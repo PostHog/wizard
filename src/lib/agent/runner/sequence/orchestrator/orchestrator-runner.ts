@@ -42,6 +42,7 @@ import type { BootstrapResult } from '../../shared/types';
 import {
   getHarness,
   resolveHarness,
+  reviewModelOverride,
   type HarnessPick,
 } from '../../switchboard';
 import { requireKnownModel } from '../../switchboard/models';
@@ -223,7 +224,11 @@ export async function runOrchestrator(
       const pick = resolveHarness(switchboardCtx, task.type);
       const base = {
         type: task.type,
-        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
+        model:
+          reviewModelOverride(programConfig.id, task.type, boot.wizardFlags)
+            ?.model ??
+          taskModelSpec(registry, task, pick.harness).model ??
+          pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -486,18 +491,28 @@ export async function runOrchestrator(
       //
       // Per-task role = task.type — the switchboard consults
       // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
-      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6),
+      // except the review-model experiment, which outranks it for exactly the
+      // review role (fail closed — see switchboard/flags/review-model.ts).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
+      const reviewOverride = reviewModelOverride(
+        programConfig.id,
+        task.type,
+        boot.wizardFlags,
+      );
       await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: requireKnownModel(taskModel.model, taskPick.model),
-        effort: taskModel.effort,
+        model: requireKnownModel(
+          reviewOverride?.model ?? taskModel.model,
+          taskPick.model,
+        ),
+        effort: reviewOverride?.effort ?? taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),

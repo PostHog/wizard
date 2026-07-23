@@ -51,6 +51,7 @@ export function resolveFlagSequence(
 }
 
 export { isOrchestratorEnabled } from './orchestrator';
+export { reviewModelOverride } from './review-model';
 export type {
   ConfigFlag,
   FlagRoute,

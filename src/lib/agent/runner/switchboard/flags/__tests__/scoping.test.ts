@@ -39,10 +39,7 @@ const ALL_FLAG_KEYS = Object.entries(constants)
 const maxFlagsFor = (exp: (typeof HARNESS_EXPERIMENTS)[number]) => {
   const flags: Record<string, string> = { [exp.flags.useFlag]: 'true' };
   const payloads: Record<string, unknown> = {};
-  if (exp.flags.modelFlag) {
-    flags[exp.flags.modelFlag] = 'gpt-5-6-terra';
-    flags[exp.flags.effortFlag] = 'high';
-  } else {
+  if (!exp.flags.model) {
     payloads[exp.flags.useFlag] = {
       model: 'gpt-5-6-terra',
       effort: 'high',
@@ -138,8 +135,8 @@ describe('flag scoping — the pinned effect matrix', () => {
     ).toEqual({
       sequence: constants.Sequence.orchestrator,
       harness: constants.Harness.pi,
-      model: constants.GPT5_6_TERRA_MODEL, // 'true' is no variant → fallback
-      thinkingLevel: undefined, // 'true' is no effort level → table default
+      model: constants.GPT5_6_SOL_MODEL, // pinned by the use flag
+      thinkingLevel: 'medium', // pinned by the use flag
     });
     expect(
       resolveBinding({ program: 'self-driving', flags, flagPayloads }),

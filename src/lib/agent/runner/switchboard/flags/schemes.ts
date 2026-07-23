@@ -30,7 +30,7 @@ const MODEL_FLAG_VARIANTS: Record<string, string> = {
 };
 
 /** Valid effort variants; anything else leaves the model's table default. */
-const EFFORT_FLAG_VARIANTS = [
+export const EFFORT_FLAG_VARIANTS = [
   'minimal',
   'low',
   'medium',
@@ -48,25 +48,23 @@ export interface FlagRoute {
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Multivariate scheme: model/effort ride their own multivariate flags. */
-export interface MultivariateConfigFlag {
+/** Pinned scheme: the useFlag routes to pi on a fixed model/effort. The model and effort multivariate flags are role-scoped experiment surfaces (see `review-model.ts`) — the general route never reads them. */
+export interface PinnedConfigFlag {
   /** Boolean flag: 'true' → route this program to pi. */
   useFlag: string;
-  /** Multivariate flag: variant key → gateway id via `MODEL_FLAG_VARIANTS`. */
-  modelFlag: string;
-  /** Multivariate flag: reasoning-effort override. */
-  effortFlag: string;
-  /** Model when the variant is missing or unknown. */
-  fallbackModel: string;
+  /** Gateway model id the route pins. */
+  model: string;
+  /** Reasoning-effort the route pins; absent → the model's table default. */
+  effort?: EffortLevel;
 }
 
 /** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
 export interface PayloadConfigFlag {
   useFlag: string;
-  modelFlag?: never;
+  model?: never;
 }
 
-export type ConfigFlag = MultivariateConfigFlag | PayloadConfigFlag;
+export type ConfigFlag = PinnedConfigFlag | PayloadConfigFlag;
 
 /**
  * A harness-axis experiment: ONE program and the flags that route it. The
@@ -127,13 +125,8 @@ export function routeFromConfigFlag(
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
   if (flags[cfg.useFlag] !== 'true') return undefined;
-  if (cfg.modelFlag) {
-    const effort = flags[cfg.effortFlag] as EffortLevel;
-    return {
-      model:
-        MODEL_FLAG_VARIANTS[flags[cfg.modelFlag] ?? ''] ?? cfg.fallbackModel,
-      thinkingLevel: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
-    };
+  if (cfg.model) {
+    return { model: cfg.model, thinkingLevel: cfg.effort };
   }
   const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
   if (!route) {
