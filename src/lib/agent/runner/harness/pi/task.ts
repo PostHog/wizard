@@ -335,12 +335,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         }
         case 'tool_execution_end': {
           if (event.isError) {
-            logToFile(
-              `[pi-task] ✗ ${event.toolName}: ${String(event.result).slice(
-                0,
-                300,
-              )}`,
-            );
+            const detail =
+              typeof event.result === 'string'
+                ? event.result
+                : JSON.stringify(event.result ?? '');
+            logToFile(`[pi-task] ✗ ${event.toolName}: ${detail.slice(0, 300)}`);
           }
           break;
         }
