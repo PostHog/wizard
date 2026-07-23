@@ -18,6 +18,7 @@ import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
+  REMARK_ASK,
   type EnqueueArgs,
   type OrchestratorToolsContext,
 } from '../../sequence/orchestrator/queue-tools';
@@ -122,6 +123,7 @@ export function createPiOrchestratorTools(
         Type.Literal('not needed'),
       ]),
       handoff: HANDOFF_PARAMS,
+      remark: Type.Optional(Type.String({ description: REMARK_ASK })),
     }),
     execute(_id, args) {
       const res = applyComplete(
@@ -129,6 +131,7 @@ export function createPiOrchestratorTools(
         args as {
           status: 'done' | 'failed' | 'not needed';
           handoff: TaskHandoff;
+          remark?: string;
         },
       );
       if (!res.ok) return Promise.resolve(text(`Error: ${res.message}`));

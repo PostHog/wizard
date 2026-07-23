@@ -98,55 +98,51 @@ describe('promoteReferenceSkill', () => {
     fs.rmSync(skillsDir, { recursive: true, force: true });
   });
 
-  it('copies the reference docs into .claude/skills before the cache is wiped', () => {
+  it('copies only the framework docs pages out of the cache', () => {
     const ref = makeSkill(cacheDir, 'integration-django', true);
     fs.mkdirSync(path.join(ref, 'references'));
-    fs.writeFileSync(path.join(ref, 'references', 'EXAMPLE.md'), '# example');
+    // Real filenames shipped by context-mill integration skills.
+    for (const f of [
+      '1-begin.md',
+      '2-edit.md',
+      '3-revise.md',
+      '4-conclude.md',
+      '3b-enable-products.md',
+      'COMMANDMENTS.md',
+      'EXAMPLE.md',
+      'EXAMPLE-swift.md',
+      'EXAMPLE-swift-xcodegen.md',
+      'django.md',
+      'identify-users.md',
+      'nuxt-js-3-6.md',
+      'react-router-v6.md',
+    ]) {
+      fs.writeFileSync(path.join(ref, 'references', f), '# ' + f);
+    }
 
     promoteReferenceSkill(ref, skillsDir, 'integration-django');
-    fs.rmSync(cacheDir, { recursive: true, force: true });
 
     const kept = path.join(skillsDir, 'integration-django');
-    expect(fs.existsSync(path.join(kept, 'SKILL.md'))).toBe(true);
-    expect(fs.existsSync(path.join(kept, 'references', 'EXAMPLE.md'))).toBe(
-      true,
-    );
+    expect(fs.readdirSync(path.join(kept, 'references')).sort()).toEqual([
+      'django.md',
+      'identify-users.md',
+      'nuxt-js-3-6.md',
+      'react-router-v6.md',
+    ]);
+    expect(fs.existsSync(path.join(kept, 'SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(kept, '.posthog-wizard'))).toBe(true);
+    // Marked and named as the reference, it survives the final sweep.
+    sweepRunInstalledSkills(skillsDir, new Set(), 'integration-django');
+    expect(fs.readdirSync(skillsDir)).toEqual(['integration-django']);
   });
 
   it('never clobbers an existing install', () => {
-    makeSkill(cacheDir, 'integration-django', true);
+    const ref = makeSkill(cacheDir, 'integration-django', true);
+    fs.mkdirSync(path.join(ref, 'references'));
+    fs.writeFileSync(path.join(ref, 'references', 'django.md'), '# fresh');
     const existing = makeSkill(skillsDir, 'integration-django', false);
-    fs.writeFileSync(path.join(existing, 'SKILL.md'), '# user edited');
 
-    promoteReferenceSkill(
-      path.join(cacheDir, 'integration-django'),
-      skillsDir,
-      'integration-django',
-    );
-    expect(fs.readFileSync(path.join(existing, 'SKILL.md'), 'utf8')).toBe(
-      '# user edited',
-    );
-  });
-
-  it('is a no-op when the cached reference is missing', () => {
-    expect(() =>
-      promoteReferenceSkill(
-        path.join(cacheDir, 'missing'),
-        skillsDir,
-        'integration-django',
-      ),
-    ).not.toThrow();
-    expect(fs.readdirSync(skillsDir)).toEqual([]);
-  });
-
-  it('promoted docs survive the final sweep', () => {
-    makeSkill(cacheDir, 'integration-django', true);
-    promoteReferenceSkill(
-      path.join(cacheDir, 'integration-django'),
-      skillsDir,
-      'integration-django',
-    );
-    sweepRunInstalledSkills(skillsDir, new Set(), 'integration-django');
-    expect(fs.readdirSync(skillsDir)).toEqual(['integration-django']);
+    promoteReferenceSkill(ref, skillsDir, 'integration-django');
+    expect(fs.existsSync(path.join(existing, 'references'))).toBe(false);
   });
 });

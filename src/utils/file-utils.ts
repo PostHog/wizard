@@ -2,15 +2,40 @@ import path from 'path';
 import fs from 'fs';
 import type { Dirent } from 'fs';
 import { analytics } from './analytics';
+import { logToFile } from './debug';
 import type { WizardRunOptions } from './types';
 
 /**
- * Report a swallowed filesystem error to error tracking. Traversal stays
- * best-effort — the caller still skips the failing entry — but the failure is
- * no longer silent. Preserves the original Error (and its `code`, e.g. EACCES
- * / ENOENT) when available.
+ * Errno codes that are expected while walking an arbitrary tree and mean
+ * "skip this entry", not "something is broken". Scanning from a broad dir
+ * (e.g. `~`) routinely hits OS-protected paths (macOS `Library/Group
+ * Containers/group.com.apple.*`) that throw EPERM/EACCES per entry — capturing
+ * each as an exception buried real errors under thousands of noise events.
+ */
+const BENIGN_FS_ERROR_CODES = new Set<string>([
+  'EACCES', // permission denied
+  'EPERM', // operation not permitted (macOS-protected dirs)
+  'ENOENT', // entry vanished mid-walk
+  'ENOTDIR', // path component isn't a directory
+  'ELOOP', // symlink loop
+  'ENAMETOOLONG', // path too long
+  'EMFILE', // too many open files (environmental, not a wizard bug)
+  'ENFILE',
+]);
+
+/**
+ * Report a swallowed filesystem error. Traversal stays best-effort — the caller
+ * still skips the failing entry. Expected errno codes (permission denied, entry
+ * vanished, symlink loops…) are logged to the debug file only; anything else is
+ * genuinely unexpected and gets captured to error tracking. Preserves the
+ * original Error (and its `code`, e.g. EACCES / ENOENT) when available.
  */
 function reportFsError(step: string, path: string, error: unknown): void {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code && BENIGN_FS_ERROR_CODES.has(code)) {
+    logToFile(`[file-utils] skipped ${step} (${code}): ${path}`);
+    return;
+  }
   analytics.captureException(
     error instanceof Error ? error : new Error(String(error)),
     { step, path },

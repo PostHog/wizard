@@ -11,7 +11,14 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
@@ -53,24 +60,26 @@ import {
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
 
-/**
- * Promote the framework reference docs from the run cache into .claude/skills
- * before the cache is wiped — the one durable artifact an orchestrator run
- * leaves, matching what a linear run leaves behind. Never clobbers an
- * existing install.
- */
+/** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
+const isDocPage = (name: string): boolean =>
+  name.endsWith('.md') && name === name.toLowerCase() && !/^\d/.test(name);
+
+/** Copy only the framework docs pages out of the run cache into .claude/skills — the one durable artifact an orchestrator run leaves. Never clobbers an existing install. */
 export function promoteReferenceSkill(
   referenceDir: string,
   claudeSkillsDir: string,
   referenceSkillId: string,
 ): void {
   const target = path.join(claudeSkillsDir, referenceSkillId);
-  if (!existsSync(referenceDir) || existsSync(target)) return;
-  mkdirSync(claudeSkillsDir, { recursive: true });
-  cpSync(referenceDir, target, { recursive: true });
-  logToFile(
-    `[orchestrator] kept reference docs at .claude/skills/${referenceSkillId}`,
-  );
+  const refs = path.join(referenceDir, 'references');
+  if (!existsSync(refs) || existsSync(target)) return;
+  const docs = readdirSync(refs).filter(isDocPage);
+  if (docs.length === 0) return;
+  mkdirSync(path.join(target, 'references'), { recursive: true });
+  for (const f of docs) {
+    cpSync(path.join(refs, f), path.join(target, 'references', f));
+  }
+  writeFileSync(path.join(target, '.posthog-wizard'), '');
 }
 
 /**
@@ -399,7 +408,6 @@ export async function runOrchestrator(
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
-    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -427,7 +435,6 @@ export async function runOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
-  let remarkRequested = false;
   const runTask: RunTask = async (task) => {
     renderQueue();
     try {
@@ -468,18 +475,6 @@ export async function runOrchestrator(
           );
         }
       }
-      // The run-end reflection fires once, on the task that is last in the
-      // queue when it starts — nothing else pending or running alongside it.
-      const isLastTask = !store
-        .list()
-        .some(
-          (t) =>
-            t.id !== task.id &&
-            (t.status === TaskStatus.Pending ||
-              t.status === TaskStatus.Running),
-        );
-      const requestRemark = isLastTask && !remarkRequested;
-      if (requestRemark) remarkRequested = true;
       // Empty spinner messages suppress the per-task spinner line (the queue
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
@@ -504,7 +499,6 @@ export async function runOrchestrator(
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
-        requestRemark,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -578,6 +572,7 @@ export async function runOrchestrator(
   logToFile(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
+
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,
