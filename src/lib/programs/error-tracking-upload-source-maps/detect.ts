@@ -32,7 +32,9 @@ export type SkillVariant =
   | 'ios'
   | 'vite'
   | 'webpack'
-  | 'rollup';
+  | 'rollup'
+  | 'go'
+  | 'rust';
 
 const DISPLAY_NAME: Record<SkillVariant, string> = {
   web: 'Web (JavaScript)',
@@ -48,16 +50,26 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
   vite: 'Vite',
   webpack: 'Webpack',
   rollup: 'Rollup',
+  go: 'Go',
+  rust: 'Rust',
 };
 
 /**
  * Variants the wizard can wire up source-map upload for automatically. The
- * native variants (react-native, flutter) are recognised but not yet
- * automatable, so the agentic picker treats them as non-instrumentable.
+ * remaining native variants (react-native, flutter, go) are recognised but not
+ * yet automatable, so the agentic picker treats them as non-instrumentable.
+ * Rust uploads native debug symbols (`posthog-cli symbol-sets upload`) instead
+ * of source maps, but the wiring is the same shape.
+ *
+ * Invariant: every variant listed here must have a published
+ * `error-tracking-upload-source-maps-<variant>` skill in context-mill —
+ * STEP 2 of the run installs that exact id, so an entry without a shipped
+ * skill fails every run for that stack.
  */
 export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'android',
   'ios',
+  'rust',
   'web',
   'nextjs',
   'node',
@@ -74,7 +86,17 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
  * build shells out to it with no npx / local-dep fallback. JS variants stay out.
  */
 export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
-  new Set(['ios', 'android']);
+  new Set(['ios', 'android', 'rust']);
+
+/**
+ * Automatable variants whose SDK the wizard's default flow cannot install —
+ * remediation for a missing SDK is a manual install (posthog-rs), not
+ * `npx @posthog/wizard`. Drives the missing-SDK copy in the picker.
+ */
+export const MANUAL_SDK_VARIANTS: readonly SkillVariant[] = ['rust'];
+
+/** Dependency string that identifies the Rust SDK in Cargo.toml. */
+export const RUST_SDK_CRATE = 'posthog-rs';
 
 const POSTHOG_SDKS = [
   'posthog-js',
@@ -106,7 +128,9 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
     body:
       'The agent could not find a PostHog SDK in your project. ' +
       'Source map upload requires the SDK to already be installed so it can ' +
-      'report errors. Run `npx @posthog/wizard` first to install the SDK.',
+      'report errors. Run `npx @posthog/wizard` first to install the SDK ' +
+      '(for Rust, add the posthog-rs crate by hand first — the wizard ' +
+      'cannot install it for that stack yet).',
     docsUrl: 'https://posthog.com/docs/error-tracking',
   },
   {
