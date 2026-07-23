@@ -69,6 +69,17 @@ describe('AgentOutputSignals', () => {
     expect(signals.hasApiErrorStatus(500)).toBe(false);
   });
 
+  it('detects a 403 plan-gated model error distinctly from a 401', () => {
+    const signals = new AgentOutputSignals();
+    signals.push(
+      'API Error: 403 {"error":"This model needs a paid PostHog plan"}',
+    );
+
+    expect(signals.hasApiErrorStatus(403)).toBe(true);
+    expect(signals.hasApiErrorStatus(401)).toBe(false);
+    expect(signals.apiErrorMessage()).toContain('403');
+  });
+
   it('extracts only the API Error lines for the message', () => {
     const signals = new AgentOutputSignals();
     signals.push('Some prose before the error');

@@ -64,6 +64,13 @@ export enum AgentErrorType {
   RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
   /** API rate limit exceeded */
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
+  /**
+   * The LLM gateway refused the requested model for this org's plan (403). The
+   * model a task was routed to (e.g. opus) is not included in the org's plan —
+   * distinct from an auth failure (401). The anthropic harness retries on the
+   * default model; this only reaches the user when that fallback also fails.
+   */
+  MODEL_PLAN_GATED = 'WIZARD_MODEL_PLAN_GATED',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */

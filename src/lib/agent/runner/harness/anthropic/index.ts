@@ -13,20 +13,56 @@
  */
 
 import { getUI } from '@ui';
-import { Harness } from '@lib/constants';
+import { Harness, DEFAULT_AGENT_MODEL } from '@lib/constants';
 import {
   initializeAgent,
   runAgent as executeAgent,
+  AgentErrorType,
 } from '@lib/agent/agent-interface';
+import { analytics } from '@utils/analytics';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
+import type { AgentRunConfig } from '@lib/agent/agent-interface';
 import type {
   AgentResult,
   AgentHarness,
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
+
+/**
+ * Run an agent, and if the gateway plan-gates the requested model (403 →
+ * `MODEL_PLAN_GATED`), retry once on the default model. A free-tier org whose
+ * plan excludes the model a task was routed to (e.g. opus) would otherwise die
+ * at that step; the rest of the run already succeeds on the default model, so
+ * completing this step there is plan-safe. Paid orgs never hit the 403, so
+ * never fall back. When the fallback also fails, the plan-gated error is
+ * returned unchanged for the pipeline to surface.
+ */
+export async function runWithPlanFallback(
+  agent: AgentRunConfig,
+  run: (agent: AgentRunConfig) => Promise<AgentResult>,
+  analyticsProperties?: Record<string, unknown>,
+): Promise<AgentResult> {
+  const result = await run(agent);
+  if (
+    result.error !== AgentErrorType.MODEL_PLAN_GATED ||
+    !agent.model ||
+    agent.model === DEFAULT_AGENT_MODEL
+  ) {
+    return result;
+  }
+  logToFile(
+    `[anthropic] model ${agent.model} plan-gated; retrying on ${DEFAULT_AGENT_MODEL}`,
+  );
+  analytics.wizardCapture('agent model plan fallback', {
+    from_model: agent.model,
+    to_model: DEFAULT_AGENT_MODEL,
+    ...analyticsProperties,
+  });
+  return run({ ...agent, model: DEFAULT_AGENT_MODEL });
+}
 
 export const anthropicBackend: AgentHarness = {
   name: Harness.anthropic,
@@ -73,22 +109,24 @@ export const anthropicBackend: AgentHarness = {
     getUI().log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
 
-    return executeAgent(
-      agent,
-      prompt,
-      sessionToOptions(session),
-      spinner,
-      {
-        estimatedDurationMinutes: config.estimatedDurationMinutes,
-        spinnerMessage: config.spinnerMessage,
-        successMessage: config.successMessage,
-        errorMessage:
-          config.errorMessage ?? `${config.integrationLabel} failed`,
-        additionalFeatureQueue: config.additionalFeatureQueue ?? [],
-        abortCases: config.abortCases,
-        emitStepEvents: config.trackStepProgress ?? false,
-      },
-      middleware,
+    return runWithPlanFallback(agent, (a) =>
+      executeAgent(
+        a,
+        prompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.estimatedDurationMinutes,
+          spinnerMessage: config.spinnerMessage,
+          successMessage: config.successMessage,
+          errorMessage:
+            config.errorMessage ?? `${config.integrationLabel} failed`,
+          additionalFeatureQueue: config.additionalFeatureQueue ?? [],
+          abortCases: config.abortCases,
+          emitStepEvents: config.trackStepProgress ?? false,
+        },
+        middleware,
+      ),
     );
   },
 
@@ -131,19 +169,18 @@ export const anthropicBackend: AgentHarness = {
       options,
     );
 
-    return executeAgent(
+    return runWithPlanFallback(
       { ...agent, model, allowedTools, disallowedTools },
-      prompt,
-      options,
-      spinner,
-      {
-        spinnerMessage,
-        successMessage,
-        errorMessage,
-        additionalFeatureQueue,
-        requestRemark,
-        analyticsProperties,
-      },
+      (a) =>
+        executeAgent(a, prompt, options, spinner, {
+          spinnerMessage,
+          successMessage,
+          errorMessage,
+          additionalFeatureQueue,
+          requestRemark,
+          analyticsProperties,
+        }),
+      analyticsProperties,
     );
   },
 };

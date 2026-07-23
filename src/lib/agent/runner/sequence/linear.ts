@@ -241,6 +241,34 @@ export async function runLinearProgram(
     });
   }
 
+  // The gateway plan-gated the model even after the harness fell back to the
+  // default model (or the run was already on it). Tell the user plainly that
+  // their plan doesn't include the required model — this used to surface as a
+  // misleading "Failed to authenticate", though the token was valid.
+  if (agentResult.error === AgentErrorType.MODEL_PLAN_GATED) {
+    analytics.wizardCapture('agent api error', {
+      integration: config.integrationLabel,
+      error_type: agentResult.error,
+      error_message: agentResult.message,
+    });
+    await wizardAbort({
+      message:
+        "This PostHog organization's plan doesn't include the AI model this " +
+        'step needs, and the fallback model was unavailable too.\n\n' +
+        'Free plans have limited AI model access. Upgrade your PostHog plan ' +
+        'to finish setup here, or integrate manually:\n' +
+        `  ${config.docsUrl}\n\n` +
+        'Questions? wizard@posthog.com',
+      error: new WizardError(
+        `Model plan-gated: ${agentResult.message ?? 'unknown model'}`,
+        {
+          integration: config.integrationLabel,
+          error_type: agentResult.error,
+        },
+      ),
+    });
+  }
+
   if (
     agentResult.error === AgentErrorType.RATE_LIMIT ||
     agentResult.error === AgentErrorType.API_ERROR

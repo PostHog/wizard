@@ -281,7 +281,7 @@ export function createStopHook(
 /**
  * Internal configuration object returned by initializeAgent
  */
-type AgentRunConfig = {
+export type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
@@ -1160,6 +1160,24 @@ export async function runAgent(
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
+    // 403: the gateway plan-gates the requested model (e.g. a task routed to
+    // opus on a free-tier org). This is NOT an auth failure — the token is
+    // valid, the plan just excludes the model. The anthropic harness retries on
+    // the default model, so this rarely reaches the user; capture it either way
+    // to measure how often free-tier runs hit a plan-gated model.
+    if (signals.hasApiErrorStatus(403)) {
+      logToFile('Agent error: MODEL_PLAN_GATED');
+      spinner.stop('Model not available on this plan');
+      analytics.wizardCapture('agent model plan gated', {
+        model: agentConfig.model,
+        message: apiErrorMessage,
+      });
+      return {
+        error: AgentErrorType.MODEL_PLAN_GATED,
+        message: apiErrorMessage,
+      };
+    }
+
     if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
@@ -1203,6 +1221,20 @@ export async function runAgent(
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+    }
+
+    // 403: gateway plan-gates the requested model — see the non-thrown path above.
+    if (signals.hasApiErrorStatus(403)) {
+      logToFile('Agent error (caught): MODEL_PLAN_GATED');
+      spinner.stop('Model not available on this plan');
+      analytics.wizardCapture('agent model plan gated', {
+        model: agentConfig.model,
+        message: apiErrorMessage,
+      });
+      return {
+        error: AgentErrorType.MODEL_PLAN_GATED,
+        message: apiErrorMessage,
+      };
     }
 
     if (signals.hasApiError()) {
