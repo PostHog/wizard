@@ -44,6 +44,7 @@ import {
   resolveHarness,
   type HarnessPick,
 } from '../../switchboard';
+import { requireKnownModel } from '../../switchboard/models';
 import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
@@ -405,7 +406,7 @@ export async function runOrchestrator(
     boot,
     prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
     spinner,
-    model: seedModel.model ?? seedPick.model,
+    model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,
     ...agentRunTools(seedPrompt),
     orchestrator: orchestratorCtx(),
@@ -495,7 +496,7 @@ export async function runOrchestrator(
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: taskModel.model ?? taskPick.model,
+        model: requireKnownModel(taskModel.model, taskPick.model),
         effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,

@@ -5,7 +5,7 @@
  * Routes: ONLY `posthog-integration` — harness, model, and effort axes.
  */
 import {
-  GPT5_4_MODEL,
+  GPT5_6_TERRA_MODEL,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
@@ -18,6 +18,7 @@ export const BASIC_INTEGRATION_EXPERIMENT: HarnessExperiment = {
     useFlag: WIZARD_USE_PI_HARNESS_FLAG_KEY,
     modelFlag: WIZARD_PI_MODEL_FLAG_KEY,
     effortFlag: WIZARD_PI_EFFORT_FLAG_KEY,
-    fallbackModel: GPT5_4_MODEL,
+    // Where an unknown model variant lands.
+    fallbackModel: GPT5_6_TERRA_MODEL,
   },
 };
