@@ -91,10 +91,10 @@ export interface RoleExperiment {
   role: string;
   useFlag: string;
   modelFlag: string;
+  /** Multivariate flag: reasoning-effort override riding the arm; invalid/missing → the role's frontmatter effort. */
+  effortFlag: string;
   /** Variant keys (`MODEL_FLAG_VARIANTS`) the experiment may route. */
   arms: readonly string[];
-  /** Effort pinned for every arm, so arms never diverge onto per-model table defaults. */
-  effort: EffortLevel;
 }
 
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
@@ -154,10 +154,15 @@ export function routeFromConfigFlag(
 export function routeFromRoleFlag(
   exp: RoleExperiment,
   flags: Record<string, string>,
-): { model: string; effort: EffortLevel } | undefined {
+): { model: string; effort?: EffortLevel } | undefined {
   if (flags[exp.useFlag] !== 'true') return undefined;
   const variant = flags[exp.modelFlag] ?? '';
   if (!exp.arms.includes(variant)) return undefined;
   const model = MODEL_FLAG_VARIANTS[variant];
-  return model ? { model, effort: exp.effort } : undefined;
+  if (!model) return undefined;
+  const effort = flags[exp.effortFlag] as EffortLevel;
+  return {
+    model,
+    effort: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
+  };
 }

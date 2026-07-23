@@ -24,9 +24,10 @@ vi.mock('@env', async (importOriginal) => ({
   },
 }));
 
-const ARM_FLAGS = (variant: string) => ({
+const ARM_FLAGS = (variant: string, effort?: string) => ({
   [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
   [WIZARD_PI_MODEL_FLAG_KEY]: variant,
+  ...(effort ? { [WIZARD_PI_EFFORT_FLAG_KEY]: effort } : {}),
 });
 
 describe('review-model experiment — scope declaration', () => {
@@ -34,17 +35,17 @@ describe('review-model experiment — scope declaration', () => {
     expect(ROLE_EXPERIMENTS).toEqual([REVIEW_MODEL_EXPERIMENT]);
   });
 
-  it('declares the posthog-integration program (exists in the registry), the review role, and exactly the sol/terra arms at medium', () => {
+  it('declares the posthog-integration program (exists in the registry), the review role, the effort flag, and exactly the sol/terra arms', () => {
     expect(REVIEW_MODEL_EXPERIMENT.program).toBe('posthog-integration');
     expect(PROGRAM_REGISTRY.map((c) => c.id)).toContain(
       REVIEW_MODEL_EXPERIMENT.program,
     );
     expect(REVIEW_MODEL_EXPERIMENT.role).toBe('review');
+    expect(REVIEW_MODEL_EXPERIMENT.effortFlag).toBe(WIZARD_PI_EFFORT_FLAG_KEY);
     expect(REVIEW_MODEL_EXPERIMENT.arms).toEqual([
       'gpt-5-6-sol',
       'gpt-5-6-terra',
     ]);
-    expect(REVIEW_MODEL_EXPERIMENT.effort).toBe('medium');
   });
 });
 
@@ -52,20 +53,41 @@ describe('review-model experiment — arms route', () => {
   it.each([
     ['gpt-5-6-sol', GPT5_6_SOL_MODEL],
     ['gpt-5-6-terra', GPT5_6_TERRA_MODEL],
-  ] as const)('%s → %s at medium', (variant, model) => {
+  ] as const)('%s + effort flag medium → %s at medium', (variant, model) => {
     expect(
-      resolveRoleRoute('posthog-integration', 'review', ARM_FLAGS(variant)),
+      resolveRoleRoute(
+        'posthog-integration',
+        'review',
+        ARM_FLAGS(variant, 'medium'),
+      ),
     ).toEqual({ model, effort: 'medium' });
   });
 
-  it('an effort flag cannot move the pinned effort (arms must not diverge)', () => {
+  it('the effort flag rides the arm (high → high)', () => {
     expect(
-      resolveRoleRoute('posthog-integration', 'review', {
-        ...ARM_FLAGS('gpt-5-6-sol'),
-        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
-      }),
-    ).toEqual({ model: GPT5_6_SOL_MODEL, effort: 'medium' });
+      resolveRoleRoute(
+        'posthog-integration',
+        'review',
+        ARM_FLAGS('gpt-5-6-sol', 'high'),
+      ),
+    ).toEqual({ model: GPT5_6_SOL_MODEL, effort: 'high' });
   });
+
+  it.each([
+    ['missing', undefined],
+    ['invalid (banana)', 'banana'],
+  ])(
+    'effort flag %s → effort undefined, the frontmatter effort governs',
+    (_name, effort) => {
+      expect(
+        resolveRoleRoute(
+          'posthog-integration',
+          'review',
+          ARM_FLAGS('gpt-5-6-terra', effort),
+        ),
+      ).toEqual({ model: GPT5_6_TERRA_MODEL, effort: undefined });
+    },
+  );
 });
 
 describe('review-model experiment — fail closed', () => {
