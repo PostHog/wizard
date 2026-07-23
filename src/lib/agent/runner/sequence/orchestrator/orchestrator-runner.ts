@@ -45,7 +45,7 @@ import {
   resolveRoleRoute,
   type HarnessPick,
 } from '../../switchboard';
-import { requireKnownModel } from '../../switchboard/models';
+import { isValidModel, requireKnownModel } from '../../switchboard/models';
 import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
@@ -235,9 +235,11 @@ export async function runOrchestrator(
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
+      // Mirror dispatch's allow-list fallback so attribution names the model that runs.
+      const specModel = taskRunSpec(task, pick.harness).model;
       const base = {
         type: task.type,
-        model: taskRunSpec(task, pick.harness).model ?? pick.model,
+        model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -606,11 +608,11 @@ export async function runOrchestrator(
     retried_task_count: store.list().filter((t) => t.attempts > 1).length,
   });
 
-  // The build step flags any unresolved conflict in its handoff; surface the
+  // The review step flags any unresolved conflict in its handoff; surface the
   // one-liner here and point the user at the report for the detail.
-  const buildTask = store.list().find((t) => t.type === 'build');
-  const conflict = buildTask
-    ? store.readHandoff(buildTask.id)?.conflict
+  const reviewTask = store.list().find((t) => t.type === 'review');
+  const conflict = reviewTask
+    ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
 
   // Prefer the report the run wrote; fall back to the raw queue if it is missing.
@@ -633,7 +635,11 @@ export async function runOrchestrator(
       .map((t) => t.type)
       .join(', ');
     await wizardAbort({
-      message: `The wizard was unable to set up PostHog: the ${failedTypes} step failed.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      message: `The wizard was unable to set up PostHog: ${
+        failedTypes
+          ? `the ${failedTypes} step failed`
+          : `${blocked} steps never ran`
+      }.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError('orchestrator drain ended with failed tasks', {
         tasks_failed: summary.failed,
         tasks_blocked: blocked,
