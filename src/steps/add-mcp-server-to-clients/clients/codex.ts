@@ -23,6 +23,7 @@ export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
   name = 'Codex';
   private codexBinaryPath: string | null = null;
+  private pluginMarketplaceSupported: boolean | null = null;
 
   constructor() {
     super();
@@ -111,8 +112,40 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     return Promise.resolve({ success: true });
   }
 
+  /**
+   * Codex CLI versions that predate the `plugin marketplace` subcommand parse
+   * `plugin` as a prompt and reject the rest of the arguments, e.g.
+   * `error: unexpected argument 'marketplace' found`. Detect that shape so we
+   * can treat those versions as "plugin not supported" instead of a hard error.
+   */
+  private isPluginUnsupportedOutput(output: string): boolean {
+    const lower = output.toLowerCase();
+    return (
+      lower.includes('unexpected argument') ||
+      lower.includes('unrecognized subcommand')
+    );
+  }
+
   supportsPlugin(): boolean {
-    return this.findCodexBinary() !== null;
+    const binary = this.findCodexBinary();
+    if (!binary) return false;
+
+    if (this.pluginMarketplaceSupported !== null) {
+      return this.pluginMarketplaceSupported;
+    }
+
+    // Feature-detect the `plugin marketplace` subcommand before we try to use
+    // it. Old Codex versions don't know it and would fail the install outright.
+    const result = spawnSync(binary, ['plugin', 'marketplace', '--help'], {
+      encoding: 'utf-8',
+    });
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+    this.pluginMarketplaceSupported =
+      result.error == null &&
+      result.status === 0 &&
+      !this.isPluginUnsupportedOutput(output);
+
+    return this.pluginMarketplaceSupported;
   }
 
   isPluginInstalled(): Promise<boolean> {
@@ -160,6 +193,14 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     }
 
     if (result.status !== 0) {
+      const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+      // Older Codex versions lack the `plugin marketplace` subcommand and
+      // reject the arguments (e.g. "unexpected argument 'marketplace' found").
+      // Skip cleanly rather than surfacing a hard error.
+      if (this.isPluginUnsupportedOutput(output)) {
+        this.pluginMarketplaceSupported = false;
+        return Promise.resolve({ success: false });
+      }
       analytics.captureException(
         new Error(`Codex plugin install failed: ${result.stderr ?? ''}`),
       );
