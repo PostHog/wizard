@@ -7,13 +7,9 @@
 import { z } from 'zod';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_4_MODEL,
-  GPT5_5_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
-  GPT5_MINI_MODEL,
-  GPT5_MODEL,
   Harness,
   Sequence,
   SONNET_5_MODEL,
@@ -24,12 +20,8 @@ import type { EffortLevel } from '../models';
 
 // ── Shared vocabulary ─────────────────────────────────────────────────────
 
-/** Model variant key → gateway id (variant keys can't carry `/` or `.`). */
+/** Model variant key → gateway id. */
 const MODEL_FLAG_VARIANTS: Record<string, string> = {
-  'gpt-5': GPT5_MODEL,
-  'gpt-5-4': GPT5_4_MODEL,
-  'gpt-5-mini': GPT5_MINI_MODEL,
-  'gpt-5-5': GPT5_5_MODEL,
   'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
   'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
   'gpt-5-6-sol': GPT5_6_SOL_MODEL,
