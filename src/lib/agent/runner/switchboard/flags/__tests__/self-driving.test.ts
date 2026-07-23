@@ -11,7 +11,6 @@ import {
   Harness,
   Sequence,
   SONNET_5_MODEL,
-  WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
@@ -209,7 +208,7 @@ describe('self-driving experiment — isolation', () => {
       name: "other experiments' flags do not leak into a self-driving binding",
       ctx: {
         ...sd({ model: 'gpt-5-6-terra' }),
-        flags: { [SD_FLAG]: 'true', [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' },
+        flags: { [SD_FLAG]: 'true', 'wizard-pi-effort': 'high' },
       },
       binding: {
         sequence: Sequence.linear,

@@ -21,10 +21,7 @@ import { analytics } from '@utils/analytics';
 import {
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_PI_EFFORT_FLAG_KEY,
-  WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { getUI } from '../../../ui';
@@ -157,9 +154,6 @@ function captureSwitchboardDecision(
   const trace = ctx.trace ?? {};
   analytics.wizardCapture('switchboard resolved', {
     program: ctx.program,
-    flag_use_pi_harness: ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY],
-    flag_pi_model: ctx.flags[WIZARD_PI_MODEL_FLAG_KEY],
-    flag_pi_effort: ctx.flags[WIZARD_PI_EFFORT_FLAG_KEY],
     flag_self_driving_use_pi_harness:
       ctx.flags[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY],
     flag_self_driving_pi_payload: JSON.stringify(
@@ -179,10 +173,7 @@ function captureSwitchboardDecision(
   });
   logToFile(
     `[switchboard] decision: program=${ctx.program}` +
-      ` in(use-pi-harness=${
-        ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] ?? '-'
-      },` +
-      ` orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
+      ` in(orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
       ` cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
         ctx.cliModel ?? '-'
       })` +

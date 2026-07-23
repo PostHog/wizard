@@ -89,10 +89,12 @@ describe('flag scoping — the pinned effect matrix', () => {
     }
     // THE PIN. A new experiment, a widened scope, or a resolver leak all
     // change this table — updating it must be a reviewed, deliberate act.
+    // wizard-orchestrator appears twice: once per axis registry (harness route
+    // + sequence route), both moving all four axes through the one flag.
     expect(matrix.sort()).toEqual([
-      'wizard-orchestrator → posthog-integration: sequence',
+      'wizard-orchestrator → posthog-integration: sequence, harness, model, thinkingLevel',
+      'wizard-orchestrator → posthog-integration: sequence, harness, model, thinkingLevel',
       'wizard-self-driving-use-pi-harness → self-driving: sequence, harness, model, thinkingLevel',
-      'wizard-use-pi-harness → posthog-integration: harness, model, thinkingLevel',
     ]);
   });
 

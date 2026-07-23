@@ -2,7 +2,6 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
   isOrchestratorEnabled,
@@ -26,40 +25,25 @@ describe('isOrchestratorEnabled', () => {
   });
 });
 
-describe('pi + orchestrator gating', () => {
+describe('orchestrator gating — the single flag', () => {
   const program = 'posthog-integration' as const;
 
-  it('runs the orchestrator on pi when both flags select pi + orchestrator', () => {
+  it('routes the orchestrator on pi from the one flag', () => {
     // pi implements runTask — the capability clamp passes and the flag stands.
     const binding = resolveBinding({
       program,
-      flags: {
-        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-      },
+      flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
     });
     expect(binding.harness).toBe(Harness.pi);
     expect(binding.sequence).toBe(Sequence.orchestrator);
   });
 
-  it('leaves the orchestrator flag effective for the anthropic harness', () => {
+  it('flag off → the binding default, both axes', () => {
     const binding = resolveBinding({
       program,
-      flags: {
-        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false',
-        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-      },
+      flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'false' },
     });
     expect(binding.harness).toBe(Harness.anthropic);
-    expect(binding.sequence).toBe(Sequence.orchestrator);
-  });
-
-  it('resolves pi alone to linear (the binding default)', () => {
-    const binding = resolveBinding({
-      program,
-      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
-    });
-    expect(binding.harness).toBe(Harness.pi);
     expect(binding.sequence).toBe(Sequence.linear);
   });
 });

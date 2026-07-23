@@ -48,7 +48,7 @@ export interface FlagRoute {
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Pinned scheme: the useFlag routes to pi on a fixed model/effort. The model and effort multivariate flags are role-scoped experiment surfaces (see `review-model.ts`) — the general route never reads them. */
+/** Pinned scheme: the useFlag routes to pi on a fixed model/effort — the pick is the fallback; per-task prompt frontmatter wins. */
 export interface PinnedConfigFlag {
   /** Boolean flag: 'true' → route this program to pi. */
   useFlag: string;
@@ -82,19 +82,6 @@ export interface SequenceExperiment {
   flag: string;
   /** Sequence the flag routes covered programs to. */
   sequence: Sequence;
-}
-
-/** A role-scoped experiment: the model flag's arm routes ONE role of ONE program, outranking prompt frontmatter there; any non-arm variant fails closed. */
-export interface RoleExperiment {
-  program: ProgramId;
-  /** Agent-prompt role (`task.type`) the arms apply to. */
-  role: string;
-  useFlag: string;
-  modelFlag: string;
-  /** Multivariate flag: reasoning-effort override riding the arm; invalid/missing → the role's frontmatter effort. */
-  effortFlag: string;
-  /** Variant keys (`MODEL_FLAG_VARIANTS`) the experiment may route. */
-  arms: readonly string[];
 }
 
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
@@ -148,21 +135,4 @@ export function routeFromConfigFlag(
     );
   }
   return route;
-}
-
-/** Resolve a role experiment's arm, or undefined when it doesn't validly route. */
-export function routeFromRoleFlag(
-  exp: RoleExperiment,
-  flags: Record<string, string>,
-): { model: string; effort?: EffortLevel } | undefined {
-  if (flags[exp.useFlag] !== 'true') return undefined;
-  const variant = flags[exp.modelFlag] ?? '';
-  if (!exp.arms.includes(variant)) return undefined;
-  const model = MODEL_FLAG_VARIANTS[variant];
-  if (!model) return undefined;
-  const effort = flags[exp.effortFlag] as EffortLevel;
-  return {
-    model,
-    effort: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
-  };
 }

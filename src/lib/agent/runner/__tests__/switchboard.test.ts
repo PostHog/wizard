@@ -20,7 +20,6 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
   PROGRAM_BINDINGS,
@@ -95,29 +94,29 @@ describe('switchboard PROGRAM_BINDINGS', () => {
 describe('switchboard CLI precedence (dev builds)', () => {
   runBindingCases([
     {
-      name: 'cliHarness wins over the wizard-use-pi-harness flag',
+      name: 'cliHarness wins over the orchestrator flag being off',
       ctx: {
         program: 'posthog-integration',
-        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'false' },
         cliHarness: Harness.pi,
       },
       binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
       trace: { harness: 'cli', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'cliModel wins over the flag pairing; the flag still routes the harness',
+      name: 'cliModel wins over the flag pin; the flag still routes harness + sequence',
       ctx: {
         program: 'posthog-integration',
-        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         cliModel: 'openai/o4-mini',
       },
       binding: {
-        sequence: Sequence.linear,
+        sequence: Sequence.orchestrator,
         harness: Harness.pi,
         model: 'openai/o4-mini',
         thinkingLevel: 'medium',
       },
-      trace: { harness: 'flag', model: 'cli', sequence: 'binding' },
+      trace: { harness: 'flag', model: 'cli', sequence: 'flag' },
     },
     {
       name: 'cliHarness + cliModel pin both axes',
@@ -157,27 +156,10 @@ describe('switchboard decision trace', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'pi flag decides harness+model; sequence stays binding (pi has runTask, no clamp)',
+      name: 'the one flag → orchestrator on pi, every axis traced to the flag',
       ctx: {
         program: 'posthog-integration',
-        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
-      },
-      binding: {
-        sequence: Sequence.linear,
-        harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
-        thinkingLevel: 'medium',
-      },
-      trace: { harness: 'flag', model: 'flag', sequence: 'binding' },
-    },
-    {
-      name: 'both flags on → orchestrator on pi, every axis traced to its flag',
-      ctx: {
-        program: 'posthog-integration',
-        flags: {
-          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-          [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-        },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
       },
       binding: {
         sequence: Sequence.orchestrator,
@@ -199,11 +181,18 @@ describe('switchboard composed clamp', () => {
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         trace: {},
       };
-      // Only the orchestrator flag is on → harness/model stay at the binding
-      // (sonnet 5 for ai-observability, the default elsewhere), and the
-      // composed clamp holds the sequence at linear.
+      // The flag routes posthog-integration's harness to pi (pinned) but the
+      // composed clamp holds every sequence at linear; other programs keep
+      // their bindings (sonnet 5 for ai-observability, the default elsewhere).
       expect(resolveBinding(ctx)).toEqual(
-        program === 'ai-observability'
+        program === 'posthog-integration'
+          ? {
+              ...DEFAULT_RESOLVED,
+              harness: Harness.pi,
+              model: GPT5_6_SOL_MODEL,
+              thinkingLevel: 'medium',
+            }
+          : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
           : DEFAULT_RESOLVED,
       );
@@ -228,10 +217,7 @@ describe('switchboard composed clamp', () => {
       ctx: {
         program: 'posthog-integration',
         composed: true,
-        flags: {
-          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-          [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-        },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
       },
       binding: {
         sequence: Sequence.linear,
