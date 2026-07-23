@@ -25,7 +25,10 @@ import {
   WIZARD_USER_AGENT,
 } from '@lib/constants';
 import { piRuntimeNotes } from './runtime-notes';
-import { queueTools } from '@lib/agent/agent-prompt-loader';
+import {
+  queueTools,
+  renderToolInventory,
+} from '@lib/agent/agent-prompt-loader';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
@@ -291,6 +294,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       orchestratorTools.has(t.name),
     );
 
+    const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
     const { session: agentSession } = await createAgentSession({
       model,
       modelRegistry: registry,
@@ -299,9 +303,18 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       sessionManager: SessionManager.inMemory(dir),
       resourceLoader,
       noTools: 'builtin',
-      customTools: [...codingToolDefs, ...wizardTools, ...queueTools],
+      customTools,
     });
     await agentSession.bindExtensions({});
+
+    // The one complete list: exactly the tools registered on this session, in
+    // the names the agent will call them by. posthog_exec binds as an extension.
+    const toolNames = [
+      ...customTools.map((t) => t.name),
+      ...(posthogMcp ? ['posthog_exec'] : []),
+    ];
+    logToFile(`[pi-task] tools passed to model: ${toolNames.join(', ')}`);
+    const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
     const unsubscribe = agentSession.subscribe((event) => {
       switch (event.type) {
@@ -345,7 +358,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     });
 
     try {
-      await agentSession.prompt(prompt);
+      await agentSession.prompt(taskPrompt);
 
       // pi's prompt() resolves the moment a turn carries no tool call — which
       // an agent mid-plan does emit. While the work has not reached its

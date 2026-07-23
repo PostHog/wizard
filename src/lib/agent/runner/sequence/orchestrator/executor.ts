@@ -18,8 +18,6 @@ import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 export interface ResolvedTask {
   allowedTools: readonly string[];
   disallowedTools: readonly string[];
-  /** Every discrete tool the agent actually holds (coding + queue tools), for the injected inventory. */
-  availableTools: readonly string[];
   /** Mini-skills to install before the task runs (the HOW). */
   skills: readonly string[];
   prompt: string;

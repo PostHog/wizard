@@ -8,13 +8,13 @@ import {
   parseAgentPrompt,
   promptModelFor,
   queueTools,
+  renderToolInventory,
   resolveTask,
   taskModelSpec,
   type AgentPrompt,
   type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
-import { allowedOrchestratorTools } from '@lib/agent/runner/harness/pi/task';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
 import { HostResolution } from '@lib/host-resolution';
 
@@ -232,31 +232,6 @@ describe('resolveTask', () => {
     ]);
   });
 
-  it('availableTools is the coding tools plus the queue tools not disallowed', () => {
-    const registry = registryOf([prompt]);
-    const task = store.enqueue({ type: 'capture' });
-    const resolved = resolveTask(registry, task, store);
-    // Read/Edit from the prompt; complete_task + read_handoffs always; no
-    // enqueue_task (disallowed for a task).
-    expect(resolved.availableTools).toEqual([
-      'Read',
-      'Edit',
-      'complete_task',
-      'read_handoffs',
-    ]);
-  });
-
-  it('availableTools names exactly what the pi harness grants (no drift)', () => {
-    const registry = registryOf([prompt]);
-    const task = store.enqueue({ type: 'capture' });
-    const resolved = resolveTask(registry, task, store);
-    const granted = new Set([
-      ...prompt.allowedTools,
-      ...allowedOrchestratorTools(prompt.disallowedTools),
-    ]);
-    expect(new Set(resolved.availableTools)).toEqual(granted);
-  });
-
   it('resolves per-harness model + effort from the prompt', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });
@@ -434,16 +409,22 @@ describe('assembleTaskPrompt', () => {
     );
   });
 
-  it('lists the passed tools and does not claim they are the whole set', () => {
-    const assembled = assembleTaskPrompt(
-      ctx,
-      'do the task',
-      [],
-      ['Read', 'complete_task', 'read_handoffs'],
+  it('does not embed a tool inventory — the harness renders it from its real set', () => {
+    const assembled = assembleTaskPrompt(ctx, 'do the task', []);
+    expect(assembled).not.toContain('Your tools for this task');
+  });
+});
+
+describe('renderToolInventory', () => {
+  it('lists the exact names passed and hands unlisted work to later tasks', () => {
+    const out = renderToolInventory(['read', 'find', 'ls', 'complete_task']);
+    expect(out).toContain(
+      'Your tools for this task: read, find, ls, complete_task',
     );
-    expect(assembled).toContain('Read, complete_task, read_handoffs');
-    // The MCP servers are always-on and named in the project context, so the
-    // inventory must not claim the listed tools are all the agent has.
-    expect(assembled).not.toContain('nothing else is available');
+    expect(out).toContain('hand that work off');
+  });
+
+  it('is empty when the set is empty', () => {
+    expect(renderToolInventory([])).toBe('');
   });
 });

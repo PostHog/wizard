@@ -72,11 +72,13 @@ function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
  * tasks hold tools this one does not, so work it cannot do is handed on rather
  * than attempted.
  */
-function toolInventory(availableTools: readonly string[]): string {
-  if (availableTools.length === 0) return '';
-  return `Your tools for this task: ${availableTools.join(
+/** Renders the inventory from the tool names a harness actually registered for
+ *  the run — the one complete list, in the vocabulary the agent will call. */
+export function renderToolInventory(toolNames: readonly string[]): string {
+  if (toolNames.length === 0) return '';
+  return `Your tools for this task: ${toolNames.join(
     ', ',
-  )} — besides the PostHog and wizard-tools MCP servers described above. Do not hunt for a tool none of these name, or treat its absence as a problem to report. Later tasks in this run hold tools you do not: when your task needs one, hand that work off in your handoff for the task that can do it, or note it for the final report.`;
+  )}. Do not look for a tool that is not listed or treat its absence as a problem to report. Later tasks in this run hold tools you do not: when your task needs one, hand that work off in your handoff for the task that can do it, or note it for the final report.`;
 }
 
 const TASK_BASICS = `You are one step in a larger PostHog workflow made of several tasks, run as a fresh agent with no memory of the other tasks beyond the context you are given. Other tasks — before and after you — own the rest of the work, so stay strictly on your own task: do not do a neighbouring step's job, redo what an upstream handoff already did, or reach beyond what you were asked. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`not needed\` and say why, rather than marking it done.`;
@@ -99,7 +101,6 @@ export function assembleTaskPrompt(
   ctx: OrchestratorPromptContext,
   body: string,
   skillPaths: readonly string[] = [],
-  availableTools: readonly string[] = [],
 ): string {
   return [
     projectContext(ctx),
@@ -107,7 +108,6 @@ export function assembleTaskPrompt(
     commandmentsReference(ctx),
     skillReference(skillPaths),
     TASK_BASICS,
-    toolInventory(availableTools),
     body,
   ]
     .filter(Boolean)
@@ -425,10 +425,6 @@ export function resolveTask(
 
   return {
     ...agentRunTools(prompt),
-    availableTools: [
-      ...prompt.allowedTools,
-      ...queueTools(prompt.disallowedTools),
-    ],
     prompt: body,
     skills: prompt.skills,
   };

@@ -13,6 +13,7 @@ import {
   type WizardAskBridge,
 } from '@lib/wizard-ask-bridge';
 import { createWizardPiTools } from '../tools';
+import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 
 const SECRET = 'phx_live_zendesk_token_123';
 
@@ -174,5 +175,25 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
       values: { ZENDESK_TOKEN: answers.token },
     });
     expect(textOf(result)).toMatch(/not known to the vault/);
+  });
+});
+
+describe('pi task tool grant — the names the inventory shows', () => {
+  it('maps wizard vocab to the pi tools the agent actually calls', () => {
+    // The bug this pins: the inventory used to show "Glob"/"Read"; the pi agent
+    // calls `find`/`ls`/`read`. The grant is the pi names, so the inventory is too.
+    expect([...allowedPiCodingTools(['Glob', 'Read'])].sort()).toEqual([
+      'find',
+      'ls',
+      'read',
+    ]);
+    expect([...allowedPiCodingTools(['Bash'])]).toEqual(['bash']);
+  });
+
+  it('grants every queue tool a task does not disallow', () => {
+    expect([...allowedOrchestratorTools(['enqueue_task'])].sort()).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]);
   });
 });

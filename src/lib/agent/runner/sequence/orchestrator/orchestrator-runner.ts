@@ -493,12 +493,7 @@ export async function runOrchestrator(
         session,
         programConfig,
         boot,
-        prompt: assembleTaskPrompt(
-          promptContext,
-          resolved.prompt,
-          skillPaths,
-          resolved.availableTools,
-        ),
+        prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
         model: taskModel.model ?? taskPick.model,
         effort: taskModel.effort,
