@@ -26,6 +26,27 @@ import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+const HOSTING_ENV_SKIP_KEY = 'hostingEnvUploadSkipped';
+
+/**
+ * Setter/getter pair for the hosting-provider env-upload skip, both keyed off
+ * the same constant — postRun writes, buildOutroData reads. Exported and
+ * unit-tested together so a key typo on either side fails a test instead of
+ * silently dropping the outro warning.
+ */
+export function setHostingEnvUploadSkip(
+  sess: WizardSession,
+  provider: string | undefined,
+): void {
+  sess.frameworkContext[HOSTING_ENV_SKIP_KEY] = provider;
+}
+
+export function buildHostingEnvSkipWarning(sess: WizardSession): string {
+  const hostingEnvSkip = sess.frameworkContext[HOSTING_ENV_SKIP_KEY];
+  return typeof hostingEnvSkip === 'string'
+    ? `⚠️ Not added to ${hostingEnvSkip} — add them there too, or your deployed site won't send events`
+    : '';
+}
 
 function resolveContinueUrl(
   sess: WizardSession,
@@ -263,20 +284,23 @@ ${warehouseReportInstruction(session)}
           const { uploadEnvironmentVariablesStep } = await import(
             '@steps/index'
           );
-          const uploadedEnvVars = await uploadEnvironmentVariablesStep(
+          const { uploadedKeys, skip } = await uploadEnvironmentVariablesStep(
             envVars,
             {
               integration: config.metadata.integration,
               session: sess,
             },
           );
-          if (uploadedEnvVars.length > 0) {
+          if (uploadedKeys.length > 0) {
             analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
               action: 'wizard_env_vars_uploaded',
               integration: config.metadata.integration,
-              variable_count: uploadedEnvVars.length,
-              variable_keys: uploadedEnvVars,
+              variable_count: uploadedKeys.length,
+              variable_keys: uploadedKeys,
             });
+          }
+          if (skip) {
+            setHostingEnvUploadSkip(sess, skip.provider);
           }
         }
 
@@ -312,6 +336,7 @@ ${warehouseReportInstruction(session)}
           Object.keys(envVars).length > 0
             ? 'Added environment variables to .env file'
             : '',
+          buildHostingEnvSkipWarning(sess),
         ].filter(Boolean);
 
         return {
