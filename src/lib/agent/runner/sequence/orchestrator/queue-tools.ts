@@ -9,6 +9,10 @@
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import {
+  isValidModel,
+  VALID_MODELS,
+} from '@lib/agent/runner/switchboard/models';
+import {
   TaskStatus,
   type QueueStore,
   type QueuedTask,
@@ -93,6 +97,19 @@ export function checkEnqueueGuards(
       message: `Unknown task type "${
         args.type
       }". Valid types: ${ctx.validTypes.join(', ')}.`,
+    };
+  }
+
+  // Reject an agent pinning a task to a non-allow-listed model.
+  if (args.model !== undefined && !isValidModel(args.model)) {
+    return {
+      ok: false,
+      guard: 'invalid-model',
+      message: `Model "${
+        args.model
+      }" is not allowed. Omit model to use the task default, or pick one of: ${[
+        ...VALID_MODELS,
+      ].join(', ')}.`,
     };
   }
 

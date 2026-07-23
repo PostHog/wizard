@@ -63,6 +63,28 @@ describe('checkEnqueueGuards', () => {
     expect(r).toEqual({ ok: true });
   });
 
+  it('rejects an enqueue that pins a non-allow-listed model', () => {
+    const r = checkEnqueueGuards(ctx, {
+      type: 'init',
+      reason: 'x',
+      model: 'openai/gpt-5',
+    });
+    expect(r).toMatchObject({ ok: false, guard: 'invalid-model' });
+  });
+
+  it('allows an allow-listed model override and an omitted model', () => {
+    expect(
+      checkEnqueueGuards(ctx, {
+        type: 'init',
+        reason: 'x',
+        model: 'openai/gpt-5.6-terra',
+      }),
+    ).toEqual({ ok: true });
+    expect(checkEnqueueGuards(ctx, { type: 'capture', reason: 'x' })).toEqual({
+      ok: true,
+    });
+  });
+
   it('refuses to grow the queue past the runaway cap', () => {
     for (let i = 0; i < 30; i++) {
       store.enqueue({ type: 'capture', inputs: { i } });

@@ -7,7 +7,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_4_MODEL,
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
@@ -121,11 +120,11 @@ describe('self-driving experiment — payload in, binding out', () => {
       },
       {
         name: 'JSON-string payload parses',
-        ctx: sd('{"model": "gpt-5-4", "effort": "low"}'),
+        ctx: sd('{"model": "gpt-5-6-terra", "effort": "low"}'),
         binding: {
           sequence: Sequence.linear,
           harness: Harness.pi,
-          model: GPT5_4_MODEL,
+          model: GPT5_6_TERRA_MODEL,
           thinkingLevel: 'low',
         },
       },
@@ -192,7 +191,7 @@ describe('self-driving experiment — fail-closed payload', () => {
 describe('self-driving experiment — isolation', () => {
   it('flag + maximal payload leave every other registry program exactly as unflagged', () => {
     const flagged = sd({
-      model: 'gpt-5-4',
+      model: 'gpt-5-6-terra',
       effort: 'high',
       harness: 'pi',
       sequence: 'orchestrator',

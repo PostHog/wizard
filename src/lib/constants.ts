@@ -27,31 +27,10 @@ export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
  */
 export const OPUS_MODEL = 'claude-opus-4-8';
 
-/**
- * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
- * completions. Enables cross-provider A/B without a wizard release.
- */
-export const GPT5_MODEL = 'openai/gpt-5';
-
-/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
-export const GPT5_4_MODEL = 'openai/gpt-5.4';
-
-/**
- * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
- * this (a reasoning model follows the integration skill; the mini tier keeps a
- * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
- * is set per-model in the switchboard capability matrix.
- */
-export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
-
-// Latest openai flagship generation. The 5.6 line ships tiered variants —
-// `luna` (fast/cheap: $1/$6 per MTok), `terra` (mid: $2.50/$15), `sol` (top:
-// $5/$30) — plus the `gpt-5.5` flagship. All are `wizard-pi-model` options for
-// cross-provider A/B; gateway ids carry no `/` or `.` in the variant keys.
+// The only openai models the wizard runs.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
 export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
 export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
-export const GPT5_5_MODEL = 'openai/gpt-5.5';
 
 // ── Agent runner routing axes ────────────────────────────────────────
 
