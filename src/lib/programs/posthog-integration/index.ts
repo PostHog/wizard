@@ -247,6 +247,11 @@ STEP 5: Set up environment variables for PostHog using the wizard-tools MCP serv
      config.metadata.name
    }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
+   - IMPORTANT — region-correct host: this project's PostHog Host is ${
+     ctx.host
+   }. Example code (from skills or docs) often hardcodes a fallback like \`https://us.i.posthog.com\`. When you write a fallback/default host in generated code (e.g. \`os.environ.get('POSTHOG_HOST', '...')\` or \`ENV['POSTHOG_HOST'] || '...'\`), use ${
+          ctx.host
+        } as that default so it matches the user's region. Never emit a fallback host for a different region than the detected one.
 
 Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses, then run its install command to add the SDK. Do not manually search for lockfiles or config files. If a file already EXISTS, read it immediately before you edit or overwrite it — writing from a stale read causes a tool failure. Creating a brand-new file needs no prior read: never read a path that does not exist yet; just write it.
 
