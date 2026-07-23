@@ -56,6 +56,7 @@ import {
   claudeConfigDir,
 } from './stored-login';
 import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
+import { workspaceRootWritePaths } from './workspace-sandbox';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -898,6 +899,12 @@ export async function runAgent(
               // Ruby — used by rails wizard
               '~/.bundle/**',
               '~/.gem/**',
+              // Monorepo: when the install dir is a sub-package, the shared
+              // node_modules + lockfile live at the workspace root (a parent
+              // dir), which isn't in the install-dir subtree above. Whitelist
+              // them so pnpm/yarn/npm/bun can actually write there instead of
+              // failing silently. Empty when not in a monorepo.
+              ...workspaceRootWritePaths(agentConfig.workingDirectory),
             ],
           },
           network: {
