@@ -8,8 +8,27 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
+import { VERSION } from '@lib/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
+
+/**
+ * The invocation, reduced to flag-safe strings: the command word (first
+ * positional, 'default' for the bare flow) and the sorted option NAMES.
+ * Option values never leave the machine — they carry paths, emails, keys.
+ */
+function invocationProperties(): { command: string; cli_flags: string } {
+  const args = process.argv.slice(2);
+  const command = args.find((a) => !a.startsWith('-')) ?? 'default';
+  const flags = [
+    ...new Set(
+      args
+        .filter((a) => a.startsWith('--'))
+        .map((a) => a.slice(2).split('=')[0]),
+    ),
+  ].sort();
+  return { command, cli_flags: flags.join(',') };
+}
 
 /**
  * Extract a standard property bag from the current session.
@@ -168,13 +187,20 @@ export class Analytics {
 
   /** Person properties sent with flag evaluation: app name plus the user's. */
   private flagPersonProperties(): Record<string, string> {
-    // run_surface and build let PostHog flag conditions scope an experiment to
-    // an invocation surface (e.g. wizard-orchestrator: local only, not cloud/
-    // headless) — evaluation-time only, never persisted onto the person.
+    // Environment facts flag conditions can scope on — evaluation-time only,
+    // never persisted onto the person. `version` gates an experiment to
+    // releases that implement it (a condition on a property older builds
+    // don't send silently never matches them); `run_surface`/`build` scope
+    // by invocation surface; `command`/`cli_flags` by subcommand; `os`/
+    // `node_major` by platform.
     return {
       $app_name: this.appName,
+      version: VERSION,
       run_surface: RUN_SURFACE,
       build: String(this.tags.build ?? 'dev'),
+      os: process.platform,
+      node_major: process.versions.node.split('.')[0],
+      ...invocationProperties(),
       ...this.personProperties,
     };
   }
