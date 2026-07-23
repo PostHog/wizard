@@ -7,12 +7,14 @@ import {
   buildRegistry,
   parseAgentPrompt,
   promptModelFor,
+  queueTools,
   resolveTask,
   taskModelSpec,
   type AgentPrompt,
   type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
+import { allowedOrchestratorTools } from '@lib/agent/runner/harness/pi/task';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
 import { HostResolution } from '@lib/host-resolution';
 
@@ -230,6 +232,31 @@ describe('resolveTask', () => {
     ]);
   });
 
+  it('availableTools is the coding tools plus the queue tools not disallowed', () => {
+    const registry = registryOf([prompt]);
+    const task = store.enqueue({ type: 'capture' });
+    const resolved = resolveTask(registry, task, store);
+    // Read/Edit from the prompt; complete_task + read_handoffs always; no
+    // enqueue_task (disallowed for a task).
+    expect(resolved.availableTools).toEqual([
+      'Read',
+      'Edit',
+      'complete_task',
+      'read_handoffs',
+    ]);
+  });
+
+  it('availableTools names exactly what the pi harness grants (no drift)', () => {
+    const registry = registryOf([prompt]);
+    const task = store.enqueue({ type: 'capture' });
+    const resolved = resolveTask(registry, task, store);
+    const granted = new Set([
+      ...prompt.allowedTools,
+      ...allowedOrchestratorTools(prompt.disallowedTools),
+    ]);
+    expect(new Set(resolved.availableTools)).toEqual(granted);
+  });
+
   it('resolves per-harness model + effort from the prompt', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });
@@ -335,6 +362,31 @@ describe('resolveTask', () => {
   });
 });
 
+describe('queueTools', () => {
+  it('is every queue tool minus the disallowed ones', () => {
+    expect(queueTools([])).toEqual([
+      'enqueue_task',
+      'complete_task',
+      'read_handoffs',
+    ]);
+    expect(queueTools(['enqueue_task'])).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]); // a task
+    expect(queueTools(['complete_task'])).toEqual([
+      'enqueue_task',
+      'read_handoffs',
+    ]); // the seed
+  });
+
+  it('accepts MCP-qualified disallow names too', () => {
+    expect(queueTools(['mcp__posthog-wizard__enqueue_task'])).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]);
+  });
+});
+
 describe('taskModelSpec', () => {
   const prompt = parseAgentPrompt(
     '---\nmodel_pi: prompt-model\n---\nx',
@@ -380,5 +432,18 @@ describe('assembleTaskPrompt', () => {
     expect(assembleTaskPrompt(ctx, 'do the task')).not.toContain(
       'task instructions',
     );
+  });
+
+  it('lists the passed tools and does not claim they are the whole set', () => {
+    const assembled = assembleTaskPrompt(
+      ctx,
+      'do the task',
+      [],
+      ['Read', 'complete_task', 'read_handoffs'],
+    );
+    expect(assembled).toContain('Read, complete_task, read_handoffs');
+    // The MCP servers are always-on and named in the project context, so the
+    // inventory must not claim the listed tools are all the agent has.
+    expect(assembled).not.toContain('nothing else is available');
   });
 });

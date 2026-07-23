@@ -497,7 +497,7 @@ export async function runOrchestrator(
           promptContext,
           resolved.prompt,
           skillPaths,
-          resolved.allowedTools,
+          resolved.availableTools,
         ),
         spinner,
         model: taskModel.model ?? taskPick.model,

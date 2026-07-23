@@ -25,6 +25,7 @@ import {
   WIZARD_USER_AGENT,
 } from '@lib/constants';
 import { piRuntimeNotes } from './runtime-notes';
+import { queueTools } from '@lib/agent/agent-prompt-loader';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
@@ -77,12 +78,7 @@ export function allowedPiCodingTools(
 export function allowedOrchestratorTools(
   disallowedTools: readonly string[] | undefined,
 ): Set<string> {
-  const disallowed = new Set((disallowedTools ?? []).map(shortToolName));
-  return new Set(
-    ['enqueue_task', 'complete_task', 'read_handoffs'].filter(
-      (name) => !disallowed.has(name),
-    ),
-  );
+  return new Set(queueTools(disallowedTools ?? []));
 }
 
 /**
