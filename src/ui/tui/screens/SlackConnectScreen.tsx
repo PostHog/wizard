@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { fetchSlackConnected, isTransientApiError } from '@lib/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
@@ -155,13 +155,21 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // Capture once and stop polling — repeating a failing call
-          // every tick would spam error tracking. The nudge copy is
-          // the fallback either way; a failed check counts as not
-          // connected so the screen doesn't sit on the loading state.
+          // A failed check counts as not connected so the screen doesn't
+          // sit on the loading state; the nudge copy is the fallback.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
           }
+          // Gateway/timeout/network blips are transient: the server or
+          // connection hiccuped, not the wizard. Keep polling quietly so
+          // the next tick can recover, and don't report noise to error
+          // tracking.
+          if (isTransientApiError(err)) {
+            timer = setTimeout(check, POLL_INTERVAL_MS);
+            return;
+          }
+          // Genuinely unexpected error: capture once and stop polling —
+          // repeating a failing call every tick would spam error tracking.
           analytics.captureException(
             err instanceof Error ? err : new Error(String(err)),
             { step: 'slack_connected_check' },
