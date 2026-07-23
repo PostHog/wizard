@@ -28,7 +28,7 @@ import { createWizardAskBridge } from '../../../wizard-ask-bridge';
 import type { ProgramConfig } from '../../../programs/program-step';
 import { assemblePrompt } from '../../agent-prompt';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
-import { abortOnInstallFailure } from '../shared/errors';
+import { abortOnInstallFailure, resolveAbortOutcome } from '../shared/errors';
 import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
 import { resolveHarness, getHarness } from '../switchboard';
 
@@ -141,33 +141,13 @@ export async function runLinearProgram(
   // 9. Error handling (full set from both runners)
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
-    const matched = config.abortCases?.find((c) => c.match.test(reason));
-    const outroData: WizardSession['outroData'] = matched
-      ? {
-          kind: OutroKind.Error,
-          message: matched.message,
-          body: matched.body,
-          docsUrl: matched.docsUrl,
-        }
-      : {
-          kind: OutroKind.Error,
-          message: `${config.integrationLabel} aborted`,
-          body: reason || 'The agent aborted the program.',
-          docsUrl: config.docsUrl,
-        };
+    const { outroData, error, matched } = resolveAbortOutcome(reason, config);
     analytics.wizardCapture('agent aborted', {
       integration: config.integrationLabel,
       reason,
       matched: matched?.message ?? null,
     });
-    await wizardAbort({
-      outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
-    });
+    await wizardAbort({ outroData, error });
   }
 
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
