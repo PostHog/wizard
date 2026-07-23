@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { useRef } from 'react';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { Panel, type VisualProps } from './panel';
+import { createGrid, plot } from './grid';
 import { VISUALIZER_PALETTE } from './palette';
 
 const PACKAGE_NAMES = [
@@ -75,16 +76,13 @@ export const CrateStack = ({ width, height }: VisualProps) => {
     }
   }
 
-  const grid: string[][] = Array.from({ length: height }, () =>
-    new Array(width).fill(' '),
-  );
+  const grid = createGrid(width, height);
   const drawCrate = (cx: number, cy: number, label: string, shake: number) => {
     const x = cx + shake;
-    if (cy < 0 || cy >= height) return;
     const labelTrimmed = label.slice(0, crateW - 2);
     const padded = `[${labelTrimmed}]`.padEnd(crateW, ' ');
-    for (let i = 0; i < crateW && x + i < width; i++) {
-      if (x + i >= 0) grid[cy][x + i] = padded[i];
+    for (let i = 0; i < crateW; i++) {
+      plot(grid, x + i, cy, padded[i]);
     }
   };
 

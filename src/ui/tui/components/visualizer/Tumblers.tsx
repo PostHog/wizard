@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { useRef } from 'react';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { createGrid, plot } from './grid';
 import { VISUALIZER_PALETTE } from './palette';
 
 interface TumblerState {
@@ -31,8 +32,14 @@ export const Tumblers = ({ width, height }: VisualProps) => {
 
   const cylinderTop = 1;
   const cylinderBottom = height - 2;
+  // Clamp to the cylinder interior: on short panels the raw formula can drop a
+  // pin's target above cylinderTop (even negative), which used to be written
+  // back as a settled height and indexed as grid[negativeRow][pinX] -> crash.
   const targetForPin = (i: number) =>
-    cylinderBottom - 1 - (i % 3) - Math.floor(i / 2);
+    Math.max(
+      cylinderTop,
+      Math.min(cylinderBottom, cylinderBottom - 1 - (i % 3) - Math.floor(i / 2)),
+    );
 
   if (state.pulse > 0) {
     state.pulse -= 1;
@@ -52,34 +59,30 @@ export const Tumblers = ({ width, height }: VisualProps) => {
     state.pulse = 14;
   }
 
-  const grid: string[][] = Array.from({ length: height }, () =>
-    new Array(width).fill(' '),
-  );
+  const grid = createGrid(width, height);
   // Outer cylinder walls
   for (let y = 0; y < height; y++) {
-    grid[y][0] = '│';
-    grid[y][width - 1] = '│';
+    plot(grid, 0, y, '│');
+    plot(grid, width - 1, y, '│');
   }
   // Top notches (where pins enter)
   for (let i = 0; i < pinCount; i++) {
-    const x = 1 + i * 2 + 1;
-    if (x < width) grid[0][x] = '▼';
+    plot(grid, 1 + i * 2 + 1, 0, '▼');
   }
   // Floor
-  for (let x = 1; x < width - 1; x++) grid[height - 1][x] = '─';
+  for (let x = 1; x < width - 1; x++) plot(grid, x, height - 1, '─');
   // Settled pins
   for (let i = 0; i < pinCount; i++) {
     const pinX = 1 + i * 2 + 1;
-    if (pinX >= width) continue;
     const top = state.heights[i] || cylinderTop;
     for (let y = top; y <= cylinderBottom; y++) {
-      grid[y][pinX] = '█';
+      plot(grid, pinX, y, '█');
     }
   }
   // Falling pin
   if (state.pulse === 0 && state.current < pinCount) {
     const pinX = 1 + state.current * 2 + 1;
-    if (pinX < width) grid[state.fallY][pinX] = '█';
+    plot(grid, pinX, state.fallY, '█');
   }
 
   const pulsing = state.pulse > 0;
