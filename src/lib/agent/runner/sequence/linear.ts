@@ -160,13 +160,20 @@ export async function runLinearProgram(
       reason,
       matched: matched?.message ?? null,
     });
+    // A matched abort case is an expected, user-driven outcome (e.g. declining
+    // the GitHub connection) already surfaced through `outroData`. Capturing it
+    // as a WizardError exception spawns spurious error-tracking issues, so only
+    // pass an `error` for genuine, unmatched aborts. The `agent aborted`
+    // product-analytics event above still fires either way, so no signal is lost.
     await wizardAbort({
       outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
+      error: matched
+        ? undefined
+        : new WizardError(`Agent aborted: ${reason}`, {
+            integration: config.integrationLabel,
+            error_type: AgentErrorType.ABORT,
+            reason,
+          }),
     });
   }
 
