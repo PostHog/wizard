@@ -395,12 +395,27 @@ describe('assembleTaskPrompt', () => {
     host: HostResolution.fromApiHost('https://us.posthog.com'),
   };
 
-  it('points the agent at its installed task instructions', () => {
+  it('inlines the instructions and tells the agent not to read them from disk', () => {
     const assembled = assembleTaskPrompt(ctx, 'do the task', [
-      '.posthog-wizard/skills/capture/SKILL.md',
+      {
+        path: '.posthog-wizard/skills/capture/SKILL.md',
+        content: '## Steps\nInstrument the events.',
+      },
     ]);
+    expect(assembled).toContain('Instrument the events.');
+    expect(assembled).toContain('do not read these files from disk');
     expect(assembled).toContain('.posthog-wizard/skills/capture/SKILL.md');
     expect(assembled).toContain('do the task');
+  });
+
+  it('falls back to a pointer for a file the runner could not read', () => {
+    const assembled = assembleTaskPrompt(ctx, 'do the task', [
+      { path: '.posthog-wizard/skills/capture/SKILL.md', content: null },
+    ]);
+    expect(assembled).toContain(
+      'instructions are at `.posthog-wizard/skills/capture/SKILL.md`',
+    );
+    expect(assembled).not.toContain('do not read these files from disk');
   });
 
   it('omits the instructions section when no skills are installed', () => {

@@ -85,28 +85,53 @@ const TASK_BASICS = `You are one step in a larger PostHog workflow made of sever
 
 const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
+/** An installed task-instruction file; content inlines when the runner could read it. */
+export interface SkillFile {
+  path: string;
+  content: string | null;
+}
+
 /**
- * Points the agent at its installed task instructions (the HOW). They live under
- * the wizard's run dir, not `.claude/skills/`, so the SDK does not auto-load
- * them — the prompt has to name them.
+ * The task's instructions (the HOW), inlined into the prompt so the agent never
+ * spends turns reading them from disk; a file the runner could not read falls
+ * back to a pointer.
  */
-function skillReference(paths: readonly string[]): string | null {
-  if (paths.length === 0) return null;
-  const list = paths.map((p) => `\`${p}\``).join(', ');
-  return `Your task instructions are at ${list}. Read them before you start and follow them. They are wizard scaffolding, not part of the project.`;
+function skillReference(skills: readonly SkillFile[]): string | null {
+  if (skills.length === 0) return null;
+  const inlined = skills.filter((s) => s.content !== null);
+  const pointers = skills.filter((s) => s.content === null);
+  const parts: string[] = [];
+  if (inlined.length > 0) {
+    parts.push(
+      `Your task instructions follow, already included — do not read these files from disk. They are wizard scaffolding, not part of the project.\n\n` +
+        inlined
+          .map(
+            (s) =>
+              `<task-instructions source="${s.path}">\n${s.content}\n</task-instructions>`,
+          )
+          .join('\n\n'),
+    );
+  }
+  if (pointers.length > 0) {
+    const list = pointers.map((s) => `\`${s.path}\``).join(', ');
+    parts.push(
+      `Further task instructions are at ${list}. Read them before you start and follow them.`,
+    );
+  }
+  return parts.join('\n\n');
 }
 
 /** A task agent's full prompt: injected basics, then the authored intent. */
 export function assembleTaskPrompt(
   ctx: OrchestratorPromptContext,
   body: string,
-  skillPaths: readonly string[] = [],
+  skills: readonly SkillFile[] = [],
 ): string {
   return [
     projectContext(ctx),
     exampleReference(ctx),
     commandmentsReference(ctx),
-    skillReference(skillPaths),
+    skillReference(skills),
     TASK_BASICS,
     body,
   ]

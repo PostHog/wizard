@@ -16,6 +16,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'fs';
@@ -62,6 +63,7 @@ import {
   resolveTask,
   taskModelSpec,
   type OrchestratorPromptContext,
+  type SkillFile,
 } from '@lib/agent/agent-prompt-loader';
 
 /** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
@@ -446,8 +448,8 @@ export async function runOrchestrator(
       // Task instructions are one-run scaffolding, not durable skills, so they
       // install under the run dir rather than .claude/skills — the SDK must not
       // auto-load them and they must never land in the project (or a CI PR).
-      // The prompt points the agent at them instead.
-      const skillPaths: string[] = [];
+      // The prompt inlines their content so the agent spends no turns reading them.
+      const skillFiles: SkillFile[] = [];
       for (const skillId of resolved.skills) {
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
@@ -472,7 +474,16 @@ export async function runOrchestrator(
           taskSkillsRoot,
         );
         if (result.kind === 'ok') {
-          skillPaths.push(path.join(result.path, 'SKILL.md'));
+          const skillPath = path.join(result.path, 'SKILL.md');
+          let content: string | null = null;
+          try {
+            content = readFileSync(skillPath, 'utf8');
+          } catch {
+            logToFile(
+              `[orchestrator] skill unreadable, prompting by pointer: ${skillPath}`,
+            );
+          }
+          skillFiles.push({ path: skillPath, content });
         } else {
           logToFile(
             `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
@@ -493,7 +504,7 @@ export async function runOrchestrator(
         session,
         programConfig,
         boot,
-        prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
+        prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillFiles),
         spinner,
         model: taskModel.model ?? taskPick.model,
         effort: taskModel.effort,
