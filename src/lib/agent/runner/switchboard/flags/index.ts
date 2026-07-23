@@ -40,7 +40,7 @@ export function resolveFlagRoute(
   );
 }
 
-/** The flag-driven sequence for a program, or undefined when no sequence experiment covers it with its flag on. */
+/** The flag-driven sequence for a program, or undefined when no sequence experiment covers it with its flag on. Surface/build scoping is the flag's own job (see `flagPersonProperties`). */
 export function resolveFlagSequence(
   program: ProgramId,
   flags: Record<string, string>,

@@ -99,11 +99,13 @@ and its `(skill: …)` reference never disagree on the number.
   they're armed as dormant responders + a report follow-up — no UI redirect, no
   verification (a downstream reminder prompts the user to finish). Enable a
   (possibly dormant) responder for every pick.
-- **6 — Configure scout troop** — materialize the canonical troop, then enable a
-  deliberately small set: `general` (always) + the **1–2 specialists** for the
-  products this project uses most; never `error-tracking`/`session-replay`
-  (consumed as native sources); disable the rest. The enabled troop lands at
-  **2–5** (general + 1–2 specialists + 0–2 custom).
+- **6 — Configure scout troop** — materialize the canonical troop, read the
+  enforced run budget via `scout-metadata-get` (24 scout runs/day per project by
+  default during early access), then enable a deliberately small set: `general`
+  (always) + the **2–3 specialists** for the products this project uses most;
+  never `error-tracking`/`session-replay` (consumed as native sources); disable
+  the rest. The enabled troop lands at **3–6** (general + 2–3 specialists + 0–2
+  custom), comfortably inside the default budget at the daily cadence.
 - **6b — Design custom scouts** — gap-analyze the repo against the troop
   (starting from the repo's for-agents context — AGENTS.md, CLAUDE.md,
   ARCHITECTURE.md, `.cursor/rules` — when present), propose **at most 2**
@@ -123,7 +125,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 3b  | Enable products                  | `3b-enable-products.md`               | `products-enable {products:[session_replay,error_tracking,conversations]}` flips the product toggles (server-owned recipes, conservative defaults). Idempotent. Web also gets a posthog-js init check; backend/mobile are inert → recorded for the report. See §9.                                                                                                                                                                                                                                                                                                                                                                      |
 | 4   | Enable signal sources            | `4-sources.md`                        | Create/enable `SignalSourceConfig` rows (`inbox-source-configs-*`). The native sources for the step-3b products (error tracking, replay, support) go on by default; others follow step-2 evidence. Always enables the scout gate `signals_scout`/`cross_source_issue`. Always enable the health check gate `health_checks`/`health_issue`. Never enables an unconfirmed connected tool.                                                                                                                                                                                                                                                 |
 | 5   | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (GitHub Issues: one connected repo → use it by default, no repo research; Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick.                                                                                                                                                                                                    |
-| 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); enable `general` + the **1–2 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`.                                                                                                                                                                                  |
+| 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); `scout-metadata-get` reports the enforced run budget (24 runs/day default); enable `general` + the **2–3 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`.                                                                                                                                                                                  |
 | 6b  | Design custom scouts             | `6b-tailor-scouts.md`                 | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the troop, reading the repo's for-agents context first (AGENTS.md, CLAUDE.md, ARCHITECTURE.md, `.cursor/rules`) as the map of surfaces and vocabulary; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
 | 7   | Write report & hand off          | `7-report.md`                         | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
@@ -259,11 +261,18 @@ sync).
 
 **Scout troop.** `SignalScoutConfig` (`models.py`): per `(team, skill_name)`,
 `enabled` (participation), `emit` (dry-run vs emit, default on),
-`run_interval_minutes` (default 60). Canonical troop (~19 `signals-scout-*`
-skills, and growing) in `posthog/products/signals/skills/`. STEP 6 does **not**
+`run_interval_minutes` (default 1440 — daily). Canonical troop (~19
+`signals-scout-*` skills, and growing) in `posthog/products/signals/skills/`.
+Scout runs are budgeted per team: the coordinator enforces caps resolved from
+the `signals-scout` flag payload (`team_configs[team]` → `default_team_config`
+→ code constant, `scout_harness/team_limits.py`); `default_team_config` currently
+sets `max_runs_per_day: 24`, so a project gets up to 24 scout runs/day by
+default during early access. The MCP `scout-metadata-get` tool
+(`scout/metadata/current/`) reports the enforced limits + the announcement
+banner, and STEP 6 reads it to size the troop. STEP 6 does **not**
 hardcode the list — it works from whatever `signals-scout-config-sync` returns
 and enables a **deliberately small set**: `general` is the only **always-on**
-scout; **1–2 specialists** are enabled for the products this project uses most
+scout; **2–3 specialists** are enabled for the products this project uses most
 (agent judgment over step-2 evidence — `top_events` volume, recent activity,
 active config counts). The specialist candidate pool is the rest of the troop —
 the surface-specific scouts (`product-analytics`, `web-analytics`,
@@ -275,10 +284,10 @@ the surface-specific scouts (`product-analytics`, `web-analytics`,
 enabled because step 4 consumes them as native sources (a scout would duplicate
 that pipeline). If no surface clearly qualifies, one universal cross-product
 scout (`anomaly-detection` or `health-checks`) is the fallback so ≥1 specialist
-always runs. Everything else is disabled; the enabled troop caps at **2–5**
+always runs. Everything else is disabled; the enabled troop caps at **3–6**
 (general
 
-- 1–2 specialists + 0–2 custom from STEP 7). Per `6-scouts.md`; plus the
+- 2–3 specialists + 0–2 custom from STEP 7). Per `6-scouts.md`; plus the
   `authoring-signals-scouts` companion (not a scout). `lazy_seed.py` mirrors the
   on-disk canonical skills into per-team `LLMSkill` rows:
   `sync_canonical_skills` only ever touches rows stamped
