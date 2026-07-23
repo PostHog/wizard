@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.51.0](https://github.com/PostHog/wizard/compare/v2.50.0...v2.51.0) (2026-07-23)
+
+
+### Features
+
+* **Orchestrator:** per-task tool lists, linear-only task-status notes ([#962](https://github.com/PostHog/wizard/issues/962)) ([420298e](https://github.com/PostHog/wizard/commit/420298e1781b2317b6610e330310d2863088ef6f))
+
 ## [2.50.0](https://github.com/PostHog/wizard/compare/v2.49.0...v2.50.0) (2026-07-23)
 
 
