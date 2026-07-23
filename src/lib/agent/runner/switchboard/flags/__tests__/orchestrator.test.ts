@@ -4,7 +4,7 @@
  * prompts per flow, so an uncovered program entering the orchestrator fails
  * with "No seed agent prompt" (the 2026-07-17 self-driving incident).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
@@ -20,6 +20,16 @@ import {
 } from '@lib/agent/runner/switchboard';
 import { ORCHESTRATOR_EXPERIMENT } from '@lib/agent/runner/switchboard/flags/orchestrator';
 import { runBindingCases } from './binding-cases';
+
+const envState = vi.hoisted(() => ({
+  runSurface: 'local' as 'cloud' | 'local',
+}));
+vi.mock('@env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@env')>()),
+  get RUN_SURFACE() {
+    return envState.runSurface;
+  },
+}));
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const ORCH_ON = { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' };
@@ -85,6 +95,26 @@ describe('orchestrator experiment — flag in, binding out', () => {
 });
 
 describe('orchestrator experiment — isolation', () => {
+  afterEach(() => {
+    envState.runSurface = 'local';
+  });
+
+  // The 2026-07-22 leak: pi is local-only (harness experiments already gate on
+  // the surface), so on cloud the flag paired the orchestrator with the
+  // anthropic binding fallback instead of its pi arm.
+  it('cloud (headless) surface → the flag routes nothing, run stays linear', () => {
+    envState.runSurface = 'cloud';
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: ORCH_ON,
+    };
+    expect(resolveBinding(ctx)).toEqual({
+      sequence: Sequence.linear,
+      ...ANTHROPIC_DEFAULT,
+    });
+    expect(ctx.trace?.sequence).toBe('binding');
+  });
+
   it('the flag leaves every uncovered registry program exactly as unflagged', () => {
     for (const program of PROGRAM_IDS) {
       if (ORCHESTRATOR_EXPERIMENT.programs.includes(program)) continue;

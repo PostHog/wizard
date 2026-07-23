@@ -45,6 +45,10 @@ export function resolveFlagSequence(
   program: ProgramId,
   flags: Record<string, string>,
 ): Sequence | undefined {
+  // Sequence experiments are disabled on the cloud (headless) run surface,
+  // like harness experiments above: pi is local-only there, so the flag would
+  // pair the orchestrator with the anthropic fallback instead of its arm.
+  if (RUN_SURFACE === 'cloud') return undefined;
   return SEQUENCE_EXPERIMENTS.find(
     (e) => e.programs.includes(program) && flags[e.flag] === 'true',
   )?.sequence;
