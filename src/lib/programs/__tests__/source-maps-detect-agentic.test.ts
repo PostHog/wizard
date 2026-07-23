@@ -220,18 +220,21 @@ describe('coerceReport', () => {
     },
   );
 
-  it('retains a React Native project with PostHog as instrumentable', () => {
-    const report = coerceReport({
-      repoType: 'single',
-      projects: [
-        {
-          path: '.',
-          framework: 'React Native',
-          targetId: 'react-native',
-          hasPostHog: true,
-        },
-      ],
-    });
+  it('retains an Expo React Native project with PostHog as instrumentable', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'React Native',
+            targetId: 'react-native',
+            hasPostHog: true,
+          },
+        ],
+      },
+      () => true,
+    );
 
     expect(report.projects[0]).toEqual({
       path: '.',
@@ -243,17 +246,20 @@ describe('coerceReport', () => {
   });
 
   it('retains an Expo-labelled project resolved to react-native as instrumentable', () => {
-    const report = coerceReport({
-      repoType: 'single',
-      projects: [
-        {
-          path: '.',
-          framework: 'Expo (React Native)',
-          targetId: 'react-native',
-          hasPostHog: true,
-        },
-      ],
-    });
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'Expo (React Native)',
+            targetId: 'react-native',
+            hasPostHog: true,
+          },
+        ],
+      },
+      () => true,
+    );
 
     expect(report.projects[0]).toEqual(
       expect.objectContaining({
@@ -263,7 +269,7 @@ describe('coerceReport', () => {
     );
   });
 
-  it('blocks a React Native project that has no PostHog SDK yet', () => {
+  it('blocks a bare React Native project (no expo package)', () => {
     const report = coerceReport({
       repoType: 'single',
       projects: [
@@ -271,10 +277,35 @@ describe('coerceReport', () => {
           path: '.',
           framework: 'React Native',
           targetId: 'react-native',
-          hasPostHog: false,
+          hasPostHog: true,
         },
       ],
     });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: null,
+        instrumentable: false,
+        reason: expect.stringMatching(/bare react native/i),
+      }),
+    );
+  });
+
+  it('blocks an Expo React Native project that has no PostHog SDK yet', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'React Native',
+            targetId: 'react-native',
+            hasPostHog: false,
+          },
+        ],
+      },
+      () => true,
+    );
 
     expect(report.projects[0]).toEqual(
       expect.objectContaining({

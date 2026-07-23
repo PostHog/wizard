@@ -7,6 +7,8 @@
  * instruments the chosen project.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   detectProjectsWithAgent,
   coerceAgenticReport,
@@ -90,11 +92,14 @@ export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
 function classify(
   variant: SkillVariant | null,
   hasPostHog: boolean,
+  reasonWhenNoVariant?: string,
 ): { instrumentable: boolean; reason?: string } {
   if (variant == null) {
     return {
       instrumentable: false,
-      reason: "Source-map upload isn't supported for this stack yet",
+      reason:
+        reasonWhenNoVariant ??
+        "Source-map upload isn't supported for this stack yet",
     };
   }
   if (!hasPostHog) {
@@ -110,8 +115,32 @@ function isAutomatableVariant(value: string | null): value is SkillVariant {
   return value !== null && AUTOMATABLE_VARIANTS.includes(value as SkillVariant);
 }
 
+export const BARE_REACT_NATIVE_REASON =
+  'Bare React Native (without Expo) is not supported — source-map upload needs the Expo build pipeline';
+
+/** True when the project at `path` has the `expo` package installed. */
+function projectHasExpo(installDir: string, projectPath: string): boolean {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(installDir, projectPath, 'package.json'), 'utf-8'),
+    ) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    return (
+      pkg.dependencies?.['expo'] != null ||
+      pkg.devDependencies?.['expo'] != null
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Map a generic detection report into source-maps projects. */
-function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
+function toSourceMapsReport(
+  report: AgenticDetectionReport,
+  isExpoProject: (path: string) => boolean,
+): DetectionReport {
   return {
     repoType: report.repoType,
     projects: report.projects.map((p) => {
@@ -122,8 +151,16 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
         /\bflutter\b/i.test(p.framework) ||
         (/\b(?:react[\s-]*native|expo)\b/i.test(p.framework) &&
           p.targetId !== 'react-native');
+      // Bare React Native (no expo package) is not supported: its Metro
+      // pipeline can't inject chunk IDs, so uploads would never resolve.
+      const isBareReactNative =
+        p.targetId === 'react-native' &&
+        !namesForeignNativePlatform &&
+        !isExpoProject(p.path);
       const variant =
-        isAutomatableVariant(p.targetId) && !namesForeignNativePlatform
+        isAutomatableVariant(p.targetId) &&
+        !namesForeignNativePlatform &&
+        !isBareReactNative
           ? p.targetId
           : null;
       return {
@@ -131,7 +168,11 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
         framework: p.framework,
         variant,
         hasPostHog: p.hasPostHog,
-        ...classify(variant, p.hasPostHog),
+        ...classify(
+          variant,
+          p.hasPostHog,
+          isBareReactNative ? BARE_REACT_NATIVE_REASON : undefined,
+        ),
       };
     }),
   };
@@ -140,14 +181,19 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
 /**
  * Validate the agent's raw JSON into a source-maps detection report. Exported
  * for testing — recognises detection-only native targets, then clamps them to
- * non-instrumentable projects.
+ * non-instrumentable projects. Without an `isExpoProject` predicate every
+ * react-native project is treated as bare (blocked).
  */
-export function coerceReport(parsed: unknown): DetectionReport {
+export function coerceReport(
+  parsed: unknown,
+  isExpoProject: (path: string) => boolean = () => false,
+): DetectionReport {
   return toSourceMapsReport(
     coerceAgenticReport(
       parsed,
       SOURCE_MAPS_TARGETS.map((target) => target.id),
     ),
+    isExpoProject,
   );
 }
 
@@ -161,5 +207,7 @@ export async function detectSourceMapsProjects(
     purpose: 'set up PostHog Error Tracking source-map upload',
     onEvent,
   });
-  return toSourceMapsReport(report);
+  return toSourceMapsReport(report, (path) =>
+    projectHasExpo(session.installDir, path),
+  );
 }
