@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.50.0](https://github.com/PostHog/wizard/compare/v2.49.0...v2.50.0) (2026-07-23)
+
+
+### Features
+
+* **self-driving:** reflect the 24 scout runs/day default budget ([#955](https://github.com/PostHog/wizard/issues/955)) ([d2df434](https://github.com/PostHog/wizard/commit/d2df4342d238853175a732f3a4ff982d698637bf))
+
+
+### Bug Fixes
+
+* **data-warehouse:** stop reporting benign fs errors during source detection ([#957](https://github.com/PostHog/wizard/issues/957)) ([a36ead3](https://github.com/PostHog/wizard/commit/a36ead333c832002769841dd4f702be3add845c4))
+* **switchboard:** sequence experiments are local-surface only ([#961](https://github.com/PostHog/wizard/issues/961)) ([b4621a1](https://github.com/PostHog/wizard/commit/b4621a1ace37436989d9faadd1e31381572daf69))
+
 ## [2.49.0](https://github.com/PostHog/wizard/compare/v2.48.0...v2.49.0) (2026-07-22)
 
 
