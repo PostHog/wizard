@@ -7,6 +7,7 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
+  pubPackageManager,
 } from '@lib/detection/package-manager';
 
 vi.mock('../../../utils/debug');
@@ -188,6 +189,7 @@ describe('static package manager helpers', () => {
     { fn: composerPackageManager, name: 'composer' },
     { fn: swiftPackageManager, name: 'spm' },
     { fn: gradlePackageManager, name: 'gradle' },
+    { fn: pubPackageManager, name: 'pub' },
   ])('$name returns valid PackageManagerInfo', async ({ fn }) => {
     const result = await fn();
     expect(result.detected).toHaveLength(1);

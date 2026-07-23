@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { FLUTTER_AGENT_CONFIG } from '../../../frameworks/flutter/flutter-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -52,6 +53,17 @@ describe('Integration enum order (drives first-match detection)', () => {
   test('generic Node is the last resort of the entire detection', () => {
     // javascriptNode matches any package.json; anything after it is unreachable.
     expect(order[order.length - 1]).toBe(Integration.javascriptNode);
+  });
+
+  test('flutter is ordered before android and swift (its subtrees look native)', () => {
+    // A Flutter project carries android/ and ios/ subtrees that would
+    // otherwise match the native detectors.
+    expect(order.indexOf(Integration.flutter)).toBeLessThan(
+      order.indexOf(Integration.android),
+    );
+    expect(order.indexOf(Integration.flutter)).toBeLessThan(
+      order.indexOf(Integration.swift),
+    );
   });
 
   test('kmp is ordered before android and swift (more specific detection wins)', () => {
@@ -137,14 +149,61 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
-  test('a Flutter project is not claimed by anything', async () => {
+  test('a Flutter project resolves to flutter, not its android/ subtree', async () => {
     const opts = project({
-      'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
+      'pubspec.yaml': FLUTTER_PUBSPEC,
       'android/build.gradle': `plugins { id 'com.android.application' }`,
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
-    await expect(detectFramework(opts.installDir)).resolves.toBeUndefined();
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.flutter,
+    );
+  });
+});
+
+const FLUTTER_PUBSPEC =
+  'name: my_flutter_app\n' +
+  'environment:\n' +
+  '  sdk: ^3.0.0\n' +
+  'dependencies:\n' +
+  '  flutter:\n' +
+  '    sdk: flutter\n';
+
+describe('flutter detect', () => {
+  const detect = FLUTTER_AGENT_CONFIG.detection.detect;
+
+  test('claims a project whose pubspec depends on the Flutter SDK', async () => {
+    const opts = project({ 'pubspec.yaml': FLUTTER_PUBSPEC });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a pure Dart project', async () => {
+    const opts = project({
+      'pubspec.yaml': 'name: my_dart_cli\nenvironment:\n  sdk: ^3.0.0\n',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a pubspec', async () => {
+    const opts = project({ 'package.json': '{}' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a commented-out flutter dependency', async () => {
+    const opts = project({
+      'pubspec.yaml':
+        'name: my_dart_cli\ndependencies:\n#  sdk: flutter removed\n',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('claims the YAML-legal multi-space variant', async () => {
+    const opts = project({
+      'pubspec.yaml':
+        'name: app\ndependencies:\n  flutter:\n    sdk:  flutter\n',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
   });
 });
 
