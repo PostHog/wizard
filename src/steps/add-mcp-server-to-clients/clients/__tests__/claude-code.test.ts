@@ -78,6 +78,119 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
     });
   });
 
+  describe('isServerInstalled', () => {
+    // `claude mcp list` enumerates servers across all scopes as `<name>: <url>`.
+    const listOutput = (...names: string[]) =>
+      Buffer.from(
+        names
+          .map((n) => `${n}: https://mcp.example.com/ - ✓ Connected`)
+          .join('\n') + '\n',
+      );
+
+    const mockList = (output: Buffer) =>
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('mcp list')) return output;
+        return Buffer.from('');
+      });
+
+    it('returns true when the exact server name is present', async () => {
+      mockList(listOutput('posthog'));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isServerInstalled()).resolves.toBe(true);
+    });
+
+    it('does not match posthog-local when checking for posthog', async () => {
+      mockList(listOutput('posthog-local'));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isServerInstalled(false)).resolves.toBe(false);
+    });
+
+    it('does not match posthog when checking for posthog-local', async () => {
+      mockList(listOutput('posthog'));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isServerInstalled(true)).resolves.toBe(false);
+    });
+
+    it('matches posthog-local when requested', async () => {
+      mockList(listOutput('posthog', 'posthog-local'));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isServerInstalled(true)).resolves.toBe(true);
+    });
+
+    it('returns false when mcp list throws', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        throw new Error('command failed');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isServerInstalled()).resolves.toBe(false);
+    });
+  });
+
+  describe('removeServer', () => {
+    it('returns success on exit 0', async () => {
+      execSyncMock.mockImplementation(() => Buffer.from(''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+    });
+
+    it('treats "No user-scoped MCP server found" stderr as a benign no-op', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('mcp remove')) {
+          throw new Error(
+            'Command failed: claude mcp remove --scope user posthog\nNo user-scoped MCP server found with name: posthog',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('treats "No MCP server named ... in user scope" stderr as a benign no-op', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('mcp remove')) {
+          throw new Error(
+            'Command failed: claude mcp remove --scope user posthog\nNo MCP server named "posthog" in user scope',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('returns failure and captures exception on unexpected error', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('mcp remove')) {
+          throw new Error('spawn ENOENT');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('spawn ENOENT'),
+        }),
+      );
+    });
+
+    it('returns failure when no binary is found', async () => {
+      execSyncMock.mockImplementation(() => {
+        throw new Error('not found');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+    });
+  });
+
   describe('installPlugin', () => {
     it('returns success on exit 0', async () => {
       execSyncMock.mockImplementation(() => Buffer.from(''));

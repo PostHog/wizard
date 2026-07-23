@@ -96,10 +96,20 @@ export class ClaudeCodeMCPClient
     if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
     try {
-      const output = execSync(`${binary} mcp list`, { stdio: 'pipe' })
-        .toString()
-        .toLowerCase();
-      return Promise.resolve(output.includes(serverName));
+      const output = execSync(`${binary} mcp list`, {
+        stdio: 'pipe',
+      }).toString();
+      // `claude mcp list` prints one server per line as `<name>: <url> ...`.
+      // Match the exact server name at the start of a line rather than a bare
+      // substring so that, when checking for `posthog`, we don't spuriously
+      // match `posthog-local` (and vice versa). A substring gate here passes
+      // while the scoped remove below fails, which is what produced the
+      // recurring "No user-scoped MCP server found" exceptions.
+      const installed = output
+        .split('\n')
+        .map((line) => line.split(':', 1)[0].trim().toLowerCase())
+        .includes(serverName);
+      return Promise.resolve(installed);
     } catch {
       return Promise.resolve(false);
     }
@@ -160,14 +170,23 @@ export class ClaudeCodeMCPClient
     const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
 
     try {
-      execSync(command);
+      execSync(command, { stdio: 'pipe' });
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      // Detection (`claude mcp list`) enumerates servers across every scope,
+      // but we only ever remove from user scope. If the server exists solely at
+      // project/local scope the CLI exits non-zero here even though there is
+      // nothing for us to do — treat "not present at user scope" as a benign
+      // no-op instead of capturing noise, mirroring the `already exists`
+      // handling in addServer.
+      if (
+        msg.includes('No user-scoped MCP server found with name') ||
+        (msg.includes('No MCP server named') && msg.includes('in user scope'))
+      ) {
+        return Promise.resolve({ success: true });
+      }
       analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
+        new Error(`Failed to remove server from Claude Code: ${msg}`),
       );
       return Promise.resolve({ success: false });
     }
