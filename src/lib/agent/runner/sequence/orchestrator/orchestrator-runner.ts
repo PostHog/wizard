@@ -622,6 +622,7 @@ export async function runOrchestrator(
         tasks_failed: summary.failed,
         tasks_blocked: blocked,
         failed_types: failedTypes,
+        queue_state: JSON.stringify(store.list()),
       }),
     });
   }
