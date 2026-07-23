@@ -43,4 +43,24 @@ describe('getWizardCommandments', () => {
       expect(text).toMatch(/do not re-ask/i);
     });
   });
+
+  // Orchestrator task-mode sessions (pi/task.ts) never register the
+  // TaskCreate/TaskUpdate todo tool, so they must not be told to drive it.
+  describe('taskTracking option', () => {
+    it('includes the TaskUpdate commandment by default', () => {
+      expect(getWizardCommandments()).toMatch(/Drive the work with TaskUpdate/);
+    });
+
+    it('omits the TaskUpdate commandment when taskTracking is false', () => {
+      expect(getWizardCommandments({ taskTracking: false })).not.toMatch(
+        /Drive the work with TaskUpdate/,
+      );
+    });
+
+    it('leaves other commandments intact when taskTracking is false', () => {
+      const text = getWizardCommandments({ taskTracking: false });
+      expect(text).toMatch(/Do not spawn subagents/);
+      expect(text).toMatch(/Keep task titles broad and stage-oriented/);
+    });
+  });
 });

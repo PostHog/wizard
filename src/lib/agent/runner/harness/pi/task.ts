@@ -265,7 +265,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       cwd: session.installDir,
       agentDir: getAgentDir(),
       systemPrompt:
-        getWizardCommandments() +
+        getWizardCommandments({ taskTracking: false }) +
         '\n' +
         taskRuntimeNotes({ bash: codingTools.has('bash'), posthogMcp }),
       noExtensions: true,
