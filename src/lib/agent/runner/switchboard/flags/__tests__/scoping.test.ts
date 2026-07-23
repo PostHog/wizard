@@ -39,12 +39,9 @@ const ALL_FLAG_KEYS = Object.entries(constants)
 const maxFlagsFor = (exp: (typeof HARNESS_EXPERIMENTS)[number]) => {
   const flags: Record<string, string> = { [exp.flags.useFlag]: 'true' };
   const payloads: Record<string, unknown> = {};
-  if (exp.flags.modelFlag) {
-    flags[exp.flags.modelFlag] = 'gpt-5-4';
-    flags[exp.flags.effortFlag] = 'high';
-  } else {
+  if (!exp.flags.model) {
     payloads[exp.flags.useFlag] = {
-      model: 'gpt-5-4',
+      model: 'gpt-5-6-terra',
       effort: 'high',
       harness: 'pi',
       sequence: 'orchestrator',
@@ -108,7 +105,7 @@ describe('flag scoping — the pinned effect matrix', () => {
       ALL_FLAG_KEYS.map((k) => [
         k,
         {
-          model: 'gpt-5-4',
+          model: 'gpt-5-6-terra',
           effort: 'high',
           harness: 'pi',
           sequence: 'orchestrator',
@@ -138,15 +135,15 @@ describe('flag scoping — the pinned effect matrix', () => {
     ).toEqual({
       sequence: constants.Sequence.orchestrator,
       harness: constants.Harness.pi,
-      model: constants.GPT5_4_MODEL, // 'true' is no variant → fallback
-      thinkingLevel: undefined, // 'true' is no effort level → table default
+      model: constants.GPT5_6_SOL_MODEL, // pinned by the use flag
+      thinkingLevel: 'medium', // pinned by the use flag
     });
     expect(
       resolveBinding({ program: 'self-driving', flags, flagPayloads }),
     ).toEqual({
       sequence: constants.Sequence.orchestrator, // from its own payload only
       harness: constants.Harness.pi,
-      model: constants.GPT5_4_MODEL,
+      model: constants.GPT5_6_TERRA_MODEL,
       thinkingLevel: 'high',
     });
   });
@@ -162,7 +159,14 @@ describe('flag scoping — routing reads live only in flags/', () => {
     '..',
     '..',
   );
-  for (const file of ['harness.ts', 'sequence.ts', 'models.ts', 'index.ts']) {
+  // orchestrator-runner consumes a flags/ resolver; it may pass the snapshot through, never index it.
+  for (const file of [
+    'harness.ts',
+    'sequence.ts',
+    'models.ts',
+    'index.ts',
+    '../sequence/orchestrator/orchestrator-runner.ts',
+  ]) {
     it(`${file} contains no direct flag reads or flag-key imports`, () => {
       const src = readFileSync(join(switchboardDir, file), 'utf8');
       expect(src).not.toMatch(/ctx\.flags\[/);

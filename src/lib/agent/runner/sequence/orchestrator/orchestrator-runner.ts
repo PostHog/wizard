@@ -21,7 +21,11 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import {
+  POSTHOG_DOCS_URL,
+  WIZARD_CONTACT_EMAIL,
+  type Integration,
+} from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
@@ -38,8 +42,10 @@ import type { BootstrapResult } from '../../shared/types';
 import {
   getHarness,
   resolveHarness,
+  resolveRoleRoute,
   type HarnessPick,
 } from '../../switchboard';
+import { isValidModel, requireKnownModel } from '../../switchboard/models';
 import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
@@ -208,6 +214,19 @@ export async function runOrchestrator(
   // to cheap models.
   const runStartMs = Date.now();
   const metrics = new RunMetrics(runStartMs);
+  // One precedence rule for both dispatch and telemetry: armed role route > enqueue/frontmatter spec.
+  const taskRunSpec = (task: QueuedTask, harness: string) => {
+    const spec = taskModelSpec(registry, task, harness);
+    const route = resolveRoleRoute(
+      programConfig.id,
+      task.type,
+      boot.wizardFlags,
+    );
+    return {
+      model: route?.model ?? spec.model,
+      effort: route?.effort ?? spec.effort,
+    };
+  };
   const durationMs = (t: QueuedTask) =>
     t.startedAt && t.finishedAt
       ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
@@ -216,9 +235,11 @@ export async function runOrchestrator(
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
+      // Mirror dispatch's allow-list fallback so attribution names the model that runs.
+      const specModel = taskRunSpec(task, pick.harness).model;
       const base = {
         type: task.type,
-        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
+        model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -401,7 +422,7 @@ export async function runOrchestrator(
     boot,
     prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
     spinner,
-    model: seedModel.model ?? seedPick.model,
+    model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,
     ...agentRunTools(seedPrompt),
     orchestrator: orchestratorCtx(),
@@ -481,18 +502,19 @@ export async function runOrchestrator(
       //
       // Per-task role = task.type — the switchboard consults
       // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
-      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6)
+      // unless a role route is armed (taskRunSpec).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
-      const taskModel = taskModelSpec(registry, task, taskPick.harness);
+      const spec = taskRunSpec(task, taskPick.harness);
       await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: taskModel.model ?? taskPick.model,
-        effort: taskModel.effort,
+        model: requireKnownModel(spec.model, taskPick.model),
+        effort: spec.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),
@@ -586,11 +608,11 @@ export async function runOrchestrator(
     retried_task_count: store.list().filter((t) => t.attempts > 1).length,
   });
 
-  // The build step flags any unresolved conflict in its handoff; surface the
+  // The review step flags any unresolved conflict in its handoff; surface the
   // one-liner here and point the user at the report for the detail.
-  const buildTask = store.list().find((t) => t.type === 'build');
-  const conflict = buildTask
-    ? store.readHandoff(buildTask.id)?.conflict
+  const reviewTask = store.list().find((t) => t.type === 'review');
+  const conflict = reviewTask
+    ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
 
   // Prefer the report the run wrote; fall back to the raw queue if it is missing.
@@ -601,6 +623,32 @@ export async function runOrchestrator(
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
+
+  // A drain that ends with failed tasks (retries exhausted) or tasks still
+  // pending (blocked behind a failed dependency) did NOT set PostHog up —
+  // abort like a linear agent failure instead of claiming success.
+  const blocked = summary[TaskStatus.Pending];
+  if (summary.failed > 0 || blocked > 0) {
+    const failedTypes = store
+      .list()
+      .filter((t) => t.status === TaskStatus.Failed)
+      .map((t) => t.type)
+      .join(', ');
+    await wizardAbort({
+      message: `The wizard was unable to set up PostHog: ${
+        failedTypes
+          ? `the ${failedTypes} step failed`
+          : `${blocked} steps never ran`
+      }.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError('orchestrator drain ended with failed tasks', {
+        tasks_failed: summary.failed,
+        tasks_blocked: blocked,
+        failed_types: failedTypes,
+        queue_state: JSON.stringify(store.list()),
+      }),
+    });
+  }
+
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${

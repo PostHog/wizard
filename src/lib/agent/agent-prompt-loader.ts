@@ -66,7 +66,22 @@ function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
 }
 
-const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`not needed\` and say why, rather than marking it done.`;
+/**
+ * The task's own tool list, injected so an agent never has to discover a tool's
+ * absence by trying it — and never reports that absence as a finding. Later
+ * tasks hold tools this one does not, so work it cannot do is handed on rather
+ * than attempted.
+ */
+/** Renders the inventory from the tool names a harness actually registered for
+ *  the run — the one complete list, in the vocabulary the agent will call. */
+export function renderToolInventory(toolNames: readonly string[]): string {
+  if (toolNames.length === 0) return '';
+  return `Your tools for this task: ${toolNames.join(
+    ', ',
+  )}. Do not look for a tool that is not listed or treat its absence as a problem to report. Later tasks in this run hold tools you do not: when your task needs one, hand that work off in your handoff for the task that can do it, or note it for the final report.`;
+}
+
+const TASK_BASICS = `You are one step in a larger PostHog workflow made of several tasks, run as a fresh agent with no memory of the other tasks beyond the context you are given. Other tasks — before and after you — own the rest of the work, so stay strictly on your own task: do not do a neighbouring step's job, redo what an upstream handoff already did, or reach beyond what you were asked. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`not needed\` and say why, rather than marking it done.`;
 
 const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
@@ -115,6 +130,15 @@ const ORCHESTRATOR_TOOLS = new Set([
   'complete_task',
   'read_handoffs',
 ]);
+
+/** The queue tools a task holds — all of them minus its disallows. Short names.
+ *  Single source for both the injected inventory and the harness's tool grant. */
+export function queueTools(disallowedTools: readonly string[]): string[] {
+  const disallowed = new Set(
+    disallowedTools.map((n) => n.replace(ORCHESTRATOR_TOOL_PREFIX, '')),
+  );
+  return [...ORCHESTRATOR_TOOLS].filter((t) => !disallowed.has(t));
+}
 
 /** A parsed agent prompt. The frontmatter fields plus the markdown body. */
 export interface AgentPrompt {

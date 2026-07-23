@@ -28,7 +28,7 @@ Both entry points are implemented:
 - **Custom headers:** wizard flags (`X-POSTHOG-FLAG-*`) and metadata
   (`X-POSTHOG-PROPERTY-*`) piggyback on every gateway request for tracing.
 - **Model routing:** `AgentConfig.modelOverride` accepts any gateway model id
-  (`DEFAULT_AGENT_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL`, `GPT5_MODEL`), so
+  (`DEFAULT_AGENT_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL`, `GPT5_6_TERRA_MODEL`), so
   mechanical work (repo classification, source-map detection) can route to
   `HAIKU_MODEL` while integration work stays on Sonnet.
 

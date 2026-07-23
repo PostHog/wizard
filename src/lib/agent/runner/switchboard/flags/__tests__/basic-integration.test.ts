@@ -1,21 +1,11 @@
-/**
- * Basic-integration pi experiment (wizard-use-pi-harness + wizard-pi-model +
- * wizard-pi-effort). Routes ONLY `posthog-integration`.
- */
+/** Basic-integration pi experiment: wizard-use-pi-harness → pi pinned to sol-medium, ONLY posthog-integration; model/effort variants must be inert here. */
 import { describe, it, expect, vi } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_4_MODEL,
-  GPT5_5_MODEL,
-  GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
-  GPT5_6_TERRA_MODEL,
-  GPT5_MINI_MODEL,
-  GPT5_MODEL,
   Harness,
   Sequence,
-  SONNET_5_MODEL,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
@@ -48,7 +38,7 @@ const integration = (flags: Record<string, string>): BindingCase['ctx'] => ({
 const PI_ON = { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' };
 const TRIO_ON = {
   ...PI_ON,
-  [WIZARD_PI_MODEL_FLAG_KEY]: 'gpt-5-4',
+  [WIZARD_PI_MODEL_FLAG_KEY]: 'gpt-5-6-terra',
   [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
 };
 
@@ -58,12 +48,12 @@ const NON_FLAGGED = {
   model: DEFAULT_AGENT_MODEL,
   thinkingLevel: undefined,
 } as const;
-const PI_LINEAR = (model: string, thinkingLevel?: 'high') => ({
+const PI_PINNED = {
   sequence: Sequence.linear,
   harness: Harness.pi,
-  model,
-  thinkingLevel,
-});
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
+} as const;
 
 describe('basic-integration experiment — scope declaration', () => {
   it('declares exactly the posthog-integration program, and it exists in the registry', () => {
@@ -76,15 +66,20 @@ describe('basic-integration experiment — flags in, binding out', () => {
   runBindingCases(
     [
       {
-        name: 'use flag alone → pi + gpt-5.4, linear, table-default effort',
+        name: 'use flag alone → pi pinned to sol-medium, linear',
         ctx: integration(PI_ON),
-        binding: PI_LINEAR(GPT5_4_MODEL),
+        binding: PI_PINNED,
         trace: { harness: 'flag', model: 'flag', sequence: 'binding' },
       },
       {
-        name: 'full trio → pi + selected model + effort override, still linear',
+        name: 'model + effort variants on top → inert, still the sol-medium pin',
         ctx: integration(TRIO_ON),
-        binding: PI_LINEAR(GPT5_4_MODEL, 'high'),
+        binding: PI_PINNED,
+      },
+      {
+        name: 'unknown model variant → inert too, the pin never reads it',
+        ctx: integration({ ...PI_ON, [WIZARD_PI_MODEL_FLAG_KEY]: 'banana' }),
+        binding: PI_PINNED,
       },
       {
         name: "use flag 'false' → the non-flagged binding, whole shape",
@@ -95,11 +90,6 @@ describe('basic-integration experiment — flags in, binding out', () => {
         name: "use flag garbage ('banana') → the non-flagged binding",
         ctx: integration({ [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'banana' }),
         binding: NON_FLAGGED,
-      },
-      {
-        name: 'invalid effort variant → table default, pi routing intact',
-        ctx: integration({ ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana' }),
-        binding: PI_LINEAR(GPT5_4_MODEL),
       },
       {
         name: 'effort flag without the use flag → inert, non-flagged binding',
@@ -114,31 +104,6 @@ describe('basic-integration experiment — flags in, binding out', () => {
       },
     ],
     setSurface,
-  );
-
-  // Variant key → gateway model, unknown/missing → gpt-5.4 fallback.
-  runBindingCases(
-    (
-      [
-        ['gpt-5', GPT5_MODEL],
-        ['gpt-5-4', GPT5_4_MODEL],
-        ['gpt-5-mini', GPT5_MINI_MODEL],
-        ['gpt-5-6-luna', GPT5_6_LUNA_MODEL],
-        ['gpt-5-6-terra', GPT5_6_TERRA_MODEL],
-        ['gpt-5-6-sol', GPT5_6_SOL_MODEL],
-        ['gpt-5-5', GPT5_5_MODEL],
-        ['sonnet-4-6', DEFAULT_AGENT_MODEL],
-        ['sonnet-5', SONNET_5_MODEL],
-        ['banana', GPT5_4_MODEL],
-        [undefined, GPT5_4_MODEL],
-      ] as const
-    ).map(([variant, model]) => ({
-      name: `model variant ${variant ?? '(missing)'} → ${model}`,
-      ctx: integration(
-        variant ? { ...PI_ON, [WIZARD_PI_MODEL_FLAG_KEY]: variant } : PI_ON,
-      ),
-      binding: PI_LINEAR(model),
-    })),
   );
 });
 

@@ -19,7 +19,16 @@
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { WIZARD_REMARK_EVENT_NAME, WIZARD_USER_AGENT } from '@lib/constants';
+import {
+  Sequence,
+  WIZARD_REMARK_EVENT_NAME,
+  WIZARD_USER_AGENT,
+} from '@lib/constants';
+import { piRuntimeNotes } from './runtime-notes';
+import {
+  queueTools,
+  renderToolInventory,
+} from '@lib/agent/agent-prompt-loader';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
@@ -72,12 +81,7 @@ export function allowedPiCodingTools(
 export function allowedOrchestratorTools(
   disallowedTools: readonly string[] | undefined,
 ): Set<string> {
-  const disallowed = new Set((disallowedTools ?? []).map(shortToolName));
-  return new Set(
-    ['enqueue_task', 'complete_task', 'read_handoffs'].filter(
-      (name) => !disallowed.has(name),
-    ),
-  );
+  return new Set(queueTools(disallowedTools ?? []));
 }
 
 /**
@@ -101,36 +105,6 @@ const TASK_NUDGE =
 
 const SEED_NUDGE =
   'The queue is still empty. Seed it now with enqueue_task calls for the task graph you planned.';
-
-/** Task-mode runtime notes — the harness constraints that survive into task mode. */
-function taskRuntimeNotes(opts: {
-  bash: boolean;
-  posthogMcp: boolean;
-}): string {
-  const lines = [
-    '## This runtime',
-    'Below are important guidance on the harness constraints you are bound to. Follow them as commandments.',
-    '- When you need several INDEPENDENT operations — reading or searching multiple files — issue them as multiple tool calls in a SINGLE turn. They run in parallel and save round-trips. Only sequence calls when one needs a previous call’s output.',
-    '- Explore with the `ls`, `find`, and `grep` tools. `read` is for FILES only — reading a directory errors. NEVER inspect files through `bash`.',
-    '- If a tool call is blocked, do NOT retry it or a reworded variant — the fence is deterministic. Change approach or note it in your handoff and move on.',
-    '- A `[YARA]` block from the security scanner caught a real problem in the edit you just tried (PII in a `capture()`, a hardcoded secret or host URL). Read the block reason and change the CODE to comply — e.g. move PII off the event and onto the person via `identify()`/`$set`. Never write a PostHog URL or token as a literal in source; read them from environment variables.',
-    "- To inspect or change a project's `.env` files use `check_env_keys` and `set_env_values` — a plain `read`, `edit`, or `write` of any `.env*` file is blocked.",
-    '- Status updates are PLAIN TEXT you write in your reply, NOT a tool call. When you begin a new action, put a line starting with the literal marker [STATUS] and a short present-tense phrase in the SAME turn as a tool call. Never send a turn that is ONLY a [STATUS] line — a turn with no tool call ends the run.',
-    '- When you are done, call `complete_task` exactly once with your structured handoff, in the same turn as your closing words. Do not stop before calling it.',
-    '- Name events in snake_case (e.g. todo_created), never with spaces.',
-  ];
-  if (opts.bash) {
-    lines.push(
-      '- `bash` is ONLY for install/build/typecheck/lint/format commands the project itself defines. Run commands BARE and synchronously: no `cd`, no `&`, `&&`, or pipes, no output redirection. Its full output is returned to you.',
-    );
-  }
-  if (opts.posthogMcp) {
-    lines.push(
-      '- The PostHog dashboard and insight tools are in your tool list directly, named `posthog_<tool>` (e.g. `posthog_dashboard-create`, `posthog_insight-create`). Use the ones present in your tool list; do not guess names.',
-    );
-  }
-  return lines.join('\n');
-}
 
 /** Whether this unit of work has reached its terminal state. */
 function isSettled(ctx: OrchestratorToolsContext): boolean {
@@ -267,7 +241,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       systemPrompt:
         getWizardCommandments() +
         '\n' +
-        taskRuntimeNotes({ bash: codingTools.has('bash'), posthogMcp }),
+        piRuntimeNotes(Sequence.orchestrator, {
+          bash: codingTools.has('bash'),
+          posthogMcp,
+        }),
       noExtensions: true,
       noSkills: true,
       noContextFiles: true,
@@ -317,6 +294,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       orchestratorTools.has(t.name),
     );
 
+    const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
     const { session: agentSession } = await createAgentSession({
       model,
       modelRegistry: registry,
@@ -325,9 +303,18 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       sessionManager: SessionManager.inMemory(dir),
       resourceLoader,
       noTools: 'builtin',
-      customTools: [...codingToolDefs, ...wizardTools, ...queueTools],
+      customTools,
     });
     await agentSession.bindExtensions({});
+
+    // The one complete list: exactly the tools registered on this session, in
+    // the names the agent will call them by. posthog_exec binds as an extension.
+    const toolNames = [
+      ...customTools.map((t) => t.name),
+      ...(posthogMcp ? ['posthog_exec'] : []),
+    ];
+    logToFile(`[pi-task] tools passed to model: ${toolNames.join(', ')}`);
+    const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
     const unsubscribe = agentSession.subscribe((event) => {
       switch (event.type) {
@@ -357,12 +344,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         }
         case 'tool_execution_end': {
           if (event.isError) {
-            logToFile(
-              `[pi-task] ✗ ${event.toolName}: ${String(event.result).slice(
-                0,
-                300,
-              )}`,
-            );
+            const detail =
+              typeof event.result === 'string'
+                ? event.result
+                : JSON.stringify(event.result ?? '');
+            logToFile(`[pi-task] ✗ ${event.toolName}: ${detail.slice(0, 300)}`);
           }
           break;
         }
@@ -372,7 +358,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     });
 
     try {
-      await agentSession.prompt(prompt);
+      await agentSession.prompt(taskPrompt);
 
       // pi's prompt() resolves the moment a turn carries no tool call — which
       // an agent mid-plan does emit. While the work has not reached its

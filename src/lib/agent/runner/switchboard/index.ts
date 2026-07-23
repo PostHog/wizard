@@ -164,4 +164,4 @@ export {
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export { isOrchestratorEnabled } from './flags';
+export { isOrchestratorEnabled, resolveRoleRoute } from './flags';

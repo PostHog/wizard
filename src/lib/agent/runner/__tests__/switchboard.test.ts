@@ -13,10 +13,6 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_MINI_MODEL,
-  GPT5_MODEL,
-  GPT5_4_MODEL,
-  GPT5_5_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
@@ -32,7 +28,11 @@ import {
   resolveBinding,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
-import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
+import {
+  modelCapabilities,
+  isValidModel,
+  requireKnownModel,
+} from '@lib/agent/runner/switchboard/models';
 import { runBindingCases } from '@lib/agent/runner/switchboard/flags/__tests__/binding-cases';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
@@ -115,7 +115,7 @@ describe('switchboard CLI precedence (dev builds)', () => {
         sequence: Sequence.linear,
         harness: Harness.pi,
         model: 'openai/o4-mini',
-        thinkingLevel: undefined,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'flag', model: 'cli', sequence: 'binding' },
     },
@@ -165,8 +165,8 @@ describe('switchboard decision trace', () => {
       binding: {
         sequence: Sequence.linear,
         harness: Harness.pi,
-        model: GPT5_4_MODEL,
-        thinkingLevel: undefined,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'flag', model: 'flag', sequence: 'binding' },
     },
@@ -182,8 +182,8 @@ describe('switchboard decision trace', () => {
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        model: GPT5_4_MODEL,
-        thinkingLevel: undefined,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
     },
@@ -236,8 +236,8 @@ describe('switchboard composed clamp', () => {
       binding: {
         sequence: Sequence.linear,
         harness: Harness.pi,
-        model: GPT5_4_MODEL,
-        thinkingLevel: undefined,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'flag', model: 'flag', sequence: 'composed' },
     },
@@ -250,7 +250,7 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
       'claude-sonnet-4-6',
       'claude-opus-4-8',
       'claude-haiku-4-5-20251001',
-      'openai/gpt-5',
+      'openai/gpt-5.6-terra',
     ]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
@@ -262,23 +262,15 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
     expect(modelCapabilities('openai/gpt-4o').reasoning).toBe(false);
   });
 
-  it('sets reasoning effort per model: gpt-5 low (fast flagship), gpt-5-mini medium', () => {
-    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
-    // The gpt-5.6 line + gpt-5.5 are reasoning models despite the openai/ prefix; they opt in past the default-off.
-    for (const m of [
-      GPT5_6_LUNA_MODEL,
-      GPT5_6_TERRA_MODEL,
-      GPT5_6_SOL_MODEL,
-      GPT5_5_MODEL,
-    ]) {
+  it('sets reasoning effort per model across the gpt-5.6 line', () => {
+    // The gpt-5.6 line are reasoning models despite the openai/ prefix; they opt in past the default-off.
+    for (const m of [GPT5_6_LUNA_MODEL, GPT5_6_TERRA_MODEL, GPT5_6_SOL_MODEL]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
-    // luna/sol/5.5 stay low (fast); terra runs medium as the sonnet-tier parallel.
+    // luna/sol stay low (fast); terra runs medium as the sonnet-tier parallel.
     expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
     expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_5_MODEL).thinkingLevel).toBe('low');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
@@ -291,10 +283,48 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
   });
 
   it('a binding thinkingLevel override rides only a reasoning model', () => {
-    expect(modelCapabilities(GPT5_4_MODEL, 'high').thinkingLevel).toBe('high');
-    expect(modelCapabilities(GPT5_4_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_6_TERRA_MODEL, 'high').thinkingLevel).toBe(
+      'high',
+    );
+    expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
     expect(
       modelCapabilities('openai/gpt-4o', 'high').thinkingLevel,
     ).toBeUndefined();
+  });
+});
+
+describe('switchboard model allow-list', () => {
+  it('allow-lists the sonnets and the gpt-5.6 line, nothing older', () => {
+    for (const m of [
+      DEFAULT_AGENT_MODEL,
+      SONNET_5_MODEL,
+      GPT5_6_LUNA_MODEL,
+      GPT5_6_TERRA_MODEL,
+      GPT5_6_SOL_MODEL,
+    ]) {
+      expect(isValidModel(m)).toBe(true);
+    }
+    // The retired openai ids are gone — no longer valid to dispatch on.
+    for (const m of ['openai/gpt-5', 'openai/gpt-5.4', 'openai/gpt-5.5']) {
+      expect(isValidModel(m)).toBe(false);
+    }
+    expect(isValidModel('')).toBe(false);
+    expect(isValidModel(undefined)).toBe(false);
+  });
+
+  it('requireKnownModel takes the first allow-listed candidate', () => {
+    expect(requireKnownModel(undefined, GPT5_6_TERRA_MODEL)).toBe(
+      GPT5_6_TERRA_MODEL,
+    );
+    expect(requireKnownModel('openai/gpt-5', GPT5_6_TERRA_MODEL)).toBe(
+      GPT5_6_TERRA_MODEL,
+    );
+  });
+
+  it('requireKnownModel throws loud when no candidate is allow-listed', () => {
+    // A dead/empty id must fail here, not reach the gateway.
+    expect(() => requireKnownModel(undefined, '', 'openai/gpt-5')).toThrow(
+      /No valid model/,
+    );
   });
 });

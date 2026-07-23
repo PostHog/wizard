@@ -7,13 +7,9 @@
 import { z } from 'zod';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_4_MODEL,
-  GPT5_5_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
-  GPT5_MINI_MODEL,
-  GPT5_MODEL,
   Harness,
   Sequence,
   SONNET_5_MODEL,
@@ -24,12 +20,8 @@ import type { EffortLevel } from '../models';
 
 // ── Shared vocabulary ─────────────────────────────────────────────────────
 
-/** Model variant key → gateway id (variant keys can't carry `/` or `.`). */
+/** Model variant key → gateway id. */
 const MODEL_FLAG_VARIANTS: Record<string, string> = {
-  'gpt-5': GPT5_MODEL,
-  'gpt-5-4': GPT5_4_MODEL,
-  'gpt-5-mini': GPT5_MINI_MODEL,
-  'gpt-5-5': GPT5_5_MODEL,
   'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
   'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
   'gpt-5-6-sol': GPT5_6_SOL_MODEL,
@@ -56,25 +48,23 @@ export interface FlagRoute {
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Multivariate scheme: model/effort ride their own multivariate flags. */
-export interface MultivariateConfigFlag {
+/** Pinned scheme: the useFlag routes to pi on a fixed model/effort. The model and effort multivariate flags are role-scoped experiment surfaces (see `review-model.ts`) — the general route never reads them. */
+export interface PinnedConfigFlag {
   /** Boolean flag: 'true' → route this program to pi. */
   useFlag: string;
-  /** Multivariate flag: variant key → gateway id via `MODEL_FLAG_VARIANTS`. */
-  modelFlag: string;
-  /** Multivariate flag: reasoning-effort override. */
-  effortFlag: string;
-  /** Model when the variant is missing or unknown. */
-  fallbackModel: string;
+  /** Gateway model id the route pins. */
+  model: string;
+  /** Reasoning-effort the route pins; absent → the model's table default. */
+  effort?: EffortLevel;
 }
 
 /** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
 export interface PayloadConfigFlag {
   useFlag: string;
-  modelFlag?: never;
+  model?: never;
 }
 
-export type ConfigFlag = MultivariateConfigFlag | PayloadConfigFlag;
+export type ConfigFlag = PinnedConfigFlag | PayloadConfigFlag;
 
 /**
  * A harness-axis experiment: ONE program and the flags that route it. The
@@ -92,6 +82,19 @@ export interface SequenceExperiment {
   flag: string;
   /** Sequence the flag routes covered programs to. */
   sequence: Sequence;
+}
+
+/** A role-scoped experiment: the model flag's arm routes ONE role of ONE program, outranking prompt frontmatter there; any non-arm variant fails closed. */
+export interface RoleExperiment {
+  program: ProgramId;
+  /** Agent-prompt role (`task.type`) the arms apply to. */
+  role: string;
+  useFlag: string;
+  modelFlag: string;
+  /** Variant keys (`MODEL_FLAG_VARIANTS`) the experiment may route. */
+  arms: readonly string[];
+  /** Effort pinned for every arm, so arms never diverge onto per-model table defaults. */
+  effort: EffortLevel;
 }
 
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
@@ -135,13 +138,8 @@ export function routeFromConfigFlag(
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
   if (flags[cfg.useFlag] !== 'true') return undefined;
-  if (cfg.modelFlag) {
-    const effort = flags[cfg.effortFlag] as EffortLevel;
-    return {
-      model:
-        MODEL_FLAG_VARIANTS[flags[cfg.modelFlag] ?? ''] ?? cfg.fallbackModel,
-      thinkingLevel: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
-    };
+  if (cfg.model) {
+    return { model: cfg.model, thinkingLevel: cfg.effort };
   }
   const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
   if (!route) {
@@ -150,4 +148,16 @@ export function routeFromConfigFlag(
     );
   }
   return route;
+}
+
+/** Resolve a role experiment's arm, or undefined when it doesn't validly route. */
+export function routeFromRoleFlag(
+  exp: RoleExperiment,
+  flags: Record<string, string>,
+): { model: string; effort: EffortLevel } | undefined {
+  if (flags[exp.useFlag] !== 'true') return undefined;
+  const variant = flags[exp.modelFlag] ?? '';
+  if (!exp.arms.includes(variant)) return undefined;
+  const model = MODEL_FLAG_VARIANTS[variant];
+  return model ? { model, effort: exp.effort } : undefined;
 }

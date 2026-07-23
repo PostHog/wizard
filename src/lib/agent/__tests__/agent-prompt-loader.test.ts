@@ -7,6 +7,8 @@ import {
   buildRegistry,
   parseAgentPrompt,
   promptModelFor,
+  queueTools,
+  renderToolInventory,
   resolveTask,
   taskModelSpec,
   type AgentPrompt,
@@ -335,6 +337,31 @@ describe('resolveTask', () => {
   });
 });
 
+describe('queueTools', () => {
+  it('is every queue tool minus the disallowed ones', () => {
+    expect(queueTools([])).toEqual([
+      'enqueue_task',
+      'complete_task',
+      'read_handoffs',
+    ]);
+    expect(queueTools(['enqueue_task'])).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]); // a task
+    expect(queueTools(['complete_task'])).toEqual([
+      'enqueue_task',
+      'read_handoffs',
+    ]); // the seed
+  });
+
+  it('accepts MCP-qualified disallow names too', () => {
+    expect(queueTools(['mcp__posthog-wizard__enqueue_task'])).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]);
+  });
+});
+
 describe('taskModelSpec', () => {
   const prompt = parseAgentPrompt(
     '---\nmodel_pi: prompt-model\n---\nx',
@@ -380,5 +407,24 @@ describe('assembleTaskPrompt', () => {
     expect(assembleTaskPrompt(ctx, 'do the task')).not.toContain(
       'task instructions',
     );
+  });
+
+  it('does not embed a tool inventory — the harness renders it from its real set', () => {
+    const assembled = assembleTaskPrompt(ctx, 'do the task', []);
+    expect(assembled).not.toContain('Your tools for this task');
+  });
+});
+
+describe('renderToolInventory', () => {
+  it('lists the exact names passed and hands unlisted work to later tasks', () => {
+    const out = renderToolInventory(['read', 'find', 'ls', 'complete_task']);
+    expect(out).toContain(
+      'Your tools for this task: read, find, ls, complete_task',
+    );
+    expect(out).toContain('hand that work off');
+  });
+
+  it('is empty when the set is empty', () => {
+    expect(renderToolInventory([])).toBe('');
   });
 });
