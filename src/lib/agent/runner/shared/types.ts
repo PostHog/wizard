@@ -22,6 +22,14 @@ export interface AbortCase {
   message: string;
   body: string;
   docsUrl?: string;
+  /**
+   * Mark a benign, user-driven or environment-driven abort (e.g. the user
+   * declining an optional connection) as expected. Expected aborts still
+   * render their outro and fire the `agent aborted` analytics event, but are
+   * NOT reported to error tracking via `captureException` — they are normal
+   * outcomes, not exceptions worth triaging.
+   */
+  expected?: boolean;
 }
 
 /**

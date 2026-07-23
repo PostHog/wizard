@@ -230,6 +230,10 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
       'open fixes, so setup cannot finish without it. Nothing was left ' +
       'half-configured. When you are ready to install the PostHog GitHub ' +
       'App, run the wizard again.',
+    // The user chose not to connect GitHub — an expected cancellation, not an
+    // error. The friendly outro above already explains next steps; don't file
+    // an error-tracking exception for it.
+    expected: true,
   },
   {
     // Skill emits: [ABORT] requires-interactive-mode
@@ -239,6 +243,9 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
       'Self-driving setup asks questions along the way (GitHub and ' +
       'issue trackers), so it needs an interactive terminal. Run ' +
       'the wizard outside CI / non-interactive mode.',
+    // Running in a non-interactive environment is an expected precondition
+    // failure, not an exception to triage.
+    expected: true,
   },
   {
     // The wizard_ask tool's own error texts (non-interactive host, ask cap
@@ -251,6 +258,9 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
       'environment was non-interactive, or the question budget ran out). ' +
       'Nothing was left half-configured. Run the wizard again in an ' +
       'interactive terminal.',
+    // Couldn't collect the required answers (non-interactive / budget) — a
+    // benign, expected outcome rather than an error.
+    expected: true,
   },
 ];
 
