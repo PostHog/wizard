@@ -15,7 +15,6 @@ import { runtimeEnv } from '@env';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
@@ -298,6 +297,13 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * The orchestrator owns the TUI task panel (it renders its queue), so its
+   * runs suppress the agent's own TaskCreate/TaskUpdate rendering. Set from
+   * the run's queue context, never from the raw flag — the flag being on must
+   * not touch other programs' linear runs.
+   */
+  suppressTaskRender?: boolean;
 };
 
 /**
@@ -579,6 +585,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      suppressTaskRender: !!config.orchestrator,
     };
 
     logToFile('Agent config:', {
@@ -1027,8 +1034,7 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
-        (agentConfig.wizardFlags ?? {})[WIZARD_ORCHESTRATOR_FLAG_KEY] ===
-          'true',
+        agentConfig.suppressTaskRender ?? false,
         emitStepEvents,
       );
 
