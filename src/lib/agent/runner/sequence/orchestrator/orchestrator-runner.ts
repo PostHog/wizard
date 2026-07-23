@@ -275,6 +275,7 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  let commandmentsContent: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
@@ -296,6 +297,16 @@ export async function runOrchestrator(
       const commandments = path.join(ref.path, 'references', 'COMMANDMENTS.md');
       if (existsSync(path.join(session.installDir, commandments))) {
         commandmentsPath = commandments;
+        try {
+          commandmentsContent = readFileSync(
+            path.join(session.installDir, commandments),
+            'utf8',
+          );
+        } catch {
+          logToFile(
+            '[orchestrator] commandments unreadable, prompting by pointer',
+          );
+        }
       }
     } else {
       logToFile(
@@ -356,6 +367,7 @@ export async function runOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
+    commandmentsContent,
   };
 
   logToFile(

@@ -424,6 +424,27 @@ describe('assembleTaskPrompt', () => {
     );
   });
 
+  it('inlines the framework rules when their content was read', () => {
+    const assembled = assembleTaskPrompt(
+      {
+        ...ctx,
+        commandmentsPath: 'ref/COMMANDMENTS.md',
+        commandmentsContent: 'Never hardcode the token.',
+      },
+      'do the task',
+    );
+    expect(assembled).toContain('Never hardcode the token.');
+    expect(assembled).toContain('do not read them from disk');
+  });
+
+  it('falls back to a rules pointer when only the path is known', () => {
+    const assembled = assembleTaskPrompt(
+      { ...ctx, commandmentsPath: 'ref/COMMANDMENTS.md' },
+      'do the task',
+    );
+    expect(assembled).toContain('rules for this integration are at');
+  });
+
   it('does not embed a tool inventory — the harness renders it from its real set', () => {
     const assembled = assembleTaskPrompt(ctx, 'do the task', []);
     expect(assembled).not.toContain('Your tools for this task');

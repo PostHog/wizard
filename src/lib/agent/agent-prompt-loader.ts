@@ -43,6 +43,8 @@ export interface OrchestratorPromptContext {
   examplePath?: string;
   /** Path to the framework's rules (COMMANDMENTS.md), if available. */
   commandmentsPath?: string;
+  /** COMMANDMENTS.md content, inlined so tasks never re-read it from disk. */
+  commandmentsContent?: string;
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
@@ -60,8 +62,13 @@ function exampleReference(ctx: OrchestratorPromptContext): string | null {
   return `A reference PostHog integration for this framework is at \`${ctx.examplePath}\`. It shows the target implementation pattern. Reference its patterns and conventions, adapting them to this codebase.`;
 }
 
-/** The framework's rules ship with the reference skill; every task follows them. */
+/** The framework's rules, inlined when read; a pointer when only the path is known. */
 function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
+  if (ctx.commandmentsContent) {
+    return `Framework rules for this integration follow, already included — do not read them from disk. Follow them in every edit.\n\n<framework-rules source="${
+      ctx.commandmentsPath ?? 'COMMANDMENTS.md'
+    }">\n${ctx.commandmentsContent}\n</framework-rules>`;
+  }
   if (!ctx.commandmentsPath) return null;
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
 }
