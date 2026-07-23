@@ -15,6 +15,10 @@ import {
   type TaskHandoff,
 } from './queue';
 
+/** The per-task remark ask, shared by both harnesses' complete_task schemas. */
+export const REMARK_ASK =
+  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
+
 export interface OrchestratorToolsContext {
   store: QueueStore;
   /** Task types the registry knows about. enqueue_task rejects anything else. */
@@ -145,7 +149,11 @@ export type CompleteResult = { ok: true } | { ok: false; message: string };
 
 export function applyComplete(
   ctx: OrchestratorToolsContext,
-  args: { status: 'done' | 'failed' | 'not needed'; handoff: TaskHandoff },
+  args: {
+    status: 'done' | 'failed' | 'not needed';
+    handoff: TaskHandoff;
+    remark?: string;
+  },
 ): CompleteResult {
   const id = ctx.currentTaskId;
   if (!id) {
@@ -153,6 +161,12 @@ export function applyComplete(
       ok: false,
       message: 'complete_task can only be called by a running task agent.',
     };
+  }
+  if (args.remark) {
+    analytics.wizardCapture('orchestrator remark', {
+      task_type: ctx.store.get(id)?.type,
+      remark: args.remark,
+    });
   }
   if (args.status === TaskStatus.Failed) {
     ctx.store.fail(
@@ -278,10 +292,12 @@ export function buildOrchestratorTools(
     {
       status: z.enum(['done', 'failed', 'not needed']),
       handoff: z.object(HANDOFF_SHAPE),
+      remark: z.string().optional().describe(REMARK_ASK),
     },
     ((args: {
       status: 'done' | 'failed' | 'not needed';
       handoff: TaskHandoff;
+      remark?: string;
     }) => {
       const res = applyComplete(ctx, args);
       if (!res.ok) return textResult(res.message, true);

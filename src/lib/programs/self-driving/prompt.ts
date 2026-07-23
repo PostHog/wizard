@@ -136,9 +136,10 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    a source only for a tool the user picked.
 
 STEP 6 — Configure the scout troop. (skill: "Scouts")
-   Materialize the troop, then enable only a small set — the "general"
-   scout plus the one or two specialists for the products this project
-   uses most — and disable the rest, per the skill.
+   Materialize the troop, read the project's enforced scout-run budget
+   (24 runs a day by default), then enable only a small set — the
+   "general" scout plus the two or three specialists for the products
+   this project uses most — and disable the rest, per the skill.
 
 STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
