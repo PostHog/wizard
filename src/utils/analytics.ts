@@ -68,7 +68,15 @@ export class Analytics {
       host: ANALYTICS_HOST_URL,
       flushAt: 1,
       flushInterval: 0,
-      enableExceptionAutocapture: true,
+      // Only autocapture exceptions in published builds. The posthog-node
+      // client installs a process-wide handler that scoops up *any* exception
+      // in the process — in dev/test runs that includes unrelated throws (e.g.
+      // a vitest suite deliberately exercising a caught JSON.parse), which then
+      // surface as spurious issues in our own error tracking. Dev/CI runs still
+      // send their tagged analytics; they just don't hijack the process's
+      // exception handler. tsdown inlines IS_PRODUCTION_BUILD to `true` only in
+      // published builds.
+      enableExceptionAutocapture: IS_PRODUCTION_BUILD,
       before_send: (event) => {
         if (!event) return event;
         if (Object.keys(this.groups).length > 0) {
