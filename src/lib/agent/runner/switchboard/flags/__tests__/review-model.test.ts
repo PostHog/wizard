@@ -1,10 +1,5 @@
-/**
- * Review-model experiment isolation (wizard-pi-model arm on the review role
- * of posthog-integration ONLY). This override runs runner-side — it outranks
- * prompt-frontmatter for its one role — so the scoping matrix cannot see it;
- * this file pins its scope and fail-closed behavior directly.
- */
-import { describe, it, expect } from 'vitest';
+/** Review-model experiment isolation — the role route runs runner-side, invisible to the scoping matrix, so its scope and fail-closed behavior are pinned here. */
+import { describe, it, expect, vi } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   GPT5_6_SOL_MODEL,
@@ -14,30 +9,42 @@ import {
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
-  REVIEW_MODEL_EXPERIMENT,
-  reviewModelOverride,
-} from '@lib/agent/runner/switchboard/flags/review-model';
+  ROLE_EXPERIMENTS,
+  resolveRoleRoute,
+} from '@lib/agent/runner/switchboard/flags';
+import { REVIEW_MODEL_EXPERIMENT } from '@lib/agent/runner/switchboard/flags/review-model';
 
-const ARM_FLAGS = (variant: string, effort = 'medium') => ({
+const envState = vi.hoisted(() => ({
+  runSurface: 'local' as 'cloud' | 'local',
+}));
+vi.mock('@env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@env')>()),
+  get RUN_SURFACE() {
+    return envState.runSurface;
+  },
+}));
+
+const ARM_FLAGS = (variant: string) => ({
   [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
   [WIZARD_PI_MODEL_FLAG_KEY]: variant,
-  [WIZARD_PI_EFFORT_FLAG_KEY]: effort,
 });
 
 describe('review-model experiment — scope declaration', () => {
-  it('declares the posthog-integration program (exists in the registry) and the review role', () => {
+  it('is the only registered role experiment', () => {
+    expect(ROLE_EXPERIMENTS).toEqual([REVIEW_MODEL_EXPERIMENT]);
+  });
+
+  it('declares the posthog-integration program (exists in the registry), the review role, and exactly the sol/terra arms at medium', () => {
     expect(REVIEW_MODEL_EXPERIMENT.program).toBe('posthog-integration');
     expect(PROGRAM_REGISTRY.map((c) => c.id)).toContain(
       REVIEW_MODEL_EXPERIMENT.program,
     );
     expect(REVIEW_MODEL_EXPERIMENT.role).toBe('review');
-  });
-
-  it('declares exactly the sol and terra arms', () => {
-    expect(REVIEW_MODEL_EXPERIMENT.arms).toEqual({
-      'gpt-5-6-sol': GPT5_6_SOL_MODEL,
-      'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
-    });
+    expect(REVIEW_MODEL_EXPERIMENT.arms).toEqual([
+      'gpt-5-6-sol',
+      'gpt-5-6-terra',
+    ]);
+    expect(REVIEW_MODEL_EXPERIMENT.effort).toBe('medium');
   });
 });
 
@@ -47,18 +54,17 @@ describe('review-model experiment — arms route', () => {
     ['gpt-5-6-terra', GPT5_6_TERRA_MODEL],
   ] as const)('%s → %s at medium', (variant, model) => {
     expect(
-      reviewModelOverride('posthog-integration', 'review', ARM_FLAGS(variant)),
+      resolveRoleRoute('posthog-integration', 'review', ARM_FLAGS(variant)),
     ).toEqual({ model, effort: 'medium' });
   });
 
-  it('invalid effort variant → model still routes, effort left to frontmatter', () => {
+  it('an effort flag cannot move the pinned effort (arms must not diverge)', () => {
     expect(
-      reviewModelOverride(
-        'posthog-integration',
-        'review',
-        ARM_FLAGS('gpt-5-6-terra', 'banana'),
-      ),
-    ).toEqual({ model: GPT5_6_TERRA_MODEL, effort: undefined });
+      resolveRoleRoute('posthog-integration', 'review', {
+        ...ARM_FLAGS('gpt-5-6-sol'),
+        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
+      }),
+    ).toEqual({ model: GPT5_6_SOL_MODEL, effort: 'medium' });
   });
 });
 
@@ -75,12 +81,29 @@ describe('review-model experiment — fail closed', () => {
     ['model variant missing', { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' }],
     ['non-arm variant (luna)', ARM_FLAGS('gpt-5-6-luna')],
     ['unknown variant', ARM_FLAGS('banana')],
+    ['prototype-key variant (__proto__)', ARM_FLAGS('__proto__')],
+    ['prototype-key variant (constructor)', ARM_FLAGS('constructor')],
     ['no flags at all', {}],
   ];
   it.each(cases)('%s → undefined, frontmatter stays', (_name, flags) => {
-    expect(reviewModelOverride('posthog-integration', 'review', flags)).toBe(
+    expect(resolveRoleRoute('posthog-integration', 'review', flags)).toBe(
       undefined,
     );
+  });
+
+  it('cloud surface → undefined, arms on full (same gate as the harness experiments)', () => {
+    envState.runSurface = 'cloud';
+    try {
+      expect(
+        resolveRoleRoute(
+          'posthog-integration',
+          'review',
+          ARM_FLAGS('gpt-5-6-terra'),
+        ),
+      ).toBe(undefined);
+    } finally {
+      envState.runSurface = 'local';
+    }
   });
 });
 
@@ -98,7 +121,7 @@ describe('review-model experiment — isolation', () => {
       'default',
     ]) {
       expect(
-        reviewModelOverride(
+        resolveRoleRoute(
           'posthog-integration',
           role,
           ARM_FLAGS('gpt-5-6-terra'),
@@ -111,7 +134,7 @@ describe('review-model experiment — isolation', () => {
     for (const program of PROGRAM_REGISTRY.map((c) => c.id)) {
       if (program === REVIEW_MODEL_EXPERIMENT.program) continue;
       expect(
-        reviewModelOverride(program, 'review', ARM_FLAGS('gpt-5-6-terra')),
+        resolveRoleRoute(program, 'review', ARM_FLAGS('gpt-5-6-terra')),
       ).toBe(undefined);
     }
   });

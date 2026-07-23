@@ -1,8 +1,4 @@
-/**
- * Basic-integration pi experiment (wizard-use-pi-harness → pi on sol-medium,
- * pinned). Routes ONLY `posthog-integration`. The model/effort multivariate
- * flags belong to the review-model experiment and must be inert here.
- */
+/** Basic-integration pi experiment: wizard-use-pi-harness → pi pinned to sol-medium, ONLY posthog-integration; model/effort variants must be inert here. */
 import { describe, it, expect, vi } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {

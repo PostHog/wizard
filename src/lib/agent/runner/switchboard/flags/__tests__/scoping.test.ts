@@ -159,7 +159,14 @@ describe('flag scoping — routing reads live only in flags/', () => {
     '..',
     '..',
   );
-  for (const file of ['harness.ts', 'sequence.ts', 'models.ts', 'index.ts']) {
+  // orchestrator-runner consumes a flags/ resolver; it may pass the snapshot through, never index it.
+  for (const file of [
+    'harness.ts',
+    'sequence.ts',
+    'models.ts',
+    'index.ts',
+    '../sequence/orchestrator/orchestrator-runner.ts',
+  ]) {
     it(`${file} contains no direct flag reads or flag-key imports`, () => {
       const src = readFileSync(join(switchboardDir, file), 'utf8');
       expect(src).not.toMatch(/ctx\.flags\[/);

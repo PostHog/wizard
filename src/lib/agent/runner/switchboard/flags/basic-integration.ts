@@ -1,11 +1,4 @@
-/**
- * Basic-integration pi experiment.
- *
- * Flag:   wizard-use-pi-harness (bool) → pi on sol-medium, pinned.
- * Routes: ONLY `posthog-integration` — harness, model, and effort axes.
- *         wizard-pi-model / wizard-pi-effort are NOT read here; they belong
- *         to the review-model experiment (`review-model.ts`).
- */
+/** Basic-integration pi experiment: wizard-use-pi-harness (bool) → pi pinned to sol-medium, ONLY `posthog-integration`. */
 import {
   GPT5_6_SOL_MODEL,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,

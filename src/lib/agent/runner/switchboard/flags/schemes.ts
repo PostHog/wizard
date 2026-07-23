@@ -30,7 +30,7 @@ const MODEL_FLAG_VARIANTS: Record<string, string> = {
 };
 
 /** Valid effort variants; anything else leaves the model's table default. */
-export const EFFORT_FLAG_VARIANTS = [
+const EFFORT_FLAG_VARIANTS = [
   'minimal',
   'low',
   'medium',
@@ -84,6 +84,19 @@ export interface SequenceExperiment {
   sequence: Sequence;
 }
 
+/** A role-scoped experiment: the model flag's arm routes ONE role of ONE program, outranking prompt frontmatter there; any non-arm variant fails closed. */
+export interface RoleExperiment {
+  program: ProgramId;
+  /** Agent-prompt role (`task.type`) the arms apply to. */
+  role: string;
+  useFlag: string;
+  modelFlag: string;
+  /** Variant keys (`MODEL_FLAG_VARIANTS`) the experiment may route. */
+  arms: readonly string[];
+  /** Effort pinned for every arm, so arms never diverge onto per-model table defaults. */
+  effort: EffortLevel;
+}
+
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
 const payloadConfigFlagSchema = z.object({
   model: z.string().refine((key) => key in MODEL_FLAG_VARIANTS),
@@ -135,4 +148,16 @@ export function routeFromConfigFlag(
     );
   }
   return route;
+}
+
+/** Resolve a role experiment's arm, or undefined when it doesn't validly route. */
+export function routeFromRoleFlag(
+  exp: RoleExperiment,
+  flags: Record<string, string>,
+): { model: string; effort: EffortLevel } | undefined {
+  if (flags[exp.useFlag] !== 'true') return undefined;
+  const variant = flags[exp.modelFlag] ?? '';
+  if (!exp.arms.includes(variant)) return undefined;
+  const model = MODEL_FLAG_VARIANTS[variant];
+  return model ? { model, effort: exp.effort } : undefined;
 }
