@@ -15,7 +15,6 @@ import { runtimeEnv } from '@env';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
@@ -298,6 +297,16 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context, propagated from `AgentConfig`. Present ONLY on
+   * runs the orchestrator actually drives (seed + per-task). Used as the
+   * suppress-task-render signal: when set, the orchestrator owns the TUI queue
+   * panel, so the sub-agent's own TaskCreate/TaskUpdate must not render. When
+   * absent (linear / top-level runs), the agent renders its own todos — never
+   * key this off the raw `wizard-orchestrator` flag, which is on account-wide
+   * and does not mean this particular run is orchestrated.
+   */
+  orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -579,6 +588,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      orchestrator: config.orchestrator,
     };
 
     logToFile('Agent config:', {
@@ -1027,8 +1037,13 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
-        (agentConfig.wizardFlags ?? {})[WIZARD_ORCHESTRATOR_FLAG_KEY] ===
-          'true',
+        // Suppress the agent's own task rendering ONLY when the orchestrator is
+        // actually driving this run (it owns the TUI queue panel and repaints
+        // via renderQueue). Keyed on the threaded orchestrator context, NOT the
+        // raw `wizard-orchestrator` flag: that flag is on account-wide but the
+        // orchestrator only routes `posthog-integration` — every other program
+        // runs linear, where suppressing would leave the todo panel empty.
+        !!agentConfig.orchestrator,
         emitStepEvents,
       );
 
