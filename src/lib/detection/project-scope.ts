@@ -49,6 +49,7 @@ export function chooseIntegrationProject(
 
 /** Every run fires exactly one `wizard: agentic detection` event with one of these outcomes — no untracked exits. */
 export type AgenticDetectionOutcome =
+  | 'auth-failed'
   | 'flag-off'
   | 'error'
   | 'timeout'
@@ -71,7 +72,20 @@ export async function scopeInstallDirToProject(
   session: WizardSession,
 ): Promise<void> {
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
-  await authenticate(session, 'posthog-integration');
+  // Best-effort — a transient failure here (network blip, 5xx on the user/project lookup) must not kill the
+  // run, since this eager call sits on the CI critical path (via ciPreRun). Skip scoping and continue; the real
+  // auth is retried at bootstrap, so a persistent failure still aborts there, at the true critical point.
+  try {
+    await authenticate(session, 'posthog-integration');
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    analytics.captureException(error, { step: 'agentic_detection_auth' });
+    captureOutcome('auth-failed', { error_message: error.message });
+    getUI().log.warn(
+      `Could not authenticate before scanning the repo (${error.message}); continuing with the install dir as-is.`,
+    );
+    return;
+  }
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
     // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
