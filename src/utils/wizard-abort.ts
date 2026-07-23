@@ -27,6 +27,16 @@ interface WizardAbortOptions {
   outroData?: OutroData;
   error?: Error | WizardError;
   exitCode?: number;
+  /**
+   * Marks this as an expected, user-driven abort (e.g. declining the GitHub
+   * connection) rather than an unexpected failure. Expected aborts skip the
+   * error-tracking `captureException` call and shut analytics down as
+   * `cancelled` — they're already tracked via a dedicated analytics event and
+   * shown as a friendly outro, so reporting them as `$exception` events just
+   * pollutes error tracking with false "new issue" alerts. The `error` (if
+   * given) is still logged for local debugging.
+   */
+  expected?: boolean;
 }
 
 const cleanupFns: Array<() => void> = [];
@@ -59,6 +69,7 @@ export async function wizardAbort(
     outroData,
     error,
     exitCode = 1,
+    expected = false,
   } = options ?? {};
 
   logToFile(`[wizard-abort] exitCode=${exitCode}, message: ${message}`);
@@ -69,15 +80,16 @@ export async function wizardAbort(
   // 1. Run registered cleanup functions
   runCleanups();
 
-  // 2. Capture error in analytics (if provided)
-  if (error) {
+  // 2. Capture error in analytics (if provided). Expected, user-driven aborts
+  //    are skipped so they don't surface as `$exception` error-tracking issues.
+  if (error && !expected) {
     analytics.captureException(error, {
       ...((error instanceof WizardError && error.context) || {}),
     });
   }
 
   // 3. Shutdown analytics
-  await analytics.shutdown(error ? 'error' : 'cancelled');
+  await analytics.shutdown(error && !expected ? 'error' : 'cancelled');
 
   // 4. Render the error outro. Synthesize OutroData from `message`
   //    when the caller didn't provide structured data.

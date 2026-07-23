@@ -160,8 +160,13 @@ export async function runLinearProgram(
       reason,
       matched: matched?.message ?? null,
     });
+    // A matched abort case is an expected, user-driven outcome (e.g. declining
+    // the GitHub connection). It already gets a friendly outro and the dedicated
+    // 'agent aborted' event above, so flag it as expected to keep it out of
+    // error tracking. Only unmatched aborts surface as `$exception` issues.
     await wizardAbort({
       outroData,
+      expected: Boolean(matched),
       error: new WizardError(`Agent aborted: ${reason}`, {
         integration: config.integrationLabel,
         error_type: AgentErrorType.ABORT,
