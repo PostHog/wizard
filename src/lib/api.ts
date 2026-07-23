@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { WIZARD_USER_AGENT } from './constants';
+import { sleep } from './helper-functions';
 
 /**
  * User payload from `/api/users/@me/`. Schema typed for the fields the
@@ -234,11 +235,72 @@ const IntegrationsResponseSchema = z.object({
   results: z.array(z.object({ kind: z.string().nullish() }).passthrough()),
 });
 
+// The Slack check runs on a non-critical post-install step and against a
+// flaky-under-load gateway, so transient failures are expected. Ride them
+// out with a short timeout plus a couple of quick retries rather than
+// surfacing every network blip.
+const SLACK_CHECK_TIMEOUT_MS = 5000;
+// One quick retry, then a slightly longer one — enough to clear a single
+// gateway hiccup or socket reset without visibly stalling the 3s poll
+// (worst case ~1.3s of added backoff on top of request time).
+const SLACK_CHECK_BACKOFFS_MS = [300, 1000];
+
+// Gateway-class statuses worth retrying. A 401/403/404 (or anything else)
+// is a genuine error the caller should report, not a transient blip.
+const TRANSIENT_STATUSES = new Set([502, 503, 504]);
+
+// Socket/transport error codes that routinely recover on a retry. Includes
+// the axios client-side timeout (ECONNABORTED) and the DNS-level EAI_AGAIN.
+const TRANSIENT_NETWORK_CODES = new Set([
+  'ECONNRESET',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'EADDRNOTAVAIL',
+  'ENETUNREACH',
+  'ENETDOWN',
+  'EPIPE',
+  'EAI_AGAIN',
+]);
+
+// Some transport failures arrive as a bare Error with a missing or
+// unhelpful `code` — most notably the TLS-handshake disconnect ("Client
+// network socket disconnected before secure TLS connection was
+// established"). Fall back to matching those by message.
+const TRANSIENT_MESSAGE_RE =
+  /socket disconnected|before secure tls|network socket|EADDRNOTAVAIL|ECONNRESET|ETIMEDOUT/i;
+
+/**
+ * Classify an error from the Slack check as a transient network failure
+ * (retry / degrade quietly) vs. a genuine error (report). Only axios
+ * errors are considered; anything else is treated as genuine.
+ */
+function isTransientSlackCheckError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  // Got an HTTP response → only gateway-class 5xx are transient.
+  if (status !== undefined) return TRANSIENT_STATUSES.has(status);
+  // No response → transport/network-layer failure.
+  if (error.code && TRANSIENT_NETWORK_CODES.has(error.code)) return true;
+  const cause =
+    (error.cause as { message?: string } | undefined)?.message ?? '';
+  return TRANSIENT_MESSAGE_RE.test(`${error.message} ${cause}`);
+}
+
 /**
  * Check whether the project already has a Slack integration connected.
- * Requires the `integration:read` scope. Throws on failure — callers
- * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
+ * Requires the `integration:read` scope.
+ *
+ * Resilient to transient failures: a short timeout plus a small
+ * retry/backoff for gateway 5xx and retryable socket/TLS errors. When the
+ * transient budget is exhausted, degrades to "not connected" (returns
+ * `false`) WITHOUT throwing — this runs on a non-critical post-install
+ * step where the caller already falls back to the connect nudge, so a
+ * flaky network shouldn't generate error-tracking noise.
+ *
+ * Throws only on genuine, non-transient errors (401/403, malformed
+ * response, etc.). The caller (the SlackConnectScreen poll) is responsible
+ * for capturing those exactly once. A caller-initiated abort propagates as
+ * a cancellation for the caller's teardown guard to swallow.
  */
 export async function fetchSlackConnected(
   accessToken: string,
@@ -246,19 +308,50 @@ export async function fetchSlackConnected(
   baseUrl: string,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  const response = await axios.get(
-    `${baseUrl}/api/projects/${projectId}/integrations/`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-      signal,
-    },
-  );
-  const parsed = IntegrationsResponseSchema.safeParse(response.data);
-  if (!parsed.success) return false;
-  return parsed.data.results.some((i) => i.kind === 'slack');
+  for (let attempt = 0; attempt <= SLACK_CHECK_BACKOFFS_MS.length; attempt++) {
+    if (attempt > 0) await sleep(SLACK_CHECK_BACKOFFS_MS[attempt - 1]);
+    // Don't spend another attempt if the caller tore the screen down.
+    if (signal?.aborted) throw new ApiError('Slack connection check aborted');
+    try {
+      const response = await axios.get(
+        `${baseUrl}/api/projects/${projectId}/integrations/`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'User-Agent': WIZARD_USER_AGENT,
+          },
+          signal,
+          timeout: SLACK_CHECK_TIMEOUT_MS,
+        },
+      );
+      const parsed = IntegrationsResponseSchema.safeParse(response.data);
+      if (!parsed.success) {
+        // A 200 with an unexpected shape means the API contract changed
+        // under us — a genuine bug, not a network blip. Report it.
+        throw new ApiError(
+          'Invalid response format while checking Slack connection',
+        );
+      }
+      return parsed.data.results.some((i) => i.kind === 'slack');
+    } catch (error) {
+      // Caller-initiated abort (screen teardown): propagate without
+      // retrying. The poll's `cancelled` guard swallows it so it never
+      // reaches captureException.
+      if (axios.isCancel(error) || signal?.aborted) throw error;
+
+      const transient = isTransientSlackCheckError(error);
+      // Retry transient failures until the backoff budget is spent.
+      if (transient && attempt < SLACK_CHECK_BACKOFFS_MS.length) continue;
+      // Exhausted transient → degrade quietly to "not connected".
+      if (transient) return false;
+      // Genuine, non-transient error → let the caller report it.
+      throw error instanceof ApiError
+        ? error
+        : handleApiError(error, 'check Slack connection');
+    }
+  }
+  // Unreachable: the loop always returns or throws on the final attempt.
+  return false;
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {
