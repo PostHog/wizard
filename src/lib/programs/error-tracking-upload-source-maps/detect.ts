@@ -121,6 +121,16 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
       'your project and run this wizard again.',
     docsUrl: 'https://posthog.com/docs/error-tracking/upload-source-maps',
   },
+  {
+    match: /^bare react native not supported$/i,
+    message: 'Bare React Native is not supported',
+    body:
+      'Source-map upload for React Native requires Expo, and this project ' +
+      'has no `expo` package. Bare React Native builds cannot inject the ' +
+      'chunk IDs PostHog needs to resolve stack traces.',
+    docsUrl:
+      'https://posthog.com/docs/error-tracking/upload-source-maps/react-native',
+  },
 ];
 
 // ── File / dependency probes ─────────────────────────────────────────
