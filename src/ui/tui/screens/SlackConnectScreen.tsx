@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { fetchSlackConnected, isAuthOrScopeError } from '@lib/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
@@ -155,17 +155,23 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // Capture once and stop polling — repeating a failing call
-          // every tick would spam error tracking. The nudge copy is
-          // the fallback either way; a failed check counts as not
-          // connected so the screen doesn't sit on the loading state.
+          // Stop polling either way — repeating a failing call every tick
+          // would spam error tracking, and the nudge copy is the fallback.
+          // A failed check counts as not connected so the screen doesn't
+          // sit on the loading state.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
           }
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'slack_connected_check' },
-          );
+          // A 401/403 here is expected and already handled: the token just
+          // lacks `integration:read`, so we can't tell if Slack is connected
+          // and fall back to the nudge (see CONNECT_SLACK_SCOPE_ADDITIONS).
+          // Only report genuinely unexpected failures to error tracking.
+          if (!isAuthOrScopeError(err)) {
+            analytics.captureException(
+              err instanceof Error ? err : new Error(String(err)),
+              { step: 'slack_connected_check' },
+            );
+          }
         });
     };
     check();
