@@ -21,7 +21,11 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import {
+  POSTHOG_DOCS_URL,
+  WIZARD_CONTACT_EMAIL,
+  type Integration,
+} from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
@@ -606,6 +610,28 @@ export async function runOrchestrator(
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
+
+  // A drain that ends with failed tasks (retries exhausted) or tasks still
+  // pending (blocked behind a failed dependency) did NOT set PostHog up —
+  // abort like a linear agent failure instead of claiming success.
+  const blocked = summary[TaskStatus.Pending];
+  if (summary.failed > 0 || blocked > 0) {
+    const failedTypes = store
+      .list()
+      .filter((t) => t.status === TaskStatus.Failed)
+      .map((t) => t.type)
+      .join(', ');
+    await wizardAbort({
+      message: `The wizard was unable to set up PostHog: the ${failedTypes} step failed.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError('orchestrator drain ended with failed tasks', {
+        tasks_failed: summary.failed,
+        tasks_blocked: blocked,
+        failed_types: failedTypes,
+        queue_state: JSON.stringify(store.list()),
+      }),
+    });
+  }
+
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
