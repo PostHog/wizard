@@ -601,6 +601,41 @@ export async function runOrchestrator(
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
+
+  // A drain that ends with failed tasks (retries exhausted) or tasks still
+  // pending (blocked behind a failed dependency) did NOT set PostHog up —
+  // init failing means no env vars, no working integration. Take the abort
+  // path (error outro, `setup wizard finished` status=error, exit 1) instead
+  // of claiming success.
+  const blocked = summary[TaskStatus.Pending];
+  if (summary.failed > 0 || blocked > 0) {
+    const failedTypes = store
+      .list()
+      .filter((t) => t.status === TaskStatus.Failed)
+      .map((t) => t.type)
+      .join(', ');
+    const message = `PostHog setup incomplete: ${summary.done}/${
+      summary.total - notRequired
+    } steps completed (failed: ${failedTypes}${
+      blocked > 0 ? `; ${blocked} blocked` : ''
+    }).`;
+    await wizardAbort({
+      message,
+      outroData: {
+        kind: OutroKind.Error,
+        message,
+        body: 'The report lists what finished and what to complete manually.',
+        reportFile,
+        docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
+      },
+      error: new WizardError('orchestrator drain ended with failed tasks', {
+        tasks_failed: summary.failed,
+        tasks_blocked: blocked,
+        failed_types: failedTypes,
+      }),
+    });
+  }
+
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
