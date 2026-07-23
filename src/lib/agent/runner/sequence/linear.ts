@@ -160,13 +160,22 @@ export async function runLinearProgram(
       reason,
       matched: matched?.message ?? null,
     });
+    // A matched abort case is an expected, program-defined outcome (e.g. the
+    // user declining the GitHub App connection during self-driving setup), not
+    // a crash. The `agent aborted` analytics event above already records it, so
+    // we don't also report it as an exception — doing so pollutes error
+    // tracking with non-bugs, and the version-specific minified stack frames
+    // re-fingerprint it as a new issue on every release. Only unmatched aborts
+    // (genuinely unexpected) carry a WizardError for exception capture.
     await wizardAbort({
       outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
+      error: matched
+        ? undefined
+        : new WizardError(`Agent aborted: ${reason}`, {
+            integration: config.integrationLabel,
+            error_type: AgentErrorType.ABORT,
+            reason,
+          }),
     });
   }
 
