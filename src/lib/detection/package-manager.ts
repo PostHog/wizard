@@ -7,6 +7,8 @@
  * current framework supplies.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   detectAllPackageManagers,
   type PackageManager,
@@ -232,4 +234,32 @@ export function gradlePackageManager(): Promise<PackageManagerInfo> {
     recommendation:
       'Add dependencies to build.gradle(.kts) using implementation().',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Java (Maven or Gradle) helper
+// ---------------------------------------------------------------------------
+
+const MAVEN: DetectedPackageManager = {
+  name: 'maven',
+  label: 'Maven',
+  installCommand: 'mvn install',
+};
+
+/**
+ * Java backends split between Maven and Gradle; pom.xml decides.
+ * Defaults to Gradle when neither manifest is present.
+ */
+export function detectJavaPackageManagers(
+  installDir: string,
+): Promise<PackageManagerInfo> {
+  if (fs.existsSync(path.join(installDir, 'pom.xml'))) {
+    return Promise.resolve({
+      detected: [MAVEN],
+      primary: MAVEN,
+      recommendation:
+        'Use Maven. Add the dependency to pom.xml, then run mvn install to resolve it.',
+    });
+  }
+  return gradlePackageManager();
 }

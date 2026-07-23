@@ -7,6 +7,7 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
+  detectJavaPackageManagers,
 } from '@lib/detection/package-manager';
 
 vi.mock('../../../utils/debug');
@@ -176,6 +177,33 @@ describe('detectPythonPackageManagers', () => {
     const result = await detectPythonPackageManagers(tmpDir);
     expect(result.recommendation).toContain('uv');
     expect(result.recommendation).toContain('uv add');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Java detection
+// ---------------------------------------------------------------------------
+
+describe('detectJavaPackageManagers', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  it('detects maven via pom.xml', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'pom.xml'), '<project></project>');
+    const result = await detectJavaPackageManagers(tmpDir);
+    expect(result.primary?.name).toBe('maven');
+    expect(result.primary?.installCommand).toBe('mvn install');
+    expect(result.recommendation).toContain('pom.xml');
+  });
+
+  it('falls back to gradle without a pom.xml', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'build.gradle'), '');
+    const result = await detectJavaPackageManagers(tmpDir);
+    expect(result.primary?.name).toBe('gradle');
   });
 });
 
