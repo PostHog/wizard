@@ -19,8 +19,8 @@ import {
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import {
-  ORCHESTRATOR_EXPERIMENT,
-  ORCHESTRATOR_PI_ROUTE,
+  ORCHESTRATOR_SEQUENCE_ROUTE,
+  ORCHESTRATOR_HARNESS_ROUTE,
 } from '@lib/agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@lib/agent/runner/switchboard/flags/self-driving';
 import { runBindingCases } from './binding-cases';
@@ -55,10 +55,12 @@ const ORCHESTRATOR_PI_DEFAULT = {
 
 describe('flag declarations', () => {
   it('wizard-orchestrator covers exactly posthog-integration, both axes, one flag', () => {
-    expect(ORCHESTRATOR_EXPERIMENT.programs).toEqual(['posthog-integration']);
-    expect(ORCHESTRATOR_PI_ROUTE.program).toBe('posthog-integration');
-    expect(ORCHESTRATOR_EXPERIMENT.flag).toBe(ORCH);
-    expect(ORCHESTRATOR_PI_ROUTE.flags.useFlag).toBe(ORCH);
+    expect(ORCHESTRATOR_SEQUENCE_ROUTE.programs).toEqual([
+      'posthog-integration',
+    ]);
+    expect(ORCHESTRATOR_HARNESS_ROUTE.program).toBe('posthog-integration');
+    expect(ORCHESTRATOR_SEQUENCE_ROUTE.flag).toBe(ORCH);
+    expect(ORCHESTRATOR_HARNESS_ROUTE.flags.useFlag).toBe(ORCH);
   });
 
   it('self-driving pi covers exactly self-driving', () => {
