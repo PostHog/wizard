@@ -1,14 +1,6 @@
-/**
- * Orchestrator experiment — wizard-orchestrator (bool) is the single gate.
- *
- * Routes: ONLY the programs listed below, on BOTH axes — the sequence goes to
- *         orchestrator, and the harness goes to pi pinned to sol-medium (the
- *         pin is the fallback; per-task models come from prompt frontmatter).
- *         context-mill publishes orchestrator agent prompts (seed + per-task)
- *         per flow, so a program joins by shipping prompts AND being added here.
- */
+/** Orchestrator gate: wizard-orchestrator on/off. On routes the declared programs to the orchestrator on pi; every model/effort comes from prompt frontmatter. */
 import {
-  GPT5_6_SOL_MODEL,
+  Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
 } from '@lib/constants';
@@ -20,13 +12,10 @@ export const ORCHESTRATOR_EXPERIMENT: SequenceExperiment = {
   sequence: Sequence.orchestrator,
 };
 
+/** Same flag, harness axis: the orchestrator drives tasks through pi. */
 export const ORCHESTRATOR_PI_ROUTE: HarnessExperiment = {
   program: 'posthog-integration',
-  flags: {
-    useFlag: WIZARD_ORCHESTRATOR_FLAG_KEY,
-    model: GPT5_6_SOL_MODEL,
-    effort: 'medium',
-  },
+  flags: { useFlag: WIZARD_ORCHESTRATOR_FLAG_KEY, harness: Harness.pi },
 };
 
 /** Raw flag read — for telemetry/log lines only, never for routing. */

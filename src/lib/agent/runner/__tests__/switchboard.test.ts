@@ -114,7 +114,7 @@ describe('switchboard CLI precedence (dev builds)', () => {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
         model: 'openai/o4-mini',
-        thinkingLevel: 'medium',
+        thinkingLevel: undefined,
       },
       trace: { harness: 'flag', model: 'cli', sequence: 'flag' },
     },
@@ -164,8 +164,8 @@ describe('switchboard decision trace', () => {
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
-        thinkingLevel: 'medium',
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
       },
       trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
     },
@@ -181,17 +181,12 @@ describe('switchboard composed clamp', () => {
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         trace: {},
       };
-      // The flag routes posthog-integration's harness to pi (pinned) but the
-      // composed clamp holds every sequence at linear; other programs keep
-      // their bindings (sonnet 5 for ai-observability, the default elsewhere).
+      // The flag routes posthog-integration's harness to pi; the composed
+      // clamp holds every sequence at linear; other programs keep their
+      // bindings (sonnet 5 for ai-observability, the default elsewhere).
       expect(resolveBinding(ctx)).toEqual(
         program === 'posthog-integration'
-          ? {
-              ...DEFAULT_RESOLVED,
-              harness: Harness.pi,
-              model: GPT5_6_SOL_MODEL,
-              thinkingLevel: 'medium',
-            }
+          ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
           : DEFAULT_RESOLVED,
@@ -219,12 +214,7 @@ describe('switchboard composed clamp', () => {
         composed: true,
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
       },
-      binding: {
-        sequence: Sequence.linear,
-        harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
-        thinkingLevel: 'medium',
-      },
+      binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
       trace: { harness: 'flag', model: 'flag', sequence: 'composed' },
     },
   ]);

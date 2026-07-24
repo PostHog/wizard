@@ -40,7 +40,7 @@ const EFFORT_FLAG_VARIANTS = [
 
 /** A resolved flag route. Absent fields keep the axis's default (pi harness, sequence resolved by its own chain, table effort). */
 export interface FlagRoute {
-  model: string;
+  model?: string;
   thinkingLevel?: EffortLevel;
   harness?: Harness;
   sequence?: Sequence;
@@ -48,23 +48,19 @@ export interface FlagRoute {
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Pinned scheme: the useFlag routes to pi on a fixed model/effort — the pick is the fallback; per-task prompt frontmatter wins. */
-export interface PinnedConfigFlag {
-  /** Boolean flag: 'true' → route this program to pi. */
+/** Harness-only scheme: the useFlag routes the harness; model/effort stay at the binding default so prompt frontmatter governs. */
+export interface HarnessConfigFlag {
   useFlag: string;
-  /** Gateway model id the route pins. */
-  model: string;
-  /** Reasoning-effort the route pins; absent → the model's table default. */
-  effort?: EffortLevel;
+  harness: Harness;
 }
 
 /** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
 export interface PayloadConfigFlag {
   useFlag: string;
-  model?: never;
+  harness?: never;
 }
 
-export type ConfigFlag = PinnedConfigFlag | PayloadConfigFlag;
+export type ConfigFlag = HarnessConfigFlag | PayloadConfigFlag;
 
 /**
  * A harness-axis experiment: ONE program and the flags that route it. The
@@ -125,9 +121,7 @@ export function routeFromConfigFlag(
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
   if (flags[cfg.useFlag] !== 'true') return undefined;
-  if (cfg.model) {
-    return { model: cfg.model, thinkingLevel: cfg.effort };
-  }
+  if (cfg.harness) return { harness: cfg.harness };
   const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
   if (!route) {
     logToFile(
