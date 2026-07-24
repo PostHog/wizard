@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.51.0](https://github.com/PostHog/wizard/compare/v2.50.0...v2.51.0) (2026-07-24)
+
+
+### Features
+
+* **Orchestrator:** per-task tool lists, linear-only task-status notes ([#962](https://github.com/PostHog/wizard/issues/962)) ([420298e](https://github.com/PostHog/wizard/commit/420298e1781b2317b6610e330310d2863088ef6f))
+* **switchboard:** wizard-orchestrator-override — per-stage model/effort via variant payload ([#971](https://github.com/PostHog/wizard/issues/971)) ([594f642](https://github.com/PostHog/wizard/commit/594f642235986364a81a60465aede3c7c0e2f2dc))
+
+
+### Bug Fixes
+
+* **detection:** bound every project-tree glob, walk, and read ([#972](https://github.com/PostHog/wizard/issues/972)) ([820e2e5](https://github.com/PostHog/wizard/commit/820e2e5934b85cd858cff003dbfd4b2d50dbf6bc))
+* **host:** MCP_URL override wins even under --local-mcp ([#975](https://github.com/PostHog/wizard/issues/975)) ([5038335](https://github.com/PostHog/wizard/commit/5038335ba7d99ebc14729100e46a46099b6836ed))
+* **yara:** triage skill-install scans instead of hard-blocking ([#977](https://github.com/PostHog/wizard/issues/977)) ([618d954](https://github.com/PostHog/wizard/commit/618d95426f7ffc9996befd98f8a31e5cfbc20c06))
+
 ## [2.50.0](https://github.com/PostHog/wizard/compare/v2.49.0...v2.50.0) (2026-07-23)
 
 
