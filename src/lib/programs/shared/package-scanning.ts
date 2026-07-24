@@ -22,7 +22,7 @@ export interface PackageMatch {
   stripeSdks: string[];
 }
 
-// O(MAX_PACKAGE_MATCHES) retained regardless of monorepo package count.
+// At most this many matches retained, regardless of monorepo package count.
 const MAX_PACKAGE_MATCHES = 500;
 
 /**

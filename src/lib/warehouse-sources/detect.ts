@@ -29,7 +29,8 @@ interface ProjectSignals {
 
 const MAX_DEPTH = 3;
 
-// O(MAX_SIGNAL_SET) retained per signal kind for the whole walk — a generated
+// At most this many entries retained per signal kind for the whole walk
+// (constant in tree size) — a generated
 // .env with millions of unique keys otherwise accumulates unbounded (the
 // retention half of the 2026-07-23 prod OOM).
 const MAX_SIGNAL_SET = 5_000;

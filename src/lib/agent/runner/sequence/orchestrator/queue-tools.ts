@@ -219,8 +219,9 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
-// O(1) bytes per handoff ⇒ O(queue cap) queue.json, which is rewritten whole
-// on every transition — every field here is LLM-authored free text.
+// Handoff fields are individually capped, so queue.json — rewritten whole on
+// every transition — grows O(n) in task count with a constant per-task bound.
+// Every field here is LLM-authored free text.
 const HANDOFF_TEXT_MAX = 8_000;
 
 const HANDOFF_SHAPE = {

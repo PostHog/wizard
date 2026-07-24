@@ -34,7 +34,7 @@ function lockfileHeaderContains(
   file: string,
   needle: string,
 ): boolean {
-  // O(500) bytes read — monorepo lockfiles run to hundreds of MB.
+  // Reads only the first 500 bytes — monorepo lockfiles run to hundreds of MB.
   return (
     readFileHead(path.join(installDir, file), 500)?.includes(needle) ?? false
   );

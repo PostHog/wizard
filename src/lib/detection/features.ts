@@ -108,8 +108,8 @@ function discoverPythonFeatures(
   }
 }
 
-// O(MAX_PROJECT_FILE_BYTES) per manifest — a generated multi-hundred-MB
-// package.json/requirements.txt is skipped, not parsed.
+// Manifest reads are capped at MAX_PROJECT_FILE_BYTES — a generated
+// multi-hundred-MB package.json/requirements.txt is skipped, not parsed.
 function safeRead(installDir: string, file: string): string | null {
   return readProjectFile(join(installDir, file));
 }

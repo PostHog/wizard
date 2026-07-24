@@ -11,14 +11,15 @@ import * as fs from 'fs';
 import fg from 'fast-glob';
 import { IGNORED_DIRS } from './file-utils';
 
-// O(1) heap per read attempt: anything larger is skipped, never materialized.
+// Heap per read attempt is capped at this constant, independent of file
+// size — anything larger is skipped, never materialized.
 export const MAX_PROJECT_FILE_BYTES = 2 * 1024 * 1024;
 
-// O(MAX_GLOB_MATCHES) result memory per glob, regardless of tree size.
+// Result memory per glob is at most this many entries — O(1) in tree size.
 export const MAX_GLOB_MATCHES = 500;
 
-// O(GLOB_DEADLINE_MS) traversal time per glob — an abandoned (Promise.race'd
-// out) sweep self-terminates instead of crawling a huge tree in the background.
+// Traversal is cut off after this long — an abandoned (Promise.race'd out)
+// sweep self-terminates instead of crawling a huge tree in the background.
 export const GLOB_DEADLINE_MS = 8_000;
 
 /**
@@ -48,8 +49,8 @@ export interface BoundedGlobOptions {
 
 /**
  * A fast-glob sweep that cannot blow up: streams matches, stops at `limit`,
- * and destroys the underlying crawl at GLOB_DEADLINE_MS. Memory is
- * O(min(limit, matches)); wall clock is O(GLOB_DEADLINE_MS). Returns paths
+ * and destroys the underlying crawl at GLOB_DEADLINE_MS — memory and wall
+ * clock are both O(1) in the size of the tree. Returns paths
  * relative to `cwd`, possibly incomplete — detection callers treat matches as
  * hints, so a truncated list degrades to "not detected", never to a crash.
  */

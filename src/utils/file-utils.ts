@@ -99,12 +99,12 @@ export const IGNORED_DIRS = new Set<string>([
  * Shared by the detection layers (warehouse sources, etc.) so traversal policy
  * — ignored dirs, depth, symlink handling — lives in one place.
  */
-// O(1) listing memory per directory: entries stream via opendirSync and a
-// wider directory stops being read here — a flat multi-million-file dump dir
-// contributes at most this many dirents.
+// Directory listings stream one dirent at a time via opendirSync and stop
+// at this cap, so listing memory is constant in directory width — a flat
+// multi-million-file dump dir contributes at most this many entries.
 export const MAX_DIR_ENTRIES = 10_000;
 
-// O(MAX_WALK_FILES) callbacks per walk, regardless of tree size.
+// At most this many onFile callbacks per walk, regardless of tree size.
 export const MAX_WALK_FILES = 100_000;
 
 export function walkProjectFiles(
@@ -186,8 +186,9 @@ export function walkProjectFiles(
   scan(rootDir, 0);
 }
 
-// O(1) heap per read: oversized "manifests" (multi-hundred-MB .env dumps
-// killed a prod run) are skipped without being materialized.
+// Heap per read is capped at this constant, independent of file size —
+// oversized "manifests" (multi-hundred-MB .env dumps killed a prod run) are
+// skipped without being materialized.
 export const MAX_SAFE_READ_BYTES = 2 * 1024 * 1024;
 
 /**
