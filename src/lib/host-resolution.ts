@@ -60,9 +60,11 @@ function assetHostFromApiHost(apiHost: string): string {
   return apiHost;
 }
 
+/** MCP_URL wins even under --local-mcp, so CI can pair local skills with the prod MCP. */
 export function mcpUrlFor(localMcp: boolean): string {
-  if (localMcp) return LOCAL_MCP_URL;
-  return runtimeEnv('MCP_URL') || PROD_MCP_URL;
+  const override = runtimeEnv('MCP_URL');
+  if (override) return override;
+  return localMcp ? LOCAL_MCP_URL : PROD_MCP_URL;
 }
 
 export class HostResolution {

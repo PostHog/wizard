@@ -86,11 +86,12 @@ describe('mcpUrlFor', () => {
     expect(mcpUrlFor(true)).toBe('http://localhost:8787/mcp');
   });
 
-  it('takes an MCP_URL override verbatim', () => {
+  it('takes an MCP_URL override verbatim, even under --local-mcp', () => {
     const prev = process.env.MCP_URL;
     process.env.MCP_URL = 'https://mcp.example.com/mcp?mode=cli';
     try {
       expect(mcpUrlFor(false)).toBe('https://mcp.example.com/mcp?mode=cli');
+      expect(mcpUrlFor(true)).toBe('https://mcp.example.com/mcp?mode=cli');
     } finally {
       if (prev === undefined) delete process.env.MCP_URL;
       else process.env.MCP_URL = prev;
