@@ -1,7 +1,21 @@
 import type { WizardRunOptions } from '@utils/types';
+import { DETECTION_IGNORE_PATTERNS } from '@lib/detection/glob';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+/**
+ * Ignore list for recursive Swift source walks: the shared heavy-tree patterns
+ * (node_modules, .git, build, …) plus Swift/Xcode build artifact directories.
+ * Without node_modules/.git these globs OOM on large or hybrid repos.
+ */
+export const SWIFT_SOURCE_IGNORE_PATTERNS = [
+  ...DETECTION_IGNORE_PATTERNS,
+  '**/.build/**',
+  '**/DerivedData/**',
+  '**/*.xcodeproj/**',
+  '**/Pods/**',
+];
 
 export enum SwiftProjectType {
   SWIFTUI = 'swiftui',
@@ -42,13 +56,7 @@ export async function detectSwiftProjectType(
   // Check Swift source files for SwiftUI vs UIKit imports
   const swiftFiles = await fg('**/*.swift', {
     cwd: installDir,
-    ignore: [
-      '**/.build/**',
-      '**/DerivedData/**',
-      '**/build/**',
-      '**/*.xcodeproj/**',
-      '**/Pods/**',
-    ],
+    ignore: SWIFT_SOURCE_IGNORE_PATTERNS,
   });
 
   let hasSwiftUI = false;

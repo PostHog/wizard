@@ -4,7 +4,7 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
 import { detectPythonPackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
-import fg from 'fast-glob';
+import { DETECTION_IGNORE_PATTERNS, globWithAbort } from '@lib/detection/glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -40,10 +40,10 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
     getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getPythonVersion(options)),
     detect: async (options) => {
-      const { installDir } = options;
+      const { installDir, signal } = options;
 
       // Look for Python package management files
-      const pythonConfigFiles = await fg(
+      const pythonConfigFiles = await globWithAbort(
         [
           '**/requirements*.txt',
           '**/pyproject.toml',
@@ -52,7 +52,8 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
         ],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          ignore: DETECTION_IGNORE_PATTERNS,
+          signal,
         },
       );
 
@@ -62,9 +63,10 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
 
       // Make sure this isn't Django or Flask (those should be detected first)
       // Check for Django
-      const managePyMatches = await fg('**/manage.py', {
+      const managePyMatches = await globWithAbort('**/manage.py', {
         cwd: installDir,
-        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        ignore: DETECTION_IGNORE_PATTERNS,
+        signal,
       });
 
       for (const match of managePyMatches) {
@@ -102,17 +104,12 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
         }
       }
 
-      const pyFiles = await fg(
+      const pyFiles = await globWithAbort(
         ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
         {
           cwd: installDir,
-          ignore: [
-            '**/venv/**',
-            '**/.venv/**',
-            '**/env/**',
-            '**/.env/**',
-            '**/__pycache__/**',
-          ],
+          ignore: DETECTION_IGNORE_PATTERNS,
+          signal,
         },
       );
 

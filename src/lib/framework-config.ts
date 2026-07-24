@@ -86,6 +86,17 @@ export interface FrameworkMetadata<
 }
 
 /**
+ * Options passed to a framework's `detect()` predicate.
+ *
+ * `signal` aborts any in-flight filesystem walk when detection times out, so a
+ * runaway glob stops reading the filesystem instead of leaking memory after the
+ * detection race has already moved on.
+ */
+export type DetectionOptions = Pick<WizardRunOptions, 'installDir'> & {
+  signal?: AbortSignal;
+};
+
+/**
  * Framework detection and version handling
  */
 export interface FrameworkDetection {
@@ -117,7 +128,7 @@ export interface FrameworkDetection {
   ) => Promise<string | undefined>;
 
   /** Detect whether this framework is present in the project. */
-  detect: (options: Pick<WizardRunOptions, 'installDir'>) => Promise<boolean>;
+  detect: (options: DetectionOptions) => Promise<boolean>;
 
   /** Detect the project's package manager(s). Used by the in-process MCP tool. */
   detectPackageManager: PackageManagerDetector;

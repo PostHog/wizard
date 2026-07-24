@@ -19,18 +19,35 @@ export async function detectFramework(
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {
     const config = FRAMEWORK_REGISTRY[integration];
+    // Abort the detector's filesystem walk on timeout. Without this the
+    // Promise.race below just stops awaiting a slow detector — the glob keeps
+    // walking and buffering in the background, which on huge repos climbs until
+    // the heap dies. Aborting stops the walk instead of leaking it.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DETECTION_TIMEOUT_MS);
     try {
       const detected = await Promise.race([
-        config.detection.detect({ installDir }),
-        new Promise<false>((resolve) =>
-          setTimeout(() => resolve(false), DETECTION_TIMEOUT_MS),
-        ),
+        config.detection.detect({ installDir, signal: controller.signal }),
+        new Promise<false>((resolve) => {
+          if (controller.signal.aborted) {
+            resolve(false);
+            return;
+          }
+          controller.signal.addEventListener('abort', () => resolve(false), {
+            once: true,
+          });
+        }),
       ]);
       if (detected) {
         return integration;
       }
     } catch {
       // Skip frameworks whose detection throws
+    } finally {
+      clearTimeout(timeout);
+      // Stop any still-running walk before moving to the next framework
+      // (covers both the timeout and the detected-early paths).
+      controller.abort();
     }
   }
 }

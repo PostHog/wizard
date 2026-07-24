@@ -3,12 +3,14 @@ import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { swiftPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
+import { globWithAbort } from '@lib/detection/glob';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   detectSwiftProjectType,
   getSwiftProjectTypeName,
+  SWIFT_SOURCE_IGNORE_PATTERNS,
   SwiftProjectType,
 } from './utils';
 
@@ -35,10 +37,10 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
     usesPackageJson: false,
     getVersion: () => undefined,
     detect: async (options) => {
-      const { installDir } = options;
+      const { installDir, signal } = options;
 
       // Xcode project/workspace, or an XcodeGen `project.yml` (the generated
-      // .xcodeproj is often uncommitted).
+      // .xcodeproj is often uncommitted). Non-recursive, so no deep walk.
       const xcodeProjects = await fg('*.{xcodeproj,xcworkspace}', {
         cwd: installDir,
         onlyDirectories: true,
@@ -49,15 +51,10 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
 
       if (xcodeProjects.length > 0 || hasXcodeGenSpec) {
         // Verify it contains Swift source files
-        const swiftFiles = await fg('**/*.swift', {
+        const swiftFiles = await globWithAbort('**/*.swift', {
           cwd: installDir,
-          ignore: [
-            '**/.build/**',
-            '**/DerivedData/**',
-            '**/build/**',
-            '**/*.xcodeproj/**',
-            '**/Pods/**',
-          ],
+          ignore: SWIFT_SOURCE_IGNORE_PATTERNS,
+          signal,
         });
         if (swiftFiles.length > 0) {
           return true;
