@@ -112,9 +112,13 @@ export function walkProjectFiles(
 ): void {
   const visited = new Set<string>();
   let filesSeen = 0;
+  // Explicit stack — no call-stack recursion.
+  const stack: Array<{ dir: string; depth: number }> = [
+    { dir: rootDir, depth: 0 },
+  ];
 
-  function scan(dir: string, depth: number): void {
-    if (depth > maxDepth || filesSeen >= MAX_WALK_FILES) return;
+  while (stack.length > 0 && filesSeen < MAX_WALK_FILES) {
+    const { dir, depth } = stack.pop()!;
 
     // realpath both resolves symlinked dirs and gives us a stable key to
     // detect loops (symlink cycles, e.g. a -> ../a).
@@ -123,9 +127,9 @@ export function walkProjectFiles(
       realDir = fs.realpathSync(dir);
     } catch (error) {
       reportFsError('walkProjectFiles.realpath', dir, error);
-      return;
+      continue;
     }
-    if (visited.has(realDir)) return;
+    if (visited.has(realDir)) continue;
     visited.add(realDir);
 
     let handle: fs.Dir;
@@ -133,7 +137,7 @@ export function walkProjectFiles(
       handle = fs.opendirSync(dir);
     } catch (error) {
       reportFsError('walkProjectFiles.opendir', dir, error);
-      return;
+      continue;
     }
     try {
       let entriesRead = 0;
@@ -166,7 +170,7 @@ export function walkProjectFiles(
 
         if (isDir) {
           if (entry.name.startsWith('.')) continue; // skip hidden directories
-          scan(fullPath, depth + 1);
+          if (depth < maxDepth) stack.push({ dir: fullPath, depth: depth + 1 });
         } else if (isFile) {
           filesSeen += 1;
           onFile(entry.name, fullPath);
@@ -180,8 +184,6 @@ export function walkProjectFiles(
       }
     }
   }
-
-  scan(rootDir, 0);
 }
 
 // Files larger than this are skipped, never materialized.

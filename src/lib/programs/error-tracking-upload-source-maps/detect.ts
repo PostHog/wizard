@@ -81,13 +81,20 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
 export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
   new Set(['ios', 'android']);
 
-const POSTHOG_SDKS = [
+const POSTHOG_SDKS = new Set([
   'posthog-js',
   'posthog-node',
   'posthog-react-native',
   'posthog-android',
   'posthog-ios',
-];
+]);
+
+const GRADLE_FILES = new Set([
+  'build.gradle',
+  'build.gradle.kts',
+  'settings.gradle',
+  'settings.gradle.kts',
+]);
 
 /**
  * Structured detection errors. The screen renders each kind into JSX
@@ -148,14 +155,19 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
     scannedFileCount: 0,
   };
 
-  function scan(dir: string, depth: number): void {
-    if (depth > maxDepth || signals.scannedFileCount >= MAX_WALK_FILES) return;
+  // Explicit stack — no call-stack recursion.
+  const stack: Array<{ dir: string; depth: number }> = [
+    { dir: installDir, depth: 0 },
+  ];
+
+  while (stack.length > 0 && signals.scannedFileCount < MAX_WALK_FILES) {
+    const { dir, depth } = stack.pop()!;
 
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
-      return;
+      continue;
     }
     // A directory contributes at most MAX_DIR_ENTRIES entries.
     if (entries.length > MAX_DIR_ENTRIES) entries.length = MAX_DIR_ENTRIES;
@@ -193,25 +205,19 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
           signals.hasSwiftPackage = true;
         } else if (entry.name === 'pubspec.yaml') {
           signals.hasPubspec = true;
-        } else if (
-          entry.name === 'build.gradle' ||
-          entry.name === 'build.gradle.kts' ||
-          entry.name === 'settings.gradle' ||
-          entry.name === 'settings.gradle.kts'
-        ) {
+        } else if (GRADLE_FILES.has(entry.name)) {
           signals.hasGradle = true;
         }
       } else if (entry.isDirectory()) {
         if (entry.name.endsWith('.xcodeproj')) {
           signals.hasXcodeProject = true;
-        } else {
-          scan(fullPath, depth + 1);
+        } else if (depth < maxDepth) {
+          stack.push({ dir: fullPath, depth: depth + 1 });
         }
       }
     }
   }
 
-  scan(installDir, 0);
   return signals;
 }
 

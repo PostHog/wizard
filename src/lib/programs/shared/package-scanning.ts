@@ -1,19 +1,19 @@
 import { relative } from 'path';
 import { safeReadFile, walkProjectFiles } from '@utils/file-utils';
 
-export const POSTHOG_SDKS = [
+export const POSTHOG_SDKS = new Set([
   'posthog-js',
   'posthog-node',
   'posthog-react-native',
   'posthog-android',
   'posthog-ios',
-];
+]);
 
-export const STRIPE_SDKS = [
+export const STRIPE_SDKS = new Set([
   'stripe',
   '@stripe/stripe-js',
   '@stripe/react-stripe-js',
-];
+]);
 
 export interface PackageMatch {
   /** Path to the package.json relative to installDir */
@@ -53,8 +53,8 @@ export function findPackageJsons(
           ...Object.keys(pkg.dependencies ?? {}),
           ...Object.keys(pkg.devDependencies ?? {}),
         ];
-        const posthogSdks = depNames.filter((d) => POSTHOG_SDKS.includes(d));
-        const stripeSdks = depNames.filter((d) => STRIPE_SDKS.includes(d));
+        const posthogSdks = depNames.filter((d) => POSTHOG_SDKS.has(d));
+        const stripeSdks = depNames.filter((d) => STRIPE_SDKS.has(d));
         matches.push({
           path: relative(installDir, fullPath) || 'package.json',
           posthogSdks,

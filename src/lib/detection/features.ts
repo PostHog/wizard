@@ -10,9 +10,9 @@ import { join } from 'path';
 import { readProjectFile } from '@utils/bounded-fs';
 import { DiscoveredFeature } from '@lib/wizard-session';
 
-const STRIPE_PACKAGES = ['stripe', '@stripe/stripe-js'];
+const STRIPE_PACKAGES = new Set(['stripe', '@stripe/stripe-js']);
 
-const LLM_PACKAGES = [
+const LLM_PACKAGES = new Set([
   'openai',
   '@anthropic-ai/sdk',
   'ai',
@@ -25,10 +25,10 @@ const LLM_PACKAGES = [
   '@instructor-ai/instructor',
   '@mastra/core',
   'portkey-ai',
-];
+]);
 
 // PyPI normalizes `_` to `-` and is case-insensitive; compare via normalizePyName.
-const PYTHON_LLM_PACKAGES = [
+const PYTHON_LLM_PACKAGES = new Set([
   'openai',
   'anthropic',
   'langchain',
@@ -47,7 +47,7 @@ const PYTHON_LLM_PACKAGES = [
   'google-generativeai',
   'google-genai',
   'portkey-ai',
-];
+]);
 
 export function discoverFeatures(installDir: string): DiscoveredFeature[] {
   const features: DiscoveredFeature[] = [];
@@ -78,10 +78,10 @@ function discoverNodeFeatures(
     ...packageJson.devDependencies,
   });
 
-  if (depNames.some((depName) => STRIPE_PACKAGES.includes(depName))) {
+  if (depNames.some((depName) => STRIPE_PACKAGES.has(depName))) {
     features.push(DiscoveredFeature.Stripe);
   }
-  if (depNames.some((depName) => LLM_PACKAGES.includes(depName))) {
+  if (depNames.some((depName) => LLM_PACKAGES.has(depName))) {
     features.push(DiscoveredFeature.LLM);
   }
 }
@@ -103,7 +103,7 @@ function discoverPythonFeatures(
   const pipfile = safeRead(installDir, 'Pipfile');
   if (pipfile) depNames.push(...parsePipfile(pipfile));
 
-  if (depNames.some((depName) => PYTHON_LLM_PACKAGES.includes(depName))) {
+  if (depNames.some((depName) => PYTHON_LLM_PACKAGES.has(depName))) {
     features.push(DiscoveredFeature.LLM);
   }
 }
