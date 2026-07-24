@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { readFileHead } from './bounded-fs';
 import { withProgress } from '../telemetry';
 import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
 import type { PackageJson } from './package-json';
@@ -33,14 +34,10 @@ function lockfileHeaderContains(
   file: string,
   needle: string,
 ): boolean {
-  try {
-    const head = fs
-      .readFileSync(path.join(installDir, file), 'utf-8')
-      .slice(0, 500);
-    return head.includes(needle);
-  } catch {
-    return false;
-  }
+  // Reads only the first 500 bytes of the lockfile.
+  return (
+    readFileHead(path.join(installDir, file), 500)?.includes(needle) ?? false
+  );
 }
 
 type OverrideSlot = 'npm' | 'yarn' | 'pnpm';

@@ -1,10 +1,9 @@
 import { major } from 'semver';
-import fg from 'fast-glob';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import type { WizardRunOptions } from '@utils/types';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { getDeclaredVersion } from '@utils/package-json';
 import { createVersionBucket } from '@utils/semver';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as semver from 'semver';
 
@@ -15,45 +14,47 @@ export enum ReactRouterMode {
   V7_DECLARATIVE = 'v7-declarative',
 }
 
-const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/public/**',
-  '**/.next/**',
-];
+const EXTRA_IGNORE = ['**/public/**'];
 
 export const getReactRouterVersionBucket = createVersionBucket();
+
+/** Content probes read at most this many files, one in memory at a time. */
+const SOURCE_PROBE_LIMIT = 200;
+
+/** Files that set up a React Router — never a blanket source sweep. */
+const ROUTER_FILE_GLOBS = [
+  '**/routes/**/*.@(ts|tsx|js|jsx)',
+  '**/*[Rr]out*.@(ts|tsx|js|jsx)',
+  '**/@(main|app|App|index|root).@(ts|tsx|js|jsx)',
+];
 
 async function hasReactRouterConfig({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const configMatches = await fg('**/react-router.config.@(ts|js|tsx|jsx)', {
-    dot: true,
-    cwd: installDir,
-    ignore: IGNORE_PATTERNS,
-  });
+  const configMatches = await boundedGlob(
+    '**/react-router.config.@(ts|js|tsx|jsx)',
+    {
+      cwd: installDir,
+      extraIgnore: EXTRA_IGNORE,
+      limit: 1,
+    },
+  );
   return configMatches.length > 0;
 }
 
 async function hasCreateBrowserRouter({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
-    dot: true,
+  const sourceFiles = await boundedGlob(ROUTER_FILE_GLOBS, {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const file of sourceFiles) {
-    try {
-      const filePath = path.join(installDir, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
-      if (content.includes('createBrowserRouter')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, file));
+    if (content?.includes('createBrowserRouter')) {
+      return true;
     }
   }
 
@@ -63,26 +64,22 @@ async function hasCreateBrowserRouter({
 async function hasDeclarativeRouter({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
-    dot: true,
+  const sourceFiles = await boundedGlob(ROUTER_FILE_GLOBS, {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const file of sourceFiles) {
-    try {
-      const filePath = path.join(installDir, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
-      if (
-        content.includes('<BrowserRouter') ||
-        (content.includes('BrowserRouter') &&
-          (content.includes('from "react-router-dom"') ||
-            content.includes("from 'react-router-dom'")))
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, file));
+    if (!content) continue;
+    if (
+      content.includes('<BrowserRouter') ||
+      (content.includes('BrowserRouter') &&
+        (content.includes('from "react-router-dom"') ||
+          content.includes("from 'react-router-dom'")))
+    ) {
+      return true;
     }
   }
 

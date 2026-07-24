@@ -1,4 +1,4 @@
-import fg from 'fast-glob';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import fs from 'fs/promises';
 import path from 'path';
 import type { WizardRunOptions } from '@utils/types';
@@ -13,11 +13,7 @@ export enum AstroRenderingMode {
   VIEW_TRANSITIONS = 'view-transitions',
 }
 
-export const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/.astro/**',
-];
+const EXTRA_IGNORE = ['**/.astro/**'];
 
 /**
  * Detect the Astro rendering mode. Pure — always resolves (Astro detection is reliable).
@@ -25,10 +21,10 @@ export const IGNORE_PATTERNS = [
 export async function getAstroRenderingMode({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<AstroRenderingMode> {
-  const configMatches = await fg('astro.config.@(mjs|ts|js)', {
-    dot: true,
+  const configMatches = await boundedGlob('astro.config.@(mjs|ts|js)', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: 1,
   });
 
   let hasAdapter = false;
@@ -70,26 +66,25 @@ export async function getAstroRenderingMode({
     }
   }
 
-  const viewTransitionMatches = await fg('**/*.@(astro|ts|tsx|js|jsx)', {
-    dot: true,
-    cwd: installDir,
-    ignore: IGNORE_PATTERNS,
-  });
+  const viewTransitionMatches = await boundedGlob(
+    '**/*.@(astro|ts|tsx|js|jsx)',
+    {
+      cwd: installDir,
+      extraIgnore: EXTRA_IGNORE,
+      limit: 20,
+    },
+  );
 
-  for (const file of viewTransitionMatches.slice(0, 20)) {
-    try {
-      const filePath = path.join(installDir, file);
-      const content = await fs.readFile(filePath, 'utf-8');
-      if (
-        content.includes('ClientRouter') ||
-        content.includes('ViewTransitions') ||
-        content.includes('astro:transitions')
-      ) {
-        usesViewTransitions = true;
-        break;
-      }
-    } catch {
-      // File not readable
+  for (const file of viewTransitionMatches) {
+    const content = readProjectFile(path.join(installDir, file));
+    if (!content) continue;
+    if (
+      content.includes('ClientRouter') ||
+      content.includes('ViewTransitions') ||
+      content.includes('astro:transitions')
+    ) {
+      usesViewTransitions = true;
+      break;
     }
   }
 

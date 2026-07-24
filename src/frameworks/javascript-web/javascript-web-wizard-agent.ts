@@ -52,7 +52,7 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
       const { installDir } = options;
 
       // Has (index.html OR has a bundler) AND is a JavaScript project
-      const hasIndexHtmlFlag = hasIndexHtml(options);
+      const hasIndexHtmlFlag = await hasIndexHtml(options);
 
       const bundler = detectBundler(options);
       const hasBundler = !!bundler;

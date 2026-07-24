@@ -1,4 +1,4 @@
-import fg from 'fast-glob';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
@@ -11,18 +11,16 @@ export enum LaravelProjectType {
   LIVEWIRE = 'livewire', // Livewire (reactive components, includes Filament)
 }
 
-/**
- * Ignore patterns for Laravel projects
- */
-const LARAVEL_IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/vendor/**',
+const EXTRA_IGNORE = [
   '**/storage/**',
   '**/bootstrap/cache/**',
   '**/.phpunit.cache/**',
   '**/public/build/**',
   '**/public/hot/**',
 ];
+
+/** Content probes read at most this many files, one in memory at a time. */
+const SOURCE_PROBE_LIMIT = 200;
 
 /**
  * Get Laravel version bucket for analytics
@@ -91,21 +89,19 @@ async function hasLaravelCodePattern(
 ): Promise<boolean> {
   const { installDir } = options;
 
-  const phpFiles = await fg(filePatterns, {
+  const phpFiles = await boundedGlob(filePatterns, {
     cwd: installDir,
-    ignore: LARAVEL_IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   const searchPattern =
     typeof pattern === 'string' ? new RegExp(pattern) : pattern;
 
   for (const phpFile of phpFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, phpFile), 'utf-8');
-      if (searchPattern.test(content)) return true;
-    } catch {
-      continue;
-    }
+    const content = readProjectFile(path.join(installDir, phpFile));
+    if (!content) continue;
+    if (searchPattern.test(content)) return true;
   }
 
   return false;
@@ -202,10 +198,14 @@ export async function findLaravelServiceProvider(
   }
 
   // Fall back to searching for any service provider
-  const providers = await fg(['**/app/Providers/*ServiceProvider.php'], {
-    cwd: installDir,
-    ignore: LARAVEL_IGNORE_PATTERNS,
-  });
+  const providers = await boundedGlob(
+    ['**/app/Providers/*ServiceProvider.php'],
+    {
+      cwd: installDir,
+      extraIgnore: EXTRA_IGNORE,
+      limit: 1,
+    },
+  );
 
   return providers[0];
 }

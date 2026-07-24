@@ -1,4 +1,4 @@
-import fg from 'fast-glob';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
@@ -12,17 +12,7 @@ export enum DjangoProjectType {
   CHANNELS = 'channels', // Django Channels (async/websockets)
 }
 
-const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/venv/**',
-  '**/.venv/**',
-  '**/env/**',
-  '**/.env/**',
-  '**/__pycache__/**',
-  '**/migrations/**',
-];
+const EXTRA_IGNORE = ['**/env/**', '**/.env/**', '**/migrations/**'];
 
 /**
  * Get Django version bucket for analytics
@@ -38,36 +28,32 @@ export async function getDjangoVersion(
   const { installDir } = options;
 
   // Check requirements files
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (!content) continue;
 
-      // Try to extract version from requirements.txt format (Django==4.2.0 or Django>=4.0)
-      const requirementsMatch = content.match(
-        /[Dd]jango[=<>~!]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
-      );
-      if (requirementsMatch) {
-        return requirementsMatch[1];
-      }
+    // Try to extract version from requirements.txt format (Django==4.2.0 or Django>=4.0)
+    const requirementsMatch = content.match(
+      /[Dd]jango[=<>~!]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
+    );
+    if (requirementsMatch) {
+      return requirementsMatch[1];
+    }
 
-      // Try to extract from pyproject.toml format
-      const pyprojectMatch = content.match(
-        /[Dd]jango["\s]*[=<>~!]+\s*["']?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
-      );
-      if (pyprojectMatch) {
-        return pyprojectMatch[1];
-      }
-    } catch {
-      // Skip files that can't be read
-      continue;
+    // Try to extract from pyproject.toml format
+    const pyprojectMatch = content.match(
+      /[Dd]jango["\s]*[=<>~!]+\s*["']?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
+    );
+    if (pyprojectMatch) {
+      return pyprojectMatch[1];
     }
   }
 
@@ -80,42 +66,31 @@ export async function getDjangoVersion(
 async function hasDRF({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
-      if (content.includes('djangorestframework')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (content?.includes('djangorestframework')) {
+      return true;
     }
   }
 
   // Also check INSTALLED_APPS in settings
-  const settingsFiles = await fg('**/settings.py', {
+  const settingsFiles = await boundedGlob('**/settings.py', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
   });
 
   for (const settingsFile of settingsFiles) {
-    try {
-      const content = fs.readFileSync(
-        path.join(installDir, settingsFile),
-        'utf-8',
-      );
-      if (content.includes('rest_framework')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, settingsFile));
+    if (content?.includes('rest_framework')) {
+      return true;
     }
   }
 
@@ -128,22 +103,18 @@ async function hasDRF({
 async function hasWagtail({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
-      if (content.includes('wagtail')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (content?.includes('wagtail')) {
+      return true;
     }
   }
 
@@ -156,22 +127,18 @@ async function hasWagtail({
 async function hasChannels({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
-      if (content.includes('channels')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (content?.includes('channels')) {
+      return true;
     }
   }
 
@@ -236,16 +203,17 @@ export async function findDjangoSettingsFile(
   const { installDir } = options;
 
   // Look for settings.py files
-  const settingsFiles = await fg('**/settings.py', {
+  const settingsFiles = await boundedGlob('**/settings.py', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
   });
 
   if (settingsFiles.length === 0) {
     // Try settings/__init__.py for split settings
-    const splitSettingsFiles = await fg('**/settings/__init__.py', {
+    const splitSettingsFiles = await boundedGlob('**/settings/__init__.py', {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
+      limit: 1,
     });
 
     if (splitSettingsFiles.length > 0) {
@@ -262,16 +230,9 @@ export async function findDjangoSettingsFile(
 
   // Try to find the main settings file by looking for ROOT_URLCONF
   for (const settingsFile of settingsFiles) {
-    try {
-      const content = fs.readFileSync(
-        path.join(installDir, settingsFile),
-        'utf-8',
-      );
-      if (content.includes('ROOT_URLCONF')) {
-        return settingsFile;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, settingsFile));
+    if (content?.includes('ROOT_URLCONF')) {
+      return settingsFile;
     }
   }
 
@@ -290,30 +251,25 @@ export async function findDjangoUrlsFile(
   // First, try to find the root urls.py referenced in settings
   const settingsFile = await findDjangoSettingsFile(options);
   if (settingsFile) {
-    try {
-      const settingsContent = fs.readFileSync(
-        path.join(installDir, settingsFile),
-        'utf-8',
-      );
-      const urlconfMatch = settingsContent.match(
-        /ROOT_URLCONF\s*=\s*['"]([^'"]+)['"]/,
-      );
-      if (urlconfMatch) {
-        const urlconfPath = urlconfMatch[1].replace(/\./g, '/') + '.py';
-        const fullPath = path.join(installDir, urlconfPath);
-        if (fs.existsSync(fullPath)) {
-          return urlconfPath;
-        }
+    const settingsContent = readProjectFile(
+      path.join(installDir, settingsFile),
+    );
+    const urlconfMatch = settingsContent?.match(
+      /ROOT_URLCONF\s*=\s*['"]([^'"]+)['"]/,
+    );
+    if (urlconfMatch) {
+      const urlconfPath = urlconfMatch[1].replace(/\./g, '/') + '.py';
+      const fullPath = path.join(installDir, urlconfPath);
+      if (fs.existsSync(fullPath)) {
+        return urlconfPath;
       }
-    } catch {
-      // Fall through to glob search
     }
   }
 
   // Fallback to glob search
-  const urlsFiles = await fg('**/urls.py', {
+  const urlsFiles = await boundedGlob('**/urls.py', {
     cwd: installDir,
-    ignore: [...IGNORE_PATTERNS, '**/admin/**'],
+    extraIgnore: [...EXTRA_IGNORE, '**/admin/**'],
   });
 
   if (urlsFiles.length === 0) {
@@ -322,13 +278,9 @@ export async function findDjangoUrlsFile(
 
   // Prefer urls.py files that contain urlpatterns
   for (const urlsFile of urlsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, urlsFile), 'utf-8');
-      if (content.includes('urlpatterns')) {
-        return urlsFile;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, urlsFile));
+    if (content?.includes('urlpatterns')) {
+      return urlsFile;
     }
   }
 

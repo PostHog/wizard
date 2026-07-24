@@ -1,8 +1,7 @@
-import fg from 'fast-glob';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 export enum FlaskProjectType {
@@ -13,18 +12,15 @@ export enum FlaskProjectType {
   BLUEPRINT = 'blueprint', // Large app with blueprints
 }
 
-const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/venv/**',
-  '**/.venv/**',
+const EXTRA_IGNORE = [
   '**/env/**',
   '**/.env/**',
-  '**/__pycache__/**',
   '**/migrations/**',
   '**/instance/**',
 ];
+
+/** Content probes read at most this many files, one in memory at a time. */
+const SOURCE_PROBE_LIMIT = 200;
 
 /**
  * Get Flask version bucket for analytics
@@ -40,36 +36,32 @@ export async function getFlaskVersion(
   const { installDir } = options;
 
   // Check requirements files
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (!content) continue;
 
-      // Try to extract version from requirements.txt format (Flask==3.0.0 or flask>=2.0)
-      const requirementsMatch = content.match(
-        /[Ff]lask[=<>~!]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
-      );
-      if (requirementsMatch) {
-        return requirementsMatch[1];
-      }
+    // Try to extract version from requirements.txt format (Flask==3.0.0 or flask>=2.0)
+    const requirementsMatch = content.match(
+      /[Ff]lask[=<>~!]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
+    );
+    if (requirementsMatch) {
+      return requirementsMatch[1];
+    }
 
-      // Try to extract from pyproject.toml format
-      const pyprojectMatch = content.match(
-        /[Ff]lask["\s]*[=<>~!]+\s*["']?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
-      );
-      if (pyprojectMatch) {
-        return pyprojectMatch[1];
-      }
-    } catch {
-      // Skip files that can't be read
-      continue;
+    // Try to extract from pyproject.toml format
+    const pyprojectMatch = content.match(
+      /[Ff]lask["\s]*[=<>~!]+\s*["']?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
+    );
+    if (pyprojectMatch) {
+      return pyprojectMatch[1];
     }
   }
 
@@ -82,45 +74,40 @@ export async function getFlaskVersion(
 async function hasFlaskRESTful({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
-      if (
-        content.includes('flask-restful') ||
-        content.includes('Flask-RESTful')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (!content) continue;
+    if (
+      content.includes('flask-restful') ||
+      content.includes('Flask-RESTful')
+    ) {
+      return true;
     }
   }
 
   // Also check imports in Python files
-  const pyFiles = await fg(['**/*.py'], {
+  const pyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of pyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('from flask_restful import') ||
-        content.includes('import flask_restful')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('from flask_restful import') ||
+      content.includes('import flask_restful')
+    ) {
+      return true;
     }
   }
 
@@ -133,42 +120,37 @@ async function hasFlaskRESTful({
 async function hasFlaskRESTX({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
-      if (content.includes('flask-restx') || content.includes('Flask-RESTX')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (!content) continue;
+    if (content.includes('flask-restx') || content.includes('Flask-RESTX')) {
+      return true;
     }
   }
 
   // Also check imports in Python files
-  const pyFiles = await fg(['**/*.py'], {
+  const pyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of pyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('from flask_restx import') ||
-        content.includes('import flask_restx')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('from flask_restx import') ||
+      content.includes('import flask_restx')
+    ) {
+      return true;
     }
   }
 
@@ -181,42 +163,37 @@ async function hasFlaskRESTX({
 async function hasFlaskSmorest({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
-      if (content.includes('flask-smorest')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (!content) continue;
+    if (content.includes('flask-smorest')) {
+      return true;
     }
   }
 
   // Also check imports in Python files
-  const pyFiles = await fg(['**/*.py'], {
+  const pyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of pyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('from flask_smorest import') ||
-        content.includes('import flask_smorest')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('from flask_smorest import') ||
+      content.includes('import flask_smorest')
+    ) {
+      return true;
     }
   }
 
@@ -229,23 +206,21 @@ async function hasFlaskSmorest({
 async function hasBlueprints({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const pyFiles = await fg(['**/*.py'], {
+  const pyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of pyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('Blueprint(') ||
-        content.includes('register_blueprint(') ||
-        content.includes('from flask import Blueprint')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('Blueprint(') ||
+      content.includes('register_blueprint(') ||
+      content.includes('from flask import Blueprint')
+    ) {
+      return true;
     }
   }
 
@@ -325,45 +300,40 @@ export async function findFlaskAppFile(
     '**/__init__.py',
   ];
 
-  const appFiles = await fg(commonPatterns, {
+  const appFiles = await boundedGlob(commonPatterns, {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
   });
 
   // Look for files with Flask() instantiation or create_app() factory
   for (const appFile of appFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, appFile), 'utf-8');
-      // Check for Flask app instantiation or application factory
-      if (
-        content.includes('Flask(__name__)') ||
-        content.includes('Flask(') ||
-        content.includes('def create_app(')
-      ) {
-        return appFile;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, appFile));
+    if (!content) continue;
+    // Check for Flask app instantiation or application factory
+    if (
+      content.includes('Flask(__name__)') ||
+      content.includes('Flask(') ||
+      content.includes('def create_app(')
+    ) {
+      return appFile;
     }
   }
 
   // If no file with Flask() found, check all Python files
-  const allPyFiles = await fg(['**/*.py'], {
+  const allPyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of allPyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('Flask(__name__)') ||
-        content.includes('def create_app(')
-      ) {
-        return pyFile;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('Flask(__name__)') ||
+      content.includes('def create_app(')
+    ) {
+      return pyFile;
     }
   }
 

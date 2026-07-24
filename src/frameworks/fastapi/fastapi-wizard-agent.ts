@@ -12,9 +12,10 @@ import {
   FastAPIProjectType,
   findFastAPIAppFile,
 } from './utils';
-import fg from 'fast-glob';
-import * as fs from 'node:fs';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as path from 'node:path';
+
+const EXTRA_IGNORE = ['**/env/**', '**/.env/**'];
 
 /**
  * FastAPI framework configuration for the universal agent runner
@@ -51,7 +52,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
       // so if we get here, the project is not a Django or Flask project.
 
       // Check for FastAPI in requirements files
-      const requirementsFiles = await fg(
+      const requirementsFiles = await boundedGlob(
         [
           '**/requirements*.txt',
           '**/pyproject.toml',
@@ -60,59 +61,41 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
         ],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          extraIgnore: EXTRA_IGNORE,
         },
       );
 
       for (const reqFile of requirementsFiles) {
-        try {
-          const content = fs.readFileSync(
-            path.join(installDir, reqFile),
-            'utf-8',
-          );
-          // Check for fastapi package (case-insensitive)
-          // Match "fastapi" as a standalone package
-          if (
-            /^fastapi([<>=~!]|$|\s)/im.test(content) ||
-            /["']fastapi["']/i.test(content)
-          ) {
-            return true;
-          }
-        } catch {
-          continue;
+        const content = readProjectFile(path.join(installDir, reqFile));
+        if (!content) continue;
+        // Check for fastapi package (case-insensitive)
+        // Match "fastapi" as a standalone package
+        if (
+          /^fastapi([<>=~!]|$|\s)/im.test(content) ||
+          /["']fastapi["']/i.test(content)
+        ) {
+          return true;
         }
       }
 
       // Check for FastAPI app patterns in Python files
-      const pyFiles = await fg(
+      const pyFiles = await boundedGlob(
         ['**/main.py', '**/app.py', '**/application.py', '**/__init__.py'],
         {
           cwd: installDir,
-          ignore: [
-            '**/venv/**',
-            '**/.venv/**',
-            '**/env/**',
-            '**/.env/**',
-            '**/__pycache__/**',
-          ],
+          extraIgnore: EXTRA_IGNORE,
         },
       );
 
       for (const pyFile of pyFiles) {
-        try {
-          const content = fs.readFileSync(
-            path.join(installDir, pyFile),
-            'utf-8',
-          );
-          if (
-            content.includes('from fastapi import') ||
-            content.includes('import fastapi') ||
-            /FastAPI\s*\(/.test(content)
-          ) {
-            return true;
-          }
-        } catch {
-          continue;
+        const content = readProjectFile(path.join(installDir, pyFile));
+        if (!content) continue;
+        if (
+          content.includes('from fastapi import') ||
+          content.includes('import fastapi') ||
+          /FastAPI\s*\(/.test(content)
+        ) {
+          return true;
         }
       }
 
