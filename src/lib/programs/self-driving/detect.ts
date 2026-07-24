@@ -119,14 +119,17 @@ const WALK_MAX_DEPTH = 2;
  */
 function scanDirs(installDir: string): string[] {
   const rels = new Set<string>(POSTHOG_DIRS);
-  const walk = (rel: string, depth: number): void => {
+  // Explicit stack — no call-stack recursion.
+  const stack: Array<{ rel: string; depth: number }> = [{ rel: '.', depth: 0 }];
+  while (stack.length > 0) {
+    const { rel, depth } = stack.pop()!;
     rels.add(rel);
-    if (depth >= WALK_MAX_DEPTH) return;
+    if (depth >= WALK_MAX_DEPTH) continue;
     let entries: Dirent[];
     try {
       entries = readdirSync(join(installDir, rel), { withFileTypes: true });
     } catch {
-      return;
+      continue;
     }
     for (const e of entries) {
       if (!e.isDirectory()) continue;
@@ -136,10 +139,12 @@ function scanDirs(installDir: string): string[] {
       if (e.name.endsWith('.xcodeproj') || e.name.endsWith('.xcworkspace')) {
         continue;
       }
-      walk(rel === '.' ? e.name : `${rel}/${e.name}`, depth + 1);
+      stack.push({
+        rel: rel === '.' ? e.name : `${rel}/${e.name}`,
+        depth: depth + 1,
+      });
     }
-  };
-  walk('.', 0);
+  }
   return [...rels];
 }
 

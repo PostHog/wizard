@@ -6,7 +6,7 @@ const readEnv =
     : (readEnvModule as any).default;
 import { tryGetPackageJson } from './setup-utils';
 import type { WizardRunOptions } from './types';
-import fg from 'fast-glob';
+import { boundedGlob } from './bounded-fs';
 import { IS_DEV } from '@lib/constants';
 
 export function isNonInteractiveEnvironment(): boolean {
@@ -35,12 +35,11 @@ export async function detectEnvVarPrefix(
 
   const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
   const has = (name: string) => name in deps;
+  // O(1) matches per probe: one config file existing anywhere answers it.
   const hasAnyFile = async (patterns: string[]) => {
-    const matches = await fg(patterns, {
+    const matches = await boundedGlob(patterns, {
       cwd: options.installDir,
-      absolute: false,
-      onlyFiles: true,
-      ignore: ['**/node_modules/**'],
+      limit: 1,
     });
     return matches.length > 0;
   };

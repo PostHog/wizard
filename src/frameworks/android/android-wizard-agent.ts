@@ -2,7 +2,7 @@
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { Integration } from '@lib/constants';
-import fg from 'fast-glob';
+import { boundedGlob } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -63,15 +63,15 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
 
       // Strategy 2: Check for AndroidManifest.xml with Kotlin source files
       // This could be an issue if we have Flutter in the mix, but we'll figure that out later.
-      const manifestFiles = await fg('**/AndroidManifest.xml', {
+      const manifestFiles = await boundedGlob('**/AndroidManifest.xml', {
         cwd: installDir,
-        ignore: ['**/build/**', '**/node_modules/**', '**/.gradle/**'],
+        limit: 1,
       });
 
       if (manifestFiles.length > 0) {
-        const kotlinFiles = await fg('**/*.kt', {
+        const kotlinFiles = await boundedGlob('**/*.kt', {
           cwd: installDir,
-          ignore: ['**/build/**', '**/node_modules/**', '**/.gradle/**'],
+          limit: 1,
         });
         if (kotlinFiles.length > 0) {
           return true;
