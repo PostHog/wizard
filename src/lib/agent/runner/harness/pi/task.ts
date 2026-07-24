@@ -424,7 +424,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         ? (analyticsProperties as { task_type: string }).task_type
         : modelId;
     logToFile(
-      `[pi-task] usage task=${taskType} model=${modelId} dur=${durations.duration_seconds}s turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
+      `[pi-task] usage task=${taskType} model=${modelId} effort=${caps.thinkingLevel} dur=${durations.duration_seconds}s turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
     );
     if (successMessage) spinner.stop(successMessage);
     return {};

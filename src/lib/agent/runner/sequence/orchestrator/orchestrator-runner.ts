@@ -42,7 +42,6 @@ import type { BootstrapResult } from '../../shared/types';
 import {
   getHarness,
   resolveHarness,
-  resolveRoleRoute,
   type HarnessPick,
 } from '../../switchboard';
 import { isValidModel, requireKnownModel } from '../../switchboard/models';
@@ -214,19 +213,6 @@ export async function runOrchestrator(
   // to cheap models.
   const runStartMs = Date.now();
   const metrics = new RunMetrics(runStartMs);
-  // One precedence rule for both dispatch and telemetry: armed role route > enqueue/frontmatter spec.
-  const taskRunSpec = (task: QueuedTask, harness: string) => {
-    const spec = taskModelSpec(registry, task, harness);
-    const route = resolveRoleRoute(
-      programConfig.id,
-      task.type,
-      boot.wizardFlags,
-    );
-    return {
-      model: route?.model ?? spec.model,
-      effort: route?.effort ?? spec.effort,
-    };
-  };
   const durationMs = (t: QueuedTask) =>
     t.startedAt && t.finishedAt
       ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
@@ -236,7 +222,7 @@ export async function runOrchestrator(
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
       // Mirror dispatch's allow-list fallback so attribution names the model that runs.
-      const specModel = taskRunSpec(task, pick.harness).model;
+      const specModel = taskModelSpec(registry, task, pick.harness).model;
       const base = {
         type: task.type,
         model: isValidModel(specModel) ? specModel : pick.model,
@@ -502,19 +488,18 @@ export async function runOrchestrator(
       //
       // Per-task role = task.type — the switchboard consults
       // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
-      // per-agent overrides. Prompt-frontmatter model still wins (§3.6)
-      // unless a role route is armed (taskRunSpec).
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
-      const spec = taskRunSpec(task, taskPick.harness);
+      const taskModel = taskModelSpec(registry, task, taskPick.harness);
       await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: requireKnownModel(spec.model, taskPick.model),
-        effort: spec.effort,
+        model: requireKnownModel(taskModel.model, taskPick.model),
+        effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),

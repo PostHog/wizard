@@ -40,7 +40,7 @@ const EFFORT_FLAG_VARIANTS = [
 
 /** A resolved flag route. Absent fields keep the axis's default (pi harness, sequence resolved by its own chain, table effort). */
 export interface FlagRoute {
-  model: string;
+  model?: string;
   thinkingLevel?: EffortLevel;
   harness?: Harness;
   sequence?: Sequence;
@@ -48,23 +48,19 @@ export interface FlagRoute {
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Pinned scheme: the useFlag routes to pi on a fixed model/effort. The model and effort multivariate flags are role-scoped experiment surfaces (see `review-model.ts`) — the general route never reads them. */
-export interface PinnedConfigFlag {
-  /** Boolean flag: 'true' → route this program to pi. */
+/** Harness-only scheme: the useFlag routes the harness; model/effort stay at the binding default so prompt frontmatter governs. */
+export interface HarnessConfigFlag {
   useFlag: string;
-  /** Gateway model id the route pins. */
-  model: string;
-  /** Reasoning-effort the route pins; absent → the model's table default. */
-  effort?: EffortLevel;
+  harness: Harness;
 }
 
 /** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
 export interface PayloadConfigFlag {
   useFlag: string;
-  model?: never;
+  harness?: never;
 }
 
-export type ConfigFlag = PinnedConfigFlag | PayloadConfigFlag;
+export type ConfigFlag = HarnessConfigFlag | PayloadConfigFlag;
 
 /**
  * A harness-axis experiment: ONE program and the flags that route it. The
@@ -82,19 +78,6 @@ export interface SequenceExperiment {
   flag: string;
   /** Sequence the flag routes covered programs to. */
   sequence: Sequence;
-}
-
-/** A role-scoped experiment: the model flag's arm routes ONE role of ONE program, outranking prompt frontmatter there; any non-arm variant fails closed. */
-export interface RoleExperiment {
-  program: ProgramId;
-  /** Agent-prompt role (`task.type`) the arms apply to. */
-  role: string;
-  useFlag: string;
-  modelFlag: string;
-  /** Variant keys (`MODEL_FLAG_VARIANTS`) the experiment may route. */
-  arms: readonly string[];
-  /** Effort pinned for every arm, so arms never diverge onto per-model table defaults. */
-  effort: EffortLevel;
 }
 
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
@@ -138,9 +121,7 @@ export function routeFromConfigFlag(
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
   if (flags[cfg.useFlag] !== 'true') return undefined;
-  if (cfg.model) {
-    return { model: cfg.model, thinkingLevel: cfg.effort };
-  }
+  if (cfg.harness) return { harness: cfg.harness };
   const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
   if (!route) {
     logToFile(
@@ -148,16 +129,4 @@ export function routeFromConfigFlag(
     );
   }
   return route;
-}
-
-/** Resolve a role experiment's arm, or undefined when it doesn't validly route. */
-export function routeFromRoleFlag(
-  exp: RoleExperiment,
-  flags: Record<string, string>,
-): { model: string; effort: EffortLevel } | undefined {
-  if (flags[exp.useFlag] !== 'true') return undefined;
-  const variant = flags[exp.modelFlag] ?? '';
-  if (!exp.arms.includes(variant)) return undefined;
-  const model = MODEL_FLAG_VARIANTS[variant];
-  return model ? { model, effort: exp.effort } : undefined;
 }

@@ -89,7 +89,7 @@ export interface HarnessPick {
   harness: Harness;
   /** Gateway model id (string). */
   model: string;
-  /** Reasoning-effort override (e.g. from a pi effort flag). Absent → the model's table default. */
+  /** Reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
 }
 
@@ -164,4 +164,4 @@ export {
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export { isOrchestratorEnabled, resolveRoleRoute } from './flags';
+export { isOrchestratorEnabled } from './flags';
