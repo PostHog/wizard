@@ -24,6 +24,14 @@ path to your phx key file?" — plus the project id and region if you don't have
 them. Clone or copy the target app to a **throwaway `/tmp` copy** (never a real
 fixture). Never print or commit the key.
 
+**No key needed for detection-only runs.** `open_app` requires only
+`{ appDir, projectId }`; everything up to and including the `auth` screen —
+framework detection, gatherContext, feature discovery, warehouse scan — runs
+credential-free. Testing a detection change means: `open_app` → poll
+`read_state` until `detectionComplete` → check `integration` /
+`detectedFrameworkLabel` → `confirm_setup` (lands on `auth`) → done, open the
+next app. Only `run_agent` needs the key.
+
 ## Drive
 
 1. **`open_app({ appDir, keyFile, projectId, region })`** — boots a live wizard on
@@ -54,6 +62,33 @@ file — `/tmp/wz-explore-snaps/NN-<screen>.txt`, incrementing `NN` in visit ord
 so the run leaves a readable, ordered record you and the user can review afterward
 (the same shape the CI route's `.txt` frames take). Capture the run screen as it
 progresses, not just on screen changes.
+
+## Sweeping the workbench
+
+The fixture library lives at
+`wizard-workbench/apps/basic-integration/<framework>/<app>` (sibling repo).
+To regression-test detection across every framework, loop: copy an app,
+`open_app`, verify, next. Learned the hard way:
+
+- **Copy with `rsync -a --exclude node_modules --exclude .git`** (plus
+  vendor/venv/Pods/build/dist). A plain `cp -R` of the workbench fills the
+  disk, and a copy that dies mid-write leaves a truncated app that detects as
+  `null` — a false regression. If detection returns `null` unexpectedly, check
+  the fixture (`package.json` present?) before blaming the code.
+- **`open_app` returns the first paint**, sometimes before detection lands
+  (`detectionComplete: false`, `integration: null`). Poll `read_state` —
+  slower detectors (laravel, rails) need a beat.
+- **One app at a time** — `open_app` replaces the active wizard.
+- **Logs:** every run appends to `/tmp/posthog-wizard.log`. Record
+  `wc -c < /tmp/posthog-wizard.log` before the sweep and slice with
+  `tail -c +OFFSET` after — that's the run's own log, greppable for
+  detection lines and `[bounded-fs]` cap warnings.
+- **Router modes and other `gatherContext` results don't appear in
+  `read_state` or the log.** An empty `setupQuestions` implies the mode
+  resolved (ambiguity would raise a question), but for positive proof call
+  the util directly with `npx tsx` against the same fixture (e.g.
+  `getNextJsRouter`, `getTanStackRouterMode`).
+- **Delete fixtures as you go** — a full sweep is multiple GB.
 
 ## Key facts
 
