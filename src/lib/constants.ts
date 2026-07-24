@@ -12,7 +12,7 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
-/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+/** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
 
 /**

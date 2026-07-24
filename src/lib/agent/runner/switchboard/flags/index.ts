@@ -10,7 +10,10 @@ import {
   type Sequence,
 } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
-import { ORCHESTRATOR_EXPERIMENT, ORCHESTRATOR_PI_ROUTE } from './orchestrator';
+import {
+  ORCHESTRATOR_SEQUENCE_ROUTE,
+  ORCHESTRATOR_HARNESS_ROUTE,
+} from './orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from './self-driving';
 import {
   routeFromConfigFlag,
@@ -23,11 +26,11 @@ import {
 
 /** Every experiment on each axis. An experiment routes ONLY by being listed here, and only for the programs it declares. */
 export const HARNESS_EXPERIMENTS: readonly HarnessExperiment[] = [
-  ORCHESTRATOR_PI_ROUTE,
+  ORCHESTRATOR_HARNESS_ROUTE,
   SELF_DRIVING_EXPERIMENT,
 ];
 export const SEQUENCE_EXPERIMENTS: readonly SequenceExperiment[] = [
-  ORCHESTRATOR_EXPERIMENT,
+  ORCHESTRATOR_SEQUENCE_ROUTE,
 ];
 
 /** The flag-driven route for a program, or undefined when no experiment covers it or its flags don't validly route. */

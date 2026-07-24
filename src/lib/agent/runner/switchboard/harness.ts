@@ -43,7 +43,7 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   return {
     harness: route.harness ?? Harness.pi,
     model: route.model ?? pick.model,
-    thinkingLevel: route.thinkingLevel,
+    thinkingLevel: route.thinkingLevel ?? pick.thinkingLevel,
   };
 };
 
