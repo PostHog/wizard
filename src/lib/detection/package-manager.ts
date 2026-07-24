@@ -216,6 +216,25 @@ export function bundlerPackageManager(): Promise<PackageManagerInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Elixir (Mix) helper
+// ---------------------------------------------------------------------------
+
+const MIX: DetectedPackageManager = {
+  name: 'mix',
+  label: 'Mix',
+  installCommand: 'mix deps.get',
+};
+
+export function mixPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [MIX],
+    primary: MIX,
+    recommendation:
+      'Use Mix. Add the dependency to the deps list in mix.exs, then run mix deps.get.',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Android (Gradle) helper
 // ---------------------------------------------------------------------------
 
