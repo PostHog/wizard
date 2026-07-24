@@ -11,6 +11,7 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { scanInstalledSkill } from '@lib/yara-hooks';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
   AUDIT_CHECKS_FILE,
@@ -204,6 +205,22 @@ export async function downloadSkill(
         )
       : extractZipArchive(data, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+
+    // Same scan the Bash-install hook runs — TS-path installs (linear
+    // pre-install, MCP/pi install_skill, orchestrator cache + reference)
+    // must not skip it.
+    const poisonReason = await scanInstalledSkill(skillDir);
+    if (poisonReason) {
+      fs.rmSync(skillDir, { recursive: true, force: true });
+      logToFile(`downloadSkill: ${poisonReason}`);
+      analytics.wizardCapture('skill install failed', {
+        skill_id: skillEntry.id,
+        step: 'scan',
+        platform: process.platform,
+        error: poisonReason.slice(0, 500),
+      });
+      return { success: false, error: poisonReason };
+    }
 
     logToFile(
       `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,

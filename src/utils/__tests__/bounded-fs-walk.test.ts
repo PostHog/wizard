@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { walkProjectFiles, safeReadFile } from '@utils/file-utils';
+import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
