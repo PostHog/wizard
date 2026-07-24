@@ -84,7 +84,10 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
-  // cargo run/test execute project code; install/publish are outward-facing.
+  // cargo build/check also execute code (build.rs build scripts + proc-macros),
+  // accepted under the "builds are equivalent risk" model in the file header.
+  // run/test are denied so the finished binary/tests aren't run; install/publish
+  // are outward-facing.
   cargo: [
     'add',
     'remove',
