@@ -5,14 +5,13 @@
  * shapes and resolution.
  */
 import { RUN_SURFACE } from '@env';
-import {
-  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
-  type Sequence,
-} from '@lib/constants';
+import { logToFile } from '@utils/debug';
+import type { Sequence } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import {
-  ORCHESTRATOR_SEQUENCE_ROUTE,
   ORCHESTRATOR_HARNESS_ROUTE,
+  ORCHESTRATOR_SEQUENCE_ROUTE,
+  ORCHESTRATOR_STAGE_OVERRIDES,
 } from './orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from './self-driving';
 import {
@@ -57,7 +56,7 @@ export function resolveFlagSequence(
   )?.sequence;
 }
 
-/** The override for one orchestrator stage, or undefined (prompt frontmatter stays). Scope = the orchestrator experiment's programs. */
+/** The override for one orchestrator stage, or undefined (prompt frontmatter stays). */
 export function resolveStageOverride(
   program: ProgramId,
   stage: string,
@@ -65,12 +64,19 @@ export function resolveStageOverride(
   flagPayloads?: Record<string, unknown>,
 ): StageOverride | undefined {
   if (RUN_SURFACE === 'cloud') return undefined;
-  if (!ORCHESTRATOR_EXPERIMENT.programs.includes(program)) return undefined;
-  const variant = flags[WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY];
+  if (!ORCHESTRATOR_STAGE_OVERRIDES.programs.includes(program)) {
+    return undefined;
+  }
+  const exp = ORCHESTRATOR_STAGE_OVERRIDES;
+  const variant = flags[exp.flag];
   if (!variant || variant === 'false') return undefined;
-  return stageOverridesFromPayload(
-    flagPayloads?.[WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY],
-  )?.[stage];
+  const overrides = stageOverridesFromPayload(flagPayloads?.[exp.flag]);
+  if (!overrides) {
+    logToFile(
+      `[switchboard] ${exp.flag}=${variant} but payload missing/invalid — keeping frontmatter`,
+    );
+  }
+  return overrides?.[stage];
 }
 
 export { isOrchestratorEnabled } from './orchestrator';

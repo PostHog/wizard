@@ -45,11 +45,7 @@ import {
   resolveStageOverride,
   type HarnessPick,
 } from '../../switchboard';
-import {
-  isValidModel,
-  requireKnownModel,
-  type ThinkingLevel,
-} from '../../switchboard/models';
+import { isValidModel, requireKnownModel } from '../../switchboard/models';
 import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
@@ -219,9 +215,9 @@ export async function runOrchestrator(
   const runStartMs = Date.now();
   const metrics = new RunMetrics(runStartMs);
   // One precedence rule for dispatch and telemetry: stage override > enqueue/frontmatter spec.
-  const stageSpec = (
+  const withStageOverride = (
     stage: string,
-    spec: { model?: string; effort?: ThinkingLevel },
+    spec: ReturnType<typeof taskModelSpec>,
   ) => {
     const o = resolveStageOverride(
       programConfig.id,
@@ -240,7 +236,7 @@ export async function runOrchestrator(
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
       // Mirror dispatch's allow-list fallback so attribution names the model that runs.
-      const specModel = stageSpec(
+      const specModel = withStageOverride(
         task.type,
         taskModelSpec(registry, task, pick.harness),
       ).model;
@@ -422,7 +418,7 @@ export async function runOrchestrator(
   // prompt is silent.
   const seedPick = resolveHarness(switchboardCtx, 'seed');
   const seedHarness = requireTaskHarness(seedPick);
-  const seedModel = stageSpec(
+  const seedModel = withStageOverride(
     'seed',
     promptModelFor(seedPrompt, seedPick.harness),
   );
@@ -515,7 +511,7 @@ export async function runOrchestrator(
       // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
-      const taskModel = stageSpec(
+      const taskModel = withStageOverride(
         task.type,
         taskModelSpec(registry, task, taskPick.harness),
       );

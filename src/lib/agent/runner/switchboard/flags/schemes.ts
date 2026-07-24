@@ -80,23 +80,36 @@ export interface SequenceExperiment {
   sequence: Sequence;
 }
 
+/** Variant key validated against the shared vocabulary, transformed to its gateway id. */
+const modelVariantSchema = z
+  .string()
+  .refine((key) => key in MODEL_FLAG_VARIANTS)
+  .transform((key) => MODEL_FLAG_VARIANTS[key]);
+
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
 const payloadConfigFlagSchema = z.object({
-  model: z.string().refine((key) => key in MODEL_FLAG_VARIANTS),
+  model: modelVariantSchema,
   effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
   harness: z.nativeEnum(Harness).optional(),
   sequence: z.nativeEnum(Sequence).optional(),
 });
+
+/** JSON-string payloads parse to their value; anything unparseable is undefined. */
+function coerceJson(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+}
 
 // ── Resolution ────────────────────────────────────────────────────────────
 
 /** Per-stage overrides keyed by stage; a whole-payload parse failure fails closed to frontmatter everywhere. */
 const stageOverridesSchema = z.record(
   z.object({
-    model: z
-      .string()
-      .refine((key) => key in MODEL_FLAG_VARIANTS)
-      .optional(),
+    model: modelVariantSchema.optional(),
     effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
   }),
 );
@@ -107,41 +120,16 @@ export type StageOverride = { model?: string; effort?: EffortLevel };
 export function stageOverridesFromPayload(
   raw: unknown,
 ): Record<string, StageOverride> | undefined {
-  let value = raw;
-  if (typeof raw === 'string') {
-    try {
-      value = JSON.parse(raw) as unknown;
-    } catch {
-      return undefined;
-    }
-  }
-  const parsed = stageOverridesSchema.safeParse(value);
-  if (!parsed.success) return undefined;
-  return Object.fromEntries(
-    Object.entries(parsed.data).map(([stage, o]) => [
-      stage,
-      {
-        model: o.model ? MODEL_FLAG_VARIANTS[o.model] : undefined,
-        effort: o.effort,
-      },
-    ]),
-  );
+  const parsed = stageOverridesSchema.safeParse(coerceJson(raw));
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Validate a payload (object or JSON string) into a route; undefined on any unexpected shape. */
 function parseFlagPayload(raw: unknown): FlagRoute | undefined {
-  let value = raw;
-  if (typeof raw === 'string') {
-    try {
-      value = JSON.parse(raw) as unknown;
-    } catch {
-      return undefined;
-    }
-  }
-  const parsed = payloadConfigFlagSchema.safeParse(value);
+  const parsed = payloadConfigFlagSchema.safeParse(coerceJson(raw));
   if (!parsed.success) return undefined;
   return {
-    model: MODEL_FLAG_VARIANTS[parsed.data.model],
+    model: parsed.data.model,
     thinkingLevel: parsed.data.effort,
     harness: parsed.data.harness,
     sequence: parsed.data.sequence,

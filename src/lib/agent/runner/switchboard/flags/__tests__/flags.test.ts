@@ -11,6 +11,7 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   SONNET_5_MODEL,
 } from '@lib/constants';
@@ -24,7 +25,6 @@ import {
   ORCHESTRATOR_HARNESS_ROUTE,
 } from '@lib/agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@lib/agent/runner/switchboard/flags/self-driving';
-import { WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY } from '@lib/constants';
 import { runBindingCases } from './binding-cases';
 
 const envState = vi.hoisted(() => ({
