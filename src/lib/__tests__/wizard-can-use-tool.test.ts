@@ -139,6 +139,21 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('carthage bootstrap')).toBe('allow');
   });
 
+  it('rust ecosystem', () => {
+    expect(allow('cargo add posthog-rs')).toBe('allow');
+    expect(allow('cargo add posthog-rs --no-default-features')).toBe('allow');
+    expect(allow('cargo build')).toBe('allow');
+    expect(allow('cargo check --all-targets')).toBe('allow');
+    expect(allow('cargo fmt')).toBe('allow');
+    expect(allow('cargo clippy')).toBe('allow');
+    expect(allow('cargo metadata --format-version 1')).toBe('allow');
+    // run/test execute project code; install/publish are outward-facing.
+    expect(allow('cargo run')).toBe('deny');
+    expect(allow('cargo test')).toBe('deny');
+    expect(allow('cargo install evil-tool')).toBe('deny');
+    expect(allow('cargo publish')).toBe('deny');
+  });
+
   it('android/jvm ecosystem', () => {
     expect(allow('./gradlew assembleDebug')).toBe('allow');
     expect(allow('./gradlew :app:assembleDebug')).toBe('allow');
@@ -193,7 +208,7 @@ describe('bash fence — attack corpus (one test per bypass vector)', () => {
     expect(allow('xcodebuild test-without-building')).toBe('deny');
     expect(allow('bundle exec rspec')).toBe('deny');
     expect(allow('composer run-script evil')).toBe('deny');
-    expect(allow('cargo run')).toBe('deny'); // no rust framework -> whole binary denied
+    expect(allow('cargo run')).toBe('deny'); // arbitrary code execution
     expect(allow('go get github.com/x/y')).toBe('deny'); // no go framework
   });
 

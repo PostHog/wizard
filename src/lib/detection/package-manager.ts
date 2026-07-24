@@ -216,6 +216,24 @@ export function bundlerPackageManager(): Promise<PackageManagerInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Rust (Cargo) helper
+// ---------------------------------------------------------------------------
+
+const CARGO: DetectedPackageManager = {
+  name: 'cargo',
+  label: 'Cargo',
+  installCommand: 'cargo add',
+};
+
+export function cargoPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [CARGO],
+    primary: CARGO,
+    recommendation: 'Use Cargo (cargo add).',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Android (Gradle) helper
 // ---------------------------------------------------------------------------
 
