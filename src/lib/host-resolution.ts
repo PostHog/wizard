@@ -24,13 +24,13 @@ import {
   detectRegion,
   resolveBaseUrl,
 } from '@utils/urls';
-import { runtimeEnv } from '@env';
+import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
 // The wizard's client gets CLI mode (a single `exec` tool) by server default,
-// so no mode is pinned; an `MCP_URL` override is taken verbatim.
-const LOCAL_MCP_URL = 'http://localhost:8787/mcp';
-const PROD_MCP_URL = 'https://mcp.posthog.com/mcp';
+// so no mode is pinned; the dev env override (see env.ts) is taken verbatim.
+const MCP_LOCAL_URL = 'http://localhost:8787/mcp';
+const MCP_PROD_URL = 'https://mcp.posthog.com/mcp';
 
 /** Construction-time inputs that aren't implied by the region. */
 export interface HostResolutionOptions {
@@ -60,11 +60,11 @@ function assetHostFromApiHost(apiHost: string): string {
   return apiHost;
 }
 
-/** MCP_URL wins even under --local-mcp, so CI can pair local skills with the prod MCP. */
+/** Dev/CI only: the env override (see env.ts) wins even under --local-mcp, so CI pairs local skills with the prod MCP; published builds strip the read. */
 export function mcpUrlFor(localMcp: boolean): string {
-  const override = runtimeEnv('MCP_URL');
+  const override = IS_PRODUCTION_BUILD ? undefined : runtimeEnv('MCP_URL');
   if (override) return override;
-  return localMcp ? LOCAL_MCP_URL : PROD_MCP_URL;
+  return localMcp ? MCP_LOCAL_URL : MCP_PROD_URL;
 }
 
 export class HostResolution {
@@ -89,7 +89,7 @@ export class HostResolution {
   /**
    * PostHog MCP server URL the agent connects to. Region-independent — the
    * server resolves the user's region from the bearer token — so this is driven
-   * only by `--local-mcp` and the `MCP_URL` override, not by region/base-url.
+   * only by `--local-mcp` and the dev env override, not by region/base-url.
    */
   readonly mcpUrl: string;
 

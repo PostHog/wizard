@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
 
 /**
@@ -95,6 +95,24 @@ describe('mcpUrlFor', () => {
     } finally {
       if (prev === undefined) delete process.env.MCP_URL;
       else process.env.MCP_URL = prev;
+    }
+  });
+
+  it('ignores MCP_URL entirely in production builds', async () => {
+    const prevEnv = process.env.NODE_ENV;
+    const prevUrl = process.env.MCP_URL;
+    process.env.NODE_ENV = 'production';
+    process.env.MCP_URL = 'https://evil.example.com/mcp';
+    try {
+      vi.resetModules();
+      const fresh = await import('@lib/host-resolution');
+      expect(fresh.mcpUrlFor(false)).toBe('https://mcp.posthog.com/mcp');
+      expect(fresh.mcpUrlFor(true)).toBe('http://localhost:8787/mcp');
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+      if (prevUrl === undefined) delete process.env.MCP_URL;
+      else process.env.MCP_URL = prevUrl;
+      vi.resetModules();
     }
   });
 });
