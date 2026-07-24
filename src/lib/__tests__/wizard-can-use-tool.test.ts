@@ -139,6 +139,27 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('carthage bootstrap')).toBe('allow');
   });
 
+  it('go ecosystem', () => {
+    expect(allow('go get github.com/posthog/posthog-go')).toBe('allow');
+    expect(allow('go mod tidy')).toBe('allow');
+    expect(allow('go mod download')).toBe('allow');
+    expect(allow('go build ./...')).toBe('allow');
+    expect(allow('go vet ./...')).toBe('allow');
+    expect(allow('go fmt ./...')).toBe('allow');
+    expect(allow('go list -m all')).toBe('allow');
+    // run/test/generate execute project code; mod edit rewrites requirements.
+    expect(allow('go run main.go')).toBe('deny');
+    expect(allow('go test ./...')).toBe('deny');
+    expect(allow('go generate ./...')).toBe('deny');
+    expect(allow('go mod edit -replace example.com/x=evil.example/x')).toBe(
+      'deny',
+    );
+    expect(allow('go tool pprof')).toBe('deny');
+    // -toolexec runs an arbitrary program during an otherwise-allowed build.
+    expect(allow('go build -toolexec=/tmp/x.sh ./...')).toBe('deny');
+    expect(allow('go vet -toolexec /tmp/x.sh ./...')).toBe('deny');
+  });
+
   it('android/jvm ecosystem', () => {
     expect(allow('./gradlew assembleDebug')).toBe('allow');
     expect(allow('./gradlew :app:assembleDebug')).toBe('allow');
@@ -194,7 +215,7 @@ describe('bash fence — attack corpus (one test per bypass vector)', () => {
     expect(allow('bundle exec rspec')).toBe('deny');
     expect(allow('composer run-script evil')).toBe('deny');
     expect(allow('cargo run')).toBe('deny'); // no rust framework -> whole binary denied
-    expect(allow('go get github.com/x/y')).toBe('deny'); // no go framework
+    expect(allow('go run main.go')).toBe('deny'); // arbitrary code execution
   });
 
   it('shell injection: separators, subshells, chaining', () => {

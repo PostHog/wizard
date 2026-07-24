@@ -216,6 +216,25 @@ export function bundlerPackageManager(): Promise<PackageManagerInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Go (modules) helper
+// ---------------------------------------------------------------------------
+
+const GO_MODULES: DetectedPackageManager = {
+  name: 'go',
+  label: 'Go modules',
+  installCommand: 'go get',
+};
+
+export function goModulesPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [GO_MODULES],
+    primary: GO_MODULES,
+    recommendation:
+      'Use Go modules (go get). Run go mod tidy after imports change.',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Android (Gradle) helper
 // ---------------------------------------------------------------------------
 
