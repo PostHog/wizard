@@ -232,6 +232,9 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
+export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
+  'wizard-orchestrator-override';
 /** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = a `MODEL_FLAG_VARIANTS` key); missing/invalid payload keeps the non-flagged default. */
 export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
   'wizard-self-driving-use-pi-harness';
