@@ -12,6 +12,7 @@ import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { scanInstalledSkill } from '@lib/yara-hooks';
+import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
   AUDIT_CHECKS_FILE,
@@ -187,6 +188,7 @@ export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
+  llmProvider?: LLMProvider,
 ): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
@@ -209,7 +211,7 @@ export async function downloadSkill(
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
     // must not skip it.
-    const poisonReason = await scanInstalledSkill(skillDir);
+    const poisonReason = await scanInstalledSkill(skillDir, llmProvider);
     if (poisonReason) {
       fs.rmSync(skillDir, { recursive: true, force: true });
       logToFile(`downloadSkill: ${poisonReason}`);
@@ -269,6 +271,7 @@ export async function installSkillById(
   installDir: string,
   skillsBaseUrl: string,
   skillsRoot?: string,
+  llmProvider?: LLMProvider,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };
@@ -278,7 +281,12 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = await downloadSkill(skill, installDir, skillsRoot);
+  const result = await downloadSkill(
+    skill,
+    installDir,
+    skillsRoot,
+    llmProvider,
+  );
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
