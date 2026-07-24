@@ -369,6 +369,13 @@ export const piBackend: AgentHarness = {
         ...createWizardPiTools({
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
+          // Same gateway auth the security extension uses (line ~276) so a
+          // freshly installed skill is triaged, not blocked untriaged. pi
+          // never sets ANTHROPIC_* env, so this must be passed explicitly.
+          triageAuth: {
+            baseURL: gatewayUrl,
+            authToken: boot.credentials.accessToken,
+          },
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the

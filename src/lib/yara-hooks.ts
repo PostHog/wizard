@@ -38,6 +38,7 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
+import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { highestSeverityMatch, scanVerdict } from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
@@ -1015,14 +1016,18 @@ export function createPostToolUseYaraHooks(
  * Scan a freshly installed skill directory (any root — .claude/skills or the
  * orchestrator's run cache) and return a terminate reason when it is
  * poisoned, else null. The choke point for TS-path installs (downloadSkill);
- * agent Bash installs are covered by the PostToolUse matcher above. Untriaged:
- * any match on downloaded skill content is treated as poisoned.
+ * agent Bash installs are covered by the PostToolUse matcher above. Runs the
+ * same LLM triage as the tool-use scans (default provider from gateway auth on
+ * the env); fail-closed to treating every match as real when no provider is
+ * configured, so a missing key never weakens the check. `llmProvider` is
+ * injectable for tests.
  */
 export async function scanInstalledSkill(
   absoluteSkillDir: string,
+  llmProvider: LLMProvider | undefined = createTriageLLMProvider(),
 ): Promise<string | null> {
   recordScan();
-  const matches = await scanSkillFiles(absoluteSkillDir, '.', undefined);
+  const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
   if (matches.length === 0) return null;
   const match = highestSeverityMatch(matches);
   recordMatch('skill-install', 'installSkillById', match, 'terminated');
