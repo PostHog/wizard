@@ -21,6 +21,13 @@ export const getReactRouterVersionBucket = createVersionBucket();
 /** Content probes read at most this many files, one in memory at a time. */
 const SOURCE_PROBE_LIMIT = 200;
 
+/** Files that set up a React Router — never a blanket source sweep. */
+const ROUTER_FILE_GLOBS = [
+  '**/routes/**/*.@(ts|tsx|js|jsx)',
+  '**/*[Rr]out*.@(ts|tsx|js|jsx)',
+  '**/@(main|app|App|index|root).@(ts|tsx|js|jsx)',
+];
+
 async function hasReactRouterConfig({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
@@ -38,7 +45,7 @@ async function hasReactRouterConfig({
 async function hasCreateBrowserRouter({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const sourceFiles = await boundedGlob('**/*.@(ts|tsx|js|jsx)', {
+  const sourceFiles = await boundedGlob(ROUTER_FILE_GLOBS, {
     cwd: installDir,
     extraIgnore: EXTRA_IGNORE,
     limit: SOURCE_PROBE_LIMIT,
@@ -57,7 +64,7 @@ async function hasCreateBrowserRouter({
 async function hasDeclarativeRouter({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const sourceFiles = await boundedGlob('**/*.@(ts|tsx|js|jsx)', {
+  const sourceFiles = await boundedGlob(ROUTER_FILE_GLOBS, {
     cwd: installDir,
     extraIgnore: EXTRA_IGNORE,
     limit: SOURCE_PROBE_LIMIT,

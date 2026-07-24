@@ -10,7 +10,7 @@
  */
 
 import { analytics } from '@utils/analytics';
-import { walkProjectFiles, safeReadFile } from '@utils/file-utils';
+import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import type { PackageJson } from '@utils/package-json';
 import {
   parseRequirementsTxt,

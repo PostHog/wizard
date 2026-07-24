@@ -17,6 +17,13 @@ export const getTanStackRouterVersionBucket = createVersionBucket();
 /** Content probes read at most this many files, one in memory at a time. */
 const SOURCE_PROBE_LIMIT = 200;
 
+/** Files that define TanStack routes — never a blanket source sweep. */
+const ROUTE_FILE_GLOBS = [
+  '**/routes/**/*.@(ts|tsx|js|jsx)',
+  '**/*[Rr]oute*.@(ts|tsx|js|jsx)',
+  '**/@(main|router|app|App|index).@(ts|tsx|js|jsx)',
+];
+
 async function hasFileBasedRouting({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
@@ -48,7 +55,7 @@ async function hasFileBasedRouting({
     // package.json not found or unreadable
   }
 
-  const sourceFiles = await boundedGlob('**/*.@(ts|tsx|js|jsx)', {
+  const sourceFiles = await boundedGlob(ROUTE_FILE_GLOBS, {
     cwd: installDir,
     extraIgnore: EXTRA_IGNORE,
     limit: SOURCE_PROBE_LIMIT,
@@ -67,7 +74,7 @@ async function hasFileBasedRouting({
 async function hasCodeBasedRouting({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const sourceFiles = await boundedGlob('**/*.@(ts|tsx|js|jsx)', {
+  const sourceFiles = await boundedGlob(ROUTE_FILE_GLOBS, {
     cwd: installDir,
     extraIgnore: EXTRA_IGNORE,
     limit: SOURCE_PROBE_LIMIT,

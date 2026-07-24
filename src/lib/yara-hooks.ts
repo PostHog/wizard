@@ -1012,6 +1012,26 @@ export function createPostToolUseYaraHooks(
 // ─── Skill File Scanner ──────────────────────────────────────────
 
 /**
+ * Scan a freshly installed skill directory (any root — .claude/skills or the
+ * orchestrator's run cache) and return a terminate reason when it is
+ * poisoned, else null. The choke point for TS-path installs (downloadSkill);
+ * agent Bash installs are covered by the PostToolUse matcher above. Untriaged:
+ * any match on downloaded skill content is treated as poisoned.
+ */
+export async function scanInstalledSkill(
+  absoluteSkillDir: string,
+): Promise<string | null> {
+  recordScan();
+  const matches = await scanSkillFiles(absoluteSkillDir, '.', undefined);
+  if (matches.length === 0) return null;
+  const match = highestSeverityMatch(matches);
+  recordMatch('skill-install', 'installSkillById', match, 'terminated');
+  return `Poisoned skill detected: ${match.rule} (${
+    match.metadata.severity ?? 'unknown'
+  }) in ${absoluteSkillDir}`;
+}
+
+/**
  * Read and scan all text files in a skill directory for prompt injection.
  * Scans each file sequentially (single-threaded WASM — parallelism buys
  * nothing), unions the 'input'-context matches, then triages once across the

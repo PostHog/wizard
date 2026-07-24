@@ -1,5 +1,5 @@
 import { relative } from 'path';
-import { safeReadFile, walkProjectFiles } from '@utils/file-utils';
+import { safeReadFile, walkProjectFiles } from '@utils/bounded-fs';
 
 export const POSTHOG_SDKS = new Set([
   'posthog-js',
