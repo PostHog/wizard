@@ -100,6 +100,13 @@ function lastEnabled<T>(options: PickerOption<T>[]): number {
  * windowing guards against). Mirrors GroupedPickerMenu's budgeting.
  */
 const CHROME_OVERHEAD = 13;
+/**
+ * Max visual rows a picker renders regardless of terminal height. Without a
+ * ceiling a tall terminal lets a long list fill the whole viewport, which
+ * reads as a wall of options; ~12 rows keeps the menu scannable and leaves
+ * known breathing room above and below.
+ */
+const MAX_LIST_ROWS = 12;
 /** Extra rows a multi-select adds below its options: marginTop + Confirm button. */
 const CONFIRM_CHROME = 3;
 /** Width the multi-select wraps option descriptions to (matches the render). */
@@ -167,7 +174,10 @@ function usePickerViewport(
   const [, termRows] = useStdoutDimensions();
   const [offset, setOffset] = useState(0);
 
-  const budget = Math.max(5, termRows - CHROME_OVERHEAD - chromeBelow);
+  const budget = Math.max(
+    5,
+    Math.min(termRows - CHROME_OVERHEAD - chromeBelow, MAX_LIST_ROWS),
+  );
   const total = costs.reduce((sum, c) => sum + c, 0);
   const needsScroll = enabled && total > budget;
   // Reserve two rows for the "↑/↓ N more" indicators.
