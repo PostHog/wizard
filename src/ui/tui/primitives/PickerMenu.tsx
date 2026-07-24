@@ -14,6 +14,8 @@ import { useEffect, useState } from 'react';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
 import { ConfirmButton } from './ConfirmButton.js';
+import { wordWrap } from './layout-helpers.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import {
   useKeyBindings,
   KeyMatch,
@@ -90,6 +92,109 @@ function lastEnabled<T>(options: PickerOption<T>[]): number {
   return options.length - 1;
 }
 
+/**
+ * Rows the surrounding screen or overlay consumes above and below a picker —
+ * border + padding, title, prompt text, and the keyboard-hints bar. A
+ * deliberately generous estimate: overshooting just shows a few fewer rows,
+ * whereas undershooting lets a long list overflow the viewport (the bug this
+ * windowing guards against). Mirrors GroupedPickerMenu's budgeting.
+ */
+const CHROME_OVERHEAD = 13;
+/** Extra rows a multi-select adds below its options: marginTop + Confirm button. */
+const CONFIRM_CHROME = 3;
+/** Width the multi-select wraps option descriptions to (matches the render). */
+const DESCRIPTION_WIDTH = 56;
+
+/**
+ * From `start`, how many options fit within `budget` visual rows, where each
+ * option's height is given by `costs`. Always yields at least the start row so
+ * the focused option is never windowed out entirely.
+ */
+function windowEnd(costs: number[], start: number, budget: number): number {
+  let used = 0;
+  let i = start;
+  while (i < costs.length) {
+    if (used + costs[i] > budget && i > start) break;
+    used += costs[i];
+    i++;
+  }
+  return Math.max(i, start + 1);
+}
+
+/** Shift the scroll offset the minimum needed to keep `focused` in view. */
+function keepFocusedVisible(
+  offset: number,
+  focused: number,
+  costs: number[],
+  budget: number,
+): number {
+  const end = windowEnd(costs, offset, budget);
+  if (focused >= offset && focused < end) return offset; // already visible
+  if (focused < offset) return focused; // scrolled off the top → align to focus
+  // Scrolled off the bottom → advance the offset until focus fits again.
+  let next = offset + 1;
+  while (next < costs.length && focused >= windowEnd(costs, next, budget)) {
+    next++;
+  }
+  return Math.min(next, Math.max(0, costs.length - 1));
+}
+
+interface PickerViewport {
+  needsScroll: boolean;
+  /** First option index in the visible window. */
+  start: number;
+  /** One past the last visible option index. */
+  end: number;
+  hiddenAbove: number;
+  hiddenBelow: number;
+  /** Call from a navigation handler with the new focused index to scroll it
+   *  into view. A no-op when the whole list already fits. */
+  scrollTo: (focused: number) => void;
+}
+
+/**
+ * Windows a single-column option list to the terminal height, scrolling to
+ * follow the focused row so long lists (e.g. a 30-tool multi-select) don't
+ * overflow the viewport. Windowing engages only for single-column pickers
+ * (`enabled`) — multi-column grids already compress vertically and render
+ * whole — and only when the list is taller than the available space.
+ */
+function usePickerViewport(
+  costs: number[],
+  chromeBelow: number,
+  enabled: boolean,
+): PickerViewport {
+  const [, termRows] = useStdoutDimensions();
+  const [offset, setOffset] = useState(0);
+
+  const budget = Math.max(5, termRows - CHROME_OVERHEAD - chromeBelow);
+  const total = costs.reduce((sum, c) => sum + c, 0);
+  const needsScroll = enabled && total > budget;
+  // Reserve two rows for the "↑/↓ N more" indicators.
+  const effectiveBudget = needsScroll ? budget - 2 : budget;
+
+  const start = needsScroll
+    ? Math.min(offset, Math.max(0, costs.length - 1))
+    : 0;
+  const end = needsScroll
+    ? windowEnd(costs, start, effectiveBudget)
+    : costs.length;
+
+  return {
+    needsScroll,
+    start,
+    end,
+    hiddenAbove: start,
+    hiddenBelow: costs.length - end,
+    scrollTo: (focused) => {
+      if (!needsScroll) return;
+      setOffset((prev) =>
+        keepFocusedVisible(prev, focused, costs, effectiveBudget),
+      );
+    },
+  };
+}
+
 interface PickerMenuProps<T> {
   message?: string;
   options: PickerOption<T>[];
@@ -157,6 +262,10 @@ const SinglePickerMenu = <T,>({
 }) => {
   const [focused, setFocused] = useState(() => firstEnabled(options));
   const rows = Math.ceil(options.length / columns);
+  // Single-select rows are label-only (no descriptions), so each option is
+  // one line plus its margin.
+  const costs = options.map(() => 1 + optionMarginBottom);
+  const viewport = usePickerViewport(costs, 0, columns === 1);
 
   // Re-validate focus when the options change while mounted \u2014 a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -174,10 +283,14 @@ const SinglePickerMenu = <T,>({
       action: 'navigate',
       handler: (_input, key) => {
         if (key.upArrow) {
-          setFocused(stepEnabled(options, rows, focused, -1));
+          const next = stepEnabled(options, rows, focused, -1);
+          setFocused(next);
+          viewport.scrollTo(next);
         }
         if (key.downArrow) {
-          setFocused(stepEnabled(options, rows, focused, 1));
+          const next = stepEnabled(options, rows, focused, 1);
+          setFocused(next);
+          viewport.scrollTo(next);
         }
       },
     },
@@ -232,49 +345,64 @@ const SinglePickerMenu = <T,>({
 
   const align = centered ? 'center' : undefined;
 
+  const renderOption = (opt: PickerOption<T>, flatIdx: number) => {
+    const isFocused = flatIdx === focused;
+    const base = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
+    const label = opt.indent ? `  ${base}` : base;
+    return (
+      <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
+        <Text
+          color={isFocused ? Colors.accent : undefined}
+          dimColor={!isFocused}
+        >
+          {isFocused && !opt.header ? Icons.triangleSmallRight : ' '}
+        </Text>
+        {opt.icon && <Text color={opt.icon.color}>{opt.icon.glyph}</Text>}
+        <Text
+          color={
+            opt.header
+              ? undefined
+              : opt.disabled
+              ? Colors.muted
+              : isFocused
+              ? Colors.accent
+              : undefined
+          }
+          bold={opt.header || (isFocused && !opt.disabled)}
+          dimColor={!opt.header && (!isFocused || opt.disabled)}
+        >
+          {label}
+        </Text>
+      </Box>
+    );
+  };
+
   return (
     <Box flexDirection="column" alignItems={align}>
       <PromptLabel message={message} />
-      <Box flexDirection="row" gap={4}>
-        {columnArrays.map((colOpts, colIdx) => (
-          <Box key={colIdx} flexDirection="column">
-            {colOpts.map((opt, rowIdx) => {
-              const flatIdx = colIdx * rows + rowIdx;
-              const isFocused = flatIdx === focused;
-              const base = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
-              const label = opt.indent ? `  ${base}` : base;
-              return (
-                <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
-                  <Text
-                    color={isFocused ? Colors.accent : undefined}
-                    dimColor={!isFocused}
-                  >
-                    {isFocused && !opt.header ? Icons.triangleSmallRight : ' '}
-                  </Text>
-                  {opt.icon && (
-                    <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
-                  )}
-                  <Text
-                    color={
-                      opt.header
-                        ? undefined
-                        : opt.disabled
-                        ? Colors.muted
-                        : isFocused
-                        ? Colors.accent
-                        : undefined
-                    }
-                    bold={opt.header || (isFocused && !opt.disabled)}
-                    dimColor={!opt.header && (!isFocused || opt.disabled)}
-                  >
-                    {label}
-                  </Text>
-                </Box>
-              );
-            })}
-          </Box>
-        ))}
-      </Box>
+      {viewport.needsScroll ? (
+        <Box flexDirection="column">
+          <Text dimColor>
+            {viewport.hiddenAbove > 0 ? `↑ ${viewport.hiddenAbove} more` : ' '}
+          </Text>
+          {options
+            .slice(viewport.start, viewport.end)
+            .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
+          <Text dimColor>
+            {viewport.hiddenBelow > 0 ? `↓ ${viewport.hiddenBelow} more` : ' '}
+          </Text>
+        </Box>
+      ) : (
+        <Box flexDirection="row" gap={4}>
+          {columnArrays.map((colOpts, colIdx) => (
+            <Box key={colIdx} flexDirection="column">
+              {colOpts.map((opt, rowIdx) =>
+                renderOption(opt, colIdx * rows + rowIdx),
+              )}
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 };
@@ -311,6 +439,17 @@ const MultiPickerMenu = <T,>({
   const [onButton, setOnButton] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
+  // A row is its label line plus any margin; a description adds one line per
+  // wrapped line beneath the label.
+  const costs = options.map(
+    (opt) =>
+      1 +
+      optionMarginBottom +
+      (opt.description
+        ? wordWrap(opt.description, DESCRIPTION_WIDTH).length
+        : 0),
+  );
+  const viewport = usePickerViewport(costs, CONFIRM_CHROME, columns === 1);
 
   // Re-validate focus when the options change while mounted — a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -337,8 +476,10 @@ const MultiPickerMenu = <T,>({
         if (key.upArrow) {
           if (onButton) {
             // Button \u2192 bottom of the grid (last enabled option).
+            const next = lastEnabled(options);
             setOnButton(false);
-            setFocused(lastEnabled(options));
+            setFocused(next);
+            viewport.scrollTo(next);
             return;
           }
           const col = Math.floor(focused / rows);
@@ -347,7 +488,9 @@ const MultiPickerMenu = <T,>({
           let r = row - 1;
           while (r >= 0 && options[col * rows + r]?.disabled) r--;
           if (r >= 0) {
-            setFocused(col * rows + r);
+            const next = col * rows + r;
+            setFocused(next);
+            viewport.scrollTo(next);
           } else {
             // Top of the column \u2192 wrap up onto the button.
             setOnButton(true);
@@ -356,8 +499,10 @@ const MultiPickerMenu = <T,>({
         if (key.downArrow) {
           if (onButton) {
             // Button \u2192 top of the grid (first enabled option).
+            const next = firstEnabled(options);
             setOnButton(false);
-            setFocused(firstEnabled(options));
+            setFocused(next);
+            viewport.scrollTo(next);
             return;
           }
           const col = Math.floor(focused / rows);
@@ -367,7 +512,9 @@ const MultiPickerMenu = <T,>({
           let r = row + 1;
           while (r < colLen && options[col * rows + r]?.disabled) r++;
           if (r < colLen) {
-            setFocused(col * rows + r);
+            const next = col * rows + r;
+            setFocused(next);
+            viewport.scrollTo(next);
           } else {
             // Bottom of the column \u2192 down onto the button.
             setOnButton(true);
@@ -444,72 +591,85 @@ const MultiPickerMenu = <T,>({
     columnArrays.push(options.slice(c * rows, c * rows + rows));
   }
 
+  const renderOption = (opt: PickerOption<T>, flatIdx: number) => {
+    const isFocused = !onButton && flatIdx === focused;
+    const isSelected = selected.has(flatIdx);
+    const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
+    const checkbox = isSelected ? Icons.squareFilled : Icons.squareOpen;
+    return (
+      <Box
+        key={flatIdx}
+        flexDirection="column"
+        marginBottom={optionMarginBottom}
+      >
+        <Box gap={1}>
+          <Text
+            color={isSelected ? 'white' : Colors.muted}
+            dimColor={!isFocused && !isSelected}
+          >
+            {checkbox}
+          </Text>
+          {opt.icon && <Text color={opt.icon.color}>{opt.icon.glyph}</Text>}
+          <Text
+            color={
+              opt.disabled
+                ? Colors.muted
+                : isFocused
+                ? Colors.accent
+                : undefined
+            }
+            bold={isFocused && !opt.disabled}
+            dimColor={!isFocused || opt.disabled}
+          >
+            {label}
+          </Text>
+        </Box>
+        {/* Optional dimmed, wrapped explanation under the label. The explicit
+            width forces Ink to wrap (an unconstrained Box shrinks to its
+            content and never wraps). Renders only when set, so label-only rows
+            are byte-for-byte unchanged. */}
+        {opt.description && (
+          <Box marginLeft={4} width={DESCRIPTION_WIDTH}>
+            <Text dimColor wrap="wrap">
+              {opt.description}
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
   return (
     <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
       <PromptLabel message={message} />
-      <Box
-        flexDirection="row"
-        gap={4}
-        marginLeft={centered ? 0 : 2}
-        marginTop={1}
-      >
-        {columnArrays.map((colOpts, colIdx) => (
-          <Box key={colIdx} flexDirection="column">
-            {colOpts.map((opt, rowIdx) => {
-              const flatIdx = colIdx * rows + rowIdx;
-              const isFocused = !onButton && flatIdx === focused;
-              const isSelected = selected.has(flatIdx);
-              const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
-              const checkbox = isSelected
-                ? Icons.squareFilled
-                : Icons.squareOpen;
-              return (
-                <Box
-                  key={flatIdx}
-                  flexDirection="column"
-                  marginBottom={optionMarginBottom}
-                >
-                  <Box gap={1}>
-                    <Text
-                      color={isSelected ? 'white' : Colors.muted}
-                      dimColor={!isFocused && !isSelected}
-                    >
-                      {checkbox}
-                    </Text>
-                    {opt.icon && (
-                      <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
-                    )}
-                    <Text
-                      color={
-                        opt.disabled
-                          ? Colors.muted
-                          : isFocused
-                          ? Colors.accent
-                          : undefined
-                      }
-                      bold={isFocused && !opt.disabled}
-                      dimColor={!isFocused || opt.disabled}
-                    >
-                      {label}
-                    </Text>
-                  </Box>
-                  {/* Optional dimmed, wrapped explanation under the label. The
-                      explicit width forces Ink to wrap (an unconstrained Box
-                      shrinks to its content and never wraps). Renders only when
-                      set, so label-only rows are byte-for-byte unchanged. */}
-                  {opt.description && (
-                    <Box marginLeft={4} width={56}>
-                      <Text dimColor wrap="wrap">
-                        {opt.description}
-                      </Text>
-                    </Box>
-                  )}
-                </Box>
-              );
-            })}
-          </Box>
-        ))}
-      </Box>
+      {viewport.needsScroll ? (
+        <Box flexDirection="column" marginLeft={centered ? 0 : 2} marginTop={1}>
+          <Text dimColor>
+            {viewport.hiddenAbove > 0 ? `↑ ${viewport.hiddenAbove} more` : ' '}
+          </Text>
+          {options
+            .slice(viewport.start, viewport.end)
+            .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
+          <Text dimColor>
+            {viewport.hiddenBelow > 0 ? `↓ ${viewport.hiddenBelow} more` : ' '}
+          </Text>
+        </Box>
+      ) : (
+        <Box
+          flexDirection="row"
+          gap={4}
+          marginLeft={centered ? 0 : 2}
+          marginTop={1}
+        >
+          {columnArrays.map((colOpts, colIdx) => (
+            <Box key={colIdx} flexDirection="column">
+              {colOpts.map((opt, rowIdx) =>
+                renderOption(opt, colIdx * rows + rowIdx),
+              )}
+            </Box>
+          ))}
+        </Box>
+      )}
       <Box marginTop={1} marginLeft={centered ? 0 : 2}>
         <ConfirmButton focused={onButton} count={selected.size} />
       </Box>
