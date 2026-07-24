@@ -188,6 +188,42 @@ describe('buildRegistry', () => {
     ).toEqual(['build']);
     expect(buildRegistry(prompts, 'f').types).toEqual(['build', 'dashboard']);
   });
+
+  it('bakes stage overrides into the pi frontmatter at load; unnamed stages and sdk fields untouched', () => {
+    const prompts = [
+      prompt({
+        type: 'plan',
+        flow: 'f',
+        seed: true,
+        modelPi: 'openai/gpt-5.6-terra',
+        effortPi: 'medium',
+      }),
+      prompt({
+        type: 'review',
+        flow: 'f',
+        modelPi: 'openai/gpt-5.6-terra',
+        effortPi: 'medium',
+        modelSdk: 'claude-sonnet-4-6',
+      }),
+      prompt({ type: 'install', flow: 'f', modelPi: 'openai/gpt-5.6-luna' }),
+    ];
+    const registry = buildRegistry(prompts, 'f', {
+      overrides: {
+        review: { model: 'openai/gpt-5.6-sol' },
+        seed: { effort: 'high' },
+      },
+    });
+    expect(registry.get('review')).toMatchObject({
+      modelPi: 'openai/gpt-5.6-sol',
+      effortPi: 'medium',
+      modelSdk: 'claude-sonnet-4-6',
+    });
+    expect(registry.seed).toMatchObject({
+      modelPi: 'openai/gpt-5.6-terra',
+      effortPi: 'high',
+    });
+    expect(registry.get('install')?.modelPi).toBe('openai/gpt-5.6-luna');
+  });
 });
 
 describe('resolveTask', () => {

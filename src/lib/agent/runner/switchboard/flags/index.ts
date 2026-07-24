@@ -56,18 +56,15 @@ export function resolveFlagSequence(
   )?.sequence;
 }
 
-/** The override for one orchestrator stage, or undefined (prompt frontmatter stays). */
-export function resolveStageOverride(
+/** The per-stage overrides for a program's run, or undefined (prompt frontmatter stays). Applied once, where the agent prompts are loaded. */
+export function resolveStageOverrides(
   program: ProgramId,
-  stage: string,
   flags: Record<string, string>,
   flagPayloads?: Record<string, unknown>,
-): StageOverride | undefined {
+): Record<string, StageOverride> | undefined {
   if (RUN_SURFACE === 'cloud') return undefined;
-  if (!ORCHESTRATOR_STAGE_OVERRIDES.programs.includes(program)) {
-    return undefined;
-  }
   const exp = ORCHESTRATOR_STAGE_OVERRIDES;
+  if (!exp.programs.includes(program)) return undefined;
   const variant = flags[exp.flag];
   if (!variant || variant === 'false') return undefined;
   const overrides = stageOverridesFromPayload(flagPayloads?.[exp.flag]);
@@ -76,7 +73,7 @@ export function resolveStageOverride(
       `[switchboard] ${exp.flag}=${variant} but payload missing/invalid — keeping frontmatter`,
     );
   }
-  return overrides?.[stage];
+  return overrides;
 }
 
 export { isOrchestratorEnabled } from './orchestrator';

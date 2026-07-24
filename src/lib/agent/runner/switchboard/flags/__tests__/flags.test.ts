@@ -17,7 +17,7 @@ import {
 } from '@lib/constants';
 import {
   resolveBinding,
-  resolveStageOverride,
+  resolveStageOverrides,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import {
@@ -206,44 +206,33 @@ describe('the truth table — self-driving × its pi payload flag', () => {
 
 describe('the truth table — wizard-orchestrator-override stage payloads', () => {
   const OVR = WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY;
-  const armed = (payload: unknown) => ({
-    flags: { [OVR]: 'terra-review' },
-    payloads: { [OVR]: payload },
-  });
   const resolve = (
-    stage: string,
-    a: { flags: Record<string, string>; payloads?: Record<string, unknown> },
-    program = 'posthog-integration',
-  ) => resolveStageOverride(program, stage, a.flags, a.payloads);
+    payload: unknown,
+    { variant = 'terra-review', program = 'posthog-integration' } = {},
+  ) => resolveStageOverrides(program, { [OVR]: variant }, { [OVR]: payload });
 
-  it('a stage row overrides model and effort for that stage only', () => {
-    const a = armed({
+  it('a stage row carries model and effort for that stage only', () => {
+    const overrides = resolve({
       review: { model: 'gpt-5-6-terra', effort: 'high' },
     });
-    expect(resolve('review', a)).toEqual({
-      model: GPT5_6_TERRA_MODEL,
-      effort: 'high',
+    expect(overrides).toEqual({
+      review: { model: GPT5_6_TERRA_MODEL, effort: 'high' },
     });
-    for (const stage of ['seed', 'install', 'capture', 'dashboard']) {
-      expect(resolve(stage, a)).toBe(undefined);
-    }
   });
 
-  it('partial rows override only what they define', () => {
-    const a = armed({
-      review: { model: 'gpt-5-6-terra' },
+  it('partial rows carry only what they define', () => {
+    expect(
+      resolve({ review: { model: 'gpt-5-6-terra' }, seed: { effort: 'low' } }),
+    ).toEqual({
+      review: { model: GPT5_6_TERRA_MODEL },
       seed: { effort: 'low' },
     });
-    expect(resolve('review', a)).toEqual({
-      model: GPT5_6_TERRA_MODEL,
-      effort: undefined,
-    });
-    expect(resolve('seed', a)).toEqual({ model: undefined, effort: 'low' });
   });
 
   it('a JSON-string payload parses the same', () => {
-    const a = armed(JSON.stringify({ review: { model: 'gpt-5-6-terra' } }));
-    expect(resolve('review', a)?.model).toBe(GPT5_6_TERRA_MODEL);
+    expect(
+      resolve(JSON.stringify({ review: { model: 'gpt-5-6-terra' } })),
+    ).toEqual({ review: { model: GPT5_6_TERRA_MODEL } });
   });
 
   it.each([
@@ -252,34 +241,28 @@ describe('the truth table — wizard-orchestrator-override stage payloads', () =
     ['non-object row', { review: 'terra' }],
     ['garbage string', '{not json'],
   ])('%s → the whole payload fails closed', (_name, payload) => {
-    expect(resolve('review', armed(payload))).toBe(undefined);
+    expect(resolve(payload)).toBe(undefined);
   });
 
   it('flag absent or false → undefined', () => {
     expect(
-      resolveStageOverride(
+      resolveStageOverrides(
         'posthog-integration',
-        'review',
         {},
-        armed({}).payloads,
+        { [OVR]: { review: { model: 'gpt-5-6-terra' } } },
       ),
     ).toBe(undefined);
     expect(
-      resolveStageOverride(
-        'posthog-integration',
-        'review',
-        { [OVR]: 'false' },
-        { [OVR]: { review: { model: 'gpt-5-6-terra' } } },
-      ),
+      resolve({ review: { model: 'gpt-5-6-terra' } }, { variant: 'false' }),
     ).toBe(undefined);
   });
 
   it('scoped to the orchestrator programs; cloud surface fails closed', () => {
-    const a = armed({ review: { model: 'gpt-5-6-terra' } });
-    expect(resolve('review', a, 'self-driving')).toBe(undefined);
+    const payload = { review: { model: 'gpt-5-6-terra' } };
+    expect(resolve(payload, { program: 'self-driving' })).toBe(undefined);
     setSurface('cloud');
     try {
-      expect(resolve('review', a)).toBe(undefined);
+      expect(resolve(payload)).toBe(undefined);
     } finally {
       setSurface('local');
     }
