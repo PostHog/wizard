@@ -15,7 +15,7 @@ import { IGNORED_DIRS } from './file-utils';
 // size — anything larger is skipped, never materialized.
 export const MAX_PROJECT_FILE_BYTES = 2 * 1024 * 1024;
 
-// Result memory per glob is at most this many entries — O(1) in tree size.
+// A glob returns at most this many entries, no matter how big the tree is.
 export const MAX_GLOB_MATCHES = 500;
 
 // Traversal is cut off after this long — an abandoned (Promise.race'd out)
@@ -50,7 +50,7 @@ export interface BoundedGlobOptions {
 /**
  * A fast-glob sweep that cannot blow up: streams matches, stops at `limit`,
  * and destroys the underlying crawl at GLOB_DEADLINE_MS — memory and wall
- * clock are both O(1) in the size of the tree. Returns paths
+ * clock stay bounded no matter how big the tree is. Returns paths
  * relative to `cwd`, possibly incomplete — detection callers treat matches as
  * hints, so a truncated list degrades to "not detected", never to a crash.
  */
@@ -114,8 +114,8 @@ export function readProjectFile(
 }
 
 /**
- * The first `bytes` of a file without materializing the rest — O(bytes) heap
- * for any file size. For header sniffs (e.g. lockfile provenance comments).
+ * The first `bytes` of a file without materializing the rest, whatever the
+ * file size. For header sniffs (e.g. lockfile provenance comments).
  */
 export function readFileHead(filePath: string, bytes: number): string | null {
   try {
