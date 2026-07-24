@@ -1,8 +1,7 @@
 import { major, minVersion } from 'semver';
-import fg from 'fast-glob';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 export enum FastAPIProjectType {
@@ -11,17 +10,10 @@ export enum FastAPIProjectType {
   FULLSTACK = 'fullstack', // FastAPI with templates (Jinja2)
 }
 
-const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/venv/**',
-  '**/.venv/**',
-  '**/env/**',
-  '**/.env/**',
-  '**/__pycache__/**',
-  '**/migrations/**',
-];
+const EXTRA_IGNORE = ['**/env/**', '**/.env/**', '**/migrations/**'];
+
+/** Import probes read at most this many files — O(SOURCE_PROBE_LIMIT × MAX_PROJECT_FILE_BYTES) transient, one file at a time. */
+const SOURCE_PROBE_LIMIT = 200;
 
 /**
  * Get FastAPI version bucket for analytics
@@ -56,36 +48,32 @@ export async function getFastAPIVersion(
   const { installDir } = options;
 
   // Check requirements files
-  const requirementsFiles = await fg(
+  const requirementsFiles = await boundedGlob(
     ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py', '**/Pipfile'],
     {
       cwd: installDir,
-      ignore: IGNORE_PATTERNS,
+      extraIgnore: EXTRA_IGNORE,
     },
   );
 
   for (const reqFile of requirementsFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, reqFile), 'utf-8');
+    const content = readProjectFile(path.join(installDir, reqFile));
+    if (!content) continue;
 
-      // Try to extract version from requirements.txt format (fastapi==0.109.0 or fastapi>=0.100)
-      const requirementsMatch = content.match(
-        /[Ff]ast[Aa][Pp][Ii][=<>~!]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
-      );
-      if (requirementsMatch) {
-        return requirementsMatch[1];
-      }
+    // Try to extract version from requirements.txt format (fastapi==0.109.0 or fastapi>=0.100)
+    const requirementsMatch = content.match(
+      /[Ff]ast[Aa][Pp][Ii][=<>~!]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
+    );
+    if (requirementsMatch) {
+      return requirementsMatch[1];
+    }
 
-      // Try to extract from pyproject.toml format
-      const pyprojectMatch = content.match(
-        /[Ff]ast[Aa][Pp][Ii]["\s]*[=<>~!]+\s*["']?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
-      );
-      if (pyprojectMatch) {
-        return pyprojectMatch[1];
-      }
-    } catch {
-      // Skip files that can't be read
-      continue;
+    // Try to extract from pyproject.toml format
+    const pyprojectMatch = content.match(
+      /[Ff]ast[Aa][Pp][Ii]["\s]*[=<>~!]+\s*["']?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/,
+    );
+    if (pyprojectMatch) {
+      return pyprojectMatch[1];
     }
   }
 
@@ -98,23 +86,21 @@ export async function getFastAPIVersion(
 async function hasAPIRouter({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const pyFiles = await fg(['**/*.py'], {
+  const pyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of pyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('APIRouter(') ||
-        content.includes('include_router(') ||
-        content.includes('from fastapi import APIRouter')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('APIRouter(') ||
+      content.includes('include_router(') ||
+      content.includes('from fastapi import APIRouter')
+    ) {
+      return true;
     }
   }
 
@@ -128,33 +114,31 @@ async function hasTemplates({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   // Check for Jinja2Templates usage in Python files
-  const pyFiles = await fg(['**/*.py'], {
+  const pyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of pyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (
-        content.includes('Jinja2Templates') ||
-        content.includes('from fastapi.templating import')
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (!content) continue;
+    if (
+      content.includes('Jinja2Templates') ||
+      content.includes('from fastapi.templating import')
+    ) {
+      return true;
     }
   }
 
   // Check for templates directory
-  const templateDirs = await fg(['**/templates'], {
+  const templateFiles = await boundedGlob(['**/templates/**'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
-    onlyDirectories: true,
+    extraIgnore: EXTRA_IGNORE,
+    limit: 1,
   });
 
-  return templateDirs.length > 0;
+  return templateFiles.length > 0;
 }
 
 /**
@@ -215,41 +199,35 @@ export async function findFastAPIAppFile(
     '**/__init__.py',
   ];
 
-  const appFiles = await fg(commonPatterns, {
+  const appFiles = await boundedGlob(commonPatterns, {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
   });
 
   // Look for files with FastAPI() instantiation
   for (const appFile of appFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, appFile), 'utf-8');
-      // Check for FastAPI app instantiation
-      if (
-        content.includes('FastAPI(') ||
-        content.includes('from fastapi import FastAPI')
-      ) {
-        return appFile;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, appFile));
+    if (!content) continue;
+    // Check for FastAPI app instantiation
+    if (
+      content.includes('FastAPI(') ||
+      content.includes('from fastapi import FastAPI')
+    ) {
+      return appFile;
     }
   }
 
   // If no file with FastAPI() found, check all Python files
-  const allPyFiles = await fg(['**/*.py'], {
+  const allPyFiles = await boundedGlob(['**/*.py'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const pyFile of allPyFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, pyFile), 'utf-8');
-      if (content.includes('FastAPI(')) {
-        return pyFile;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, pyFile));
+    if (content?.includes('FastAPI(')) {
+      return pyFile;
     }
   }
 

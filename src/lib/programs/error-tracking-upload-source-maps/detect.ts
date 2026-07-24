@@ -8,9 +8,14 @@
  */
 
 import type { Dirent } from 'fs';
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { IGNORED_DIRS } from '@utils/file-utils';
+import {
+  IGNORED_DIRS,
+  MAX_DIR_ENTRIES,
+  MAX_WALK_FILES,
+  safeReadFile,
+} from '@utils/file-utils';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 
@@ -144,7 +149,7 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
   };
 
   function scan(dir: string, depth: number): void {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth || signals.scannedFileCount >= MAX_WALK_FILES) return;
 
     let entries: Dirent[];
     try {
@@ -152,6 +157,9 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
     } catch {
       return;
     }
+    // O(MAX_DIR_ENTRIES) considered per directory — a flat multi-million-file
+    // dump dir stops contributing here.
+    if (entries.length > MAX_DIR_ENTRIES) entries.length = MAX_DIR_ENTRIES;
 
     for (const entry of entries) {
       if (entry.name.startsWith('.') && entry.name !== '.') continue;
@@ -162,8 +170,10 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
       if (entry.isFile()) {
         signals.scannedFileCount += 1;
         if (entry.name === 'package.json') {
+          const content = safeReadFile(fullPath);
+          if (content === null) continue;
           try {
-            const pkg = JSON.parse(readFileSync(fullPath, 'utf-8')) as {
+            const pkg = JSON.parse(content) as {
               dependencies?: Record<string, string>;
               devDependencies?: Record<string, string>;
             };

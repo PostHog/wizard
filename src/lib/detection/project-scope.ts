@@ -119,6 +119,9 @@ export async function scopeInstallDirToProject(
 
   const { projects } = report;
   const recommended = projects.find((p) => p.recommended === true);
+  // O(MAX_PROJECTS_CAPTURED) analytics payload — project_count keeps the true
+  // total when a giant monorepo's list is truncated.
+  const MAX_PROJECTS_CAPTURED = 25;
   const scanProperties = {
     duration_ms: Date.now() - startedAt,
     repo_type: report.repoType,
@@ -126,7 +129,7 @@ export async function scopeInstallDirToProject(
     supported_count: projects.filter((p) => p.targetId != null).length,
     has_recommendation: recommended !== undefined,
     recommended_path: recommended?.path ?? null,
-    projects,
+    projects: projects.slice(0, MAX_PROJECTS_CAPTURED),
   };
 
   const project = chooseIntegrationProject(projects);

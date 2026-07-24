@@ -6,8 +6,8 @@
  * No store mutations, no UI calls.
  */
 
-import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readProjectFile } from '@utils/bounded-fs';
 import { DiscoveredFeature } from '@lib/wizard-session';
 
 const STRIPE_PACKAGES = ['stripe', '@stripe/stripe-js'];
@@ -108,12 +108,10 @@ function discoverPythonFeatures(
   }
 }
 
+// O(MAX_PROJECT_FILE_BYTES) per manifest — a generated multi-hundred-MB
+// package.json/requirements.txt is skipped, not parsed.
 function safeRead(installDir: string, file: string): string | null {
-  try {
-    return readFileSync(join(installDir, file), 'utf-8');
-  } catch {
-    return null;
-  }
+  return readProjectFile(join(installDir, file));
 }
 
 function normalizePyName(name: string): string {

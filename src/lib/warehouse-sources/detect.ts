@@ -29,6 +29,15 @@ interface ProjectSignals {
 
 const MAX_DEPTH = 3;
 
+// O(MAX_SIGNAL_SET) retained per signal kind for the whole walk — a generated
+// .env with millions of unique keys otherwise accumulates unbounded (the
+// retention half of the 2026-07-23 prod OOM).
+const MAX_SIGNAL_SET = 5_000;
+
+function addCapped(set: Set<string>, value: string): void {
+  if (set.size < MAX_SIGNAL_SET) set.add(value);
+}
+
 /**
  * Detect which warehouse sources the project at `installDir` appears to use.
  * Returns one `DetectedSource` per matched registry entry (kinds are unique,
@@ -125,15 +134,17 @@ type Ingestor = (content: string, signals: ProjectSignals) => void;
 function ingestorFor(name: string): Ingestor | null {
   if (name === 'package.json') return addNpmDeps;
   if (name === 'requirements.txt')
-    return (c, s) => parseRequirementsTxt(c).forEach((d) => s.python.add(d));
+    return (c, s) =>
+      parseRequirementsTxt(c).forEach((d) => addCapped(s.python, d));
   if (name === 'pyproject.toml')
-    return (c, s) => parsePyprojectToml(c).forEach((d) => s.python.add(d));
+    return (c, s) =>
+      parsePyprojectToml(c).forEach((d) => addCapped(s.python, d));
   if (name === 'Pipfile')
-    return (c, s) => parsePipfile(c).forEach((d) => s.python.add(d));
+    return (c, s) => parsePipfile(c).forEach((d) => addCapped(s.python, d));
   if (name === 'Gemfile')
-    return (c, s) => parseGemfile(c).forEach((g) => s.ruby.add(g));
+    return (c, s) => parseGemfile(c).forEach((g) => addCapped(s.ruby, g));
   if (name.startsWith('.env'))
-    return (c, s) => parseEnvKeys(c).forEach((k) => s.envKeys.add(k));
+    return (c, s) => parseEnvKeys(c).forEach((k) => addCapped(s.envKeys, k));
   return null;
 }
 
@@ -144,7 +155,7 @@ function addNpmDeps(content: string, signals: ProjectSignals): void {
       ...pkg.dependencies,
       ...pkg.devDependencies,
     })) {
-      signals.npm.add(dep);
+      addCapped(signals.npm, dep);
     }
   } catch (error) {
     // Malformed package.json — skip it, but record that we hit it.

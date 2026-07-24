@@ -33,6 +33,7 @@ import type {
   Category,
 } from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
+import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
@@ -341,6 +342,11 @@ const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
  * (~25K tokens), so triage always sees the chunk its matches came from.
  */
 const SCAN_CHUNK_SIZE = 100_000;
+
+// O(SKILL_FILE_SCAN_BYTES) heap per skill file scanned; anything past the cap
+// is logged and head-scanned rather than materialized whole (real skill files
+// are KB — a multi-hundred-MB one is itself a red flag).
+const SKILL_FILE_SCAN_BYTES = 10 * 1024 * 1024;
 /**
  * Overlap between adjacent chunks so a pattern straddling a chunk boundary
  * still lands whole inside at least one chunk. YARA rule strings are at most
@@ -1030,30 +1036,39 @@ async function scanSkillFiles(
     absolute: true,
   });
 
-  const fileContents: string[] = [];
-  for (const filePath of files) {
-    try {
-      fileContents.push(fs.readFileSync(filePath, 'utf-8'));
-    } catch (err) {
-      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
-    }
-  }
-
-  if (fileContents.length === 0) {
+  if (files.length === 0) {
     logToFile(`[YARA] No text files found in skill directory: ${absoluteDir}`);
     return [];
   }
 
   logToFile(
-    `[YARA] Scanning ${fileContents.length} files in skill directory: ${skillDir}`,
+    `[YARA] Scanning ${files.length} files in skill directory: ${skillDir}`,
   );
 
-  // Pass 1 (sequential): scan each file through the chunk-aware path —
-  // full coverage even for oversized files, and every flagged chunk keeps a
-  // reference to the exact content its matches came from.
+  // Pass 1 (sequential): read and scan ONE file at a time through the
+  // chunk-aware path — O(SKILL_FILE_SCAN_BYTES) heap instead of every file's
+  // content retained at once. A security scan never silently skips a file:
+  // oversized files are scanned up to the cap and logged. Flagged chunks keep
+  // a reference to the exact content their matches came from.
   const flagged: FlaggedChunk[] = [];
-  for (const content of fileContents) {
-    flagged.push(...(await scanForContext(content, 'input')));
+  for (const filePath of files) {
+    let content: string | null;
+    try {
+      if (fs.statSync(filePath).size > SKILL_FILE_SCAN_BYTES) {
+        logToFile(
+          `[YARA] Skill file over ${SKILL_FILE_SCAN_BYTES} bytes; scanning its head only: ${filePath}`,
+        );
+        content = readFileHead(filePath, SKILL_FILE_SCAN_BYTES);
+      } else {
+        content = fs.readFileSync(filePath, 'utf-8');
+      }
+    } catch (err) {
+      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
+      continue;
+    }
+    if (content) {
+      flagged.push(...(await scanForContext(content, 'input')));
+    }
   }
 
   // Pass 2 (parallel, inside triageFlagged): triage each flagged chunk

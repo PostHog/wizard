@@ -1,5 +1,5 @@
-import fg from 'fast-glob';
 import type { WizardRunOptions } from '@utils/types';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { hasDeclaredDependency } from '@utils/package-json';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
@@ -10,25 +10,24 @@ export enum TanStackRouterMode {
   CODE_BASED = 'code-based',
 }
 
-const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/public/**',
-  '**/.vinxi/**',
-  '**/.output/**',
-];
+const EXTRA_IGNORE = ['**/public/**', '**/.vinxi/**', '**/.output/**'];
 
 export const getTanStackRouterVersionBucket = createVersionBucket();
+
+/** Route-mode probes read at most this many source files — O(SOURCE_PROBE_LIMIT × MAX_PROJECT_FILE_BYTES) transient, one file at a time. */
+const SOURCE_PROBE_LIMIT = 200;
 
 async function hasFileBasedRouting({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const generatedFiles = await fg('**/routeTree.gen.@(ts|tsx|js|jsx)', {
-    dot: true,
-    cwd: installDir,
-    ignore: IGNORE_PATTERNS,
-  });
+  const generatedFiles = await boundedGlob(
+    '**/routeTree.gen.@(ts|tsx|js|jsx)',
+    {
+      cwd: installDir,
+      extraIgnore: EXTRA_IGNORE,
+      limit: 1,
+    },
+  );
 
   if (generatedFiles.length > 0) {
     return true;
@@ -49,21 +48,16 @@ async function hasFileBasedRouting({
     // package.json not found or unreadable
   }
 
-  const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
-    dot: true,
+  const sourceFiles = await boundedGlob('**/*.@(ts|tsx|js|jsx)', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   for (const file of sourceFiles) {
-    try {
-      const filePath = path.join(installDir, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
-      if (content.includes('createFileRoute')) {
-        return true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, file));
+    if (content?.includes('createFileRoute')) {
+      return true;
     }
   }
 
@@ -73,28 +67,24 @@ async function hasFileBasedRouting({
 async function hasCodeBasedRouting({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
-    dot: true,
+  const sourceFiles = await boundedGlob('**/*.@(ts|tsx|js|jsx)', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   let hasCreateRoute = false;
   let hasCreateFileRoute = false;
 
   for (const file of sourceFiles) {
-    try {
-      const filePath = path.join(installDir, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
+    const content = readProjectFile(path.join(installDir, file));
+    if (!content) continue;
 
-      if (content.includes('createRoute(')) {
-        hasCreateRoute = true;
-      }
-      if (content.includes('createFileRoute')) {
-        hasCreateFileRoute = true;
-      }
-    } catch {
-      continue;
+    if (content.includes('createRoute(')) {
+      hasCreateRoute = true;
+    }
+    if (content.includes('createFileRoute')) {
+      hasCreateFileRoute = true;
     }
   }
 

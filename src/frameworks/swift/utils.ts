@@ -1,7 +1,13 @@
 import type { WizardRunOptions } from '@utils/types';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+const EXTRA_IGNORE = ['**/.build/**', '**/*.xcodeproj/**'];
+
+/** Import probes read at most this many files — O(SOURCE_PROBE_LIMIT × MAX_PROJECT_FILE_BYTES) transient, one file at a time. */
+const SOURCE_PROBE_LIMIT = 200;
 
 export enum SwiftProjectType {
   SWIFTUI = 'swiftui',
@@ -40,31 +46,23 @@ export async function detectSwiftProjectType(
   }
 
   // Check Swift source files for SwiftUI vs UIKit imports
-  const swiftFiles = await fg('**/*.swift', {
+  const swiftFiles = await boundedGlob('**/*.swift', {
     cwd: installDir,
-    ignore: [
-      '**/.build/**',
-      '**/DerivedData/**',
-      '**/build/**',
-      '**/*.xcodeproj/**',
-      '**/Pods/**',
-    ],
+    extraIgnore: EXTRA_IGNORE,
+    limit: SOURCE_PROBE_LIMIT,
   });
 
   let hasSwiftUI = false;
   let hasUIKit = false;
 
   for (const file of swiftFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, file), 'utf-8');
-      if (content.includes('import SwiftUI')) {
-        hasSwiftUI = true;
-      }
-      if (content.includes('import UIKit')) {
-        hasUIKit = true;
-      }
-    } catch {
-      continue;
+    const content = readProjectFile(path.join(installDir, file));
+    if (!content) continue;
+    if (content.includes('import SwiftUI')) {
+      hasSwiftUI = true;
+    }
+    if (content.includes('import UIKit')) {
+      hasUIKit = true;
     }
   }
 

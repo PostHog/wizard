@@ -299,7 +299,18 @@ export async function detectProjectsWithAgent(
     runOptions,
   );
 
+  // O(MAX_TRANSCRIPT_CHARS) retained: keep the transcript TAIL (the report
+  // JSON is the agent's last output) instead of every text block of the run.
+  const MAX_TRANSCRIPT_CHARS = 256 * 1024;
   const collected: string[] = [];
+  let collectedChars = 0;
+  const collect = (text: string): void => {
+    collected.push(text);
+    collectedChars += text.length;
+    while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
+      collectedChars -= collected.shift()!.length;
+    }
+  };
   let resultText = '';
 
   const middleware = {
@@ -308,7 +319,7 @@ export async function detectProjectsWithAgent(
       if (message?.type === 'assistant') {
         for (const block of message.message?.content ?? []) {
           if (block?.type === 'text' && typeof block.text === 'string') {
-            collected.push(block.text);
+            collect(block.text);
             const line = block.text.trim();
             if (line && onEvent) {
               onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);

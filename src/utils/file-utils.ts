@@ -99,15 +99,24 @@ export const IGNORED_DIRS = new Set<string>([
  * Shared by the detection layers (warehouse sources, etc.) so traversal policy
  * — ignored dirs, depth, symlink handling — lives in one place.
  */
+// O(1) listing memory per directory: entries stream via opendirSync and a
+// wider directory stops being read here — a flat multi-million-file dump dir
+// contributes at most this many dirents.
+export const MAX_DIR_ENTRIES = 10_000;
+
+// O(MAX_WALK_FILES) callbacks per walk, regardless of tree size.
+export const MAX_WALK_FILES = 100_000;
+
 export function walkProjectFiles(
   rootDir: string,
   onFile: (name: string, fullPath: string) => void,
   maxDepth = 3,
 ): void {
   const visited = new Set<string>();
+  let filesSeen = 0;
 
   function scan(dir: string, depth: number): void {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth || filesSeen >= MAX_WALK_FILES) return;
 
     // realpath both resolves symlinked dirs and gives us a stable key to
     // detect loops (symlink cycles, e.g. a -> ../a).
@@ -121,39 +130,55 @@ export function walkProjectFiles(
     if (visited.has(realDir)) return;
     visited.add(realDir);
 
-    let entries: Dirent[];
+    let handle: fs.Dir;
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      handle = fs.opendirSync(dir);
     } catch (error) {
-      reportFsError('walkProjectFiles.readdir', dir, error);
+      reportFsError('walkProjectFiles.opendir', dir, error);
       return;
     }
+    try {
+      let entriesRead = 0;
+      let entry: Dirent | null;
+      while ((entry = handle.readSync()) !== null) {
+        if (++entriesRead > MAX_DIR_ENTRIES || filesSeen >= MAX_WALK_FILES) {
+          logToFile(
+            `[file-utils] walk capped in ${dir} (entries=${entriesRead}, files=${filesSeen})`,
+          );
+          break;
+        }
+        if (IGNORED_DIRS.has(entry.name)) continue;
 
-    for (const entry of entries) {
-      if (IGNORED_DIRS.has(entry.name)) continue;
+        const fullPath = path.join(dir, entry.name);
 
-      const fullPath = path.join(dir, entry.name);
+        // Symlinks report isDirectory()/isFile() as false under withFileTypes,
+        // so resolve the target before deciding how to handle the entry.
+        let isDir = entry.isDirectory();
+        let isFile = entry.isFile();
+        if (entry.isSymbolicLink()) {
+          try {
+            const st = fs.statSync(fullPath);
+            isDir = st.isDirectory();
+            isFile = st.isFile();
+          } catch (error) {
+            reportFsError('walkProjectFiles.stat', fullPath, error);
+            continue;
+          }
+        }
 
-      // Symlinks report isDirectory()/isFile() as false under withFileTypes,
-      // so resolve the target before deciding how to handle the entry.
-      let isDir = entry.isDirectory();
-      let isFile = entry.isFile();
-      if (entry.isSymbolicLink()) {
-        try {
-          const st = fs.statSync(fullPath);
-          isDir = st.isDirectory();
-          isFile = st.isFile();
-        } catch (error) {
-          reportFsError('walkProjectFiles.stat', fullPath, error);
-          continue;
+        if (isDir) {
+          if (entry.name.startsWith('.')) continue; // skip hidden directories
+          scan(fullPath, depth + 1);
+        } else if (isFile) {
+          filesSeen += 1;
+          onFile(entry.name, fullPath);
         }
       }
-
-      if (isDir) {
-        if (entry.name.startsWith('.')) continue; // skip hidden directories
-        scan(fullPath, depth + 1);
-      } else if (isFile) {
-        onFile(entry.name, fullPath);
+    } finally {
+      try {
+        handle.closeSync();
+      } catch {
+        /* already closed */
       }
     }
   }
@@ -161,12 +186,21 @@ export function walkProjectFiles(
   scan(rootDir, 0);
 }
 
+// O(1) heap per read: oversized "manifests" (multi-hundred-MB .env dumps
+// killed a prod run) are skipped without being materialized.
+export const MAX_SAFE_READ_BYTES = 2 * 1024 * 1024;
+
 /**
- * Read a file as UTF-8, returning `null` on any error. Best-effort: errors are
- * reported to error tracking, then swallowed.
+ * Read a file as UTF-8, returning `null` on any error or when it exceeds
+ * MAX_SAFE_READ_BYTES. Best-effort: errors are reported to error tracking,
+ * then swallowed.
  */
 export function safeReadFile(fullPath: string): string | null {
   try {
+    if (fs.statSync(fullPath).size > MAX_SAFE_READ_BYTES) {
+      logToFile(`[file-utils] skipped oversized file: ${fullPath}`);
+      return null;
+    }
     return fs.readFileSync(fullPath, 'utf-8');
   } catch (error) {
     reportFsError('safeReadFile', fullPath, error);

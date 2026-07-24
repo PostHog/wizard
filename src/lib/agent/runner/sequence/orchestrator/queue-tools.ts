@@ -219,30 +219,45 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
+// O(1) bytes per handoff ⇒ O(queue cap) queue.json, which is rewritten whole
+// on every transition — every field here is LLM-authored free text.
+const HANDOFF_TEXT_MAX = 8_000;
+
 const HANDOFF_SHAPE = {
-  goals: z.string().describe('What this task was asked to achieve.'),
+  goals: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .describe('What this task was asked to achieve.'),
   did: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .describe(
       'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
     ),
-  forNextAgent: z.string().describe('What the next agent should know.'),
+  forNextAgent: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .describe('What the next agent should know.'),
   filesTouched: z
-    .array(z.string())
+    .array(z.string().max(1_000))
+    .max(200)
     .optional()
     .describe('Paths of every file you edited.'),
   evidence: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
     .describe(
       'How you know it worked — what you ran or observed, not what you expect.',
     ),
   assumptions: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
     .describe('What you assumed about the app and could not verify.'),
   conflict: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
     .describe(
       'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
