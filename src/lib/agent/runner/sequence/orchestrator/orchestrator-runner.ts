@@ -42,6 +42,7 @@ import type { BootstrapResult } from '../../shared/types';
 import {
   getHarness,
   resolveHarness,
+  resolveStageOverrides,
   type HarnessPick,
 } from '../../switchboard';
 import { isValidModel, requireKnownModel } from '../../switchboard/models';
@@ -199,6 +200,12 @@ export async function runOrchestrator(
   const flow = programConfig.agentFlow ?? programConfig.id;
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
     exclude: ciExcludedTaskTypes(),
+    // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
+    overrides: resolveStageOverrides(
+      programConfig.id,
+      boot.wizardFlags,
+      boot.wizardFlagPayloads,
+    ),
   });
   const seedPrompt = registry.seed;
   if (!seedPrompt) {

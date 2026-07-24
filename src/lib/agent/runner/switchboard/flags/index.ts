@@ -5,18 +5,22 @@
  * shapes and resolution.
  */
 import { RUN_SURFACE } from '@env';
+import { logToFile } from '@utils/debug';
 import type { Sequence } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import {
-  ORCHESTRATOR_SEQUENCE_ROUTE,
   ORCHESTRATOR_HARNESS_ROUTE,
+  ORCHESTRATOR_SEQUENCE_ROUTE,
+  ORCHESTRATOR_STAGE_OVERRIDES,
 } from './orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from './self-driving';
 import {
   routeFromConfigFlag,
+  stageOverridesFromPayload,
   type FlagRoute,
   type HarnessExperiment,
   type SequenceExperiment,
+  type StageOverride,
 } from './schemes';
 
 /** Every experiment on each axis. An experiment routes ONLY by being listed here, and only for the programs it declares. */
@@ -52,10 +56,31 @@ export function resolveFlagSequence(
   )?.sequence;
 }
 
+/** The per-stage overrides for a program's run, or undefined (prompt frontmatter stays). Applied once, where the agent prompts are loaded. */
+export function resolveStageOverrides(
+  program: ProgramId,
+  flags: Record<string, string>,
+  flagPayloads?: Record<string, unknown>,
+): Record<string, StageOverride> | undefined {
+  if (RUN_SURFACE === 'cloud') return undefined;
+  const exp = ORCHESTRATOR_STAGE_OVERRIDES;
+  if (!exp.programs.includes(program)) return undefined;
+  const variant = flags[exp.flag];
+  if (!variant || variant === 'false') return undefined;
+  const overrides = stageOverridesFromPayload(flagPayloads?.[exp.flag]);
+  if (!overrides) {
+    logToFile(
+      `[switchboard] ${exp.flag}=${variant} but payload missing/invalid — keeping frontmatter`,
+    );
+  }
+  return overrides;
+}
+
 export { isOrchestratorEnabled } from './orchestrator';
 export type {
   ConfigFlag,
   FlagRoute,
   HarnessExperiment,
   SequenceExperiment,
+  StageOverride,
 } from './schemes';

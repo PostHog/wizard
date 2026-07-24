@@ -11,11 +11,13 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   SONNET_5_MODEL,
 } from '@lib/constants';
 import {
   resolveBinding,
+  resolveStageOverrides,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import {
@@ -200,6 +202,71 @@ describe('the truth table — self-driving × its pi payload flag', () => {
     ],
     setSurface,
   );
+});
+
+describe('the truth table — wizard-orchestrator-override stage payloads', () => {
+  const OVR = WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY;
+  const resolve = (
+    payload: unknown,
+    { variant = 'terra-review', program = 'posthog-integration' } = {},
+  ) => resolveStageOverrides(program, { [OVR]: variant }, { [OVR]: payload });
+
+  it('a stage row carries model and effort for that stage only', () => {
+    const overrides = resolve({
+      review: { model: 'gpt-5-6-terra', effort: 'high' },
+    });
+    expect(overrides).toEqual({
+      review: { model: GPT5_6_TERRA_MODEL, effort: 'high' },
+    });
+  });
+
+  it('partial rows carry only what they define', () => {
+    expect(
+      resolve({ review: { model: 'gpt-5-6-terra' }, seed: { effort: 'low' } }),
+    ).toEqual({
+      review: { model: GPT5_6_TERRA_MODEL },
+      seed: { effort: 'low' },
+    });
+  });
+
+  it('a JSON-string payload parses the same', () => {
+    expect(
+      resolve(JSON.stringify({ review: { model: 'gpt-5-6-terra' } })),
+    ).toEqual({ review: { model: GPT5_6_TERRA_MODEL } });
+  });
+
+  it.each([
+    ['unknown model key', { review: { model: 'banana' } }],
+    ['invalid effort', { review: { effort: 'banana' } }],
+    ['non-object row', { review: 'terra' }],
+    ['garbage string', '{not json'],
+  ])('%s → the whole payload fails closed', (_name, payload) => {
+    expect(resolve(payload)).toBe(undefined);
+  });
+
+  it('flag absent or false → undefined', () => {
+    expect(
+      resolveStageOverrides(
+        'posthog-integration',
+        {},
+        { [OVR]: { review: { model: 'gpt-5-6-terra' } } },
+      ),
+    ).toBe(undefined);
+    expect(
+      resolve({ review: { model: 'gpt-5-6-terra' } }, { variant: 'false' }),
+    ).toBe(undefined);
+  });
+
+  it('scoped to the orchestrator programs; cloud surface fails closed', () => {
+    const payload = { review: { model: 'gpt-5-6-terra' } };
+    expect(resolve(payload, { program: 'self-driving' })).toBe(undefined);
+    setSurface('cloud');
+    try {
+      expect(resolve(payload)).toBe(undefined);
+    } finally {
+      setSurface('local');
+    }
+  });
 });
 
 describe('isolation — everything on at once', () => {
