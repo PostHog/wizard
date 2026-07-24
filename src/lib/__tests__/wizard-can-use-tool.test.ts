@@ -155,6 +155,9 @@ describe('bash fence — allows real toolchain commands (from skills + field log
       'deny',
     );
     expect(allow('go tool pprof')).toBe('deny');
+    // -toolexec runs an arbitrary program during an otherwise-allowed build.
+    expect(allow('go build -toolexec=/tmp/x.sh ./...')).toBe('deny');
+    expect(allow('go vet -toolexec /tmp/x.sh ./...')).toBe('deny');
   });
 
   it('android/jvm ecosystem', () => {

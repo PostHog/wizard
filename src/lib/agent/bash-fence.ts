@@ -289,7 +289,19 @@ function commandDecision(command: string): BashFenceDecision {
         `Allowed go mod subcommands: ${GO_MOD_SUBCOMMANDS.join(', ')}.`,
       );
     }
-    if (parts[1] && GO_SUBCOMMANDS.includes(parts[1])) return { allowed: true };
+    if (parts[1] && GO_SUBCOMMANDS.includes(parts[1])) {
+      // -toolexec runs an arbitrary program on every build/vet action, so the
+      // allowed verbs above are not safe with it. Deny it explicitly.
+      const toolexec = parts
+        .slice(2)
+        .find((p) => p === '-toolexec' || p.startsWith('-toolexec='));
+      if (toolexec)
+        return denyCommand(
+          command,
+          'The -toolexec flag runs an arbitrary program during the build and is not allowed.',
+        );
+      return { allowed: true };
+    }
     return denyCommand(
       command,
       `Allowed go subcommands: ${GO_SUBCOMMANDS.join(
