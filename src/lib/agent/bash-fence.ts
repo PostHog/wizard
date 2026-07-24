@@ -84,8 +84,10 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
-  // mix runs arbitrary project-defined tasks, so only the dependency +
-  // verify tasks are listed — run/test/phx.server execute project code.
+  // mix runs arbitrary project-defined tasks, so only the dependency + build
+  // tasks are listed. compile also executes code (compile-time macros), accepted
+  // under the "builds are equivalent risk" model in the file header; run/test/
+  // phx.server are denied so app code, tests, and servers aren't run.
   mix: [
     'deps.get',
     'deps.update',
