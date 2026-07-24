@@ -42,8 +42,8 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   return {
     harness: route.harness ?? Harness.pi,
-    model: route.model,
-    thinkingLevel: route.thinkingLevel,
+    model: route.model ?? pick.model,
+    thinkingLevel: route.thinkingLevel ?? pick.thinkingLevel,
   };
 };
 
