@@ -90,6 +90,44 @@ const payloadConfigFlagSchema = z.object({
 
 // ── Resolution ────────────────────────────────────────────────────────────
 
+/** Per-stage overrides keyed by stage; a whole-payload parse failure fails closed to frontmatter everywhere. */
+const stageOverridesSchema = z.record(
+  z.object({
+    model: z
+      .string()
+      .refine((key) => key in MODEL_FLAG_VARIANTS)
+      .optional(),
+    effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
+  }),
+);
+
+export type StageOverride = { model?: string; effort?: EffortLevel };
+
+/** Validate a stage-override payload (object or JSON string); undefined on any unexpected shape. */
+export function stageOverridesFromPayload(
+  raw: unknown,
+): Record<string, StageOverride> | undefined {
+  let value = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+  const parsed = stageOverridesSchema.safeParse(value);
+  if (!parsed.success) return undefined;
+  return Object.fromEntries(
+    Object.entries(parsed.data).map(([stage, o]) => [
+      stage,
+      {
+        model: o.model ? MODEL_FLAG_VARIANTS[o.model] : undefined,
+        effort: o.effort,
+      },
+    ]),
+  );
+}
+
 /** Validate a payload (object or JSON string) into a route; undefined on any unexpected shape. */
 function parseFlagPayload(raw: unknown): FlagRoute | undefined {
   let value = raw;

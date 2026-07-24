@@ -16,6 +16,7 @@ import {
 } from '@lib/constants';
 import {
   resolveBinding,
+  resolveStageOverride,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import {
@@ -23,6 +24,7 @@ import {
   ORCHESTRATOR_PI_ROUTE,
 } from '@lib/agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@lib/agent/runner/switchboard/flags/self-driving';
+import { WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY } from '@lib/constants';
 import { runBindingCases } from './binding-cases';
 
 const envState = vi.hoisted(() => ({
@@ -198,6 +200,88 @@ describe('the truth table — self-driving × its pi payload flag', () => {
     ],
     setSurface,
   );
+});
+
+describe('the truth table — wizard-orchestrator-override stage payloads', () => {
+  const OVR = WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY;
+  const armed = (payload: unknown) => ({
+    flags: { [OVR]: 'terra-review' },
+    payloads: { [OVR]: payload },
+  });
+  const resolve = (
+    stage: string,
+    a: { flags: Record<string, string>; payloads?: Record<string, unknown> },
+    program = 'posthog-integration',
+  ) => resolveStageOverride(program, stage, a.flags, a.payloads);
+
+  it('a stage row overrides model and effort for that stage only', () => {
+    const a = armed({
+      review: { model: 'gpt-5-6-terra', effort: 'high' },
+    });
+    expect(resolve('review', a)).toEqual({
+      model: GPT5_6_TERRA_MODEL,
+      effort: 'high',
+    });
+    for (const stage of ['seed', 'install', 'capture', 'dashboard']) {
+      expect(resolve(stage, a)).toBe(undefined);
+    }
+  });
+
+  it('partial rows override only what they define', () => {
+    const a = armed({
+      review: { model: 'gpt-5-6-terra' },
+      seed: { effort: 'low' },
+    });
+    expect(resolve('review', a)).toEqual({
+      model: GPT5_6_TERRA_MODEL,
+      effort: undefined,
+    });
+    expect(resolve('seed', a)).toEqual({ model: undefined, effort: 'low' });
+  });
+
+  it('a JSON-string payload parses the same', () => {
+    const a = armed(JSON.stringify({ review: { model: 'gpt-5-6-terra' } }));
+    expect(resolve('review', a)?.model).toBe(GPT5_6_TERRA_MODEL);
+  });
+
+  it.each([
+    ['unknown model key', { review: { model: 'banana' } }],
+    ['invalid effort', { review: { effort: 'banana' } }],
+    ['non-object row', { review: 'terra' }],
+    ['garbage string', '{not json'],
+  ])('%s → the whole payload fails closed', (_name, payload) => {
+    expect(resolve('review', armed(payload))).toBe(undefined);
+  });
+
+  it('flag absent or false → undefined', () => {
+    expect(
+      resolveStageOverride(
+        'posthog-integration',
+        'review',
+        {},
+        armed({}).payloads,
+      ),
+    ).toBe(undefined);
+    expect(
+      resolveStageOverride(
+        'posthog-integration',
+        'review',
+        { [OVR]: 'false' },
+        { [OVR]: { review: { model: 'gpt-5-6-terra' } } },
+      ),
+    ).toBe(undefined);
+  });
+
+  it('scoped to the orchestrator programs; cloud surface fails closed', () => {
+    const a = armed({ review: { model: 'gpt-5-6-terra' } });
+    expect(resolve('review', a, 'self-driving')).toBe(undefined);
+    setSurface('cloud');
+    try {
+      expect(resolve('review', a)).toBe(undefined);
+    } finally {
+      setSurface('local');
+    }
+  });
 });
 
 describe('isolation — everything on at once', () => {
