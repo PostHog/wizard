@@ -1,6 +1,7 @@
 import fg from 'fast-glob';
 import { logToFile } from '@utils/debug';
 import { tryGetPackageJson } from '@utils/setup-utils';
+import { DETECTION_IGNORE_PATTERNS } from '@lib/detection/glob';
 
 const CLOUDFLARE_PACKAGES = [
   '@react-router/cloudflare',
@@ -22,10 +23,13 @@ const CLOUDFLARE_PACKAGES = [
 export async function detectCloudflareTarget(
   installDir: string,
 ): Promise<boolean> {
-  // Check for wrangler config files
+  // Check for wrangler config files. This pattern is root-only (no `**`), but
+  // we still pass the shared ignore list so it stays consistent with the other
+  // detectors and never descends into node_modules/.git if it's ever widened.
   const wranglerFiles = await fg('wrangler.@(toml|jsonc|json)', {
     cwd: installDir,
     dot: true,
+    ignore: DETECTION_IGNORE_PATTERNS,
   });
   if (wranglerFiles.length > 0) {
     logToFile(
