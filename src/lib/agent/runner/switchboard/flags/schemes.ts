@@ -94,7 +94,13 @@ const payloadConfigFlagSchema = z.object({
   sequence: z.nativeEnum(Sequence).optional(),
 });
 
-/** JSON-string payloads parse to their value; anything unparseable is undefined. */
+/**
+ * PostHog serves a variant's payload as a JSON string, e.g. the
+ * wizard-orchestrator-override `terra-review` variant arrives as
+ * `'{"review":{"model":"gpt-5-6-terra","effort":"medium"}}'`; local CI
+ * overrides inject the same payloads as already-parsed objects. Coerce both
+ * to the value; anything unparseable is undefined.
+ */
 function coerceJson(raw: unknown): unknown {
   if (typeof raw !== 'string') return raw;
   try {
