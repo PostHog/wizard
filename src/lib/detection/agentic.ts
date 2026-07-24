@@ -299,8 +299,7 @@ export async function detectProjectsWithAgent(
     runOptions,
   );
 
-  // Retained transcript is capped at MAX_TRANSCRIPT_CHARS, constant in run
-  // length. Keep the TAIL: the report JSON is the agent's last output.
+  // Keeps only the transcript tail — the report JSON is the last output.
   const MAX_TRANSCRIPT_CHARS = 256 * 1024;
   const collected: string[] = [];
   let collectedChars = 0;

@@ -1,25 +1,19 @@
 /**
- * Bounded filesystem primitives for scanning USER project trees.
- *
- * Every detection-time glob and project-file read goes through here so the
- * worst case is a constant, never a function of the user's repo. The prod OOM
- * of 2026-07-23 (multi-million-file monorepo, 3.9GB heap) came from unbounded
- * `fg('**')` sweeps whose 10s detection timeouts raced but never cancelled
- * them, stacked with uncapped whole-file reads.
+ * Bounded filesystem primitives for scanning USER project trees. Every
+ * detection-time glob and project-file read goes through here so the worst
+ * case is a constant, never a function of the user's repo.
  */
 import * as fs from 'fs';
 import fg from 'fast-glob';
 import { IGNORED_DIRS } from './file-utils';
 
-// Heap per read attempt is capped at this constant, independent of file
-// size — anything larger is skipped, never materialized.
+// Files larger than this are skipped, never materialized.
 export const MAX_PROJECT_FILE_BYTES = 2 * 1024 * 1024;
 
-// A glob returns at most this many entries, no matter how big the tree is.
+// A glob returns at most this many entries.
 export const MAX_GLOB_MATCHES = 500;
 
-// Traversal is cut off after this long — an abandoned (Promise.race'd out)
-// sweep self-terminates instead of crawling a huge tree in the background.
+// A glob's traversal is destroyed after this long, even when abandoned.
 export const GLOB_DEADLINE_MS = 8_000;
 
 /**
@@ -48,11 +42,8 @@ export interface BoundedGlobOptions {
 }
 
 /**
- * A fast-glob sweep that cannot blow up: streams matches, stops at `limit`,
- * and destroys the underlying crawl at GLOB_DEADLINE_MS — memory and wall
- * clock stay bounded no matter how big the tree is. Returns paths
- * relative to `cwd`, possibly incomplete — detection callers treat matches as
- * hints, so a truncated list degrades to "not detected", never to a crash.
+ * Streams matches, stops at `limit`, destroys the crawl at GLOB_DEADLINE_MS.
+ * Returns paths relative to `cwd`, possibly truncated.
  */
 export async function boundedGlob(
   patterns: string | string[],
@@ -97,9 +88,7 @@ export async function boundedGlob(
 
 /**
  * Read a project file as UTF-8, or null when missing, unreadable, or over
- * `maxBytes` (stat-gated: an oversized file is never materialized). V8's max
- * string length already hard-fails reads past ~512MB; this cap turns that
- * cliff into a policy.
+ * `maxBytes` (stat-gated: an oversized file is never materialized).
  */
 export function readProjectFile(
   filePath: string,
@@ -114,8 +103,7 @@ export function readProjectFile(
 }
 
 /**
- * The first `bytes` of a file without materializing the rest, whatever the
- * file size. For header sniffs (e.g. lockfile provenance comments).
+ * The first `bytes` of a file without materializing the rest.
  */
 export function readFileHead(filePath: string, bytes: number): string | null {
   try {

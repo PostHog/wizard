@@ -18,7 +18,7 @@ const EXTRA_IGNORE = ['**/public/**'];
 
 export const getReactRouterVersionBucket = createVersionBucket();
 
-/** Router-mode probes read at most this many source files — holding one ≤MAX_PROJECT_FILE_BYTES file in memory at a time. */
+/** Content probes read at most this many files, one in memory at a time. */
 const SOURCE_PROBE_LIMIT = 200;
 
 async function hasReactRouterConfig({

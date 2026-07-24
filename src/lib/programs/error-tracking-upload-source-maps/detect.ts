@@ -157,8 +157,7 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
     } catch {
       return;
     }
-    // At most MAX_DIR_ENTRIES considered per directory — a flat
-    // multi-million-file dump dir stops contributing here.
+    // A directory contributes at most MAX_DIR_ENTRIES entries.
     if (entries.length > MAX_DIR_ENTRIES) entries.length = MAX_DIR_ENTRIES;
 
     for (const entry of entries) {

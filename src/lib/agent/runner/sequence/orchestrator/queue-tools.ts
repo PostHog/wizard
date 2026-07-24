@@ -219,9 +219,7 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
-// Handoff fields are individually capped, so queue.json — rewritten whole on
-// every transition — grows only with task count, never with how verbose one
-// agent gets. Every field here is LLM-authored free text.
+// Caps each LLM-authored free-text field; queue.json rewrites whole per transition.
 const HANDOFF_TEXT_MAX = 8_000;
 
 const HANDOFF_SHAPE = {

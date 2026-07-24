@@ -12,7 +12,7 @@ export enum FastAPIProjectType {
 
 const EXTRA_IGNORE = ['**/env/**', '**/.env/**', '**/migrations/**'];
 
-/** Import probes read at most this many files — holding one ≤MAX_PROJECT_FILE_BYTES file in memory at a time. */
+/** Content probes read at most this many files, one in memory at a time. */
 const SOURCE_PROBE_LIMIT = 200;
 
 /**

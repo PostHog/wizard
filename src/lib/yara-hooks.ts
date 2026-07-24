@@ -343,9 +343,7 @@ const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
  */
 const SCAN_CHUNK_SIZE = 100_000;
 
-// Heap per skill file scanned is capped at this constant; anything past it
-// is logged and head-scanned rather than materialized whole (real skill
-// files are KB — a multi-hundred-MB one is itself a red flag).
+// A skill file is read at most this far; the rest is head-scanned and logged.
 const SKILL_FILE_SCAN_BYTES = 10 * 1024 * 1024;
 /**
  * Overlap between adjacent chunks so a pattern straddling a chunk boundary
@@ -1046,10 +1044,9 @@ async function scanSkillFiles(
   );
 
   // Pass 1 (sequential): read and scan ONE file at a time through the
-  // chunk-aware path — peak heap is one capped file instead of every file's
-  // content retained at once. A security scan never silently skips a file:
-  // oversized files are scanned up to the cap and logged. Flagged chunks keep
-  // a reference to the exact content their matches came from.
+  // chunk-aware path. Oversized files are scanned up to the cap and logged —
+  // never silently skipped. Flagged chunks keep a reference to the exact
+  // content their matches came from.
   const flagged: FlaggedChunk[] = [];
   for (const filePath of files) {
     let content: string | null;

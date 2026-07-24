@@ -119,9 +119,7 @@ export async function scopeInstallDirToProject(
 
   const { projects } = report;
   const recommended = projects.find((p) => p.recommended === true);
-  // The analytics payload carries at most this many projects —
-  // project_count keeps the true total when a giant monorepo's list is
-  // truncated.
+  // The event carries at most this many projects; project_count is the true total.
   const MAX_PROJECTS_CAPTURED = 25;
   const scanProperties = {
     duration_ms: Date.now() - startedAt,
