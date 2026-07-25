@@ -276,7 +276,7 @@ export const GroupedPickerMenu = ({
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
-      <Box flexDirection="column" marginTop={1} marginLeft={2}>
+      <Box flexDirection="column" marginTop={message ? 1 : 0} marginLeft={2}>
         {needsScroll && (
           <Text dimColor>
             {hiddenAbove > 0 ? `\u2191 ${hiddenAbove} more` : ' '}
