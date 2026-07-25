@@ -389,7 +389,7 @@ const SinglePickerMenu = <T,>({
         <Box flexDirection="column">
           <Text dimColor>
             {viewport.hiddenAbove > 0
-              ? `↑ ${viewport.hiddenAbove} more (p)`
+              ? `↑ ${viewport.hiddenAbove} more [P] for previous page`
               : ' '}
           </Text>
           {options
@@ -397,7 +397,7 @@ const SinglePickerMenu = <T,>({
             .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
           <Text dimColor>
             {viewport.hiddenBelow > 0
-              ? `↓ ${viewport.hiddenBelow} more (n)`
+              ? `↓ ${viewport.hiddenBelow} more [N] for next page`
               : ' '}
           </Text>
         </Box>
@@ -683,7 +683,7 @@ const MultiPickerMenu = <T,>({
         >
           <Text dimColor>
             {viewport.hiddenAbove > 0
-              ? `↑ ${viewport.hiddenAbove} more (p)`
+              ? `↑ ${viewport.hiddenAbove} more [P] for previous page`
               : ' '}
           </Text>
           {options
@@ -691,7 +691,7 @@ const MultiPickerMenu = <T,>({
             .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
           <Text dimColor>
             {viewport.hiddenBelow > 0
-              ? `↓ ${viewport.hiddenBelow} more (n)`
+              ? `↓ ${viewport.hiddenBelow} more [N] for next page`
               : ' '}
           </Text>
         </Box>
