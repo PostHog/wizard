@@ -653,7 +653,11 @@ const MultiPickerMenu = <T,>({
     <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
       <PromptLabel message={message} />
       {viewport.needsScroll ? (
-        <Box flexDirection="column" marginLeft={centered ? 0 : 2} marginTop={1}>
+        <Box
+          flexDirection="column"
+          marginLeft={centered ? 0 : 2}
+          marginTop={message ? 1 : 0}
+        >
           <Text dimColor>
             {viewport.hiddenAbove > 0 ? `↑ ${viewport.hiddenAbove} more` : ' '}
           </Text>
@@ -669,7 +673,7 @@ const MultiPickerMenu = <T,>({
           flexDirection="row"
           gap={4}
           marginLeft={centered ? 0 : 2}
-          marginTop={1}
+          marginTop={message ? 1 : 0}
         >
           {columnArrays.map((colOpts, colIdx) => (
             <Box key={colIdx} flexDirection="column">
