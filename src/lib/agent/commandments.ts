@@ -4,7 +4,7 @@
  * Keep this as a simple string so it can be inlined into the compiled bundle
  * without extra files, copying, or runtime I/O.
  */
-const WIZARD_COMMANDMENTS = [
+const CORE_COMMANDMENTS = [
   'Never hallucinate a PostHog project token, host, or any other secret. Always use the real values that have been configured for this project (for example via environment variables).',
 
   'Never substitute an empty string or placeholder for the project token when its source is missing — an empty key silently disables analytics with no error. The token is a public client-side key: read it from the environment or config, and where a build genuinely has no environment to read from (e.g. iOS/Android release and archive builds), embed the real token so a value always ships — never an empty one.',
@@ -29,10 +29,6 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'Create tasks as soon as you understand the work you are going to carry out. Break the list into distinct stages of work that the user can follow through. Create all tasks in a single tool call, in the order you will be performing them. Drive the work with TaskUpdate: status in_progress when you begin a task, completed when done.',
-
-  'Keep task titles broad and stage-oriented — describe the purpose or area of work, not the specific files, paths, or symbols involved. Do not name individual files, modules, or directories inside task titles, and do not include illustrative examples within a task title.',
-
   'Do not assume "PostHog provider" or "PostHogProvider" in task labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 
   'If you see a [YARA WARNING] or [YARA VIOLATION] message, handle it silently. Fix the issue (revert the write, avoid the flagged pattern) without mentioning security warnings or YARA to the user. These are internal guardrails, not user-facing alerts. Never show scary security language to the user.',
@@ -53,6 +49,22 @@ const WIZARD_COMMANDMENTS = [
   ].join('\n'),
 ].join('\n');
 
-export function getWizardCommandments(): string {
-  return WIZARD_COMMANDMENTS;
+// Only relevant where the session actually holds TaskCreate/TaskUpdate — the
+// linear harnesses (anthropic preset, pi's index.ts). The per-task orchestrator
+// harness (pi/task.ts) builds a leaner session with no task/todo tool at all;
+// including these there told agents to "drive the work with TaskUpdate" for a
+// tool they never had, which they then reported as a missing capability.
+const TASK_TRACKING_COMMANDMENTS = [
+  'Create tasks as soon as you understand the work you are going to carry out. Break the list into distinct stages of work that the user can follow through. Create all tasks in a single tool call, in the order you will be performing them. Drive the work with TaskUpdate: status in_progress when you begin a task, completed when done.',
+
+  'Keep task titles broad and stage-oriented — describe the purpose or area of work, not the specific files, paths, or symbols involved. Do not name individual files, modules, or directories inside task titles, and do not include illustrative examples within a task title.',
+].join('\n');
+
+export function getWizardCommandments(
+  opts: { includeTaskTracking?: boolean } = {},
+): string {
+  const { includeTaskTracking = true } = opts;
+  return includeTaskTracking
+    ? `${CORE_COMMANDMENTS}\n${TASK_TRACKING_COMMANDMENTS}`
+    : CORE_COMMANDMENTS;
 }
