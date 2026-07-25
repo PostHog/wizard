@@ -113,31 +113,6 @@ const CONFIRM_CHROME = 3;
 /** Width the multi-select wraps option descriptions to (matches the render). */
 const DESCRIPTION_WIDTH = 56;
 
-/**
- * Chunk options into pages, each holding as many options as fit in `budget`
- * visual rows (each option's height given by `costs`). Every page holds at
- * least one option so an oversized row can't stall the chunking.
- */
-function computePages(
-  costs: number[],
-  budget: number,
-): { start: number; end: number }[] {
-  const pages: { start: number; end: number }[] = [];
-  let start = 0;
-  while (start < costs.length) {
-    let used = 0;
-    let end = start;
-    while (end < costs.length) {
-      if (used + costs[end] > budget && end > start) break;
-      used += costs[end];
-      end++;
-    }
-    pages.push({ start, end });
-    start = end;
-  }
-  return pages.length ? pages : [{ start: 0, end: 0 }];
-}
-
 interface PickerViewport {
   needsScroll: boolean;
   /** First option index on the current page. */
@@ -146,63 +121,46 @@ interface PickerViewport {
   end: number;
   hiddenAbove: number;
   hiddenBelow: number;
-  /** First enabled option on the next/previous page (wrapping), for the
-   *  n/p page-jump keys. Meaningless when !needsScroll. */
+  /** Focus target one page over (wrapping), for the n/p keys. */
   pageStep: (focused: number, dir: 1 | -1) => number;
 }
 
 /**
  * Pages a single-column option list to the terminal height. The visible page
- * is derived from the focused index — no scroll state — so ↑/↓ flip pages
- * naturally as focus crosses a page edge, and n/p jump a whole page. Paging
- * engages only for single-column pickers (`enabled`) — multi-column grids
- * already compress vertically — and only when the list is taller than the
- * available space.
+ * is derived from the focused index — no scroll state — so ↑/↓ flip pages as
+ * focus crosses a page edge and n/p jump a whole page. Pages hold a fixed
+ * option count sized to the tallest row (`rowCost`), trading a sparser page
+ * on mixed-height lists for arithmetic-only paging. Engages only for
+ * single-column pickers — multi-column grids already compress vertically.
  */
 function usePickerViewport(
-  costs: number[],
+  count: number,
+  rowCost: number,
   chromeBelow: number,
   enabled: boolean,
   focused: number,
 ): PickerViewport {
   const [, termRows] = useStdoutDimensions();
-
   const budget = Math.max(
     5,
     Math.min(termRows - CHROME_OVERHEAD - chromeBelow, MAX_LIST_ROWS),
   );
-  const total = costs.reduce((sum, c) => sum + c, 0);
-  const needsScroll = enabled && total > budget;
-  if (!needsScroll) {
-    return {
-      needsScroll,
-      start: 0,
-      end: costs.length,
-      hiddenAbove: 0,
-      hiddenBelow: 0,
-      pageStep: (f) => f,
-    };
-  }
-
+  const needsScroll = enabled && count * rowCost > budget;
   // Reserve two rows for the "↑/↓ N more" indicators.
-  const pages = computePages(costs, budget - 2);
-  const pageOf = (idx: number) =>
-    Math.max(
-      0,
-      pages.findIndex((p) => idx >= p.start && idx < p.end),
-    );
-  const page = pages[pageOf(focused)];
-
+  const perPage = needsScroll
+    ? Math.max(1, Math.floor((budget - 2) / rowCost))
+    : count;
+  const pageCount = Math.max(1, Math.ceil(count / perPage));
+  const start = Math.floor(focused / perPage) * perPage;
+  const end = Math.min(start + perPage, count);
   return {
     needsScroll,
-    start: page.start,
-    end: page.end,
-    hiddenAbove: page.start,
-    hiddenBelow: costs.length - page.end,
-    pageStep: (f, dir) => {
-      const target = pages[(pageOf(f) + dir + pages.length) % pages.length];
-      return target.start;
-    },
+    start,
+    end,
+    hiddenAbove: start,
+    hiddenBelow: count - end,
+    pageStep: (f, dir) =>
+      ((Math.floor(f / perPage) + dir + pageCount) % pageCount) * perPage,
   };
 }
 
@@ -273,10 +231,14 @@ const SinglePickerMenu = <T,>({
 }) => {
   const [focused, setFocused] = useState(() => firstEnabled(options));
   const rows = Math.ceil(options.length / columns);
-  // Single-select rows are label-only (no descriptions), so each option is
-  // one line plus its margin.
-  const costs = options.map(() => 1 + optionMarginBottom);
-  const viewport = usePickerViewport(costs, 0, columns === 1, focused);
+  // Single-select rows are label-only (no descriptions): one line plus margin.
+  const viewport = usePickerViewport(
+    options.length,
+    1 + optionMarginBottom,
+    0,
+    columns === 1,
+    focused,
+  );
 
   // Re-validate focus when the options change while mounted \u2014 a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -468,17 +430,22 @@ const MultiPickerMenu = <T,>({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
   // A row is its label line plus any margin; a description adds one line per
-  // wrapped line beneath the label.
-  const costs = options.map(
-    (opt) =>
-      1 +
-      optionMarginBottom +
-      (opt.description
-        ? wordWrap(opt.description, DESCRIPTION_WIDTH).length
-        : 0),
+  // wrapped line beneath the label. Pages size to the tallest row.
+  const rowCost = options.reduce(
+    (max, opt) =>
+      Math.max(
+        max,
+        1 +
+          optionMarginBottom +
+          (opt.description
+            ? wordWrap(opt.description, DESCRIPTION_WIDTH).length
+            : 0),
+      ),
+    1,
   );
   const viewport = usePickerViewport(
-    costs,
+    options.length,
+    rowCost,
     CONFIRM_CHROME,
     columns === 1,
     focused,
@@ -595,6 +562,12 @@ const MultiPickerMenu = <T,>({
           return next;
         });
       },
+    },
+    {
+      match: 's',
+      label: 's',
+      action: 'submit',
+      handler: confirm,
     },
   ];
 

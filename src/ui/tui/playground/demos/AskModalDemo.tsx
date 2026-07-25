@@ -104,6 +104,7 @@ export const AskModalDemo = () => {
     return (
       <AskModal prompt="Self-driving can also watch your other tools and investigate and fix the problems they surface. Which of these do you use?">
         <PickerMenu
+          key={step}
           mode="multi"
           options={LONG_OPTIONS}
           onSelect={(values) => {
@@ -122,6 +123,7 @@ export const AskModalDemo = () => {
     return (
       <AskModal prompt="Besides analytics, which PostHog products should the agent set up while it's in the codebase?">
         <PickerMenu
+          key={step}
           mode="multi"
           optionMarginBottom={1}
           options={DESCRIBED_OPTIONS}
