@@ -20,6 +20,7 @@ import {
   useKeyBindings,
   KeyMatch,
   type KeyBinding,
+  type KeyMatchOrChar,
 } from '@ui/tui/hooks/useKeyBindings';
 
 interface PickerOption<T> {
@@ -113,66 +114,58 @@ const CONFIRM_CHROME = 3;
 const DESCRIPTION_WIDTH = 56;
 
 /**
- * From `start`, how many options fit within `budget` visual rows, where each
- * option's height is given by `costs`. Always yields at least the start row so
- * the focused option is never windowed out entirely.
+ * Chunk options into pages, each holding as many options as fit in `budget`
+ * visual rows (each option's height given by `costs`). Every page holds at
+ * least one option so an oversized row can't stall the chunking.
  */
-function windowEnd(costs: number[], start: number, budget: number): number {
-  let used = 0;
-  let i = start;
-  while (i < costs.length) {
-    if (used + costs[i] > budget && i > start) break;
-    used += costs[i];
-    i++;
-  }
-  return Math.max(i, start + 1);
-}
-
-/** Shift the scroll offset the minimum needed to keep `focused` in view. */
-function keepFocusedVisible(
-  offset: number,
-  focused: number,
+function computePages(
   costs: number[],
   budget: number,
-): number {
-  const end = windowEnd(costs, offset, budget);
-  if (focused >= offset && focused < end) return offset; // already visible
-  if (focused < offset) return focused; // scrolled off the top → align to focus
-  // Scrolled off the bottom → advance the offset until focus fits again.
-  let next = offset + 1;
-  while (next < costs.length && focused >= windowEnd(costs, next, budget)) {
-    next++;
+): { start: number; end: number }[] {
+  const pages: { start: number; end: number }[] = [];
+  let start = 0;
+  while (start < costs.length) {
+    let used = 0;
+    let end = start;
+    while (end < costs.length) {
+      if (used + costs[end] > budget && end > start) break;
+      used += costs[end];
+      end++;
+    }
+    pages.push({ start, end });
+    start = end;
   }
-  return Math.min(next, Math.max(0, costs.length - 1));
+  return pages.length ? pages : [{ start: 0, end: 0 }];
 }
 
 interface PickerViewport {
   needsScroll: boolean;
-  /** First option index in the visible window. */
+  /** First option index on the current page. */
   start: number;
-  /** One past the last visible option index. */
+  /** One past the last option index on the current page. */
   end: number;
   hiddenAbove: number;
   hiddenBelow: number;
-  /** Call from a navigation handler with the new focused index to scroll it
-   *  into view. A no-op when the whole list already fits. */
-  scrollTo: (focused: number) => void;
+  /** First enabled option on the next/previous page (wrapping), for the
+   *  n/p page-jump keys. Meaningless when !needsScroll. */
+  pageStep: (focused: number, dir: 1 | -1) => number;
 }
 
 /**
- * Windows a single-column option list to the terminal height, scrolling to
- * follow the focused row so long lists (e.g. a 30-tool multi-select) don't
- * overflow the viewport. Windowing engages only for single-column pickers
- * (`enabled`) — multi-column grids already compress vertically and render
- * whole — and only when the list is taller than the available space.
+ * Pages a single-column option list to the terminal height. The visible page
+ * is derived from the focused index — no scroll state — so ↑/↓ flip pages
+ * naturally as focus crosses a page edge, and n/p jump a whole page. Paging
+ * engages only for single-column pickers (`enabled`) — multi-column grids
+ * already compress vertically — and only when the list is taller than the
+ * available space.
  */
 function usePickerViewport(
   costs: number[],
   chromeBelow: number,
   enabled: boolean,
+  focused: number,
 ): PickerViewport {
   const [, termRows] = useStdoutDimensions();
-  const [offset, setOffset] = useState(0);
 
   const budget = Math.max(
     5,
@@ -180,27 +173,35 @@ function usePickerViewport(
   );
   const total = costs.reduce((sum, c) => sum + c, 0);
   const needsScroll = enabled && total > budget;
-  // Reserve two rows for the "↑/↓ N more" indicators.
-  const effectiveBudget = needsScroll ? budget - 2 : budget;
+  if (!needsScroll) {
+    return {
+      needsScroll,
+      start: 0,
+      end: costs.length,
+      hiddenAbove: 0,
+      hiddenBelow: 0,
+      pageStep: (f) => f,
+    };
+  }
 
-  const start = needsScroll
-    ? Math.min(offset, Math.max(0, costs.length - 1))
-    : 0;
-  const end = needsScroll
-    ? windowEnd(costs, start, effectiveBudget)
-    : costs.length;
+  // Reserve two rows for the "↑/↓ N more" indicators.
+  const pages = computePages(costs, budget - 2);
+  const pageOf = (idx: number) =>
+    Math.max(
+      0,
+      pages.findIndex((p) => idx >= p.start && idx < p.end),
+    );
+  const page = pages[pageOf(focused)];
 
   return {
     needsScroll,
-    start,
-    end,
-    hiddenAbove: start,
-    hiddenBelow: costs.length - end,
-    scrollTo: (focused) => {
-      if (!needsScroll) return;
-      setOffset((prev) =>
-        keepFocusedVisible(prev, focused, costs, effectiveBudget),
-      );
+    start: page.start,
+    end: page.end,
+    hiddenAbove: page.start,
+    hiddenBelow: costs.length - page.end,
+    pageStep: (f, dir) => {
+      const target = pages[(pageOf(f) + dir + pages.length) % pages.length];
+      return target.start;
     },
   };
 }
@@ -275,7 +276,7 @@ const SinglePickerMenu = <T,>({
   // Single-select rows are label-only (no descriptions), so each option is
   // one line plus its margin.
   const costs = options.map(() => 1 + optionMarginBottom);
-  const viewport = usePickerViewport(costs, 0, columns === 1);
+  const viewport = usePickerViewport(costs, 0, columns === 1, focused);
 
   // Re-validate focus when the options change while mounted \u2014 a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -293,17 +294,30 @@ const SinglePickerMenu = <T,>({
       action: 'navigate',
       handler: (_input, key) => {
         if (key.upArrow) {
-          const next = stepEnabled(options, rows, focused, -1);
-          setFocused(next);
-          viewport.scrollTo(next);
+          setFocused(stepEnabled(options, rows, focused, -1));
         }
         if (key.downArrow) {
-          const next = stepEnabled(options, rows, focused, 1);
-          setFocused(next);
-          viewport.scrollTo(next);
+          setFocused(stepEnabled(options, rows, focused, 1));
         }
       },
     },
+    ...(viewport.needsScroll
+      ? [
+          {
+            match: ['n', 'p'] as KeyMatchOrChar[],
+            label: 'n/p',
+            action: 'page',
+            handler: (input: string) => {
+              const target = viewport.pageStep(focused, input === 'n' ? 1 : -1);
+              setFocused(
+                options[target]?.disabled
+                  ? stepEnabled(options, rows, target, 1)
+                  : target,
+              );
+            },
+          },
+        ]
+      : []),
     {
       match: KeyMatch.Return,
       label: 'enter',
@@ -393,13 +407,17 @@ const SinglePickerMenu = <T,>({
       {viewport.needsScroll ? (
         <Box flexDirection="column">
           <Text dimColor>
-            {viewport.hiddenAbove > 0 ? `↑ ${viewport.hiddenAbove} more` : ' '}
+            {viewport.hiddenAbove > 0
+              ? `↑ ${viewport.hiddenAbove} more (p)`
+              : ' '}
           </Text>
           {options
             .slice(viewport.start, viewport.end)
             .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
           <Text dimColor>
-            {viewport.hiddenBelow > 0 ? `↓ ${viewport.hiddenBelow} more` : ' '}
+            {viewport.hiddenBelow > 0
+              ? `↓ ${viewport.hiddenBelow} more (n)`
+              : ' '}
           </Text>
         </Box>
       ) : (
@@ -459,7 +477,12 @@ const MultiPickerMenu = <T,>({
         ? wordWrap(opt.description, DESCRIPTION_WIDTH).length
         : 0),
   );
-  const viewport = usePickerViewport(costs, CONFIRM_CHROME, columns === 1);
+  const viewport = usePickerViewport(
+    costs,
+    CONFIRM_CHROME,
+    columns === 1,
+    focused,
+  );
 
   // Re-validate focus when the options change while mounted — a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -486,10 +509,8 @@ const MultiPickerMenu = <T,>({
         if (key.upArrow) {
           if (onButton) {
             // Button \u2192 bottom of the grid (last enabled option).
-            const next = lastEnabled(options);
             setOnButton(false);
-            setFocused(next);
-            viewport.scrollTo(next);
+            setFocused(lastEnabled(options));
             return;
           }
           const col = Math.floor(focused / rows);
@@ -498,9 +519,7 @@ const MultiPickerMenu = <T,>({
           let r = row - 1;
           while (r >= 0 && options[col * rows + r]?.disabled) r--;
           if (r >= 0) {
-            const next = col * rows + r;
-            setFocused(next);
-            viewport.scrollTo(next);
+            setFocused(col * rows + r);
           } else {
             // Top of the column \u2192 wrap up onto the button.
             setOnButton(true);
@@ -509,10 +528,8 @@ const MultiPickerMenu = <T,>({
         if (key.downArrow) {
           if (onButton) {
             // Button \u2192 top of the grid (first enabled option).
-            const next = firstEnabled(options);
             setOnButton(false);
-            setFocused(next);
-            viewport.scrollTo(next);
+            setFocused(firstEnabled(options));
             return;
           }
           const col = Math.floor(focused / rows);
@@ -522,9 +539,7 @@ const MultiPickerMenu = <T,>({
           let r = row + 1;
           while (r < colLen && options[col * rows + r]?.disabled) r++;
           if (r < colLen) {
-            const next = col * rows + r;
-            setFocused(next);
-            viewport.scrollTo(next);
+            setFocused(col * rows + r);
           } else {
             // Bottom of the column \u2192 down onto the button.
             setOnButton(true);
@@ -532,6 +547,24 @@ const MultiPickerMenu = <T,>({
         }
       },
     },
+    ...(viewport.needsScroll
+      ? [
+          {
+            match: ['n', 'p'] as KeyMatchOrChar[],
+            label: 'n/p',
+            action: 'page',
+            handler: (input: string) => {
+              const target = viewport.pageStep(focused, input === 'n' ? 1 : -1);
+              setOnButton(false);
+              setFocused(
+                options[target]?.disabled
+                  ? stepEnabled(options, rows, target, 1)
+                  : target,
+              );
+            },
+          },
+        ]
+      : []),
     {
       match: [KeyMatch.Space, KeyMatch.Return],
       label: 'enter',
@@ -659,13 +692,17 @@ const MultiPickerMenu = <T,>({
           marginTop={message ? 1 : 0}
         >
           <Text dimColor>
-            {viewport.hiddenAbove > 0 ? `↑ ${viewport.hiddenAbove} more` : ' '}
+            {viewport.hiddenAbove > 0
+              ? `↑ ${viewport.hiddenAbove} more (p)`
+              : ' '}
           </Text>
           {options
             .slice(viewport.start, viewport.end)
             .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
           <Text dimColor>
-            {viewport.hiddenBelow > 0 ? `↓ ${viewport.hiddenBelow} more` : ' '}
+            {viewport.hiddenBelow > 0
+              ? `↓ ${viewport.hiddenBelow} more (n)`
+              : ' '}
           </Text>
         </Box>
       ) : (

@@ -13,6 +13,7 @@ import {
   GroupedPickerMenu,
 } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
+import { LONG_OPTIONS } from './InputDemo.js';
 
 enum DemoStep {
   MultiLong = 'multi-long',
@@ -21,46 +22,6 @@ enum DemoStep {
   Grouped = 'grouped',
   Done = 'done',
 }
-
-const LONG_OPTIONS = [
-  'None of these',
-  'GitHub Issues',
-  'Linear',
-  'Jira',
-  'GitLab',
-  'Gitea',
-  'Shortcut',
-  'Sentry',
-  'Rollbar',
-  'Bugsnag',
-  'Honeybadger',
-  'Raygun',
-  'Zendesk',
-  'Freshdesk',
-  'Freshservice',
-  'Front',
-  'Gorgias',
-  'Kustomer',
-  'Dixa',
-  'Plain',
-  'pganalyze',
-  'Snyk',
-  'SonarQube',
-  'Semgrep',
-  'Rapid7 InsightVM',
-  'Featurebase',
-  'Frill',
-  'Aha',
-  'UserVoice',
-  'Productboard',
-  'Canny',
-  'AskNicely',
-  'Retently',
-  'Appfigures',
-  'AppFollow',
-  'Judge.me',
-  'Google Search Console',
-].map((label) => ({ label, value: label.toLowerCase().replace(/\s+/g, '-') }));
 
 const DESCRIBED_OPTIONS = [
   {

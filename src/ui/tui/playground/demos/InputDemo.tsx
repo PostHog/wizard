@@ -16,9 +16,10 @@ enum DemoStep {
 }
 
 // A long single-column multi-select — more options than a normal terminal can
-// show at once — so the playground exercises PickerMenu's viewport scrolling
-// (the "↑/↓ N more" indicators and cursor-following window).
-const LONG_OPTIONS = [
+// show at once — so the playground exercises PickerMenu's viewport paging
+// (the "↑/↓ N more" indicators and the n/p page keys). Shared with
+// AskModalDemo.
+export const LONG_OPTIONS = [
   'None of these',
   'GitHub Issues',
   'Linear',
