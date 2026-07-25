@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { WORDPRESS_AGENT_CONFIG } from '../../../frameworks/wordpress/wordpress-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -201,5 +202,87 @@ describe('kmp detect', () => {
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
     await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('wordpress detect', () => {
+  const detect = WORDPRESS_AGENT_CONFIG.detection.detect;
+
+  test('claims a site by wp-config.php', async () => {
+    const opts = project({
+      'wp-config.php': "<?php define('DB_NAME', 'wp');",
+      'wp-content/themes/twentytwentyfour/style.css': '/* Theme Name: TT4 */',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a fresh unpacked core before install (wp-config-sample.php only)', async () => {
+    const opts = project({
+      'wp-config-sample.php': '<?php // sample',
+      'wp-includes/version.php': "<?php $wp_version = '6.7.1';",
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a Composer-managed install (Bedrock) with no core in the root', async () => {
+    const opts = project({
+      'composer.json': JSON.stringify({
+        require: { 'roots/wordpress': '^6.7' },
+      }),
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a standalone plugin directory by its Plugin Name header', async () => {
+    const opts = project({
+      'my-plugin.php': '<?php\n/**\n * Plugin Name: My Plugin\n */\n',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a standalone theme directory by its Theme Name header', async () => {
+    const opts = project({
+      'style.css': '/*\nTheme Name: My Theme\n*/\n',
+      'index.php': '<?php',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a Laravel project that merely has composer.json', async () => {
+    const opts = project({
+      'composer.json': JSON.stringify({
+        require: { 'laravel/framework': '^11' },
+      }),
+      artisan: '#!/usr/bin/env php\n<?php // Artisan',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a plain PHP project', async () => {
+    const opts = project({
+      'index.php': '<?php echo "hello";',
+      'composer.json': JSON.stringify({ require: { 'monolog/monolog': '^3' } }),
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('wordpress detection order', () => {
+  test('a WordPress site wins over the Node fallback despite a theme package.json', async () => {
+    const opts = project({
+      'wp-config.php': "<?php define('DB_NAME', 'wp');",
+      'package.json': JSON.stringify({ devDependencies: { vite: '^6' } }),
+      'package-lock.json': '{}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.wordpress,
+    );
+  });
+
+  test('laravel is still checked before wordpress', () => {
+    const order = Object.values(Integration);
+    expect(order.indexOf(Integration.laravel)).toBeLessThan(
+      order.indexOf(Integration.wordpress),
+    );
   });
 });
