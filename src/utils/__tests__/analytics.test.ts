@@ -209,6 +209,60 @@ describe('Analytics', () => {
     });
   });
 
+  describe('flag exposure emission', () => {
+    beforeEach(() => {
+      (mockPostHogInstance as any).getAllFlagsAndPayloads = vi
+        .fn()
+        .mockResolvedValue({
+          featureFlags: {
+            'wizard-orchestrator': true,
+            'wizard-orchestrator-override': 'sol-review',
+            'unrelated-flag': 'variant-x',
+          },
+          featureFlagPayloads: {},
+        });
+    });
+
+    it('emits $feature_flag_called once per wizard-owned flag after the fetch', async () => {
+      await analytics.getAllFlagsForWizard();
+      const exposureCalls = mockPostHogInstance.capture.mock.calls.filter(
+        ([arg]) => (arg as any).event === '$feature_flag_called',
+      );
+      expect(
+        exposureCalls.map(([arg]) => [
+          (arg as any).properties.$feature_flag,
+          (arg as any).properties.$feature_flag_response,
+        ]),
+      ).toEqual([
+        ['wizard-orchestrator', 'true'],
+        ['wizard-orchestrator-override', 'sol-review'],
+      ]);
+    });
+
+    it('stamps $feature/<key> for wizard-owned flags on subsequent captures, never unrelated flags', async () => {
+      await analytics.getAllFlagsForWizard();
+      analytics.wizardCapture('switchboard resolved', { program: 'x' });
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
+      );
+      const props = (call![0] as any).properties;
+      expect(props['$feature/wizard-orchestrator']).toBe('true');
+      expect(props['$feature/wizard-orchestrator-override']).toBe('sol-review');
+      expect(props['$feature/unrelated-flag']).toBeUndefined();
+    });
+
+    it('captures before the fetch carry no $feature props', () => {
+      analytics.wizardCapture('early event');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: early event',
+      );
+      const keys = Object.keys((call![0] as any).properties).filter((k) =>
+        k.startsWith('$feature/'),
+      );
+      expect(keys).toEqual([]);
+    });
+  });
+
   describe('build tag', () => {
     it("tags dev/test runs as 'dev'", () => {
       analytics.captureException(new Error('e'));

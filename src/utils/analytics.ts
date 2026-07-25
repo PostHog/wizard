@@ -227,9 +227,20 @@ export class Analytics {
       event: eventName,
       properties: {
         ...this.tags,
+        ...this.wizardFlagFeatureProperties(),
         ...properties,
       },
     });
+  }
+
+  /** `$feature/<key>` for every wizard-owned flag in the run snapshot, so experiments can filter any wizard event by variant. Empty until the flags are fetched. */
+  private wizardFlagFeatureProperties(): Record<string, string> {
+    if (this.activeFlags === null) return {};
+    const props: Record<string, string> = {};
+    for (const [key, value] of Object.entries(this.activeFlags)) {
+      if (key.startsWith('wizard-')) props[`$feature/${key}`] = value;
+    }
+    return props;
   }
 
   /**
@@ -304,6 +315,16 @@ export class Analytics {
     this.activeFlags = merged.flags;
     this.activeFlagPayloads = merged.payloads;
     logToFile('[flags] evaluated', this.activeFlags);
+    // The bulk fetch emits no per-flag events, so experiments on wizard flags
+    // would never count an exposure; emit the default exposure event once per
+    // run for each wizard-owned flag.
+    for (const [key, value] of Object.entries(this.activeFlags)) {
+      if (!key.startsWith('wizard-')) continue;
+      this.capture('$feature_flag_called', {
+        $feature_flag: key,
+        $feature_flag_response: value,
+      });
+    }
     return this.activeFlags;
   }
 
