@@ -78,19 +78,30 @@ function stepEnabled<T>(
   return from;
 }
 
-/** Index of the first enabled option, for the initial focus. */
-function firstEnabled<T>(options: PickerOption<T>[]): number {
-  const idx = options.findIndex((o) => !o.disabled);
-  return idx === -1 ? 0 : idx;
-}
-
-/** Index of the last enabled option, for wrapping from the button onto
- *  the bottom of the grid. */
-function lastEnabled<T>(options: PickerOption<T>[]): number {
-  for (let i = options.length - 1; i >= 0; i--) {
+/** First enabled option in [start, end), for initial focus and for entering
+ *  a page from the Confirm button. */
+function firstEnabled<T>(
+  options: PickerOption<T>[],
+  start = 0,
+  end = options.length,
+): number {
+  for (let i = start; i < end; i++) {
     if (!options[i]?.disabled) return i;
   }
-  return options.length - 1;
+  return start;
+}
+
+/** Last enabled option in [start, end), for wrapping from the button onto
+ *  the bottom of the page. */
+function lastEnabled<T>(
+  options: PickerOption<T>[],
+  start = 0,
+  end = options.length,
+): number {
+  for (let i = end - 1; i >= start; i--) {
+    if (!options[i]?.disabled) return i;
+  }
+  return end - 1;
 }
 
 /**
@@ -255,12 +266,20 @@ const SinglePickerMenu = <T,>({
       label: '\u2191\u2193',
       action: 'navigate',
       handler: (_input, key) => {
-        if (key.upArrow) {
-          setFocused(stepEnabled(options, rows, focused, -1));
+        const dir = key.upArrow ? -1 : 1;
+        if (columns === 1) {
+          // Wrap within the current page; pages change only via n/p.
+          const { start, end } = viewport;
+          const span = end - start;
+          let r = focused;
+          for (let i = 0; i < span; i++) {
+            r = start + ((r - start + dir + span) % span);
+            if (!options[r]?.disabled) break;
+          }
+          setFocused(r);
+          return;
         }
-        if (key.downArrow) {
-          setFocused(stepEnabled(options, rows, focused, 1));
-        }
+        setFocused(stepEnabled(options, rows, focused, dir));
       },
     },
     ...(viewport.needsScroll
@@ -473,44 +492,48 @@ const MultiPickerMenu = <T,>({
       label: '\u2191\u2193',
       action: 'navigate',
       handler: (_input, key) => {
-        if (key.upArrow) {
-          if (onButton) {
-            // Button \u2192 bottom of the grid (last enabled option).
-            setOnButton(false);
-            setFocused(lastEnabled(options));
-            return;
-          }
-          const col = Math.floor(focused / rows);
-          const row = focused % rows;
-          // Nearest enabled option above in this column.
-          let r = row - 1;
-          while (r >= 0 && options[col * rows + r]?.disabled) r--;
-          if (r >= 0) {
-            setFocused(col * rows + r);
-          } else {
-            // Top of the column \u2192 wrap up onto the button.
-            setOnButton(true);
-          }
+        const dir = key.upArrow ? -1 : 1;
+        if (onButton) {
+          // Button \u2192 back onto the current page (bottom for \u2191, top for \u2193).
+          setOnButton(false);
+          setFocused(
+            dir === -1
+              ? lastEnabled(options, viewport.start, viewport.end)
+              : firstEnabled(options, viewport.start, viewport.end),
+          );
+          return;
         }
-        if (key.downArrow) {
-          if (onButton) {
-            // Button \u2192 top of the grid (first enabled option).
-            setOnButton(false);
-            setFocused(firstEnabled(options));
-            return;
+        if (columns === 1) {
+          // Walk within the current page; stepping past either edge lands
+          // on the Confirm button. Pages change only via n/p.
+          let r = focused + dir;
+          while (
+            r >= viewport.start &&
+            r < viewport.end &&
+            options[r]?.disabled
+          ) {
+            r += dir;
           }
-          const col = Math.floor(focused / rows);
-          const row = focused % rows;
-          const colLen = Math.min(rows, options.length - col * rows);
-          // Nearest enabled option below in this column.
-          let r = row + 1;
-          while (r < colLen && options[col * rows + r]?.disabled) r++;
-          if (r < colLen) {
-            setFocused(col * rows + r);
+          if (r >= viewport.start && r < viewport.end) {
+            setFocused(r);
           } else {
-            // Bottom of the column \u2192 down onto the button.
             setOnButton(true);
           }
+          return;
+        }
+        const col = Math.floor(focused / rows);
+        const row = focused % rows;
+        const colLen = Math.min(rows, options.length - col * rows);
+        // Nearest enabled option above/below in this column; leaving the
+        // column lands on the button.
+        let r = row + dir;
+        while (r >= 0 && r < colLen && options[col * rows + r]?.disabled) {
+          r += dir;
+        }
+        if (r >= 0 && r < colLen) {
+          setFocused(col * rows + r);
+        } else {
+          setOnButton(true);
         }
       },
     },
@@ -562,12 +585,6 @@ const MultiPickerMenu = <T,>({
           return next;
         });
       },
-    },
-    {
-      match: 's',
-      label: 's',
-      action: 'submit',
-      handler: confirm,
     },
   ];
 

@@ -245,12 +245,6 @@ export const GroupedPickerMenu = ({
       },
     },
     {
-      match: 's',
-      label: 's',
-      action: 'submit',
-      handler: () => onSelect([...selected]),
-    },
-    {
       match: 'a',
       label: 'a',
       action: 'toggle all',
