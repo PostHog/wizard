@@ -90,6 +90,39 @@ function lastEnabled<T>(options: PickerOption<T>[]): number {
   return options.length - 1;
 }
 
+/**
+ * Drop selected indices that no longer resolve to an enabled option — a list
+ * that shrank, reordered, or disabled entries while mounted can leave the
+ * multi-select `selected` set pointing at missing options. Returns the same
+ * Set reference when nothing changed so callers can skip a needless state
+ * update (and re-render).
+ */
+export function pruneSelected<T>(
+  options: PickerOption<T>[],
+  selected: Set<number>,
+): Set<number> {
+  const pruned = new Set(
+    [...selected].filter((i) => i < options.length && !options[i]?.disabled),
+  );
+  return pruned.size === selected.size ? selected : pruned;
+}
+
+/**
+ * Resolve a multi-select `selected` set to the option values, in option order.
+ * Defensive: an index whose option vanished before this ran resolves to
+ * `undefined`; drop it rather than crash reading `.value`.
+ */
+export function selectedValues<T>(
+  options: PickerOption<T>[],
+  selected: Set<number>,
+): T[] {
+  return [...selected]
+    .sort((a, b) => a - b)
+    .map((i) => options[i])
+    .filter((o): o is PickerOption<T> => Boolean(o))
+    .map((o) => o.value);
+}
+
 interface PickerMenuProps<T> {
   message?: string;
   options: PickerOption<T>[];
@@ -312,20 +345,20 @@ const MultiPickerMenu = <T,>({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
 
-  // Re-validate focus when the options change while mounted — a list
-  // that shrinks or disables entries can leave `focused` pointing at a
-  // missing or disabled option, which would make enter a no-op.
+  // Re-validate focus AND selection when the options change while mounted — a
+  // list that shrinks or reorders can leave `focused` pointing at a missing or
+  // disabled option (making enter a no-op) and leave `selected` holding stale
+  // indices that no longer resolve to an option (crashing confirm() when it
+  // reads `.value`). Repair both so the two stay consistent.
   useEffect(() => {
     if (focused >= options.length || options[focused]?.disabled) {
       setFocused(firstEnabled(options));
     }
+    setSelected((prev) => pruneSelected(options, prev));
   }, [options, focused]);
 
   const confirm = () => {
-    const values = [...selected]
-      .sort((a, b) => a - b)
-      .map((i) => options[i].value);
-    onSelect(values);
+    onSelect(selectedValues(options, selected));
   };
 
   const bindings: KeyBinding[] = [
