@@ -89,13 +89,12 @@ export const WORDPRESS_AGENT_CONFIG: FrameworkConfig<WordPressContext> = {
         ? getWordPressProjectTypeName(context.projectType)
         : 'unknown';
 
+      // Integration rules (plugin over functions.php, ABSPATH, esc_js, flush)
+      // live in context-mill's wordpress commandments and reach the agent with
+      // the skill. Only project-shape facts the skill cannot know belong here.
       const lines = [
         `Project type: ${projectTypeName}`,
         `Framework docs ID: php (use posthog://docs/frameworks/php for documentation)`,
-        "Ship the integration as a standalone plugin. Do NOT edit the active theme's functions.php — a theme switch or theme update silently removes the tracking.",
-        "Guard every plugin entry file with `if (!defined('ABSPATH')) { exit; }` before any other code.",
-        'Print the client snippet from a wp_head hook and escape the interpolated token with esc_js().',
-        'Capture pageviews client-side. Reserve PostHog::capture for server-side WordPress actions such as comment_post, user_register, or woocommerce_thankyou, and call PostHog::flush() after each capture — a web request has no single exit point like a CLI script.',
       ];
 
       if (context.pluginsDir) {
