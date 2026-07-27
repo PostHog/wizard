@@ -56,13 +56,14 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
 };
 
 /**
- * Variants the wizard can wire up source-map upload for automatically. The
- * native variants (react-native, flutter) are recognised but not yet
- * automatable, so the agentic picker treats them as non-instrumentable.
+ * Variants the wizard can wire up source-map upload for automatically. React
+ * Native is recognised but not yet automatable, so the agentic picker treats
+ * it as non-instrumentable.
  */
 export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'android',
   'ios',
+  'flutter',
   'web',
   'nextjs',
   'node',
@@ -76,10 +77,13 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
 
 /**
  * Variants the wizard pre-installs a machine-global `posthog-cli` for — their
- * build shells out to it with no npx / local-dep fallback. JS variants stay out.
+ * build shells out to it with no npx / local-dep fallback. JS variants stay
+ * out. Flutter counts here despite emitting plain `.js.map` files: a Flutter
+ * project has no `package.json`, so there is no npx or local dependency to
+ * fall back to when the post-build step invokes the CLI.
  */
 export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
-  new Set(['ios', 'android']);
+  new Set(['ios', 'android', 'flutter']);
 
 const POSTHOG_SDKS = new Set([
   'posthog-js',
