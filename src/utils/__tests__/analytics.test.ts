@@ -277,7 +277,7 @@ describe('Analytics', () => {
     it('lists only enabled wizard flags in $active_feature_flags', async () => {
       mockFlags({
         'wizard-orchestrator': true,
-        'wizard-use-pi-harness': false,
+        'wizard-self-driving-use-pi-harness': false,
         'wizard-orchestrator-override': 'sol-review',
         'unrelated-flag': 'variant-x',
       });
