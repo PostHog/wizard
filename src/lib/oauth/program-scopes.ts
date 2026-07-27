@@ -202,6 +202,23 @@ export const WAREHOUSE_SOURCE_SCOPE_ADDITIONS = [
 export const CONNECT_SLACK_SCOPE_ADDITIONS = ['integration:read'] as const;
 
 /**
+ * Extra scopes the default integration run needs on top of
+ * `WIZARD_OAUTH_SCOPES`.
+ *
+ *   • integration:read — the Connect-Slack step that ends the run
+ *     (see {@link CONNECT_SLACK_SCOPE_ADDITIONS}).
+ *   • product_enablement:write — the run's `enable-features` step turns on
+ *     Session Replay / Error Tracking / Support via `products-enable`, the
+ *     same call the self-driving program makes. Without it the tool is
+ *     filtered out of the agent's catalog and the step can only report
+ *     the products as un-enabled.
+ */
+export const POSTHOG_INTEGRATION_SCOPE_ADDITIONS = [
+  ...CONNECT_SLACK_SCOPE_ADDITIONS,
+  'product_enablement:write',
+] as const;
+
+/**
  * Per-program scope additions, layered on top of `WIZARD_OAUTH_SCOPES`.
  *
  * Programs not listed here request the unchanged base set. Use this
@@ -221,7 +238,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
+  'posthog-integration': POSTHOG_INTEGRATION_SCOPE_ADDITIONS,
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
 
