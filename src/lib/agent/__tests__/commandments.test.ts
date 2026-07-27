@@ -9,6 +9,21 @@ describe('getWizardCommandments', () => {
     expect(getWizardCommandments()).toMatchSnapshot();
   });
 
+  // The orchestrator's task sessions don't mount TaskCreate/TaskUpdate.
+  describe('task-list commandments', () => {
+    it('ships them by default', () => {
+      expect(getWizardCommandments()).toMatch(/Drive the work with TaskUpdate/);
+    });
+
+    it('drops only them when the tools are absent', () => {
+      const full = getWizardCommandments().split('\n');
+      const lean = getWizardCommandments(false).split('\n');
+      expect(lean).not.toContain(expect.stringContaining('TaskUpdate'));
+      expect(full.filter((l) => !lean.includes(l))).toHaveLength(3);
+      expect(lean.filter((l) => !full.includes(l))).toHaveLength(0);
+    });
+  });
+
   // Targeted assertions for the wizard_ask Path A translation rules.
   // These are the rules a skill author depends on when leaving their prose
   // unchanged — they need to keep working as the commandment list evolves.

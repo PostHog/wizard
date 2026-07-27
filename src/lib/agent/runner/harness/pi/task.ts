@@ -245,7 +245,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       cwd: session.installDir,
       agentDir: getAgentDir(),
       systemPrompt:
-        getWizardCommandments() +
+        // No task-list tools in a task session — see the module header.
+        getWizardCommandments(false) +
         '\n' +
         piRuntimeNotes(Sequence.orchestrator, {
           bash: codingTools.has('bash'),
