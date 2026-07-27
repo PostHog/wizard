@@ -227,7 +227,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       mcpCleanup = mcp.cleanup;
       posthogMcp = true;
     } catch (err) {
+      // Silent here reads as a task failure minutes later: dashboard and report
+      // need `posthog_exec` and can only skip or fail without it.
       logToFile(`[pi-task] PostHog MCP setup skipped: ${String(err)}`);
+      analytics.wizardCapture('mcp setup failed', {
+        harness: 'pi',
+        scope: 'task',
+        error: String(err).slice(0, 300),
+      });
     }
 
     const codingTools = allowedPiCodingTools(allowedTools);
