@@ -211,9 +211,12 @@ describe('Analytics', () => {
 
   describe('flag exposure', () => {
     // The getFlag spy *is* the exposure assertion — the SDK emits the event, not the wizard.
-    let snapshot: ReturnType<typeof mockFlags>;
+    let snapshot: {
+      getFlag: MockedFunction<(key: string) => string | boolean | undefined>;
+      getFlagPayload: MockedFunction<() => undefined>;
+    };
 
-    function mockFlags(flags: Record<string, string | boolean>) {
+    function mockFlags(flags: Record<string, string | boolean>): void {
       snapshot = {
         getFlag: vi.fn((key: string) => flags[key]),
         getFlagPayload: vi.fn(() => undefined),
@@ -221,7 +224,6 @@ describe('Analytics', () => {
       (mockPostHogInstance as any).evaluateFlags = vi
         .fn()
         .mockResolvedValue(snapshot);
-      return snapshot;
     }
 
     beforeEach(() => {

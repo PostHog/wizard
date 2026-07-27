@@ -280,25 +280,12 @@ export class Analytics {
     await this.client.shutdown();
   }
 
-  async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
-    try {
-      const distinctId = this.distinctId ?? this.anonymousId;
-      return await this.client.getFeatureFlag(flagKey, distinctId, {
-        sendFeatureFlagEvents: true,
-        personProperties: this.flagPersonProperties(),
-      });
-    } catch (error) {
-      debug('Failed to get feature flag:', flagKey, error);
-      return undefined;
-    }
-  }
-
   /**
    * Evaluate all feature flags for the current user at the start of a run.
    * Result is cached; subsequent calls in the same run return the same map.
    * Returns flag key -> string value (booleans become 'true'/'false').
    */
-  // Only a getFlag read bills an exposure; the bulk response records none.
+  // Only a getFlag read records an exposure; the bulk response records none.
   async getAllFlagsForWizard(): Promise<Record<string, string>> {
     if (this.activeFlags !== null) {
       return this.activeFlags;

@@ -243,8 +243,8 @@ export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
-// Reading a flag bills an exposure, so a closed set — not a `wizard-` prefix — decides
-// what a run evaluates; anyone may name an unrelated flag `wizard-*`. Test-pinned exhaustive.
+// Reading a flag enters this run into that flag's experiment, so a closed set — not a
+// `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
