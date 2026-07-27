@@ -67,8 +67,8 @@ export function groupsFromUser(
   return groups;
 }
 
-/** PostHog's own exposure event name. */
-const FLAG_CALLED_EVENT = '$feature_flag_called';
+/** Flags the wizard owns, and the only ones any wizard code path reads. */
+const WIZARD_FLAG_PREFIX = 'wizard-';
 
 /**
  * The flag value in the shape PostHog's own SDKs report it: a boolean flag as a
@@ -118,6 +118,13 @@ export class Analytics {
             event.properties ?? {};
           void $process_person_profile;
           event.properties = { ...this.tags, ...properties };
+        }
+        // Flag exposures are captured inside the SDK (see getAllFlagsForWizard),
+        // so they never pass through `capture()` and would otherwise carry none
+        // of the run's tags — leaving them unattributable to a wizard run,
+        // build, or surface. The SDK's own flag properties still win.
+        if (event.event === '$feature_flag_called') {
+          event.properties = { ...this.tags, ...(event.properties ?? {}) };
         }
         return event;
       },
@@ -243,12 +250,7 @@ export class Analytics {
       event: eventName,
       properties: {
         ...this.tags,
-        // An exposure event already carries its own flag's value. posthog-node
-        // deliberately skips snapshot enrichment on these, since the snapshot
-        // can be staler than the flag the event is reporting.
-        ...(eventName === FLAG_CALLED_EVENT
-          ? {}
-          : this.wizardFlagFeatureProperties()),
+        ...this.wizardFlagFeatureProperties(),
         ...properties,
       },
     });
@@ -256,9 +258,13 @@ export class Analytics {
 
   /**
    * `$feature/<key>` for every wizard-owned flag in the run snapshot, plus the
-   * `$active_feature_flags` list — the same pair posthog-node stamps when it
-   * sends flags with an event, so experiments can filter any wizard event by
-   * variant and the flags tab renders. Empty until the flags are fetched.
+   * `$active_feature_flags` list — the same pair the SDK stamps when an event is
+   * captured with `flags:`, so experiments can filter any wizard event by variant
+   * and the flags tab renders. Empty until the flags are fetched.
+   *
+   * Derived from the resolved map rather than handed the SDK's snapshot, because
+   * the map is post-CI-override: a benchmark run forcing a variant must have its
+   * events attributed to the variant it actually ran.
    */
   private wizardFlagFeatureProperties(): Record<string, unknown> {
     if (this.activeFlags === null) return {};
@@ -308,13 +314,27 @@ export class Analytics {
    * Evaluate all feature flags for the current user at the start of a run.
    * Result is cached; subsequent calls in the same run return the same map.
    * Returns flag key -> string value (booleans become 'true'/'false').
+   *
+   * One `/flags` round trip via `evaluateFlags`, then a `getFlag` read per
+   * wizard-owned key. Only a *value read* counts as an exposure — the bulk
+   * response on its own records none, which would leave every wizard run out of
+   * its own experiment's results. Reading through the snapshot is what makes the
+   * SDK emit `$feature_flag_called`, carrying the flag id/version/reason/
+   * request-id and the per-(distinctId, flag, value) dedup we would otherwise
+   * have to reimplement. The run resolves its whole config up front, so reading
+   * every wizard flag here is the decision point, not a widening of it.
+   *
+   * Only `wizard-`-prefixed keys are read, and only those land in the map: every
+   * wizard read goes through a `WIZARD_*_FLAG_KEY` constant, and reading another
+   * team's flag would bill an exposure against an experiment this run has no
+   * part in.
    */
   async getAllFlagsForWizard(): Promise<Record<string, string>> {
     if (this.activeFlags !== null) {
       return this.activeFlags;
     }
     const out: Record<string, string> = {};
-    let payloads: Record<string, unknown> = {};
+    const payloads: Record<string, unknown> = {};
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
       logToFile('[flags] evaluating as', {
@@ -322,15 +342,17 @@ export class Analytics {
         identified: this.distinctId !== undefined,
         personProperties: this.flagPersonProperties(),
       });
-      const result = await this.client.getAllFlagsAndPayloads(distinctId, {
+      const evaluation = await this.client.evaluateFlags(distinctId, {
         personProperties: this.flagPersonProperties(),
       });
-      const flags = result.featureFlags ?? {};
-      for (const [key, value] of Object.entries(flags)) {
+      for (const key of evaluation.keys) {
+        if (!key.startsWith(WIZARD_FLAG_PREFIX)) continue;
+        const value = evaluation.getFlag(key);
         if (value === undefined) continue;
-        out[key] = typeof value === 'boolean' ? String(value) : String(value);
+        out[key] = String(value);
+        const payload = evaluation.getFlagPayload(key);
+        if (payload !== undefined) payloads[key] = payload;
       }
-      payloads = result.featureFlagPayloads ?? {};
     } catch (error) {
       debug('Failed to get all feature flags:', error);
       this.captureException(
@@ -345,18 +367,6 @@ export class Analytics {
     this.activeFlags = merged.flags;
     this.activeFlagPayloads = merged.payloads;
     logToFile('[flags] evaluated', this.activeFlags);
-    // The bulk fetch emits no per-flag events, so experiments on wizard flags
-    // would never count an exposure; emit the default exposure event once per
-    // run for each wizard-owned flag.
-    for (const [key, value] of Object.entries(this.activeFlags)) {
-      if (!key.startsWith('wizard-')) continue;
-      const response = flagResponseValue(value);
-      this.capture(FLAG_CALLED_EVENT, {
-        $feature_flag: key,
-        $feature_flag_response: response,
-        [`$feature/${key}`]: response,
-      });
-    }
     return this.activeFlags;
   }
 
