@@ -234,9 +234,36 @@ describe('Analytics', () => {
           (arg as any).properties.$feature_flag_response,
         ]),
       ).toEqual([
-        ['wizard-orchestrator', 'true'],
+        ['wizard-orchestrator', true],
         ['wizard-orchestrator-override', 'sol-review'],
       ]);
+    });
+
+    it('reports a boolean flag as a boolean, matching what PostHog SDKs send', async () => {
+      await analytics.getAllFlagsForWizard();
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) =>
+          (arg as any).event === '$feature_flag_called' &&
+          (arg as any).properties.$feature_flag === 'wizard-orchestrator',
+      );
+      const props = (call![0] as any).properties;
+      expect(props.$feature_flag_response).toBe(true);
+      expect(props['$feature/wizard-orchestrator']).toBe(true);
+    });
+
+    it('does not enrich an exposure event with the whole flag snapshot', async () => {
+      await analytics.getAllFlagsForWizard();
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) =>
+          (arg as any).event === '$feature_flag_called' &&
+          (arg as any).properties.$feature_flag === 'wizard-orchestrator',
+      );
+      const props = (call![0] as any).properties;
+      // Only its own flag's $feature/ key, never the other flags' or the list.
+      expect(
+        Object.keys(props).filter((k) => k.startsWith('$feature/')),
+      ).toEqual(['$feature/wizard-orchestrator']);
+      expect(props.$active_feature_flags).toBeUndefined();
     });
 
     it('stamps $feature/<key> for wizard-owned flags on subsequent captures, never unrelated flags', async () => {
@@ -246,9 +273,32 @@ describe('Analytics', () => {
         ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
       );
       const props = (call![0] as any).properties;
-      expect(props['$feature/wizard-orchestrator']).toBe('true');
+      expect(props['$feature/wizard-orchestrator']).toBe(true);
       expect(props['$feature/wizard-orchestrator-override']).toBe('sol-review');
       expect(props['$feature/unrelated-flag']).toBeUndefined();
+    });
+
+    it('lists the enabled wizard flags in $active_feature_flags, excluding disabled ones', async () => {
+      (mockPostHogInstance as any).getAllFlagsAndPayloads = vi
+        .fn()
+        .mockResolvedValue({
+          featureFlags: {
+            'wizard-orchestrator': true,
+            'wizard-use-pi-harness': false,
+            'wizard-orchestrator-override': 'sol-review',
+            'unrelated-flag': 'variant-x',
+          },
+          featureFlagPayloads: {},
+        });
+      await analytics.getAllFlagsForWizard();
+      analytics.wizardCapture('switchboard resolved');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
+      );
+      expect((call![0] as any).properties.$active_feature_flags).toEqual([
+        'wizard-orchestrator',
+        'wizard-orchestrator-override',
+      ]);
     });
 
     it('captures before the fetch carry no $feature props', () => {

@@ -67,6 +67,22 @@ export function groupsFromUser(
   return groups;
 }
 
+/** PostHog's own exposure event name. */
+const FLAG_CALLED_EVENT = '$feature_flag_called';
+
+/**
+ * The flag value in the shape PostHog's own SDKs report it: a boolean flag as a
+ * boolean, a multivariate flag as its variant key. The run snapshot stores every
+ * value as a string (booleans stringified, CI overrides normalised), so booleans
+ * are widened back here — otherwise a filter on `true` never matches `'true'`.
+ * Variant keys are slugs, so `'true'`/`'false'` are unambiguously booleans.
+ */
+function flagResponseValue(value: string): string | boolean {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return value;
+}
+
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
@@ -227,19 +243,33 @@ export class Analytics {
       event: eventName,
       properties: {
         ...this.tags,
-        ...this.wizardFlagFeatureProperties(),
+        // An exposure event already carries its own flag's value. posthog-node
+        // deliberately skips snapshot enrichment on these, since the snapshot
+        // can be staler than the flag the event is reporting.
+        ...(eventName === FLAG_CALLED_EVENT
+          ? {}
+          : this.wizardFlagFeatureProperties()),
         ...properties,
       },
     });
   }
 
-  /** `$feature/<key>` for every wizard-owned flag in the run snapshot, so experiments can filter any wizard event by variant. Empty until the flags are fetched. */
-  private wizardFlagFeatureProperties(): Record<string, string> {
+  /**
+   * `$feature/<key>` for every wizard-owned flag in the run snapshot, plus the
+   * `$active_feature_flags` list — the same pair posthog-node stamps when it
+   * sends flags with an event, so experiments can filter any wizard event by
+   * variant and the flags tab renders. Empty until the flags are fetched.
+   */
+  private wizardFlagFeatureProperties(): Record<string, unknown> {
     if (this.activeFlags === null) return {};
-    const props: Record<string, string> = {};
+    const props: Record<string, unknown> = {};
+    const active: string[] = [];
     for (const [key, value] of Object.entries(this.activeFlags)) {
-      if (key.startsWith('wizard-')) props[`$feature/${key}`] = value;
+      if (!key.startsWith('wizard-')) continue;
+      props[`$feature/${key}`] = flagResponseValue(value);
+      if (value !== 'false') active.push(key);
     }
+    if (active.length > 0) props.$active_feature_flags = active.sort();
     return props;
   }
 
@@ -320,9 +350,11 @@ export class Analytics {
     // run for each wizard-owned flag.
     for (const [key, value] of Object.entries(this.activeFlags)) {
       if (!key.startsWith('wizard-')) continue;
-      this.capture('$feature_flag_called', {
+      const response = flagResponseValue(value);
+      this.capture(FLAG_CALLED_EVENT, {
         $feature_flag: key,
-        $feature_flag_response: value,
+        $feature_flag_response: response,
+        [`$feature/${key}`]: response,
       });
     }
     return this.activeFlags;
