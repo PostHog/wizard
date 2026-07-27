@@ -297,7 +297,13 @@ export const piBackend: AgentHarness = {
       let mcpCleanup: (() => void) | undefined;
       let mcpInstructions: string | undefined;
       try {
-        const { setupPostHogMcp } = await import('./mcp');
+        const { setupPostHogMcp, fetchInstructions } = await import('./mcp');
+        // Overlaps the network handshake with the adapter's jiti load.
+        const instructionsPromise = fetchInstructions(
+          boot.credentials.host.mcpUrl,
+          boot.credentials.accessToken,
+          WIZARD_USER_AGENT,
+        );
         const mcp = await setupPostHogMcp({
           mcpUrl: boot.credentials.host.mcpUrl,
           accessToken: boot.credentials.accessToken,
@@ -305,7 +311,7 @@ export const piBackend: AgentHarness = {
         });
         extensionFactories.push(mcp.extensionFactory);
         mcpCleanup = mcp.cleanup;
-        mcpInstructions = mcp.instructions;
+        mcpInstructions = await instructionsPromise;
       } catch (err) {
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
       }

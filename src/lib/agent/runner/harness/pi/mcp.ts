@@ -1,26 +1,13 @@
 /**
- * Wire the real PostHog MCP into the pi backend (#10). pi has no built-in MCP,
- * but `pi-mcp-adapter` is pi's own MCP extension — built with `createMcpAdapter`
- * (the adapter's supported embedding API): an in-memory, isolated config, so no
- * files are written and nothing needs restoring. The adapter connects to the
- * same hosted MCP the anthropic path uses (`boot.credentials.host.mcpUrl`).
- *
- * In CLI mode the server exposes a single `exec` tool that carries the whole
- * command protocol on its schema; it registers as a DIRECT tool (`lifecycle:
- * "eager"` connects at extension load) so the agent calls `exec` in one step
- * instead of through the fragile `mcp` proxy search.
- *
- * The bearer token is passed by env-var NAME (`bearerTokenEnv`), so it lives only
- * in the wizard process for the adapter's in-process client. It is never written
- * to disk and never reaches pi's (env-scrubbed) tool subprocesses.
- *
- * The adapter ships raw TypeScript, so it loads through `jiti` (pi's own runtime
- * `.ts` loader, already a dependency) — the README's documented requirement.
+ * pi has no built-in MCP; `pi-mcp-adapter` — pi's own MCP extension, built here
+ * with its supported `createMcpAdapter` embedding API — bridges the same hosted
+ * MCP the anthropic path uses into the agent.
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createJiti } from 'jiti';
+import { VERSION } from '@lib/version';
 import { logToFile } from '@utils/debug';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
@@ -30,22 +17,15 @@ export interface PostHogMcpSetup {
   extensionFactory: (pi: unknown) => void;
   /** Drop the token env var. Call after the run. */
   cleanup: () => void;
-  /**
-   * The MCP server's `instructions` payload from the initialize handshake. The
-   * caller rides it into the system prompt — it carries the "prioritize skills
-   * over tools" steer, the active project/environment, and the tool domains the
-   * agent searches to discover tools. Undefined if the fetch failed.
-   */
-  instructions?: string;
 }
 
-/** One standard-SDK handshake for the server `instructions`; best-effort. */
-async function fetchInstructions(
+/** Server `instructions` for the system prompt — the adapter exposes no accessor, so one standard-SDK handshake; best-effort. */
+export async function fetchInstructions(
   mcpUrl: string,
   accessToken: string,
   userAgent: string,
 ): Promise<string | undefined> {
-  const client = new Client({ name: 'posthog-wizard', version: '1.0.0' });
+  const client = new Client({ name: 'posthog-wizard', version: VERSION });
   try {
     const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
       requestInit: {
@@ -74,8 +54,10 @@ export async function setupPostHogMcp(opts: {
 }): Promise<PostHogMcpSetup> {
   const { mcpUrl, accessToken, userAgent } = opts;
 
+  // By env NAME: the token stays in this process, off disk, and never reaches pi's env-scrubbed tool subprocesses.
   process.env[MCP_TOKEN_ENV] = accessToken;
 
+  // The adapter ships raw TypeScript; loading through jiti is its documented requirement.
   const jiti = createJiti(import.meta.url);
   const mod = await jiti.import('pi-mcp-adapter');
   const extensionFactory = mod.createMcpAdapter({
@@ -99,11 +81,9 @@ export async function setupPostHogMcp(opts: {
   });
   logToFile(`[pi-mcp] adapter loaded; posthog MCP at ${mcpUrl}`);
 
-  const instructions = await fetchInstructions(mcpUrl, accessToken, userAgent);
-
   const cleanup = (): void => {
     delete process.env[MCP_TOKEN_ENV];
   };
 
-  return { extensionFactory, cleanup, instructions };
+  return { extensionFactory, cleanup };
 }

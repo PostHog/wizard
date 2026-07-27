@@ -37,6 +37,7 @@
     "@earendil-works/pi-coding-agent": "~0.79.8",
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@posthog/warlock": "0.2.4",
     "axios": "1.7.4",
     "fast-glob": "^3.3.3",
@@ -62,8 +63,7 @@
     "xml-js": "^1.6.11",
     "yargs": "^16.2.0",
     "zod": "^3.25.76",
-    "zod-to-json-schema": "^3.24.3",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "zod-to-json-schema": "^3.24.3"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
@@ -139,7 +139,7 @@
     "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts"
   },
   "lint-staged": {
-    ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json \u2014 use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",
+    ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",
     "*.{js,ts,tsx,jsx}": [
       "eslint --cache --fix",
       "prettier --write"
