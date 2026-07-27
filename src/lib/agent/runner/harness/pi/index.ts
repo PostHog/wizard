@@ -314,6 +314,11 @@ export const piBackend: AgentHarness = {
         mcpInstructions = await instructionsPromise;
       } catch (err) {
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
+        analytics.wizardCapture('mcp setup failed', {
+          harness: 'pi',
+          scope: 'run',
+          error: String(err).slice(0, 300),
+        });
       }
 
       const resourceLoader = new DefaultResourceLoader({

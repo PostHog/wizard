@@ -17,6 +17,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: ~0.79.8
         version: 0.79.8(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.18.1)(zod@3.25.76)
+      '@earendil-works/pi-tui':
+        specifier: ~0.79.8
+        version: 0.79.8
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@6.8.0(@types/react@19.2.14)(react@19.2.4))
@@ -3388,10 +3391,6 @@ packages:
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
-
-  get-east-asian-width@1.5.0:
-    resolution: {integrity: sha512-CQ+bEO+Tva/qlmw24dCejulK5pMzVnUOFOijVogd3KQs07HnRIgp8TGipvCCRT06xeYEbpbgwaCxglFyiuIcmA==}
-    engines: {node: '>=18'}
 
   get-east-asian-width@1.6.0:
     resolution: {integrity: sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA==}
@@ -8879,8 +8878,6 @@ snapshots:
 
   get-caller-file@2.0.5: {}
 
-  get-east-asian-width@1.5.0: {}
-
   get-east-asian-width@1.6.0: {}
 
   get-intrinsic@1.3.0:
@@ -9155,11 +9152,11 @@ snapshots:
 
   is-fullwidth-code-point@5.0.0:
     dependencies:
-      get-east-asian-width: 1.5.0
+      get-east-asian-width: 1.6.0
 
   is-fullwidth-code-point@5.1.0:
     dependencies:
-      get-east-asian-width: 1.5.0
+      get-east-asian-width: 1.6.0
 
   is-generator-fn@2.1.0: {}
 
@@ -10525,12 +10522,12 @@ snapshots:
   string-width@7.2.0:
     dependencies:
       emoji-regex: 10.4.0
-      get-east-asian-width: 1.5.0
+      get-east-asian-width: 1.6.0
       strip-ansi: 7.1.0
 
   string-width@8.2.0:
     dependencies:
-      get-east-asian-width: 1.5.0
+      get-east-asian-width: 1.6.0
       strip-ansi: 7.2.0
 
   strip-ansi@4.0.0:
