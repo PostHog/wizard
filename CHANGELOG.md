@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.52.1](https://github.com/PostHog/wizard/compare/v2.52.0...v2.52.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* **pi:** declare @earendil-works/pi-tui so the MCP adapter loads ([#992](https://github.com/PostHog/wizard/issues/992)) ([da39512](https://github.com/PostHog/wizard/commit/da39512bccfb5310d334ca10472b56fa63e66023))
+
 ## [2.52.0](https://github.com/PostHog/wizard/compare/v2.51.0...v2.52.0) (2026-07-27)
 
 
