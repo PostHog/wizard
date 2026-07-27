@@ -9,7 +9,7 @@
  * hints in the KeyboardHintsBar.
  */
 
-import { Box, Text } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import { useEffect, useState } from 'react';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
@@ -88,6 +88,40 @@ function lastEnabled<T>(options: PickerOption<T>[]): number {
     if (!options[i]?.disabled) return i;
   }
   return options.length - 1;
+}
+
+/** Description rows never exceed this width even on very wide terminals —
+ *  the original fixed value, kept as an upper bound rather than a constant. */
+const MAX_DESCRIPTION_WIDTH = 56;
+/** Floor so a narrow terminal still gets a readable multi-line wrap instead
+ *  of a near-zero or negative width. */
+const MIN_DESCRIPTION_WIDTH = 20;
+/** Matches the description Box's own `marginLeft`, below. */
+const DESCRIPTION_INDENT = 4;
+/** Matches the `gap` on the row of column Boxes, below. */
+const COLUMN_GAP = 4;
+
+/**
+ * Width for a wrapped option description, clamped to the terminal's actual
+ * width instead of a bare constant. A fixed width here used to overflow
+ * narrow terminals — the description Box would report a layout wider than
+ * the physical screen, and the terminal's own line-wrapping (which Ink
+ * doesn't control) would then misalign subsequent rows against Ink's cursor
+ * bookkeeping, producing overlapping/corrupted text (see wizard#986).
+ */
+function descriptionWidth(
+  terminalColumns: number,
+  columns: number,
+  centered: boolean,
+): number {
+  const outerMargin = centered ? 0 : 2;
+  const perColumn =
+    (terminalColumns - outerMargin - (columns - 1) * COLUMN_GAP) / columns;
+  const available = Math.floor(perColumn) - DESCRIPTION_INDENT;
+  return Math.max(
+    MIN_DESCRIPTION_WIDTH,
+    Math.min(MAX_DESCRIPTION_WIDTH, available),
+  );
 }
 
 interface PickerMenuProps<T> {
@@ -311,6 +345,8 @@ const MultiPickerMenu = <T,>({
   const [onButton, setOnButton] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
+  const { stdout } = useStdout();
+  const descWidth = descriptionWidth(stdout.columns, columns, centered);
 
   // Re-validate focus when the options change while mounted — a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -498,7 +534,7 @@ const MultiPickerMenu = <T,>({
                       shrinks to its content and never wraps). Renders only when
                       set, so label-only rows are byte-for-byte unchanged. */}
                   {opt.description && (
-                    <Box marginLeft={4} width={56}>
+                    <Box marginLeft={DESCRIPTION_INDENT} width={descWidth}>
                       <Text dimColor wrap="wrap">
                         {opt.description}
                       </Text>
