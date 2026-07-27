@@ -22,8 +22,11 @@ import { logToFile } from '@utils/debug';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
 
-/** Adapter source files are loaded by absolute path, sibling to the resolved root entry — ≥2.12's exports map gates bare subpaths but never file paths. */
-async function importAdapterFile(jiti: Jiti, file: string): Promise<unknown> {
+/** The warm path needs two adapter internals the package doesn't export; resolve its root and load them by file path, which no exports map gates. */
+async function importAdapterInternal(
+  jiti: Jiti,
+  file: string,
+): Promise<unknown> {
   const rootUrl = jiti.esmResolve('pi-mcp-adapter');
   return await jiti.import(fileURLToPath(new URL(file, rootUrl)));
 }
@@ -103,8 +106,8 @@ export async function setupPostHogMcp(opts: {
 
   // Pre-warm: connect once to seed the adapter's metadata cache; best-effort (proxy fallback on failure).
   try {
-    const sm = (await importAdapterFile(jiti, 'server-manager.ts')) as any;
-    const mc = (await importAdapterFile(jiti, 'metadata-cache.ts')) as any;
+    const sm = (await importAdapterInternal(jiti, 'server-manager.ts')) as any;
+    const mc = (await importAdapterInternal(jiti, 'metadata-cache.ts')) as any;
     const manager = new sm.McpServerManager();
     try {
       const conn = await manager.connect('posthog', server);
@@ -142,7 +145,7 @@ export async function setupPostHogMcp(opts: {
     logToFile(`[pi-mcp] cache warm skipped (proxy fallback): ${String(err)}`);
   }
 
-  const mod = await importAdapterFile(jiti, 'index.ts');
+  const mod = await jiti.import('pi-mcp-adapter');
   const extensionFactory = ((mod as { default?: unknown }).default ?? mod) as (
     pi: unknown,
   ) => void;
