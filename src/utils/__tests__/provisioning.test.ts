@@ -123,6 +123,68 @@ describe('provisionNewAccount', () => {
     );
   });
 
+  it('completes when the resources response omits the unused service_id', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_no_sid', type: 'oauth', oauth: { code: 'code_ns' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_ns',
+          refresh_token: 'phr_ns',
+          expires_in: 3600,
+          account: { id: 'org_ns' },
+        },
+      })
+      // `service_id` intentionally omitted — the API doesn't always return it,
+      // and the wizard never reads it, so this must not crash the flow.
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '77',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_ns',
+              host: 'https://us.posthog.com',
+            },
+          },
+        },
+      });
+
+    const result = await provisionNewAccount('nosid@example.com', '');
+
+    expect(result).toMatchObject({
+      projectApiKey: 'phc_ns',
+      host: 'https://us.posthog.com',
+      projectId: '77',
+    });
+  });
+
+  it('throws a controlled error on a partial/pending resources response', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_partial', type: 'oauth', oauth: { code: 'code_pp' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_pp',
+          refresh_token: 'phr_pp',
+          expires_in: 3600,
+        },
+      })
+      // Async provisioning still in progress: no `id`, no `complete`. Must
+      // degrade to a controlled error, not an unhandled ZodError.
+      .mockResolvedValueOnce({
+        data: { status: 'pending' },
+      });
+
+    await expect(
+      provisionNewAccount('partial@example.com', ''),
+    ).rejects.toThrow('did not complete');
+  });
+
   it('throws when account already exists', async () => {
     mockedAxios.post.mockResolvedValueOnce({
       data: {

@@ -99,7 +99,10 @@ const TokenResponseSchema = z.object({
 const ResourceResponseSchema = z.object({
   status: z.string(),
   id: z.string(),
-  service_id: z.string(),
+  // `service_id` is echoed back by the API but never consumed here. Keep it
+  // optional so a response that omits it doesn't throw a ZodError before we
+  // reach the `status !== 'complete'` check below.
+  service_id: z.string().optional(),
   complete: z
     .object({
       access_configuration: z.object({
@@ -232,11 +235,21 @@ export async function provisionNewAccount(
     },
   );
 
-  const resourceData = ResourceResponseSchema.parse(resourceRes.data);
+  // Provisioning can be asynchronous: a partial/pending response (or minor
+  // shape drift from the API) should surface as a controlled "did not complete"
+  // error and let the caller fall back to browser login — never crash the flow
+  // with an unhandled ZodError. `safeParse` keeps that failure mode graceful.
+  const parsedResource = ResourceResponseSchema.safeParse(resourceRes.data);
 
-  if (resourceData.status !== 'complete' || !resourceData.complete) {
+  if (
+    !parsedResource.success ||
+    parsedResource.data.status !== 'complete' ||
+    !parsedResource.data.complete
+  ) {
     throw new Error('Resource provisioning did not complete');
   }
+
+  const resourceData = parsedResource.data;
 
   logToFile('[provisioning] resources provisioned successfully');
 
