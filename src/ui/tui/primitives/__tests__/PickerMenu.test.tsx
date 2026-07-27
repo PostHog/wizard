@@ -4,6 +4,65 @@ import { render } from 'ink-testing-library';
 import { PickerMenu } from '../PickerMenu.js';
 
 /**
+ * Pre-wrap a line of text at `width` characters, breaking at word boundaries.
+ * Ink's Text wrap="wrap" wraps at render time *after* Yoga layout has already
+ * measured the raw text height, so multi-line descriptions overflow their
+ * layout cell — the next option or Confirm button renders at the wrong Y
+ * offset. Pre-wrapping ensures the raw text contains \n at the actual wrap
+ * points, so measureText returns the true multi-line height.
+ */
+function prewrap(text: string, width: number): string {
+  if (!text || text.length <= width) return text;
+  const lines: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    if (start + width >= text.length) {
+      lines.push(text.slice(start));
+      break;
+    }
+    const breakpoint = text.lastIndexOf(' ', start + width);
+    const splitAt = breakpoint > start ? breakpoint : start + width;
+    lines.push(text.slice(start, splitAt));
+    start = splitAt + (text[splitAt] === ' ' ? 1 : 0);
+  }
+  return lines.join('\n');
+}
+
+describe('prewrap', () => {
+  it('returns text unchanged when it fits within width', () => {
+    expect(prewrap('short', 20)).toBe('short');
+  });
+
+  it('wraps at word boundary', () => {
+    const result = prewrap('hello world foo bar', 11);
+    const lines = result.split('\n');
+    expect(lines[0]).toBe('hello world');
+    expect(lines[1]).toBe('foo bar');
+  });
+
+  it('hard-breaks a word longer than width', () => {
+    const result = prewrap('abcdefghijklmnop', 8);
+    const lines = result.split('\n');
+    expect(lines[0]).toBe('abcdefgh');
+    expect(lines[1]).toBe('ijklmnop');
+  });
+
+  it('wraps long description at 56 chars', () => {
+    const desc =
+      "Speaks up when triaged feedback stops producing tickets at the expected rate, catching cases where a GitHub or Linear token has expired or the downstream API is down — failures that are silently swallowed and don't appear in error tracking.";
+    const result = prewrap(desc, 56);
+    const lines = result.split('\n');
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(56);
+    }
+    // Should have wrapped to multiple lines
+    expect(lines.length).toBeGreaterThan(1);
+    // No line should overflow
+    expect(lines.every((l) => l.length <= 56)).toBe(true);
+  });
+});
+
+/**
  * wizard#986: a multi-select option's description used a fixed width (56)
  * regardless of the real terminal width. On a narrow terminal the rendered
  * row was wider than the physical screen, so the terminal's own line
@@ -82,7 +141,6 @@ describe('PickerMenu multi-select — description width', () => {
         unmount();
       });
     }
-    // Monotonically non-increasing as the terminal gets narrower.
     expect(widths[1]).toBeLessThanOrEqual(widths[0]);
     expect(widths[2]).toBeLessThanOrEqual(widths[1]);
   });
@@ -96,9 +154,6 @@ describe('PickerMenu multi-select — description width', () => {
           onSelect={() => undefined}
         />,
       );
-      // marginLeft(4) + width(<=56) = 60 is the description row's own budget;
-      // the checkbox/label row and message can be shorter or longer on their
-      // own terms, so we only assert the description block itself held its cap.
       const frame = lastFrame() ?? '';
       const descriptionLines = frame
         .split('\n')

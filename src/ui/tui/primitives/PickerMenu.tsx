@@ -102,6 +102,36 @@ const DESCRIPTION_INDENT = 4;
 const COLUMN_GAP = 4;
 
 /**
+ * Greedy word-wrap at `width` characters. Ink's Text wrap="wrap" wraps text at
+ * render time *after* Yoga layout has already measured the raw text height,
+ * so multi-line descriptions overflow their layout cell — the next option or
+ * Confirm button renders at the wrong Y offset.
+ *
+ * Pre-wrapping ensures the raw text passed to Ink contains \n at the actual
+ * wrap points, so measureText returns the true multi-line height and Yoga
+ * allocates the correct vertical space.
+ */
+function prewrap(text: string, width: number): string {
+  if (!text || text.length <= width) return text;
+  const lines: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    if (start + width >= text.length) {
+      lines.push(text.slice(start));
+      break;
+    }
+    // Find the last space within the width boundary
+    let breakpoint = text.lastIndexOf(' ', start + width);
+    if (breakpoint <= start) {
+      breakpoint = start + width;
+    }
+    lines.push(text.slice(start, breakpoint));
+    start = breakpoint + (text[breakpoint] === ' ' ? 1 : 0);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Width for a wrapped option description, clamped to the terminal's actual
  * width instead of a bare constant. A fixed width here used to overflow
  * narrow terminals — the description Box would report a layout wider than
@@ -536,7 +566,7 @@ const MultiPickerMenu = <T,>({
                   {opt.description && (
                     <Box marginLeft={DESCRIPTION_INDENT} width={descWidth}>
                       <Text dimColor wrap="wrap">
-                        {opt.description}
+                        {prewrap(opt.description, descWidth)}
                       </Text>
                     </Box>
                   )}
