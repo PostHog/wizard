@@ -3,6 +3,7 @@ import {
   ANALYTICS_HOST_URL,
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
+  WIZARD_FLAG_KEYS,
 } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
@@ -67,6 +68,15 @@ export function groupsFromUser(
   return groups;
 }
 
+const WIZARD_FLAGS: ReadonlySet<string> = new Set(WIZARD_FLAG_KEYS);
+
+// Widen back to the SDK's shape — a filter on `true` never matches `'true'`.
+function flagResponseValue(value: string): string | boolean {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return value;
+}
+
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
@@ -102,6 +112,10 @@ export class Analytics {
             event.properties ?? {};
           void $process_person_profile;
           event.properties = { ...this.tags, ...properties };
+        }
+        // The SDK captures this one itself, bypassing capture(), so tags merge here.
+        if (event.event === '$feature_flag_called') {
+          event.properties = { ...this.tags, ...(event.properties ?? {}) };
         }
         return event;
       },
@@ -227,9 +241,25 @@ export class Analytics {
       event: eventName,
       properties: {
         ...this.tags,
+        ...this.wizardFlagFeatureProperties(),
         ...properties,
       },
     });
+  }
+
+  // Built from the resolved map, not the SDK snapshot: a CI-forced variant must own its events.
+  private wizardFlagFeatureProperties(): Record<string, unknown> {
+    if (this.activeFlags === null) return {};
+    const props: Record<string, unknown> = {};
+    const active: string[] = [];
+    for (const [key, value] of Object.entries(this.activeFlags)) {
+      if (!WIZARD_FLAGS.has(key)) continue;
+      const resolved = flagResponseValue(value);
+      props[`$feature/${key}`] = resolved;
+      if (resolved !== false) active.push(key);
+    }
+    if (active.length > 0) props.$active_feature_flags = active.sort();
+    return props;
   }
 
   /**
@@ -250,30 +280,18 @@ export class Analytics {
     await this.client.shutdown();
   }
 
-  async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
-    try {
-      const distinctId = this.distinctId ?? this.anonymousId;
-      return await this.client.getFeatureFlag(flagKey, distinctId, {
-        sendFeatureFlagEvents: true,
-        personProperties: this.flagPersonProperties(),
-      });
-    } catch (error) {
-      debug('Failed to get feature flag:', flagKey, error);
-      return undefined;
-    }
-  }
-
   /**
    * Evaluate all feature flags for the current user at the start of a run.
    * Result is cached; subsequent calls in the same run return the same map.
    * Returns flag key -> string value (booleans become 'true'/'false').
    */
+  // Only a getFlag read records an exposure; the bulk response records none.
   async getAllFlagsForWizard(): Promise<Record<string, string>> {
     if (this.activeFlags !== null) {
       return this.activeFlags;
     }
     const out: Record<string, string> = {};
-    let payloads: Record<string, unknown> = {};
+    const payloads: Record<string, unknown> = {};
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
       logToFile('[flags] evaluating as', {
@@ -281,15 +299,16 @@ export class Analytics {
         identified: this.distinctId !== undefined,
         personProperties: this.flagPersonProperties(),
       });
-      const result = await this.client.getAllFlagsAndPayloads(distinctId, {
+      const evaluation = await this.client.evaluateFlags(distinctId, {
         personProperties: this.flagPersonProperties(),
       });
-      const flags = result.featureFlags ?? {};
-      for (const [key, value] of Object.entries(flags)) {
+      for (const key of WIZARD_FLAG_KEYS) {
+        const value = evaluation.getFlag(key);
         if (value === undefined) continue;
-        out[key] = typeof value === 'boolean' ? String(value) : String(value);
+        out[key] = String(value);
+        const payload = evaluation.getFlagPayload(key);
+        if (payload !== undefined) payloads[key] = payload;
       }
-      payloads = result.featureFlagPayloads ?? {};
     } catch (error) {
       debug('Failed to get all feature flags:', error);
       this.captureException(

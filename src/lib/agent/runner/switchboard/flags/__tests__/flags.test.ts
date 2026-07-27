@@ -269,10 +269,20 @@ describe('the truth table — wizard-orchestrator-override stage payloads', () =
   });
 });
 
+const ALL_FLAG_KEYS = Object.entries(constants)
+  .filter(([name]) => name.endsWith('_FLAG_KEY'))
+  .map(([, value]) => value as string);
+
+describe('WIZARD_FLAG_KEYS', () => {
+  // A key missing from the set is never evaluated, so its flag silently stops routing.
+  it('covers every declared flag key', () => {
+    expect([...constants.WIZARD_FLAG_KEYS].sort()).toEqual(
+      [...ALL_FLAG_KEYS].sort(),
+    );
+  });
+});
+
 describe('isolation — everything on at once', () => {
-  const ALL_FLAG_KEYS = Object.entries(constants)
-    .filter(([name]) => name.endsWith('_FLAG_KEY'))
-    .map(([, value]) => value as string);
   const flags = Object.fromEntries(ALL_FLAG_KEYS.map((k) => [k, 'true']));
   const flagPayloads = Object.fromEntries(
     ALL_FLAG_KEYS.map((k) => [
