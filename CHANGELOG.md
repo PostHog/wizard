@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.52.0](https://github.com/PostHog/wizard/compare/v2.51.0...v2.52.0) (2026-07-27)
+
+
+### Features
+
+* **source-maps:** automate Flutter source-map upload ([#985](https://github.com/PostHog/wizard/issues/985)) ([1a6c19a](https://github.com/PostHog/wizard/commit/1a6c19ade01fec53a79ebaa108d0a20939c6f312))
+
+
+### Bug Fixes
+
+* **pi:** rebuild the MCP wiring on createMcpAdapter (adapter ~2.15) ([#981](https://github.com/PostHog/wizard/issues/981)) ([070d9da](https://github.com/PostHog/wizard/commit/070d9daf92d97b1cb41b6f87f4c5402e67b3961b))
+
 ## [2.51.0](https://github.com/PostHog/wizard/compare/v2.50.0...v2.51.0) (2026-07-24)
 
 
