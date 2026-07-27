@@ -31,10 +31,7 @@ import {
   resolveEnvSecretRefs,
   vaultSensitiveAnswers,
 } from '@lib/wizard-tools/tools';
-import {
-  createTriageLLMProvider,
-  type TriageGatewayAuth,
-} from '@lib/agent/triage-provider';
+import type { LLMProvider } from '@posthog/warlock';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
 import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
@@ -63,14 +60,8 @@ export interface PiToolsContext {
   onAskPendingChange?: (pending: boolean) => void;
   /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
   disallowedTools?: readonly string[];
-  /**
-   * Gateway auth for triaging a freshly installed skill. pi auths the gateway
-   * programmatically and never sets the ANTHROPIC_* env vars, so the env
-   * fallback in createTriageLLMProvider is empty here — without this the
-   * skill-install scan runs untriaged and fails closed, blocking clean
-   * first-party skills.
-   */
-  triageAuth?: TriageGatewayAuth;
+  /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
+  triageProvider?: LLMProvider;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -79,11 +70,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     skillsBaseUrl,
     askBridge,
     onAskPendingChange,
-    triageAuth,
+    triageProvider,
   } = ctx;
-  // Build the triage provider from pi's explicit gateway auth (env fallback is
-  // empty on pi) so install_skill can triage rather than block untriaged.
-  const skillScanTriageProvider = createTriageLLMProvider(triageAuth);
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
   const askMaxQuestions = ctx.maxQuestions ?? DEFAULT_ASK_MAX_QUESTIONS;
@@ -140,7 +128,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         workingDirectory,
         skillsBaseUrl,
         undefined,
-        skillScanTriageProvider,
+        triageProvider,
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);

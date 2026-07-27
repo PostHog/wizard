@@ -187,8 +187,8 @@ async function downloadWithRetry(
 export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
-  skillsRoot?: string,
-  llmProvider?: LLMProvider,
+  skillsRoot: string | undefined,
+  llmProvider: LLMProvider | undefined,
 ): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
@@ -270,8 +270,8 @@ export async function installSkillById(
   skillId: string,
   installDir: string,
   skillsBaseUrl: string,
-  skillsRoot?: string,
-  llmProvider?: LLMProvider,
+  skillsRoot: string | undefined,
+  llmProvider: LLMProvider | undefined,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };

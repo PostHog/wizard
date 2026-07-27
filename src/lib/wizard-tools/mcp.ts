@@ -26,6 +26,8 @@ import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
 } from '../agent/runner/sequence/orchestrator/queue-tools';
+import { createTriageLLMProvider } from '../agent/triage-provider';
+import { Harness } from '../constants';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
@@ -404,7 +406,13 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = await downloadSkill(skill, workingDirectory);
+      // Own process, no switchboard: the SDK hands it the anthropic gateway env.
+      const result = await downloadSkill(
+        skill,
+        workingDirectory,
+        undefined,
+        createTriageLLMProvider(undefined, Harness.anthropic),
+      );
       if (result.success) {
         return {
           content: [

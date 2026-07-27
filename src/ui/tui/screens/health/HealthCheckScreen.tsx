@@ -151,10 +151,12 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         s.id.startsWith(prefix),
       );
       for (const skill of skills) {
+        // Pre-auth outage cache: no gateway to triage against, so fail closed.
         await downloadSkill(
           skill,
           store.session.installDir,
           '.posthog/skills',
+          undefined,
         );
       }
     }

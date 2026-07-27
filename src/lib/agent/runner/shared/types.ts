@@ -10,6 +10,7 @@ import type {
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import type { ApiProject } from '@lib/api';
+import type { LLMProvider } from '@posthog/warlock';
 
 export type { PromptContext, Credentials };
 
@@ -103,4 +104,6 @@ export interface BootstrapResult {
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */
   project: ApiProject | null;
+  /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
+  triageProvider: LLMProvider | undefined;
 }
