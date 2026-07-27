@@ -1,7 +1,7 @@
 import { Analytics, groupsFromUser } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
-import { ANALYTICS_TEAM_TAG } from '@lib/constants';
+import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
 import type { ApiUser } from '@lib/api';
 
 vi.mock('posthog-node');
@@ -210,24 +210,19 @@ describe('Analytics', () => {
   });
 
   describe('flag exposure', () => {
-    /**
-     * Stand-in for the SDK's `FeatureFlagEvaluations` snapshot. `getFlag` is what
-     * records an exposure inside the SDK, so the spy on it *is* the assertion that
-     * a flag was exposed — there is no wizard-emitted event left to inspect.
-     */
-    const evaluation = (flags: Record<string, string | boolean>) => ({
-      keys: Object.keys(flags),
-      getFlag: vi.fn((key: string) => flags[key]),
-      getFlagPayload: vi.fn(() => undefined),
-    });
+    // The getFlag spy *is* the exposure assertion — the SDK emits the event, not the wizard.
+    let snapshot: ReturnType<typeof mockFlags>;
 
-    const mockFlags = (flags: Record<string, string | boolean>) => {
-      const snapshot = evaluation(flags);
+    function mockFlags(flags: Record<string, string | boolean>) {
+      snapshot = {
+        getFlag: vi.fn((key: string) => flags[key]),
+        getFlagPayload: vi.fn(() => undefined),
+      };
       (mockPostHogInstance as any).evaluateFlags = vi
         .fn()
         .mockResolvedValue(snapshot);
       return snapshot;
-    };
+    }
 
     beforeEach(() => {
       mockFlags({
@@ -237,29 +232,19 @@ describe('Analytics', () => {
       });
     });
 
-    it('reads every wizard-owned flag through getFlag, so the SDK records the exposure', async () => {
-      const snapshot = mockFlags({
-        'wizard-orchestrator': true,
-        'wizard-orchestrator-override': 'sol-review',
-        'unrelated-flag': 'variant-x',
-      });
+    it('reads each wizard flag through getFlag', async () => {
       await analytics.getAllFlagsForWizard();
       expect(snapshot.getFlag.mock.calls.map(([k]) => k)).toEqual([
-        'wizard-orchestrator',
-        'wizard-orchestrator-override',
+        ...WIZARD_FLAG_KEYS,
       ]);
     });
 
-    it("never reads another team's flag, which would bill an unrelated exposure", async () => {
-      const snapshot = mockFlags({
-        'wizard-orchestrator': true,
-        'unrelated-flag': 'variant-x',
-      });
+    it("skips another team's flag", async () => {
       await analytics.getAllFlagsForWizard();
       expect(snapshot.getFlag).not.toHaveBeenCalledWith('unrelated-flag');
     });
 
-    it("emits no wizard-authored $feature_flag_called — that is the SDK's event", async () => {
+    it('does not hand-roll $feature_flag_called', async () => {
       await analytics.getAllFlagsForWizard();
       const handRolled = mockPostHogInstance.capture.mock.calls.filter(
         ([arg]) => (arg as any).event === '$feature_flag_called',
@@ -267,7 +252,7 @@ describe('Analytics', () => {
       expect(handRolled).toEqual([]);
     });
 
-    it('resolves wizard flags into the map, dropping unrelated ones', async () => {
+    it('resolves only wizard flags into the map', async () => {
       const flags = await analytics.getAllFlagsForWizard();
       expect(flags).toEqual({
         'wizard-orchestrator': 'true',
@@ -275,7 +260,7 @@ describe('Analytics', () => {
       });
     });
 
-    it('stamps $feature/<key> for wizard-owned flags on subsequent captures, never unrelated flags', async () => {
+    it('stamps $feature/<key> for wizard flags only', async () => {
       await analytics.getAllFlagsForWizard();
       analytics.wizardCapture('switchboard resolved', { program: 'x' });
       const call = mockPostHogInstance.capture.mock.calls.find(
@@ -287,7 +272,7 @@ describe('Analytics', () => {
       expect(props['$feature/unrelated-flag']).toBeUndefined();
     });
 
-    it('lists the enabled wizard flags in $active_feature_flags, excluding disabled ones', async () => {
+    it('lists only enabled wizard flags in $active_feature_flags', async () => {
       mockFlags({
         'wizard-orchestrator': true,
         'wizard-use-pi-harness': false,
@@ -305,9 +290,7 @@ describe('Analytics', () => {
       ]);
     });
 
-    it("reattaches the run's tags to the SDK's own exposure event", () => {
-      // The SDK captures $feature_flag_called internally, bypassing capture(),
-      // so before_send is the only place the run tags can be added.
+    it("tags the SDK's exposure event", () => {
       const beforeSend = MockedPostHog.mock.calls[0][1]!.before_send as (
         e: any,
       ) => any;
@@ -324,7 +307,7 @@ describe('Analytics', () => {
       });
     });
 
-    it('captures before the fetch carry no $feature props', () => {
+    it('carries no $feature props before the fetch', () => {
       analytics.wizardCapture('early event');
       const call = mockPostHogInstance.capture.mock.calls.find(
         ([arg]) => (arg as any).event === 'wizard: early event',

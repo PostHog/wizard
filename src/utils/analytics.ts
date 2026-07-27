@@ -3,6 +3,7 @@ import {
   ANALYTICS_HOST_URL,
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
+  WIZARD_FLAG_KEYS,
 } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
@@ -67,16 +68,9 @@ export function groupsFromUser(
   return groups;
 }
 
-/** Flags the wizard owns, and the only ones any wizard code path reads. */
-const WIZARD_FLAG_PREFIX = 'wizard-';
+const WIZARD_FLAGS: ReadonlySet<string> = new Set(WIZARD_FLAG_KEYS);
 
-/**
- * The flag value in the shape PostHog's own SDKs report it: a boolean flag as a
- * boolean, a multivariate flag as its variant key. The run snapshot stores every
- * value as a string (booleans stringified, CI overrides normalised), so booleans
- * are widened back here — otherwise a filter on `true` never matches `'true'`.
- * Variant keys are slugs, so `'true'`/`'false'` are unambiguously booleans.
- */
+// Widen back to the SDK's shape — a filter on `true` never matches `'true'`.
 function flagResponseValue(value: string): string | boolean {
   if (value === 'true') return true;
   if (value === 'false') return false;
@@ -119,10 +113,7 @@ export class Analytics {
           void $process_person_profile;
           event.properties = { ...this.tags, ...properties };
         }
-        // Flag exposures are captured inside the SDK (see getAllFlagsForWizard),
-        // so they never pass through `capture()` and would otherwise carry none
-        // of the run's tags — leaving them unattributable to a wizard run,
-        // build, or surface. The SDK's own flag properties still win.
+        // The SDK captures this one itself, bypassing capture(), so tags merge here.
         if (event.event === '$feature_flag_called') {
           event.properties = { ...this.tags, ...(event.properties ?? {}) };
         }
@@ -256,24 +247,16 @@ export class Analytics {
     });
   }
 
-  /**
-   * `$feature/<key>` for every wizard-owned flag in the run snapshot, plus the
-   * `$active_feature_flags` list — the same pair the SDK stamps when an event is
-   * captured with `flags:`, so experiments can filter any wizard event by variant
-   * and the flags tab renders. Empty until the flags are fetched.
-   *
-   * Derived from the resolved map rather than handed the SDK's snapshot, because
-   * the map is post-CI-override: a benchmark run forcing a variant must have its
-   * events attributed to the variant it actually ran.
-   */
+  // Built from the resolved map, not the SDK snapshot: a CI-forced variant must own its events.
   private wizardFlagFeatureProperties(): Record<string, unknown> {
     if (this.activeFlags === null) return {};
     const props: Record<string, unknown> = {};
     const active: string[] = [];
     for (const [key, value] of Object.entries(this.activeFlags)) {
-      if (!key.startsWith('wizard-')) continue;
-      props[`$feature/${key}`] = flagResponseValue(value);
-      if (value !== 'false') active.push(key);
+      if (!WIZARD_FLAGS.has(key)) continue;
+      const resolved = flagResponseValue(value);
+      props[`$feature/${key}`] = resolved;
+      if (resolved !== false) active.push(key);
     }
     if (active.length > 0) props.$active_feature_flags = active.sort();
     return props;
@@ -314,21 +297,8 @@ export class Analytics {
    * Evaluate all feature flags for the current user at the start of a run.
    * Result is cached; subsequent calls in the same run return the same map.
    * Returns flag key -> string value (booleans become 'true'/'false').
-   *
-   * One `/flags` round trip via `evaluateFlags`, then a `getFlag` read per
-   * wizard-owned key. Only a *value read* counts as an exposure — the bulk
-   * response on its own records none, which would leave every wizard run out of
-   * its own experiment's results. Reading through the snapshot is what makes the
-   * SDK emit `$feature_flag_called`, carrying the flag id/version/reason/
-   * request-id and the per-(distinctId, flag, value) dedup we would otherwise
-   * have to reimplement. The run resolves its whole config up front, so reading
-   * every wizard flag here is the decision point, not a widening of it.
-   *
-   * Only `wizard-`-prefixed keys are read, and only those land in the map: every
-   * wizard read goes through a `WIZARD_*_FLAG_KEY` constant, and reading another
-   * team's flag would bill an exposure against an experiment this run has no
-   * part in.
    */
+  // Only a getFlag read bills an exposure; the bulk response records none.
   async getAllFlagsForWizard(): Promise<Record<string, string>> {
     if (this.activeFlags !== null) {
       return this.activeFlags;
@@ -345,8 +315,7 @@ export class Analytics {
       const evaluation = await this.client.evaluateFlags(distinctId, {
         personProperties: this.flagPersonProperties(),
       });
-      for (const key of evaluation.keys) {
-        if (!key.startsWith(WIZARD_FLAG_PREFIX)) continue;
+      for (const key of WIZARD_FLAG_KEYS) {
         const value = evaluation.getFlag(key);
         if (value === undefined) continue;
         out[key] = String(value);
