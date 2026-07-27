@@ -14,15 +14,17 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
     }
   });
 
-  it('ranks unsupported native guards ahead of the native targets', () => {
+  it('ranks the cross-platform targets ahead of the native targets', () => {
     expect(SOURCE_MAPS_TARGETS).toContainEqual({
       id: 'android',
       name: 'Android',
     });
     expect(SOURCE_MAPS_TARGETS).toContainEqual({ id: 'ios', name: 'iOS' });
-    for (const nativeGuard of ['react-native', 'flutter']) {
-      expect(rank(nativeGuard)).toBeLessThan(rank('android'));
-      expect(rank(nativeGuard)).toBeLessThan(rank('ios'));
+    // React Native and Flutter repos both carry Gradle and Xcode manifests
+    // inside them, so they must win over the bare native targets.
+    for (const crossPlatform of ['react-native', 'flutter']) {
+      expect(rank(crossPlatform)).toBeLessThan(rank('android'));
+      expect(rank(crossPlatform)).toBeLessThan(rank('ios'));
     }
     expect(rank('android')).toBeLessThan(rank('nextjs'));
     expect(rank('ios')).toBeLessThan(rank('nextjs'));
@@ -211,6 +213,84 @@ describe('coerceReport', () => {
       );
     },
   );
+
+  it('retains a Flutter project with a platform target and PostHog as instrumentable', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'Flutter',
+            targetId: 'flutter',
+            hasPostHog: true,
+          },
+        ],
+      },
+      () => true,
+    );
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'Flutter',
+      variant: 'flutter',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('blocks a Flutter project with no platform targets at all', () => {
+    // A pure Dart package or plugin has no web/, android/ or ios/ directory,
+    // so it never produces an app build with symbols to upload.
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'Flutter',
+            targetId: 'flutter',
+            hasPostHog: true,
+          },
+        ],
+      },
+      () => false,
+    );
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: null,
+        instrumentable: false,
+        reason: expect.stringMatching(/no web, android or ios target/i),
+      }),
+    );
+  });
+
+  it('blocks a Flutter project with a platform target but no PostHog SDK yet', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'Flutter',
+            targetId: 'flutter',
+            hasPostHog: false,
+          },
+        ],
+      },
+      () => true,
+    );
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'flutter',
+        hasPostHog: false,
+        instrumentable: false,
+        reason: expect.stringMatching(/no posthog sdk/i),
+      }),
+    );
+  });
 
   it('blocks a supported project that has no PostHog SDK yet', () => {
     const report = coerceReport({
