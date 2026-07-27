@@ -219,7 +219,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     try {
       const { setupPostHogMcp } = await import('./mcp');
       const mcp = await setupPostHogMcp({
-        agentDir: getAgentDir(),
         mcpUrl: boot.credentials.host.mcpUrl,
         accessToken: boot.credentials.accessToken,
         userAgent: WIZARD_USER_AGENT,
