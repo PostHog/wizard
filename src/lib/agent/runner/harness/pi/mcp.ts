@@ -22,14 +22,10 @@ import { logToFile } from '@utils/debug';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
 
-/** Load an adapter source file across adapter versions: ≤2.10 resolves `.ts` subpaths (no exports map), ≥2.12's map allows only the root — resolve it and address the file directly, which no exports map gates. */
+/** Adapter source files are loaded by absolute path, sibling to the resolved root entry — ≥2.12's exports map gates bare subpaths but never file paths. */
 async function importAdapterFile(jiti: Jiti, file: string): Promise<unknown> {
-  try {
-    return await jiti.import(`pi-mcp-adapter/${file}`);
-  } catch {
-    const rootUrl = import.meta.resolve('pi-mcp-adapter');
-    return await jiti.import(fileURLToPath(new URL(file, rootUrl)));
-  }
+  const rootUrl = jiti.esmResolve('pi-mcp-adapter');
+  return await jiti.import(fileURLToPath(new URL(file, rootUrl)));
 }
 
 export interface PostHogMcpSetup {
