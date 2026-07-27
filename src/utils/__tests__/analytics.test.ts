@@ -2,6 +2,7 @@ import { Analytics, groupsFromUser } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
+import { VERSION } from '@lib/version';
 import type { ApiUser } from '@lib/api';
 
 vi.mock('posthog-node');
@@ -16,6 +17,8 @@ vi.mock('uuid');
 const envState = vi.hoisted(() => ({
   isProductionBuild: false,
   runSurface: 'local' as 'cloud' | 'local',
+  taskRunId: undefined as string | undefined,
+  taskId: undefined as string | undefined,
 }));
 vi.mock('@env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@env')>()),
@@ -24,6 +27,12 @@ vi.mock('@env', async (importOriginal) => ({
   },
   get RUN_SURFACE() {
     return envState.runSurface;
+  },
+  get TASK_RUN_ID() {
+    return envState.taskRunId;
+  },
+  get TASK_ID() {
+    return envState.taskId;
   },
 }));
 
@@ -37,6 +46,8 @@ describe('Analytics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     envState.isProductionBuild = false;
+    envState.taskRunId = undefined;
+    envState.taskId = undefined;
     // Each run mints several distinct uuids; mock them to different values
     // so the tests reflect reality (run_id !== $session_id) rather than
     // collapsing them. Call order: anonymousId, runId (both in the
@@ -78,6 +89,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           ...properties,
         },
       );
@@ -99,6 +111,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           testTag: 'testValue',
           ...properties,
         },
@@ -121,6 +134,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           $session_id: 'session-uuid',
         },
       );
@@ -140,6 +154,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
         },
       );
     });
@@ -149,7 +164,8 @@ describe('Analytics', () => {
       const properties = { integration: 'nextjs', step: 'installation' };
 
       analytics.setTag('environment', 'test');
-      analytics.setTag('version', '1.0.0');
+      // Not `version`: that key is now one of the constructor's own tags.
+      analytics.setTag('framework_version', '1.0.0');
       analytics.captureException(error, properties);
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
@@ -161,8 +177,9 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           environment: 'test',
-          version: '1.0.0',
+          framework_version: '1.0.0',
           integration: 'nextjs',
           step: 'installation',
         },
@@ -185,6 +202,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           integration: 'react',
         },
       );
@@ -204,6 +222,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
         },
       );
     });
@@ -366,6 +385,36 @@ describe('Analytics', () => {
     });
   });
 
+  describe('task run tags', () => {
+    it('omits both ids on a run the sandbox did not launch', () => {
+      analytics.capture('wizard: test');
+
+      const properties = (mockPostHogInstance.capture as Mock).mock.calls.at(
+        -1,
+      )?.[0].properties;
+      expect(properties).not.toHaveProperty('task_run_id');
+      expect(properties).not.toHaveProperty('task_id');
+    });
+
+    it('tags every event with the launching task run', () => {
+      envState.taskRunId = 'task-run-uuid';
+      envState.taskId = 'task-uuid';
+      const cloud = new Analytics();
+
+      cloud.capture('wizard: test');
+      cloud.captureException(new Error('e'));
+
+      // Both paths merge the same tag bag, so the join back to the task run has
+      // to hold for exceptions too, not just explicit captures.
+      expect(
+        (mockPostHogInstance.capture as Mock).mock.calls.at(-1)?.[0].properties,
+      ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
+    });
+  });
+
   describe('identifyUser', () => {
     const user = {
       distinct_id: 'user-123',
@@ -472,6 +521,7 @@ describe('Analytics', () => {
         build: 'dev',
         run_id: 'run-uuid',
         run_surface: 'local',
+        version: VERSION,
         command: 'slack',
         $exception_list: [{ type: 'Error' }],
       });
@@ -654,6 +704,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -680,6 +731,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           $session_id: 'session-uuid',
           integration: 'svelte',
         },
