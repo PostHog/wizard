@@ -57,7 +57,6 @@ import {
   hasStoredClaudeLogin,
   claudeConfigDir,
 } from './stored-login';
-import { offloadMcpConfig } from '@lib/agent/sdk-mcp-config';
 import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
 // Dynamic import cache for ESM module
@@ -562,7 +561,9 @@ export async function initializeAgent(
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
-          Authorization: `Bearer ${config.posthogApiKey}`,
+          // Env reference, not the token: the SDK puts this config on the
+          // spawned CLI's argv, where `ps` shows it to any local process.
+          Authorization: 'Bearer ${CLAUDE_CODE_OAUTH_TOKEN}',
           // Tag the UA with the running program so the backend can attribute what this
           // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
           'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
@@ -813,9 +814,6 @@ export async function runAgent(
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
   let yaraViolationReason: string | null = null;
 
-  // Keeps the PostHog MCP bearer out of the spawned CLI's argv.
-  const mcpConfig = offloadMcpConfig(agentConfig.mcpServers);
-
   try {
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
     // enabled via the `skills` query option; PostHog MCP tools come through
@@ -863,8 +861,7 @@ export async function runAgent(
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
         betas: ['context-1m-2025-08-07'],
-        mcpServers: mcpConfig.mcpServers,
-        extraArgs: mcpConfig.extraArgs,
+        mcpServers: agentConfig.mcpServers,
         agents: {
           'general-purpose': {
             description:
@@ -1254,7 +1251,6 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    mcpConfig.dispose();
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion.
     if (!receivedSuccessResult) {
