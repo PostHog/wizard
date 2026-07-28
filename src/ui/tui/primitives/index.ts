@@ -32,6 +32,14 @@ export { HNViewer } from './HNViewer.js';
 export { KeyboardHintsBar } from './KeyboardHintsBar.js';
 export { DissolveTransition } from './DissolveTransition.js';
 export type { WipeDirection } from './DissolveTransition.js';
+export {
+  HogFace,
+  AnimatedHogFace,
+  SnoringHog,
+  TalkingHog,
+  DancingHog,
+} from './HogFace.js';
+export type { HogExpression, WinkEye, HogArms } from './HogFace.js';
 export { ContentSequencer } from './ContentSequencer.js';
 export type {
   ContentBlock,
