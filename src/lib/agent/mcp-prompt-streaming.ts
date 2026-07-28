@@ -17,6 +17,7 @@ import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { offloadMcpConfig } from '@lib/agent/sdk-mcp-config';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
@@ -249,6 +250,21 @@ export async function* runMcpPromptViaSdk(args: {
     });
   };
 
+  // Keeps the PostHog MCP bearer out of the spawned CLI's argv.
+  const mcpConfig = offloadMcpConfig({
+    'posthog-wizard': {
+      type: 'http',
+      url: mcpUrl,
+      headers: {
+        Authorization: `Bearer ${credentials.accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
+      },
+      // CLI mode's single `exec` tool carries the full command reference on its
+      // schema — keep it in context, never deferred behind tool search.
+      alwaysLoad: true,
+    },
+  });
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     const response = query({
@@ -298,20 +314,8 @@ export async function* runMcpPromptViaSdk(args: {
           preset: 'claude_code',
           append: buildTerminalFitPrompt(),
         },
-        mcpServers: {
-          'posthog-wizard': {
-            type: 'http',
-            url: mcpUrl,
-            headers: {
-              Authorization: `Bearer ${credentials.accessToken}`,
-              'User-Agent': WIZARD_USER_AGENT,
-            },
-            // CLI mode's single `exec` tool carries the full command reference
-            // on its schema — keep it in context, never deferred behind tool
-            // search.
-            alwaysLoad: true,
-          },
-        },
+        mcpServers: mcpConfig.mcpServers,
+        extraArgs: mcpConfig.extraArgs,
         // Only let the agent use MCP tools — no shell, no file I/O,
         // no Read/Edit/Write. This is a chat-with-MCP run, not a
         // wizard skill execution.
@@ -354,6 +358,7 @@ export async function* runMcpPromptViaSdk(args: {
     logToFile(`[runMcpPromptViaSdk] error: ${text}`);
     yield { kind: 'error', text };
   } finally {
+    mcpConfig.dispose();
     // Closes the prompt stream so `query()` shuts down cleanly even if
     // we never saw a 'result' message.
     abortController.abort();
