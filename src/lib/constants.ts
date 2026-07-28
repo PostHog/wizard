@@ -21,6 +21,9 @@ export const SONNET_5_MODEL = 'claude-sonnet-5';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
+export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
+
 /**
  * Larger model for planning / hard work. Named the switchboard could route to
  * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
@@ -238,11 +241,17 @@ export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
 /** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = a `MODEL_FLAG_VARIANTS` key); missing/invalid payload keeps the non-flagged default. */
 export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
   'wizard-self-driving-use-pi-harness';
-/** Feature flag key that gates the intro-screen "Tools" menu. */
-export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
+// Reading a flag enters this run into that flag's experiment, so a closed set — not a
+// `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
+export const WIZARD_FLAG_KEYS = [
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

@@ -97,19 +97,6 @@ describe('the truth table — posthog-integration × wizard-orchestrator', () =>
         trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
       },
       {
-        name: "'true' + retired pi flags → identical, nothing reads them",
-        ctx: {
-          program: 'posthog-integration',
-          flags: {
-            [ORCH]: 'true',
-            'wizard-use-pi-harness': 'true',
-            'wizard-pi-model': 'gpt-5-6-terra',
-            'wizard-pi-effort': 'high',
-          },
-        },
-        binding: ORCHESTRATOR_PI_DEFAULT,
-      },
-      {
         // Harness axis code-gated on cloud; sequence scoping is the flag's own run_surface targeting (#961).
         name: "'true' on the cloud surface → orchestrator sequence, harness route disabled",
         surface: 'cloud',
@@ -269,10 +256,20 @@ describe('the truth table — wizard-orchestrator-override stage payloads', () =
   });
 });
 
+const ALL_FLAG_KEYS = Object.entries(constants)
+  .filter(([name]) => name.endsWith('_FLAG_KEY'))
+  .map(([, value]) => value as string);
+
+describe('WIZARD_FLAG_KEYS', () => {
+  // A key missing from the set is never evaluated, so its flag silently stops routing.
+  it('covers every declared flag key', () => {
+    expect([...constants.WIZARD_FLAG_KEYS].sort()).toEqual(
+      [...ALL_FLAG_KEYS].sort(),
+    );
+  });
+});
+
 describe('isolation — everything on at once', () => {
-  const ALL_FLAG_KEYS = Object.entries(constants)
-    .filter(([name]) => name.endsWith('_FLAG_KEY'))
-    .map(([, value]) => value as string);
   const flags = Object.fromEntries(ALL_FLAG_KEYS.map((k) => [k, 'true']));
   const flagPayloads = Object.fromEntries(
     ALL_FLAG_KEYS.map((k) => [
