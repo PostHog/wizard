@@ -25,8 +25,14 @@ describe('yara-policy: terminate-or-warn', () => {
     expect(isTerminalMatch(match('critical', 'remediate'))).toBe(true);
   });
 
-  test('a rule asking to block terminates at any severity', () => {
-    expect(isTerminalMatch(match('low', 'block'))).toBe(true);
+  test('a rule asking to block does not terminate below critical', () => {
+    // `action: 'block'` refuses the operation (PreToolUse still does); it does
+    // not end the run. medium/high block rules fire on first-party skill prose
+    // often enough that terminating cost ~15 users/day — see #997.
+    expect(isTerminalMatch(match('low', 'block'))).toBe(false);
+    expect(isTerminalMatch(match('medium', 'block'))).toBe(false);
+    expect(isTerminalMatch(match('high', 'block'))).toBe(false);
+    expect(isTerminalMatch(match('critical', 'block'))).toBe(true);
   });
 
   test('a high-severity rule that only asks to remediate warns', () => {

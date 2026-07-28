@@ -17,6 +17,7 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
+  Harness,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -33,6 +34,7 @@ import {
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
+import type { LLMProvider } from '@posthog/warlock';
 import { getWizardCommandments } from './commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
@@ -648,6 +650,8 @@ export async function runAgent(
     emitStepEvents?: boolean;
     /** Request the end-of-run reflection remark. Defaults to true. */
     requestRemark?: boolean;
+    /** Scan-triage classifier resolved in bootstrap. Absent → rebuilt from the gateway auth on the env. */
+    triageProvider?: LLMProvider;
     /**
      * Extra properties attached to this run's `agent completed` / `agent
      * aborted` events (e.g. the orchestrator's task type and id).
@@ -807,10 +811,10 @@ export async function runAgent(
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
-    // LLM provider for warlock triage (reuses the gateway auth set on
-    // process.env by initializeAgent). Undefined if auth is missing — hooks
-    // then skip triage and fail closed.
-    const triageProvider = createTriageLLMProvider();
+    // Resolved in bootstrap; the env fallback covers callers without a boot result.
+    const triageProvider =
+      config?.triageProvider ??
+      createTriageLLMProvider(undefined, Harness.anthropic);
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like

@@ -38,7 +38,6 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
-import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { highestSeverityMatch, scanVerdict } from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
@@ -972,26 +971,22 @@ export function createPostToolUseYaraHooks(
             recordScan();
             const matches = await scanSkillFiles(cwd, skillDir, llmProvider);
 
-            if (matches.length === 0) return {};
+            const verdict = scanVerdict(matches);
+            if (!verdict) return {};
 
-            // INTENTIONAL ASYMMETRY: skill-install terminates on ANY
-            // post-triage match, while Read/Grep only terminates on
-            // critical-or-block. Skills are downloaded code from an
-            // external source; any flagged content in them is treated as
-            // poisoned. Read/Grep, by contrast, may scan project files
-            // the user wrote themselves where a medium-severity match
-            // can warrant a warning instead of a terminate.
-            // TODO(wizard#593): document / lock in this contract with a test.
-            const match = highestSeverityMatch(matches);
             recordMatch(
               'PostToolUse',
               'Bash (skill install)',
-              match,
-              'aborted',
+              verdict.match,
+              verdict.action,
             );
+            // Same verdict as every other surface: critical terminates, the
+            // rest warn. These rules fire on first-party skill prose often
+            // enough that terminating costs more than it prevents.
+            if (!verdict.terminal) return {};
 
             const reason =
-              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule}. ` +
+              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${verdict.match.rule}. ` +
               `The downloaded skill contains potential prompt injection. Session terminated for safety.`;
             onTerminate(reason);
             return { stopReason: reason };
@@ -1014,25 +1009,42 @@ export function createPostToolUseYaraHooks(
 
 /**
  * Scan a freshly installed skill directory (any root — .claude/skills or the
- * orchestrator's run cache) and return a terminate reason when it is
- * poisoned, else null. The choke point for TS-path installs (downloadSkill);
- * agent Bash installs are covered by the PostToolUse matcher above. Runs the
- * same LLM triage as the tool-use scans (default provider from gateway auth on
- * the env); fail-closed to treating every match as real when no provider is
- * configured, so a missing key never weakens the check. `llmProvider` is
- * injectable for tests.
+ * orchestrator's run cache) and return a terminate reason when it is poisoned,
+ * else null. The choke point for TS-path installs (downloadSkill); agent Bash
+ * installs are covered by the PostToolUse matcher above. Runs the same LLM
+ * triage as the tool-use scans; fail-closed to treating every match as real when
+ * no provider is configured, so a missing key never weakens the check.
+ * `llmProvider` is explicit — pi and the orchestrator never set the env fallback.
+ *
+ * Terminates on the same verdict as every other surface (critical only). A
+ * non-terminal match is recorded and the skill is kept: these rules fire on
+ * first-party skill prose, and deleting the skill leaves the agent working blind
+ * on the very content it needed.
  */
 export async function scanInstalledSkill(
   absoluteSkillDir: string,
-  llmProvider: LLMProvider | undefined = createTriageLLMProvider(),
+  llmProvider: LLMProvider | undefined,
 ): Promise<string | null> {
   recordScan();
   const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
-  if (matches.length === 0) return null;
-  const match = highestSeverityMatch(matches);
-  recordMatch('skill-install', 'installSkillById', match, 'terminated');
-  return `Poisoned skill detected: ${match.rule} (${
-    match.metadata.severity ?? 'unknown'
+  const verdict = scanVerdict(matches);
+  if (!verdict) return null;
+  recordMatch(
+    'skill-install',
+    'installSkillById',
+    verdict.match,
+    verdict.action,
+  );
+  if (!verdict.terminal) {
+    logToFile(
+      `[YARA] ${verdict.match.rule} (${
+        verdict.match.metadata.severity ?? 'unknown'
+      }) in ${absoluteSkillDir} — non-terminal, keeping the skill`,
+    );
+    return null;
+  }
+  return `Poisoned skill detected: ${verdict.match.rule} (${
+    verdict.match.metadata.severity ?? 'unknown'
   }) in ${absoluteSkillDir}`;
 }
 

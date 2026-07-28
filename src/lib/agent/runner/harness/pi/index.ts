@@ -233,7 +233,7 @@ export const piBackend: AgentHarness = {
 
       // the claude-agent-sdk path. The provider spec is shared with the
       // orchestrator's per-task sessions (gateway.ts).
-      const { provider, caps, gatewayUrl } = buildGatewayProvider({
+      const { provider, caps } = buildGatewayProvider({
         gatewayUrl: boot.credentials.host.gatewayUrl,
         accessToken: boot.credentials.accessToken,
         wizardMetadata: boot.wizardMetadata,
@@ -269,14 +269,7 @@ export const piBackend: AgentHarness = {
       const security = createSecurityExtension({
         disallowedTools: programConfig.disallowedTools,
         getWizardAskPending: () => askState.pending,
-        // Triage speaks the Anthropic messages API (it appends /v1/messages),
-        // so it gets the bare gateway URL regardless of which API shape the
-        // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
-        // auths programmatically) and triage would silently no-op.
-        triageAuth: {
-          baseURL: gatewayUrl,
-          authToken: boot.credentials.accessToken,
-        },
+        triageProvider: boot.triageProvider,
         // Where pi's bash runs; the rm allowance is confined to this tree.
         workingDirectory: session.installDir,
       });
@@ -379,13 +372,7 @@ export const piBackend: AgentHarness = {
         ...createWizardPiTools({
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
-          // Same gateway auth the security extension uses (line ~276) so a
-          // freshly installed skill is triaged, not blocked untriaged. pi
-          // never sets ANTHROPIC_* env, so this must be passed explicitly.
-          triageAuth: {
-            baseURL: gatewayUrl,
-            authToken: boot.credentials.accessToken,
-          },
+          triageProvider: boot.triageProvider,
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the

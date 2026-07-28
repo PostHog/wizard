@@ -24,6 +24,7 @@ const makeTools = (answers: Record<string, string | string[]>) => {
     workingDirectory,
     skillsBaseUrl: 'http://localhost:0',
     askBridge: { request } as unknown as WizardAskBridge,
+    triageProvider: undefined,
   });
   const byName = (name: string) => {
     const tool = tools.find((t) => t.name === name);
