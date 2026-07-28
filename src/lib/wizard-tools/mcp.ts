@@ -407,12 +407,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }
 
       // Own process, no switchboard: the SDK hands it the anthropic gateway env.
-      const result = await downloadSkill(
-        skill,
-        workingDirectory,
-        undefined,
-        createTriageLLMProvider(undefined, Harness.anthropic),
-      );
+      const result = await downloadSkill(skill, workingDirectory, {
+        triage: createTriageLLMProvider(undefined, Harness.anthropic),
+      });
       if (result.success) {
         return {
           content: [

@@ -50,8 +50,7 @@ export async function runLinearProgram(
       config.skillId,
       session.installDir,
       skillsBaseUrl,
-      undefined,
-      boot.triageProvider,
+      { triage: boot.triageProvider },
     );
     if (installResult.kind !== 'ok') {
       await abortOnInstallFailure(config.integrationLabel, installResult);

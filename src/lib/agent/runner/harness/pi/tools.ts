@@ -127,8 +127,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         args.skillId,
         workingDirectory,
         skillsBaseUrl,
-        undefined,
-        triageProvider,
+        { triage: triageProvider },
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);

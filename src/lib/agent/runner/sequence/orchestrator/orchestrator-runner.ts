@@ -293,8 +293,10 @@ export async function runOrchestrator(
       referenceSkillId,
       session.installDir,
       boot.skillsBaseUrl,
-      path.join(QUEUE_DIR_NAME, 'reference'),
-      boot.triageProvider,
+      {
+        skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
+        triage: boot.triageProvider,
+      },
     );
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
@@ -480,8 +482,7 @@ export async function runOrchestrator(
           variantId,
           session.installDir,
           boot.skillsBaseUrl,
-          taskSkillsRoot,
-          boot.triageProvider,
+          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
