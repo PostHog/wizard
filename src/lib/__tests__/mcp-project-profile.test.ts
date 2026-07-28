@@ -1,6 +1,7 @@
 import {
   assembleProfile,
   degradedProfile,
+  isKnownCloudHost,
   type EventVolume,
 } from '@lib/mcp-project-profile';
 
@@ -150,5 +151,30 @@ describe('degradedProfile', () => {
     expect(p.seeded).toBe(false);
     // Never nag a user to enable something when we could not probe.
     expect(Object.values(p.products).every((v) => v === true)).toBe(true);
+  });
+});
+
+describe('isKnownCloudHost', () => {
+  it('recognises the US cloud ingestion host', () => {
+    expect(isKnownCloudHost('https://us.i.posthog.com')).toBe(true);
+  });
+
+  it('recognises the EU cloud ingestion host', () => {
+    expect(isKnownCloudHost('https://eu.i.posthog.com')).toBe(true);
+  });
+
+  it('rejects the app hosts (not ingestion routes)', () => {
+    expect(isKnownCloudHost('https://us.posthog.com')).toBe(false);
+    expect(isKnownCloudHost('https://eu.posthog.com')).toBe(false);
+  });
+
+  it('rejects self-hosted / --base-url deployments', () => {
+    expect(isKnownCloudHost('https://ph.mycompany.com')).toBe(false);
+    expect(isKnownCloudHost('http://localhost:8010')).toBe(false);
+  });
+
+  it('rejects malformed inputs without throwing', () => {
+    expect(isKnownCloudHost('not-a-url')).toBe(false);
+    expect(isKnownCloudHost('')).toBe(false);
   });
 });

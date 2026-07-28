@@ -131,6 +131,24 @@ function isSystemEvent(name: string): boolean {
 }
 
 /**
+ * True only when the given ingestion host is a PostHog-managed cloud
+ * region we know maps to a working ingestion endpoint. Used as a gate on
+ * the seed offer: PostHog events are immutable in ClickHouse, so we must
+ * NOT offer to write demo events into a self-hosted deployment where we
+ * can't be sure the ingestion route will succeed (and where the operator
+ * hasn't opted in to us leaving artifacts). Cloud-hosted users have
+ * consented to the wizard's writes as part of using the hosted service.
+ */
+export function isKnownCloudHost(apiHost: string): boolean {
+  try {
+    const { host } = new URL(apiHost);
+    return host === 'us.i.posthog.com' || host === 'eu.i.posthog.com';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pure profile assembler — turns raw probe outputs into a classified
  * profile. Exported so tier classification, custom-event filtering, and
  * product derivation can be unit-tested without touching the network.

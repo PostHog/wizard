@@ -65,6 +65,7 @@ import {
 } from '@lib/mcp-role-prompts';
 import {
   degradedProfile,
+  isKnownCloudHost,
   type ProjectDataProfile,
 } from '@lib/mcp-project-profile';
 import type { Integration } from '@lib/constants';
@@ -134,6 +135,8 @@ export const McpSuggestedPromptsScreen = ({
 
   const session = store.session;
 
+  // Phase.Choose is the no-commitment entry. Login fires only when the
+  // user picks 'Start tutorial' — explicit consent for the OAuth dance.
   const [phase, setPhase] = useState<Phase>(Phase.Choose);
   // The scout's read of the project, set in the Scouting phase. Drives the
   // data-aware picker, greeting flavor, and Goodbye samples. Null until the
@@ -256,13 +259,23 @@ export const McpSuggestedPromptsScreen = ({
       }
       if (cancelled) return;
       setProfile(probed);
+      // Gate the seed offer on both an empty tier AND a known PostHog
+      // cloud host. Self-hosted / --base-url deployments never see the
+      // offer, because the seeder posts to `apiHost` verbatim — a
+      // customer who split app + ingestion onto different subdomains
+      // would silently 401, and PostHog events are immutable in
+      // ClickHouse (only the person mapping can be deleted), so a
+      // misroute or an unwanted write leaves a permanent trail.
+      const offerSeed =
+        probed.tier === 'empty' && isKnownCloudHost(credentials.host.apiHost);
       analytics.wizardCapture('mcp suggested prompts scouted', {
         tier: probed.tier,
         totalEvents: probed.totalEvents,
         distinctEvents: probed.distinctEventCount,
         degraded: probed.degraded,
+        offerSeed,
       });
-      setPhase(probed.tier === 'empty' ? Phase.SeedOffer : Phase.Greeting);
+      setPhase(offerSeed ? Phase.SeedOffer : Phase.Greeting);
     })();
 
     return () => {
@@ -1277,6 +1290,17 @@ const GoodbyePhase = ({
           </Box>
         ))}
       </Box>
+
+      {profile?.seeded && (
+        <Box marginBottom={1}>
+          <Text dimColor>
+            Demo data is tagged <Text bold>wizard_seed:true</Text> and uses{' '}
+            <Text bold>wizard-demo-user-*</Text> distinct IDs — events are
+            immutable in PostHog, but you can filter these out of any query or
+            dashboard.
+          </Text>
+        </Box>
+      )}
 
       <Box marginBottom={1}>
         <Text dimColor>

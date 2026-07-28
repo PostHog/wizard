@@ -589,7 +589,7 @@
     "bullets": [
       "Your project hasn't logged events yet, so there's nothing to chart — yet.",
       "I can send a small demo dataset so you can see funnels, trends, and dashboards in action.",
-      "Everything I send is tagged so you can wipe it in one click later."
+      "Everything is tagged wizard_seed:true and uses wizard-demo-user-* distinct IDs — events are immutable in PostHog, but you can filter these out of any query."
     ],
     "outro": "Want me to seed some demo data to explore?"
   },
