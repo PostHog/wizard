@@ -148,6 +148,12 @@ export type AskAnswers = Record<string, string | string[]>;
 export interface PendingQuestion {
   id: string;
   questions: AskQuestion[];
+  /**
+   * UTC ISO 8601 timestamp of when the ask was created. Published on the
+   * task stream as `pending_input.asked_at` so the web app can age the
+   * prompt; stable across pushes for the lifetime of one ask.
+   */
+  askedAt?: string;
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
   /**

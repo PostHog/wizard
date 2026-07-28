@@ -5,7 +5,7 @@ import type {
   TaskStreamUpdate,
 } from '@lib/task-stream/types';
 import type { WizardStore, TaskItem } from '@ui/tui/store';
-import { RunPhase } from '@lib/wizard-session';
+import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +19,7 @@ interface MockStoreState {
   tasks: TaskItem[];
   eventPlan: unknown[];
   installDir?: string;
+  pendingQuestion?: PendingQuestion | null;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -38,6 +39,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         skillId: state.skillId,
         outroData: null,
         installDir: state.installDir,
+        pendingQuestion: state.pendingQuestion ?? null,
       };
     },
     get tasks() {
@@ -276,6 +278,58 @@ describe('TaskStreamPush', () => {
       expect(payload.skill_id).toMatch(/^[A-Za-z0-9_.-]+$/);
     });
 
+    it('publishes pending_input while a wizard_ask is open', async () => {
+      const store = createMockStore({
+        runPhase: RunPhase.Running,
+        pendingQuestion: pendingQuestion(),
+      });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].pending_input).toEqual({
+        id: 'q-1',
+        asked_at: '2026-07-28T10:00:00.000Z',
+        question_count: 1,
+        sensitive: false,
+        prompts: ['Which region is your project in?'],
+      });
+    });
+
+    it('omits pending_input when no wizard_ask is open', async () => {
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].pending_input).toBeUndefined();
+    });
+
+    it('withholds prompts when any question is sensitive', async () => {
+      const store = createMockStore({
+        runPhase: RunPhase.Running,
+        pendingQuestion: pendingQuestion({
+          questions: [
+            {
+              id: 'key',
+              prompt: 'Paste your API key',
+              kind: 'text',
+              sensitive: true,
+            },
+            { id: 'region', prompt: 'Which region?', kind: 'text' },
+          ],
+        }),
+      });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      const pendingInput = dest.calls[0][1].pending_input;
+      expect(pendingInput?.sensitive).toBe(true);
+      expect(pendingInput?.question_count).toBe(2);
+      expect(pendingInput?.prompts).toBeUndefined();
+    });
+
     it('populates error when phase is Error', async () => {
       const store = createMockStore({ runPhase: RunPhase.Error });
       const { push, dest } = createPush(store);
@@ -444,6 +498,31 @@ describe('TaskStreamPush', () => {
     });
   });
 
+  describe('spec: wizard_ask open/close bypasses debounce', () => {
+    it('question appearing and resolving each produce an immediate push', async () => {
+      vi.useFakeTimers();
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      const { push, dest } = createPush(store);
+      push.attach();
+
+      store._setAndEmit({ runPhase: RunPhase.Running });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(1);
+
+      // wizard_ask opens — no debounce wait.
+      store._setAndEmit({ pendingQuestion: pendingQuestion() });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(2);
+      expect(dest.calls[1][1].pending_input?.id).toBe('q-1');
+
+      // User answers — the clearing push is just as immediate.
+      store._setAndEmit({ pendingQuestion: null });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(3);
+      expect(dest.calls[2][1].pending_input).toBeUndefined();
+    });
+  });
+
   describe('spec: coalesces concurrent emits during in-flight push', () => {
     it('emits during a slow flush produce one follow-up push with the latest state', async () => {
       const store = createMockStore({ runPhase: RunPhase.Running });
@@ -592,6 +671,24 @@ function taskItem(label: string): TaskItem {
     activeForm: label,
     status: 'pending' as TaskItem['status'],
     done: false,
+  };
+}
+
+function pendingQuestion(
+  overrides: Partial<PendingQuestion> = {},
+): PendingQuestion {
+  return {
+    id: 'q-1',
+    source: 'test-skill',
+    askedAt: '2026-07-28T10:00:00.000Z',
+    questions: [
+      {
+        id: 'region',
+        prompt: 'Which region is your project in?',
+        kind: 'text',
+      },
+    ],
+    ...overrides,
   };
 }
 
