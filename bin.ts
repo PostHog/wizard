@@ -12,7 +12,19 @@ const NODE_VERSION_RANGE = '>=22.22.0';
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   // eslint-disable-next-line no-console
   console.log(
-    `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
+    [
+      `The PostHog wizard needs a newer version of Node.js to run.`,
+      ``,
+      `  You have:  ${process.version}`,
+      `  You need:  v${NODE_VERSION_RANGE.replace('>=', '')} or later`,
+      ``,
+      `Node.js is the program that runs the wizard. To update it:`,
+      ``,
+      `  Download the latest version from https://nodejs.org/en/download`,
+      `  Or, if you use nvm, run: nvm install 22 && nvm use 22`,
+      ``,
+      `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
+    ].join('\n'),
   );
   process.exit(1);
 }
