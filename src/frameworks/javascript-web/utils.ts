@@ -33,6 +33,34 @@ export const FRAMEWORK_PACKAGES = [
 ] as const;
 
 /**
+ * Packages that mean the project serves requests rather than shipping a browser
+ * bundle. Checked against `dependencies` only — a static site may well keep a
+ * server in `devDependencies` to preview itself locally, and that shouldn't
+ * read as a backend.
+ */
+export const SERVER_PACKAGES = [
+  'express',
+  'fastify',
+  'koa',
+  '@nestjs/core',
+  '@hapi/hapi',
+  'hapi',
+  'restify',
+  'h3',
+] as const;
+
+/**
+ * An index.html in the project root — the entry point of a site, as opposed to
+ * a `docs/` page or a generated report deeper in the tree. Used only where a
+ * match has to stand on its own without a lockfile to corroborate it.
+ */
+export function hasRootIndexHtml(
+  options: Pick<WizardRunOptions, 'installDir'>,
+): boolean {
+  return fs.existsSync(path.join(options.installDir, 'index.html'));
+}
+
+/**
  * Detect the JS package manager for the project by checking lockfiles.
  * Reuses the existing package manager detection infrastructure.
  */
