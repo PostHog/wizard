@@ -20,11 +20,11 @@ import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import {
+  Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
-import { piRuntimeNotes } from './runtime-notes';
 import {
   queueTools,
   renderToolInventory,
@@ -36,6 +36,7 @@ import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
   buildScrubbedEnv,
@@ -124,6 +125,7 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   const {
     session,
+    programConfig,
     boot,
     prompt,
     spinner,
@@ -240,18 +242,15 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const codingTools = allowedPiCodingTools(allowedTools);
     const orchestratorTools = allowedOrchestratorTools(disallowedTools);
 
-    const { getWizardCommandments } = await import('@lib/agent/commandments');
     const resourceLoader = new DefaultResourceLoader({
       cwd: session.installDir,
       agentDir: getAgentDir(),
-      systemPrompt:
-        // No task-list tools in a task session — see the module header.
-        getWizardCommandments(false) +
-        '\n' +
-        piRuntimeNotes(Sequence.orchestrator, {
-          bash: codingTools.has('bash'),
-          posthogMcp,
-        }),
+      systemPrompt: assembleCommandments({
+        program: programConfig.id,
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
+        caps: { bash: codingTools.has('bash'), posthogMcp },
+      }),
       noExtensions: true,
       noSkills: true,
       noContextFiles: true,

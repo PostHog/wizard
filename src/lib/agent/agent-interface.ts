@@ -13,6 +13,8 @@ import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { runtimeEnv } from '@env';
 import {
+  Harness,
+  Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   wizardUserAgentForProgram,
@@ -33,7 +35,7 @@ import {
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
-import { getWizardCommandments } from './commandments';
+import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
@@ -304,6 +306,10 @@ type AgentRunConfig = {
    * not touch other programs' linear runs.
    */
   suppressTaskRender?: boolean;
+  /** Program id, for the program-axis commandments. */
+  program?: string;
+  /** Resolved sequence, for the sequence-axis commandments. */
+  sequence: Sequence;
 };
 
 /**
@@ -586,6 +592,9 @@ export async function initializeAgent(
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
+      program: config.integrationLabel,
+      // A queue context is present only on a task run; that is the sequence.
+      sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
     };
 
     logToFile('Agent config:', {
@@ -959,9 +968,14 @@ export async function runAgent(
         systemPrompt: {
           type: 'preset',
           preset: 'claude_code',
-          // Append wizard-wide commandments rather than replacing
-          // the preset so we keep default Claude Code behaviors.
-          append: getWizardCommandments(),
+          // Append the run's commandments rather than replacing the preset so
+          // we keep default Claude Code behaviors. An orchestrator context is
+          // present only on a task run — that is what picks the sequence.
+          append: assembleCommandments({
+            program: agentConfig.program,
+            sequence: agentConfig.sequence,
+            harness: Harness.anthropic,
+          }),
         },
         tools: { type: 'preset', preset: 'claude_code' },
         // Capture stderr from CLI subprocess for debugging

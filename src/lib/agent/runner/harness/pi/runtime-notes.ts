@@ -80,17 +80,6 @@ const VERIFY_WITH_BUILD =
 const DISPATCH_AGENT =
   "- When you call `dispatch_agent`, make the prompt fully self-contained (exact paths, patterns, and the precise question) — the subagent can't see your context, is read-only, and can't dispatch further.";
 
-/**
- * LINEAR only: only the linear pi session holds the Task tools and drives the
- * whole run itself. Orchestrator task agents each do one step and never see these.
- */
-const TASK_STATUS_MANAGEMENT = [
-  '- Use the Task tools to plan and track the whole run so the user always sees where you are. Create the task list once you understand the work — after you load and skim the skill workflow, not before — with one task per stage covering the whole run through to instrumenting events, creating the dashboard, and writing the setup report. Give each an imperative subject AND an `activeForm` (the present-continuous label the panel shows while it runs, e.g. subject "Install SDK" / activeForm "Installing SDK"). Keep the list current: add a task the moment you discover work it is missing.',
-  '- Try to keep exactly ONE task `in_progress`. `TaskUpdate` it to `in_progress` right before you start that stage, and to `completed` the instant you finish it — one at a time, never batched at the end. Only mark `completed` when the work is genuinely done; if the build fails, a step is partial, or you hit a blocker, keep it `in_progress` and add a task for the fix.',
-  '- After you complete a task, take the next one in order (lowest id first — earlier stages set up later ones), mark it `in_progress`, and continue. Driving the list in order top to bottom is how you finish every stage.',
-  '- Each task subject is SHORT — a few words naming only the stage of work: "Analyze project", "Install SDK", "Initialize PostHog", "Instrument events", "Set env vars", "Verify", "Create dashboard". No file or directory names, no framework/router/package names, no specific event names, and no parenthetical "(...)" detail. The detail belongs in the work and the `activeForm`, not the subject.',
-];
-
 const STATUS_LINEAR =
   '- Status updates are PLAIN TEXT you write in your reply, NOT a tool call — there is no status tool. When you begin a new action, put a line that starts with the literal marker [STATUS] and a short present-tense phrase (e.g. "[STATUS] Reading the router entry") in the SAME turn as the tool call for that action. CRITICAL: never send a turn that is ONLY a [STATUS] line with no tool call — a turn with no tool call ends the run. Always pair [STATUS] with a tool call. The harness parses any [STATUS] line and shows it as the live status. Do this OFTEN — several times per task — but always alongside a tool call. It is free.';
 
@@ -124,7 +113,7 @@ export function piRuntimeNotes(sequence: Sequence, caps: RuntimeCaps): string {
   if (linear) notes.push(SKILL_MENU, SKILL_STEPS);
   notes.push(NO_LITERAL_URL, ENV_VIA_MCP);
   if (caps.posthogMcp) notes.push(POSTHOG_MCP);
-  if (linear) notes.push(DASHBOARD_STEP, ...TASK_STATUS_MANAGEMENT);
+  if (linear) notes.push(DASHBOARD_STEP);
 
   notes.push(linear ? STATUS_LINEAR : STATUS_TASK);
   if (!linear) notes.push(COMPLETE_TASK);
