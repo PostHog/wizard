@@ -28,6 +28,24 @@ describe('bash fence: the Python venv workflow the runtime notes prescribe', () 
     expect(ok('python3 -m pip install -r requirements.txt')).toBe(true);
   });
 
+  it('allows the verify step: compileall and lint tools, incl. through a venv', () => {
+    // compileall is Python's typecheck-equivalent — byte-compiles without
+    // importing, so the verify step has some way to prove the edits parse.
+    expect(ok('python3 -m compileall app config.py')).toBe(true);
+    expect(ok('.venv/bin/python -m compileall server.py')).toBe(true);
+    expect(ok('python -m ruff check .')).toBe(true);
+    expect(ok('.venv/bin/ruff check app')).toBe(true);
+    expect(ok('.venv/bin/mypy app')).toBe(true);
+    expect(ok('venv/bin/black --check .')).toBe(true);
+  });
+
+  it('refuses anything else under <venv>/bin — that would be arbitrary exec', () => {
+    expect(ok('.venv/bin/sh -c whoami')).toBe(false);
+    expect(ok('.venv/bin/pytest')).toBe(false);
+    // A framework CLI imports and runs the app; compileall covers verification.
+    expect(ok('.venv/bin/flask routes')).toBe(false);
+  });
+
   it('keeps Django’s system check', () => {
     expect(ok('python manage.py check')).toBe(true);
   });

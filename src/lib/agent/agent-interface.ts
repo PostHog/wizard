@@ -307,6 +307,8 @@ type AgentRunConfig = {
    * not touch other programs' linear runs.
    */
   suppressTaskRender?: boolean;
+  /** Scan-triage classifier, built from this run's gateway auth. */
+  triageProvider: LLMProvider;
   /** Program id, for the program-axis commandments. */
   program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
@@ -511,6 +513,13 @@ export async function initializeAgent(
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
 
+    // Same values the env vars above carry, handed over explicitly so triage
+    // never has to read them back out of the environment.
+    const triageProvider = createTriageLLMProvider(
+      { baseURL: gatewayUrl, authToken: config.posthogApiKey },
+      Harness.anthropic,
+    );
+
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
@@ -576,6 +585,7 @@ export async function initializeAgent(
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
+      triageProvider,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -593,6 +603,7 @@ export async function initializeAgent(
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
+      triageProvider,
       program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
@@ -819,10 +830,7 @@ export async function runAgent(
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
-    // Resolved in bootstrap; the env fallback covers callers without a boot result.
-    const triageProvider =
-      config?.triageProvider ??
-      createTriageLLMProvider(undefined, Harness.anthropic);
+    const triageProvider = agentConfig.triageProvider;
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like

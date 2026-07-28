@@ -85,6 +85,7 @@ describe('runAgent', () => {
     mcpServers: {},
     model: 'claude-opus-4-5-20251101',
     sequence: Sequence.linear,
+    triageProvider: () => Promise.resolve('false_positive'),
   };
 
   beforeEach(() => {

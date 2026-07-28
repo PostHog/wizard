@@ -59,8 +59,10 @@ const NPX_TOOLS = new Set([
 ]);
 
 const PIP_SUBCOMMANDS = ['install', 'uninstall', 'show', 'list', 'index'];
-/** `.venv/bin/pip`, `venv/bin/python3`, `env/bin/pip3` — a venv-local interpreter. */
+/** `.venv/bin/pip`, `venv/bin/python3` — a venv-local interpreter, judged as the tool it is. */
 const VENV_BIN = /^[\w./-]*\/bin\/(pip3?|python3?)$/;
+/** `.venv/bin/ruff`, `venv/bin/mypy` — a tool installed into the venv. Only lint/format tools qualify. */
+const VENV_TOOL = /^[\w./-]*\/bin\/([\w.-]+)$/;
 const BUNDLE_SUBCOMMANDS = ['install', 'add', 'remove', 'update', 'show'];
 const MAVEN_GOALS = [
   'install',
@@ -101,7 +103,8 @@ const DANGEROUS_OPERATORS = /[;`$()]/;
 const ALLOWED_TOOLS_SUMMARY =
   'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
   'npx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
-  'python/python3 (-m venv <dir>, -m pip <install|...>, manage.py check) and any <venv>/bin/pip|python, ' +
+  'python/python3 (-m venv <dir>, -m pip <install|...>, -m compileall <files>, -m <lint tool>, manage.py check), ' +
+  'any <venv>/bin/pip|python plus <venv>/bin/<lint tool>, ' +
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
   'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
@@ -265,6 +268,10 @@ function commandDecision(command: string): BashFenceDecision {
   // A venv-local interpreter (`.venv/bin/pip`, `venv/bin/python3`) is the
   // sanctioned way to install on Python — judge it as the tool it is.
   const bin = raw.match(VENV_BIN)?.[1] ?? raw;
+  // A lint/format tool installed into the venv is reached by its venv path;
+  // anything else under `<venv>/bin/` stays denied (it would be arbitrary exec).
+  const venvTool = raw === bin ? raw.match(VENV_TOOL)?.[1] : undefined;
+  if (venvTool && isLintingTool(venvTool)) return { allowed: true };
   if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command);
   if (bin === 'npx') return npxDecision(parts, command);
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
@@ -288,11 +295,21 @@ function commandDecision(command: string): BashFenceDecision {
     ) {
       return { allowed: true };
     }
+    // `-m compileall` is Python's typecheck-equivalent — the verify step has no
+    // other way to prove the edited files parse. It byte-compiles without
+    // importing them, so it never runs project code.
+    if (parts[1] === '-m' && parts[2] === 'compileall') {
+      return { allowed: true };
+    }
+    // `python -m <lint tool>` — how ruff/black/mypy are invoked inside a venv.
+    if (parts[1] === '-m' && parts[2] && isLintingTool(parts[2])) {
+      return { allowed: true };
+    }
     return denyCommand(
       command,
       `Allowed ${bin} shapes: -m venv <dir>, -m pip <${PIP_SUBCOMMANDS.join(
         '|',
-      )}>, manage.py check.`,
+      )}>, -m compileall <files>, -m <lint tool>, manage.py check.`,
     );
   }
   if (bin === 'uv' && parts[1] === 'pip') {

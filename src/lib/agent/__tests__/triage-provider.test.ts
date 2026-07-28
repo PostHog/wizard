@@ -24,19 +24,22 @@ describe('triage model routing', () => {
 });
 
 describe('createTriageLLMProvider', () => {
-  it('returns undefined with no auth so the caller fails closed', () => {
-    expect(createTriageLLMProvider(undefined, Harness.pi)).toBeUndefined();
-  });
-
-  it('falls back to the anthropic gateway env when no auth is passed', () => {
+  // Auth is a required argument: a call site that has none is a compile error,
+  // not a provider that silently returns undefined and fails every scan closed.
+  it('never reads gateway auth out of the environment', () => {
     process.env.ANTHROPIC_BASE_URL = 'https://env.posthog.test';
     process.env.ANTHROPIC_AUTH_TOKEN = 'env-tok';
-    expect(createTriageLLMProvider(undefined, Harness.anthropic)).toBeDefined();
+    complete.mockResolvedValue(reply('false_positive'));
+    const provider = createTriageLLMProvider(AUTH, Harness.anthropic);
+    return provider('verdict?').then(() => {
+      expect(complete.mock.calls[0][0].baseUrl).toBe(AUTH.baseURL);
+      expect(complete.mock.calls[0][2]?.apiKey).toBe(AUTH.authToken);
+    });
   });
 
   it('triages a pi run on luna at the table effort, over openai-completions', async () => {
     complete.mockResolvedValue(reply('true_positive'));
-    const provider = createTriageLLMProvider(AUTH, Harness.pi)!;
+    const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
     await expect(provider('verdict?')).resolves.toBe('true_positive');
 
@@ -52,7 +55,7 @@ describe('createTriageLLMProvider', () => {
 
   it('triages an anthropic run on haiku over anthropic-messages', async () => {
     complete.mockResolvedValue(reply('false_positive'));
-    const provider = createTriageLLMProvider(AUTH, Harness.anthropic)!;
+    const provider = createTriageLLMProvider(AUTH, Harness.anthropic);
 
     await expect(provider('verdict?')).resolves.toBe('false_positive');
 
@@ -89,7 +92,7 @@ describe('createTriageLLMProvider', () => {
         { type: 'text', text: 'false_positive' },
       ],
     } as never);
-    const provider = createTriageLLMProvider(AUTH, Harness.pi)!;
+    const provider = createTriageLLMProvider(AUTH, Harness.pi);
     await expect(provider('verdict?')).resolves.toBe('false_positive');
   });
 });
