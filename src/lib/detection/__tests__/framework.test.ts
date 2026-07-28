@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { RUST_AGENT_CONFIG } from '../../../frameworks/rust/rust-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -137,6 +138,16 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Rust crate resolves to rust', async () => {
+    const opts = project({
+      'Cargo.toml': '[package]\nname = "my-app"\nedition = "2021"\n',
+      'src/main.rs': 'fn main() {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.rust,
+    );
+  });
+
   test('a Flutter project is not claimed by anything', async () => {
     const opts = project({
       'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
@@ -165,6 +176,29 @@ describe('android detect', () => {
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('rust detect', () => {
+  const detect = RUST_AGENT_CONFIG.detection.detect;
+
+  test('claims a crate with a [package] section', async () => {
+    const opts = project({
+      'Cargo.toml': '[package]\nname = "my-app"\nedition = "2021"\n',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a workspace-root-only manifest', async () => {
+    const opts = project({
+      'Cargo.toml': '[workspace]\nmembers = ["crates/*"]\n',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a Cargo.toml', async () => {
+    const opts = project({ 'src/main.rs': 'fn main() {}' });
     await expect(detect(opts)).resolves.toBe(false);
   });
 });
