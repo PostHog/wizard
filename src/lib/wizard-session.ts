@@ -10,16 +10,18 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import type { Integration } from './constants';
+import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/agent-interface';
-import type { ApiUser } from './api';
+import type { SettingsConflict } from './agent/claude-settings';
+import type { ApiUser, ApiProject } from './api';
+import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
   projectApiKey: string;
-  host: string;
+  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
+  host: HostResolution;
   projectId: number;
 }
 
@@ -56,12 +58,12 @@ export enum AdditionalFeature {
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'LLM analytics',
+  [AdditionalFeature.LLM]: 'AI observability',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
@@ -87,6 +89,19 @@ export interface OutroData {
   body?: string;
   /** Success-only: bulleted list of "what the agent did" */
   changes?: string[];
+  /**
+   * Success-only: a prominent, labeled link to where the user should go
+   * next (e.g. an inbox the program just configured). Rendered right under
+   * the headline and shown verbatim — no UTM tagging — so the URL stays
+   * clean and copy-pasteable. Set per-program in buildOutroData.
+   */
+  primaryLink?: { label: string; url: string };
+  /**
+   * Success-only: a short "what to do next" checklist with its own heading,
+   * rendered as a bulleted list. Distinct from `changes`, which recaps what
+   * the agent already did.
+   */
+  nextSteps?: { heading: string; items: string[] };
   docsUrl?: string;
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
@@ -95,6 +110,14 @@ export interface OutroData {
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
   notebookUrl?: string;
+  /**
+   * Copy-paste prompt the operator hands to their coding agent to finish the
+   * job (work the report's checklist). Printed to the terminal's main buffer on
+   * exit (see getExitLine in start-tui.ts) — the TUI's alternate screen is wiped
+   * on exit, so the scrollback line is where it survives and can be
+   * triple-click-selected. Set per-program in buildOutroData.
+   */
+  handoffPrompt?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */
@@ -105,7 +128,7 @@ export interface AskQuestion {
   /** text = single-line free input; single/multi = picker */
   kind: 'single' | 'multi' | 'text';
   /** Required for `single` and `multi`. Ignored for `text`. */
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; description?: string }[];
   /** Defaults to true */
   required?: boolean;
   /**
@@ -127,6 +150,14 @@ export interface PendingQuestion {
   questions: AskQuestion[];
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
+  /**
+   * When true, the ask overlay renders standalone URLs in prompt text as
+   * OSC 8 hyperlinks and copies a lone URL to the clipboard. Opt-in per
+   * program (set from `ProgramRun.richLinks` via the ask bridge); defaults
+   * to false so existing flows render prompts exactly as before. See
+   * `LinkText` / `link-helpers`.
+   */
+  richLinks?: boolean;
 }
 
 /**
@@ -148,10 +179,25 @@ export interface WizardSession {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  /**
+   * Explicit PostHog base URL (`--base-url`). When set, it pins every PostHog
+   * origin — API host, cloud/app URL, OAuth server — and `region` is ignored.
+   * The runtime equivalent of the dev-build localhost routing; lets the shipped
+   * wizard target a local/self-hosted stack. Threaded into the URL helpers in
+   * `@utils/urls`. Empty/unset → region-based resolution.
+   */
+  baseUrl?: string;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
   noTelemetry: boolean;
+
+  /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
+  harness?: Harness;
+  /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
+  sequence?: Sequence;
+  /** `--model` override (gateway id), read by `resolveHarness`. Wins over the binding's model. */
+  model?: string;
 
   // From detection + screens
   setupConfirmed: boolean;
@@ -196,6 +242,14 @@ export interface WizardSession {
    */
   apiUser: ApiUser | null;
 
+  /**
+   * Project payload resolved at authentication, kept so a second agent run in
+   * the same invocation (e.g. self-driving's integration phase) reuses the
+   * first login wholesale instead of re-authenticating. The resolved region
+   * lives on `credentials.host.region`.
+   */
+  apiProject: ApiProject | null;
+
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
@@ -212,8 +266,46 @@ export interface WizardSession {
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
   mcpSuggestedPromptsDismissed: boolean;
+  /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
+  slackStepDismissed: boolean;
+  /**
+   * Whether the project already has a Slack integration connected.
+   * `null` until detected. Prefetched by the tutorial screen as soon as
+   * credentials exist so the Connect-Slack step renders the right
+   * variant immediately instead of flashing the nudge first.
+   */
+  slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
+
+  /**
+   * Self-driving only: whether to integrate PostHog as part of this run.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
+   */
+  integrate: boolean | null;
+
+  /**
+   * Ids of composed run steps that have completed — e.g. self-driving's
+   * `integrate-run`. Lets a run step's `isComplete` hold after it ran,
+   * independent of the shared `runPhase`.
+   */
+  completedRuns: string[];
+
+  /**
+   * Self-driving only: whether the user confirmed the handoff screen shown
+   * after the integration run ("PostHog is installed — now set up Self-driving").
+   * Gates the Self-driving run so it doesn't start until acknowledged. Only
+   * reached in the integrate path; the already-has-PostHog path skips it.
+   */
+  selfDrivingHandoffConfirmed: boolean;
 
   // Runtime
   readinessResult: WizardReadinessResult | null;
@@ -222,6 +314,7 @@ export interface WizardSession {
   settingsConflicts: SettingsConflict[] | null;
   authErrorDetail: {
     hasSettingsConflict: boolean;
+    conflicts?: SettingsConflict[];
     logFilePath: string;
   } | null;
   portConflictProcess: {
@@ -261,11 +354,16 @@ export function buildSession(args: {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  baseUrl?: string;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
   noTelemetry?: boolean;
+  harness?: Harness;
+  sequence?: Sequence;
+  model?: string;
+  integrate?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -277,10 +375,14 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
+    baseUrl: args.baseUrl,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    harness: args.harness,
+    sequence: args.sequence,
+    model: args.model,
 
     setupConfirmed: false,
     integration: args.integration ?? null,
@@ -297,13 +399,21 @@ export function buildSession(args: {
     mcpOutcome: null,
     mcpInstalledClients: [],
     mcpSuggestedPromptsDismissed: false,
+    slackStepDismissed: false,
+    slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
+    // `--integrate` forces integration (skip the question); otherwise the
+    // integration-check screen resolves it from null.
+    integrate: args.integrate === true ? true : null,
+    completedRuns: [],
+    selfDrivingHandoffConfirmed: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
+    apiProject: null,
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,

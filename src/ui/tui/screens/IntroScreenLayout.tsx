@@ -28,8 +28,16 @@ interface IntroScreenLayoutProps {
   /** Title text after the colored blocks, e.g. "PostHog Wizard 🦔" */
   title?: string;
 
-  /** Show the default "We'll use AI…" / ".env*…" subtitle. Default true. */
+  /** Show the subtitle below the title. Default true. */
   showSubtitle?: boolean;
+
+  /**
+   * Custom subtitle content, rendered in place of the default
+   * "We'll use AI… / .env*…" lines when `showSubtitle` is true. Pass the
+   * inner <Text> lines — the layout owns the centered, top-margined
+   * wrapper. Defaults to the generic subtitle when omitted.
+   */
+  subtitle?: ReactNode;
 
   /** Free-form content below the title (copy, spinners, pickers, notices) */
   body?: ReactNode;
@@ -45,6 +53,13 @@ interface IntroScreenLayoutProps {
 
   /** Menu options. Pass null to hide the menu entirely. */
   menuOptions?: { label: string; value: string }[] | null;
+
+  /**
+   * Menu alignment. 'center' (default) matches the wizard's standard
+   * intro menu. 'left' is for views like the privacy panel where the
+   * menu should align with the panel content rather than viewport center.
+   */
+  menuAlign?: 'center' | 'left';
 
   /** Called when the user picks a menu option */
   onSelect?: (value: string) => void;
@@ -67,15 +82,27 @@ const WizardTitle = ({ title }: { title: string }) => (
   </Text>
 );
 
+/** Generic subtitle shown when a screen doesn't supply its own. */
+const DEFAULT_SUBTITLE = (
+  <>
+    <Text dimColor>
+      We'll use AI to analyze your project and complete work.
+    </Text>
+    <Text dimColor>.env* file contents will not leave your machine.</Text>
+  </>
+);
+
 export const IntroScreenLayout = ({
   installDir,
   title = 'PostHog Wizard 🦔',
   showSubtitle = true,
+  subtitle,
   body,
   showDetection = true,
   detectionRows,
   children,
   menuOptions,
+  menuAlign = 'center',
   onSelect,
   programLabel,
   skillId,
@@ -119,12 +146,7 @@ export const IntroScreenLayout = ({
 
           {showSubtitle && (
             <Box flexDirection="column" alignItems="center" marginTop={1}>
-              <Text dimColor>
-                We'll use AI to analyze your project and complete work.
-              </Text>
-              <Text dimColor>
-                .env* file contents will not leave your machine.
-              </Text>
+              {subtitle ?? DEFAULT_SUBTITLE}
             </Box>
           )}
 
@@ -177,9 +199,11 @@ export const IntroScreenLayout = ({
           </Box>
         )}
 
-        <Box width={24}>
+        <Box width={menuAlign === 'left' ? 64 : 24} marginTop={1}>
           {resolvedMenuOptions && onSelect && (
-            <Box justifyContent="center">
+            <Box
+              justifyContent={menuAlign === 'left' ? 'flex-start' : 'center'}
+            >
               <PickerMenu
                 key={resolvedMenuOptions.map((o) => o.value).join(',')}
                 options={resolvedMenuOptions}

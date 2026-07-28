@@ -51,8 +51,28 @@ function mapComponentStatus(status: string): ServiceHealthStatus {
   }
 }
 
-function errResult(error: string): BaseHealthResult {
-  return { status: ServiceHealthStatus.Degraded, error };
+/**
+ * Build an error result for fetch failures. The kind matters for
+ * downstream reconciliation:
+ *
+ *   - 'http' (incident.io returned a bad status code) → `Down`. We
+ *     reached the status page but it told us something is wrong on
+ *     its side. We have a definitive response.
+ *   - 'network' (timeout, DNS failure, TCP/TLS failure) → `NoConnection`.
+ *     We never reached the status page. Treating this as `Degraded`
+ *     (the previous behavior) silently flipped the reconciliation in
+ *     `readiness.ts` from "soft" to "confirmed outage" whenever the
+ *     user's own network was flaky — exactly the false positive this
+ *     module is meant to help diagnose.
+ */
+function errResult(error: string, kind: 'http' | 'network'): BaseHealthResult {
+  return {
+    status:
+      kind === 'http'
+        ? ServiceHealthStatus.Down
+        : ServiceHealthStatus.NoConnection,
+    error,
+  };
 }
 
 const POSTHOG_STATUS_URL = 'https://www.posthogstatus.com/api/v1/summary';
@@ -67,7 +87,7 @@ async function fetchPosthogStatus(
     clearTimeout(tid);
 
     if (!res.ok) {
-      const err = errResult(`HTTP ${res.status}`);
+      const err = errResult(`HTTP ${res.status}`, 'http');
       return { overall: err, components: err };
     }
 
@@ -114,10 +134,13 @@ async function fetchPosthogStatus(
     };
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
-      const err = errResult('Request timed out');
+      const err = errResult('Request timed out', 'network');
       return { overall: err, components: err };
     }
-    const err = errResult(e instanceof Error ? e.message : 'Unknown error');
+    const err = errResult(
+      e instanceof Error ? e.message : 'Unknown error',
+      'network',
+    );
     return { overall: err, components: err };
   }
 }

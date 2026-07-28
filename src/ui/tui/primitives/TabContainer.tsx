@@ -125,9 +125,10 @@ export const TabContainer = ({
         </Box>
       )}
 
-      {/* Tab bar */}
+      {/* Tab bar — wraps onto extra rows when there are more tabs than
+          fit the terminal width, instead of clipping the overflow. */}
       <Box height={1} />
-      <Box gap={1} paddingX={1}>
+      <Box gap={1} paddingX={1} flexWrap="wrap" flexShrink={0}>
         {tabs.map((tab, i) => (
           <Text
             key={tab.id}

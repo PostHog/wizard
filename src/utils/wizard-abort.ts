@@ -7,6 +7,7 @@
  * The legacy abort() in setup-utils.ts delegates here.
  */
 import { analytics } from './analytics';
+import { logToFile } from './debug';
 import { getUI } from '@ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 
@@ -38,6 +39,18 @@ export function clearCleanup(): void {
   cleanupFns.length = 0;
 }
 
+/** Runs all registered cleanup functions and drains the array. */
+export function runCleanups(): void {
+  const fns = cleanupFns.splice(0);
+  for (const fn of fns) {
+    try {
+      fn();
+    } catch {
+      /* cleanup should not prevent exit */
+    }
+  }
+}
+
 export async function wizardAbort(
   options?: WizardAbortOptions,
 ): Promise<never> {
@@ -48,14 +61,13 @@ export async function wizardAbort(
     exitCode = 1,
   } = options ?? {};
 
-  // 1. Run registered cleanup functions
-  for (const fn of cleanupFns) {
-    try {
-      fn();
-    } catch {
-      /* cleanup should not prevent exit */
-    }
+  logToFile(`[wizard-abort] exitCode=${exitCode}, message: ${message}`);
+  if (error) {
+    logToFile('[wizard-abort] error:', error);
   }
+
+  // 1. Run registered cleanup functions
+  runCleanups();
 
   // 2. Capture error in analytics (if provided)
   if (error) {

@@ -6,13 +6,14 @@
  */
 
 import { join } from 'node:path';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
 import { getAuditChecks } from '@lib/programs/audit/types';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface AuditOutroScreenProps {
   store: WizardStore;
@@ -24,9 +25,7 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
-    store.setOutroDismissed();
-  });
+  useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
 

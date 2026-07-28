@@ -34,6 +34,7 @@ export enum Overlay {
   PortConflict = 'port-conflict',
   ManualAuthCode = 'manual-auth-code',
   AuthError = 'auth-error',
+  SessionTimeout = 'session-timeout',
   WizardAsk = 'wizard-ask',
 }
 

@@ -1,24 +1,14 @@
-import { runWizard, runWizardCI } from '@lib/runners';
 import { revenueAnalyticsConfig } from '@lib/programs/revenue-analytics/index';
-import { skillProgramOptions } from './skill-program-options';
-import type { Command } from './command';
 
-export const revenueCommand: Command = {
-  name: 'revenue',
-  description: revenueAnalyticsConfig.description,
-  options: {
-    ...skillProgramOptions,
-    ...(revenueAnalyticsConfig.cliOptions ?? {}),
-  },
-  handler: (argv) => {
-    const extras =
-      revenueAnalyticsConfig.mapCliOptions?.(argv as Record<string, unknown>) ??
-      {};
-    const options = { ...argv, ...extras };
-    if (options.ci) {
-      runWizardCI(revenueAnalyticsConfig, options);
-    } else {
-      runWizard(revenueAnalyticsConfig, options);
-    }
-  },
-};
+import type { Command } from './command';
+import { nativeCommandFactory } from './factories/native-command-factory';
+
+/**
+ * `wizard revenue-analytics` — flat skill command, Stripe today.
+ *
+ * Stays flat while there's only one provider. Restructure into a family
+ * if/when a second provider lands.
+ */
+export const revenueCommand: Command = nativeCommandFactory(
+  revenueAnalyticsConfig,
+);

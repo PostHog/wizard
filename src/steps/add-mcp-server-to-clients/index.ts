@@ -10,6 +10,7 @@ import { ClaudeWebMCPClient } from './clients/claude-web';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
+import { OpenCodeMCPClient } from './clients/opencode';
 import { ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '@utils/debug';
 import { isPluginCapable, PluginCapable } from './plugin-client';
@@ -22,6 +23,7 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
     new CursorMCPClient(),
     new VisualStudioCodeClient(),
     new ZedClient(),
+    new OpenCodeMCPClient(),
   ];
   const supportedClients: MCPClient[] = [];
 

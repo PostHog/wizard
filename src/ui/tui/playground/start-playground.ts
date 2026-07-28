@@ -6,9 +6,13 @@ import { render } from 'ink';
 import { createElement } from 'react';
 import { WizardStore } from '@ui/tui/store';
 import { PlaygroundApp } from './PlaygroundApp.js';
+import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
+import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
 
 export function startPlayground(version: string): void {
+  enterDarkTerminal();
+
   const store = new WizardStore();
   store.version = version;
 
@@ -25,7 +29,7 @@ export function startPlayground(version: string): void {
   store.setCredentials({
     accessToken: 'fake',
     projectApiKey: 'fake',
-    host: 'https://app.posthog.com',
+    host: HostResolution.fromApiHost('https://app.posthog.com'),
     projectId: 0,
   });
 
@@ -35,6 +39,7 @@ export function startPlayground(version: string): void {
 
   void waitUntilExit().then(() => {
     unmount();
+    releaseTerminal();
     process.exit(0);
   });
 }

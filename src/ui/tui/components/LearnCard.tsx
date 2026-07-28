@@ -13,7 +13,10 @@ import type { WizardStore } from '@ui/tui/store';
 import { ContentSequencer, TextRevealMode } from '@ui/tui/primitives/index';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
-import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@ui/tui/primitives/TabContainer';
+import {
+  COLLAPSED_COUNT,
+  EXPANDED_COUNT,
+} from '@ui/tui/primitives/TabContainer';
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;

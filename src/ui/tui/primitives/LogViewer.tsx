@@ -15,8 +15,10 @@ import { useState, useEffect } from 'react';
 import * as fs from 'fs';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
-/** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar + tab bar */
-const CHROME_ROWS = 8;
+/** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar +
+ *  tab bar, with a couple rows of headroom so the tail never crowds the status
+ *  bar below it. */
+const CHROME_ROWS = 10;
 
 /** Bytes read from the end of the log per refresh — large enough to contain
  *  any practical visible window of lines, small enough to allocate cheaply. */

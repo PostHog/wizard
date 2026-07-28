@@ -51,7 +51,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
   const slides =
-    store.session.skillId === 'events-audit'
+    store.session.skillId === 'audit-events'
       ? EVENTS_AUDIT_AREA_SLIDES
       : AUDIT_AREA_SLIDES;
   const areaPane = (

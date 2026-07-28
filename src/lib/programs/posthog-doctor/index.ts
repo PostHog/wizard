@@ -7,6 +7,7 @@ export const posthogDoctorConfig: ProgramConfig = {
   description:
     'Diagnose your PostHog project for configuration issues and setup warnings',
   id: 'posthog-doctor',
+  requiresAi: false,
   steps: POSTHOG_DOCTOR_PROGRAM,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],

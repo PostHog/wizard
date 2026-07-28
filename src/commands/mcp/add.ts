@@ -43,6 +43,7 @@ function runMcpAdd(argv: Arguments): void {
         localMcp,
         mcpFeatures: features,
         apiKey,
+        baseUrl: argv.baseUrl as string | undefined,
       });
     } catch (error) {
       if (!isTUIUnavailable(error)) throw error;

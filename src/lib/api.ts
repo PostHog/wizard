@@ -62,6 +62,10 @@ export const ApiUserSchema = z
         slug: z.string().nullish(),
         membership_level: z.number().nullish(),
         customer_id: z.string().nullish(),
+        // Org-level AI consent gate. Signals drops all findings while
+        // this is not true. Null on older orgs (pre-2026-05 default
+        // flip) — treat null as "unknown", not "off".
+        is_ai_data_processing_approved: z.boolean().nullish(),
       })
       .passthrough(),
     organizations: z.array(
@@ -109,6 +113,15 @@ export const ApiProjectSchema = z.object({
   organization: z.string().uuid(),
   api_token: z.string(),
   name: z.string(),
+  // Product opt-ins (TeamSerializer-compat fields on /api/projects/:id).
+  // Project-level truth for "is this product enabled" — a product can be
+  // instrumented from another repo or the snippet, so these settings
+  // override repo-local evidence. Null/absent = unknown. Only the
+  // opt-ins a signals decision consumes: replay + exception autocapture
+  // feed signal-source choices; surveys feeds the surveys-scout tuning.
+  session_recording_opt_in: z.boolean().nullish(),
+  autocapture_exceptions_opt_in: z.boolean().nullish(),
+  surveys_opt_in: z.boolean().nullish(),
 });
 
 export type ApiUser = z.infer<typeof ApiUserSchema>;
@@ -214,6 +227,38 @@ export async function fetchProjectData(
     });
     throw apiError;
   }
+}
+
+/** Minimal shape of `/api/projects/:id/integrations/` — we only read `kind`. */
+const IntegrationsResponseSchema = z.object({
+  results: z.array(z.object({ kind: z.string().nullish() }).passthrough()),
+});
+
+/**
+ * Check whether the project already has a Slack integration connected.
+ * Requires the `integration:read` scope. Throws on failure — callers
+ * (including the SlackConnectScreen poll) decide how to degrade and
+ * are responsible for capturing the error exactly once.
+ */
+export async function fetchSlackConnected(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const response = await axios.get(
+    `${baseUrl}/api/projects/${projectId}/integrations/`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
+      },
+      signal,
+    },
+  );
+  const parsed = IntegrationsResponseSchema.safeParse(response.data);
+  if (!parsed.success) return false;
+  return parsed.data.results.some((i) => i.kind === 'slack');
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {

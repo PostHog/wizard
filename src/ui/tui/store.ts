@@ -15,20 +15,31 @@
 
 import { atom, map } from 'nanostores';
 import { logToFile } from '@utils/debug';
-import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+  type TokenUsageDelta,
+} from '@ui/wizard-ui';
 import {
   type WizardSession,
   type OutroData,
   type DiscoveredFeature,
   type PendingQuestion,
   type AskAnswers,
+  type CloudRegion,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
   buildSession,
 } from '@lib/wizard-session';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
+import {
+  WizardReadiness,
+  getBlockingServiceKeys,
+  type WizardReadinessResult,
+} from '@lib/health-checks/readiness';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
 import {
   WizardRouter,
   type ScreenName,
@@ -43,7 +54,10 @@ import type {
   ProgramReadyContext,
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
+import { IS_DEV } from '@lib/constants';
+import { computeTokenCostUsd } from '@lib/agent/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -61,6 +75,42 @@ export interface PlannedEvent {
   description: string;
 }
 
+/**
+ * Running token/cost estimate for the hidden Ctrl+T HUD. Accumulated live
+ * from each assistant turn's usage (see `agent-interface.ts`), then
+ * reconciled to the SDK's authoritative `total_cost_usd` once the run
+ * completes — `costIsFinal` flips so the HUD can show the number as exact
+ * rather than a running estimate.
+ */
+export interface TokenUsageSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costUsd: number;
+  costIsFinal: boolean;
+}
+
+const EMPTY_TOKEN_USAGE: TokenUsageSnapshot = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheCreationTokens: 0,
+  costUsd: 0,
+  costIsFinal: false,
+};
+
+/** Total tokens across all counters in a `TokenUsageSnapshot` — used by
+ *  both `TokenCostHud` and `exit-line.ts` to detect "no agent turns yet". */
+export function totalTokenCount(usage: TokenUsageSnapshot): number {
+  return (
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadTokens +
+    usage.cacheCreationTokens
+  );
+}
+
 interface GateEntry {
   predicate: (session: WizardSession) => boolean;
   promise: Promise<void>;
@@ -75,6 +125,60 @@ interface GateEntry {
  */
 const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
+/**
+ * Fired once per blocked readiness result, so we can quantify how often
+ * the wizard refuses to start and — crucially — split that between
+ * confirmed PostHog outages and probe-level reachability failures that
+ * are most likely the user's network. Helps us decide whether the
+ * health-check UX is over-firing.
+ */
+function captureHealthCheckBlocked(result: WizardReadinessResult): void {
+  try {
+    const health = result.health;
+    const blockingKeys = getBlockingServiceKeys(health);
+    const blockingStatuses = blockingKeys.map((k) => health[k]?.status);
+
+    const allNoConnection =
+      blockingStatuses.length > 0 &&
+      blockingStatuses.every((s) => s === ServiceHealthStatus.NoConnection);
+    const onlyGithubReleases =
+      blockingKeys.length === 1 && blockingKeys[0] === 'githubReleases';
+
+    const decision = onlyGithubReleases
+      ? 'github-releases-down'
+      : allNoConnection
+      ? 'no-connection'
+      : 'confirmed-outage';
+
+    const posthogStatus = health.posthogOverall?.status;
+    const retriesUsed = Math.max(
+      0,
+      ...(['llmGateway', 'mcp', 'githubReleases'] as const).map((k) => {
+        const ind = health[k]?.rawIndicator ?? '';
+        const m = ind.match(/attempts=(\d+)/);
+        return m ? Number(m[1]) - 1 : 0;
+      }),
+    );
+
+    analytics.wizardCapture('health check blocked', {
+      decision,
+      blocking_keys: blockingKeys,
+      posthog_status_reachable:
+        posthogStatus !== ServiceHealthStatus.NoConnection,
+      posthog_status_reports_incident:
+        posthogStatus === ServiceHealthStatus.Down ||
+        posthogStatus === ServiceHealthStatus.Degraded,
+      retries_used: retriesUsed,
+    });
+  } catch (err) {
+    logToFile(
+      `[health-checks] failed to capture analytics: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
@@ -85,6 +189,15 @@ export class WizardStore {
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
+  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
+    null,
+  );
+  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
+  // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
+  // contributors see it without needing to know the shortcut; defaults off
+  // for the published build, where it stays genuinely hidden. Still
+  // Ctrl+T-toggleable either way.
+  private $tokenHudVisible = atom(IS_DEV);
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -121,11 +234,16 @@ export class WizardStore {
   }
 
   /**
-   * Scan program steps for gate predicates and onInit callbacks.
-   * Creates gate promises and fires init work.
+   * Scan program steps for gate predicates and create gate promises.
+   *
+   * Steps are wrapped with withAiOptInGate so the injected ai-opt-in
+   * step's gate registers here — the agent runner awaits it (via
+   * WizardUI.waitForAiOptIn) before any source leaves the machine.
+   * Same wrapper screen-sequences.ts uses, so the gate and its screen
+   * can't drift apart.
    */
   private _initFromProgram(program: ProgramId): void {
-    const steps = getProgramConfig(program).steps;
+    const steps = withAiOptInGate(getProgramConfig(program));
 
     // Create gate promises from steps that define them
     for (const step of steps) {
@@ -142,10 +260,16 @@ export class WizardStore {
         });
       }
     }
+  }
 
-    // Run onInit callbacks with a minimal context interface.
-    // Arrow functions capture `this` from _initFromProgram so we don't
-    // need to alias it.
+  /**
+   * Run the program steps' onInit callbacks. startTUI calls this once
+   * the screens are actually rendering — constructing a store alone
+   * (tests, playground) must not fire init work like the health-check
+   * pre-flight, whose probes belong only to flows that show its screen.
+   */
+  runInitHooks(): void {
+    const steps = getProgramConfig(this.router.activeProgram).steps;
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {
@@ -173,6 +297,7 @@ export class WizardStore {
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
@@ -201,6 +326,25 @@ export class WizardStore {
    */
   getGate(stepId: string): Promise<void> {
     return this._gates.get(stepId)?.promise ?? Promise.resolve();
+  }
+
+  /**
+   * Resolve once `predicate(session)` is true. Unlike a gate, this is created
+   * at the await point and evaluated live against the current session, so it
+   * never latches on a startup value — the orchestrator uses it to wait for a
+   * decision (a project picked, a handoff acknowledged) without the "true while
+   * undecided" trap that latched gate predicates have.
+   */
+  waitUntil(predicate: (session: WizardSession) => boolean): Promise<void> {
+    if (predicate(this.session)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const unsub = this.subscribe(() => {
+        if (predicate(this.session)) {
+          unsub();
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -243,6 +387,19 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get currentStage(): { stage: string; startedAt: number } | null {
+    return this.$currentStage.get();
+  }
+
+  /** No-op when the stage hasn't changed, so `startedAt` survives across
+   *  re-renders and tab switches and measures real stage time. */
+  setCurrentStage(stage: string): void {
+    const cur = this.$currentStage.get();
+    if (cur?.stage === stage) return;
+    this.$currentStage.set({ stage, startedAt: Date.now() });
+    this.emitChange();
+  }
+
   get statusExpanded(): boolean {
     return this.$statusExpanded.get();
   }
@@ -277,6 +434,9 @@ export class WizardStore {
 
   setCredentials(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);
+    if (credentials?.projectId) {
+      analytics.setTag('project_id', credentials.projectId);
+    }
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
@@ -300,6 +460,7 @@ export class WizardStore {
     this.$session.setKey('integration', integration);
     this.$session.setKey('frameworkConfig', config);
     this.$session.setKey('unsupportedVersion', null);
+    if (integration) analytics.setTag('integration', integration);
     this.emitChange();
   }
 
@@ -310,6 +471,12 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    analytics.setTag('detected_framework', label);
+    this.emitChange();
+  }
+
+  setSkillId(skillId: string | null): void {
+    this.$session.setKey('skillId', skillId);
     this.emitChange();
   }
 
@@ -334,11 +501,15 @@ export class WizardStore {
 
   setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
+    if (result && result.decision === WizardReadiness.No) {
+      captureHealthCheckBlocked(result);
+    }
     this.emitChange();
   }
 
   /** User dismissed the blocking outage screen. Gate resolves via _checkGates(). */
   dismissOutage(): void {
+    logToFile('[health-checks] user dismissed outage screen, continuing');
     this.$session.setKey('outageDismissed', true);
     this.emitChange();
   }
@@ -497,6 +668,11 @@ export class WizardStore {
     this.pushOverlay(Overlay.AuthError);
   }
 
+  /** Push the session-timeout overlay (no dismiss — user must exit). */
+  showSessionTimeout(): void {
+    this.pushOverlay(Overlay.SessionTimeout);
+  }
+
   addDiscoveredFeature(feature: DiscoveredFeature): void {
     if (!this.session.discoveredFeatures.includes(feature)) {
       this.session.discoveredFeatures.push(feature);
@@ -523,13 +699,19 @@ export class WizardStore {
   setMcpComplete(
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
+    featuresSelected?: 'all' | string[],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    const featuresPayload =
+      outcome === McpOutcome.Installed && featuresSelected !== undefined
+        ? { mcp_features_selected: featuresSelected }
+        : {};
     analytics.wizardCapture('mcp complete', {
       mcp_outcome: outcome,
       mcp_installed_clients: installedClients,
+      ...featuresPayload,
       ...sessionProperties(this.session),
     });
     this.emitChange();
@@ -546,6 +728,82 @@ export class WizardStore {
 
   setMcpSuggestedPromptsDismissed(): void {
     this.$session.setKey('mcpSuggestedPromptsDismissed', true);
+    this.emitChange();
+  }
+
+  setSlackStepDismissed(): void {
+    this.$session.setKey('slackStepDismissed', true);
+    this.emitChange();
+  }
+
+  setSlackConnected(connected: boolean): void {
+    this.$session.setKey('slackConnected', connected);
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving integration-check answer. `true` → integrate the SDK as part
+   * of this run; `false` → PostHog is already set up, go straight to
+   * Self-driving. Resolves `session.integrate` from null.
+   */
+  setIntegrate(
+    integrate: boolean,
+    extra?: { via?: string; path?: string },
+  ): void {
+    this.$session.setKey('integrate', integrate);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: integrate,
+      ...(extra?.via ? { self_driving_integrate_via: extra.via } : {}),
+      ...(extra?.path ? { self_driving_integrate_path: extra.path } : {}),
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving "no PostHog account" branch of the integration check. The
+   * project has no SDK, so we always integrate (`integrate = true`); and since
+   * the user has no account, we flip `signup` and record the `email` / `region`
+   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
+   * the provisioning path (create account + email a login link) instead of
+   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
+   * leaves `signup` false so auth runs the normal OAuth login.
+   */
+  chooseProvisionAccount(email: string, region: CloudRegion): void {
+    this.$session.setKey('signup', true);
+    this.$session.setKey('email', email);
+    this.$session.setKey('region', region);
+    this.$session.setKey('integrate', true);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: true,
+      self_driving_has_account: false,
+      provision_region: region,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving handoff confirmed — the user acknowledged the post-integration
+   * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
+   */
+  confirmSelfDrivingHandoff(): void {
+    this.$session.setKey('selfDrivingHandoffConfirmed', true);
+    this.emitChange();
+  }
+
+  /**
+   * Mark a composed run step complete (e.g. self-driving's `integrate-run`).
+   * Records the step id so its `isComplete` predicate holds, clears the task
+   * list, and resets run phase to Idle so the next run step starts fresh.
+   */
+  completeRunStep(stepId: string): void {
+    const done = this.session.completedRuns;
+    if (!done.includes(stepId)) {
+      this.$session.setKey('completedRuns', [...done, stepId]);
+    }
+    this.$tasks.set([]);
+    this.$session.setKey('runPhase', RunPhase.Idle);
     this.emitChange();
   }
 
@@ -645,6 +903,11 @@ export class WizardStore {
   private _detectTransition(): void {
     const next = this.router.resolve(this.session);
     const prev = this._lastScreen;
+    if (next !== prev) {
+      // Every event carries the active TUI screen, filling the
+      // "URL / Screen" column in PostHog.
+      analytics.setTag('$screen_name', next);
+    }
     if (prev !== null && next !== prev) {
       const hooks = this._enterScreenHooks.get(next);
       if (hooks) {
@@ -673,6 +936,52 @@ export class WizardStore {
         ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
         : [...msgs, message];
     this.$statusMessages.set(next);
+    this.emitChange();
+  }
+
+  get tokenUsage(): TokenUsageSnapshot {
+    return this.$tokenUsage.get();
+  }
+
+  get tokenHudVisible(): boolean {
+    return this.$tokenHudVisible.get();
+  }
+
+  /** Hidden Ctrl+T shortcut — see ScreenContainer. Not registered as a
+   *  keyboard hint, so it never shows in the hints bar. */
+  toggleTokenHud(): void {
+    this.$tokenHudVisible.set(!this.$tokenHudVisible.get());
+    this.emitChange();
+  }
+
+  /**
+   * Accumulate one assistant turn's token usage into the running estimate.
+   * Approximate by design (no dedup for SDK-retried/replayed turns, unlike
+   * the benchmark middleware's TurnCounterPlugin) — it's a live indicator
+   * for a hidden debug HUD, not a billing record, and `setFinalTokenCostUsd`
+   * corrects the total once the run's authoritative cost is known.
+   */
+  addTokenUsage(delta: TokenUsageDelta): void {
+    const cur = this.$tokenUsage.get();
+    if (cur.costIsFinal) return;
+    const deltaCostUsd = computeTokenCostUsd(delta);
+    this.$tokenUsage.set({
+      inputTokens: cur.inputTokens + delta.inputTokens,
+      outputTokens: cur.outputTokens + delta.outputTokens,
+      cacheReadTokens: cur.cacheReadTokens + delta.cacheReadTokens,
+      cacheCreationTokens: cur.cacheCreationTokens + delta.cacheCreationTokens,
+      costUsd: cur.costUsd + deltaCostUsd,
+      costIsFinal: false,
+    });
+    this.emitChange();
+  }
+
+  /** Reconcile the running cost estimate to the SDK's authoritative total
+   *  once the agent run completes — same trick the benchmark's
+   *  CostTrackerPlugin.onFinalize uses to correct any per-turn drift. */
+  setFinalTokenCostUsd(costUsd: number): void {
+    const cur = this.$tokenUsage.get();
+    this.$tokenUsage.set({ ...cur, costUsd, costIsFinal: true });
     this.emitChange();
   }
 

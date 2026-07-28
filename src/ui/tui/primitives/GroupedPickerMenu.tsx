@@ -2,8 +2,11 @@
  * GroupedPickerMenu — Multi-select with category headers.
  *
  * Renders groups of options with bold category labels.
- * Arrow keys navigate selectable items (headers are skipped),
- * space toggles, "a" toggles all, enter submits.
+ * Arrow keys navigate selectable items (headers are skipped) and the Confirm
+ * button below them; enter toggles the focused option, "a" toggles all, and
+ * moving onto the Confirm button and pressing enter submits. Space is kept as
+ * an undocumented alias for enter. Shares the interaction model with
+ * PickerMenu mode="multi".
  *
  * When content exceeds available terminal height, the list scrolls
  * to keep the focused item visible with up/down indicators.
@@ -16,6 +19,7 @@ import { Box, Text } from 'ink';
 import { useState, useMemo } from 'react';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
+import { ConfirmButton } from './ConfirmButton.js';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 
@@ -44,8 +48,12 @@ function truncateWithEllipsis(text: string, maxWidth: number): string {
 
 /** Rows consumed by chrome outside this component (title bar, screen padding, etc.) */
 const CHROME_OVERHEAD = 10;
-/** Rows used by the prompt label + marginTop before content (hint text moved to KeyboardHintsBar). */
-const MENU_CHROME = 2;
+/**
+ * Rows used by the prompt label + marginTop before content (hint text moved to
+ * KeyboardHintsBar) plus the Confirm button below the list: marginTop (1) +
+ * single border top/bottom (2) + button text (1).
+ */
+const MENU_CHROME = 6;
 
 /** Count the visual rows occupied by rows[start..end), accounting for header margins. */
 function countVisualRows(rows: Row[], start: number, end: number): number {
@@ -148,6 +156,8 @@ export const GroupedPickerMenu = ({
   );
 
   const [focusedSelectable, setFocusedSelectable] = useState(0);
+  // When true, the cursor is on the Confirm button rather than an option.
+  const [onButton, setOnButton] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(initialSelected ?? allValues),
   );
@@ -167,37 +177,49 @@ export const GroupedPickerMenu = ({
       label: '\u2191\u2193',
       action: 'navigate',
       handler: (_input, key) => {
-        let newFocused = focusedSelectable;
+        const last = selectableIndices.length - 1;
+
+        // Move focus onto a selectable option, scrolling it into view.
+        const moveTo = (target: number) => {
+          setOnButton(false);
+          setFocusedSelectable(target);
+          if (needsScroll) {
+            const rowIdx = selectableIndices[target] ?? 0;
+            setScrollOffset((prev) =>
+              adjustScrollOffset(prev, rowIdx, rows, effectiveBudget),
+            );
+          }
+        };
 
         if (key.upArrow) {
-          newFocused =
-            focusedSelectable > 0
-              ? focusedSelectable - 1
-              : selectableIndices.length - 1;
+          if (onButton) {
+            moveTo(last); // button → bottom of the list
+          } else if (focusedSelectable > 0) {
+            moveTo(focusedSelectable - 1);
+          } else {
+            setOnButton(true); // top of the list → button
+          }
         }
         if (key.downArrow) {
-          newFocused =
-            focusedSelectable < selectableIndices.length - 1
-              ? focusedSelectable + 1
-              : 0;
-        }
-
-        if (newFocused !== focusedSelectable) {
-          setFocusedSelectable(newFocused);
-          if (needsScroll) {
-            const newFocusedRowIdx = selectableIndices[newFocused] ?? 0;
-            setScrollOffset((prev) =>
-              adjustScrollOffset(prev, newFocusedRowIdx, rows, effectiveBudget),
-            );
+          if (onButton) {
+            moveTo(0); // button → top of the list
+          } else if (focusedSelectable < last) {
+            moveTo(focusedSelectable + 1);
+          } else {
+            setOnButton(true); // bottom of the list → button
           }
         }
       },
     },
     {
-      match: KeyMatch.Space,
-      label: 'space',
-      action: 'toggle',
+      match: [KeyMatch.Space, KeyMatch.Return],
+      label: 'enter',
+      action: 'select',
       handler: () => {
+        if (onButton) {
+          onSelect([...selected]);
+          return;
+        }
         const targetRowIdx = selectableIndices[focusedSelectable] ?? 0;
         const row = rows[targetRowIdx];
         if (row?.kind === 'option') {
@@ -225,14 +247,6 @@ export const GroupedPickerMenu = ({
           }
           return new Set(allValues);
         });
-      },
-    },
-    {
-      match: KeyMatch.Return,
-      label: 'enter',
-      action: 'confirm',
-      handler: () => {
-        onSelect([...selected]);
       },
     },
   ]);
@@ -275,7 +289,7 @@ export const GroupedPickerMenu = ({
             );
           }
 
-          const isFocused = focusedRowIdx === absIdx;
+          const isFocused = !onButton && focusedRowIdx === absIdx;
           const isSelected = selected.has(row.value);
           const checkbox = isSelected ? Icons.squareFilled : Icons.squareOpen;
           const fullLabel = row.hint ? `${row.label} (${row.hint})` : row.label;
@@ -307,6 +321,9 @@ export const GroupedPickerMenu = ({
             {hiddenBelow > 0 ? `\u2193 ${hiddenBelow} more` : ' '}
           </Text>
         )}
+      </Box>
+      <Box marginTop={1} marginLeft={2}>
+        <ConfirmButton focused={onButton} count={selected.size} />
       </Box>
     </Box>
   );

@@ -23,7 +23,6 @@
  * meant to create.
  */
 
-import { getIngestionHostFromHost } from '@utils/urls';
 import { logToFile } from '@utils/debug';
 import {
   assembleProfile,
@@ -160,28 +159,27 @@ export function seededProfile(
 export async function seedDemoEvents(args: {
   /** Public project API key (write key) — the SDK's ingestion credential. */
   projectApiKey: string;
-  /** App host, e.g. https://us.posthog.com; mapped to the ingestion host. */
-  host: string;
+  /** Event-ingestion host (e.g. https://us.i.posthog.com). */
+  apiHost: string;
   /** The pre-seed probe result; its REST product flags are carried forward. */
   baseProfile: ProjectDataProfile;
   signal?: AbortSignal;
   /** Injectable clock for deterministic tests. */
   now?: Date;
 }): Promise<ProjectDataProfile> {
-  const { projectApiKey, host, baseProfile, signal } = args;
+  const { projectApiKey, apiHost, baseProfile, signal } = args;
   const now = args.now ?? new Date();
 
   if (signal?.aborted) throw new Error('Seeding aborted');
 
   const events = buildSeedEvents(now);
-  const ingestionHost = getIngestionHostFromHost(host);
   logToFile(
-    `[seedDemoEvents] sending ${events.length} demo events to ${ingestionHost}`,
+    `[seedDemoEvents] sending ${events.length} demo events to ${apiHost}`,
   );
 
   const { PostHog } = await import('posthog-node');
   const client = new PostHog(projectApiKey, {
-    host: ingestionHost,
+    host: apiHost,
     // Send everything in one batch on shutdown; no background timer.
     flushAt: events.length,
     flushInterval: 0,

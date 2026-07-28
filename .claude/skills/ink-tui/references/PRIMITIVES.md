@@ -40,7 +40,17 @@ Tabs array can be built conditionally — see `RunScreen.tsx` for an example of 
 Single and multi select. Fully custom renderers — does NOT use `@inkjs/ui` Select/MultiSelect.
 
 - **Single select**: `▸` triangle cursor on focused item, enter selects
-- **Multi select** (`mode="multi"`): `◻`/`◼` toggles with space, enter submits
+- **Multi select** (`mode="multi"`): `◻`/`◼` toggles with **enter**, then arrow down onto the trailing **ConfirmButton** and press enter to submit. See "Multi-select confirm pattern" below.
+
+### GroupedPickerMenu
+`src/ui/tui/primitives/GroupedPickerMenu.tsx`
+
+Multi-select with bold category headers and scrolling. Same interaction model as PickerMenu multi: enter toggles the focused option, `a` toggles all, and a trailing ConfirmButton submits. Arrow navigation skips headers and walks onto the button.
+
+### ConfirmButton
+`src/ui/tui/primitives/ConfirmButton.tsx`
+
+Pure-render bordered "physical" submit button. Used by the multi-select menus as the final focusable row. Props: `label` (default `"Confirm"`), `focused`, optional `count` (renders `Label (n)`). Accent border + triangle when focused, muted otherwise.
 
 ### ConfirmationInput
 `src/ui/tui/primitives/ConfirmationInput.tsx`
@@ -118,6 +128,16 @@ useEffect(() => {
 See `Divider.tsx` for a working example. For terminal resize reactivity, combine with the `useStdoutDimensions` hook from `src/ui/tui/hooks/useStdoutDimensions.ts`.
 
 ---
+
+## Multi-select confirm pattern
+
+Multi-select menus (`PickerMenu` `mode="multi"` and `GroupedPickerMenu`) all follow one interaction model so users never have to learn per-screen key bindings:
+
+- `↑↓` move the cursor through the options **and** onto a `ConfirmButton` rendered just past the last option (top wraps up onto the button, bottom wraps down onto it).
+- **enter** toggles the focused option, so there's no "space toggles but enter advances" trap. (Space is kept as an undocumented alias, but the hints bar advertises only enter.)
+- moving onto the `ConfirmButton` and pressing enter submits the current selection.
+
+This replaced the older "enter anywhere submits" behavior, which confused people who expected enter to toggle the focused row. When adding a new multi-select surface, reuse these primitives rather than wiring raw `useInput` — you get the shared pattern and the auto-registered hints bar for free.
 
 ## Design conventions
 

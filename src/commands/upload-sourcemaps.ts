@@ -4,7 +4,8 @@ import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 
 export const uploadSourcemapsCommand: Command = {
-  name: 'upload-sourcemaps',
+  // Must match ProgramConfig.command; legacy alias kept for #489 regression.
+  name: [errorTrackingUploadSourceMapsConfig.command!, 'upload-sourcemaps'],
   description: errorTrackingUploadSourceMapsConfig.description,
   options: {
     ...skillProgramOptions,

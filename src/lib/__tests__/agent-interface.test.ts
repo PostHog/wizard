@@ -1,4 +1,12 @@
-import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import * as fs from 'fs';
+import * as os from 'os';
+import path from 'path';
+import {
+  runAgent,
+  createStopHook,
+  isWarlockDisabled,
+  buildAuthErrorContext,
+} from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -8,54 +16,56 @@ import {
 } from '@lib/wizard-session';
 
 // Mock dependencies
-jest.mock('../../utils/analytics');
-jest.mock('../../utils/debug');
+vi.mock('../../utils/analytics');
+vi.mock('../../utils/debug');
 
 // Mock the SDK module
-const mockQuery = jest.fn();
-jest.mock('@anthropic-ai/claude-agent-sdk', () => ({
+const mockQuery = vi.fn();
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
 }));
 
 // Mock the UI layer
 const mockUIInstance = {
   log: {
-    step: jest.fn(),
-    success: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
+    step: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
   },
-  spinner: jest.fn(),
-  select: jest.fn(),
-  confirm: jest.fn(),
-  text: jest.fn(),
-  intro: jest.fn(),
-  outro: jest.fn(),
-  cancel: jest.fn(),
-  note: jest.fn(),
-  isCancel: jest.fn(),
-  setDetectedFramework: jest.fn(),
-  setCredentials: jest.fn(),
-  pushStatus: jest.fn(),
-  setLoginUrl: jest.fn(),
-  showBlockingOutage: jest.fn(),
-  setReadinessWarnings: jest.fn(),
-  showSettingsOverride: jest.fn(),
-  startRun: jest.fn(),
-  syncTodos: jest.fn(),
-  groupMultiselect: jest.fn(),
-  multiselect: jest.fn(),
+  spinner: vi.fn(),
+  select: vi.fn(),
+  confirm: vi.fn(),
+  text: vi.fn(),
+  intro: vi.fn(),
+  outro: vi.fn(),
+  cancel: vi.fn(),
+  note: vi.fn(),
+  isCancel: vi.fn(),
+  setDetectedFramework: vi.fn(),
+  setCredentials: vi.fn(),
+  pushStatus: vi.fn(),
+  setLoginUrl: vi.fn(),
+  showBlockingOutage: vi.fn(),
+  setReadinessWarnings: vi.fn(),
+  showSettingsOverride: vi.fn(),
+  startRun: vi.fn(),
+  syncTodos: vi.fn(),
+  groupMultiselect: vi.fn(),
+  multiselect: vi.fn(),
+  addTokenUsage: vi.fn(),
+  setFinalTokenCostUsd: vi.fn(),
 };
-jest.mock('../../ui', () => ({
+vi.mock('../../ui', () => ({
   getUI: () => mockUIInstance,
 }));
 
 describe('runAgent', () => {
   let mockSpinner: {
-    start: jest.Mock;
-    stop: jest.Mock;
-    message: jest.Mock;
+    start: Mock;
+    stop: Mock;
+    message: Mock;
   };
 
   const defaultOptions: WizardRunOptions = {
@@ -76,12 +86,12 @@ describe('runAgent', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockSpinner = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      message: jest.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      message: vi.fn(),
     };
 
     mockUIInstance.spinner.mockReturnValue(mockSpinner);
@@ -279,6 +289,61 @@ describe('runAgent', () => {
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
+    it('should return success when a post-success result carries an API Error', async () => {
+      // The reported failure: after a clean success result, the SDK emits a
+      // second error result whose text is "API Error: socket closed" (the
+      // streaming connection dropping on teardown). That text lands in the
+      // output signals, so the post-loop hasApiError() check would escalate
+      // teardown noise to a fatal API_ERROR. A finished run is finished.
+      function* mockGeneratorWithApiErrorAfterSuccess() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          num_turns: 42,
+          result: '[WIZARD-REMARK] Integration completed successfully',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 1.23,
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          num_turns: 0,
+          result:
+            'API Error: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 0,
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApiErrorAfterSuccess());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(result).toEqual({});
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
+      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
+    });
+
     it('should ignore abort requests when no abort cases are registered', async () => {
       function* mockGeneratorWithAbortText() {
         yield {
@@ -422,5 +487,96 @@ describe('createStopHook', () => {
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
     expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+  });
+});
+
+describe('isWarlockDisabled (local env escape hatch)', () => {
+  const ENV_KEY = 'POSTHOG_WIZARD_WARLOCK_DISABLED';
+  const originalEnv = process.env[ENV_KEY];
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env[ENV_KEY];
+    } else {
+      process.env[ENV_KEY] = originalEnv;
+    }
+  });
+
+  // Fail-safe: scanning stays ON unless the env override explicitly says 'true'.
+  // There is no remote feature flag — a security control is never disabled from
+  // the network; safety comes from version-locking warlock + the release-gate
+  // smoke test.
+  it('is enabled (false) by default — no env override', () => {
+    delete process.env[ENV_KEY];
+    expect(isWarlockDisabled()).toBe(false);
+  });
+
+  it('disables scanning via the local env override set to "true"', () => {
+    process.env[ENV_KEY] = 'true';
+    expect(isWarlockDisabled()).toBe(true);
+  });
+
+  it('env override only triggers on exactly "true"', () => {
+    process.env[ENV_KEY] = '1';
+    expect(isWarlockDisabled()).toBe(false);
+    process.env[ENV_KEY] = 'True';
+    expect(isWarlockDisabled()).toBe(false);
+  });
+});
+
+describe('buildAuthErrorContext', () => {
+  const GATEWAY = 'https://gateway.us.posthog.com/wizard';
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'wz-auth-ctx-'));
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  afterEach(() => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    try {
+      fs.rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  });
+
+  it('flags usingManagedLogin when apiKeySource is a /login managed key', () => {
+    const ctx = buildAuthErrorContext(
+      home,
+      GATEWAY,
+      home,
+      '/login managed key',
+    );
+    expect(ctx.usingManagedLogin).toBe(true);
+    expect(ctx.apiKeySource).toBe('/login managed key');
+  });
+
+  it('does not flag an explicit API key as a managed login', () => {
+    expect(
+      buildAuthErrorContext(home, GATEWAY, home, 'ANTHROPIC_API_KEY')
+        .usingManagedLogin,
+    ).toBe(false);
+    // Absent apiKeySource is also not a managed login.
+    expect(buildAuthErrorContext(home, GATEWAY, home).usingManagedLogin).toBe(
+      false,
+    );
+  });
+
+  it('lists the logged-in session when ~/.claude/.credentials.json exists', () => {
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{}');
+
+    const ctx = buildAuthErrorContext(
+      home,
+      GATEWAY,
+      home,
+      '/login managed key',
+    );
+
+    expect(
+      ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
+    ).toBe(true);
   });
 });

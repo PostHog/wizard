@@ -9,9 +9,11 @@ import {
   type WizardUI,
   type SpinnerHandle,
   type AuthErrorDetail,
+  type TokenUsageDelta,
 } from './wizard-ui';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
+import { OAUTH_TIMEOUT_MS } from '@lib/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
@@ -19,6 +21,7 @@ import {
 } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -39,6 +42,11 @@ export class LoggingUI implements WizardUI {
   }
 
   waitForOutroDismissed(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  waitForAiOptIn(): Promise<void> {
+    // Non-TUI runs are CI runs, which auto-consent to AI usage.
     return Promise.resolve();
   }
 
@@ -108,7 +116,7 @@ export class LoggingUI implements WizardUI {
   }
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
-    console.log(`▲  Service health issues detected — blocking outage.`);
+    console.log(`▲  Service health issues detected.`);
     const blockingKeys = getBlockingServiceKeys(result.health);
     if (blockingKeys.length > 0) {
       console.log(`│`);
@@ -125,7 +133,9 @@ export class LoggingUI implements WizardUI {
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);
     }
-    console.log(`│  The wizard cannot start while these services are down.`);
+    console.log(
+      `│  Continuing anyway — health checks are advisory in non-interactive runs.`,
+    );
     return Promise.resolve();
   }
 
@@ -169,6 +179,10 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  cancelPendingQuestion(): void {
+    // Nothing to dismiss — requestQuestion never opens an overlay here.
+  }
+
   showAuthError(detail?: AuthErrorDetail): void {
     console.log(`✖  Authentication failed (401)`);
     if (detail?.hasSettingsConflict) {
@@ -196,16 +210,19 @@ export class LoggingUI implements WizardUI {
     }
   }
 
+  showSessionTimeout(): void {
+    const minutes = Math.round(OAUTH_TIMEOUT_MS / 60_000);
+    console.log(
+      `✖  Login timed out. The OAuth link timed out after ${minutes} minutes.`,
+    );
+    console.log(`│  Re-run the wizard to get a fresh link and try again.`);
+  }
+
   startRun(): void {
     // No-op in CI mode
   }
 
-  setCredentials(_credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(_credentials: Credentials): void {
     // No-op in CI mode — credentials are handled directly
   }
 
@@ -218,20 +235,22 @@ export class LoggingUI implements WizardUI {
     // the session.
   }
 
+  private lastTodoLine = '';
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
     const completed = todos.filter(
       (t) => t.status === TaskStatus.Completed,
     ).length;
-    const inProgress = todos.find((t) => t.status === TaskStatus.InProgress);
-    if (inProgress) {
-      console.log(
-        `◌  [${completed}/${todos.length}] ${
-          inProgress.activeForm || inProgress.content
-        }`,
-      );
-    }
+    const active = todos.filter((t) => t.status === TaskStatus.InProgress);
+    if (active.length === 0) return;
+    const labels = active.map((t) => t.activeForm || t.content).join(' · ');
+    const line = `◌  [${completed}/${todos.length}] ${labels}`;
+    // The queue re-renders on every transition; print only what changed.
+    if (line === this.lastTodoLine) return;
+    this.lastTodoLine = line;
+    console.log(line);
   }
 
   setEventPlan(_events: Array<{ name: string; description: string }>): void {
@@ -242,8 +261,20 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setStage(_stage: string): void {
+    // No-op in CI mode
+  }
+
   setNotebookUrl(_url: string): void {
     // No-op in CI mode
+  }
+
+  addTokenUsage(_delta: TokenUsageDelta): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
+  }
+
+  setFinalTokenCostUsd(_costUsd: number): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
   }
 
   setOutroData(_data: import('@lib/wizard-session').OutroData): void {
@@ -252,5 +283,15 @@ export class LoggingUI implements WizardUI {
 
   setFrameworkContext(_key: string, _value: unknown): void {
     // No-op in CI mode
+  }
+
+  getFrameworkContext(_key: string): unknown {
+    // No frameworkContext in CI mode
+    return undefined;
+  }
+
+  waitForGate(_stepId: string): Promise<void> {
+    // No interactive gates in CI mode
+    return Promise.resolve();
   }
 }

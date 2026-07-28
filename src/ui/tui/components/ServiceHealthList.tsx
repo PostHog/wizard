@@ -38,6 +38,8 @@ function statusIcon(status: ServiceHealthStatus): {
       return { icon: Icons.squareFilled, color: 'red' };
     case ServiceHealthStatus.Degraded:
       return { icon: Icons.squareFilled, color: '#DC9300' };
+    case ServiceHealthStatus.NoConnection:
+      return { icon: Icons.squareFilled, color: 'gray' };
     case ServiceHealthStatus.Healthy:
       return { icon: Icons.check, color: 'green' };
   }

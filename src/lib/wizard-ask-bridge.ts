@@ -43,6 +43,20 @@ export interface WizardAskBridgeOptions {
    * {@link CANCELLED_SENTINEL} value. Defaults to {@link DEFAULT_ASK_TIMEOUT_MS}.
    */
   timeoutMs?: number;
+  /**
+   * Opt the rendered overlay into rich link handling (OSC 8 hyperlinks +
+   * clipboard copy for prompt URLs). Set per program; defaults to false.
+   * Propagated onto every {@link PendingQuestion} this bridge creates.
+   */
+  richLinks?: boolean;
+  /**
+   * Dismiss the host's in-flight question overlay. Called when the timeout
+   * wins the race: without it the host keeps its pending-question state, and
+   * every later `wizard_ask` in the run fails with "another request is
+   * pending" — one unanswered prompt would block credential collection for
+   * all remaining sources.
+   */
+  cancelQuestion?: () => void;
 }
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
@@ -59,7 +73,7 @@ function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   return out;
 }
 
-function isFullyCancelled(answers: AskAnswers): boolean {
+export function isFullyCancelled(answers: AskAnswers): boolean {
   const values = Object.values(answers);
   if (values.length === 0) return false;
   return values.every((v) => v === CANCELLED_SENTINEL);
@@ -76,17 +90,19 @@ export function createWizardAskBridge(
         id: randomUUID(),
         questions,
         source: opts.getSource(),
+        richLinks: opts.richLinks ?? false,
       };
 
       const startedAt = Date.now();
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      // Race the user against the timeout. Whichever fires first wins; the
-      // other branch is harmless because the overlay still resolves via the
-      // store when the user eventually submits (and the answers are simply
-      // discarded).
+      // Race the user against the timeout. Whichever fires first wins. On
+      // timeout we also cancel the host's overlay: resolving our side alone
+      // would leave the host's pending-question state set, and the next
+      // wizard_ask would be rejected as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
+          opts.cancelQuestion?.();
           resolve(buildCancelledAnswers(questions));
         }, timeoutMs);
       });

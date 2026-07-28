@@ -1,9 +1,8 @@
-import opn from 'opn';
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind, RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -12,37 +11,87 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
+import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
-import { getCloudUrlFromRegion } from '@utils/urls';
 import { requestDeepLink } from '@utils/provisioning';
-import type { CloudRegion } from '@utils/types';
+import { openTrackedLink, withUtm } from '@utils/links';
+import type { HostResolution } from '@lib/host-resolution';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
+import { buildCodingAgentPrompt } from './handoff.js';
+import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
 function resolveContinueUrl(
   sess: WizardSession,
-  cloudRegion: CloudRegion | undefined,
+  host: HostResolution,
   deepLink: unknown,
 ): string | undefined {
   if (!sess.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
-  if (cloudRegion)
-    return `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`;
-  return undefined;
+  return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
+}
+
+/**
+ * Outro suggestion for data sources found in the project but not connected.
+ *
+ * A pointer at `wizard warehouse`, not an inline flow. Connecting a source
+ * needs interactive credential collection, and chaining that as a second agent
+ * run before the outro would let any of its terminal failure paths
+ * `process.exit()` — costing the user the success outro and the post-outro
+ * MCP / Slack steps on a run where PostHog installed fine.
+ *
+ * Returns undefined when nothing was detected, so the outro is unchanged for
+ * projects with no connectable source.
+ */
+function buildWarehouseNextSteps(
+  sess: WizardSession,
+): { heading: string; items: string[] } | undefined {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return undefined;
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return {
+    heading: 'Query your other data in PostHog:',
+    items: [
+      `Found in this project: ${labels}`,
+      'Import it into the data warehouse with: npx @posthog/wizard warehouse',
+    ],
+  };
+}
+
+/**
+ * Prompt fragment asking the agent to note the detected data sources in the
+ * setup report's checklist.
+ *
+ * Empty string when nothing was detected, so the prompt is byte-identical to
+ * today for projects with no connectable source. Best-effort by nature — the
+ * agent may word it differently or skip it. That is acceptable here precisely
+ * because it is a note in a report: the outro `nextSteps` bullet carries the
+ * same information deterministically, so nothing is lost if the agent drops it.
+ */
+function warehouseReportInstruction(sess: WizardSession): string {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return '';
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
 }
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
-export const EVENT_PLAN_FILE = '.posthog-events.json';
+export { EVENT_PLAN_FILE } from './constants.js';
 
 export const posthogIntegrationConfig: ProgramConfig = {
   command: 'integrate',
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
+  agentFlow: 'integration-v2',
+  eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
@@ -54,6 +103,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (session: WizardSession): Promise<void> => {
+    await scopeInstallDirToProject(session);
+
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
@@ -160,7 +211,7 @@ Project context:
 - Framework: ${config.metadata.name} ${frameworkVersion || 'latest'}
 - TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}
+- PostHog Host: ${ctx.host.apiHost}
 - Project type: ${config.prompts.projectTypeDetection}
 - Package installation: ${
           config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
@@ -180,10 +231,15 @@ STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available
 
 STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
    Do NOT run any shell commands to install skills.
+   If install_skill fails, emit on its own line: ${
+     AgentSignals.SKILL_INSTALL_FAILED
+   } <skill id — one-line reason>. Then CONTINUE and SKIP to STEP 5 the integration without the skill, following these steps and your knowledge of ${
+          config.metadata.name
+        } and PostHog's official docs, and note in the setup report that the skill could not be installed.
 
 STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 4: Follow the skill's program files in sequence. Look for numbered program files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each program file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
+STEP 4: Follow the skill's program files in sequence. Look for numbered program files in the references (e.g., files with patterns like "1-", "2-", "3-"). Start with the first one and proceed through each step until completion. Each program file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
 
 STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
@@ -192,16 +248,16 @@ STEP 5: Set up environment variables for PostHog using the wizard-tools MCP serv
    }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
 
-Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses, then run its install command to add the SDK. Do not manually search for lockfiles or config files. If a file already EXISTS, read it immediately before you edit or overwrite it — writing from a stale read causes a tool failure. Creating a brand-new file needs no prior read: never read a path that does not exist yet; just write it.
 
-
+${warehouseReportInstruction(session)}
 `;
       },
 
       postRun: async (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
-          credentials.host,
+          credentials.host.apiHost,
         );
         if (config.environment.uploadToHosting) {
           const { uploadEnvironmentVariablesStep } = await import(
@@ -230,23 +286,26 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
             credentials.host,
           );
           if (deepLink) {
-            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = deepLink;
-            if (process.env.NODE_ENV !== 'test') {
-              opn(deepLink, { wait: false }).catch(() => {
-                // opn throws in environments without a browser
-              });
-            }
+            const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
+            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
+            openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
+              auto: true,
+            });
           }
         }
       },
 
-      buildOutroData: (sess, credentials, cloudRegion) => {
+      buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
-          credentials.host,
+          credentials.host.apiHost,
         );
         const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
-        const continueUrl = resolveContinueUrl(sess, cloudRegion, deepLink);
+        const continueUrl = resolveContinueUrl(
+          sess,
+          credentials.host,
+          deepLink,
+        );
 
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
@@ -262,6 +321,10 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          nextSteps: buildWarehouseNextSteps(sess),
+          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          notebookUrl: sess.notebookUrl ?? undefined,
+          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
     };
@@ -269,3 +332,23 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
 };
 
 export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+
+/**
+ * Self-contained run step that runs the integration agent. Other programs
+ * import this and splice it into their own step list to compose the
+ * integration's work as one of their run steps — self-driving sets up PostHog
+ * this way before its own run. The host program supplies `show`/`onRunPrep`/
+ * `targetDir`; this carries the run.
+ */
+export const integrationRunStep: ProgramStep = {
+  id: 'run',
+  label: 'Integration',
+  screenId: 'run',
+  // composed: runs inside the host program (self-driving), so skip the
+  // integration's terminal outro + analytics shutdown of the shared client.
+  run: (session) =>
+    runAgent(posthogIntegrationConfig, session, { composed: true }),
+  isComplete: (session) =>
+    session.runPhase === RunPhase.Completed ||
+    session.runPhase === RunPhase.Error,
+};

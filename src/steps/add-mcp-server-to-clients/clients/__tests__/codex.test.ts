@@ -1,33 +1,32 @@
 import { CodexMCPClient } from '@steps/add-mcp-server-to-clients/clients/codex';
+import { execSync, spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import { analytics } from '@utils/analytics';
 
-jest.mock('node:child_process', () => ({
-  execSync: jest.fn(),
-  spawnSync: jest.fn(),
+vi.mock('node:child_process', () => ({
+  execSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
-jest.mock('node:fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  rmSync: jest.fn(),
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  rmSync: vi.fn(),
 }));
 
-jest.mock('../../../../utils/analytics', () => ({
-  analytics: { captureException: jest.fn() },
+vi.mock('../../../../utils/analytics', () => ({
+  analytics: { captureException: vi.fn() },
 }));
 
 describe('CodexMCPClient', () => {
-  const { execSync, spawnSync } = require('node:child_process');
-  const fs = require('node:fs');
-  const analytics = require('@utils/analytics').analytics;
-
-  const spawnSyncMock = spawnSync as jest.Mock;
-  const execSyncMock = execSync as jest.Mock;
-  const readFileSyncMock = fs.readFileSync as jest.Mock;
+  const spawnSyncMock = spawnSync as Mock;
+  const execSyncMock = execSync as Mock;
+  const readFileSyncMock = fs.readFileSync as Mock;
 
   const CODEX_PATH = '/usr/local/bin/codex';
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default: codex found via command -v
     execSyncMock.mockReturnValue(Buffer.from(CODEX_PATH + '\n'));
   });
@@ -77,26 +76,72 @@ describe('CodexMCPClient', () => {
   });
 
   describe('isServerInstalled', () => {
-    it('delegates to isPluginInstalled', async () => {
-      readFileSyncMock.mockReturnValue(
-        '[marketplaces.posthog]\nsource_type = "git"\n',
-      );
+    it('returns true when posthog appears in mcp list output', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: 'posthog\n',
+        stderr: '',
+      });
       const client = new CodexMCPClient();
       await expect(client.isServerInstalled()).resolves.toBe(true);
+    });
+
+    it('returns false when posthog is absent from mcp list output', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: 'other-server\n',
+        stderr: '',
+      });
+      const client = new CodexMCPClient();
+      await expect(client.isServerInstalled()).resolves.toBe(false);
+    });
+
+    it('returns false when mcp list exits non-zero', async () => {
+      spawnSyncMock.mockReturnValue({ status: 1, stdout: '', stderr: 'err' });
+      const client = new CodexMCPClient();
+      await expect(client.isServerInstalled()).resolves.toBe(false);
     });
   });
 
   describe('addServer', () => {
-    it('delegates to installPlugin — returns success when plugin installs', async () => {
+    it('runs codex mcp add with the resolved URL and returns success on exit 0', async () => {
       spawnSyncMock.mockReturnValue({ status: 0, stderr: '' });
       const client = new CodexMCPClient();
-      await expect(client.addServer()).resolves.toEqual({ success: true });
+      await expect(client.addServer('phx_test')).resolves.toEqual({
+        success: true,
+      });
+      const call = spawnSyncMock.mock.calls[0]!;
+      expect(call[0]).toBe(CODEX_PATH);
+      expect(call[1]).toEqual([
+        'mcp',
+        'add',
+        'posthog',
+        '--url',
+        'https://mcp.posthog.com/mcp',
+        '--bearer-token-env-var',
+        'POSTHOG_AUTH_HEADER',
+      ]);
+      expect(call[2].env.POSTHOG_AUTH_HEADER).toBe('Bearer phx_test');
     });
 
-    it('delegates to installPlugin — returns failure when plugin fails', async () => {
+    it('treats "already" stderr as success', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: "Server 'posthog' already exists",
+      });
+      const client = new CodexMCPClient();
+      await expect(client.addServer('phx_test')).resolves.toEqual({
+        success: true,
+      });
+    });
+
+    it('returns failure and captures exception on unexpected error', async () => {
       spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
       const client = new CodexMCPClient();
-      await expect(client.addServer()).resolves.toEqual({ success: false });
+      await expect(client.addServer('phx_test')).resolves.toEqual({
+        success: false,
+      });
+      expect(analytics.captureException).toHaveBeenCalled();
     });
   });
 
@@ -148,7 +193,6 @@ describe('CodexMCPClient', () => {
     });
 
     it('clears stale cache and retries when marketplace is already added from a different source', async () => {
-      const { rmSync } = require('node:fs');
       spawnSyncMock
         .mockReturnValueOnce({
           status: 1,
@@ -158,7 +202,7 @@ describe('CodexMCPClient', () => {
         .mockReturnValueOnce({ status: 0, stderr: '' });
       const client = new CodexMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
-      expect(rmSync).toHaveBeenCalledWith(
+      expect(fs.rmSync).toHaveBeenCalledWith(
         expect.stringContaining('marketplaces/posthog'),
         { recursive: true, force: true },
       );

@@ -4,18 +4,19 @@
  * Unlike the generic OutroScreen, this spells out the operational facts a user
  * needs to actually get de-minified stack traces: that packages were installed
  * and upload credentials written to .env, plus the three gotchas (builds
- * upload, run the build, mirror the env vars in CI). All static guidance —
+ * upload, run the build, give CI the same credentials). All static guidance —
  * driven only by the program's `buildOutroData` (kind / message / report /
  * docs), no per-run data.
  */
 
 import { join } from 'node:path';
 import type { ReactNode } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface SourceMapsOutroScreenProps {
   store: WizardStore;
@@ -29,9 +30,7 @@ export const SourceMapsOutroScreen = ({
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
-    store.setOutroDismissed();
-  });
+  useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
 
@@ -70,8 +69,10 @@ export const SourceMapsOutroScreen = ({
               uploaded.
             </Text>
             <Text>
-              • In <Text bold>CI</Text>, make sure the build job exposes the
-              same env vars the wizard added to your <Text bold>.env</Text>.
+              • In <Text bold>CI</Text>, the build job needs the same upload
+              credentials. If the wizard wired your pipeline, add the referenced
+              secrets to your CI provider (e.g. GitHub repo secrets) before your
+              next deploy.
             </Text>
           </Section>
 

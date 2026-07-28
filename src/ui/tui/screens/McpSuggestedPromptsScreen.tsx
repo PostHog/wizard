@@ -157,6 +157,10 @@ export const McpSuggestedPromptsScreen = ({
     [session.roleAtOrganization, session.integration, profile],
   );
   const [loginError, setLoginError] = useState<string | null>(null);
+  // Whether the user picked "Start MCP tutorial" — decides where a
+  // successful login lands: Greeting for a started tutorial, Choose
+  // for the up-front auth.
+  const startedTutorialRef = useRef(false);
   const [runningPrompt, setRunningPrompt] = useState<string | null>(null);
   const [runChunks, setRunChunks] = useState<AgentChunk[]>([]);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
@@ -174,6 +178,9 @@ export const McpSuggestedPromptsScreen = ({
   // context-aware follow-up suggestions in FollowUp. Cleared at the
   // start of each new run.
   const [lastToolName, setLastToolName] = useState<string | null>(null);
+  // CLI mode's exec command string for the last tool call — recovers the inner
+  // tool name so follow-ups stay context-aware under both server modes.
+  const [lastToolCommand, setLastToolCommand] = useState<string | null>(null);
   // Every prompt the user has picked this session — initial + follow-ups.
   // Used to filter out already-seen suggestions in getFollowUps().
   const [branchHistory, setBranchHistory] = useState<string[]>([]);
@@ -209,7 +216,10 @@ export const McpSuggestedPromptsScreen = ({
         store.setRoleAtOrganization(roleAtOrganization);
         store.setApiUser(user);
         store.setLoginUrl(null);
-        setPhase(Phase.Scouting);
+        // Only route into the scout when the user actually kicked off the
+        // tutorial. A pre-auth login (no committed start) lands back on
+        // Choose so the user still owns the "begin tutorial" decision.
+        setPhase(startedTutorialRef.current ? Phase.Scouting : Phase.Choose);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -323,6 +333,7 @@ export const McpSuggestedPromptsScreen = ({
     setRunStartedAt(startedAt);
     setRunChunks([]);
     setLastToolName(null);
+    setLastToolCommand(null);
     setRunDurationSecs(null);
 
     const finishStream = (
@@ -369,6 +380,7 @@ export const McpSuggestedPromptsScreen = ({
           setRunChunks((prev) => [...prev, chunk]);
           if (chunk.kind === 'tool-call') {
             setLastToolName(chunk.toolName);
+            setLastToolCommand(chunk.command ?? null);
           }
           if (chunk.kind === 'done') {
             // Remember the SDK session id so the next follow-up can
@@ -423,7 +435,11 @@ export const McpSuggestedPromptsScreen = ({
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'login',
       });
-      setPhase(Phase.Authenticating);
+      startedTutorialRef.current = true;
+      // Picking Start tutorial is the explicit OAuth consent moment.
+      // If credentials already exist, skip auth and go straight to the
+      // scout — same landing as post-auth for a started tutorial.
+      setPhase(session.credentials ? Phase.Scouting : Phase.Authenticating);
     } else {
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'exit',
@@ -491,10 +507,19 @@ export const McpSuggestedPromptsScreen = ({
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: phase === Phase.Goodbye ? 'close' : 'exit',
+      action:
+        phase === Phase.Goodbye
+          ? 'close'
+          : phase === Phase.Authenticating
+          ? 'cancel'
+          : 'exit',
       handler: () => {
         if (phase === Phase.Goodbye) {
           closeWizard();
+        } else if (phase === Phase.Authenticating) {
+          // Cancel the OAuth dance — the login effect's cleanup discards
+          // the in-flight result. Choose still works without credentials.
+          setPhase(Phase.Choose);
         } else if (
           phase === Phase.Running ||
           phase === Phase.PromptPicker ||
@@ -612,6 +637,7 @@ export const McpSuggestedPromptsScreen = ({
             <Box marginTop={1} flexShrink={0} flexDirection="column">
               <FollowUpPhase
                 lastToolName={lastToolName}
+                lastToolCommand={lastToolCommand}
                 lastPrompt={runningPrompt}
                 chunks={runChunks}
                 role={session.roleAtOrganization}
@@ -646,57 +672,59 @@ interface ChoosePhaseProps {
   onSelect: (value: ChoiceValue | ChoiceValue[]) => void;
 }
 
-const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
-  <Box flexDirection="column">
-    <Text bold color={Colors.accent}>
-      PostHog MCP
-    </Text>
+const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => {
+  return (
+    <Box flexDirection="column">
+      <Text bold color={Colors.accent}>
+        PostHog MCP
+      </Text>
 
-    <Box marginTop={1}>
-      <Text>
-        With MCP your agent works directly with the PostHog platform. You can
-        prompt it to:
-      </Text>
-    </Box>
-
-    <Box marginTop={1} flexDirection="column">
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Build dashboards
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> And lots more...
-      </Text>
-    </Box>
-
-    <Box marginTop={1}>
-      <Text>Want a live demo using real data from your project?</Text>
-    </Box>
-
-    <Box>
-      <PickerMenu
-        options={[
-          { label: 'Start MCP tutorial', value: ChoiceValue.Login },
-          { label: 'Exit', value: ChoiceValue.Exit },
-        ]}
-        onSelect={onSelect}
-      />
-    </Box>
-    {error && (
       <Box marginTop={1}>
-        <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        <Text>
+          With MCP your agent works directly with the PostHog platform. You can
+          prompt it to:
+        </Text>
       </Box>
-    )}
-  </Box>
-);
+
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Build dashboards
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> And lots more...
+        </Text>
+      </Box>
+
+      <Box marginTop={1}>
+        <Text>Want a live demo using real data from your project?</Text>
+      </Box>
+
+      <Box>
+        <PickerMenu
+          options={[
+            { label: 'Start MCP tutorial', value: ChoiceValue.Login },
+            { label: 'Exit', value: ChoiceValue.Exit },
+          ]}
+          onSelect={onSelect}
+        />
+      </Box>
+      {error && (
+        <Box marginTop={1}>
+          <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 // ── Authenticating phase ───────────────────────────────────────────────
 
@@ -1124,6 +1152,7 @@ const ChunkLine = ({ chunk }: ChunkLineProps) => {
 
 interface FollowUpPhaseProps {
   lastToolName: string | null;
+  lastToolCommand: string | null;
   lastPrompt: string | null;
   chunks: AgentChunk[];
   role: string | null;
@@ -1135,6 +1164,7 @@ interface FollowUpPhaseProps {
 
 const FollowUpPhase = ({
   lastToolName,
+  lastToolCommand,
   lastPrompt,
   chunks,
   role,
@@ -1147,11 +1177,12 @@ const FollowUpPhase = ({
     () =>
       getFollowUps({
         lastToolName,
+        lastToolCommand,
         lastPrompt: lastPrompt || '',
         role,
         branchHistory,
       }),
-    [lastToolName, lastPrompt, role, branchHistory],
+    [lastToolName, lastToolCommand, lastPrompt, role, branchHistory],
   );
 
   // When the cap is reached, only the exit entry is available. Follow-up
@@ -1256,7 +1287,7 @@ const GoodbyePhase = ({
 
       <PickerMenu
         options={[{ label: 'Close', value: 'close' }]}
-        onSelect={onClose}
+        onSelect={() => onClose()}
       />
     </Box>
   );

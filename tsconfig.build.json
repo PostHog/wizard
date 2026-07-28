@@ -20,6 +20,7 @@
     "paths": {
       "@env": ["./src/env.ts"],
       "@lib/*": ["./src/lib/*"],
+      "@e2e-harness/*": ["./e2e-harness/*"],
       "@utils/*": ["./src/utils/*"],
       "@ui": ["./src/ui/index.ts"],
       "@ui/*": ["./src/ui/*"],

@@ -1,3 +1,5 @@
+import type { Harness, Sequence } from '@lib/constants';
+
 export type CloudRegion = 'us' | 'eu';
 
 export type AIModel =
@@ -28,4 +30,11 @@ export type WizardRunOptions = {
   projectId?: number;
 
   localMcp: boolean;
+
+  /** `--harness` override. */
+  harness?: Harness;
+  /** `--sequence` override. */
+  sequence?: Sequence;
+  /** `--model` override (gateway id). */
+  model?: string;
 };

@@ -15,6 +15,8 @@
  * this module instead.
  */
 
+import { HEADLESS_FLAG } from '@lib/headless-mode';
+
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.
 // After build these are just `"production"`, `false`, etc.
@@ -32,6 +34,13 @@ export const IS_DEV =
  */
 export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
 
+/** 'cloud' when launched with the experimental headless flag, else 'local' — resolved once from argv at launch. */
+export const RUN_SURFACE: 'cloud' | 'local' = process.argv.some(
+  (a) => a === `--${HEADLESS_FLAG}` || a.startsWith(`--${HEADLESS_FLAG}=`),
+)
+  ? 'cloud'
+  : 'local';
+
 // ── Runtime environment ──────────────────────────────────────────────
 
 /**
@@ -39,11 +48,26 @@ export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
  * Add new keys here when a new runtime dependency is needed.
  */
 type RuntimeEnvKey =
+  // CI-build-only flag overrides (see utils/ci-flag-overrides.ts).
+  // Deliberately NOT POSTHOG_WIZARD_-prefixed: yargs .env('POSTHOG_WIZARD')
+  // would claim it as an unknown CLI option and strict-reject the run.
+  | 'WIZARD_CI_FLAG_OVERRIDES'
+  | 'WIZARD_CI_EXCLUDE_TASKS'
   // Wizard CLI configuration (yargs POSTHOG_WIZARD_ prefix)
   | 'POSTHOG_WIZARD_BENCHMARK_CONFIG'
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
   | 'POSTHOG_WIZARD_LOG_DIR'
   | 'POSTHOG_WIZARD_DEBUG'
+  // Identity of the PostHog task run whose sandbox launched this wizard. Set by
+  // the sandbox for every run it starts, agent or wizard. Deliberately NOT
+  // POSTHOG_WIZARD_-prefixed, for the same reason as the two keys above:
+  // yargs .env('POSTHOG_WIZARD') would claim them as CLI options and
+  // .strictOptions() would reject the run unless the wizard also declared them,
+  // which would tie every sandbox deploy to an npm release of this package.
+  | 'POSTHOG_TASK_RUN_ID'
+  | 'POSTHOG_TASK_ID'
+  // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
+  | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'
@@ -58,9 +82,20 @@ type RuntimeEnvKey =
   | 'ConEmuTask'
   // Platform: paths
   | 'APPDATA'
+  | 'OPENCODE_CONFIG_DIR'
   | 'XDG_CONFIG_HOME';
 
 /** Read a runtime environment variable. Only allowlisted keys compile. */
 export function runtimeEnv(key: RuntimeEnvKey): string | undefined {
   return process.env[key];
 }
+
+/**
+ * The PostHog task run that launched this wizard, when one did. A cloud run's
+ * sandbox exports both ids into the wizard's environment; every local run
+ * leaves them undefined. Resolved once at launch, like RUN_SURFACE above.
+ */
+export const TASK_RUN_ID: string | undefined =
+  runtimeEnv('POSTHOG_TASK_RUN_ID') || undefined;
+export const TASK_ID: string | undefined =
+  runtimeEnv('POSTHOG_TASK_ID') || undefined;

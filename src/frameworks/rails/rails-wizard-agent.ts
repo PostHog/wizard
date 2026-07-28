@@ -22,7 +22,6 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
   metadata: {
     name: 'Ruby on Rails',
     integration: Integration.rails,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/ruby-on-rails',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/ruby',
     gatherContext: (options: WizardRunOptions) => {

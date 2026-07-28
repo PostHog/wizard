@@ -1,4 +1,4 @@
-import fg from 'fast-glob';
+import { boundedGlob } from '@utils/bounded-fs';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
@@ -9,13 +9,7 @@ export enum RubyPackageManager {
   MANUAL = 'manual',
 }
 
-const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/vendor/**',
-  '**/vendor/bundle/**',
-  '**/tmp/**',
-  '**/log/**',
-];
+const EXTRA_IGNORE = ['**/tmp/**', '**/log/**'];
 
 /**
  * Get Ruby version bucket for analytics
@@ -118,9 +112,10 @@ export async function isRubyProject(
   }
 
   // Check for *.gemspec files
-  const gemspecFiles = await fg('*.gemspec', {
+  const gemspecFiles = await boundedGlob('*.gemspec', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: 1,
   });
 
   if (gemspecFiles.length > 0) {
@@ -128,9 +123,10 @@ export async function isRubyProject(
   }
 
   // Check for Ruby source files in the root
-  const rubyFiles = await fg(['*.rb', 'lib/**/*.rb', 'bin/**/*.rb'], {
+  const rubyFiles = await boundedGlob(['*.rb', 'lib/**/*.rb', 'bin/**/*.rb'], {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: EXTRA_IGNORE,
+    limit: 1,
   });
 
   return rubyFiles.length > 0;

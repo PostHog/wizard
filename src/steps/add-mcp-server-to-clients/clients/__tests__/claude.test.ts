@@ -3,26 +3,29 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { ClaudeMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude';
-import { getDefaultServerConfig } from '@steps/add-mcp-server-to-clients/defaults';
+import {
+  getDefaultServerConfig,
+  DefaultMCPClientConfig,
+} from '@steps/add-mcp-server-to-clients/defaults';
 
-jest.mock('fs', () => ({
+vi.mock('fs', () => ({
   promises: {
-    mkdir: jest.fn(),
-    readFile: jest.fn(),
-    writeFile: jest.fn(),
+    mkdir: vi.fn(),
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
   },
-  existsSync: jest.fn(),
+  existsSync: vi.fn(),
 }));
 
-jest.mock('os', () => ({
-  homedir: jest.fn(),
+vi.mock('os', () => ({
+  homedir: vi.fn(),
 }));
 
-jest.mock('../../defaults', () => ({
+vi.mock('../../defaults', () => ({
   DefaultMCPClientConfig: {
-    parse: jest.fn(),
+    parse: vi.fn(),
   },
-  getDefaultServerConfig: jest.fn(),
+  getDefaultServerConfig: vi.fn(),
 }));
 
 describe('ClaudeMCPClient', () => {
@@ -35,26 +38,25 @@ describe('ClaudeMCPClient', () => {
     env: { POSTHOG_AUTH_HEADER: `Bearer ${mockApiKey}` },
   };
 
-  const mkdirMock = fs.promises.mkdir as jest.Mock;
-  const readFileMock = fs.promises.readFile as jest.Mock;
-  const writeFileMock = fs.promises.writeFile as jest.Mock;
-  const existsSyncMock = fs.existsSync as jest.Mock;
-  const homedirMock = os.homedir as jest.Mock;
-  const getDefaultServerConfigMock = getDefaultServerConfig as jest.Mock;
+  const mkdirMock = fs.promises.mkdir as Mock;
+  const readFileMock = fs.promises.readFile as Mock;
+  const writeFileMock = fs.promises.writeFile as Mock;
+  const existsSyncMock = fs.existsSync as Mock;
+  const homedirMock = os.homedir as Mock;
+  const getDefaultServerConfigMock = getDefaultServerConfig as Mock;
 
   const originalPlatform = process.platform;
 
   beforeEach(() => {
     client = new ClaudeMCPClient();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     homedirMock.mockReturnValue(mockHomeDir);
     getDefaultServerConfigMock.mockReturnValue(mockServerConfig);
 
     // Mock the Zod schema parse method
-    const {
-      DefaultMCPClientConfig,
-    } = require('@steps/add-mcp-server-to-clients/defaults');
-    DefaultMCPClientConfig.parse.mockImplementation((data: any) => data);
+    (DefaultMCPClientConfig.parse as Mock).mockImplementation(
+      (data: any) => data,
+    );
   });
 
   afterEach(() => {

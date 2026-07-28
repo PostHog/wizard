@@ -1,28 +1,15 @@
-/** Flags shared by every skill-based program command (integrate, audit, …). */
+/**
+ * Per-command options shared by every skill-based program command
+ * (`audit events`, `migrate statsig`, `revenue`, `source-maps`, …).
+ *
+ * Only flags that are unique to skill commands live here. Global flags
+ * (`--debug`, `--local-mcp`, `--benchmark`, `--yara-report`, `--ci`) are
+ * declared once in `wizard.ts::GLOBAL_OPTIONS` and apply automatically
+ * across every command — no need to repeat them per subcommand.
+ */
 export const skillProgramOptions = {
-  debug: {
-    default: false,
-    describe: 'Enable verbose logging',
-    type: 'boolean' as const,
-  },
   'install-dir': {
     describe: 'Directory to install in',
     type: 'string' as const,
-  },
-  'local-mcp': {
-    default: false,
-    describe: 'Use local MCP server',
-    type: 'boolean' as const,
-  },
-  benchmark: {
-    default: false,
-    describe: 'Run in benchmark mode',
-    type: 'boolean' as const,
-  },
-  'yara-report': {
-    default: false,
-    describe: 'Print YARA scanner summary',
-    type: 'boolean' as const,
-    hidden: true,
   },
 };

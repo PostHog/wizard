@@ -274,11 +274,11 @@ async function restExists(
 export async function probeProjectData(args: {
   accessToken: string;
   projectId: number;
-  /** App host, e.g. https://us.posthog.com. */
-  host: string;
+  /** Event-ingestion / REST API host (e.g. https://us.i.posthog.com). */
+  apiHost: string;
 }): Promise<ProjectDataProfile> {
-  const { accessToken, projectId, host } = args;
-  const baseUrl = host.replace(/\/$/, '');
+  const { accessToken, projectId, apiHost } = args;
+  const baseUrl = apiHost.replace(/\/$/, '');
 
   try {
     const [

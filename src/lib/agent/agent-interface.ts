@@ -4,34 +4,39 @@
  */
 
 import path from 'path';
-import * as fs from 'fs';
+import * as os from 'os';
+import { createRequire } from 'node:module';
 import { getUI, type SpinnerHandle } from '@ui';
+import type { TokenUsageDelta } from '@ui/wizard-ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
+import { runtimeEnv } from '@env';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
-  WIZARD_VARIANT_FLAG_KEY,
-  WIZARD_VARIANTS,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
+  DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@lib/wizard-session';
-import { registerCleanup, wizardAbort, WizardError } from '@utils/wizard-abort';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
-import { getLlmGatewayUrlFromHost } from '@utils/urls';
-import { LINTING_TOOLS } from '@lib/safe-tools';
+import type { HostResolution } from '@lib/host-resolution';
+import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
+  prewarmYaraScanner,
 } from '@lib/yara-hooks';
+import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
+import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import { AgentSignals, AgentErrorType } from './signals';
+import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -39,6 +44,17 @@ import { AgentOutputSignals } from './output-signals';
 export { AgentSignals, AgentErrorType } from './signals';
 export type { AgentSignal } from './signals';
 export { AgentOutputSignals } from './output-signals';
+import {
+  checkAllSettingsConflicts,
+  type SettingsConflict,
+  type SettingsConflictSource,
+} from './claude-settings';
+import {
+  detectStoredClaudeLogin,
+  hasStoredClaudeLogin,
+  claudeConfigDir,
+} from './stored-login';
+import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -54,8 +70,13 @@ async function getSDKModule(): Promise<any> {
  * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
  */
 function getClaudeCodeExecutablePath(): string {
-  // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
+  // Bare `require` is undefined in ESM (tsx dev runs) — fall back to createRequire.
+  const resolver =
+    typeof require !== 'undefined'
+      ? require
+      : createRequire(process.argv[1] ?? `${process.cwd()}/`);
+  // resolve finds the package's main entry, then we get cli.js from same dir
+  const sdkPackagePath = resolver.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
@@ -65,181 +86,96 @@ type SDKMessage = any;
 type McpServersConfig = any;
 type AbortCaseMatcher = { match: RegExp };
 
-const BLOCKING_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_AUTH_TOKEN',
-];
-const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
-
-/** Where a settings conflict was found. */
-export type SettingsConflictSource = 'project' | 'managed';
-
-/** A single settings conflict detected during startup. */
-export interface SettingsConflict {
-  /** Where the conflict was found. */
-  source: SettingsConflictSource;
-  /** The blocking keys found (e.g. 'ANTHROPIC_BASE_URL', 'apiKeyHelper'). */
-  keys: string[];
-  /** Whether the wizard can back up / remove this file. Managed settings are read-only. */
-  writable: boolean;
+/** Region implied by the resolved gateway URL, for telemetry and display. */
+function regionFromGatewayUrl(gatewayUrl: string): 'eu' | 'us' | 'local' {
+  if (gatewayUrl.includes('localhost')) return 'local';
+  return gatewayUrl.includes('gateway.eu.') ? 'eu' : 'us';
 }
 
 /**
- * Check a single settings file for blocking env keys and top-level settings keys.
- * Returns matched key names, or an empty array if none found.
- */
-function checkSettingsFile(filePath: string): string[] {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const matched: string[] = [];
-
-    // Check env block for blocking env keys
-    const envBlock = parsed?.env;
-    if (envBlock && typeof envBlock === 'object') {
-      matched.push(...BLOCKING_ENV_KEYS.filter((key) => key in envBlock));
-    }
-
-    // Check top-level settings keys
-    matched.push(
-      ...BLOCKING_SETTINGS_KEYS.filter(
-        (key) => key in parsed && parsed[key] !== '' && parsed[key] != null,
-      ),
-    );
-
-    return matched;
-  } catch {
-    // File doesn't exist or isn't valid JSON — skip
-    return [];
-  }
-}
-
-/**
- * Check if .claude/settings.json in the project directory contains env
- * overrides or apiKeyHelper that block the Wizard from accessing the PostHog LLM Gateway.
- * Returns the list of matched key names, or an empty array if none found.
+ * Diagnostic context for a gateway 401, used by the auth-error screen and the
+ * captured exception.
  *
- * @deprecated Use {@link checkAllSettingsConflicts} for comprehensive detection.
+ * A bare "Authentication failed" can't be triaged: the 401 could be a settings
+ * file overriding the credential, a region mismatch, or a rejected key. This
+ * records which, so the screen can name an actionable next step and telemetry
+ * can tell the causes apart. Absolute conflict paths stay out of the telemetry
+ * payload (they contain the user's home dir) — only sources/keys are reported.
  */
-export function checkClaudeSettingsOverrides(
-  workingDirectory: string,
+export interface AuthErrorContext {
+  hasSettingsConflict: boolean;
+  conflicts: SettingsConflict[];
+  conflictSources: SettingsConflictSource[];
+  conflictKeys: string[];
+  gatewayUrl: string;
+  region: 'eu' | 'us' | 'local';
+  /** SDK `apiKeySource` from the init message, when known. */
+  apiKeySource?: string;
+  /**
+   * True when the SDK authenticated from a stored Claude login (`apiKeySource`
+   * is a "/login managed key") — i.e. conflicting Anthropic credentials, not
+   * the gateway token the wizard injected.
+   */
+  usingManagedLogin: boolean;
+  /** Human-readable places a conflicting Anthropic credential may live. */
+  credentialPlaces: string[];
+}
+
+/** Places the agent could have picked up a non-PostHog credential. */
+function findCredentialPlaces(
+  conflicts: SettingsConflict[],
+  homeDir: string,
 ): string[] {
-  const candidates = [
-    path.join(workingDirectory, '.claude', 'settings.json'),
-    path.join(workingDirectory, '.claude', 'settings'),
-  ];
+  const places: string[] = [];
 
-  for (const filePath of candidates) {
-    const matched = checkSettingsFile(filePath);
-    if (matched.length > 0) return matched;
-  }
-
-  return [];
-}
-
-/**
- * Managed settings path on macOS.
- * IT/MDM-deployed settings — readable by all users, writable only by root.
- */
-const MANAGED_SETTINGS_PATH =
-  '/Library/Application Support/ClaudeCode/managed-settings.json';
-
-/**
- * Check project and org-managed settings for blocking keys that conflict
- * with the wizard's proxy auth.
- */
-export function checkAllSettingsConflicts(
-  workingDirectory: string,
-): SettingsConflict[] {
-  const conflicts: SettingsConflict[] = [];
-
-  const sources: {
-    source: SettingsConflictSource;
-    paths: string[];
-    writable: boolean;
-  }[] = [
-    {
-      source: 'managed',
-      paths: [MANAGED_SETTINGS_PATH],
-      writable: false,
-    },
-    {
-      source: 'project',
-      paths: [
-        path.join(workingDirectory, '.claude', 'settings.json'),
-        path.join(workingDirectory, '.claude', 'settings'),
-      ],
-      writable: true,
-    },
-  ];
-
-  for (const { source, paths, writable } of sources) {
-    for (const filePath of paths) {
-      const keys = checkSettingsFile(filePath);
-      if (keys.length > 0) {
-        conflicts.push({ source, keys, writable });
-        break; // Only one conflict per source (settings.json vs settings fallback)
-      }
-    }
-  }
-
-  return conflicts;
-}
-
-/**
- * Copy .claude/settings.json to .wizard-backup (overwriting if it exists),
- * then remove the original so the SDK doesn't load the blocking overrides.
- */
-export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
-  for (const name of ['settings.json', 'settings']) {
-    const filePath = path.join(workingDirectory, '.claude', name);
-    const backupPath = `${filePath}.wizard-backup`;
-    analytics.wizardCapture('backedup-claude-settings');
-    try {
-      fs.copyFileSync(filePath, backupPath);
-      fs.unlinkSync(filePath);
-      registerCleanup(() => {
-        try {
-          restoreClaudeSettings(workingDirectory);
-        } catch (error) {
-          analytics.captureException(error);
-        }
-      });
-      return true;
-    } catch {
-      // File doesn't exist — try next candidate
-    }
-  }
-  return false;
-}
-
-/**
- * Restore .claude/settings.json from .wizard-backup.
- * Copies (not moves) so the backup is preserved.
- */
-export function restoreClaudeSettings(workingDirectory: string): void {
-  for (const name of ['settings.json', 'settings']) {
-    const backup = path.join(
-      workingDirectory,
-      '.claude',
-      `${name}.wizard-backup`,
+  const stored = detectStoredClaudeLogin(homeDir);
+  const configDir = claudeConfigDir(homeDir);
+  if (stored.credentialsFile) {
+    places.push(
+      `A logged-in Claude session: ${path.join(
+        configDir,
+        '.credentials.json',
+      )}`,
     );
-    try {
-      fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
-      analytics.wizardCapture('restored-claude-settings');
-      return;
-    } catch (error) {
-      analytics.captureException(error);
-    }
   }
+  if (stored.keychain) {
+    places.push(
+      'A logged-in Claude session: macOS keychain item "Claude Code-credentials"',
+    );
+  }
+  for (const c of conflicts) {
+    places.push(`${c.path} sets ${c.keys.join(', ')}`);
+  }
+  return places;
+}
+
+export function buildAuthErrorContext(
+  workingDirectory: string,
+  gatewayUrl: string,
+  homeDir: string = os.homedir(),
+  apiKeySource?: string,
+): AuthErrorContext {
+  const conflicts = checkAllSettingsConflicts(workingDirectory, homeDir);
+  // The SDK reports a stored Claude login as a "/login managed key".
+  const usingManagedLogin = /login|managed key/i.test(apiKeySource ?? '');
+  return {
+    hasSettingsConflict: conflicts.length > 0,
+    conflicts,
+    conflictSources: conflicts.map((c) => c.source),
+    conflictKeys: [...new Set(conflicts.flatMap((c) => c.keys))],
+    gatewayUrl,
+    region: regionFromGatewayUrl(gatewayUrl),
+    apiKeySource,
+    usingManagedLogin,
+    credentialPlaces: findCredentialPlaces(conflicts, homeDir),
+  };
 }
 
 export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
-  posthogApiHost: string;
+  host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
   /** Base URL for the skills server (context-mill dev or GitHub releases) */
@@ -249,6 +185,11 @@ export type AgentConfig = {
   wizardMetadata?: Record<string, string>;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
+  /**
+   * Override the agent model for this run. Defaults to DEFAULT_AGENT_MODEL.
+   * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
+   */
+  modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('@lib/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
@@ -264,6 +205,12 @@ export type AgentConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run here; threaded into wizard-tools so the orchestrator
+   * tools register.
+   */
+  orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -285,6 +232,7 @@ export type StopHookResult =
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
+  requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -312,13 +260,14 @@ export function createStopHook(
       return { decision: 'block', reason: prompt };
     }
 
-    // Phase 2: collect remark (once)
-    if (!remarkRequested) {
+    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // orchestrator suppresses it per task so it does not fire on every agent.
+    if (requestRemark && !remarkRequested) {
       remarkRequested = true;
       logToFile('Stop hook: requesting reflection');
       return {
         decision: 'block',
-        reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+        reason: REMARK_INSTRUCTION,
       };
     }
 
@@ -348,19 +297,48 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * The orchestrator owns the TUI task panel (it renders its queue), so its
+   * runs suppress the agent's own TaskCreate/TaskUpdate rendering. Set from
+   * the run's queue context, never from the raw flag — the flag being on must
+   * not touch other programs' linear runs.
+   */
+  suppressTaskRender?: boolean;
 };
 
 /**
- * Select wizard metadata from WIZARD_VARIANTS using the variant feature flag.
- * If the flag is missing or the value is not in config, returns the "base" variant (VARIANT: "base").
+ * Global identifiers attached to every LLM gateway trace for a run. They ride on
+ * each `$ai_generation` the gateway emits (as `X-POSTHOG-PROPERTY-*` headers via
+ * `buildAgentEnv`), so traces are filterable by program, framework, run, and build
+ * type for cost attribution and dashboards. `skill_id` is omitted when the run has
+ * none.
  */
-export function buildWizardMetadata(
-  flags: Record<string, string> = {},
-): Record<string, string> {
-  const variantKey = flags[WIZARD_VARIANT_FLAG_KEY];
-  const variant =
-    (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
-  return { ...variant };
+export function buildRunTags(args: {
+  programId: string;
+  integration: string;
+  runId: string;
+  build: string;
+  skillId?: string;
+}): Record<string, string> {
+  return {
+    program_id: args.programId,
+    integration: args.integration,
+    run_id: args.runId,
+    build: args.build,
+    ...(args.skillId ? { skill_id: args.skillId } : {}),
+  };
+}
+
+/**
+ * Whether Warlock/YARA scanning is disabled for this run. Off by default:
+ * scanning is disabled only by the local POSTHOG_WIZARD_WARLOCK_DISABLED env
+ * override, set to the explicit string 'true'. This is a local/CI escape hatch
+ * only — there is deliberately no remote flag to switch off a security control
+ * (we rely on version-locking @posthog/warlock + the release-gate smoke test
+ * instead). Any other value leaves scanning ON.
+ */
+export function isWarlockDisabled(): boolean {
+  return runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true';
 }
 
 /**
@@ -391,88 +369,13 @@ export function buildAgentEnv(
   return encoded;
 }
 
-/**
- * Package managers that can be used to run commands.
- */
-const PACKAGE_MANAGERS = [
-  // JavaScript
-  'npm',
-  'pnpm',
-  'yarn',
-  'bun',
-  'npx',
-  // Python
-  'pip',
-  'pip3',
-  'poetry',
-  'pipenv',
-  'uv',
-];
-
-/**
- * Safe scripts/commands that can be run with any package manager.
- * Uses startsWith matching, so 'build' matches 'build', 'build:prod', etc.
- * Note: Linting tools are in LINTING_TOOLS and checked separately.
- */
-const SAFE_SCRIPTS = [
-  // Package installation
-  'install',
-  'add',
-  'ci',
-  // Build
-  'build',
-  // Type checking (various naming conventions)
-  'tsc',
-  'typecheck',
-  'type-check',
-  'check-types',
-  'types',
-  // Linting/formatting script names (actual tools are in LINTING_TOOLS)
-  'lint',
-  'format',
-];
-
-/**
- * Dangerous shell operators that could allow command injection.
- * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
- */
-const DANGEROUS_OPERATORS = /[;`$()]/;
-
 // Re-export for backwards compatibility — canonical source is skill-install.ts
 export { isSkillInstallCommand } from '@lib/skill-install';
 
 /**
- * Check if command is an allowed package manager command.
- * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
- */
-function matchesAllowedPrefix(command: string): boolean {
-  const parts = command.split(/\s+/);
-  if (parts.length === 0 || !PACKAGE_MANAGERS.includes(parts[0])) {
-    return false;
-  }
-
-  // Skip 'run' or 'exec' if present
-  let scriptIndex = 1;
-  if (parts[scriptIndex] === 'run' || parts[scriptIndex] === 'exec') {
-    scriptIndex++;
-  }
-
-  // Get the script/command portion (may include args)
-  const scriptPart = parts.slice(scriptIndex).join(' ');
-
-  // Check if script starts with any safe script name or linting tool
-  return (
-    SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe)) ||
-    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool))
-  );
-}
-
-/**
- * Permission hook that allows only safe commands.
- * - Package manager install commands
- * - Build/typecheck/lint commands for verification
- * - Piping to tail/head for output limiting is allowed
- * - Stderr redirection (2>&1) is allowed
+ * Permission hook that allows only safe commands. Bash commands are gated by
+ * the exact per-manager fence in bash-fence.ts (install/build/typecheck/lint
+ * commands, single | tail/head, 2>&1).
  *
  * `wizardAskPending` is true while a wizard_ask overlay is open — when set,
  * Write/Edit calls are denied as a defense-in-depth measure against a
@@ -515,11 +418,16 @@ export function wizardCanUseTool(
     };
   }
 
-  // Block direct reads/writes of .env files — use wizard-tools MCP instead
+  // Block direct reads/writes of real .env files — use wizard-tools MCP instead.
+  // Example/template files (.env.example, .env.sample, .env.template, .env.dist)
+  // carry no secrets and are meant to be committed, so they stay writable.
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    if (basename.startsWith('.env')) {
+    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
+      basename,
+    );
+    if (basename.startsWith('.env') && !isEnvExample) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -555,80 +463,20 @@ export function wizardCanUseTool(
     typeof input.command === 'string' ? input.command : ''
   ).trim();
 
-  // Block definitely dangerous operators: ; ` $ ( )
-  if (DANGEROUS_OPERATORS.test(command)) {
-    logToFile(`Denying bash command with dangerous operators: ${command}`);
-    debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'dangerous operators',
-      command,
-    });
-    return {
-      behavior: 'deny',
-      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
-    };
-  }
-
-  // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
-  const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
-
-  // Check for pipe to tail/head (safe output limiting)
-  const pipeMatch = normalized.match(/^(.+?)\s*\|\s*(tail|head)(\s+\S+)*\s*$/);
-  if (pipeMatch) {
-    const baseCommand = pipeMatch[1].trim();
-
-    // Block if base command has pipes or & (multiple chaining)
-    if (/[|&]/.test(baseCommand)) {
-      logToFile(`Denying bash command with multiple pipes: ${command}`);
-      debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.wizardCapture('bash denied', {
-        reason: 'multiple pipes',
-        command,
-      });
-      return {
-        behavior: 'deny',
-        message: `Bash command not allowed. Only single pipe to tail/head is permitted.`,
-      };
-    }
-
-    if (matchesAllowedPrefix(baseCommand)) {
-      logToFile(`Allowing bash command with output limiter: ${command}`);
-      debug(`Allowing bash command with output limiter: ${command}`);
-      return { behavior: 'allow', updatedInput: input };
-    }
-  }
-
-  // Block remaining pipes and & (not covered by tail/head case above)
-  if (/[|&]/.test(normalized)) {
-    logToFile(`Denying bash command with pipe/&: ${command}`);
-    debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'disallowed pipe',
-      command,
-    });
-    return {
-      behavior: 'deny',
-      message: `Bash command not allowed. Pipes are only permitted with tail/head for output limiting.`,
-    };
-  }
-
-  // Check if command starts with any allowed prefix (package manager commands)
-  if (matchesAllowedPrefix(normalized)) {
+  const decision = evaluateBashCommand(command);
+  if (decision.allowed) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
   }
 
-  logToFile(`Denying bash command: ${command}`);
-  debug(`Denying bash command: ${command}`);
+  logToFile(`Denying bash command (${decision.analyticsReason}): ${command}`);
+  debug(`Denying bash command (${decision.analyticsReason}): ${command}`);
   analytics.wizardCapture('bash denied', {
-    reason: 'not in allowlist',
+    reason: decision.analyticsReason,
     command,
   });
-  return {
-    behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
-  };
+  return { behavior: 'deny', message: decision.message };
 }
 
 /**
@@ -643,17 +491,18 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  getUI().log.step('Initializing Claude agent...');
-
   try {
-    // Configure LLM gateway environment variables (inherited by SDK subprocess)
-    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog LLM gateway, authed with the user's
+    // OAuth token.
+    // Disable experimental betas (like input_examples) the gateway doesn't support.
+    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+    const gatewayUrl = config.host.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
@@ -662,6 +511,24 @@ export async function initializeAgent(
         ? `${config.posthogApiKey.slice(0, 4)}***`
         : '(missing)',
     );
+
+    // A pre-existing Claude login (the SDK's "/login managed key") can outrank
+    // the gateway token we just set and get sent to the PostHog gateway, which
+    // 401s it. The settings-conflict scan can't see it, so detect + report it
+    // here — this is the leading suspect behind the gateway auth_failed reports.
+    const storedLogin = detectStoredClaudeLogin();
+    if (hasStoredClaudeLogin(storedLogin)) {
+      logToFile(
+        `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
+          `keychain=${storedLogin.keychain}). It can outrank the wizard's gateway token ` +
+          `and cause a 401 — 'claude auth logout' clears it.`,
+      );
+      analytics.wizardCapture('claude stored login detected', {
+        credentials_file: storedLogin.credentialsFile,
+        keychain: storedLogin.keychain,
+      });
+    }
+
     const initConflicts = checkAllSettingsConflicts(options.installDir);
     logToFile(
       'Settings conflicts at agent init:',
@@ -679,8 +546,13 @@ export async function initializeAgent(
         url: config.posthogMcpUrl,
         headers: {
           Authorization: `Bearer ${config.posthogApiKey}`,
-          'User-Agent': WIZARD_USER_AGENT,
+          // Tag the UA with the running program so the backend can attribute what this
+          // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
+          'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
         },
+        // CLI mode's single `exec` tool carries the full command reference on
+        // its schema — keep it in context, never deferred behind tool search.
+        alwaysLoad: true,
       },
       ...Object.fromEntries(
         Object.entries(config.additionalMcpServers ?? {}).map(
@@ -696,17 +568,13 @@ export async function initializeAgent(
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
+      orchestrator: config.orchestrator,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
-    // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
-    // every other program runs on Sonnet 4.6.
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
-    const model =
-      config.integrationLabel === 'audit-3000'
-        ? 'claude-opus-4-6'
-        : 'claude-sonnet-4-6';
+    const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
@@ -717,6 +585,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      suppressTaskRender: !!config.orchestrator,
     };
 
     logToFile('Agent config:', {
@@ -735,8 +604,14 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
+    // Pre-warm the warlock scanner (WASM init + rule compile) off the hook path
+    // so the first tool-call scan doesn't pay cold-start under a hook timeout.
+    // Fire-and-forget: the warlock module promise is cached, so the first real
+    // scan awaits the same in-flight promise. Awaiting here would just move
+    // the cold-start cost to user-visible startup.
+    // Best-effort — a failure is non-fatal (hooks still fail closed per scan).
+    void prewarmYaraScanner();
+
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(
@@ -746,22 +621,6 @@ export async function initializeAgent(
     debug('Agent initialization error:', error);
     throw error;
   }
-}
-
-/**
- * Check agent output for YARA scanner violations.
- * Used in both the success and catch paths of runAgent.
- */
-function checkYaraViolation(
-  signals: AgentOutputSignals,
-  spinner: SpinnerHandle,
-): { error: AgentErrorType } | null {
-  if (signals.hasYaraViolation()) {
-    logToFile('Agent error: YARA_VIOLATION');
-    spinner.stop('Security violation detected');
-    return { error: AgentErrorType.YARA_VIOLATION };
-  }
-  return null;
 }
 
 /**
@@ -782,6 +641,18 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    /**
+     * Emit a `wizard: step` event on each agent task transition. Threaded from
+     * `ProgramRun.trackStepProgress`; defaults off for every other caller.
+     */
+    emitStepEvents?: boolean;
+    /** Request the end-of-run reflection remark. Defaults to true. */
+    requestRemark?: boolean;
+    /**
+     * Extra properties attached to this run's `agent completed` / `agent
+     * aborted` events (e.g. the orchestrator's task type and id).
+     */
+    analyticsProperties?: Record<string, unknown>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -793,8 +664,10 @@ export async function runAgent(
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
     abortCases = [],
+    emitStepEvents = false,
   } = config ?? {};
 
+  logToFile('Starting agent run');
   const { query } = await getSDKModule();
 
   spinner.start(spinnerMessage);
@@ -859,10 +732,44 @@ export async function runAgent(
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // A failed install_skill is non-fatal — the agent continues best-effort
+    // without the skill — but every such run must be measurable.
+    const skillFailure = signals.skillInstallFailure();
+    if (skillFailure !== undefined) {
+      analytics.wizardCapture('agent continued without skill', {
+        detail: skillFailure,
+      });
+    }
+
+    // Token usage comes from the SDK result message and is per agent run —
+    // for the orchestrator that means per task, the secondary cost to watch.
+    const usage = lastResultMessage?.usage as
+      | {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        }
+      | undefined;
     analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
+      model: agentConfig.model,
+      num_turns: lastResultMessage?.num_turns,
+      total_cost_usd: lastResultMessage?.total_cost_usd,
+      input_tokens: usage?.input_tokens,
+      output_tokens: usage?.output_tokens,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens,
+      cache_read_input_tokens: usage?.cache_read_input_tokens,
+      ...config?.analyticsProperties,
     });
+    // Reconcile the hidden Ctrl+T HUD's running cost estimate to the SDK's
+    // authoritative total — same trick the benchmark's
+    // CostTrackerPlugin.onFinalize uses to correct per-turn drift.
+    const totalCostUsd = Number(lastResultMessage?.total_cost_usd ?? 0);
+    if (totalCostUsd > 0) {
+      getUI().setFinalTokenCostUsd(totalCostUsd);
+    }
     try {
       middleware?.finalize(lastResultMessage, durationMs);
     } catch (e) {
@@ -877,6 +784,10 @@ export async function runAgent(
   // runner can surface it via outroData after we unwind.
   const abortController = new AbortController();
   let abortReason: string | null = null;
+  // Set when a YARA hook detects a terminal violation. Returning `stopReason`
+  // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
+  // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
+  let yaraViolationReason: string | null = null;
 
   try {
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
@@ -895,6 +806,30 @@ export async function runAgent(
     // general-purpose to forward parent MCP servers by name; SDK resolves
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
+
+    // LLM provider for warlock triage (reuses the gateway auth set on
+    // process.env by initializeAgent). Undefined if auth is missing — hooks
+    // then skip triage and fail closed.
+    const triageProvider = createTriageLLMProvider();
+
+    // Actually stop the run when a YARA hook hits a terminal violation. The SDK
+    // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
+    // [ABORT]) and return YARA_VIOLATION from the loop-end / catch below.
+    const onYaraTerminate = (reason: string) => {
+      if (yaraViolationReason) return; // first violation wins
+      yaraViolationReason = reason;
+      logToFile(`[YARA] terminating run: ${reason}`);
+      abortController.abort();
+      signalDone!();
+    };
+
+    // Local/CI escape hatch for Warlock/YARA scanning (off by default — see
+    // isWarlockDisabled for the fail-safe semantics).
+    const warlockDisabled = isWarlockDisabled();
+    if (warlockDisabled) {
+      logToFile('[warlock] scanning disabled for run (local env override)');
+      analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
+    }
 
     const response = query({
       prompt: createPromptStream(),
@@ -983,23 +918,26 @@ export async function runAgent(
           },
         },
         env: {
-          ...process.env,
-          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
-          ANTHROPIC_API_KEY: undefined,
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // The posthog-wizard MCP exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, leaving
-          // almost no room in Sonnet's 200k context window.
-          ENABLE_TOOL_SEARCH: 'auto:0',
+          // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
+          // inherited env so no shell/settings value can leak into or outrank
+          // the agent's routing; the wizard's own gateway routing is injected
+          // fresh below. See agent-env-isolation.ts.
+          ...sanitizeAgentSubprocessEnv(process.env),
+          // Gateway routing — injected explicitly (initializeAgent set these on
+          // process.env for in-process readers; the strip above removed them
+          // from the inherited copy, so re-add the wizard's own values here).
+          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
           // (audit programs call audit_seed_checks on turn 1, integration
           // programs call load_skill_menu / install_skill). Restore the prior
           // blocking behavior so the SDK waits up to 5s for MCP connect before
-          // turn 1. `alwaysLoad: true` on the server would also work but it
-          // disables tool search deferral and re-inflates the system prompt by
-          // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
+          // turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
+          // PostHog gateway headers: Bedrock fallback + property/flag tags.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             agentConfig.wizardMetadata ?? {},
             agentConfig.wizardFlags ?? {},
@@ -1035,12 +973,20 @@ export async function runAgent(
         },
         // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
-          PreToolUse: createPreToolUseYaraHooks(),
-          PostToolUse: createPostToolUseYaraHooks(),
+          PreToolUse: warlockDisabled
+            ? []
+            : createPreToolUseYaraHooks(triageProvider),
+          PostToolUse: warlockDisabled
+            ? []
+            : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
           Stop: [
             {
               hooks: [
-                createStopHook(config?.additionalFeatureQueue ?? [], signals),
+                createStopHook(
+                  config?.additionalFeatureQueue ?? [],
+                  signals,
+                  config?.requestRemark ?? true,
+                ),
               ],
               timeout: 30,
             },
@@ -1088,6 +1034,8 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
+        agentConfig.suppressTaskRender ?? false,
+        emitStepEvents,
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1125,19 +1073,31 @@ export async function runAgent(
         // of a 401, distinct from bad PAT / wrong region / expired key.
         // Only the conflict case warrants telling the user to log out of
         // Claude Code.
-        const conflicts = checkAllSettingsConflicts(options.installDir);
-        const hasSettingsConflict = conflicts.length > 0;
-        logToFile('Agent error: 401, showing auth error screen', {
-          hasSettingsConflict,
-          conflicts,
-        });
+        const authError = buildAuthErrorContext(
+          options.installDir,
+          process.env.ANTHROPIC_BASE_URL ?? '',
+          os.homedir(),
+          signals.apiKeySource,
+        );
+        logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
-          hasSettingsConflict,
+          hasSettingsConflict: authError.hasSettingsConflict,
+          conflicts: authError.conflicts,
+          usingManagedLogin: authError.usingManagedLogin,
+          credentialPlaces: authError.credentialPlaces,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
           message: 'Authentication failed (401)',
-          error: new WizardError('Authentication failed'),
+          error: new WizardError('Authentication failed', {
+            hasSettingsConflict: authError.hasSettingsConflict,
+            conflictSources: authError.conflictSources,
+            conflictKeys: authError.conflictKeys,
+            gatewayUrl: authError.gatewayUrl,
+            region: authError.region,
+            usingManagedLogin: authError.usingManagedLogin,
+            apiKeySource: authError.apiKeySource,
+          }),
         });
       }
 
@@ -1159,16 +1119,19 @@ export async function runAgent(
       }
     }
 
+    // A YARA hook detected a terminal violation and aborted the run.
+    if (yaraViolationReason) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security check stopped the setup');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
+
     // If the middleware caught an [ABORT] and aborted the SDK query, surface
     // it as a structured error before checking other signals.
     if (abortReason) {
       spinner.stop('Wizard aborted');
       return { error: AgentErrorType.ABORT, message: abortReason };
     }
-
-    // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(signals, spinner);
-    if (yaraResult) return yaraResult;
 
     // Check for error markers in the agent's output
     if (signals.has('MCP_MISSING')) {
@@ -1181,6 +1144,16 @@ export async function runAgent(
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
+    }
+
+    // A clean success result already arrived. The Claude SDK can emit a second
+    // error result during teardown (e.g. "API Error: The socket connection was
+    // closed unexpectedly" when the streaming connection drops on cleanup),
+    // whose text lands in `signals` — so the API-error checks below would
+    // escalate that teardown noise to a fatal error. A finished run is
+    // finished; mirror the catch-path guard and complete successfully.
+    if (receivedSuccessResult) {
+      return completeWithSuccess();
     }
 
     // Check for API errors (rate limits, etc.)
@@ -1204,6 +1177,15 @@ export async function runAgent(
     // Signal done to unblock the async generator
     signalDone!();
 
+    // A YARA hook aborted the run (the SDK throws AbortError once the hook
+    // calls abortController.abort()). Surface it before anything else so it is
+    // never mistaken for a success-cleanup race or a generic abort.
+    if (yaraViolationReason) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security check stopped the setup');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
+
     // If the middleware caught an [ABORT] and triggered abortController.abort(),
     // the SDK will throw an AbortError — surface it as a clean abort result.
     if (abortReason) {
@@ -1219,13 +1201,8 @@ export async function runAgent(
       return completeWithSuccess(error as Error);
     }
 
-    // Check if we collected an error before the exception was thrown
-
-    // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(signals, spinner);
-    if (yaraResult) return yaraResult;
-
-    // Surface just the API error line(s), not the entire output
+    // Check if we collected an error signal before the exception was thrown.
+    // Surface just the API error line(s), not the entire output.
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
     if (signals.hasApiErrorStatus(429)) {
@@ -1254,6 +1231,8 @@ export async function runAgent(
       analytics.wizardCapture('agent aborted', {
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
+        model: agentConfig.model,
+        ...config?.analyticsProperties,
       });
     }
   }
@@ -1302,6 +1281,8 @@ type TaskEntry = { content: string; status: string; activeForm?: string };
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
   sync: () => void;
+  /** When true, emit a `wizard: step` event on each status transition. */
+  emitStepEvents?: boolean;
 }
 
 interface ToolUseBlock {
@@ -1341,6 +1322,36 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
   if (input.status === 'deleted') {
     store.tasks.delete(input.taskId);
   } else {
+    // Per-step drop-off signal for programs that opt in via `trackStepProgress`
+    // (threaded here as `emitStepEvents`). Emit `wizard: step` on each real
+    // status transition so analytics can see how far a run got — even a silent
+    // step (no wizard_ask) that dies mid-run surfaces as its last `in_progress`
+    // with no matching `completed`. Generic: the step name is whatever the
+    // agent set; the `command` tag already identifies the program.
+    if (
+      store.emitStepEvents &&
+      input.status &&
+      input.status !== existing.status &&
+      (input.status === 'in_progress' || input.status === 'completed')
+    ) {
+      const keys = [...store.tasks.keys()];
+      analytics.wizardCapture('step', {
+        // The task's display label lives on `activeForm` (what the TUI renders,
+        // e.g. "Checking access"); `content`/`subject` are typically empty on a
+        // status-only TaskUpdate. Prefer the stored entry, then the update, so
+        // the name is never null. Named `step_name` (not `step`): a bare
+        // `properties.step` doesn't resolve in HogQL — `step_name` queries
+        // cleanly, like `step_index` / `step_count`.
+        step_name:
+          existing.activeForm ??
+          input.activeForm ??
+          existing.content ??
+          input.subject,
+        status: input.status,
+        step_index: keys.indexOf(input.taskId),
+        step_count: keys.length,
+      });
+    }
     store.tasks.set(input.taskId, {
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
@@ -1414,6 +1425,48 @@ function extractTaskIdFromResult(content: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Extracts a `TokenUsageDelta` for the hidden Ctrl+T token/cost HUD from an
+ * SDK assistant message, or `null` when the message carries no usage (e.g.
+ * a duplicate/retried turn). `message.message` is a BetaMessage (the raw
+ * Anthropic API response), which carries `model` alongside `usage` — read
+ * per turn, not from the run's nominal model, since a subagent dispatched
+ * via the Agent tool can genuinely run on a different model than the main
+ * session.
+ */
+function extractTokenUsageDelta(message: SDKMessage): TokenUsageDelta | null {
+  const apiMessage = message.message as
+    | {
+        model?: string;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_creation?: {
+            ephemeral_5m_input_tokens?: number;
+            ephemeral_1h_input_tokens?: number;
+          };
+        };
+      }
+    | undefined;
+  const usage = apiMessage?.usage;
+  if (!usage) return null;
+  return {
+    inputTokens: Number(usage.input_tokens ?? 0),
+    outputTokens: Number(usage.output_tokens ?? 0),
+    cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+    cacheCreationTokens: Number(usage.cache_creation_input_tokens ?? 0),
+    cacheCreation5m: Number(
+      usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+    ),
+    cacheCreation1h: Number(
+      usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    ),
+    model: apiMessage?.model,
+  };
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
@@ -1421,6 +1474,12 @@ function handleSDKMessage(
   signals: AgentOutputSignals,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
+  // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
+  // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
+  suppressTaskRender = false,
+  // Opt-in per-step analytics, threaded from runAgent's `emitStepEvents`
+  // (ProgramRun.trackStepProgress). Off for every program that doesn't opt in.
+  emitStepEvents = false,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1432,7 +1491,7 @@ function handleSDKMessage(
   };
   const rank = (status: string): number => STATUS_RANK[status] ?? 2;
   const syncTasks = (): void => {
-    if (!tasks) return;
+    if (!tasks || suppressTaskRender) return;
     const sorted = Array.from(tasks.values()).sort(
       (a, b) => rank(a.status) - rank(b.status),
     );
@@ -1446,6 +1505,13 @@ function handleSDKMessage(
 
   switch (message.type) {
     case 'assistant': {
+      // Feed the hidden Ctrl+T token/cost HUD. Mirrors the benchmark
+      // middleware's TokenTrackerPlugin/CacheTrackerPlugin extraction (no
+      // dedup for SDK-retried turns — see addTokenUsage's doc comment), so
+      // this stays live-updating for every run, not just `--benchmark`.
+      const tokenUsageDelta = extractTokenUsageDelta(message);
+      if (tokenUsageDelta) getUI().addTokenUsage(tokenUsageDelta);
+
       // Extract text content from assistant messages
       const content = message.message?.content;
       if (Array.isArray(content)) {
@@ -1506,7 +1572,14 @@ function handleSDKMessage(
             dispatchTaskToolUse(block as ToolUseBlock, {
               tasks,
               sync: syncTasks,
+              emitStepEvents,
             });
+          }
+
+          // Mirror the active tool into the Visualizer's "stage" indicator.
+          if (block.type === 'tool_use') {
+            const stage = classifyToolToStage((block as ToolUseBlock).name);
+            if (stage) getUI().setStage(stage);
           }
         }
       }
@@ -1584,10 +1657,16 @@ function handleSDKMessage(
 
     case 'system': {
       if (message.subtype === 'init') {
+        // Capture which credential the SDK authenticated with. A managed-login
+        // source (`"/login managed key"`) means it used a stored Claude login
+        // rather than the gateway token we injected — the prime suspect for a
+        // subsequent 401 (consumed by the auth-error handler below).
+        signals.recordApiKeySource(message.apiKeySource);
         logToFile('Agent session initialized', {
           model: message.model,
           tools: message.tools?.length,
           mcpServers: message.mcp_servers,
+          apiKeySource: message.apiKeySource,
         });
       }
       break;

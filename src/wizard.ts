@@ -2,11 +2,16 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
+import { Harness, Sequence } from '@lib/constants';
 import { toCommandModule, type Command } from './commands/command';
 
 /**
  * Global yargs options applied to every command. These are read from the
  * `POSTHOG_WIZARD` env prefix as well as flags.
+ *
+ * Options with `hidden: true` are "internal modes" — they don't show up in
+ * `--help` but are still accepted on every command. The catalog of internal
+ * flags and what each one does lives in CONTRIBUTING.md.
  */
 export const GLOBAL_OPTIONS = {
   debug: {
@@ -14,21 +19,10 @@ export const GLOBAL_OPTIONS = {
     describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
     type: 'boolean' as const,
   },
-  region: {
-    describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
-    choices: ['us', 'eu'] as const,
-    type: 'string' as const,
-  },
   signup: {
     default: false,
     describe:
       'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
-    type: 'boolean' as const,
-  },
-  'local-mcp': {
-    default: false,
-    describe:
-      'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
     type: 'boolean' as const,
   },
   telemetry: {
@@ -52,6 +46,38 @@ export const GLOBAL_OPTIONS = {
       'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
+  // ── Internal modes ─────────────────────────────────────────────────
+  // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
+  // NB: the experimental headless flag is deliberately NOT global — it's
+  // declared per-command (basic integration + audit) via `headlessOption`
+  // in @lib/headless-mode, so no other command accepts it.
+  'local-mcp': {
+    default: false,
+    describe:
+      'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  'base-url': {
+    describe:
+      'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
+    type: 'string' as const,
+    hidden: true,
+  },
+  benchmark: {
+    default: false,
+    describe:
+      'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  'yara-report': {
+    default: false,
+    describe:
+      'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
+    type: 'boolean' as const,
+    hidden: true,
+  },
 };
 
 export class Wizard {
@@ -66,23 +92,57 @@ export class Wizard {
     // published builds (NODE_ENV==='production'), so .strictOptions() rejects
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
+    // The published-build, non-interactive path is the experimental headless
+    // flag — declared per-command on basic integration + audit via
+    // `headlessOption` (see @lib/headless-mode), not globally, so no other
+    // command accepts it. --ci and headless are kept as separate flags so they
+    // can diverge — see basic-integration's dispatch. headless is deliberately
+    // not advertised.
     if (!IS_PRODUCTION_BUILD) {
-      cli = cli.option('ci', {
-        default: false,
-        describe:
-          'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
-        type: 'boolean',
-      });
+      cli = cli
+        .option('ci', {
+          default: false,
+          describe:
+            'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+          type: 'boolean',
+          hidden: true,
+        })
+        // Runner overrides — dev/test only, same lifecycle as --ci.
+        .option('harness', {
+          describe:
+            'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
+          choices: Object.values(Harness),
+          type: 'string',
+          hidden: true,
+        })
+        .option('sequence', {
+          describe:
+            'Override the runner sequence (linear | orchestrator). Wins over the PostHog orchestrator flag.\nenv: POSTHOG_WIZARD_SEQUENCE',
+          choices: Object.values(Sequence),
+          type: 'string',
+          hidden: true,
+        })
+        .option('model', {
+          describe:
+            'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
+          type: 'string',
+          hidden: true,
+        });
     }
 
     this.cli = cli
       .strictOptions()
-      // Print the error first (bright red) and the usage below it, instead of
-      // yargs' default of burying the message under the full help output.
-      .fail((msg, err, parser) => {
+      // Reject unrecognized commands (e.g. `wizard bogus`) instead of letting
+      // them fall through to the default `$0` integration flow.
+      .strictCommands()
+      // Print a concise error and point to `--help`, instead of yargs' default
+      // of dumping the entire usage screen under every failure.
+      .fail((msg, err) => {
         const text = msg || (err && err.message) || 'Invalid arguments';
-        process.stderr.write(`\n\x1b[1;91m✖ ${text}\x1b[0m\n\n`);
-        parser.showHelp();
+        process.stderr.write(
+          `\n\x1b[1;91m✖ ${text}\x1b[0m\n` +
+            `  Run \`wizard --help\` to see available commands and options.\n\n`,
+        );
         process.exit(1);
       })
       .help()
@@ -122,6 +182,31 @@ export class Wizard {
       if (argvHasCI || envHasCI) {
         process.stderr.write(
           `\n\x1b[1;91m✖ CI mode is not currently supported in published builds.\x1b[0m\n\n`,
+        );
+        process.exit(1);
+      }
+
+      // --harness / --sequence / --model are dev/test-only. In published builds
+      // the env vars would silently no-op, so reject them explicitly instead.
+      const argvHasOverride = args.some(
+        (a) =>
+          a === '--harness' ||
+          a.startsWith('--harness=') ||
+          a === '--sequence' ||
+          a.startsWith('--sequence=') ||
+          a === '--model' ||
+          a.startsWith('--model='),
+      );
+      const envHasOverride =
+        (process.env.POSTHOG_WIZARD_HARNESS != null &&
+          process.env.POSTHOG_WIZARD_HARNESS !== '') ||
+        (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
+          process.env.POSTHOG_WIZARD_SEQUENCE !== '') ||
+        (process.env.POSTHOG_WIZARD_MODEL != null &&
+          process.env.POSTHOG_WIZARD_MODEL !== '');
+      if (argvHasOverride || envHasOverride) {
+        process.stderr.write(
+          `\n\x1b[1;91m✖ The --harness, --sequence, and --model overrides are not available in published builds.\x1b[0m\n\n`,
         );
         process.exit(1);
       }

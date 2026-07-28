@@ -6,13 +6,19 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
+import type {
+  WizardUI,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -47,7 +53,7 @@ export class InkUI implements WizardUI {
       });
     }
 
-    // Signal that the main work is done — router resolves to mcp or outro
+    // Signal that the main work is done — router resolves to outro
     if (this.store.session.runPhase === RunPhase.Running) {
       this.store.setRunPhase(RunPhase.Completed);
     }
@@ -76,12 +82,7 @@ export class InkUI implements WizardUI {
     });
   }
 
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(credentials: Credentials): void {
     this.store.setCredentials(credentials);
   }
 
@@ -91,6 +92,21 @@ export class InkUI implements WizardUI {
 
   setApiUser(user: ApiUser | null): void {
     this.store.setApiUser(user);
+  }
+
+  waitForAiOptIn(): Promise<void> {
+    // Resolved immediately when no gate is registered (requiresAi: false,
+    // no auth step, or CI). Otherwise parks until _checkGates sees the
+    // org's approval flip to true — e.g. via [R]etry on the kill screen.
+    return this.store.getGate('ai-opt-in');
+  }
+
+  waitForGate(stepId: string): Promise<void> {
+    return this.store.getGate(stepId);
+  }
+
+  getFrameworkContext(key: string): unknown {
+    return this.store.session.frameworkContext[key];
   }
 
   setDetectedFramework(label: string): void {
@@ -147,8 +163,16 @@ export class InkUI implements WizardUI {
     this.store.showAuthError(detail);
   }
 
+  showSessionTimeout(): void {
+    this.store.showSessionTimeout();
+  }
+
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
     return this.store.requestQuestion(question);
+  }
+
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
   }
 
   startRun(): void {
@@ -213,8 +237,20 @@ export class InkUI implements WizardUI {
     this.store.setDashboardUrl(url);
   }
 
+  setStage(stage: string): void {
+    this.store.setCurrentStage(stage);
+  }
+
   setNotebookUrl(url: string): void {
     this.store.setNotebookUrl(url);
+  }
+
+  addTokenUsage(delta: TokenUsageDelta): void {
+    this.store.addTokenUsage(delta);
+  }
+
+  setFinalTokenCostUsd(costUsd: number): void {
+    this.store.setFinalTokenCostUsd(costUsd);
   }
 
   setOutroData(data: OutroData): void {

@@ -1,30 +1,64 @@
 /**
- * RunScreenDemo — Renders the real RunScreen with a mock store.
- * Tasks auto-advance every 1.5s. Discovered features (Stripe, LLM)
- * are pre-populated so conditional tips appear.
+ * RunScreenDemo — Playground demo for the agent run view.
+ *
+ * Renders RunScreen's tab panels directly (not RunScreen itself) and owns its
+ * own tab navigation, the way HealthCheckDemo renders its components directly —
+ * a nested TabContainer would fight the playground's outer one over the arrow
+ * keys (Ink delivers every key to every handler), leaving the inner tabs
+ * unreachable. So the outer playground keeps the arrows and this demo uses:
+ *
+ *   n / p   switch run-screen tab (Status, Event plan, Tail logs, Visualizer, HN)
+ *
+ * Tasks auto-advance every 1.5s and the visualizer stage cycles on its own.
+ * Discovered features (Stripe, LLM) are pre-populated so conditional tips appear.
  */
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { Box, Text, useInput } from 'ink';
 import { WizardStore, TaskStatus } from '@ui/tui/store';
 import { DiscoveredFeature } from '@lib/wizard-session';
+import { AgentPhase } from '@lib/agent/agent-phase';
 import {
-  TabContainer,
   SplitView,
   ProgressList,
   LogViewer,
   EventPlanViewer,
   HNViewer,
 } from '@ui/tui/primitives/index';
-import type { ProgressItem } from '@ui/tui/primitives/index';
+import type { ProgressItem, TabDefinition } from '@ui/tui/primitives/index';
 import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
-import { getContentBlocks as getMigrationContentBlocks } from '@lib/programs/migration/content/index';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
+import { getProgramConfig } from '@lib/programs/program-registry';
+import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { Colors } from '@ui/tui/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
+
+const STAGE_CYCLE: AgentPhase[] = [
+  AgentPhase.CodebaseScan,
+  AgentPhase.SkillInstall,
+  AgentPhase.DepInstall,
+  AgentPhase.CodeEdits,
+  AgentPhase.EnvSetup,
+  AgentPhase.Dashboards,
+];
 
 const MOCK_TASKS = [
   {
     label: 'Checking project structure and finding files for event tracking',
     activeForm: 'Checking project structure',
+    status: TaskStatus.Pending,
+    done: false,
+  },
+  {
+    label: 'Load skill menu and install integration-nextjs-app-router skill',
+    activeForm: 'Picking the right skill',
     status: TaskStatus.Pending,
     done: false,
   },
@@ -76,6 +110,18 @@ const MOCK_TASKS = [
     status: TaskStatus.Pending,
     done: false,
   },
+  {
+    label: 'Create onboarding dashboard and insight',
+    activeForm: 'Building dashboard',
+    status: TaskStatus.Pending,
+    done: false,
+  },
+  {
+    label: 'Verify $pageview and $autocapture are arriving',
+    activeForm: 'Watching events arrive',
+    status: TaskStatus.Pending,
+    done: false,
+  },
 ];
 
 const MOCK_EVENTS = [
@@ -101,6 +147,13 @@ interface RunScreenDemoProps {
 export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
   const tickRef = useRef(0);
   const lastStatusRef = useRef('');
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Re-render whenever the mock timers mutate the store (tasks, stage, etc.).
+  useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.getSnapshot(),
+  );
 
   // Seed the store with mock data on mount
   useEffect(() => {
@@ -148,39 +201,50 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
     return () => clearInterval(timer);
   }, []);
 
-  useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.getSnapshot(),
-  );
+  // Cycle through every Visualizer stage on a faster timer so the playground
+  // exercises each ASCII visual without needing the real agent loop.
+  useEffect(() => {
+    let i = 0;
+    store.setCurrentStage(STAGE_CYCLE[0]);
+    const timer = setInterval(() => {
+      i = (i + 1) % STAGE_CYCLE.length;
+      store.setCurrentStage(STAGE_CYCLE[i]);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [store]);
 
+  // Mirror RunScreen's tab panels (built here so the demo can drive them with
+  // n/p instead of the arrow keys the outer playground TabContainer owns).
   const progressItems: ProgressItem[] = store.tasks.map((t) => ({
     label: t.label,
     activeForm: t.activeForm,
     status: t.status,
   }));
 
-  const statuses =
-    store.statusMessages.length > 0 ? store.statusMessages : undefined;
+  const learnBlocks = useMemo(() => {
+    const getBlocks =
+      getProgramConfig(store.router.activeProgram).getContentBlocks ??
+      getSkillContentBlocks;
+    return getBlocks(store);
+  }, [store]);
 
-  const learnBlocks = getMigrationContentBlocks(store);
+  const leftPane = store.learnCardComplete ? (
+    <TipsCard store={store} />
+  ) : (
+    <LearnCard
+      store={store}
+      blocks={learnBlocks}
+      onComplete={() => store.setLearnCardComplete()}
+    />
+  );
 
-  const tabs = [
+  const tabs: TabDefinition[] = [
     {
       id: 'status',
       label: 'Status',
       component: (
         <SplitView
-          left={
-            store.learnCardComplete ? (
-              <TipsCard store={store} />
-            ) : (
-              <LearnCard
-                store={store}
-                blocks={learnBlocks}
-                onComplete={() => store.setLearnCardComplete()}
-              />
-            )
-          }
+          left={leftPane}
           right={<ProgressList items={progressItems} title="Tasks" />}
         />
       ),
@@ -200,18 +264,46 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
     {
-      id: 'hn',
-      label: 'HN',
-      component: <HNViewer />,
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
     },
+    { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 
+  // The outer playground TabContainer owns the arrow keys, so navigate with n/p.
+  useInput((input) => {
+    if (input === 'n') {
+      setActiveTab((i) => Math.min(tabs.length - 1, i + 1));
+    } else if (input === 'p') {
+      setActiveTab((i) => Math.max(0, i - 1));
+    }
+  });
+
+  const current = tabs[Math.min(activeTab, tabs.length - 1)];
+
   return (
-    <TabContainer
-      tabs={tabs}
-      statusMessage={statuses}
-      expandableStatus
-      store={store}
-    />
+    <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+        {current?.component}
+      </Box>
+
+      <Box height={1} />
+      <Box gap={1} paddingX={1}>
+        {tabs.map((tab, i) => (
+          <Text
+            key={tab.id}
+            inverse={i === activeTab}
+            color={i === activeTab ? Colors.accent : Colors.muted}
+            bold={i === activeTab}
+          >
+            {` ${tab.label} `}
+          </Text>
+        ))}
+      </Box>
+      <Box paddingX={1}>
+        <Text dimColor>n/p switch tab</Text>
+      </Box>
+    </Box>
   );
 };

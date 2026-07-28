@@ -2,8 +2,8 @@ import { VercelEnvironmentProvider } from '@steps/upload-environment-variables/p
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 
-jest.mock('fs');
-jest.mock('child_process');
+vi.mock('fs');
+vi.mock('child_process');
 
 const mockOptions = { installDir: '/tmp/project' };
 
@@ -12,17 +12,17 @@ describe('VercelEnvironmentProvider', () => {
 
   beforeEach(() => {
     provider = new VercelEnvironmentProvider(mockOptions as any);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('should detect Vercel CLI, project link, and authentication', async () => {
-    (child_process.execSync as jest.Mock).mockReturnValue(undefined);
-    (fs.existsSync as jest.Mock).mockImplementation((p: string) => {
+    (child_process.execSync as Mock).mockReturnValue(undefined);
+    (fs.existsSync as Mock).mockImplementation((p: string) => {
       if (p.endsWith('.vercel')) return true;
       if (p.endsWith('project.json')) return true;
       return false;
     });
-    (child_process.spawnSync as jest.Mock).mockReturnValue({
+    (child_process.spawnSync as Mock).mockReturnValue({
       stdout: 'testuser',
       stderr: '',
       status: 0,
@@ -32,22 +32,22 @@ describe('VercelEnvironmentProvider', () => {
   });
 
   it('should return false if Vercel CLI is missing', async () => {
-    (child_process.execSync as jest.Mock).mockImplementation(() => {
+    (child_process.execSync as Mock).mockImplementation(() => {
       throw new Error();
     });
     await expect(provider.detect()).resolves.toBe(false);
   });
 
   it('should return false if project is not linked', async () => {
-    (child_process.execSync as jest.Mock).mockReturnValue(undefined);
-    (fs.existsSync as jest.Mock).mockReturnValue(false);
+    (child_process.execSync as Mock).mockReturnValue(undefined);
+    (fs.existsSync as Mock).mockReturnValue(false);
     await expect(provider.detect()).resolves.toBe(false);
   });
 
   it('should return false if not authenticated', async () => {
-    (child_process.execSync as jest.Mock).mockReturnValue(undefined);
-    (fs.existsSync as jest.Mock).mockReturnValue(true);
-    (child_process.spawnSync as jest.Mock).mockReturnValue({
+    (child_process.execSync as Mock).mockReturnValue(undefined);
+    (fs.existsSync as Mock).mockReturnValue(true);
+    (child_process.spawnSync as Mock).mockReturnValue({
       stdout: 'Log in to Vercel',
       stderr: '',
       status: 0,
@@ -56,21 +56,21 @@ describe('VercelEnvironmentProvider', () => {
   });
 
   it('should return false if env var already exists', async () => {
-    const stdinMock = { write: jest.fn(), end: jest.fn() };
+    const stdinMock = { write: vi.fn(), end: vi.fn() };
     let closeCallback: ((code: number) => void) | undefined;
-    const onMock = jest.fn((event, cb) => {
+    const onMock = vi.fn((event, cb) => {
       if (event === 'close') closeCallback = cb;
     });
 
     // Simulate a process with a writable stderr stream
     let stderrListener: ((data: Buffer | string) => void) | undefined;
     const stderr = {
-      on: jest.fn((event, cb) => {
+      on: vi.fn((event, cb) => {
         if (event === 'data') stderrListener = cb;
       }),
     };
 
-    (child_process.spawn as jest.Mock).mockReturnValue({
+    (child_process.spawn as Mock).mockReturnValue({
       stdin: stdinMock,
       on: onMock,
       stderr,
@@ -86,7 +86,7 @@ describe('VercelEnvironmentProvider', () => {
   });
 
   it('should attempt to upload environment variables', async () => {
-    (child_process.spawn as jest.Mock).mockReturnValue({});
+    (child_process.spawn as Mock).mockReturnValue({});
 
     await provider.uploadEnvVars({ FOO: 'bar' });
 

@@ -18,41 +18,24 @@ const MIGRATION_ABORT_CASES: AbortCase[] = [
   },
 ];
 
-/**
- * Map each `--product=<id>` choice to the context-mill skill ID that handles
- * it. Adding a variant: drop a new row here. The CLI `choices` and the
- * runtime lookup both read from this map, so the two stay in sync.
- */
-const PRODUCT_TO_SKILL_ID = {
-  statsig: 'migrate-statsig',
-} as const;
-
-type MigrateProduct = keyof typeof PRODUCT_TO_SKILL_ID;
-const MIGRATE_PRODUCTS = Object.keys(PRODUCT_TO_SKILL_ID) as MigrateProduct[];
+// Default skill id when nothing else picks one. The `wizard migrate <vendor>`
+// subcommands override this via skillCommandFactory using each manifest
+// entry's skillId, so this default only kicks in for legacy callers (e.g.
+// programmatic uses of migrationConfig directly).
+const DEFAULT_MIGRATE_SKILL_ID = 'migrate-statsig';
 
 export const migrationConfig: ProgramConfig = {
   command: 'migrate',
   description: 'Migrate to PostHog from another analytics provider',
   id: 'migration',
-  skillId: PRODUCT_TO_SKILL_ID.statsig,
+  skillId: DEFAULT_MIGRATE_SKILL_ID,
   steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
   getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
-  cliOptions: {
-    product: {
-      describe: 'Source SDK to migrate from',
-      type: 'string',
-      choices: MIGRATE_PRODUCTS,
-      demandOption: true,
-    },
-  },
-  mapCliOptions: (argv) => ({
-    skillId: PRODUCT_TO_SKILL_ID[argv.product as MigrateProduct],
-  }),
   run: {
-    skillId: PRODUCT_TO_SKILL_ID.statsig,
+    skillId: DEFAULT_MIGRATE_SKILL_ID,
     integrationLabel: 'migration',
     customPrompt: () =>
       'Migrate this project from its existing third-party analytics, ' +

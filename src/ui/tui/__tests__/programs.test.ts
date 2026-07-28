@@ -100,6 +100,140 @@ describe('PROGRAM_SEQUENCES', () => {
     });
   });
 
+  describe('Source maps flow', () => {
+    const sourceMapsScreens = () =>
+      PROGRAM_SEQUENCES[Program.ErrorTrackingUploadSourceMaps].map((s) => s.id);
+
+    it('logs in, then detects: intro → auth → detect → run, no health-check', () => {
+      const screens = sourceMapsScreens();
+
+      // Auth comes before the agentic detect screen (detection needs creds).
+      expect(screens.indexOf(ScreenId.Auth)).toBeLessThan(
+        screens.indexOf(ScreenId.SourceMapsDetect),
+      );
+      expect(screens.indexOf(ScreenId.SourceMapsIntro)).toBeLessThan(
+        screens.indexOf(ScreenId.Auth),
+      );
+      expect(screens.indexOf(ScreenId.SourceMapsDetect)).toBeLessThan(
+        screens.indexOf(ScreenId.Run),
+      );
+      // The health-check ("connection") screen was removed from this flow.
+      expect(screens).not.toContain(ScreenId.HealthCheck);
+    });
+
+    it('detect screen stays incomplete until a project is selected', () => {
+      const entry = getEntry(
+        Program.ErrorTrackingUploadSourceMaps,
+        ScreenId.SourceMapsDetect,
+      );
+      const session = buildSession({});
+
+      expect(entry.isComplete?.(session)).toBe(false);
+
+      session.frameworkContext = { sourceMapsSelectedVariant: 'nextjs' };
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+  });
+
+  describe('AI opt-in gate predicate', () => {
+    const orgWith = (
+      is_ai_data_processing_approved: boolean | null | undefined,
+    ) =>
+      ({
+        organization: { is_ai_data_processing_approved },
+      } as never);
+
+    it('hides the gate while apiUser is null (transient between emits)', () => {
+      const session = buildSession({});
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(session.apiUser).toBeNull();
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('hides the gate when the org has opted in (true)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(true);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    it('shows the gate when the org has explicitly opted out (false)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(false);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('shows the gate when the field is null (legacy org, matches Max)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(null);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('shows the gate when the field is undefined (matches Max)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(undefined);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('is omitted entirely from programs with requiresAi: false', () => {
+      // posthog-doctor sets requiresAi: false — withAiOptInGate should skip
+      // injection so the gate never appears in the sequence.
+      const entry = PROGRAM_SEQUENCES[Program.PosthogDoctor].find(
+        (e) => e.id === ScreenId.AiOptIn,
+      );
+      expect(entry).toBeUndefined();
+    });
+
+    it('skips the gate in CI mode regardless of opt-in state', () => {
+      // CI users have already auto-consented to AI usage per the README,
+      // and the interactive kill screen would be unworkable headless.
+      const session = buildSession({});
+      session.ci = true;
+      session.apiUser = orgWith(false);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    it('skips the gate in signup mode regardless of opt-in state', () => {
+      // A provisioned account's token omits `organization:read`, so the org's
+      // AI approval can never be read back. Creating an account through the
+      // wizard to run the agent is itself the consent — signup auto-consents
+      // like CI, so the gate must never block it.
+      const session = buildSession({});
+      session.signup = true;
+      session.apiUser = orgWith(false);
+      const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    it('skips the gate in signup mode even when apiUser is null', () => {
+      const session = buildSession({});
+      session.signup = true;
+      const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
+
+      expect(session.apiUser).toBeNull();
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+  });
+
   describe('Wizard run predicate', () => {
     it('stays incomplete while run is idle or running', () => {
       const session = buildSession({});
@@ -145,6 +279,25 @@ describe('PROGRAM_SEQUENCES', () => {
       session.mcpComplete = true;
 
       expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    describe('McpAdd step ordering', () => {
+      // Slack-connect must run before the tutorial: the no-creds Slack render
+      // is the only post-install step that can render in mcp-add (a loginless
+      // command), so it sits between install and the tutorial. Ordering it
+      // after the tutorial would also bury Slack discovery behind a tutorial
+      // dismissal screen.
+      it('runs install → slack-connect → mcp-suggested-prompts', () => {
+        const order = PROGRAM_SEQUENCES[Program.McpAdd]
+          .map((entry) => entry.id)
+          .filter((id) => id !== ScreenId.Exit);
+
+        expect(order).toEqual([
+          ScreenId.McpAdd,
+          ScreenId.SlackConnect,
+          ScreenId.McpSuggestedPrompts,
+        ]);
+      });
     });
 
     describe('McpAdd → mcp-suggested-prompts step', () => {

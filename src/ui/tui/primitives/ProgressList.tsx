@@ -11,7 +11,7 @@ import { LoadingBox } from './LoadingBox.js';
 export interface ProgressItem {
   label: string;
   activeForm?: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
 }
 
 interface ProgressListProps {
@@ -20,8 +20,11 @@ interface ProgressListProps {
 }
 
 export const ProgressList = ({ items, title }: ProgressListProps) => {
-  const completed = items.filter((t) => t.status === 'completed').length;
-  const total = items.length;
+  // A task found not needed leaves the list — it was never work to show.
+  const visible = items.filter((t) => t.status !== 'skipped');
+  const resolved = visible.filter((t) => t.status === 'completed').length;
+  const total = visible.length;
+  const notRequired = items.length - visible.length;
 
   return (
     <Box flexDirection="column">
@@ -31,8 +34,8 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
           <Text> </Text>
         </>
       )}
-      {items.length === 0 && <LoadingBox message="Analyzing project..." />}
-      {items.map((item, i) => {
+      {visible.length === 0 && <LoadingBox message="Analyzing project..." />}
+      {visible.map((item, i) => {
         const icon =
           item.status === 'completed'
             ? Icons.squareFilled
@@ -50,10 +53,11 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
             ? item.activeForm
             : item.label;
 
+        // One row per task: the pane is half the terminal, so truncate.
         return (
-          <Text key={i}>
-            <Text color={color}>{icon}</Text>
-            <Text dimColor={item.status === 'pending'}> {label}</Text>
+          <Text key={i} wrap="truncate">
+            <Text color={color}>{icon}</Text>{' '}
+            <Text dimColor={item.status === 'pending'}>{label}</Text>
           </Text>
         );
       })}
@@ -61,11 +65,14 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
         <Box marginTop={1} gap={1}>
           <Spinner />
           <Text dimColor>
-            {completed < total
-              ? `Progress: ${completed}/${total} completed`
+            {resolved < total
+              ? `Progress: ${resolved}/${total} completed`
               : 'Cleaning up...'}
           </Text>
         </Box>
+      )}
+      {notRequired > 0 && (
+        <Text dimColor>({notRequired} skipped as not required)</Text>
       )}
     </Box>
   );

@@ -1,36 +1,38 @@
 import { createMcpInstaller } from '@ui/tui/services/mcp-installer';
+import * as mcpModuleReal from '@steps/add-mcp-server-to-clients/index';
+import { analytics } from '@utils/analytics';
 
-jest.mock('../../../steps/add-mcp-server-to-clients/index.js', () => ({
-  getSupportedClients: jest.fn(),
-  getInstalledClients: jest.fn(),
-  removeMCPServer: jest.fn(),
-  getSupportedPluginClients: jest.fn(),
-  installPlugins: jest.fn(),
+// The module is mocked below. Expose its exports as plain Mocks so the tests
+// can drive them with lightweight partial fixtures (the same loose access the
+// previous `require()` form gave) while still typing the .mock* helpers.
+const mcpModule = mcpModuleReal as unknown as Record<string, Mock>;
+
+vi.mock('../../../steps/add-mcp-server-to-clients/index.js', () => ({
+  getSupportedClients: vi.fn(),
+  getInstalledClients: vi.fn(),
+  removeMCPServer: vi.fn(),
+  getSupportedPluginClients: vi.fn(),
+  installPlugins: vi.fn(),
 }));
 
-jest.mock('../../../steps/add-mcp-server-to-clients/defaults.js', () => ({
+vi.mock('../../../steps/add-mcp-server-to-clients/defaults.js', () => ({
   ALL_FEATURE_VALUES: ['feature-a'],
 }));
 
-jest.mock('../../../utils/debug.js', () => ({
-  logToFile: jest.fn(),
+vi.mock('../../../utils/debug.js', () => ({
+  logToFile: vi.fn(),
 }));
 
-jest.mock('../../../utils/analytics.js', () => ({
-  analytics: { wizardCapture: jest.fn() },
+vi.mock('../../../utils/analytics.js', () => ({
+  analytics: { wizardCapture: vi.fn() },
 }));
 
 describe('createMcpInstaller — installPlugins', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mcpModule = require('@steps/add-mcp-server-to-clients/index');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { analytics } = require('@utils/analytics');
-
   const mockClaudeClient = { name: 'Claude Code' };
   const mockCursorClient = { name: 'Cursor' };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mcpModule.getSupportedClients.mockResolvedValue([
       mockClaudeClient,
       mockCursorClient,
@@ -117,11 +119,8 @@ describe('createMcpInstaller — installPlugins', () => {
 });
 
 describe('createMcpInstaller — detectClients', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mcpModule = require('@steps/add-mcp-server-to-clients/index');
-
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('surfaces the finish note for browser-finishable clients only', async () => {

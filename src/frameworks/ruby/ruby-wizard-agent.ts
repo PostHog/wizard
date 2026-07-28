@@ -20,7 +20,6 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
   metadata: {
     name: 'Ruby',
     integration: Integration.ruby,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/ruby',
     gatherContext: (options: WizardRunOptions) => {
       const packageManager = detectPackageManager(options);

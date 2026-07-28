@@ -19,7 +19,6 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
   metadata: {
     name: 'JavaScript (Web)',
     integration: Integration.javascript_web,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/js',
     gatherContext: (options: WizardRunOptions) => {
       const packageManagerName = detectJsPackageManager(options);
@@ -53,7 +52,7 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
       const { installDir } = options;
 
       // Has (index.html OR has a bundler) AND is a JavaScript project
-      const hasIndexHtmlFlag = hasIndexHtml(options);
+      const hasIndexHtmlFlag = await hasIndexHtml(options);
 
       const bundler = detectBundler(options);
       const hasBundler = !!bundler;

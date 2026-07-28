@@ -7,6 +7,7 @@ import {
   getGeneratedQuests,
   getActivationCrossSell,
   getTutorialPicker,
+  getSlackAppCard,
   FOLLOW_UP_EXIT_SENTINEL,
   TAILORED_ROLES,
 } from '@lib/mcp-role-prompts';
@@ -203,6 +204,57 @@ describe('getFollowUps', () => {
       lastToolName: 'mcp__posthog-wizard__query-trends',
     });
     expect(prefixed[0].label).toBe(direct[0].label);
+  });
+
+  it('recovers the inner tool from a CLI-mode exec command', () => {
+    // CLI mode: every call is the single `exec` tool; the real tool is named
+    // in the command string. Follow-ups should match the tools-mode result.
+    const toolsMode = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+    });
+    const cliMode = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__exec',
+      lastToolCommand: 'call query-trends {"event":"signup"}',
+    });
+    expect(cliMode[0].label).toBe(toolsMode[0].label);
+  });
+
+  it('parses the inner tool past exec --flag options', () => {
+    const flagged = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'exec',
+      lastToolCommand: 'call --force query-trends {"event":"signup"}',
+    });
+    const plain = getFollowUps({ ...baseArgs, lastToolName: 'query-trends' });
+    expect(flagged[0].label).toBe(plain[0].label);
+  });
+
+  it('falls through to generics for non-call exec commands', () => {
+    for (const command of ['search dashboard', 'info query-trends', 'tools']) {
+      const fs = getFollowUps({
+        ...baseArgs,
+        lastToolName: 'mcp__posthog-wizard__exec',
+        lastToolCommand: command,
+      });
+      // No inner tool → generic pool, same as an unknown tool.
+      expect(fs[0].label).toMatch(
+        /deeper|angle|surprise|slice|compare|actionable/i,
+      );
+      expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+    }
+  });
+
+  it('falls through to generics for a bare exec with no command', () => {
+    const fs = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__exec',
+    });
+    expect(fs[0].label).toMatch(
+      /deeper|angle|surprise|slice|compare|actionable/i,
+    );
+    expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
   });
 
   it('falls back to generic follow-ups for unknown tool names', () => {
@@ -455,5 +507,29 @@ describe('getTutorialPicker', () => {
     expect(picker[0].prompt).toBe(
       'Show me my top 5 events from the last 7 days',
     );
+  });
+});
+
+describe('getSlackAppCard', () => {
+  it('returns a populated, role-independent card', () => {
+    const card = getSlackAppCard();
+    expect(card.headline).toBeTruthy();
+    expect(card.pitch).toBeTruthy();
+    expect(card.capabilities).toHaveLength(2);
+    for (const capability of card.capabilities) {
+      expect(capability).toBeTruthy();
+    }
+  });
+
+  it('exposes the documented learn-more and setup URLs', () => {
+    const card = getSlackAppCard();
+    expect(card.learnMoreUrl).toBe('https://posthog.com/slack');
+    expect(card.setupUrl).toBe('https://app.posthog.com/integrations/slack');
+  });
+
+  it('describes both Slack agent capabilities — code/PR and data', () => {
+    const [code, data] = getSlackAppCard().capabilities;
+    expect(code).toMatch(/PR/i);
+    expect(data).toMatch(/data question|SQL/i);
   });
 });

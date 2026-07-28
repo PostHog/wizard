@@ -1,4 +1,6 @@
 import { isNonInteractiveEnvironment } from '@utils/environment';
+import { setEntryCommand } from '@utils/links';
+import { headlessOption, isHeadless, regionOption } from '@lib/headless-mode';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
@@ -14,56 +16,49 @@ export const basicIntegrationCommand: Command = {
         'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
       type: 'string',
     },
-    playground: {
-      default: false,
-      describe: 'Launch the TUI primitives playground',
-      type: 'boolean',
-    },
-    benchmark: {
-      default: false,
-      describe:
-        'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
-      type: 'boolean',
-    },
-    'yara-report': {
-      default: false,
-      describe:
-        'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
-      type: 'boolean',
-      hidden: true,
-    },
-    skill: {
-      describe:
-        'Run a specific context-mill skill by ID\nenv: POSTHOG_WIZARD_SKILL',
-      type: 'string',
-    },
     name: {
       describe:
         'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
       type: 'string',
     },
+    // ── Internal modes ───────────────────────────────────────────────
+    // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
+    playground: {
+      default: false,
+      describe: 'Launch the TUI primitives playground',
+      type: 'boolean',
+      hidden: true,
+    },
+    // The experimental headless flag — declared here (and on `audit`) rather
+    // than globally. Routed by this command's handler via runHeadlessInstall.
+    ...headlessOption,
+    ...regionOption,
   },
   check: (argv) => {
-    // --playground is the standalone TUI demo; it can't combine with the other
-    // run modes. (--ci + --skill IS valid — run a skill headlessly.)
-    if (argv.playground && (argv.ci || argv.skill)) {
-      throw new Error('--playground cannot be combined with --ci or --skill.');
-    }
-    // --skill with no ID would otherwise fall through to the interactive flow.
-    if (typeof argv.skill === 'string' && argv.skill.trim() === '') {
-      throw new Error('--skill needs a skill ID, e.g. --skill="foo"');
+    // --playground is the standalone TUI demo; it can't combine with a
+    // non-interactive run (either --ci or the experimental headless flag).
+    if (argv.playground && (argv.ci || isHeadless(argv))) {
+      throw new Error('--playground cannot be combined with a headless run.');
     }
     return true;
   },
   handler: (argv) => {
+    // The bare run is the integrate flow.
+    setEntryCommand('integrate');
     // Each mode file is loaded only when its branch is taken, so a plain
-    // `npx @posthog/wizard` never pulls in the CI, playground, or skill paths.
+    // `npx @posthog/wizard` never pulls in the CI or playground paths.
     void (async () => {
-      // --ci --skill runs the skill headlessly (skill takes precedence over the
-      // default CI integration); --ci alone runs the integration.
-      if (argv.ci && argv.skill) {
-        const { runSkillMode } = await import('./skill');
-        return runSkillMode(argv);
+      // ── The CI / headless division ───────────────────────────────────
+      // --ci (dev/test only) and the experimental headless flag (the
+      // published-build, non-interactive path; see @lib/headless-mode) both
+      // request a non-interactive install, but route to dedicated entry points
+      // — runHeadlessInstall vs runCIInstall (and below them runWizardHeadless
+      // vs runWizardCI). Both share one pipeline today but are separate
+      // functions end-to-end, so headless can diverge later without touching
+      // the CI path or its callers.
+      if (isHeadless(argv)) {
+        const { runHeadlessInstall } = await import('./ci-install');
+        return runHeadlessInstall(argv);
       }
       if (argv.ci) {
         const { runCIInstall } = await import('./ci-install');
@@ -76,10 +71,6 @@ export const basicIntegrationCommand: Command = {
       if (argv.playground) {
         const { runPlayground } = await import('./playground');
         return runPlayground();
-      }
-      if (argv.skill) {
-        const { runSkillMode } = await import('./skill');
-        return runSkillMode(argv);
       }
       const { runInteractive } = await import('./interactive');
       runInteractive(argv);

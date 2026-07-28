@@ -5,6 +5,13 @@
  * edited without touching TypeScript. This file holds the types,
  * the lookup functions, and the framework-family mapping.
  *
+ * Editing rule for the JSON (which can't carry comments itself): every
+ * prompt is either (a) a read query on any PostHog product, or (b) a
+ * write on dashboards, insights, notebooks, or annotations — the four
+ * "persistence" surfaces. No prompt should ask the agent to ship a
+ * flag, run an experiment, send a survey, or create an alert. See
+ * prompt-tree.md §5 for the scope reality.
+ *
  * The wizard surfaces these on the McpSuggestedPromptsScreen after
  * MCP install. Picking strategy for the kit:
  *   1. Known role + known framework → role kit with family overrides.
@@ -83,6 +90,25 @@ export interface RoleGreeting {
   outro: string;
 }
 
+/**
+ * The "Take PostHog to Slack" card surfaced at the end of the MCP flow
+ * (Goodbye phase + dedicated Connect-Slack step). `useCases` is resolved
+ * per role; the rest is static. Every string here is presentation copy
+ * shown to the user — none of it is sent to the agent, so the picker's
+ * read/persistence prompt-scope rule does not apply.
+ */
+export interface SlackAppCard {
+  headline: string;
+  /** One-line hook covering both analysis and shipping. */
+  pitch: string;
+  /** posthog.com/slack — "learn more". */
+  learnMoreUrl: string;
+  /** integrations/slack — where the user connects Slack. */
+  setupUrl: string;
+  /** The Slack agent's two capabilities (code/PR + data) — fixed, not role-tailored. */
+  capabilities: string[];
+}
+
 export const FOLLOW_UP_EXIT_SENTINEL = '__follow_up_exit__';
 /** How many follow-up suggestions to surface above the exit entry. */
 export const FOLLOW_UP_COUNT = 3;
@@ -132,6 +158,19 @@ const CROSS_SELL_BY_ROLE = copyData.crossSellByRole as Record<
   PromptOption[]
 >;
 const NEUTRAL_CROSS_SELL = copyData.neutralCrossSell as PromptOption[];
+// Presentation copy for the "Take PostHog to Slack" surfaces (Goodbye
+// card + dedicated step). Shown to the user, never sent to the agent —
+// so the read/persistence prompt-scope rule above does not apply. The
+// capabilities describe the Slack agent itself, not role-specific
+// examples. Connecting Slack is a manual OAuth step in the PostHog app,
+// so we link out to `setupUrl` rather than wiring it up.
+const SLACK_APP = copyData.slackApp as {
+  learnMoreUrl: string;
+  setupUrl: string;
+  headline: string;
+  pitch: string;
+  capabilities: string[];
+};
 
 // Data-aware surfaces — templates + copy for the scout-driven picker.
 const GENERATED_QUESTS = copyData.generatedQuests as {
@@ -198,6 +237,29 @@ function normalizeToolName(toolName: string | null): string | null {
   if (!toolName) return null;
   const idx = toolName.lastIndexOf('__');
   return idx >= 0 ? toolName.slice(idx + 2) : toolName;
+}
+
+/**
+ * CLI mode wraps every real tool in a single `exec` tool whose `command`
+ * string names the inner tool: `call query-trends {…}` → `query-trends`. The
+ * inner name is the first token after `call` (past any `--flag` options).
+ */
+const EXEC_INNER_TOOL = /^call\s+(?:--\w+\s+)*([a-z0-9-]+)/;
+
+/**
+ * Resolve the `TOOL_FOLLOW_UPS` lookup key from the last tool call, under both
+ * server modes. Tools mode passes the real tool name directly; CLI mode passes
+ * `exec` plus the command string, so we extract the inner tool from it. A
+ * non-`call` exec command (`search`, `info`) has no inner tool and yields null,
+ * so the lookup falls through to the generic pools.
+ */
+function resolveToolKey(
+  toolName: string | null,
+  toolCommand: string | null,
+): string | null {
+  const normalized = normalizeToolName(toolName);
+  if (normalized !== 'exec') return normalized;
+  return toolCommand?.match(EXEC_INNER_TOOL)?.[1] ?? null;
 }
 
 /** Pick `n` items from a pool starting at a rotation offset. */
@@ -281,12 +343,14 @@ export function getRoleGreeting(role: string | null | undefined): RoleGreeting {
  */
 export function getFollowUps(args: {
   lastToolName: string | null;
+  /** CLI mode's exec `command` string, used to recover the inner tool name. */
+  lastToolCommand?: string | null;
   lastPrompt: string;
   role: string | null | undefined;
   branchHistory: string[];
 }): PromptOption[] {
-  const { lastToolName, role, branchHistory } = args;
-  const normalized = normalizeToolName(lastToolName);
+  const { lastToolName, lastToolCommand, role, branchHistory } = args;
+  const normalized = resolveToolKey(lastToolName, lastToolCommand ?? null);
   const depth = branchHistory.length;
 
   // Build the candidate pool — order matters because dedup keeps the
@@ -528,4 +592,19 @@ export function getTutorialPicker(
     ...getRolePrompts(role, integration),
     ...getActivationCrossSell(role, profile, 1),
   ];
+}
+
+/**
+ * Resolve the "Take PostHog to Slack" card. Role-independent — the Slack
+ * agent's two capabilities (code/PR + data) describe the product itself,
+ * not role-specific examples.
+ */
+export function getSlackAppCard(): SlackAppCard {
+  return {
+    headline: SLACK_APP.headline,
+    pitch: SLACK_APP.pitch,
+    learnMoreUrl: SLACK_APP.learnMoreUrl,
+    setupUrl: SLACK_APP.setupUrl,
+    capabilities: SLACK_APP.capabilities,
+  };
 }

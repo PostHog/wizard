@@ -8,9 +8,10 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
+import type { Credentials } from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -21,10 +22,30 @@ export enum TaskStatus {
   Pending = 'pending',
   InProgress = 'in_progress',
   Completed = 'completed',
+  Skipped = 'skipped',
 }
 
 export function isTaskStatus(value: string): value is TaskStatus {
   return (Object.values(TaskStatus) as string[]).includes(value);
+}
+
+/**
+ * One assistant turn's token usage, for the hidden Ctrl+T token/cost HUD.
+ * `model` is the model that produced *this* turn (e.g. the SDK's
+ * `message.message.model`) — a subagent can run on a different model than
+ * the main session, and some programs override to Haiku, so pricing must key
+ * off the per-turn model rather than a single run-wide assumption. Omit only
+ * when the caller genuinely has no model context (falls back to Sonnet
+ * pricing — see `pricePerMtokForModel` in `@lib/agent/token-pricing`).
+ */
+export interface TokenUsageDelta {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  cacheCreation5m: number;
+  cacheCreation1h: number;
+  model?: string;
 }
 
 export interface SpinnerHandle {
@@ -36,15 +57,24 @@ export interface SpinnerHandle {
 /**
  * Context passed to `showAuthError` so the screen can pick the right copy.
  *
- * `hasSettingsConflict` is true when a Claude Code settings.json /
- * managed-settings file actually overrides the LLM Gateway auth — the
- * Wizard's pre-flight check missed it or it appeared after startup.
- * When false, the 401 has a different cause (bad PAT prefix, missing
- * scope, expired key, region mismatch) and we should not advise the
- * user to log out of Claude Code.
+ * `hasSettingsConflict` is true when a Claude Code settings file (project,
+ * project-local, the user's global config, or managed) actually overrides the
+ * LLM Gateway auth. `conflicts` carries the exact files and keys so the screen
+ * can name them. When there is no conflict, the 401 has a different cause (bad
+ * PAT prefix, missing scope, expired key, region mismatch) and we should not
+ * advise the user to log out of Claude Code.
  */
 export interface AuthErrorDetail {
   hasSettingsConflict: boolean;
+  conflicts?: SettingsConflict[];
+  /**
+   * True when the agent SDK authenticated from a stored Claude login
+   * (`apiKeySource: "/login managed key"`) instead of the wizard's gateway
+   * token — conflicting Anthropic credentials. Takes priority in the screen.
+   */
+  usingManagedLogin?: boolean;
+  /** Human-readable places a conflicting Anthropic credential may live. */
+  credentialPlaces?: string[];
   logFilePath: string;
 }
 
@@ -86,12 +116,7 @@ export interface WizardUI {
   startRun(): void;
 
   /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void;
+  setCredentials(credentials: Credentials): void;
 
   /**
    * Persist the user's `role_at_organization` once it's been fetched from
@@ -107,6 +132,18 @@ export interface WizardUI {
    * when the request failed.
    */
   setApiUser(user: ApiUser | null): void;
+
+  /**
+   * Park until the org's AI opt-in gate clears
+   * (`organization.is_ai_data_processing_approved === true`, or the
+   * program never registered the gate — requiresAi: false / no auth
+   * step / CI session). The agent runner awaits this after setApiUser
+   * and BEFORE skill install or agent start: this is the enforcement
+   * point that keeps source on the machine while the TUI shows
+   * AiOptInRequiredScreen. Resolves immediately in non-TUI
+   * environments (CI auto-consents to AI usage).
+   */
+  waitForAiOptIn(): Promise<void>;
 
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
@@ -138,12 +175,22 @@ export interface WizardUI {
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
 
+  /** Show the session-timeout overlay when the OAuth login window expires. */
+  showSessionTimeout(): void;
+
   /**
    * Open the wizard_ask overlay and resolve with the user's answers.
    * Implementations that can't ask (CI/logging) reject so the bridge can
    * surface a clear "not available" error to the agent.
    */
   requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
+
+  /**
+   * Dismiss the in-flight wizard_ask overlay, resolving its request with
+   * cancelled sentinels. No-op when nothing is pending. The ask bridge calls
+   * this on timeout so a stale pending question can't block later asks.
+   */
+  cancelPendingQuestion(): void;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
@@ -171,8 +218,20 @@ export interface WizardUI {
   // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
   setDashboardUrl(url: string): void;
 
+  /** Current "stage of work" — derived from the active tool call. Drives the
+   *  Visualizer tab's NOW PLAYING display. Pass an AgentPhase value. */
+  setStage(stage: string): void;
+
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
+
+  /** Accumulate one assistant turn's token usage into the hidden Ctrl+T
+   *  token/cost HUD's running estimate. No-op outside the TUI. */
+  addTokenUsage(delta: TokenUsageDelta): void;
+
+  /** Reconcile the HUD's running cost estimate to the SDK's authoritative
+   *  `total_cost_usd` once the agent run completes. No-op outside the TUI. */
+  setFinalTokenCostUsd(costUsd: number): void;
 
   // ── Outro payload built by agent-runner ──
   // Replaces the direct `session.outroData = X` mutation that breaks once
@@ -181,4 +240,14 @@ export interface WizardUI {
 
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
+
+  /** Read a frameworkContext value from the LIVE session (store may have
+   * forked the reference the runner holds). Used by run configs to read
+   * values written by post-auth screens (e.g. the source-maps picker). */
+  getFrameworkContext(key: string): unknown;
+
+  /** Park until the named program step's gate predicate flips true. Resolves
+   * immediately if the step has no gate. Mirrors waitForAiOptIn for any
+   * post-auth interactive step the agent run must wait on. */
+  waitForGate(stepId: string): Promise<void>;
 }

@@ -1,53 +1,24 @@
 /**
  * Error tracking source maps upload program step list.
  *
- * Detection runs headless via onReady, then the user sees a custom intro
- * showing the picked skill variant. Auth → agent run → outro mirrors the
- * other programs.
+ * Flow: a static intro (no detection yet) → login → an agentic detect+pick
+ * screen that scans the repo on Haiku and lets the user choose a project →
+ * agent run → outro. Detection runs after auth because the detection agent
+ * needs credentials.
  */
 
 import type { ProgramStep } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@lib/wizard-session';
-import {
-  evaluateWizardReadiness,
-  WizardReadiness,
-  SIGNUP_WIZARD_READINESS_CONFIG,
-  getBlockingServiceKeys,
-} from '@lib/health-checks/readiness';
-import { detectSourceMapsPrerequisites } from './detect.js';
+import { SOURCE_MAPS_CONTEXT_KEYS } from './detect.js';
 
-function healthCheckReady(session: WizardSession): boolean {
-  if (!session.readinessResult) return false;
-
-  if (session.signup) {
-    const hardBlocking = getBlockingServiceKeys(
-      session.readinessResult.health,
-      SIGNUP_WIZARD_READINESS_CONFIG,
-    );
-    const defaultBlocking = getBlockingServiceKeys(
-      session.readinessResult.health,
-    );
-    if (hardBlocking.length === 0 && defaultBlocking.length === 0) return true;
-    return session.outageDismissed;
-  }
-
-  if (session.readinessResult.decision === WizardReadiness.No) {
-    return session.outageDismissed;
-  }
-  return true;
+function projectSelected(session: WizardSession): boolean {
+  return (
+    session.frameworkContext[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant] != null
+  );
 }
 
 export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting platform',
-    // Headless: scans for platform / build-system signals and picks the
-    // matching context-mill skill variant. Writes either the variant or
-    // a detectError to frameworkContext.
-    onReady: (ctx) =>
-      detectSourceMapsPrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
   {
     id: 'intro',
     label: 'Welcome',
@@ -55,29 +26,22 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     gate: (session) => session.setupConfirmed,
   },
   {
-    id: 'health-check',
-    label: 'Health check',
-    screenId: 'health-check',
-    gate: healthCheckReady,
-    onInit: (ctx) => {
-      evaluateWizardReadiness()
-        .then((readiness) => {
-          ctx.setReadinessResult(readiness);
-        })
-        .catch(() => {
-          ctx.setReadinessResult({
-            decision: WizardReadiness.Yes,
-            health: {} as never,
-            reasons: [],
-          });
-        });
-    },
-  },
-  {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
     isComplete: (session) => session.credentials !== null,
+  },
+  {
+    id: 'detect',
+    label: 'Detecting projects',
+    // The Haiku agent scans the repo, surfaces an instrumentable / not-yet map,
+    // and the user picks the project to wire up. Advances once a project is
+    // chosen (its variant is written to frameworkContext). The gate lets the
+    // agent runner park after auth until the pick lands, so the run prompt sees
+    // the chosen variant.
+    screenId: 'source-maps-detect',
+    isComplete: projectSelected,
+    gate: projectSelected,
   },
   {
     id: 'run',

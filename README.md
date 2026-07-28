@@ -24,6 +24,18 @@ support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
 
+## Privacy & data usage
+
+The wizard uses **Anthropic Claude** (via PostHog's LLM gateway) to read your project's source files and integrate PostHog. A few things worth knowing up front:
+
+- **Source files** are sent to Anthropic as part of the agent's context.
+- **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
+- **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+- **AI opt-in**: the wizard honors your PostHog organization's `is_ai_data_processing_approved` setting (the same toggle that gates Max). If your org has not opted in, the wizard explains how to enable it and exits without sending source to Anthropic.
+- **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
+
+The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
+
 ## MCP Commands
 
 The wizard also includes commands for managing PostHog MCP (Model Context
@@ -37,16 +49,126 @@ npx @posthog/wizard mcp add
 npx @posthog/wizard mcp remove
 ```
 
-## Revenue Analytics
+## Wizard programs
+
+The wizard's commands are grouped into **programs** — self-contained agentic jobs that install, audit, or wire up a specific piece of PostHog. They're powered by skills from the [context mill](https://github.com/PostHog/context-mill).
+
+### PostHog integration (default)
+
+Running the wizard with no arguments installs PostHog into your project. It detects your framework, wires up initialization, instruments a starter set of events, and walks you through a first dashboard:
+
+```bash
+npx @posthog/wizard
+```
+
+Powered by the `posthog-integration` program. Most other programs below build on it (they declare `requires: ['posthog-integration']`) and will offer to run it first if PostHog isn't already set up.
+
+### Self-driving
+
+Autonomously sets up PostHog self-driving end-to-end. It connects GitHub, enables Session Replay and Error Tracking, wires up signal sources, and configures a Signals scout troop that watches your project for you.
+
+```bash
+npx @posthog/wizard self-driving
+```
+
+If PostHog isn't already installed, the wizard runs the default integration first (composed run) before starting the self-driving setup.
+
+### Audit
+
+Audit an existing PostHog integration for correctness and best practices. The
+`audit` command is a **family**. With no subcommand it runs the **events**
+audit (the default); pass a subcommand to run a specific one:
+
+```bash
+# Runs the events audit (the default) — no subcommand needed
+npx @posthog/wizard audit
+
+# Or run a specific audit directly
+npx @posthog/wizard audit events           # event capture quality + cost (default)
+npx @posthog/wizard audit all              # comprehensive audit across every area
+npx @posthog/wizard audit autocapture      # autocapture setup + cost
+npx @posthog/wizard audit feature-flags    # feature flag usage + cost
+npx @posthog/wizard audit identify         # your $identify implementation
+npx @posthog/wizard audit session-replay   # session replay setup
+npx @posthog/wizard audit web-analytics    # web analytics setup
+```
+
+Most audit subcommands resolve at runtime from the published skill registry, so
+new audits appear without a wizard release (`web-analytics` is wizard-native).
+
+> **`audit <subcommand>` chooses an audit area — it does not take a skill name.**
+> The audit subcommands above *are* context-mill skills promoted to commands (via
+> a `cli: role: command` block); [`wizard skill <skill-name>`](#run-a-single-skill)
+> runs a skill that hasn't been promoted. Same machinery, two surfaces.
+> (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
+> a subcommand.")
+
+### Revenue Analytics
 
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
 ```bash
-npx @posthog/wizard revenue
+npx @posthog/wizard revenue-analytics
 ```
 
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
-same flags as the main wizard.
+same flags as the main wizard. (Renamed from `revenue` in the CLI overhaul.)
+
+### Data Warehouse
+
+Detect data sources your project already uses (Postgres, MySQL, MongoDB,
+Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
+
+```bash
+npx @posthog/wizard warehouse
+```
+
+The wizard scans your dependencies and `.env` key names (never the values) to
+identify sources. Database and API-key sources are created from the terminal;
+OAuth sources open the PostHog app's new-source flow in your browser.
+
+### Upload source maps
+
+Upload JavaScript source maps to PostHog error tracking so stack traces are symbolicated back to your original code:
+
+```bash
+npx @posthog/wizard upload-source-maps
+```
+
+### Run skill
+
+Run any context-mill skill directly by name, even if it isn't exposed as its own
+command:
+
+```bash
+npx @posthog/wizard skill list              # list every available skill
+npx @posthog/wizard skill <skill-name>      # run one by name
+```
+
+## Wizard ownership
+
+Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
+file is the source of truth; this table just mirrors it for readability.
+`team-wizard-docs` is the default reviewer; the team-owned programs below
+route review to their owning team instead.
+
+| Path | Owning team |
+|---|---|
+| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
+| `src/lib/agent/` | `@PostHog/team-wizard-docs` |
+| `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/lib/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/lib/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/lib/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
+| `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+
+Ownership is by directory. Programs not listed above
+(`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
+`shared`, `slack`) fall through the default and are owned by
+`team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
+not a merge gate.
 
 ## Headless signup + install (agents / CI)
 
@@ -104,6 +226,7 @@ The following CLI arguments are available:
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+| `--no-telemetry`  | Disable wizard run-state telemetry                               | boolean | `false` |                                                      | `POSTHOG_WIZARD_NO_TELEMETRY`  |
 
 
 # CI Mode
@@ -145,6 +268,43 @@ When creating your personal API key, ensure it has the following scopes enabled:
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
+
+### OAuth app scope ceiling
+
+The wizard's OAuth app on the PostHog side caps the scopes its tokens may
+carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
+`src/lib/oauth/program-scopes.ts`) must be present in that list. This is
+the allow-list to keep in sync — a net-new scope (e.g.
+`product_enablement:write`) must be added to the live
+`OAuthApplication.scopes` on the PostHog side before a token can be granted
+it:
+
+```
+user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,event_definition:write,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write,product_enablement:write
+```
+
+If an existing Wizard authorization predates a newly required scope, reconnect
+the Wizard OAuth app. Refresh tokens retain their original grant and cannot be
+used to silently add permissions.
+
+# Command changes (CLI overhaul)
+
+The CLI was overhauled to consolidate commands into a smaller, extensible
+surface. If you used an older command, here's where it went:
+
+| Old command | New command | What changed |
+|---|---|---|
+| `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
+| `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
+| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands |
+| `wizard audit-3000` | *removed* | Retired |
+| `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
+| `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
+
+> **Commands vs. programs:** `integrate` was the *command*; the program behind it
+> is `posthog-integration`, which still exists and now powers the default flow.
+> Other commands depend on it via `requires: ['posthog-integration']`. The
+> program id is internal — it was never a command you typed.
 
 # Steal this code
 
@@ -302,7 +462,7 @@ wizard --integration=nextjs
 wizard --integration=nextjs --local-mcp
 ```
 
-## Testing
+### Testing
 
 To run unit tests, run:
 
@@ -318,6 +478,40 @@ bin/test-e2e
 
 E2E tests are a bit more complicated to create and adjust due to to their mocked
 LLM calls. See the `e2e-tests/README.md` for more information.
+
+#### Explore with an agent
+
+You can hand the wizard to an AI agent and have it drive the real flow itself —
+deciding each screen and snapshotting the TUI to see what happened. The agent
+drives through the `wizard-ci` MCP tools (`open_app` / `read_state` /
+`perform_action` / `render_screen` / `run_agent`), which are registered in this
+repo's `.mcp.json` and bound in every session here — approve `wizard-ci` the first
+time you're prompted. The how-to is the `exploring-the-wizard` skill
+(`.claude/skills/exploring-the-wizard/SKILL.md`), which an agent discovers
+automatically.
+
+Example prompt — explore against
+[open-saas](https://github.com/wasp-lang/open-saas):
+
+> Explore the PostHog wizard against open-saas, following the
+> `exploring-the-wizard` skill. Ask me for my phx key file path and project id,
+> then clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp`
+> copy. Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding
+> each screen:
+>
+> 1. `open_app` on the `/tmp` copy, then `read_state` to see the screen and the
+>    actions legal right now.
+> 2. At each key moment, `render_screen` and save the frame to
+>    `/tmp/wz-explore-snaps/NN-<screen>.txt` (numbered in order) so we get a
+>    readable record of the run.
+> 3. Act: `confirm_setup` at intro, `dismiss_outage` at health-check, `choose`
+>    for any setup question, then `run_agent` at auth.
+> 4. Poll `read_state` until `integration` is `done` (or `failed` — then report
+>    `integrationError`), snapshotting as the run screen progresses.
+> 5. Finish the tail: dismiss outro / mcp / slack, then `keep_skills`.
+>
+> Then show me the saved snapshots in order, the screen path, whether `posthog`
+> landed in the app, and anything that broke.
 
 ## Publishing your tool
 

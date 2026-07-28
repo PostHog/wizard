@@ -1,4 +1,15 @@
-import { extractOAuthCode } from '@utils/oauth';
+import {
+  assertWizardCompletionScope,
+  extractOAuthCode,
+  isAuthorizationTimeout,
+  OAuthTokenResponseSchema,
+  parseOAuthScopes,
+} from '@utils/oauth';
+import {
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@lib/constants';
+import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 
 describe('extractOAuthCode', () => {
   it('extracts the code from a full callback URL', () => {
@@ -44,5 +55,101 @@ describe('extractOAuthCode', () => {
 
   it('returns null for free-form text with whitespace and no code', () => {
     expect(extractOAuthCode('please paste here')).toBeNull();
+  });
+});
+
+describe('isAuthorizationTimeout', () => {
+  it('matches the authorization timeout error', () => {
+    expect(isAuthorizationTimeout(new Error('Authorization timed out'))).toBe(
+      true,
+    );
+  });
+
+  it('does not match unrelated errors', () => {
+    expect(
+      isAuthorizationTimeout(new Error('OAuth error: access_denied')),
+    ).toBe(false);
+    expect(isAuthorizationTimeout(new Error('Unknown error'))).toBe(false);
+  });
+
+  // Guards the regression where `.includes('timeout')` was used to detect the
+  // `'Authorization timed out'` error — it never matched, so timeouts fell
+  // through to the generic "create an issue" message.
+  it('matches a message that the old substring check would have missed', () => {
+    const error = new Error('Authorization timed out');
+    expect(error.message).not.toContain('timeout');
+    expect(isAuthorizationTimeout(error)).toBe(true);
+  });
+});
+
+describe('wizard OAuth scopes', () => {
+  it('requests both scopes required to complete wizard sessions', () => {
+    const scopes = getOAuthScopesForProgram(null);
+
+    expect(scopes).toContain('wizard_session:write');
+    expect(scopes).toContain('event_definition:write');
+    expect(WIZARD_OAUTH_SCOPES).toEqual(
+      expect.arrayContaining([...WIZARD_PROVISIONING_SCOPES]),
+    );
+  });
+
+  it('accepts a newly issued token with the completion scope', () => {
+    expect(() =>
+      assertWizardCompletionScope(
+        'user:read wizard_session:write event_definition:write',
+      ),
+    ).not.toThrow();
+  });
+
+  it('asks legacy authorizations to reconnect before completion', () => {
+    expect(() =>
+      assertWizardCompletionScope('user:read wizard_session:write'),
+    ).toThrow(/missing.*event_definition:write.*Reconnect.*revoke/is);
+  });
+
+  it('preserves unrelated granted scopes when parsing the token response', () => {
+    expect(
+      parseOAuthScopes(
+        'user:read project:read wizard_session:write event_definition:write',
+      ),
+    ).toEqual([
+      'user:read',
+      'project:read',
+      'wizard_session:write',
+      'event_definition:write',
+    ]);
+  });
+});
+
+describe('OAuthTokenResponseSchema posthog_region', () => {
+  const base = {
+    access_token: 'pha_test',
+    expires_in: 3600,
+    token_type: 'Bearer',
+    scope: 'event_definition:write',
+  };
+
+  it('passes a recognized region through', () => {
+    const token = OAuthTokenResponseSchema.parse({
+      ...base,
+      posthog_region: 'eu',
+      posthog_base_url: 'https://eu.posthog.com',
+    });
+    expect(token.posthog_region).toBe('eu');
+    expect(token.posthog_base_url).toBe('https://eu.posthog.com');
+  });
+
+  it('degrades an unrecognized region to undefined instead of failing login', () => {
+    const token = OAuthTokenResponseSchema.parse({
+      ...base,
+      posthog_region: 'apac',
+    });
+    expect(token.access_token).toBe('pha_test');
+    expect(token.posthog_region).toBeUndefined();
+  });
+
+  it('parses responses without region fields (self-hosted)', () => {
+    const token = OAuthTokenResponseSchema.parse(base);
+    expect(token.posthog_region).toBeUndefined();
   });
 });

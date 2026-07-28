@@ -1,17 +1,18 @@
 import {
   CANCELLED_SENTINEL,
   createWizardAskBridge,
+  isFullyCancelled,
 } from '@lib/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
 import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
 
-jest.mock('../../utils/analytics', () => ({
+vi.mock('../../utils/analytics', () => ({
   analytics: {
-    wizardCapture: jest.fn(),
+    wizardCapture: vi.fn(),
   },
 }));
 
-const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
+const wizardCaptureMock = analytics.wizardCapture as Mock;
 
 beforeEach(() => {
   wizardCaptureMock.mockClear();
@@ -162,14 +163,40 @@ describe('createWizardAskBridge', () => {
     });
   });
 
+  describe('isFullyCancelled', () => {
+    // Gates the per-run cap refund in wizard-tools: a fully cancelled ask must
+    // not burn a wizard_ask slot, while any real answer must still count.
+    it('is true only when every field is the cancelled sentinel', () => {
+      expect(
+        isFullyCancelled({ a: CANCELLED_SENTINEL, b: CANCELLED_SENTINEL }),
+      ).toBe(true);
+    });
+
+    it('is false when at least one field has a real answer', () => {
+      expect(isFullyCancelled({ a: CANCELLED_SENTINEL, b: 'real' })).toBe(
+        false,
+      );
+    });
+
+    it('is false when nothing was cancelled', () => {
+      expect(isFullyCancelled({ a: 'x', b: ['y', 'z'] })).toBe(false);
+    });
+
+    it('is false for an empty answer map', () => {
+      expect(isFullyCancelled({})).toBe(false);
+    });
+  });
+
   describe('timeout', () => {
-    it('resolves every field with the cancelled sentinel when the user does not answer in time', async () => {
-      jest.useFakeTimers();
+    it('resolves every field with the cancelled sentinel and dismisses the host overlay when the user does not answer in time', async () => {
+      vi.useFakeTimers();
       try {
         // showQuestion intentionally never resolves — the timeout has to win.
+        const cancelQuestion = vi.fn();
         const bridge = createWizardAskBridge({
           getSource: () => 'product-tours',
           showQuestion: () => new Promise<AskAnswers>(() => undefined),
+          cancelQuestion,
           timeoutMs: 1000,
         });
 
@@ -180,19 +207,46 @@ describe('createWizardAskBridge', () => {
           ],
         });
 
-        jest.advanceTimersByTime(1000);
+        vi.advanceTimersByTime(1000);
 
         await expect(promise).resolves.toEqual({
           goal: CANCELLED_SENTINEL,
           audience: CANCELLED_SENTINEL,
         });
 
+        // Without this, the host's pending-question state survives the
+        // timeout and every later wizard_ask in the run is rejected as a
+        // duplicate request.
+        expect(cancelQuestion).toHaveBeenCalledTimes(1);
+
         const cancelledCall = wizardCaptureMock.mock.calls.find(
           ([name]) => name === 'wizard_ask cancelled',
         );
         expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
       } finally {
-        jest.useRealTimers();
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not dismiss the overlay when the user answers before the timeout', async () => {
+      vi.useFakeTimers();
+      try {
+        const cancelQuestion = vi.fn();
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: () => Promise.resolve({ goal: 'ship it' }),
+          cancelQuestion,
+          timeoutMs: 1000,
+        });
+
+        await bridge.request({
+          questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+        });
+
+        vi.advanceTimersByTime(1000);
+        expect(cancelQuestion).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
       }
     });
   });

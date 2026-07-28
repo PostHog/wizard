@@ -10,34 +10,76 @@ import {
 import {
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
+  VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
-import { getUiHostFromHost } from '@utils/urls';
+import { getUI } from '@ui';
+import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import { analytics } from '@utils/analytics';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
+
+let postHogCliInstallAttempted = false;
+
+/**
+ * Pre-install posthog-cli for variants that need a machine-global copy
+ * (`VARIANTS_REQUIRING_POSTHOG_CLI`). The agent can't — warlock blocks
+ * `npm install -g` — so the wizard does it in-process. Warn, don't fail.
+ */
+function ensurePostHogCli(variant: SkillVariant): void {
+  if (postHogCliInstallAttempted) return;
+  postHogCliInstallAttempted = true;
+
+  const result = installOrUpdatePostHogCli();
+  if (!result.success) {
+    analytics.wizardCapture('source maps posthog-cli preinstall failed', {
+      variant,
+      error: String(result.error).slice(0, 500),
+    });
+    analytics.captureException(
+      result.errorObject ??
+        new Error(`posthog-cli pre-install failed: ${result.error}`),
+      { source: 'source_maps_cli_preinstall', variant },
+    );
+    getUI().log.warn(
+      `Could not pre-install posthog-cli (${result.error}). Your release build ` +
+        `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
+    );
+  }
+}
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   command: 'upload-source-maps',
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',
+  requiresAi: true,
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: REPORT_FILE,
   getContentBlocks,
   requires: ['posthog-integration'],
 
-  run: (session: WizardSession): Promise<ProgramRun> => {
-    const variant = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.skillVariant
-    ] as SkillVariant | undefined;
-    const displayName = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.displayName
-    ] as string | undefined;
-
-    const skillId = variant
-      ? `error-tracking-upload-source-maps-${variant}`
-      : undefined;
+  run: (_session: WizardSession): Promise<ProgramRun> => {
+    // Read the picked project LIVE at prompt-build time, not here: the picker
+    // screen runs AFTER this run config is resolved (post-auth), and the store
+    // forks the session reference, so the `session` passed in never sees the
+    // choice. getUI().getFrameworkContext reads the live store session.
+    const readSelection = () => {
+      const variant = getUI().getFrameworkContext(
+        SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
+      ) as SkillVariant | undefined;
+      const displayName = getUI().getFrameworkContext(
+        SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
+      ) as string | undefined;
+      const projectPath = getUI().getFrameworkContext(
+        SOURCE_MAPS_CONTEXT_KEYS.selectedPath,
+      ) as string | undefined;
+      const skillId = variant
+        ? `error-tracking-upload-source-maps-${variant}`
+        : undefined;
+      return { variant, displayName, projectPath, skillId };
+    };
 
     return Promise.resolve({
       integrationLabel: 'error-tracking-upload-source-maps',
@@ -49,32 +91,43 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
       spinnerMessage: 'Wiring up source maps...',
       estimatedDurationMinutes: 3,
       abortCases: SOURCE_MAPS_ABORT_CASES,
+      // The flow parks on wizard_ask while the user does slow work — create
+      // a personal API key in the browser (STEP 1), or run a production
+      // build, trigger the test error, and check Error Tracking (STEP 8).
+      // The 5-minute default cancels the question mid-task and the agent
+      // wraps up to the outro, so give these answers half an hour.
+      askTimeoutMs: 30 * 60 * 1000,
 
       customPrompt: (ctx) => {
+        const { variant, displayName, projectPath, skillId } = readSelection();
         if (!skillId || !variant) {
-          // Detection failed but the user got past the intro somehow.
-          // Tell the agent to abort with a structured signal so the runner
-          // renders a friendly outro.
+          // No project was selected — abort with a structured signal so the
+          // runner renders a friendly outro.
           return SOURCE_MAPS_DETECTION_FAILED_PROMPT;
         }
 
-        const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+        if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
+          ensurePostHogCli(variant);
+
+        const uiHost = ctx.host.appHost.replace(/\/$/, '');
 
         return buildSourceMapsUploadPrompt({
           displayName,
           variant,
           skillId,
+          projectPath,
           projectId: ctx.projectId,
-          host: ctx.host,
+          host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
         });
       },
 
-      postRun: (sess) => {
+      postRun: () => {
         // Stash a hint for the outro about what variant we shipped.
+        const { variant } = readSelection();
         if (variant) {
-          sess.frameworkContext['sourceMapsCompletedVariant'] = variant;
+          getUI().setFrameworkContext('sourceMapsCompletedVariant', variant);
         }
         return Promise.resolve();
       },

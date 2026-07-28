@@ -8,9 +8,14 @@
  */
 
 import type { Dirent } from 'fs';
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { IGNORED_DIRS } from '@utils/file-utils';
+import {
+  IGNORED_DIRS,
+  MAX_DIR_ENTRIES,
+  MAX_WALK_FILES,
+  safeReadFile,
+} from '@utils/bounded-fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 
@@ -50,13 +55,50 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
   rollup: 'Rollup',
 };
 
-const POSTHOG_SDKS = [
+/**
+ * Variants the wizard can wire up source-map upload for automatically. React
+ * Native is recognised but not yet automatable, so the agentic picker treats
+ * it as non-instrumentable.
+ */
+export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
+  'android',
+  'ios',
+  'flutter',
+  'web',
+  'nextjs',
+  'node',
+  'react',
+  'angular',
+  'nuxt',
+  'vite',
+  'webpack',
+  'rollup',
+];
+
+/**
+ * Variants the wizard pre-installs a machine-global `posthog-cli` for — their
+ * build shells out to it with no npx / local-dep fallback. JS variants stay
+ * out. Flutter counts here despite emitting plain `.js.map` files: a Flutter
+ * project has no `package.json`, so there is no npx or local dependency to
+ * fall back to when the post-build step invokes the CLI.
+ */
+export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
+  new Set(['ios', 'android', 'flutter']);
+
+const POSTHOG_SDKS = new Set([
   'posthog-js',
   'posthog-node',
   'posthog-react-native',
   'posthog-android',
   'posthog-ios',
-];
+]);
+
+const GRADLE_FILES = new Set([
+  'build.gradle',
+  'build.gradle.kts',
+  'settings.gradle',
+  'settings.gradle.kts',
+]);
 
 /**
  * Structured detection errors. The screen renders each kind into JSX
@@ -117,15 +159,22 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
     scannedFileCount: 0,
   };
 
-  function scan(dir: string, depth: number): void {
-    if (depth > maxDepth) return;
+  // Explicit stack — no call-stack recursion.
+  const stack: Array<{ dir: string; depth: number }> = [
+    { dir: installDir, depth: 0 },
+  ];
+
+  while (stack.length > 0 && signals.scannedFileCount < MAX_WALK_FILES) {
+    const { dir, depth } = stack.pop()!;
 
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
-      return;
+      continue;
     }
+    // A directory contributes at most MAX_DIR_ENTRIES entries.
+    if (entries.length > MAX_DIR_ENTRIES) entries.length = MAX_DIR_ENTRIES;
 
     for (const entry of entries) {
       if (entry.name.startsWith('.') && entry.name !== '.') continue;
@@ -136,8 +185,10 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
       if (entry.isFile()) {
         signals.scannedFileCount += 1;
         if (entry.name === 'package.json') {
+          const content = safeReadFile(fullPath);
+          if (content === null) continue;
           try {
-            const pkg = JSON.parse(readFileSync(fullPath, 'utf-8')) as {
+            const pkg = JSON.parse(content) as {
               dependencies?: Record<string, string>;
               devDependencies?: Record<string, string>;
             };
@@ -158,25 +209,19 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
           signals.hasSwiftPackage = true;
         } else if (entry.name === 'pubspec.yaml') {
           signals.hasPubspec = true;
-        } else if (
-          entry.name === 'build.gradle' ||
-          entry.name === 'build.gradle.kts' ||
-          entry.name === 'settings.gradle' ||
-          entry.name === 'settings.gradle.kts'
-        ) {
+        } else if (GRADLE_FILES.has(entry.name)) {
           signals.hasGradle = true;
         }
       } else if (entry.isDirectory()) {
         if (entry.name.endsWith('.xcodeproj')) {
           signals.hasXcodeProject = true;
-        } else {
-          scan(fullPath, depth + 1);
+        } else if (depth < maxDepth) {
+          stack.push({ dir: fullPath, depth: depth + 1 });
         }
       }
     }
   }
 
-  scan(installDir, 0);
   return signals;
 }
 
@@ -248,6 +293,10 @@ export const SOURCE_MAPS_CONTEXT_KEYS = {
   displayName: 'sourceMapsDisplayName',
   packagePaths: 'sourceMapsPackagePaths',
   detectError: 'detectError',
+  // Set by the agentic picker once the user chooses a project to instrument.
+  selectedVariant: 'sourceMapsSelectedVariant',
+  selectedDisplayName: 'sourceMapsSelectedDisplayName',
+  selectedPath: 'sourceMapsSelectedPath',
 } as const;
 
 /**
@@ -284,8 +333,8 @@ export function detectSourceMapsPrerequisites(
   const signals = collectSignals(installDir);
   const variant = selectVariant(signals);
 
-  // This program currently targets JS-like stacks only. Avoid selecting native
-  // platforms until dedicated skill variants are available.
+  // The legacy filesystem detector does not automate native platforms. The
+  // live source-map picker uses detectSourceMapsProjects instead.
   if (
     variant &&
     ['react-native', 'flutter', 'ios', 'android'].includes(variant)
