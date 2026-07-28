@@ -12,6 +12,7 @@ import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { runtimeEnv } from '@env';
+import type { AioCapture } from '@lib/agent/aio-capture';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
@@ -213,6 +214,12 @@ export type AgentConfig = {
    * tools register.
    */
   orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
+  /**
+   * Optional AIO capture — mirrors each assistant SDK message into the
+   * authenticated project as `$ai_generation`. No-op instance when
+   * `--capture-aio` is off. Constructed once per run by the harness.
+   */
+  capture?: AioCapture;
 };
 
 /**
@@ -306,6 +313,8 @@ type AgentRunConfig = {
    * not touch other programs' linear runs.
    */
   suppressTaskRender?: boolean;
+  /** AIO capture, forwarded from AgentConfig. Undefined when disabled. */
+  capture?: AioCapture;
 };
 
 /**
@@ -588,6 +597,7 @@ export async function initializeAgent(
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
+      capture: config.capture,
     };
 
     logToFile('Agent config:', {
@@ -835,6 +845,13 @@ export async function runAgent(
       analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
     }
 
+    // Seed the AIO capture with the initial prompt so the first assistant
+    // generation carries `$ai_input`. The prompt goes to the SDK subprocess
+    // via `createPromptStream()` below and is never echoed on the return
+    // stream, so this is the only place we can capture it. No-op when
+    // capture is disabled.
+    agentConfig.capture?.setInitialPrompt(prompt);
+
     const response = query({
       prompt: createPromptStream(),
       options: {
@@ -1028,6 +1045,12 @@ export async function runAgent(
         }
         loggedInitialContext = true;
       }
+
+      // Mirror the assistant turn into the authenticated project's AIO tab.
+      // No-op when `--capture-aio` is off (dev/test builds only). Fire-and-
+      // forget: failures are debug-logged inside the module and never touch
+      // the stream loop.
+      agentConfig.capture?.captureFromAnthropicSDKMessage(message);
 
       // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
       // output for post-success cleanup errors while still logging them to file

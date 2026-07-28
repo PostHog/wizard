@@ -127,6 +127,13 @@ export class Wizard {
             'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
           type: 'string',
           hidden: true,
+        })
+        .option('capture-aio', {
+          default: false,
+          describe:
+            "Capture wizard LLM calls as $ai_generation events in the authenticated project's AI Observability tab.\nenv: POSTHOG_WIZARD_CAPTURE_AIO",
+          type: 'boolean',
+          hidden: true,
         });
     }
 
@@ -186,8 +193,9 @@ export class Wizard {
         process.exit(1);
       }
 
-      // --harness / --sequence / --model are dev/test-only. In published builds
-      // the env vars would silently no-op, so reject them explicitly instead.
+      // --harness / --sequence / --model / --capture-aio are dev/test-only.
+      // In published builds the env vars would silently no-op, so reject them
+      // explicitly instead.
       const argvHasOverride = args.some(
         (a) =>
           a === '--harness' ||
@@ -195,7 +203,10 @@ export class Wizard {
           a === '--sequence' ||
           a.startsWith('--sequence=') ||
           a === '--model' ||
-          a.startsWith('--model='),
+          a.startsWith('--model=') ||
+          a === '--capture-aio' ||
+          a === '--no-capture-aio' ||
+          a.startsWith('--capture-aio='),
       );
       const envHasOverride =
         (process.env.POSTHOG_WIZARD_HARNESS != null &&
@@ -203,10 +214,12 @@ export class Wizard {
         (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
           process.env.POSTHOG_WIZARD_SEQUENCE !== '') ||
         (process.env.POSTHOG_WIZARD_MODEL != null &&
-          process.env.POSTHOG_WIZARD_MODEL !== '');
+          process.env.POSTHOG_WIZARD_MODEL !== '') ||
+        (process.env.POSTHOG_WIZARD_CAPTURE_AIO != null &&
+          process.env.POSTHOG_WIZARD_CAPTURE_AIO !== '');
       if (argvHasOverride || envHasOverride) {
         process.stderr.write(
-          `\n\x1b[1;91m✖ The --harness, --sequence, and --model overrides are not available in published builds.\x1b[0m\n\n`,
+          `\n\x1b[1;91m✖ The --harness, --sequence, --model, and --capture-aio overrides are not available in published builds.\x1b[0m\n\n`,
         );
         process.exit(1);
       }
