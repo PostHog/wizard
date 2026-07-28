@@ -178,7 +178,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const { provider, caps, gatewayUrl } = buildGatewayProvider({
+    const { provider, caps } = buildGatewayProvider({
       gatewayUrl: boot.credentials.host.gatewayUrl,
       accessToken: boot.credentials.accessToken,
       wizardMetadata: boot.wizardMetadata,
@@ -203,10 +203,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
-      triageAuth: {
-        baseURL: gatewayUrl,
-        authToken: boot.credentials.accessToken,
-      },
+      triageProvider: boot.triageProvider,
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
@@ -289,6 +286,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const wizardTools = createWizardPiTools({
       workingDirectory: dir,
       skillsBaseUrl: boot.skillsBaseUrl,
+      triageProvider: boot.triageProvider,
     }).filter((t) =>
       ['check_env_keys', 'set_env_values', 'detect_package_manager'].includes(
         t.name,
