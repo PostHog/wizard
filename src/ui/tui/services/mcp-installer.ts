@@ -11,6 +11,7 @@ import {
   getInstalledClients,
   getSupportedPluginClients,
   installPlugins as runPluginInstall,
+  type PluginInstallReport,
 } from '@steps/add-mcp-server-to-clients/index';
 import { ALL_FEATURE_VALUES } from '@steps/add-mcp-server-to-clients/defaults';
 import { isPluginCapable } from '@steps/add-mcp-server-to-clients/plugin-client';
@@ -42,8 +43,12 @@ export interface McpInstaller {
   /** Remove the PostHog MCP server from all installed clients. Returns names of removed clients. */
   remove(): Promise<string[]>;
 
-  /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
-  installPlugins(clientNames: string[]): Promise<string[]>;
+  /**
+   * Install the PostHog AI plugin to supported clients. Best-effort: failures
+   * do not affect the MCP outcome, but they come back as hints so the screen
+   * can tell the user rather than swallowing them.
+   */
+  installPlugins(clientNames: string[]): Promise<PluginInstallReport>;
 }
 
 /**
@@ -119,21 +124,22 @@ export function createMcpInstaller(): McpInstaller {
       return installed.map((c) => c.name);
     },
 
-    async installPlugins(clientNames: string[]): Promise<string[]> {
+    async installPlugins(clientNames: string[]): Promise<PluginInstallReport> {
       const rawClients = cachedClients
         .filter((c) => clientNames.includes(c.name))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((c) => c.raw as any);
 
       const pluginClients = getSupportedPluginClients(rawClients);
-      const installed = await runPluginInstall(pluginClients);
+      const report = await runPluginInstall(pluginClients);
 
       analytics.wizardCapture('mcp plugins installed', {
-        clients: installed,
+        clients: report.installed,
         attempted: pluginClients.map((c) => c.name),
+        not_installed: report.hints.map((h) => h.client),
       });
 
-      return installed;
+      return report;
     },
   };
 }

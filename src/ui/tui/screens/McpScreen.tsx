@@ -100,6 +100,9 @@ export const McpScreen = ({
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [resultClients, setResultClients] = useState<string[]>([]);
   const [pluginClients, setPluginClients] = useState<string[]>([]);
+  const [pluginHints, setPluginHints] = useState<
+    Array<{ client: string; message: string }>
+  >([]);
   const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
 
   useEffect(() => {
@@ -130,11 +133,11 @@ export const McpScreen = ({
     // (e.g. Claude Desktop/Web) just open their connector page here, same as
     // before — no extra screen.
     if (chosenMode === 'all') {
-      void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
+      void doInstall(clientNames, [...ALL_FEATURE_VALUES], chosenMode);
       return;
     }
     if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures);
+      void doInstall(clientNames, store.session.mcpFeatures, chosenMode);
       return;
     }
 
@@ -179,10 +182,21 @@ export const McpScreen = ({
     markDone(store, McpOutcome.Skipped);
   };
 
-  const doInstall = async (names: string[], features?: string[]) => {
+  /**
+   * `chosenMode` is passed in rather than read from `installMode`: with a single
+   * detected client the picker's choice and this call happen in one event
+   * handler, so the state setter hasn't landed yet and the stale 'custom'
+   * default would skip the plugin install entirely.
+   */
+  const doInstall = async (
+    names: string[],
+    features: string[] | undefined,
+    chosenMode: 'all' | 'custom',
+  ) => {
     setPhase(Phase.Working);
     let mcpResult: string[] = [];
     let pluginResult: string[] = [];
+    let hints: Array<{ client: string; message: string }> = [];
 
     const pluginCapableSet = new Set(
       clients.filter((c) => c.supportsPlugin).map((c) => c.name),
@@ -190,7 +204,7 @@ export const McpScreen = ({
     const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
     const directNames = names.filter((n) => !pluginCapableSet.has(n));
 
-    if (installMode === 'all') {
+    if (chosenMode === 'all') {
       // Plugin-capable clients get the plugin (which bundles MCP).
       // Non-plugin-capable clients get a direct MCP config write.
       try {
@@ -203,7 +217,9 @@ export const McpScreen = ({
         // mcpResult stays []
       }
       try {
-        pluginResult = await installer.installPlugins(pluginCapableNames);
+        const report = await installer.installPlugins(pluginCapableNames);
+        pluginResult = report.installed;
+        hints = report.hints;
       } catch {
         // best-effort
       }
@@ -223,6 +239,7 @@ export const McpScreen = ({
 
     setResultClients(mcpResult);
     setPluginClients(pluginResult);
+    setPluginHints(hints);
     setPhase(Phase.Done);
     const succeeded = mcpResult.length + pluginResult.length > 0;
     const outcome = succeeded ? McpOutcome.Installed : McpOutcome.Failed;
@@ -235,7 +252,8 @@ export const McpScreen = ({
           [...mcpResult, ...pluginResult],
           featuresReport,
         ),
-      2000,
+      // Give the reader time to take in a plugin hint before we move on.
+      hints.length > 0 ? 5000 : 2000,
     );
   };
 
@@ -386,7 +404,7 @@ export const McpScreen = ({
             groups={AVAILABLE_FEATURES}
             initialSelected={[]}
             onSelect={(features) => {
-              void doInstall(selectedClientNames, features);
+              void doInstall(selectedClientNames, features, 'custom');
             }}
           />
         )}
@@ -400,7 +418,9 @@ export const McpScreen = ({
               </Text>
             </Box>
             <ConnectorContinue
-              onContinue={() => void doInstall(selectedClientNames, [])}
+              onContinue={() =>
+                void doInstall(selectedClientNames, [], 'custom')
+              }
             />
           </Box>
         )}
@@ -415,9 +435,11 @@ export const McpScreen = ({
           <Box flexDirection="column">
             {installedNow.length + pluginClients.length + finishNotes.length ===
             0 ? (
-              <Text dimColor>
-                {isRemove ? 'Removal' : 'Installation'} skipped.
-              </Text>
+              pluginHints.length === 0 && (
+                <Text dimColor>
+                  {isRemove ? 'Removal' : 'Installation'} skipped.
+                </Text>
+              )
             ) : (
               <>
                 {pluginClients.length > 0 && (
@@ -467,6 +489,17 @@ export const McpScreen = ({
                 ))}
               </>
             )}
+            {pluginHints.map((hint) => (
+              <Box key={hint.client} flexDirection="column" marginTop={1}>
+                <Text color="yellow">
+                  {Icons.warning} {hint.client} plugin not installed
+                </Text>
+                <Text dimColor>
+                  {'  '}
+                  {hint.message}
+                </Text>
+              </Box>
+            ))}
           </Box>
         )}
       </Box>

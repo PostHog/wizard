@@ -41,7 +41,10 @@ describe('createMcpInstaller — installPlugins', () => {
 
   it('calls installPlugins on plugin-capable clients and returns installed names', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue(['Claude Code']);
+    mcpModule.installPlugins.mockResolvedValue({
+      installed: ['Claude Code'],
+      hints: [],
+    });
 
     const installer = createMcpInstaller();
     await installer.detectClients();
@@ -52,12 +55,15 @@ describe('createMcpInstaller — installPlugins', () => {
       mockCursorClient,
     ]);
     expect(mcpModule.installPlugins).toHaveBeenCalledWith([mockClaudeClient]);
-    expect(result).toEqual(['Claude Code']);
+    expect(result).toEqual({ installed: ['Claude Code'], hints: [] });
   });
 
   it('emits mcp plugins installed analytics with clients and attempted', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue(['Claude Code']);
+    mcpModule.installPlugins.mockResolvedValue({
+      installed: ['Claude Code'],
+      hints: [],
+    });
 
     const installer = createMcpInstaller();
     await installer.detectClients();
@@ -68,31 +74,33 @@ describe('createMcpInstaller — installPlugins', () => {
       {
         clients: ['Claude Code'],
         attempted: ['Claude Code'],
+        not_installed: [],
       },
     );
   });
 
   it('returns empty array and still emits analytics when no clients support plugins', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([]);
-    mcpModule.installPlugins.mockResolvedValue([]);
+    mcpModule.installPlugins.mockResolvedValue({ installed: [], hints: [] });
 
     const installer = createMcpInstaller();
     await installer.detectClients();
     const result = await installer.installPlugins(['Claude Code']);
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ installed: [], hints: [] });
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'mcp plugins installed',
       {
         clients: [],
         attempted: [],
+        not_installed: [],
       },
     );
   });
 
   it('only passes clients matching the requested names to getSupportedPluginClients', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([]);
-    mcpModule.installPlugins.mockResolvedValue([]);
+    mcpModule.installPlugins.mockResolvedValue({ installed: [], hints: [] });
 
     const installer = createMcpInstaller();
     await installer.detectClients();
@@ -103,18 +111,32 @@ describe('createMcpInstaller — installPlugins', () => {
     ]);
   });
 
-  it('returns partial success when plugin install fails for some clients', async () => {
+  it('returns partial success and surfaces a hint when plugin install fails for some clients', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([
       mockClaudeClient,
       mockCursorClient,
     ]);
-    mcpModule.installPlugins.mockResolvedValue(['Claude Code']); // Cursor failed
+    mcpModule.installPlugins.mockResolvedValue({
+      installed: ['Claude Code'],
+      hints: [{ client: 'Cursor', message: 'update the CLI and retry' }],
+    });
 
     const installer = createMcpInstaller();
     await installer.detectClients();
     const result = await installer.installPlugins(['Claude Code', 'Cursor']);
 
-    expect(result).toEqual(['Claude Code']);
+    expect(result).toEqual({
+      installed: ['Claude Code'],
+      hints: [{ client: 'Cursor', message: 'update the CLI and retry' }],
+    });
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'mcp plugins installed',
+      {
+        clients: ['Claude Code'],
+        attempted: ['Claude Code', 'Cursor'],
+        not_installed: ['Cursor'],
+      },
+    );
   });
 });
 
