@@ -209,12 +209,14 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
 
 STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
    Follow the skill's "Verify and hand off" step. Write the hand-off to
-   \`${reportFile}\` at the project root — the files you changed (paths
-   only), the exact build and upload commands, every CI secret the user
-   still has to create, and how to verify the upload — then give the same
-   summary in chat. Never write secret values into the report, only
-   variable names. The success screen points the user at this file, so do
-   not skip it. The Symbol sets page for this project — where the user
+   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
+   \`${reportFile}\` as the file path, never prefixed with the selected
+   project directory; this file is the one exception to the project-scope
+   rule above. Cover: the files you changed (paths only), the exact build
+   and upload commands, every CI secret the user still has to create, and
+   how to verify the upload — then give the same summary in chat. Never
+   write secret values into the report, only variable names. The success
+   screen points the user at this file, so do not skip it. The Symbol sets page for this project — where the user
    confirms the upload landed — is:
    ${uiHost}/project/${projectId}/error_tracking/configuration
 `;

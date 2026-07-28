@@ -18,6 +18,18 @@ describe('buildSourceMapsUploadPrompt hand-off report', () => {
     expect(prompt).toContain('Write the hand-off to');
     expect(prompt).toContain('`posthog-source-maps-report.md`');
   });
+
+  it('pins the report to the wizard working directory for monorepo projects', () => {
+    // The outro resolves reportFile against installDir, so a `backend/`
+    // scoped run must still write the report at the working directory.
+    const prompt = buildSourceMapsUploadPrompt({
+      ...baseParams,
+      projectPath: 'backend',
+    });
+
+    expect(prompt).toContain("WIZARD'S WORKING DIRECTORY");
+    expect(prompt).toContain('never prefixed with the selected');
+  });
 });
 
 describe('buildSourceMapsUploadPrompt env file paths', () => {
