@@ -287,6 +287,8 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  /** The run's OAuth access token — the MCP config resolves it in the child. */
+  posthogApiKey: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -561,7 +563,9 @@ export async function initializeAgent(
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
-          Authorization: `Bearer ${config.posthogApiKey}`,
+          // Env reference, not the token: the SDK puts this config on the
+          // spawned CLI's argv, where `ps` shows it to any local process.
+          Authorization: 'Bearer ${POSTHOG_MCP_TOKEN}',
           // Tag the UA with the running program so the backend can attribute what this
           // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
           'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
@@ -597,6 +601,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model,
+      posthogApiKey: config.posthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
@@ -950,6 +955,9 @@ export async function runAgent(
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+          // The MCP config resolves this in the child; sending the value would
+          // put it on the CLI's argv.
+          POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
           // (audit programs call audit_seed_checks on turn 1, integration
