@@ -589,6 +589,38 @@ describe('rustSdkVerifier', () => {
     expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
   });
 
+  it('finds the SDK in a member when the workspace root manifest is virtual', () => {
+    // The rust-workspace fixture shape: the root Cargo.toml has no
+    // [dependencies] at all, only [workspace] — the SDK lives in a member.
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[workspace]\nresolver = "2"\nmembers = ["crates/api"]\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'crates', 'api'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'crates', 'api', 'Cargo.toml'),
+      '[package]\nname = "api"\n\n[dependencies]\nposthog-rs = "0.20"\n',
+    );
+
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(true);
+  });
+
+  it('ignores manifests under target/ when scanning members', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[workspace]\nmembers = ["crates/api"]\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'target', 'package', 'dep'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, 'target', 'package', 'dep', 'Cargo.toml'),
+      '[package]\nname = "dep"\n\n[dependencies]\nposthog-rs = "0.20"\n',
+    );
+
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
   it('ignores a commented-out dependency', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'Cargo.toml'),

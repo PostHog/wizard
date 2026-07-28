@@ -7,8 +7,9 @@
  * instruments the chosen project.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { IGNORED_DIRS } from '@utils/bounded-fs';
 import {
   detectProjectsWithAgent,
   coerceAgenticReport,
@@ -106,18 +107,57 @@ export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
 
+/** Comment-stripped substring check for the Rust SDK in one manifest. */
+function manifestMentionsSdk(manifestPath: string): boolean {
+  try {
+    return readFileSync(manifestPath, 'utf-8')
+      .split('\n')
+      .some((line) => {
+        const code = line.split('#', 1)[0];
+        return code.includes(RUST_SDK_CRATE);
+      });
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Checks a project's own Cargo.toml for the Rust SDK. The agentic detector
+ * A workspace root is often a virtual manifest (`[workspace]` only, no
+ * `[dependencies]`) — the SDK then lives in a member crate's manifest, so a
+ * miss on the root must fall through to a bounded walk over nested
+ * manifests. Depth 3 covers the common `crates/<name>/` layouts.
+ */
+function anyNestedManifestMentionsSdk(dir: string, depth: number): boolean {
+  if (depth > 3) return false;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue;
+    if (IGNORED_DIRS.has(entry.name) || entry.name === 'target') continue;
+    const child = join(dir, entry.name);
+    if (manifestMentionsSdk(join(child, 'Cargo.toml'))) return true;
+    if (anyNestedManifestMentionsSdk(child, depth + 1)) return true;
+  }
+  return false;
+}
+
+/**
+ * Checks a project's Cargo manifests for the Rust SDK. The agentic detector
  * reports a single `hasPostHog` boolean for ANY PostHog dependency in the
  * project — for `rust` that could be satisfied by an unrelated JS SDK in the
  * same directory, so the deterministic manifest read is authoritative.
  * Comment-stripped substring matching, not TOML parsing: it still catches
  * renamed (`package = "posthog-rs"`) and workspace-inherited deps, while a
- * commented-out dependency no longer counts. Known miss: a member manifest
- * whose dep is aliased at the workspace root (`posthog.workspace = true`
- * with the `package = "posthog-rs"` mapping only in the root manifest) —
- * accepted; resolving that needs full workspace metadata. Exported for
- * testing.
+ * commented-out dependency no longer counts. Known miss: selecting a
+ * workspace MEMBER whose dep is aliased at the workspace root
+ * (`posthog.workspace = true` with the `package = "posthog-rs"` mapping only
+ * in the root manifest, which sits above the member) — accepted; resolving
+ * that needs full workspace metadata. Exported for testing.
  */
 export function rustSdkVerifier(
   installDir: string,
@@ -125,16 +165,10 @@ export function rustSdkVerifier(
   return (projectPath) => {
     const dir =
       projectPath === '.' ? installDir : join(installDir, projectPath);
-    try {
-      return readFileSync(join(dir, 'Cargo.toml'), 'utf-8')
-        .split('\n')
-        .some((line) => {
-          const code = line.split('#', 1)[0];
-          return code.includes(RUST_SDK_CRATE);
-        });
-    } catch {
-      return false;
-    }
+    return (
+      manifestMentionsSdk(join(dir, 'Cargo.toml')) ||
+      anyNestedManifestMentionsSdk(dir, 0)
+    );
   };
 }
 
