@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { GO_AGENT_CONFIG } from '../../../frameworks/go/go-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -137,6 +138,27 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Go module project resolves to go', async () => {
+    const opts = project({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'main.go': 'package main',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.go,
+    );
+  });
+
+  test('a Go project with an embedded frontend package.json still resolves to go', async () => {
+    const opts = project({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'package.json': JSON.stringify({ devDependencies: { esbuild: '^0.20' } }),
+      'package-lock.json': '{}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.go,
+    );
+  });
+
   test('a Flutter project is not claimed by anything', async () => {
     const opts = project({
       'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
@@ -165,6 +187,25 @@ describe('android detect', () => {
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('go detect', () => {
+  const detect = GO_AGENT_CONFIG.detection.detect;
+
+  test('claims a Go module project', async () => {
+    const opts = project({ 'go.mod': 'module example.com/app\n\ngo 1.22\n' });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a go.mod without a module directive', async () => {
+    const opts = project({ 'go.mod': '// not a real module file\n' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a go.mod', async () => {
+    const opts = project({ 'main.go': 'package main' });
     await expect(detect(opts)).resolves.toBe(false);
   });
 });

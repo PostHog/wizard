@@ -86,6 +86,12 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   carthage: ['bootstrap', 'update'],
 };
 
+// go's verb list is closed: dependency + verify commands only. run/test/generate
+// execute project-defined code; `go mod edit` can rewrite module requirements
+// to arbitrary sources, so only the read/refresh mod subcommands are allowed.
+const GO_SUBCOMMANDS = ['get', 'build', 'vet', 'fmt', 'version', 'list'];
+const GO_MOD_SUBCOMMANDS = ['tidy', 'download', 'verify', 'graph', 'why'];
+
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
 const GRADLE_EXACT_TASKS = new Set(['build', 'clean', 'dependencies']);
 const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint'];
@@ -102,7 +108,8 @@ const ALLOWED_TOOLS_SUMMARY =
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
   'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
-  'mvn (install|compile|package|verify|dependency:tree).';
+  'mvn (install|compile|package|verify|dependency:tree), ' +
+  'go (get|build|vet|fmt|version|list, mod tidy/download/verify/graph/why).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
   return { allowed: false, message, analyticsReason };
@@ -272,6 +279,37 @@ function commandDecision(command: string): BashFenceDecision {
     parts[2] === 'check'
   ) {
     return { allowed: true };
+  }
+  if (bin === 'go') {
+    if (parts[1] === 'mod') {
+      if (parts[2] && GO_MOD_SUBCOMMANDS.includes(parts[2]))
+        return { allowed: true };
+      return denyCommand(
+        command,
+        `Allowed go mod subcommands: ${GO_MOD_SUBCOMMANDS.join(', ')}.`,
+      );
+    }
+    if (parts[1] && GO_SUBCOMMANDS.includes(parts[1])) {
+      // -toolexec runs an arbitrary program on every build/vet action, so the
+      // allowed verbs above are not safe with it. Deny it explicitly.
+      const toolexec = parts
+        .slice(2)
+        .find((p) => p === '-toolexec' || p.startsWith('-toolexec='));
+      if (toolexec)
+        return denyCommand(
+          command,
+          'The -toolexec flag runs an arbitrary program during the build and is not allowed.',
+        );
+      return { allowed: true };
+    }
+    return denyCommand(
+      command,
+      `Allowed go subcommands: ${GO_SUBCOMMANDS.join(
+        ', ',
+      )}, mod <${GO_MOD_SUBCOMMANDS.join(
+        '|',
+      )}>. go run/test/generate execute project code and are not allowed.`,
+    );
   }
   if (bin === 'uv' && parts[1] === 'pip') {
     if (parts[2] && PIP_SUBCOMMANDS.includes(parts[2]))
