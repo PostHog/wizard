@@ -8,7 +8,17 @@ const baseParams = {
   host: 'https://us.i.posthog.com',
   settingsUrl: 'https://us.posthog.com/settings/user-api-keys',
   uiHost: 'https://us.posthog.com',
+  reportFile: 'posthog-source-maps-report.md',
 };
+
+describe('buildSourceMapsUploadPrompt hand-off report', () => {
+  it('instructs the agent to write the report file the outro points at', () => {
+    const prompt = buildSourceMapsUploadPrompt(baseParams);
+
+    expect(prompt).toContain('Write the hand-off to');
+    expect(prompt).toContain('`posthog-source-maps-report.md`');
+  });
+});
 
 describe('buildSourceMapsUploadPrompt env file paths', () => {
   it('scopes env tools to the selected monorepo project', () => {
