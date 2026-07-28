@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { provisionNewAccount } from '@utils/provisioning';
+import { NetworkError } from '@utils/network-errors';
 
 vi.mock('axios');
 // Return the override verbatim so region-based prod routing applies (no IS_DEV
@@ -370,5 +371,164 @@ describe('provisionNewAccount', () => {
       | Record<string, unknown>
       | undefined;
     expect(tokenConfig?.timeout).toBe(30_000);
+  });
+});
+
+/**
+ * The shape axios rethrows when Node's happy-eyeballs connect fails: the
+ * AxiosError's own `message` is the empty string (it is copied off an
+ * `AggregateError` that was built without one), so a caller reading
+ * `error.message` printed nothing at all. See network-errors.test.ts.
+ */
+function connectFailure(
+  code = 'ETIMEDOUT',
+  detail = `connect ${code} 1.2.3.4:443`,
+) {
+  const inner = Object.assign(new Error(detail), { code });
+  return Object.assign(new Error(''), {
+    name: 'AggregateError',
+    isAxiosError: true,
+    code,
+    errors: [inner],
+  });
+}
+
+const okAccount = {
+  data: { id: 'req_n', type: 'oauth', oauth: { code: 'code_n' } },
+};
+const okToken = {
+  data: {
+    token_type: 'bearer',
+    access_token: 'pha_n',
+    refresh_token: 'phr_n',
+    expires_in: 3600,
+  },
+};
+const okResources = {
+  data: {
+    status: 'complete',
+    id: '77',
+    service_id: 'analytics',
+    complete: {
+      access_configuration: {
+        api_key: 'phc_n',
+        host: 'https://us.posthog.com',
+      },
+    },
+  },
+};
+
+// Signup runs before the user has an account, so a connect blip must not end the
+// run — these calls retry, and a failure that survives every attempt has to say
+// something the user can act on.
+describe('provisionNewAccount transport failures', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Drive the backoff sleeps so retries don't take real seconds. */
+  async function settle<T>(promise: Promise<T>): Promise<T> {
+    const result = promise.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    await vi.runAllTimersAsync();
+    const settled = await result;
+    if (!settled.ok) throw settled.error;
+    return settled.value;
+  }
+
+  it('retries a failed connect and completes', async () => {
+    mockedAxios.post
+      .mockRejectedValueOnce(connectFailure())
+      .mockResolvedValueOnce(okAccount)
+      .mockResolvedValueOnce(okToken)
+      .mockResolvedValueOnce(okResources);
+
+    const result = await settle(
+      provisionNewAccount('retry@example.com', '', 'US'),
+    );
+
+    expect(result.projectApiKey).toBe('phc_n');
+    expect(mockedAxios.post).toHaveBeenCalledTimes(4);
+    // The retried account_requests reuses its id, which is the idempotency key.
+    const [first, second] = mockedAxios.post.mock.calls;
+    expect((first[1] as Record<string, unknown>).id).toBe(
+      (second[1] as Record<string, unknown>).id,
+    );
+  });
+
+  it('retries the token exchange and the resources call too', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce(okAccount)
+      .mockRejectedValueOnce(connectFailure('ECONNRESET', 'socket hang up'))
+      .mockResolvedValueOnce(okToken)
+      .mockRejectedValueOnce(connectFailure('ENOTFOUND'))
+      .mockResolvedValueOnce(okResources);
+
+    const result = await settle(
+      provisionNewAccount('retry2@example.com', '', 'US'),
+    );
+
+    expect(result.projectApiKey).toBe('phc_n');
+    expect(mockedAxios.post).toHaveBeenCalledTimes(5);
+  });
+
+  it('throws a NetworkError naming the host once retries are exhausted', async () => {
+    mockedAxios.post.mockRejectedValue(
+      connectFailure('ENOTFOUND', 'getaddrinfo ENOTFOUND us.posthog.com'),
+    );
+
+    const error = await settle(
+      provisionNewAccount('offline@example.com', '', 'US').then(
+        () => {
+          throw new Error('expected a rejection');
+        },
+        (e: unknown) => e,
+      ),
+    );
+
+    expect(error).toBeInstanceOf(NetworkError);
+    expect((error as NetworkError).code).toBe('ENOTFOUND');
+    // The whole point: never an empty message behind "Failed to create account:".
+    expect((error as NetworkError).message).toContain(
+      "Couldn't reach us.posthog.com",
+    );
+    expect((error as NetworkError).message).toContain('after 3 attempts');
+    expect(mockedAxios.post).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry an HTTP error response', async () => {
+    // The request reached PostHog, so re-POSTing it could provision twice.
+    mockedAxios.post.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 400'), {
+        isAxiosError: true,
+        code: 'ERR_BAD_REQUEST',
+        response: { status: 400, data: { detail: 'nope' } },
+      }),
+    );
+
+    await expect(
+      settle(provisionNewAccount('badrequest@example.com', '', 'US')),
+    ).rejects.toThrow('Request failed with status code 400');
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry an account that already exists', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { id: 'req_x', type: 'requires_auth' },
+    });
+
+    await expect(
+      settle(provisionNewAccount('existing@example.com', '', 'US')),
+    ).rejects.toThrow('already associated');
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
   });
 });

@@ -23,6 +23,7 @@ import { HostResolution } from '@lib/host-resolution';
 import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
+import { NetworkError, describeNetworkError } from './network-errors';
 import {
   fetchUserData,
   fetchProjectData,
@@ -702,8 +703,14 @@ async function askForProvisioningSignup(
       projectId: parseInt(result.projectId, 10) || 0,
     };
   } catch (error) {
-    spinner.stop('Account creation failed.');
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const networkError = error instanceof NetworkError ? error : null;
+    spinner.stop(
+      networkError ? "Couldn't reach PostHog." : 'Account creation failed.',
+    );
+    // Never read `error.message` directly: a failed happy-eyeballs connect
+    // arrives as an AggregateError whose own message is the empty string, which
+    // used to render as a bare "Failed to create account:".
+    const message = describeNetworkError(error).message || 'Unknown error';
 
     if (message.includes('already associated')) {
       getUI().log.info(
@@ -713,11 +720,22 @@ async function askForProvisioningSignup(
       return askForWizardLogin({ signup: false, baseUrl, localMcp });
     }
 
-    getUI().log.error(`Failed to create account: ${message}`);
-    analytics.captureException(
-      error instanceof Error ? error : new Error(message),
-      { step: 'provisioning_signup' },
+    // A NetworkError's message is already a full user-facing sentence naming
+    // the host and the remediation, so it needs no framing.
+    getUI().log.error(
+      networkError ? message : `Failed to create account: ${message}`,
     );
+    // Keep the exception's own message when it has one — an empty message is
+    // what made these unreadable in error tracking too (`$exception_values` of
+    // `[""]`), so fall back to the unwrapped one.
+    const reportable =
+      error instanceof Error && error.message.trim()
+        ? error
+        : new Error(message, { cause: error });
+    analytics.captureException(reportable, {
+      step: 'provisioning_signup',
+      ...(networkError ? { network_error_code: networkError.code } : {}),
+    });
     await abort();
     throw error;
   }

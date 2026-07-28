@@ -2,6 +2,7 @@ import type { Arguments } from 'yargs';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProvisioningResult } from '@utils/provisioning';
+import { NetworkError, describeNetworkError } from '@utils/network-errors';
 import type { Command } from './command';
 
 export const provisionCommand: Command = {
@@ -97,10 +98,16 @@ function emitResult(result: ProvisioningResult, jsonMode: boolean): void {
 }
 
 function emitError(error: unknown, jsonMode: boolean): void {
-  const msg = error instanceof Error ? error.message : String(error);
-  const code = msg.includes('already associated')
-    ? 'email_exists'
-    : 'provisioning_failed';
+  // Unwrapped rather than `error.message`: a failed connect surfaces as an
+  // AggregateError whose own message is empty, which JSON consumers saw as
+  // `{"error":""}`.
+  const msg = describeNetworkError(error).message || String(error);
+  const code =
+    error instanceof NetworkError
+      ? 'network_error'
+      : msg.includes('already associated')
+      ? 'email_exists'
+      : 'provisioning_failed';
   if (jsonMode) {
     process.stderr.write(`${JSON.stringify({ error: msg, code })}\n`);
     return;

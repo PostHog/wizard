@@ -9,6 +9,7 @@
 
 import * as crypto from 'node:crypto';
 import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import { z } from 'zod';
 import {
   POSTHOG_DEV_CLIENT_ID,
@@ -17,12 +18,20 @@ import {
   WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { retryWithBackoff } from '@lib/retry';
 import { resolveBaseUrl } from './urls';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
+import {
+  describeNetworkError,
+  isRetryableNetworkError,
+  networkErrorFor,
+} from './network-errors';
 import type { HostResolution } from '@lib/host-resolution';
 
 const API_VERSION = '0.1d';
+
+const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * Provisioning host. Follows a `--base-url` override (and IS_DEV → localhost),
@@ -111,6 +120,52 @@ const ResourceResponseSchema = z.object({
     .optional(),
 });
 
+/**
+ * POST to the provisioning API, retrying transient transport failures.
+ *
+ * These calls sit on the signup critical path: the caller has no PostHog
+ * account yet, so a connect blip that ends the run leaves them with nothing to
+ * fall back on — not even the login flow. Only transport failures retry; an
+ * HTTP response, however unhappy, is the caller's to interpret and must not be
+ * re-POSTed (re-sending a request PostHog already processed could provision
+ * twice). `account_requests` carries a caller-generated `id` precisely so the
+ * one retried call that isn't naturally idempotent is deduped server-side.
+ *
+ * A transport failure that survives every attempt is rethrown as a
+ * `NetworkError` whose message names the host — the raw error's message is the
+ * empty string when Node's happy-eyeballs connect fails, which is how this
+ * reached users as a bare "Failed to create account:".
+ */
+async function postToProvisioningApi<T>(
+  url: string,
+  body: unknown,
+  headers: Record<string, string>,
+): Promise<AxiosResponse<T>> {
+  let attempts = 0;
+  try {
+    return await retryWithBackoff(
+      () => axios.post<T>(url, body, { headers, timeout: REQUEST_TIMEOUT_MS }),
+      {
+        shouldRetry: isRetryableNetworkError,
+        onAttemptError: (error, attempt) => {
+          attempts = attempt;
+          const { code, message } = describeNetworkError(error);
+          logToFile(
+            `[provisioning] POST ${url} attempt ${attempt} failed: ${
+              message || code || 'no detail'
+            }`,
+          );
+        },
+      },
+    );
+  } catch (error) {
+    if (isRetryableNetworkError(error)) {
+      throw networkErrorFor(error, url, attempts);
+    }
+    throw error;
+  }
+}
+
 export interface ProvisioningResult {
   accessToken: string;
   refreshToken: string;
@@ -140,8 +195,9 @@ export async function provisionNewAccount(
 
   logToFile('[provisioning] starting account creation');
 
-  // Step 1: Create account
-  const accountRes = await axios.post(
+  // Step 1: Create account. The request id doubles as the idempotency key, so
+  // it's generated once and reused across retries of this POST.
+  const accountRes = await postToProvisioningApi(
     `${provisioningBaseUrl}/api/agentic/provisioning/account_requests`,
     {
       id: crypto.randomUUID(),
@@ -157,12 +213,9 @@ export async function provisionNewAccount(
       },
     },
     {
-      headers: {
-        'Content-Type': 'application/json',
-        'API-Version': API_VERSION,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-      timeout: 30_000,
+      'Content-Type': 'application/json',
+      'API-Version': API_VERSION,
+      'User-Agent': WIZARD_USER_AGENT,
     },
   );
 
@@ -191,7 +244,7 @@ export async function provisionNewAccount(
   logToFile('[provisioning] account created, exchanging code for tokens');
 
   // Step 2: Exchange code for tokens
-  const tokenRes = await axios.post(
+  const tokenRes = await postToProvisioningApi(
     `${provisioningBaseUrl}/api/agentic/oauth/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
@@ -199,12 +252,9 @@ export async function provisionNewAccount(
       code_verifier: codeVerifier,
     }).toString(),
     {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'API-Version': API_VERSION,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-      timeout: 30_000,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'API-Version': API_VERSION,
+      'User-Agent': WIZARD_USER_AGENT,
     },
   );
 
@@ -213,7 +263,7 @@ export async function provisionNewAccount(
   logToFile('[provisioning] tokens received, provisioning resources');
 
   // Step 3: Provision resources
-  const resourceRes = await axios.post(
+  const resourceRes = await postToProvisioningApi(
     `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
     {
       service_id: 'analytics',
@@ -222,13 +272,10 @@ export async function provisionNewAccount(
         : {}),
     },
     {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${tokenData.access_token}`,
-        'API-Version': API_VERSION,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-      timeout: 30_000,
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${tokenData.access_token}`,
+      'API-Version': API_VERSION,
+      'User-Agent': WIZARD_USER_AGENT,
     },
   );
 

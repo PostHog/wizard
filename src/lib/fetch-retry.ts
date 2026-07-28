@@ -3,19 +3,23 @@
  * production). GitHub releases blips transiently, so every fetch on the run's
  * critical path — skill menu, skill zips, agent menu, agent prompt bodies —
  * goes through here rather than a bare `fetch`.
+ *
+ * The retry loop itself lives in `retry.ts`; this owns the HTTP-specific parts
+ * (per-attempt timeout, non-ok responses count as failures) and the aggregated
+ * "every attempt failed" message.
  */
 
+import {
+  retryWithBackoff,
+  DEFAULT_BACKOFF_MS,
+  DEFAULT_MAX_ATTEMPTS,
+  type RetryPolicy,
+} from './retry';
+
 const DEFAULT_TIMEOUT_MS = 60000; // per attempt
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_BACKOFF_MS = 500; // doubles each retry
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export interface RetryOpts {
+export interface RetryOpts extends Pick<RetryPolicy, 'sleepImpl'> {
   fetchImpl?: typeof fetch;
-  sleepImpl?: (ms: number) => Promise<void>;
   timeoutMs?: number;
   maxAttempts?: number;
   backoffMs?: number;
@@ -28,26 +32,33 @@ export async function fetchWithRetry(
 ): Promise<Response> {
   const {
     fetchImpl = fetch,
-    sleepImpl = sleep,
+    sleepImpl,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     backoffMs = DEFAULT_BACKOFF_MS,
   } = opts;
 
   const failures: string[] = [];
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const resp = await fetchImpl(url, {
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
-      return resp;
-    } catch (err: any) {
-      failures.push(`attempt ${attempt}: ${err.message}`);
-      if (attempt < maxAttempts) {
-        await sleepImpl(backoffMs * 2 ** (attempt - 1));
-      }
-    }
+  try {
+    return await retryWithBackoff(
+      async () => {
+        const resp = await fetchImpl(url, {
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+        return resp;
+      },
+      {
+        sleepImpl,
+        maxAttempts,
+        backoffMs,
+        onAttemptError: (err, attempt) => {
+          const message = err instanceof Error ? err.message : String(err);
+          failures.push(`attempt ${attempt}: ${message}`);
+        },
+      },
+    );
+  } catch {
+    throw new Error(`fetch ${url} failed — ${failures.join('; ')}`);
   }
-  throw new Error(`fetch ${url} failed — ${failures.join('; ')}`);
 }

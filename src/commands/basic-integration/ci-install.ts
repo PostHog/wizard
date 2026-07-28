@@ -4,6 +4,7 @@ import { LoggingUI } from '@ui/logging-ui';
 import { runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
+import { describeNetworkError } from '@utils/network-errors';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 
 type Options = Arguments & {
@@ -160,7 +161,9 @@ async function provisionForSignup(
       { baseUrl: options.baseUrl },
     );
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    // Unwrapped rather than `error.message`, which is empty when the connect
+    // itself fails (happy-eyeballs AggregateError).
+    const msg = describeNetworkError(error).message || String(error);
     getUI().log.error(`Provisioning failed: ${msg}`);
     throw error;
   }
