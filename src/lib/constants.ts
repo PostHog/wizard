@@ -82,6 +82,7 @@ export enum Integration {
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  elixir = 'elixir',
 
   // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',

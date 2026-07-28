@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { ELIXIR_AGENT_CONFIG } from '../../../frameworks/elixir/elixir-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -137,6 +138,17 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Phoenix project resolves to elixir', async () => {
+    const opts = project({
+      'mix.exs':
+        'defmodule MyApp.MixProject do\n  use Mix.Project\n\n  def project do\n    [app: :my_app, deps: deps()]\n  end\n\n  defp deps do\n    [{:phoenix, "~> 1.7"}]\n  end\nend\n',
+      'config/config.exs': 'import Config',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.elixir,
+    );
+  });
+
   test('a Flutter project is not claimed by anything', async () => {
     const opts = project({
       'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
@@ -165,6 +177,28 @@ describe('android detect', () => {
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('elixir detect', () => {
+  const detect = ELIXIR_AGENT_CONFIG.detection.detect;
+
+  const mixExs =
+    'defmodule MyApp.MixProject do\n  use Mix.Project\n\n  def project do\n    [app: :my_app]\n  end\nend\n';
+
+  test('claims a Mix project', async () => {
+    const opts = project({ 'mix.exs': mixExs });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a mix.exs without a project definition', async () => {
+    const opts = project({ 'mix.exs': '# placeholder\n' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a mix.exs', async () => {
+    const opts = project({ 'lib/my_app.ex': 'defmodule MyApp do\nend\n' });
     await expect(detect(opts)).resolves.toBe(false);
   });
 });
