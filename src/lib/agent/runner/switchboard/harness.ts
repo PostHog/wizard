@@ -39,7 +39,12 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
   if (!route) return pick;
-  if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
+  if (ctx.trace) {
+    ctx.trace.harness = 'flag';
+    // A harness-only route leaves the model at the binding default; claiming
+    // 'flag' here made the decision log misattribute it.
+    if (route.model) ctx.trace.model = 'flag';
+  }
   return {
     harness: route.harness ?? Harness.pi,
     model: route.model ?? pick.model,

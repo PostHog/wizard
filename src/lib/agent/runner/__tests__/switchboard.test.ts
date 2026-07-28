@@ -156,7 +156,7 @@ describe('switchboard decision trace', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'the one flag → orchestrator on pi, every axis traced to the flag',
+      name: 'the one flag → orchestrator on pi; model stays traced to the binding',
       ctx: {
         program: 'posthog-integration',
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
@@ -167,7 +167,7 @@ describe('switchboard decision trace', () => {
         model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
-      trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
+      trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
     },
   ]);
 });
@@ -215,7 +215,7 @@ describe('switchboard composed clamp', () => {
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
       },
       binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
-      trace: { harness: 'flag', model: 'flag', sequence: 'composed' },
+      trace: { harness: 'flag', model: 'binding', sequence: 'composed' },
     },
   ]);
 });
