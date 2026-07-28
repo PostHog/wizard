@@ -24,7 +24,7 @@ describe('commandments by axis', () => {
   // of its system prompt and they steer every program's behavior. Snapshotting
   // the assembled output per axis combination makes any edit, or any rule
   // silently reaching the wrong kind of run, visible in the PR diff.
-  describe.each(COMBOS)('%s + %s', (_label, harness, sequence) => {
+  describe.each(COMBOS)('$0 + $2', (_label, harness, sequence) => {
     it('matches the published prompt', () => {
       expect(prompt(harness, sequence)).toMatchSnapshot();
     });
