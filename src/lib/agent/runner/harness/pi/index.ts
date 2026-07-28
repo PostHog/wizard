@@ -28,6 +28,7 @@ import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { createAioCapture } from '@lib/agent/aio-capture';
 import type {
   AgentResult,
   AgentHarness,
@@ -184,6 +185,13 @@ export const piBackend: AgentHarness = {
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;
     const modelId = inputs.model;
+
+    const capture = createAioCapture({
+      enabled: session.captureAio,
+      projectApiKey: boot.credentials.projectApiKey,
+      apiHost: boot.credentials.host.apiHost,
+      runTags: boot.wizardMetadata,
+    });
 
     // Init banner (parity #5).
     getUI().log.step('Initializing Wizard agent...');
@@ -429,6 +437,11 @@ export const piBackend: AgentHarness = {
       // anthropic path's log shape (assistant turns + tool I/O) and driving the
       // single run spinner with one stable status at a time (no overlap).
       const unsubscribe = agentSession.subscribe((event) => {
+        // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
+        // before the role guard so the module's own filter (assistant-only)
+        // stays the single source of truth for what's captured.
+        capture.captureFromPiMessageEndEvent(event);
+
         switch (event.type) {
           case 'message_end': {
             // User prompts also emit message_end; only assistant turns count.
@@ -482,6 +495,12 @@ export const piBackend: AgentHarness = {
             break;
         }
       });
+
+      // Seed AIO capture with the initial prompt so the first assistant
+      // turn's `$ai_input` includes it — pi's subscribe stream doesn't emit
+      // a message_end for the initial prompt, only for tool_result user
+      // turns that follow.
+      capture.setInitialPrompt(prompt);
 
       try {
         // Non-streaming: resolves when the agent run completes. Throws if no

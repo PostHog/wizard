@@ -115,6 +115,7 @@
     "clean": "rm -rf ./dist",
     "prebuild": "pnpm clean && node scripts/generate-version.cjs",
     "build:watch": "tsdown --watch",
+    "build:watch:ci": "WIZARD_BUILD_NODE_ENV=ci tsdown --watch",
     "build": "tsdown",
     "build:ci": "WIZARD_BUILD_NODE_ENV=ci pnpm build",
     "typecheck": "tsc --noEmit",
