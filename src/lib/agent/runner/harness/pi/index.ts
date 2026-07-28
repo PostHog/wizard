@@ -22,13 +22,11 @@ import {
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
-import { piRuntimeNotes } from './runtime-notes';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
-import { getWizardCommandments } from '@lib/agent/commandments';
-import { piProgramGuidance } from './program-guidance';
+import { assembleCommandments } from '../../switchboard/commandments';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { createAioCapture } from '@lib/agent/aio-capture';
 import type {
@@ -326,10 +324,12 @@ export const piBackend: AgentHarness = {
         cwd: session.installDir,
         agentDir: getAgentDir(),
         systemPrompt:
-          getWizardCommandments() +
-          '\n\n' +
-          piRuntimeNotes(Sequence.linear, { bash: true, posthogMcp: true }) +
-          piProgramGuidance(programConfig.id) +
+          assembleCommandments({
+            program: programConfig.id,
+            sequence: Sequence.linear,
+            harness: Harness.pi,
+            caps: { bash: true, posthogMcp: true },
+          }) +
           '\n' +
           piMcpContext(boot, mcpInstructions),
         noExtensions: true,

@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.53.0](https://github.com/PostHog/wizard/compare/v2.52.1...v2.53.0) (2026-07-28)
+
+
+### Features
+
+* data-aware MCP tutorial (scout, real-schema quests, demo seeding) ([#600](https://github.com/PostHog/wizard/issues/600)) ([006575b](https://github.com/PostHog/wizard/commit/006575b70edb667b3944bb1f58496daf7ffce615))
+* **telemetry:** tag analytics with the task run id and package version ([#991](https://github.com/PostHog/wizard/issues/991)) ([a1bcf57](https://github.com/PostHog/wizard/commit/a1bcf5741a147baf831370dd1184aeba9812d338))
+
+
+### Bug Fixes
+
+* **commandments:** drop task-list rules where the tools aren't mounted ([#995](https://github.com/PostHog/wizard/issues/995)) ([01b34b6](https://github.com/PostHog/wizard/commit/01b34b6e216d0dbc04c59b939def7e9559a299e5))
+* **security:** reference the MCP bearer by env var, not its value ([#1004](https://github.com/PostHog/wizard/issues/1004)) ([10bfb88](https://github.com/PostHog/wizard/commit/10bfb88b89bf226b8a0a705602c13547c1b03328))
+* **tui:** scroll long picker lists so they don't overflow the viewport ([#978](https://github.com/PostHog/wizard/issues/978)) ([08a92ac](https://github.com/PostHog/wizard/commit/08a92ac1060fd0afc7a63b50c570212fbad47195))
+* **yara:** triage skill installs on every harness ([#997](https://github.com/PostHog/wizard/issues/997)) ([9566310](https://github.com/PostHog/wizard/commit/9566310a9786f9fe99892c9197d4dd2aea245e5d))
+
 ## [2.52.1](https://github.com/PostHog/wizard/compare/v2.52.0...v2.52.1) (2026-07-27)
 
 

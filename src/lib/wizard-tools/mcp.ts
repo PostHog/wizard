@@ -26,8 +26,7 @@ import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
 } from '../agent/runner/sequence/orchestrator/queue-tools';
-import { createTriageLLMProvider } from '../agent/triage-provider';
-import { Harness } from '../constants';
+import type { LLMProvider } from '@posthog/warlock';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
@@ -122,6 +121,9 @@ export interface WizardToolsOptions {
    * linear path.
    */
   orchestrator?: OrchestratorToolsContext;
+
+  /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
+  triageProvider: LLMProvider;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -142,6 +144,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
     orchestrator,
+    triageProvider,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -406,9 +409,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      // Own process, no switchboard: the SDK hands it the anthropic gateway env.
       const result = await downloadSkill(skill, workingDirectory, {
-        triage: createTriageLLMProvider(undefined, Harness.anthropic),
+        triage: triageProvider,
       });
       if (result.success) {
         return {

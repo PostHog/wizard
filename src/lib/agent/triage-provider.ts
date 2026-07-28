@@ -20,27 +20,25 @@ const TRIAGE_MAX_TOKENS = 16_384;
 const TRIAGE_TIMEOUT_MS = 20_000;
 
 export interface TriageGatewayAuth {
+  /** Gateway base url — `credentials.host.gatewayUrl`. */
   baseURL: string;
+  /** The run's OAuth access token. */
   authToken: string;
   wizardMetadata?: Record<string, string>;
   wizardFlags?: Record<string, string>;
 }
 
-/** Triage provider for a harness, or undefined when there's no gateway auth — callers then fail closed. */
+/**
+ * Triage provider for a harness. Auth is always explicit: every caller already
+ * holds the gateway url and the run's token, and reading them back out of
+ * ANTHROPIC_* made an unauthed provider silent — it returned undefined, the
+ * caller failed closed, and a clean first-party skill got deleted.
+ */
 export function createTriageLLMProvider(
-  auth: TriageGatewayAuth | undefined,
+  auth: TriageGatewayAuth,
   harness: Harness,
-): LLMProvider | undefined {
-  const baseURL = auth?.baseURL ?? process.env.ANTHROPIC_BASE_URL;
-  const authToken = auth?.authToken ?? process.env.ANTHROPIC_AUTH_TOKEN;
-
-  if (!baseURL || !authToken) {
-    logToFile(
-      '[YARA] triage provider unavailable (no gateway auth) — flagged scans will fail closed',
-    );
-    return undefined;
-  }
-
+): LLMProvider {
+  const { baseURL, authToken } = auth;
   const modelId = triageModelFor(harness);
   const model = buildGatewayModel({
     gatewayUrl: baseURL,
