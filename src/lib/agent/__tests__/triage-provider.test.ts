@@ -1,6 +1,6 @@
 import { completeSimple } from '@earendil-works/pi-ai';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
-import { GPT5_6_LUNA_MODEL, HAIKU_MODEL, Harness } from '@lib/constants';
+import { GPT5_6_LUNA_MODEL, HAIKU_TRIAGE_MODEL, Harness } from '@lib/constants';
 import { triageModelFor } from '@lib/agent/runner/switchboard/models';
 
 vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));
@@ -18,7 +18,7 @@ beforeEach(() => {
 
 describe('triage model routing', () => {
   it('binds each harness to the cheap model of the line it already speaks', () => {
-    expect(triageModelFor(Harness.anthropic)).toBe(HAIKU_MODEL);
+    expect(triageModelFor(Harness.anthropic)).toBe(HAIKU_TRIAGE_MODEL);
     expect(triageModelFor(Harness.pi)).toBe(GPT5_6_LUNA_MODEL);
   });
 });
@@ -57,7 +57,7 @@ describe('createTriageLLMProvider', () => {
     await expect(provider('verdict?')).resolves.toBe('false_positive');
 
     const [model] = complete.mock.calls[0];
-    expect(model.id).toBe(HAIKU_MODEL);
+    expect(model.id).toBe(HAIKU_TRIAGE_MODEL);
     expect(model.api).toBe('anthropic-messages');
     expect(model.baseUrl).toBe('https://gw.posthog.test');
   });
