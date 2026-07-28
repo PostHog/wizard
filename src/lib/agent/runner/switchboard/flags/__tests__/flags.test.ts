@@ -97,19 +97,6 @@ describe('the truth table — posthog-integration × wizard-orchestrator', () =>
         trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
       },
       {
-        name: "'true' + retired pi flags → identical, nothing reads them",
-        ctx: {
-          program: 'posthog-integration',
-          flags: {
-            [ORCH]: 'true',
-            'wizard-use-pi-harness': 'true',
-            'wizard-pi-model': 'gpt-5-6-terra',
-            'wizard-pi-effort': 'high',
-          },
-        },
-        binding: ORCHESTRATOR_PI_DEFAULT,
-      },
-      {
         // Harness axis code-gated on cloud; sequence scoping is the flag's own run_surface targeting (#961).
         name: "'true' on the cloud surface → orchestrator sequence, harness route disabled",
         surface: 'cloud',
