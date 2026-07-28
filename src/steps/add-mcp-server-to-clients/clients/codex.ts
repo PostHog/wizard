@@ -15,10 +15,21 @@ import {
 } from '@steps/add-mcp-server-to-clients/plugin-client';
 
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 
 export const CodexMCPConfig = DefaultMCPClientConfig;
 
 export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
+
+/**
+ * Hard ceiling on any `codex` subprocess. `codex mcp add` for a remote server
+ * can otherwise block for a long time on Codex's own OAuth handshake (see
+ * `addServer`), so every spawnSync here is bounded to fail fast instead of
+ * hanging the wizard.
+ */
+const CODEX_COMMAND_TIMEOUT_MS = 20_000;
+
+const TOKEN_ENV_VAR = 'POSTHOG_AUTH_HEADER';
 
 export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
   name = 'Codex';
@@ -56,7 +67,10 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     const binary = this.findCodexBinary();
     if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
-    const result = spawnSync(binary, ['mcp', 'list'], { encoding: 'utf-8' });
+    const result = spawnSync(binary, ['mcp', 'list'], {
+      encoding: 'utf-8',
+      timeout: CODEX_COMMAND_TIMEOUT_MS,
+    });
     if (result.status !== 0) return Promise.resolve(false);
     return Promise.resolve(
       (result.stdout ?? '').toLowerCase().includes(serverName),
@@ -73,15 +87,56 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
-    const args = ['mcp', 'add', serverName, '--url', url];
-    const env = { ...process.env };
-    if (apiKey) {
-      const tokenVar = 'POSTHOG_AUTH_HEADER';
-      env[tokenVar] = `Bearer ${apiKey}`;
-      args.push('--bearer-token-env-var', tokenVar);
+
+    // Without a bearer token, `codex mcp add --url` falls into Codex's own
+    // interactive OAuth flow against the remote server. In a non-interactive
+    // wizard run that browser handshake can never complete, so Codex blocks
+    // until its OAuth deadline elapses and then errors. Skip that path
+    // entirely rather than hanging — the server can be added later once a
+    // personal API key is available.
+    if (!apiKey) {
+      logToFile(
+        `[Codex] Skipping MCP install for "${serverName}": no PostHog API key, ` +
+          `and adding without one triggers an interactive OAuth flow. ` +
+          `Add it later with: codex mcp add ${serverName} --url ${url} ` +
+          `--bearer-token-env-var ${TOKEN_ENV_VAR}`,
+      );
+      return Promise.resolve({ success: false });
     }
 
-    const result = spawnSync(binary, args, { encoding: 'utf-8', env });
+    const args = [
+      'mcp',
+      'add',
+      serverName,
+      '--url',
+      url,
+      '--bearer-token-env-var',
+      TOKEN_ENV_VAR,
+    ];
+    const env = { ...process.env, [TOKEN_ENV_VAR]: `Bearer ${apiKey}` };
+
+    const result = spawnSync(binary, args, {
+      encoding: 'utf-8',
+      env,
+      timeout: CODEX_COMMAND_TIMEOUT_MS,
+    });
+
+    // A timeout (or any spawn failure) surfaces on `result.error`, with
+    // `status` left null. Degrade gracefully with a diagnostic instead of
+    // firing a captured exception — the process was bounded on purpose.
+    if (result.error) {
+      const timedOut =
+        (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT';
+      logToFile(
+        `[Codex] MCP install for "${serverName}" ${
+          timedOut
+            ? `timed out after ${CODEX_COMMAND_TIMEOUT_MS}ms`
+            : `failed to run: ${result.error.message}`
+        }. Skipping.`,
+      );
+      return Promise.resolve({ success: false });
+    }
+
     if (result.status !== 0) {
       const stderr = result.stderr ?? '';
       if (stderr.toLowerCase().includes('already')) {
@@ -99,6 +154,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
 
     const result = spawnSync(binary, ['mcp', 'remove', 'posthog'], {
       stdio: 'ignore',
+      timeout: CODEX_COMMAND_TIMEOUT_MS,
     });
 
     if (result.error || result.status !== 0) {
