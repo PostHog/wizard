@@ -18,7 +18,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
       `  You have:  ${process.version}`,
       `  You need:  v${NODE_VERSION_RANGE.replace('>=', '')} or later`,
       ``,
-      `Node.js is the program that runs the wizard. To update it:`,
+      `To update Node.js:`,
       ``,
       `  Download the latest version from https://nodejs.org/en/download`,
       `  Or, if you use nvm, run: nvm install 22 && nvm use 22`,
