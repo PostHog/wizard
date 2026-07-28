@@ -28,6 +28,11 @@ import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import {
+  withContentGuard,
+  pickEditContent,
+  pickWriteContent,
+} from './content-guard';
 import type {
   AgentResult,
   AgentHarness,
@@ -360,8 +365,14 @@ export const piBackend: AgentHarness = {
         // are the stock definitions. Reads run in parallel so a batched turn of
         // independent reads executes at once; edit/write/bash stay sequential.
         withMode(createReadToolDefinition(session.installDir), 'parallel'),
-        withMode(createEditToolDefinition(session.installDir), 'sequential'),
-        withMode(createWriteToolDefinition(session.installDir), 'sequential'),
+        withContentGuard(
+          withMode(createEditToolDefinition(session.installDir), 'sequential'),
+          pickEditContent,
+        ),
+        withContentGuard(
+          withMode(createWriteToolDefinition(session.installDir), 'sequential'),
+          pickWriteContent,
+        ),
         scrubbedBash,
         // Native ls/find/grep so the agent explores with proper tools instead
         // of fence-blocked `bash {ls/find}` (the profiled retry-spirals came

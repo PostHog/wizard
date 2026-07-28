@@ -44,6 +44,11 @@ import {
   lastStatusLine,
   withMode,
 } from './index';
+import {
+  withContentGuard,
+  pickEditContent,
+  pickWriteContent,
+} from './content-guard';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -263,8 +268,16 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const dir = session.installDir;
     const codingToolFactories = {
       read: () => withMode(createReadToolDefinition(dir), 'parallel'),
-      edit: () => withMode(createEditToolDefinition(dir), 'sequential'),
-      write: () => withMode(createWriteToolDefinition(dir), 'sequential'),
+      edit: () =>
+        withContentGuard(
+          withMode(createEditToolDefinition(dir), 'sequential'),
+          pickEditContent,
+        ),
+      write: () =>
+        withContentGuard(
+          withMode(createWriteToolDefinition(dir), 'sequential'),
+          pickWriteContent,
+        ),
       bash: () =>
         withMode(
           createBashToolDefinition(dir, {
