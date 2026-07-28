@@ -94,7 +94,7 @@ describe('the truth table — posthog-integration × wizard-orchestrator', () =>
         name: "'true' → orchestrator on pi; model stays the binding default (frontmatter decides per task)",
         ctx: { program: 'posthog-integration', flags: { [ORCH]: 'true' } },
         binding: ORCHESTRATOR_PI_DEFAULT,
-        trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
+        trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
       },
       {
         // Harness axis code-gated on cloud; sequence scoping is the flag's own run_surface targeting (#961).
