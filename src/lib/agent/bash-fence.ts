@@ -59,6 +59,8 @@ const NPX_TOOLS = new Set([
 ]);
 
 const PIP_SUBCOMMANDS = ['install', 'uninstall', 'show', 'list', 'index'];
+/** `.venv/bin/pip`, `venv/bin/python3`, `env/bin/pip3` — a venv-local interpreter. */
+const VENV_BIN = /^[\w./-]*\/bin\/(pip3?|python3?)$/;
 const BUNDLE_SUBCOMMANDS = ['install', 'add', 'remove', 'update', 'show'];
 const MAVEN_GOALS = [
   'install',
@@ -99,6 +101,7 @@ const DANGEROUS_OPERATORS = /[;`$()]/;
 const ALLOWED_TOOLS_SUMMARY =
   'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
   'npx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
+  'python/python3 (-m venv <dir>, -m pip <install|...>, manage.py check) and any <venv>/bin/pip|python, ' +
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
   'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
@@ -257,21 +260,40 @@ function xcodebuildDecision(
 /** Grammar decision for a single operator-free, pipe-free command. */
 function commandDecision(command: string): BashFenceDecision {
   const parts = command.split(/\s+/).filter(Boolean);
-  const bin = parts[0];
-  if (!bin) return denyCommand(command, ALLOWED_TOOLS_SUMMARY);
+  const raw = parts[0];
+  if (!raw) return denyCommand(command, ALLOWED_TOOLS_SUMMARY);
+  // A venv-local interpreter (`.venv/bin/pip`, `venv/bin/python3`) is the
+  // sanctioned way to install on Python — judge it as the tool it is.
+  const bin = raw.match(VENV_BIN)?.[1] ?? raw;
   if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command);
   if (bin === 'npx') return npxDecision(parts, command);
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
   if (MAVEN_MANAGERS.has(bin)) return mavenDecision(parts, command);
   if (bin === 'xcodebuild') return xcodebuildDecision(parts, command);
-  // Django's system check — the one sanctioned `python` shape; bare python
-  // stays denied (python -c is arbitrary code).
-  if (
-    (bin === 'python' || bin === 'python3') &&
-    parts[1] === 'manage.py' &&
-    parts[2] === 'check'
-  ) {
-    return { allowed: true };
+  if (bin === 'python' || bin === 'python3') {
+    // Django's system check.
+    if (parts[1] === 'manage.py' && parts[2] === 'check') {
+      return { allowed: true };
+    }
+    // Creating the venv the runtime notes ask for, and installing through it.
+    // `python -c` stays denied — that is arbitrary code.
+    if (parts[1] === '-m' && parts[2] === 'venv' && parts[3]) {
+      return { allowed: true };
+    }
+    if (
+      parts[1] === '-m' &&
+      parts[2] === 'pip' &&
+      parts[3] &&
+      PIP_SUBCOMMANDS.includes(parts[3])
+    ) {
+      return { allowed: true };
+    }
+    return denyCommand(
+      command,
+      `Allowed ${bin} shapes: -m venv <dir>, -m pip <${PIP_SUBCOMMANDS.join(
+        '|',
+      )}>, manage.py check.`,
+    );
   }
   if (bin === 'uv' && parts[1] === 'pip') {
     if (parts[2] && PIP_SUBCOMMANDS.includes(parts[2]))
