@@ -49,6 +49,7 @@ import {
   pickEditContent,
   pickWriteContent,
 } from './content-guard';
+import { createAioCapture } from '@lib/agent/aio-capture';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -147,6 +148,13 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   } = inputs;
 
   if (spinnerMessage) spinner.start(spinnerMessage);
+
+  const capture = createAioCapture({
+    enabled: session.captureAio,
+    projectApiKey: boot.credentials.projectApiKey,
+    apiHost: boot.credentials.host.apiHost,
+    runTags: boot.wizardMetadata,
+  });
 
   const startTime = Date.now();
   const signals = new AgentOutputSignals();
@@ -334,6 +342,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
     const unsubscribe = agentSession.subscribe((event) => {
+      // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
+      // before the role guard so the module's own filter is authoritative.
+      capture.captureFromPiMessageEndEvent(event);
+
       switch (event.type) {
         case 'message_end': {
           // User prompts also emit message_end; only assistant turns count.
@@ -373,6 +385,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           break;
       }
     });
+
+    // Seed AIO capture with this task's prompt — includes any handoff data
+    // from prior tasks (the orchestrator bakes it into the prompt string
+    // before it reaches this call site).
+    capture.setInitialPrompt(taskPrompt);
 
     try {
       await agentSession.prompt(taskPrompt);

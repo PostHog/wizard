@@ -137,6 +137,9 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     ).toBe('allow');
     expect(allow('pod install')).toBe('allow');
     expect(allow('carthage bootstrap')).toBe('allow');
+    expect(allow('xcodegen generate')).toBe('allow');
+    expect(allow('xcodegen generate --spec project.yml')).toBe('allow');
+    expect(allow('xcodegen dump')).toBe('deny');
   });
 
   it('android/jvm ecosystem', () => {
