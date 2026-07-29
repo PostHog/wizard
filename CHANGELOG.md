@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.54.0](https://github.com/PostHog/wizard/compare/v2.53.0...v2.54.0) (2026-07-28)
+
+
+### Features
+
+* **auth:** give the browser login 30 minutes instead of 5 ([#1012](https://github.com/PostHog/wizard/issues/1012)) ([9b8a747](https://github.com/PostHog/wizard/commit/9b8a747338b944dbf4ecde70d2d335747f002df5))
+* **bash-fence:** allow xcodegen generate ([#1011](https://github.com/PostHog/wizard/issues/1011)) ([e7d4eff](https://github.com/PostHog/wizard/commit/e7d4efffa06c2e6df27d38c2c1d8a92a91d93471))
+* **task-stream:** publish pending wizard_ask prompts as pending_input ([#1008](https://github.com/PostHog/wizard/issues/1008)) ([5b51df5](https://github.com/PostHog/wizard/commit/5b51df5c6f8df34b1e69a7382f67214eacb04df6))
+
+
+### Bug Fixes
+
+* **switchboard:** trace the model to the binding when a flag route is harness-only ([#1009](https://github.com/PostHog/wizard/issues/1009)) ([93ca4d1](https://github.com/PostHog/wizard/commit/93ca4d1a4193a3922bf9c409bd8a25cbdc7be66b))
+
 ## [2.53.0](https://github.com/PostHog/wizard/compare/v2.52.1...v2.53.0) (2026-07-28)
 
 

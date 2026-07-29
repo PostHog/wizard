@@ -56,13 +56,12 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
 };
 
 /**
- * Variants the wizard can wire up source-map upload for automatically. React
- * Native is recognised but not yet automatable, so the agentic picker treats
- * it as non-instrumentable.
+ * Variants the wizard can wire up source-map upload for automatically.
  */
 export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'android',
   'ios',
+  'react-native',
   'flutter',
   'web',
   'nextjs',
@@ -77,13 +76,14 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
 
 /**
  * Variants the wizard pre-installs a machine-global `posthog-cli` for — their
- * build shells out to it with no npx / local-dep fallback. JS variants stay
- * out. Flutter counts here despite emitting plain `.js.map` files: a Flutter
- * project has no `package.json`, so there is no npx or local dependency to
- * fall back to when the post-build step invokes the CLI.
+ * build shells out to it with no npx / local-dep fallback. Web JS variants stay
+ * out. React Native counts as native here — its Xcode build phases and Gradle
+ * tasks invoke the global CLI. Flutter counts too despite emitting plain
+ * `.js.map` files: a Flutter project has no `package.json`, so there is no npx
+ * or local dependency to fall back to when the post-build step invokes the CLI.
  */
 export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
-  new Set(['ios', 'android', 'flutter']);
+  new Set(['ios', 'android', 'react-native', 'flutter']);
 
 const POSTHOG_SDKS = new Set([
   'posthog-js',
@@ -133,6 +133,16 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
       'upload runs as part of the production build. Add a build script to ' +
       'your project and run this wizard again.',
     docsUrl: 'https://posthog.com/docs/error-tracking/upload-source-maps',
+  },
+  {
+    match: /^bare react native not supported$/i,
+    message: 'Bare React Native is not supported',
+    body:
+      'Source-map upload for React Native requires Expo, and this project ' +
+      'has no `expo` package. Bare React Native builds cannot inject the ' +
+      'chunk IDs PostHog needs to resolve stack traces.',
+    docsUrl:
+      'https://posthog.com/docs/error-tracking/upload-source-maps/react-native',
   },
 ];
 

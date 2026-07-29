@@ -120,6 +120,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
+          reportFile: REPORT_FILE,
         });
       },
 
