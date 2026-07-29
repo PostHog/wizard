@@ -18,7 +18,8 @@ type Step = ProgramConfig['steps'][number];
 
 /** The session a run step's agent runs in: scoped to the step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged. */
+ * A step without `targetDir` runs in the live session, unchanged.
+ * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
   step: Step,
   live: WizardSession,
