@@ -19,6 +19,47 @@ const BROWSABLE_ROLES: ReadonlySet<CliEntry['role']> = new Set([
   'skill',
 ]);
 
+/**
+ * Reject an unknown skill id before the wizard authenticates.
+ *
+ * Without this, `readSkillName` accepts any non-empty string and the name is
+ * only validated far downstream, when the agent tries to download it — after
+ * the user has already logged in. A typo then costs a full auth round-trip
+ * (the concern raised in review). We resolve against the same set
+ * `downloadSkill` uses (`categories` flattened by `id`), so this never
+ * false-rejects a skill the download would have accepted.
+ *
+ * If the registry is unreachable we stay silent and defer to the download
+ * step's own `menu-fetch-failed` handling, rather than adding a second network
+ * dependency that could block an otherwise-valid run.
+ */
+async function assertSkillExists(
+  skillName: string,
+  localMcp: boolean,
+): Promise<void> {
+  const skillsBaseUrl = getSkillsBaseUrl(localMcp);
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return; // registry down — let the download step surface it
+  const known = Object.values(menu.categories)
+    .flat()
+    .some((s) => s.id === skillName);
+  if (known) return;
+  analytics.wizardCapture('cli dispatch error', {
+    reason: 'unknown skill',
+    family: 'skill',
+    sub: skillName,
+    skillsBaseUrl,
+  });
+  try {
+    await analytics.flush();
+  } catch {
+    /* best-effort */
+  }
+  throw new Error(
+    `Unknown skill "${skillName}". Run \`wizard skill list\` to see available skills.`,
+  );
+}
+
 function formatEntry(entry: CliEntry): string {
   const path = entry.parentCommand
     ? `wizard ${entry.parentCommand} ${entry.command}`
@@ -122,7 +163,11 @@ export const skillCommand: Command = {
     return true;
   },
   handler: (argv) => {
-    // runSkillMode reads `argv.skill`; bridge the positional onto it.
-    runSkillMode({ ...argv, skill: readSkillName(argv) });
+    runCommandHandler(async () => {
+      const skillName = readSkillName(argv);
+      await assertSkillExists(skillName, Boolean(argv['local-mcp']));
+      // runSkillMode reads `argv.skill`; bridge the positional onto it.
+      runSkillMode({ ...argv, skill: skillName });
+    });
   },
 };
