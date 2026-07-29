@@ -8,7 +8,7 @@
  */
 
 import * as crypto from 'node:crypto';
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import { z } from 'zod';
 import {
   POSTHOG_DEV_CLIENT_ID,
@@ -57,6 +57,191 @@ const getProvisioningClientId = (
   if (resolveBaseUrl(baseUrl)) return POSTHOG_DEV_CLIENT_ID;
   return region === 'EU' ? POSTHOG_EU_CLIENT_ID : POSTHOG_US_CLIENT_ID;
 };
+
+/** The three provisioning calls, in the order they run. */
+export type ProvisioningStep =
+  | 'account_request'
+  | 'token_exchange'
+  | 'resources';
+
+const STEP_LABELS: Record<ProvisioningStep, string> = {
+  account_request: 'account creation',
+  token_exchange: 'token exchange',
+  resources: 'project provisioning',
+};
+
+/**
+ * A provisioning failure with the context needed to act on it: which of the
+ * three calls failed, the HTTP status, the region, and whether a `--base-url`
+ * was pinned. Without this a 401 anywhere in the flow reaches the user (and
+ * error tracking) as axios' bare "Request failed with status code 401", which
+ * says nothing about which call broke or what the server actually complained
+ * about.
+ */
+export class ProvisioningError extends Error {
+  readonly step: ProvisioningStep;
+  readonly status?: number;
+  readonly region: 'US' | 'EU';
+  readonly baseUrlPinned: boolean;
+  readonly errorCode?: string;
+
+  constructor(
+    message: string,
+    context: {
+      step: ProvisioningStep;
+      region: 'US' | 'EU';
+      baseUrlPinned: boolean;
+      status?: number;
+      errorCode?: string;
+    },
+  ) {
+    super(message);
+    this.name = 'ProvisioningError';
+    this.step = context.step;
+    this.status = context.status;
+    this.region = context.region;
+    this.baseUrlPinned = context.baseUrlPinned;
+    this.errorCode = context.errorCode;
+  }
+
+  /**
+   * True when the interactive login flow is a viable recovery: the email
+   * already has an account, or the provisioning API refused to authenticate
+   * us (401/403) so it will never mint credentials for this request.
+   */
+  get requiresLogin(): boolean {
+    return (
+      this.errorCode === 'email_exists' ||
+      this.status === 401 ||
+      this.status === 403
+    );
+  }
+}
+
+/** Analytics properties describing a provisioning failure. Empty for other errors. */
+export function provisioningErrorProperties(
+  error: unknown,
+): Record<string, unknown> {
+  if (!(error instanceof ProvisioningError)) return {};
+  return {
+    provisioning_step: error.step,
+    status_code: error.status,
+    error_code: error.errorCode,
+    region: error.region,
+    base_url_pinned: error.baseUrlPinned,
+  };
+}
+
+/**
+ * Pull a human-readable message out of an error response body. The
+ * provisioning API answers with `{error: {code, message}}`, DRF with
+ * `{detail}`, and the OAuth token endpoint with RFC 6749 §5.2
+ * `{error, error_description}` — cover all three rather than guessing.
+ */
+function serverMessage(data: unknown): string | undefined {
+  if (typeof data === 'string') return data.trim().slice(0, 500) || undefined;
+  if (!data || typeof data !== 'object') return undefined;
+  const body = data as Record<string, unknown>;
+
+  const nested = body.error;
+  if (nested && typeof nested === 'object') {
+    const message = (nested as Record<string, unknown>).message;
+    if (typeof message === 'string') return message;
+  }
+
+  const description = body.error_description;
+  if (typeof description === 'string') {
+    return typeof nested === 'string'
+      ? `${nested}: ${description}`
+      : description;
+  }
+
+  for (const key of ['detail', 'message', 'error'] as const) {
+    const value = body[key];
+    if (typeof value === 'string') return value;
+  }
+  return undefined;
+}
+
+/** Log the failure, capture it with full context, then throw. */
+function failProvisioning(error: ProvisioningError): never {
+  logToFile(
+    `[provisioning] ${error.step} failed` +
+      (error.status ? ` (HTTP ${error.status})` : '') +
+      `: ${error.message}`,
+  );
+  // An existing account is an expected outcome the caller recovers from, not a
+  // fault worth an exception event. Everything else is captured here, once, so
+  // every entry point (TUI signup, `wizard provision`, CI install) records the
+  // provisioning context instead of leaving it to exception autocapture.
+  if (error.errorCode !== 'email_exists') {
+    analytics.captureException(error, {
+      step: `provisioning_${error.step}`,
+      ...provisioningErrorProperties(error),
+    });
+  }
+  throw error;
+}
+
+/**
+ * POST to the provisioning API and validate the response, turning any HTTP or
+ * schema failure into a `ProvisioningError` that names the step, the status,
+ * and whatever the server said.
+ */
+async function provisioningPost<T extends z.ZodTypeAny>(
+  step: ProvisioningStep,
+  context: { region: 'US' | 'EU'; baseUrlPinned: boolean },
+  url: string,
+  body: unknown,
+  config: AxiosRequestConfig,
+  schema: T,
+): Promise<z.infer<T>> {
+  let response;
+  try {
+    response = await axios.post(url, body, config);
+  } catch (e) {
+    const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+    const detail = axios.isAxiosError(e)
+      ? serverMessage(e.response?.data)
+      : undefined;
+    const reason = detail ?? (e instanceof Error ? e.message : String(e));
+
+    let message = `Provisioning failed during ${STEP_LABELS[step]}`;
+    if (status) message += ` (HTTP ${status})`;
+    message += `: ${reason}`;
+    // The most likely cause of a 401 against a pinned stack: that instance
+    // doesn't have the wizard's dev OAuth client registered, so PKCE fails.
+    if ((status === 401 || status === 403) && context.baseUrlPinned) {
+      message +=
+        ' — check that the pinned instance has the wizard OAuth client registered.';
+    }
+
+    return failProvisioning(
+      new ProvisioningError(message, {
+        ...context,
+        step,
+        status,
+        errorCode: axios.isAxiosError(e) ? e.code : undefined,
+      }),
+    );
+  }
+
+  const parsed = schema.safeParse(response.data);
+  if (!parsed.success) {
+    return failProvisioning(
+      new ProvisioningError(
+        `Provisioning failed during ${STEP_LABELS[step]}: the server returned an unexpected response`,
+        {
+          ...context,
+          step,
+          status: response.status,
+          errorCode: 'bad_response',
+        },
+      ),
+    );
+  }
+  return parsed.data;
+}
 
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
@@ -137,11 +322,17 @@ export async function provisionNewAccount(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   const provisioningBaseUrl = getProvisioningBaseUrl(region, opts?.baseUrl);
+  const context = {
+    region,
+    baseUrlPinned: !!resolveBaseUrl(opts?.baseUrl),
+  };
 
   logToFile('[provisioning] starting account creation');
 
   // Step 1: Create account
-  const accountRes = await axios.post(
+  const accountData = await provisioningPost(
+    'account_request',
+    context,
     `${provisioningBaseUrl}/api/agentic/provisioning/account_requests`,
     {
       id: crypto.randomUUID(),
@@ -164,34 +355,47 @@ export async function provisionNewAccount(
       },
       timeout: 30_000,
     },
+    AccountRequestResponseSchema,
   );
 
-  const accountData = AccountRequestResponseSchema.parse(accountRes.data);
-
   if (accountData.type === 'error') {
-    const msg = accountData.error?.message ?? 'Account creation failed';
-    analytics.captureException(new Error(msg), {
-      step: 'provisioning_account_request',
-      error_code: accountData.error?.code,
-    });
-    throw new Error(msg);
+    failProvisioning(
+      new ProvisioningError(
+        accountData.error?.message ?? 'Account creation failed',
+        {
+          ...context,
+          step: 'account_request',
+          errorCode: accountData.error?.code,
+        },
+      ),
+    );
   }
 
   if (accountData.type === 'requires_auth') {
-    throw new Error(
-      'This email is already associated with a PostHog account. Please use the login flow instead.',
+    failProvisioning(
+      new ProvisioningError(
+        'This email is already associated with a PostHog account. Please use the login flow instead.',
+        { ...context, step: 'account_request', errorCode: 'email_exists' },
+      ),
     );
   }
 
   const code = accountData.oauth?.code;
   if (!code) {
-    throw new Error('No authorization code received from account creation');
+    failProvisioning(
+      new ProvisioningError(
+        'No authorization code received from account creation',
+        { ...context, step: 'account_request', errorCode: 'missing_code' },
+      ),
+    );
   }
 
   logToFile('[provisioning] account created, exchanging code for tokens');
 
   // Step 2: Exchange code for tokens
-  const tokenRes = await axios.post(
+  const tokenData = await provisioningPost(
+    'token_exchange',
+    context,
     `${provisioningBaseUrl}/api/agentic/oauth/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
@@ -206,14 +410,15 @@ export async function provisionNewAccount(
       },
       timeout: 30_000,
     },
+    TokenResponseSchema,
   );
-
-  const tokenData = TokenResponseSchema.parse(tokenRes.data);
 
   logToFile('[provisioning] tokens received, provisioning resources');
 
   // Step 3: Provision resources
-  const resourceRes = await axios.post(
+  const resourceData = await provisioningPost(
+    'resources',
+    context,
     `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
     {
       service_id: 'analytics',
@@ -230,12 +435,17 @@ export async function provisionNewAccount(
       },
       timeout: 30_000,
     },
+    ResourceResponseSchema,
   );
 
-  const resourceData = ResourceResponseSchema.parse(resourceRes.data);
-
   if (resourceData.status !== 'complete' || !resourceData.complete) {
-    throw new Error('Resource provisioning did not complete');
+    failProvisioning(
+      new ProvisioningError('Resource provisioning did not complete', {
+        ...context,
+        step: 'resources',
+        errorCode: resourceData.status,
+      }),
+    );
   }
 
   logToFile('[provisioning] resources provisioned successfully');
