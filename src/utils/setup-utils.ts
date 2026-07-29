@@ -22,7 +22,7 @@ import { getUI } from '@ui';
 import { HostResolution } from '@lib/host-resolution';
 import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
-import { provisionNewAccount } from './provisioning';
+import { ProvisioningError, provisionNewAccount } from './provisioning';
 import {
   fetchUserData,
   fetchProjectData,
@@ -705,19 +705,38 @@ async function askForProvisioningSignup(
     spinner.stop('Account creation failed.');
     const message = error instanceof Error ? error.message : 'Unknown error';
 
-    if (message.includes('already associated')) {
+    // The login flow is a real recovery for more than an existing account: a
+    // 401/403 means the provisioning API won't mint credentials for this
+    // request at all, and the browser flow can still get the user in. Gating
+    // that on a substring match sent every other auth failure straight to
+    // abort with axios' bare "Request failed with status code 401".
+    const requiresLogin =
+      error instanceof ProvisioningError
+        ? error.requiresLogin
+        : message.includes('already associated');
+
+    if (requiresLogin) {
+      const emailExists =
+        !(error instanceof ProvisioningError) ||
+        error.errorCode === 'email_exists';
       getUI().log.info(
-        'This email already has a PostHog account. Switching to login flow...',
+        emailExists
+          ? 'This email already has a PostHog account. Switching to login flow...'
+          : `Automatic signup was rejected (${message}). Switching to login flow...`,
       );
 
       return askForWizardLogin({ signup: false, baseUrl, localMcp });
     }
 
     getUI().log.error(`Failed to create account: ${message}`);
-    analytics.captureException(
-      error instanceof Error ? error : new Error(message),
-      { step: 'provisioning_signup' },
-    );
+    // `provisionNewAccount` already captured its own failures with the step,
+    // status, and region attached — capturing again here would double-count.
+    if (!(error instanceof ProvisioningError)) {
+      analytics.captureException(
+        error instanceof Error ? error : new Error(message),
+        { step: 'provisioning_signup' },
+      );
+    }
     await abort();
     throw error;
   }
