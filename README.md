@@ -73,6 +73,19 @@ npx @posthog/wizard self-driving
 
 If PostHog isn't already installed, the wizard runs the default integration first (composed run) before starting the self-driving setup.
 
+### Feature flags
+
+Add one real PostHog feature flag to an existing application. The wizard detects
+the project's framework, installs the matching context-mill skill, creates or
+reuses a flag, implements one safe use case, and verifies the result:
+
+```bash
+npx @posthog/wizard feature-flags
+```
+
+This program requires an existing PostHog SDK integration. If the integration
+is missing, run the default wizard first and then rerun this command.
+
 ### Audit
 
 Audit an existing PostHog integration for correctness and best practices. The

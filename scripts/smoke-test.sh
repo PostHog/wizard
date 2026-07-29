@@ -23,6 +23,16 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
   exit 1
 }
 
+# The feature-flags program is still registered manually in bin.ts. Exercise
+# the compiled command so registry tests cannot pass while the public CLI is
+# accidentally left unmounted.
+feature_flags_help=$(node "$DIST_BIN" feature-flags --help 2>&1)
+if ! echo "$feature_flags_help" | grep -q 'Add a PostHog feature flag to an existing app'; then
+  echo 'Smoke test failed: feature-flags command is not mounted' >&2
+  echo "$feature_flags_help" | head -5 >&2
+  exit 1
+fi
+
 # ── 2. CI flag overrides physically absent from production builds ───────────
 # The override path (src/utils/ci-flag-overrides.ts) is dead code in published
 # builds and tsdown strips it; its env var name appearing in dist/*.js means

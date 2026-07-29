@@ -16,6 +16,15 @@ interface AgentSkillIntroScreenProps {
   store: WizardStore;
 }
 
+export function getAgentSkillIntroTarget(
+  skillId: string | null,
+  programLabel: string | null,
+): { label: string; noun: 'program' | 'skill' } {
+  return skillId
+    ? { label: skillId, noun: 'skill' }
+    : { label: programLabel ?? 'Wizard', noun: 'program' };
+}
+
 export const AgentSkillIntroScreen = ({
   store,
 }: AgentSkillIntroScreenProps) => {
@@ -27,7 +36,8 @@ export const AgentSkillIntroScreen = ({
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
 
   const { session } = store;
-  const skillId = session.skillId ?? 'unknown';
+  const skillId = session.skillId;
+  const target = getAgentSkillIntroTarget(skillId, session.programLabel);
   const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
 
   let body: ReactNode;
@@ -41,14 +51,23 @@ export const AgentSkillIntroScreen = ({
             source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
           </Text>
         </Box>
-        <SkillSourceInfo
-          skillId={skillId}
-          skillEntry={skillEntry}
-          fetchFailed={fetchFailed}
-        />
+        {skillId ? (
+          <SkillSourceInfo
+            skillId={skillId}
+            skillEntry={skillEntry}
+            fetchFailed={fetchFailed}
+          />
+        ) : (
+          <Text dimColor>
+            The program selects the matching Context Mill skill after inspecting
+            the app.
+          </Text>
+        )}
         <Box marginTop={1}>
           <Text dimColor>
-            {skillEntry?.name ?? (fetchFailed ? skillId : 'Loading...')}
+            {skillId
+              ? skillEntry?.name ?? (fetchFailed ? skillId : 'Loading...')
+              : target.label}
           </Text>
         </Box>
       </Box>
@@ -58,9 +77,9 @@ export const AgentSkillIntroScreen = ({
       <Text>
         Let's run the{' '}
         <Text italic color="cyan">
-          {skillId}
+          {target.label}
         </Text>{' '}
-        skill.
+        {target.noun}.
       </Text>
     );
   }

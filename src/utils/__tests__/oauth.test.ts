@@ -93,6 +93,14 @@ describe('wizard OAuth scopes', () => {
     );
   });
 
+  it('requests feature flag management scopes for the feature flags program', () => {
+    const scopes = getOAuthScopesForProgram('feature-flags');
+
+    expect(scopes).toContain('feature_flag:read');
+    expect(scopes).toContain('feature_flag:write');
+    expect(scopes).toContain('property_definition:read');
+  });
+
   it('accepts a newly issued token with the completion scope', () => {
     expect(() =>
       assertWizardCompletionScope(

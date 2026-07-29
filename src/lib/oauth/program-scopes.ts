@@ -13,7 +13,8 @@
  * Current additions: `McpTutorial` layers read-only on every product
  * surface (feature flags, experiments, surveys, replays, errors, web
  * analytics, LLM analytics, cohorts, persons) plus read/write on
- * annotations; `AgentSkill` adds feature-flag read/write; the default
+ * annotations; `AgentSkill` and `FeatureFlags` add feature-flag
+ * read/write; the default
  * `PostHogIntegration` run and the standalone `slack` flow add
  * `integration:read` for the Connect-Slack step. Persistence writes (dashboard:write,
  * insight:write, notebook:write, query:read) come for free from the
@@ -219,6 +220,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'feature-flags': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,

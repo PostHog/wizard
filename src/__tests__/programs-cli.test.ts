@@ -25,6 +25,7 @@ import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { selfDrivingCommand } from '../commands/self-driving';
+import { featureFlagsCommand } from '../commands/feature-flags';
 import {
   dispatchFamily,
   pickerChildrenToShow,
@@ -88,6 +89,11 @@ describe('top-level command shapes', () => {
   test('warehouse is a flat skill command', () => {
     expect(warehouseCommand.name).toBe('warehouse');
     expect(warehouseCommand.children).toBeUndefined();
+  });
+
+  test('feature-flags is a flat wizard-native command', () => {
+    expect(featureFlagsCommand.name).toBe('feature-flags');
+    expect(featureFlagsCommand.children).toBeUndefined();
   });
 
   test('audit exposes the shared skill options on the parent', () => {
@@ -191,6 +197,18 @@ describe('flat skill commands', () => {
       Record<string, unknown>,
     ];
     expect(config.skillId).toBe('data-warehouse-source-setup');
+    expect(opts.installDir).toBe('/tmp/some-app');
+  });
+
+  test('feature-flags dispatches without a fixed skillId', () => {
+    expect(featureFlagsCommand.handler).toBeDefined();
+    featureFlagsCommand.handler?.(makeArgv({ installDir: '/tmp/some-app' }));
+    const [config, opts] = mockRunWizard.mock.calls[0] as [
+      { id?: string; skillId?: string },
+      Record<string, unknown>,
+    ];
+    expect(config.id).toBe('feature-flags');
+    expect(config.skillId).toBeUndefined();
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 });
