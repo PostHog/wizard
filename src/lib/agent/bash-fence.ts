@@ -88,6 +88,9 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
+  // Materializes the Xcode project from project.yml so xcodebuild can verify —
+  // build-equivalent risk (runs on the project's own spec).
+  xcodegen: ['generate'],
 };
 
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
@@ -107,7 +110,7 @@ const ALLOWED_TOOLS_SUMMARY =
   'any <venv>/bin/pip|python plus <venv>/bin/<lint tool>, ' +
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
-  'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
+  'xcodegen (generate), xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
   'mvn (install|compile|package|verify|dependency:tree).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
