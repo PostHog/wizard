@@ -160,14 +160,20 @@ export async function runLinearProgram(
       integration: config.integrationLabel,
       reason,
       matched: matched?.message ?? null,
+      expected: matched?.expected ?? false,
     });
     await wizardAbort({
       outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
+      // An `expected` case is a known dead end the outro already explains to
+      // the user — capturing it would file an error-tracking issue for a
+      // working code path. Everything else stays an exception.
+      error: matched?.expected
+        ? undefined
+        : new WizardError(`Agent aborted: ${reason}`, {
+            integration: config.integrationLabel,
+            error_type: AgentErrorType.ABORT,
+            reason,
+          }),
     });
   }
 

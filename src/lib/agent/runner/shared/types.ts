@@ -23,6 +23,14 @@ export interface AbortCase {
   message: string;
   body: string;
   docsUrl?: string;
+  /**
+   * This abort is an expected outcome, not a failure — the wizard reached a
+   * dead end it already knows how to explain (unsupported stack, no build
+   * command). The runner still renders the error outro and still fires the
+   * `agent aborted` product event, but files no exception, so error tracking
+   * stays a list of real bugs.
+   */
+  expected?: boolean;
 }
 
 /**

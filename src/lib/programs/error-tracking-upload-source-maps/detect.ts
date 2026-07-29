@@ -144,6 +144,22 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
     docsUrl:
       'https://posthog.com/docs/error-tracking/upload-source-maps/react-native',
   },
+  {
+    // Emitted by SOURCE_MAPS_DETECTION_FAILED_PROMPT when the picker never
+    // resolved a project to a supported skill variant. Without this case the
+    // user is shown the bare `unsupported-platform` token, and the wizard
+    // files an error-tracking issue for a dead end it already understands.
+    match: /^unsupported-platform$/i,
+    message: "Source-map upload isn't supported for this project yet",
+    body:
+      'The wizard could not match this project to a stack it knows how to ' +
+      'wire source-map upload into. It supports Next.js, Nuxt, Angular, ' +
+      'React, Vite, Webpack, Rollup, Node.js and plain web projects, plus ' +
+      'Expo React Native, Flutter, iOS and Android. You can still upload ' +
+      'source maps manually with the PostHog CLI — see the docs below.',
+    docsUrl: 'https://posthog.com/docs/error-tracking/upload-source-maps',
+    expected: true,
+  },
 ];
 
 // ── File / dependency probes ─────────────────────────────────────────
