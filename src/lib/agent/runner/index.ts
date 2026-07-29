@@ -152,9 +152,7 @@ function captureSwitchboardDecision(
   binding: ProgramBinding,
 ): void {
   const trace = ctx.trace ?? {};
-  // Orchestrator tasks pick their models from prompt frontmatter — when
-  // nothing pinned a run-level model, the binding fallback is not what runs,
-  // so report the truth instead of a model no task will use.
+  // Unpinned orchestrator runs pick per-task models from frontmatter, so the binding fallback is not what runs.
   const perTaskModel =
     binding.sequence === Sequence.orchestrator && trace.model === 'binding';
   const model = perTaskModel ? 'per-task' : binding.model;
