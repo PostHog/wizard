@@ -105,8 +105,10 @@ and its `(skill: …)` reference never disagree on the number.
   (always) + the **3–5 specialists** for the products this project uses most,
   with the whole troop (including step 6b) capped at **~10 enabled scouts**;
   never `error-tracking`/`session-replay` (consumed as native sources); disable
-  the rest. The enabled troop lands at **4–10** (general + 3–5 specialists + 0–5
-  custom), well inside the default budget at the daily cadence.
+  the rest. The enabled troop lands at **4–10** (general + up to 5 specialists +
+  up to 5 custom, both ceilings not quotas), well inside the default budget at
+  the daily cadence. Requires PostHog/context-mill#295, which raises step 6b's
+  custom-scout limit to match; until that lands the skill still caps custom at 2.
 - **6b — Design custom scouts** — gap-analyze the repo against the troop
   (starting from the repo's for-agents context — AGENTS.md, CLAUDE.md,
   ARCHITECTURE.md, `.cursor/rules` — when present), propose **at most 2**
@@ -288,7 +290,7 @@ the surface-specific scouts (`product-analytics`, `web-analytics`,
 enabled because step 4 consumes them as native sources (a scout would duplicate
 that pipeline). If no surface clearly qualifies, one universal cross-product
 scout (`anomaly-detection` or `health-checks`) is the fallback so ≥1 specialist
-always runs. Everything else is disabled; the enabled troop caps at **3–6**
+always runs. Everything else is disabled; the enabled troop caps at **~10**
 (general
 
 - 3–5 specialists + 0–5 custom from STEP 7). Per `6-scouts.md`; plus the
