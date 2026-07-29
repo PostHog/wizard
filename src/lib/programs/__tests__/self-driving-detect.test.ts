@@ -88,8 +88,7 @@ describe('detectSelfDrivingPrerequisites', () => {
   });
 
   it('keeps only the tools the inbox can connect', () => {
-    // `pg` and `stripe` are warehouse sources, not connected tools — surfacing
-    // them would lead STEP 5 with a database and a payment processor.
+    // `pg` and `stripe` are warehouse sources, not connected tools.
     expect(detectedKinds({ pg: '^8.0.0', stripe: '^14.0.0' })).toEqual([]);
     expect(detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' })).toEqual([
       'Sentry',
@@ -97,8 +96,7 @@ describe('detectSelfDrivingPrerequisites', () => {
   });
 
   it('writes nothing when the codebase has no detectable tools', () => {
-    // Bare dir: valid (no detectError) but no tools to prioritise, so the key
-    // stays unset and STEP 5 falls back to the skill default.
+    // Bare dir: valid, but no tools to prioritise, so the key stays unset.
     const session = buildSession({ installDir: tmpDir });
     detectSelfDrivingPrerequisites(session, setCtx);
 
@@ -109,8 +107,7 @@ describe('detectSelfDrivingPrerequisites', () => {
 
 describe('SELF_DRIVING_TOOL_KINDS', () => {
   it('names only kinds the source registry can actually detect', () => {
-    // The filter is a plain string set, so a registry rename would silently
-    // drop a tool from the ask. Fail here instead.
+    // A plain string set, so a registry rename would otherwise drop a tool silently.
     const known = new Set(SOURCE_DETECTORS.map((d) => d.kind));
     expect([...SELF_DRIVING_TOOL_KINDS].filter((k) => !known.has(k))).toEqual(
       [],
@@ -119,13 +116,7 @@ describe('SELF_DRIVING_TOOL_KINDS', () => {
 });
 
 describe('the detect step does not leak into the composed integration run', () => {
-  // Driven through the REAL store, the way run-wizard does it
-  // (`await store.runReadyHooks()`), because the leak lived in the plumbing
-  // rather than in `detectConnectedTools`: writing the warehouse program's key
-  // here put the scan into the integration agent's prompt, since the
-  // integrate-run phase inherits a copy of this frameworkContext and
-  // `posthog-integration` reads that key to build its prompt. Asserting on the
-  // setter's argument alone would not have caught it.
+  // Through the real store — the leak lived in the plumbing, not in detectConnectedTools.
   let tmpDir: string;
 
   beforeEach(() => {
@@ -148,9 +139,7 @@ describe('the detect step does not leak into the composed integration run', () =
     expect(
       getSelfDrivingDetectedTools(store.session).map((s) => s.kind),
     ).toContain('Sentry');
-    // ...and the integration program, reading its own key off the session it
-    // inherits, sees nothing — so its prompt is byte-identical to a run without
-    // self-driving in front of it.
+    // ...and the integration program, on the session it inherits, sees nothing.
     expect(getDetectedWarehouseSources(store.session)).toEqual([]);
     const inherited = {
       ...store.session,
