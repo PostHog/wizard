@@ -215,8 +215,8 @@ export const SourceMapsDetectScreen = ({
  */
 const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
   const unsupported = blocked.filter((p) => p.variant == null).length;
-  // The wizard can't install the Rust SDK, so its missing-SDK remediation is
-  // a manual install, not `npx @posthog/wizard`.
+  // The wizard can't install the Go/Rust SDKs, so their missing-SDK
+  // remediation is a manual install, not `npx @posthog/wizard`.
   const manualSdk = blocked.filter(
     (p) => p.variant != null && MANUAL_SDK_VARIANTS.includes(p.variant),
   ).length;
@@ -238,8 +238,8 @@ const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
       )}
       {manualSdk > 0 && (
         <Text dimColor>
-          (… {manualSdk} supported but missing the PostHog SDK — add the
-          posthog-rs crate to the project first, then re-run)
+          (… {manualSdk} supported but missing the PostHog SDK — add it to the
+          project first (posthog-go / posthog-rs), then re-run)
         </Text>
       )}
     </Box>

@@ -21,8 +21,9 @@ import type { WizardSession } from '@lib/wizard-session';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,
-  MANUAL_SDK_VARIANTS,
+  MANUAL_SDK_INSTALL,
   RUST_SDK_CRATE,
+  GO_SDK_MODULE,
   type SkillVariant,
 } from './detect.js';
 
@@ -48,14 +49,6 @@ export type DetectionReport = {
   repoType: 'monorepo' | 'single';
   projects: DetectedProject[];
 };
-
-/**
- * Variants the detector recognises so the picker can name and block them,
- * without a shipped skill behind them yet. They rank LOW — a go.mod signal
- * must not shadow a real JS/native target in the same directory, it only
- * needs to beat the generic web fallback.
- */
-const DETECTION_ONLY_VARIANTS: readonly SkillVariant[] = ['go'];
 
 /**
  * Variant precedence for the agentic picker (most specific first). The detector
@@ -95,15 +88,8 @@ const precedenceRank = (v: SkillVariant): number => {
   return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 };
 
-/**
- * Source-map detection targets, ordered by VARIANT_PRECEDENCE. Detection-only
- * variants stay in the target list so the detector can identify and block
- * them instead of falling through to a JS target or the web fallback.
- */
-export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
-  ...DETECTION_ONLY_VARIANTS,
-  ...AUTOMATABLE_VARIANTS,
-]
+/** Source-map detection targets, ordered by VARIANT_PRECEDENCE. */
+export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
 
@@ -172,6 +158,32 @@ export function rustSdkVerifier(
   };
 }
 
+/**
+ * Checks a project's go.mod for the Go SDK — the same authoritative override
+ * as `rustSdkVerifier`, for the same reason. Comment-stripped (`//`)
+ * substring matching; no multi-module walk — unlike Cargo workspaces, a Go
+ * module's requirements always live in the selected module's own go.mod.
+ * Exported for testing.
+ */
+export function goSdkVerifier(
+  installDir: string,
+): (projectPath: string) => boolean {
+  return (projectPath) => {
+    const dir =
+      projectPath === '.' ? installDir : join(installDir, projectPath);
+    try {
+      return readFileSync(join(dir, 'go.mod'), 'utf-8')
+        .split('\n')
+        .some((line) => {
+          const code = line.split('//', 1)[0];
+          return code.includes(GO_SDK_MODULE);
+        });
+    } catch {
+      return false;
+    }
+  };
+}
+
 function isAutomatableVariant(value: string | null): value is SkillVariant {
   return value !== null && AUTOMATABLE_VARIANTS.includes(value as SkillVariant);
 }
@@ -203,6 +215,8 @@ export type ProjectProbes = {
    * present, because any unrelated PostHog dependency can satisfy it.
    */
   verifyRustSdk?: (path: string) => boolean;
+  /** Go: does the project's go.mod require posthog-go? Same semantics as `verifyRustSdk`. */
+  verifyGoSdk?: (path: string) => boolean;
 };
 
 const NO_PROBES: ProjectProbes = {
@@ -251,12 +265,16 @@ function classifyProject(
   p: AgenticDetectionReport['projects'][number],
   probes: ProjectProbes,
 ): DetectedProject {
-  // For rust the deterministic Cargo.toml read overrides the agent's single
-  // hasPostHog boolean, which any unrelated PostHog dependency can satisfy.
-  const hasPostHog =
-    p.targetId === 'rust' && probes.verifyRustSdk
-      ? probes.verifyRustSdk(p.path)
-      : p.hasPostHog;
+  // For the native-binary variants the deterministic manifest read overrides
+  // the agent's single hasPostHog boolean, which any unrelated PostHog
+  // dependency can satisfy.
+  const sdkVerifier =
+    p.targetId === 'rust'
+      ? probes.verifyRustSdk
+      : p.targetId === 'go'
+      ? probes.verifyGoSdk
+      : undefined;
+  const hasPostHog = sdkVerifier ? sdkVerifier(p.path) : p.hasPostHog;
   const base = {
     path: p.path,
     framework: p.framework,
@@ -302,11 +320,10 @@ function classifyProject(
   }
 
   if (!hasPostHog) {
-    // The wizard's default flow can't install the Rust SDK, so don't point
-    // users at it for that stack.
-    const install = MANUAL_SDK_VARIANTS.includes(p.targetId)
-      ? 'add the posthog-rs crate first'
-      : 'run `npx @posthog/wizard` first';
+    // The wizard's default flow can't install the Go/Rust SDKs, so don't
+    // point users at it for those stacks.
+    const install =
+      MANUAL_SDK_INSTALL[p.targetId] ?? 'run `npx @posthog/wizard` first';
     return {
       ...base,
       variant: p.targetId,
@@ -363,5 +380,6 @@ export async function detectSourceMapsProjects(
     hasBuildTarget: (path) => projectHasBuildTarget(session.installDir, path),
     isExpoProject: (path) => projectHasExpo(session.installDir, path),
     verifyRustSdk: rustSdkVerifier(session.installDir),
+    verifyGoSdk: goSdkVerifier(session.installDir),
   });
 }

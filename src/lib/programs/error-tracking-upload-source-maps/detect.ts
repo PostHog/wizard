@@ -60,11 +60,9 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
 };
 
 /**
- * Variants the wizard can wire up source-map upload for automatically. Go is
- * recognised but not yet automatable, so the agentic picker treats it as
- * non-instrumentable. Rust uploads native debug symbols
- * (`posthog-cli symbol-sets upload`) instead of source maps, but the wiring
- * is the same shape.
+ * Variants the wizard can wire up source-map upload for automatically. Go and
+ * Rust upload native debug symbols (`posthog-cli symbol-sets upload`) instead
+ * of source maps, but the wiring is the same shape.
  *
  * Invariant: every variant listed here must have a published
  * `error-tracking-upload-source-maps-<variant>` skill in context-mill —
@@ -76,6 +74,7 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'ios',
   'react-native',
   'flutter',
+  'go',
   'rust',
   'web',
   'nextjs',
@@ -97,17 +96,28 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
  * or local dependency to fall back to when the post-build step invokes the CLI.
  */
 export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
-  new Set(['ios', 'android', 'react-native', 'flutter', 'rust']);
+  new Set(['ios', 'android', 'react-native', 'flutter', 'go', 'rust']);
 
 /**
  * Automatable variants whose SDK the wizard's default flow cannot install —
- * remediation for a missing SDK is a manual install (posthog-rs), not
- * `npx @posthog/wizard`. Drives the missing-SDK copy in the picker.
+ * remediation for a missing SDK is a manual install (posthog-go /
+ * posthog-rs), not `npx @posthog/wizard`. Drives the missing-SDK copy in the
+ * picker and the classifier.
  */
-export const MANUAL_SDK_VARIANTS: readonly SkillVariant[] = ['rust'];
+export const MANUAL_SDK_INSTALL: Partial<Record<SkillVariant, string>> = {
+  go: 'add the posthog-go module first',
+  rust: 'add the posthog-rs crate first',
+};
+
+export const MANUAL_SDK_VARIANTS: readonly SkillVariant[] = Object.keys(
+  MANUAL_SDK_INSTALL,
+) as SkillVariant[];
 
 /** Dependency string that identifies the Rust SDK in Cargo.toml. */
 export const RUST_SDK_CRATE = 'posthog-rs';
+
+/** Module path that identifies the Go SDK in go.mod. */
+export const GO_SDK_MODULE = 'github.com/posthog/posthog-go';
 
 const POSTHOG_SDKS = new Set([
   'posthog-js',
@@ -147,8 +157,8 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
       'The agent could not find a PostHog SDK in your project. ' +
       'Source map upload requires the SDK to already be installed so it can ' +
       'report errors. Run `npx @posthog/wizard` first to install the SDK ' +
-      '(for Rust, add the posthog-rs crate by hand first — the wizard ' +
-      'cannot install it for that stack yet).',
+      '(for Go and Rust, add posthog-go / posthog-rs by hand first — the ' +
+      'wizard cannot install the SDK for those stacks yet).',
     docsUrl: 'https://posthog.com/docs/error-tracking',
   },
   {
