@@ -44,21 +44,10 @@ export const POSTHOG_PRESENT_KEY = 'postHogPresent';
  */
 export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
 
-/**
- * frameworkContext key holding the tools this codebase uses that are worth
- * promoting in the connected-tools ask. Self-driving's own key, not the
- * warehouse program's `DETECTED_WAREHOUSE_SOURCES_KEY`: the integration program
- * reads that one to build its prompt, and the integrate-run phase inherits a
- * copy of this frameworkContext — so writing there would silently rewrite the
- * integration agent's prompt on every self-driving run that installs PostHog
- * first. (Its outro is safe: a composed run returns before `buildOutroData`.)
- */
+/** Self-driving's own detected-tools key — not the warehouse one, which the integration program reads. */
 export const SELF_DRIVING_DETECTED_TOOLS_KEY = 'selfDrivingDetectedTools';
 
-/**
- * Read the detected tools out of frameworkContext. Single accessor shared by
- * the detect step and the prompt builder so the key + cast live in one place.
- */
+/** Read the detected tools out of frameworkContext. */
 export function getSelfDrivingDetectedTools(
   session: WizardSession,
 ): DetectedSource[] {
@@ -323,33 +312,7 @@ export function detectSelfDrivingPrerequisites(
   detectConnectedTools(installDir, setFrameworkContext);
 }
 
-/**
- * Source kinds worth promoting in the connected-tools ask. The shared scanner
- * matches the whole warehouse catalog (databases, payments, LLM vendors, ad
- * platforms) and most of that has nothing to do with STEP 5: unfiltered, a
- * routine repo leads the issue-tracker ask with Postgres (matched on
- * `DATABASE_URL`), Stripe and OpenAI — the wall of irrelevant options this is
- * supposed to remove.
- *
- * The intersection of two lists, computed rather than guessed: the tools the
- * connected-tools ask actually offers (the `options` array in context-mill's
- * `self-driving/references/5-connected-tools.md`) and the kinds this repo can
- * detect (`SOURCE_DETECTORS`). Promoting anything outside that intersection is
- * wasted at best and misleading at worst — a tool the ask never lists can't be
- * picked, so pointing the agent at it sends it after a source it can't create.
- *
- * The ask's remaining options are deliberately absent because no detector
- * matches them (Freshservice, Dixa, pganalyze, SonarQube, Semgrep, Rapid7
- * InsightVM, Featurebase, Frill, Aha, UserVoice, AskNicely, Retently,
- * Appfigures, AppFollow, Judge.me). They stay offered by the skill; they just
- * never get promoted, which is the safe direction.
- *
- * A shadow list of both sources, and the guard test only covers one of them —
- * it catches a kind that leaves `SOURCE_DETECTORS`, but nothing here can see the
- * skill's catalog change in another repo. So when step 5's option list grows,
- * reconcile against it. If that becomes a habit, the fix is a field on
- * `SourceDetector` rather than a third copy of this list.
- */
+/** Step 5's ask options intersected with `SOURCE_DETECTORS` — reconcile when the skill's catalog grows. */
 export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   // Issue trackers / code hosts
   'Github',
@@ -380,17 +343,7 @@ export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   'GoogleSearchConsole',
 ]);
 
-/**
- * Scan the codebase for the tools it uses that the inbox can connect (Sentry,
- * Linear, GitHub, Zendesk, …) so STEP 5's connected-tools ask can surface those
- * first instead of dumping the full source catalog on the user. Stashed under
- * self-driving's own `SELF_DRIVING_DETECTED_TOOLS_KEY` and read back with
- * `getSelfDrivingDetectedTools`.
- *
- * Best-effort: the connected-tools ask degrades to the skill's default
- * ordering when nothing is detected, so a scan failure must never break the
- * surrounding prerequisite check.
- */
+/** Scan for inbox-connectable tools so STEP 5 can surface them first. Best-effort — never blocks detection. */
 function detectConnectedTools(
   installDir: string,
   setFrameworkContext: (key: string, value: unknown) => void,
@@ -400,12 +353,7 @@ function detectConnectedTools(
       SELF_DRIVING_TOOL_KINDS.has(s.kind),
     );
 
-    // Tagged on every run that scans, including the empty case — without the
-    // zero rows there is no way to tell "the scan found nothing" from "this code
-    // path never ran", which is the first thing to check when the ask looks
-    // unprioritised. Deliberately NOT the `warehouse sources detected` event
-    // the integration flow emits: that metric's denominator is integration
-    // runs, and firing it here would fold self-driving runs into it.
+    // Tagged even at zero, so "found nothing" is distinguishable from "never ran".
     analytics.setTag('connected_tools_detected_count', tools.length);
     if (tools.length === 0) return;
 
@@ -415,9 +363,7 @@ function detectConnectedTools(
     );
     setFrameworkContext(SELF_DRIVING_DETECTED_TOOLS_KEY, tools);
   } catch (error) {
-    // -1 rather than nothing: an absent tag would be indistinguishable from a
-    // build that never ran this scan, which is what the count is here to rule
-    // out. The captured exception carries the why.
+    // -1, not absent, so a failed scan stays distinguishable from one that never ran.
     analytics.setTag('connected_tools_detected_count', -1);
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
