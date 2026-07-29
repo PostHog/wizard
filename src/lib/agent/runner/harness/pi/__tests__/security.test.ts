@@ -299,9 +299,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     ).toEqual({});
   });
 
-  test('with triageAuth, a triage false_positive verdict unblocks the write', async () => {
+  test('with a triage provider, a false_positive verdict unblocks the write', async () => {
     const { factory, state } = createSecurityExtension({
-      triageAuth: { baseURL: 'https://gw.example', authToken: 'tok' },
+      triageProvider: () => Promise.resolve('false_positive'),
     });
     const { pi, handlers } = fakePi();
     factory(pi);

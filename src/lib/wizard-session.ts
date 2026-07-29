@@ -148,6 +148,12 @@ export type AskAnswers = Record<string, string | string[]>;
 export interface PendingQuestion {
   id: string;
   questions: AskQuestion[];
+  /**
+   * UTC ISO 8601 timestamp of when the ask was created. Published on the
+   * task stream as `pending_input.asked_at` so the web app can age the
+   * prompt; stable across pushes for the lifetime of one ask.
+   */
+  askedAt?: string;
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
   /**
@@ -191,6 +197,14 @@ export interface WizardSession {
   yaraReport: boolean;
   projectId?: number;
   noTelemetry: boolean;
+
+  /**
+   * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
+   * into the authenticated project's AI Observability tab. Dev/test builds
+   * only — the flag is undeclared in published builds so this stays `false`
+   * there. See `src/lib/agent/aio-capture.ts`.
+   */
+  captureAio: boolean;
 
   /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
   harness?: Harness;
@@ -364,6 +378,7 @@ export function buildSession(args: {
   sequence?: Sequence;
   model?: string;
   integrate?: boolean;
+  captureAio?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -380,6 +395,7 @@ export function buildSession(args: {
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    captureAio: args.captureAio ?? false,
     harness: args.harness,
     sequence: args.sequence,
     model: args.model,

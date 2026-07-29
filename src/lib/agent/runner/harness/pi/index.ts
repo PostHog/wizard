@@ -22,14 +22,13 @@ import {
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
-import { piRuntimeNotes } from './runtime-notes';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
-import { getWizardCommandments } from '@lib/agent/commandments';
-import { piProgramGuidance } from './program-guidance';
+import { assembleCommandments } from '../../switchboard/commandments';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { createAioCapture } from '@lib/agent/aio-capture';
 import type {
   AgentResult,
   AgentHarness,
@@ -187,6 +186,13 @@ export const piBackend: AgentHarness = {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;
     const modelId = inputs.model;
 
+    const capture = createAioCapture({
+      enabled: session.captureAio,
+      projectApiKey: boot.credentials.projectApiKey,
+      apiHost: boot.credentials.host.apiHost,
+      runTags: boot.wizardMetadata,
+    });
+
     // Init banner (parity #5).
     getUI().log.step('Initializing Wizard agent...');
     getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
@@ -233,7 +239,7 @@ export const piBackend: AgentHarness = {
 
       // the claude-agent-sdk path. The provider spec is shared with the
       // orchestrator's per-task sessions (gateway.ts).
-      const { provider, caps, gatewayUrl } = buildGatewayProvider({
+      const { provider, caps } = buildGatewayProvider({
         gatewayUrl: boot.credentials.host.gatewayUrl,
         accessToken: boot.credentials.accessToken,
         wizardMetadata: boot.wizardMetadata,
@@ -269,14 +275,7 @@ export const piBackend: AgentHarness = {
       const security = createSecurityExtension({
         disallowedTools: programConfig.disallowedTools,
         getWizardAskPending: () => askState.pending,
-        // Triage speaks the Anthropic messages API (it appends /v1/messages),
-        // so it gets the bare gateway URL regardless of which API shape the
-        // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
-        // auths programmatically) and triage would silently no-op.
-        triageAuth: {
-          baseURL: gatewayUrl,
-          authToken: boot.credentials.accessToken,
-        },
+        triageProvider: boot.triageProvider,
         // Where pi's bash runs; the rm allowance is confined to this tree.
         workingDirectory: session.installDir,
       });
@@ -314,16 +313,23 @@ export const piBackend: AgentHarness = {
         mcpInstructions = await instructionsPromise;
       } catch (err) {
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
+        analytics.wizardCapture('mcp setup failed', {
+          harness: 'pi',
+          scope: 'run',
+          error: String(err).slice(0, 300),
+        });
       }
 
       const resourceLoader = new DefaultResourceLoader({
         cwd: session.installDir,
         agentDir: getAgentDir(),
         systemPrompt:
-          getWizardCommandments() +
-          '\n\n' +
-          piRuntimeNotes(Sequence.linear, { bash: true, posthogMcp: true }) +
-          piProgramGuidance(programConfig.id) +
+          assembleCommandments({
+            program: programConfig.id,
+            sequence: Sequence.linear,
+            harness: Harness.pi,
+            caps: { bash: true, posthogMcp: true },
+          }) +
           '\n' +
           piMcpContext(boot, mcpInstructions),
         noExtensions: true,
@@ -374,13 +380,7 @@ export const piBackend: AgentHarness = {
         ...createWizardPiTools({
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
-          // Same gateway auth the security extension uses (line ~276) so a
-          // freshly installed skill is triaged, not blocked untriaged. pi
-          // never sets ANTHROPIC_* env, so this must be passed explicitly.
-          triageAuth: {
-            baseURL: gatewayUrl,
-            authToken: boot.credentials.accessToken,
-          },
+          triageProvider: boot.triageProvider,
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the
@@ -437,6 +437,11 @@ export const piBackend: AgentHarness = {
       // anthropic path's log shape (assistant turns + tool I/O) and driving the
       // single run spinner with one stable status at a time (no overlap).
       const unsubscribe = agentSession.subscribe((event) => {
+        // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
+        // before the role guard so the module's own filter (assistant-only)
+        // stays the single source of truth for what's captured.
+        capture.captureFromPiMessageEndEvent(event);
+
         switch (event.type) {
           case 'message_end': {
             // User prompts also emit message_end; only assistant turns count.
@@ -490,6 +495,12 @@ export const piBackend: AgentHarness = {
             break;
         }
       });
+
+      // Seed AIO capture with the initial prompt so the first assistant
+      // turn's `$ai_input` includes it — pi's subscribe stream doesn't emit
+      // a message_end for the initial prompt, only for tool_result user
+      // turns that follow.
+      capture.setInitialPrompt(prompt);
 
       try {
         // Non-streaming: resolves when the agent run completes. Throws if no

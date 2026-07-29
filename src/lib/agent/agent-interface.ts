@@ -12,7 +12,10 @@ import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { runtimeEnv } from '@env';
+import type { AioCapture } from '@lib/agent/aio-capture';
 import {
+  Harness,
+  Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   wizardUserAgentForProgram,
@@ -33,7 +36,8 @@ import {
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
-import { getWizardCommandments } from './commandments';
+import type { LLMProvider } from '@posthog/warlock';
+import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
@@ -211,6 +215,12 @@ export type AgentConfig = {
    * tools register.
    */
   orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
+  /**
+   * Optional AIO capture — mirrors each assistant SDK message into the
+   * authenticated project as `$ai_generation`. No-op instance when
+   * `--capture-aio` is off. Constructed once per run by the harness.
+   */
+  capture?: AioCapture;
 };
 
 /**
@@ -284,6 +294,8 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  /** The run's OAuth access token — the MCP config resolves it in the child. */
+  posthogApiKey: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -304,6 +316,14 @@ type AgentRunConfig = {
    * not touch other programs' linear runs.
    */
   suppressTaskRender?: boolean;
+  /** AIO capture, forwarded from AgentConfig. Undefined when disabled. */
+  capture?: AioCapture;
+  /** Scan-triage classifier, built from this run's gateway auth. */
+  triageProvider: LLMProvider;
+  /** Program id, for the program-axis commandments. */
+  program?: string;
+  /** Resolved sequence, for the sequence-axis commandments. */
+  sequence: Sequence;
 };
 
 /**
@@ -504,6 +524,13 @@ export async function initializeAgent(
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
 
+    // Same values the env vars above carry, handed over explicitly so triage
+    // never has to read them back out of the environment.
+    const triageProvider = createTriageLLMProvider(
+      { baseURL: gatewayUrl, authToken: config.posthogApiKey },
+      Harness.anthropic,
+    );
+
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
@@ -545,7 +572,9 @@ export async function initializeAgent(
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
-          Authorization: `Bearer ${config.posthogApiKey}`,
+          // Env reference, not the token: the SDK puts this config on the
+          // spawned CLI's argv, where `ps` shows it to any local process.
+          Authorization: 'Bearer ${POSTHOG_MCP_TOKEN}',
           // Tag the UA with the running program so the backend can attribute what this
           // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
           'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
@@ -569,6 +598,7 @@ export async function initializeAgent(
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
+      triageProvider,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -580,12 +610,18 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model,
+      posthogApiKey: config.posthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
+      capture: config.capture,
+      triageProvider,
+      program: config.integrationLabel,
+      // A queue context is present only on a task run; that is the sequence.
+      sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
     };
 
     logToFile('Agent config:', {
@@ -648,6 +684,8 @@ export async function runAgent(
     emitStepEvents?: boolean;
     /** Request the end-of-run reflection remark. Defaults to true. */
     requestRemark?: boolean;
+    /** Scan-triage classifier resolved in bootstrap. Absent → rebuilt from the gateway auth on the env. */
+    triageProvider?: LLMProvider;
     /**
      * Extra properties attached to this run's `agent completed` / `agent
      * aborted` events (e.g. the orchestrator's task type and id).
@@ -807,10 +845,7 @@ export async function runAgent(
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
-    // LLM provider for warlock triage (reuses the gateway auth set on
-    // process.env by initializeAgent). Undefined if auth is missing — hooks
-    // then skip triage and fail closed.
-    const triageProvider = createTriageLLMProvider();
+    const triageProvider = agentConfig.triageProvider;
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
@@ -830,6 +865,13 @@ export async function runAgent(
       logToFile('[warlock] scanning disabled for run (local env override)');
       analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
     }
+
+    // Seed the AIO capture with the initial prompt so the first assistant
+    // generation carries `$ai_input`. The prompt goes to the SDK subprocess
+    // via `createPromptStream()` below and is never echoed on the return
+    // stream, so this is the only place we can capture it. No-op when
+    // capture is disabled.
+    agentConfig.capture?.setInitialPrompt(prompt);
 
     const response = query({
       prompt: createPromptStream(),
@@ -930,6 +972,9 @@ export async function runAgent(
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+          // The MCP config resolves this in the child; sending the value would
+          // put it on the CLI's argv.
+          POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
           // (audit programs call audit_seed_checks on turn 1, integration
@@ -959,9 +1004,14 @@ export async function runAgent(
         systemPrompt: {
           type: 'preset',
           preset: 'claude_code',
-          // Append wizard-wide commandments rather than replacing
-          // the preset so we keep default Claude Code behaviors.
-          append: getWizardCommandments(),
+          // Append the run's commandments rather than replacing the preset so
+          // we keep default Claude Code behaviors. An orchestrator context is
+          // present only on a task run — that is what picks the sequence.
+          append: assembleCommandments({
+            program: agentConfig.program,
+            sequence: agentConfig.sequence,
+            harness: Harness.anthropic,
+          }),
         },
         tools: { type: 'preset', preset: 'claude_code' },
         // Capture stderr from CLI subprocess for debugging
@@ -1024,6 +1074,12 @@ export async function runAgent(
         }
         loggedInitialContext = true;
       }
+
+      // Mirror the assistant turn into the authenticated project's AIO tab.
+      // No-op when `--capture-aio` is off (dev/test builds only). Fire-and-
+      // forget: failures are debug-logged inside the module and never touch
+      // the stream loop.
+      agentConfig.capture?.captureFromAnthropicSDKMessage(message);
 
       // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
       // output for post-success cleanup errors while still logging them to file

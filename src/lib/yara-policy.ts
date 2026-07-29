@@ -22,15 +22,18 @@ const SEVERITY_RANK: Record<string, number> = {
   low: 1,
 };
 
-/** Severities that end the session on their own, whatever the rule asks for. */
+/** Severities that end the session. Critical only — nothing below it is worth killing a run over. */
 const TERMINAL_SEVERITIES = new Set(['critical']);
 
-/** The match that ends the session rather than just warning. */
+/**
+ * The match that ends the session rather than just warning. Severity alone
+ * decides: a rule's `action: 'block'` is a recommendation about the *operation*
+ * (PreToolUse still refuses the command), not a licence to end the run. Medium
+ * and high `block` rules fire on first-party content often enough that
+ * terminating on them costs more than it prevents.
+ */
 export function isTerminalMatch(match: ScanMatch): boolean {
-  return (
-    TERMINAL_SEVERITIES.has(match.metadata.severity ?? '') ||
-    match.metadata.action === 'block'
-  );
+  return TERMINAL_SEVERITIES.has(match.metadata.severity ?? '');
 }
 
 /** Return the highest-severity match from a list of matches. */

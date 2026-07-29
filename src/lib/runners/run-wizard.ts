@@ -102,6 +102,7 @@ export function runWizard(
         sequence: options.sequence as Sequence | undefined,
         model: options.model as string | undefined,
         integrate: options.integrate as boolean | undefined,
+        captureAio: options.captureAio as boolean | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {

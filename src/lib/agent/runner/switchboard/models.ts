@@ -17,6 +17,8 @@ import {
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
+  HAIKU_TRIAGE_MODEL,
+  Harness,
 } from '@lib/constants';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
@@ -93,6 +95,21 @@ export function requireKnownModel(
  */
 function defaultCaps(modelId: string): ModelCapabilities {
   return { reasoning: !modelId.startsWith('openai/') };
+}
+
+/**
+ * Scan-triage classifier per harness: the cheapest tier of the line that harness
+ * already speaks. Undated ids on purpose — triage is a boolean classifier, so it
+ * should follow the current release rather than pin one, and these are not
+ * dispatchable agent models (absent from MODEL_CAPABILITIES by design).
+ */
+export const TRIAGE_MODELS: Record<Harness, string> = {
+  [Harness.anthropic]: HAIKU_TRIAGE_MODEL,
+  [Harness.pi]: GPT5_6_LUNA_MODEL,
+};
+
+export function triageModelFor(harness: Harness): string {
+  return TRIAGE_MODELS[harness];
 }
 
 /**

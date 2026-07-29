@@ -59,6 +59,10 @@ const NPX_TOOLS = new Set([
 ]);
 
 const PIP_SUBCOMMANDS = ['install', 'uninstall', 'show', 'list', 'index'];
+/** `.venv/bin/pip`, `venv/bin/python3` — a venv-local interpreter, judged as the tool it is. */
+const VENV_BIN = /^[\w./-]*\/bin\/(pip3?|python3?)$/;
+/** `.venv/bin/ruff`, `venv/bin/mypy` — a tool installed into the venv. Only lint/format tools qualify. */
+const VENV_TOOL = /^[\w./-]*\/bin\/([\w.-]+)$/;
 const BUNDLE_SUBCOMMANDS = ['install', 'add', 'remove', 'update', 'show'];
 const MAVEN_GOALS = [
   'install',
@@ -84,6 +88,9 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
+  // Materializes the Xcode project from project.yml so xcodebuild can verify —
+  // build-equivalent risk (runs on the project's own spec).
+  xcodegen: ['generate'],
 };
 
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
@@ -99,9 +106,11 @@ const DANGEROUS_OPERATORS = /[;`$()]/;
 const ALLOWED_TOOLS_SUMMARY =
   'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
   'npx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
+  'python/python3 (-m venv <dir>, -m pip <install|...>, -m compileall <files>, -m <lint tool>, manage.py check), ' +
+  'any <venv>/bin/pip|python plus <venv>/bin/<lint tool>, ' +
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
-  'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
+  'xcodegen (generate), xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
   'mvn (install|compile|package|verify|dependency:tree).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
@@ -257,21 +266,54 @@ function xcodebuildDecision(
 /** Grammar decision for a single operator-free, pipe-free command. */
 function commandDecision(command: string): BashFenceDecision {
   const parts = command.split(/\s+/).filter(Boolean);
-  const bin = parts[0];
-  if (!bin) return denyCommand(command, ALLOWED_TOOLS_SUMMARY);
+  const raw = parts[0];
+  if (!raw) return denyCommand(command, ALLOWED_TOOLS_SUMMARY);
+  // A venv-local interpreter (`.venv/bin/pip`, `venv/bin/python3`) is the
+  // sanctioned way to install on Python — judge it as the tool it is.
+  const bin = raw.match(VENV_BIN)?.[1] ?? raw;
+  // A lint/format tool installed into the venv is reached by its venv path;
+  // anything else under `<venv>/bin/` stays denied (it would be arbitrary exec).
+  const venvTool = raw === bin ? raw.match(VENV_TOOL)?.[1] : undefined;
+  if (venvTool && isLintingTool(venvTool)) return { allowed: true };
   if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command);
   if (bin === 'npx') return npxDecision(parts, command);
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
   if (MAVEN_MANAGERS.has(bin)) return mavenDecision(parts, command);
   if (bin === 'xcodebuild') return xcodebuildDecision(parts, command);
-  // Django's system check — the one sanctioned `python` shape; bare python
-  // stays denied (python -c is arbitrary code).
-  if (
-    (bin === 'python' || bin === 'python3') &&
-    parts[1] === 'manage.py' &&
-    parts[2] === 'check'
-  ) {
-    return { allowed: true };
+  if (bin === 'python' || bin === 'python3') {
+    // Django's system check.
+    if (parts[1] === 'manage.py' && parts[2] === 'check') {
+      return { allowed: true };
+    }
+    // Creating the venv the runtime notes ask for, and installing through it.
+    // `python -c` stays denied — that is arbitrary code.
+    if (parts[1] === '-m' && parts[2] === 'venv' && parts[3]) {
+      return { allowed: true };
+    }
+    if (
+      parts[1] === '-m' &&
+      parts[2] === 'pip' &&
+      parts[3] &&
+      PIP_SUBCOMMANDS.includes(parts[3])
+    ) {
+      return { allowed: true };
+    }
+    // `-m compileall` is Python's typecheck-equivalent — the verify step has no
+    // other way to prove the edited files parse. It byte-compiles without
+    // importing them, so it never runs project code.
+    if (parts[1] === '-m' && parts[2] === 'compileall') {
+      return { allowed: true };
+    }
+    // `python -m <lint tool>` — how ruff/black/mypy are invoked inside a venv.
+    if (parts[1] === '-m' && parts[2] && isLintingTool(parts[2])) {
+      return { allowed: true };
+    }
+    return denyCommand(
+      command,
+      `Allowed ${bin} shapes: -m venv <dir>, -m pip <${PIP_SUBCOMMANDS.join(
+        '|',
+      )}>, -m compileall <files>, -m <lint tool>, manage.py check.`,
+    );
   }
   if (bin === 'uv' && parts[1] === 'pip') {
     if (parts[2] && PIP_SUBCOMMANDS.includes(parts[2]))
