@@ -8,7 +8,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
 import { VERSION } from '@lib/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
@@ -130,6 +130,18 @@ export class Analytics {
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.tags.run_surface = RUN_SURFACE;
+
+    // The build this run came from. Already sent as a flag-evaluation person
+    // property; tagging it makes every event attributable to a release, so a
+    // regression can be bounded to the versions that carry it.
+    this.tags.version = VERSION;
+
+    // Cloud runs only: the task run that owns the sandbox. Without these the
+    // wizard's events and the run that launched it are two unrelated streams,
+    // since run_id above is minted per process and never leaves the wizard.
+    // Left unset for local runs so the properties stay absent rather than null.
+    if (TASK_RUN_ID) this.tags.task_run_id = TASK_RUN_ID;
+    if (TASK_ID) this.tags.task_id = TASK_ID;
 
     this.anonymousId = uuidv4();
 

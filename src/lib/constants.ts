@@ -21,6 +21,9 @@ export const SONNET_5_MODEL = 'claude-sonnet-5';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
+export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
+
 /**
  * Larger model for planning / hard work. Named the switchboard could route to
  * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
@@ -282,10 +285,10 @@ export const AGENTIC_DETECTION_TIMEOUT_MS = 60_000;
 /**
  * Timeout for the OAuth authorization flow (ms).
  *
- * Mirrors the server-side authorization-code expiry
- * (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes). Once the code expires the
- * callback is dead and the token exchange can no longer succeed, so we stop
- * waiting at the same moment and prompt the user to re-run rather than letting
- * them complete a login that would fail.
+ * How long the user has to complete the browser login. The authorization
+ * code is minted at approval and exchanged immediately on callback, so the
+ * server-side code expiry (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes)
+ * bounds only the approval→exchange gap — manual-paste users have 5 minutes
+ * from approval to submit the code — not how long this window may stay open.
  */
-export const OAUTH_TIMEOUT_MS = 300_000;
+export const OAUTH_TIMEOUT_MS = 1_800_000;

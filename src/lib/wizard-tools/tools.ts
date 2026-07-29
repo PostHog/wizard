@@ -179,16 +179,22 @@ async function downloadWithRetry(
   return new Uint8Array(await resp.arrayBuffer());
 }
 
+/** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
+export interface SkillInstallOptions {
+  /** Base directory override, e.g. `.posthog/skills`. Default `.claude/skills`. */
+  skillsRoot?: string;
+  /** Scan-triage classifier. `undefined` = no gateway, so a flagged skill fails closed. */
+  triage: LLMProvider | undefined;
+}
+
 /**
  * Download and extract a skill.
  * By default installs to `<installDir>/.claude/skills/<id>/`.
- * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
  */
 export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
-  skillsRoot?: string,
-  llmProvider?: LLMProvider,
+  { skillsRoot, triage }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
@@ -211,7 +217,7 @@ export async function downloadSkill(
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
     // must not skip it.
-    const poisonReason = await scanInstalledSkill(skillDir, llmProvider);
+    const poisonReason = await scanInstalledSkill(skillDir, triage);
     if (poisonReason) {
       fs.rmSync(skillDir, { recursive: true, force: true });
       logToFile(`downloadSkill: ${poisonReason}`);
@@ -270,8 +276,7 @@ export async function installSkillById(
   skillId: string,
   installDir: string,
   skillsBaseUrl: string,
-  skillsRoot?: string,
-  llmProvider?: LLMProvider,
+  options: SkillInstallOptions,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };
@@ -281,18 +286,13 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = await downloadSkill(
-    skill,
-    installDir,
-    skillsRoot,
-    llmProvider,
-  );
+  const result = await downloadSkill(skill, installDir, options);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
 
-  const relPath = skillsRoot
-    ? `${skillsRoot}/${skillId}`
+  const relPath = options.skillsRoot
+    ? `${options.skillsRoot}/${skillId}`
     : `.claude/skills/${skillId}`;
   return { kind: 'ok', path: relPath };
 }

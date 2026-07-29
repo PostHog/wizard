@@ -20,11 +20,11 @@ import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import {
+  Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
-import { piRuntimeNotes } from './runtime-notes';
 import {
   queueTools,
   renderToolInventory,
@@ -36,6 +36,7 @@ import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
   buildScrubbedEnv,
@@ -43,6 +44,7 @@ import {
   lastStatusLine,
   withMode,
 } from './index';
+import { createAioCapture } from '@lib/agent/aio-capture';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -124,6 +126,7 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   const {
     session,
+    programConfig,
     boot,
     prompt,
     spinner,
@@ -140,6 +143,13 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   } = inputs;
 
   if (spinnerMessage) spinner.start(spinnerMessage);
+
+  const capture = createAioCapture({
+    enabled: session.captureAio,
+    projectApiKey: boot.credentials.projectApiKey,
+    apiHost: boot.credentials.host.apiHost,
+    runTags: boot.wizardMetadata,
+  });
 
   const startTime = Date.now();
   const signals = new AgentOutputSignals();
@@ -176,7 +186,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const { provider, caps, gatewayUrl } = buildGatewayProvider({
+    const { provider, caps } = buildGatewayProvider({
       gatewayUrl: boot.credentials.host.gatewayUrl,
       accessToken: boot.credentials.accessToken,
       wizardMetadata: boot.wizardMetadata,
@@ -201,10 +211,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
-      triageAuth: {
-        baseURL: gatewayUrl,
-        authToken: boot.credentials.accessToken,
-      },
+      triageProvider: boot.triageProvider,
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
@@ -227,23 +234,28 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       mcpCleanup = mcp.cleanup;
       posthogMcp = true;
     } catch (err) {
+      // Silent here reads as a task failure minutes later: dashboard and report
+      // need `posthog_exec` and can only skip or fail without it.
       logToFile(`[pi-task] PostHog MCP setup skipped: ${String(err)}`);
+      analytics.wizardCapture('mcp setup failed', {
+        harness: 'pi',
+        scope: 'task',
+        error: String(err).slice(0, 300),
+      });
     }
 
     const codingTools = allowedPiCodingTools(allowedTools);
     const orchestratorTools = allowedOrchestratorTools(disallowedTools);
 
-    const { getWizardCommandments } = await import('@lib/agent/commandments');
     const resourceLoader = new DefaultResourceLoader({
       cwd: session.installDir,
       agentDir: getAgentDir(),
-      systemPrompt:
-        getWizardCommandments() +
-        '\n' +
-        piRuntimeNotes(Sequence.orchestrator, {
-          bash: codingTools.has('bash'),
-          posthogMcp,
-        }),
+      systemPrompt: assembleCommandments({
+        program: programConfig.id,
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
+        caps: { bash: codingTools.has('bash'), posthogMcp },
+      }),
       noExtensions: true,
       noSkills: true,
       noContextFiles: true,
@@ -282,6 +294,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const wizardTools = createWizardPiTools({
       workingDirectory: dir,
       skillsBaseUrl: boot.skillsBaseUrl,
+      triageProvider: boot.triageProvider,
     }).filter((t) =>
       ['check_env_keys', 'set_env_values', 'detect_package_manager'].includes(
         t.name,
@@ -316,6 +329,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
     const unsubscribe = agentSession.subscribe((event) => {
+      // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
+      // before the role guard so the module's own filter is authoritative.
+      capture.captureFromPiMessageEndEvent(event);
+
       switch (event.type) {
         case 'message_end': {
           // User prompts also emit message_end; only assistant turns count.
@@ -355,6 +372,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           break;
       }
     });
+
+    // Seed AIO capture with this task's prompt — includes any handoff data
+    // from prior tasks (the orchestrator bakes it into the prompt string
+    // before it reaches this call site).
+    capture.setInitialPrompt(taskPrompt);
 
     try {
       await agentSession.prompt(taskPrompt);

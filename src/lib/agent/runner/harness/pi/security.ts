@@ -30,10 +30,6 @@ import {
   type RepeatBlockTracker,
 } from '@lib/yara-hooks';
 import { scanVerdict, type ScanContext } from '@lib/yara-policy';
-import {
-  createTriageLLMProvider,
-  type TriageGatewayAuth,
-} from '@lib/agent/triage-provider';
 import { logToFile } from '@utils/debug';
 
 /** warlock ScanMatch → the report shape `recordExternalScan` expects. */
@@ -53,13 +49,8 @@ export interface ToolGateContext {
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
-  /**
-   * Gateway auth for the LLM triage pass. pi auths the gateway
-   * programmatically and never sets ANTHROPIC_BASE_URL/AUTH_TOKEN on the env,
-   * so without this triage silently no-ops and every flagged match is acted
-   * on (fail-closed, but no false-positive filtering).
-   */
-  triageAuth?: TriageGatewayAuth;
+  /** Scan-triage classifier, resolved once in bootstrap. Absent → every flagged match is acted on. */
+  triageProvider?: LLMProvider;
   /**
    * Per-run tracker of YARA-blocked payloads. When the agent retries content
    * that was already blocked, the block reason escalates ("change the code,
@@ -374,7 +365,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
 
   // One triage provider per extension. Undefined (no gateway auth) means
   // triage is skipped and every flagged match is acted on — fail closed.
-  const llmProvider = createTriageLLMProvider(ctx.triageAuth);
+  const llmProvider = ctx.triageProvider;
 
   // One tracker per extension = per (sub)agent session, so an identical
   // payload retried after a block gets the escalating reason.

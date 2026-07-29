@@ -119,6 +119,8 @@ describe('CLI argument parsing', () => {
     'POSTHOG_WIZARD_CI',
     'POSTHOG_WIZARD_API_KEY',
     'POSTHOG_WIZARD_INSTALL_DIR',
+    'POSTHOG_TASK_RUN_ID',
+    'POSTHOG_TASK_ID',
   ];
   const clearWizardEnv = () => {
     for (const key of WIZARD_ENV_KEYS) delete process.env[key];
@@ -475,6 +477,25 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_env_key');
+    });
+
+    test('accepts the task-run identity the sandbox exports', async () => {
+      // These two are read straight from the environment, never as CLI options,
+      // and their names must stay outside the POSTHOG_WIZARD_ prefix for that to
+      // hold: `.env('POSTHOG_WIZARD')` turns every prefixed variable into an
+      // option name and `.strictOptions()` fails the run on one it doesn't know,
+      // so renaming them under the prefix would exit every cloud run before the
+      // wizard does any work.
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+      process.env.POSTHOG_TASK_RUN_ID = 'task-run-uuid';
+      process.env.POSTHOG_TASK_ID = 'task-uuid';
+
+      await runCLI([]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
     });
 
     test('CLI args override CI environment variables', async () => {
