@@ -152,11 +152,11 @@ function captureSwitchboardDecision(
   binding: ProgramBinding,
 ): void {
   const trace = ctx.trace ?? {};
-  // Unpinned orchestrator runs pick per-task models from frontmatter, so the binding fallback is not what runs.
+  // Unpinned orchestrator runs choose a model per task from the context-mill agent prompts; the orchestrator logs that map once the prompts load.
   const perTaskModel =
     binding.sequence === Sequence.orchestrator && trace.model === 'binding';
-  const model = perTaskModel ? 'per-task' : binding.model;
-  const modelSource = perTaskModel ? 'frontmatter' : trace.model;
+  const model = perTaskModel ? 'chosen-per-task' : binding.model;
+  const modelSource = perTaskModel ? 'agent-prompts' : trace.model;
   analytics.wizardCapture('switchboard resolved', {
     program: ctx.program,
     flag_self_driving_use_pi_harness:
