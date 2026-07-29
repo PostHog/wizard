@@ -19,7 +19,12 @@ import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
 import { analytics } from '@utils/analytics';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
-const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
+/** Manual source-map upload guide. Shown in the outro and on the
+ *  detect-screen dead ends so an unsupported/native stack still has a path
+ *  forward instead of an exit. */
+export const SOURCE_MAPS_DOCS_URL =
+  'https://posthog.com/docs/error-tracking/upload-source-maps';
+const DOCS_URL = SOURCE_MAPS_DOCS_URL;
 
 let postHogCliInstallAttempted = false;
 
