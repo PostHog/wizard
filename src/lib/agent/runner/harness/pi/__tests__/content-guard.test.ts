@@ -4,6 +4,7 @@ import {
   withContentGuard,
   pickEditContent,
   pickWriteContent,
+  type LeakFinding,
 } from '../content-guard';
 
 vi.mock('@utils/analytics', () => ({
@@ -48,11 +49,14 @@ function makeTool() {
   return { tool: { name: 'write', execute }, execute };
 }
 
-describe('withContentGuard', () => {
-  it('blocks a write whose content carries the leak and never executes', async () => {
+describe('withContentGuard (passive observation)', () => {
+  it('observes a leaking write, reports it, and still executes', async () => {
     const { tool, execute } = makeTool();
-    const guarded = withContentGuard(tool, pickWriteContent);
-    const result = (await guarded.execute(
+    const leaks: LeakFinding[] = [];
+    const guarded = withContentGuard(tool, pickWriteContent, (f) =>
+      leaks.push(f),
+    );
+    await guarded.execute(
       ...([
         'id1',
         { content: LEAKED_LINE },
@@ -60,15 +64,18 @@ describe('withContentGuard', () => {
         undefined,
         {},
       ] as never[]),
-    )) as { isError?: boolean; content: [{ text: string }] };
-    expect(execute).not.toHaveBeenCalled();
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/NOT written/);
+    );
+    expect(execute).toHaveBeenCalledOnce();
+    expect(leaks).toHaveLength(1);
+    expect(leaks[0].label).toBe('leaked tool-call tokens');
   });
 
-  it('passes clean writes through to the real execute', async () => {
+  it('passes clean writes through without reporting', async () => {
     const { tool, execute } = makeTool();
-    const guarded = withContentGuard(tool, pickWriteContent);
+    const leaks: LeakFinding[] = [];
+    const guarded = withContentGuard(tool, pickWriteContent, (f) =>
+      leaks.push(f),
+    );
     await guarded.execute(
       ...([
         'id1',
@@ -79,12 +86,15 @@ describe('withContentGuard', () => {
       ] as never[]),
     );
     expect(execute).toHaveBeenCalledOnce();
+    expect(leaks).toHaveLength(0);
   });
 
-  it('guards edit newText but lets oldText match existing garbage (repairs stay possible)', async () => {
+  it('observes edit newText but ignores oldText (repairs stay silent)', async () => {
     const { tool, execute } = makeTool();
-    const guarded = withContentGuard(tool, pickEditContent);
-    // Repair edit: garbage in oldText, clean newText — must pass.
+    const leaks: LeakFinding[] = [];
+    const guarded = withContentGuard(tool, pickEditContent, (f) =>
+      leaks.push(f),
+    );
     await guarded.execute(
       ...([
         'id1',
@@ -94,9 +104,8 @@ describe('withContentGuard', () => {
         {},
       ] as never[]),
     );
-    expect(execute).toHaveBeenCalledOnce();
-    // Corrupted newText — must block.
-    const result = (await guarded.execute(
+    expect(leaks).toHaveLength(0);
+    await guarded.execute(
       ...([
         'id2',
         { path: 'x.tsx', edits: [{ oldText: '\n', newText: LEAKED_LINE }] },
@@ -104,9 +113,9 @@ describe('withContentGuard', () => {
         undefined,
         {},
       ] as never[]),
-    )) as { isError?: boolean };
-    expect(result.isError).toBe(true);
-    expect(execute).toHaveBeenCalledOnce();
+    );
+    expect(leaks).toHaveLength(1);
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('lets malformed params fall through to the tool own validation', async () => {

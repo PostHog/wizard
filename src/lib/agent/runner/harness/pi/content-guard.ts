@@ -1,10 +1,10 @@
 /**
- * Workaround, not a feature: rejects pi write/edit content carrying leaked
- * model transport tokens before it reaches disk. gpt-5.x streaming with tools
- * leaks its function-call grammar into string values — run 9704a73e wrote
- * `' }#+#+#+#+.functions.complete_task (commentary …json>tagger…` plus a DEL
- * byte into a customer's global-error.tsx, and exact-match edits could not
- * remove it. Unfixed upstream; delete this module when the stack stops leaking:
+ * Passive observability for an unfixed upstream failure: gpt-5.x streaming
+ * with tools leaks its function-call grammar into string values — run 9704a73e
+ * wrote `' }#+#+#+#+.functions.complete_task (commentary …json>tagger…` plus a
+ * DEL byte into a customer's global-error.tsx. Writes are observed and logged,
+ * never blocked; a leak is surfaced to the review stage via the task handoff.
+ * Delete this module when the stack stops leaking:
  * - litellm#14260 ("gpt5 with streaming and tool calls randomly produces
  *   garbage in response": `functions.name_of_some_function <garbage bytes>`
  *   in content — closed stale, not planned)
@@ -65,10 +65,11 @@ type GuardableTool = {
   execute: (...args: never[]) => Promise<unknown>;
 };
 
-/** Wraps a pi write/edit tool; `pick` extracts the strings that would be WRITTEN, and a leak returns a corrective error instead of executing. */
+/** Wraps a pi write/edit tool with passive leak observation: `pick` extracts the strings that would be WRITTEN; a leak is logged, captured, and handed to `onLeak` — the call always executes. */
 export function withContentGuard<T extends GuardableTool>(
   tool: T,
   pick: (params: unknown) => readonly string[],
+  onLeak?: (finding: LeakFinding) => void,
 ): T {
   const execute = tool.execute.bind(tool) as (
     ...args: unknown[]
@@ -82,7 +83,7 @@ export function withContentGuard<T extends GuardableTool>(
       leak = undefined; // malformed params: let the tool's own validation speak
     }
     if (leak) {
-      analytics.wizardCapture('file content guard tripped', {
+      analytics.wizardCapture('file content leak observed', {
         tool: tool.name,
         leak: leak.label,
         leak_token: leak.token,
@@ -92,20 +93,9 @@ export function withContentGuard<T extends GuardableTool>(
         at_end: leak.contentLength - leak.offset < 80,
       });
       logToFile(
-        `[content-guard] blocked ${tool.name}: ${leak.label} token=${leak.token} at ${leak.offset}/${leak.contentLength}`,
+        `[content-guard] observed ${tool.name}: ${leak.label} token=${leak.token} at ${leak.offset}/${leak.contentLength}`,
       );
-      return Promise.resolve({
-        content: [
-          {
-            type: 'text',
-            text:
-              `Error: the new file content contains ${leak.label} from the model transport — ` +
-              'it was NOT written. Re-issue the call with only the intended file content.',
-          },
-        ],
-        details: {},
-        isError: true,
-      });
+      onLeak?.(leak);
     }
     return execute(...args);
   }) as T['execute'];

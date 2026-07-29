@@ -48,6 +48,7 @@ import {
   withContentGuard,
   pickEditContent,
   pickWriteContent,
+  type LeakFinding,
 } from './content-guard';
 import { createAioCapture } from '@lib/agent/aio-capture';
 
@@ -274,18 +275,22 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // in parallel; mutating tools stay sequential. Bash subprocesses get the
     // scrubbed env, same as the linear run.
     const dir = session.installDir;
+    // Observes gpt-5.x transport-token leaks (litellm#14260) — see content-guard.ts; findings ride the handoff to the review stage.
+    const observedLeaks: LeakFinding[] = [];
+    const recordLeak = (f: LeakFinding) => observedLeaks.push(f);
     const codingToolFactories = {
       read: () => withMode(createReadToolDefinition(dir), 'parallel'),
       edit: () =>
-        // Guards against gpt-5.x transport-token leaks (litellm#14260) — see content-guard.ts.
         withContentGuard(
           withMode(createEditToolDefinition(dir), 'sequential'),
           pickEditContent,
+          recordLeak,
         ),
       write: () =>
         withContentGuard(
           withMode(createWriteToolDefinition(dir), 'sequential'),
           pickWriteContent,
+          recordLeak,
         ),
       bash: () =>
         withMode(
@@ -316,9 +321,17 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     );
 
     const { createPiOrchestratorTools } = await import('./orchestrator-tools');
-    const queueTools = createPiOrchestratorTools(orchestrator).filter((t) =>
-      orchestratorTools.has(t.name),
-    );
+    const queueTools = createPiOrchestratorTools(orchestrator, () =>
+      observedLeaks.length
+        ? `Note (added by the wizard, not the agent): ${
+            observedLeaks.length
+          } file write(s) in this task matched model transport-leak patterns (${[
+            ...new Set(observedLeaks.map((f) => f.label)),
+          ].join(
+            ', ',
+          )}) — the touched files may contain garbled lines; verify them.`
+        : undefined,
+    ).filter((t) => orchestratorTools.has(t.name));
 
     const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
     const { session: agentSession } = await createAgentSession({
