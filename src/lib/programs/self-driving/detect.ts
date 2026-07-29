@@ -27,8 +27,11 @@ import {
   type Dirent,
 } from 'fs';
 import { join } from 'path';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';
@@ -291,4 +294,43 @@ export function detectSelfDrivingPrerequisites(
   // screen: found → skip straight to self-driving; not found → ask to set up
   // PostHog first.
   setFrameworkContext(POSTHOG_PRESENT_KEY, detectPostHogPresent(installDir));
+
+  detectConnectedTools(installDir, setFrameworkContext);
+}
+
+/**
+ * Scan the codebase for the tools it uses (Sentry, Linear, GitHub, Stripe, …)
+ * so STEP 5's connected-tools ask can surface detected tools first instead of
+ * dumping the full ~500-source catalog on the user. Same deterministic scanner
+ * the warehouse program uses, so the result lands under the shared
+ * `DETECTED_WAREHOUSE_SOURCES_KEY` and is read back with
+ * `getDetectedWarehouseSources`.
+ *
+ * Best-effort: the connected-tools ask degrades to the skill's default
+ * ordering when nothing is detected, so a scan failure must never break the
+ * surrounding prerequisite check.
+ */
+function detectConnectedTools(
+  installDir: string,
+  setFrameworkContext: (key: string, value: unknown) => void,
+): void {
+  try {
+    const sources = detectWarehouseSources(installDir);
+    if (sources.length === 0) return;
+
+    // Tag the run so the connected-tools funnel can slice on what the project
+    // had available. Deliberately NOT the `warehouse sources detected` event
+    // the integration flow emits — that metric's denominator is integration
+    // runs, and firing it here would fold self-driving runs into it.
+    analytics.setTag(
+      'connected_tools_detected',
+      sources.map((s) => s.kind).join(','),
+    );
+    setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectConnectedTools' },
+    );
+  }
 }

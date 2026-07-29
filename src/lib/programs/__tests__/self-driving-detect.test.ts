@@ -10,6 +10,10 @@ import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
 } from '@lib/programs/self-driving/detect';
+import {
+  DETECTED_WAREHOUSE_SOURCES_KEY,
+  getDetectedWarehouseSources,
+} from '@lib/programs/warehouse-source/detect';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
 import {
   PROJECT_MANIFESTS,
@@ -58,6 +62,32 @@ describe('detectSelfDrivingPrerequisites', () => {
     detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toBeUndefined();
+  });
+
+  it('stashes tools detected in the codebase for the connected-tools ask', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: { '@sentry/node': '^7.0.0' } }),
+    );
+    const session = buildSession({ installDir: tmpDir });
+    detectSelfDrivingPrerequisites(session, setCtx);
+
+    // Mirror the value onto the session the way the store setter would, so the
+    // shared accessor the run closure uses reads it back.
+    session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] =
+      ctx[DETECTED_WAREHOUSE_SOURCES_KEY];
+    const detected = getDetectedWarehouseSources(session);
+    expect(detected.map((s) => s.kind)).toContain('Sentry');
+  });
+
+  it('writes nothing when the codebase has no detectable tools', () => {
+    // Bare dir: valid (no detectError) but no tools to prioritise, so the key
+    // stays unset and STEP 5 falls back to the skill default.
+    const session = buildSession({ installDir: tmpDir });
+    detectSelfDrivingPrerequisites(session, setCtx);
+
+    expect(ctx.detectError).toBeUndefined();
+    expect(ctx[DETECTED_WAREHOUSE_SOURCES_KEY]).toBeUndefined();
   });
 });
 
