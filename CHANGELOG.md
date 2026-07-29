@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.55.0](https://github.com/PostHog/wizard/compare/v2.54.0...v2.55.0) (2026-07-29)
+
+
+### Features
+
+* automate React Native source-map upload ([#941](https://github.com/PostHog/wizard/issues/941)) ([2357937](https://github.com/PostHog/wizard/commit/23579379e4279dd614d1730dbeb6fef8976462a6))
+* **self-driving:** prioritise codebase-detected tools in the connected-tools ask ([#1022](https://github.com/PostHog/wizard/issues/1022)) ([dd4572a](https://github.com/PostHog/wizard/commit/dd4572a379b555a29e94167ee92ffa5ad503a1a4))
+* **self-driving:** reflect the 100 runs/day budget and ten-scout troop ([#1029](https://github.com/PostHog/wizard/issues/1029)) ([b41d80f](https://github.com/PostHog/wizard/commit/b41d80f11f14b292dad9feb7ab7f860232413f2a))
+
+
+### Bug Fixes
+
+* **cli:** explain how to fix an out-of-date Node.js version ([#1018](https://github.com/PostHog/wizard/issues/1018)) ([5e536a7](https://github.com/PostHog/wizard/commit/5e536a7a0806cdf15eaad079e6b779e87ac87157))
+* **provisioning:** stop requiring a /resources field the API no longer sends ([#994](https://github.com/PostHog/wizard/issues/994)) ([05ec027](https://github.com/PostHog/wizard/commit/05ec027a4b2ad83b8d41b32d5d31e79c3421b1dd))
+* **source-maps:** write the hand-off report the success screen names ([#1006](https://github.com/PostHog/wizard/issues/1006)) ([ca8fdb2](https://github.com/PostHog/wizard/commit/ca8fdb2e4ef8233eea4f36bac8fbdd9375aaf523))
+
 ## [2.54.0](https://github.com/PostHog/wizard/compare/v2.53.0...v2.54.0) (2026-07-28)
 
 
