@@ -96,8 +96,18 @@ export const skillCommand: Command = {
   options: {
     ...skillProgramOptions,
   },
-  // yargs already enforces the `<skill-name>` positional, but an
-  // explicitly-empty value (`wizard skill ""`) would otherwise slip
+  // Under `.strictOptions()` yargs rejects a positional declared only in the
+  // command string as an "Unknown argument" — it has to be registered via
+  // `.positional()` too (see the `positionals` note on the Command interface).
+  // Declare `skill-name` here so `wizard skill <id>` actually accepts its value.
+  positionals: {
+    'skill-name': {
+      type: 'string',
+      describe: 'Skill id to run (e.g. audit-events), or `list`',
+    },
+  },
+  // yargs already enforces the presence of the `<skill-name>` positional, but
+  // an explicitly-empty value (`wizard skill ""`) would otherwise slip
   // through to a broken run. Reject it with the same friendly message
   // the old --skill flag gave. When `wizard skill list` matched the
   // child instead, yargs leaves the positional unset — the `null` guard
