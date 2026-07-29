@@ -9,11 +9,11 @@ import {
 import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
+  SELF_DRIVING_DETECTED_TOOLS_KEY,
+  SELF_DRIVING_TOOL_KINDS,
 } from '@lib/programs/self-driving/detect';
-import {
-  DETECTED_WAREHOUSE_SOURCES_KEY,
-  getDetectedWarehouseSources,
-} from '@lib/programs/warehouse-source/detect';
+import { SOURCE_DETECTORS } from '@lib/warehouse-sources/registry';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
 import {
   PROJECT_MANIFESTS,
@@ -64,20 +64,33 @@ describe('detectSelfDrivingPrerequisites', () => {
     expect(ctx.detectError).toBeUndefined();
   });
 
-  it('stashes tools detected in the codebase for the connected-tools ask', () => {
+  /** Kinds stashed for the connected-tools ask after a scan of `tmpDir`. */
+  const detectedKinds = (deps: Record<string, string>): string[] => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
-      JSON.stringify({ dependencies: { '@sentry/node': '^7.0.0' } }),
+      JSON.stringify({ dependencies: deps }),
     );
-    const session = buildSession({ installDir: tmpDir });
-    detectSelfDrivingPrerequisites(session, setCtx);
+    detectSelfDrivingPrerequisites(
+      buildSession({ installDir: tmpDir }),
+      setCtx,
+    );
+    const tools = ctx[SELF_DRIVING_DETECTED_TOOLS_KEY] as
+      | DetectedSource[]
+      | undefined;
+    return (tools ?? []).map((s) => s.kind);
+  };
 
-    // Mirror the value onto the session the way the store setter would, so the
-    // shared accessor the run closure uses reads it back.
-    session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] =
-      ctx[DETECTED_WAREHOUSE_SOURCES_KEY];
-    const detected = getDetectedWarehouseSources(session);
-    expect(detected.map((s) => s.kind)).toContain('Sentry');
+  it('stashes tools detected in the codebase for the connected-tools ask', () => {
+    expect(detectedKinds({ '@sentry/node': '^7.0.0' })).toContain('Sentry');
+  });
+
+  it('keeps only the tools the inbox can connect', () => {
+    // `pg` and `stripe` are warehouse sources, not connected tools — surfacing
+    // them would lead STEP 5 with a database and a payment processor.
+    expect(detectedKinds({ pg: '^8.0.0', stripe: '^14.0.0' })).toEqual([]);
+    expect(detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' })).toEqual([
+      'Sentry',
+    ]);
   });
 
   it('writes nothing when the codebase has no detectable tools', () => {
@@ -87,7 +100,18 @@ describe('detectSelfDrivingPrerequisites', () => {
     detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toBeUndefined();
-    expect(ctx[DETECTED_WAREHOUSE_SOURCES_KEY]).toBeUndefined();
+    expect(ctx[SELF_DRIVING_DETECTED_TOOLS_KEY]).toBeUndefined();
+  });
+});
+
+describe('SELF_DRIVING_TOOL_KINDS', () => {
+  it('names only kinds the source registry can actually detect', () => {
+    // The filter is a plain string set, so a registry rename would silently
+    // drop a tool from the ask. Fail here instead.
+    const known = new Set(SOURCE_DETECTORS.map((d) => d.kind));
+    expect([...SELF_DRIVING_TOOL_KINDS].filter((k) => !known.has(k))).toEqual(
+      [],
+    );
   });
 });
 
