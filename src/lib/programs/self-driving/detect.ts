@@ -331,17 +331,24 @@ export function detectSelfDrivingPrerequisites(
  * `DATABASE_URL`), Stripe and OpenAI — the wall of irrelevant options this is
  * supposed to remove.
  *
- * Exactly the kinds enumerated as inbox tools in #1022, which were sourced from
- * the context-mill `self-driving` skill's connected-tools list. Deliberately no
- * guesses beyond it: this list only decides what gets PROMOTED, so leaving a
- * kind out costs a nudge (the skill still offers the tool), while putting a kind
- * in that the inbox can't connect sends the agent after a source it can't
- * create. When the skill's catalog grows, reconcile here.
+ * The intersection of two lists, computed rather than guessed: the tools the
+ * connected-tools ask actually offers (the `options` array in context-mill's
+ * `self-driving/references/5-connected-tools.md`) and the kinds this repo can
+ * detect (`SOURCE_DETECTORS`). Promoting anything outside that intersection is
+ * wasted at best and misleading at worst — a tool the ask never lists can't be
+ * picked, so pointing the agent at it sends it after a source it can't create.
  *
- * A shadow list of the registry, so it drifts in one direction the guard test
- * can't catch: a new inbox-connectable kind added to `SOURCE_DETECTORS` has to
- * be added here too or it never gets promoted. If that bites, the fix is a
- * field on `SourceDetector` rather than a third copy of this list.
+ * The ask's remaining options are deliberately absent because no detector
+ * matches them (Freshservice, Dixa, pganalyze, SonarQube, Semgrep, Rapid7
+ * InsightVM, Featurebase, Frill, Aha, UserVoice, AskNicely, Retently,
+ * Appfigures, AppFollow, Judge.me). They stay offered by the skill; they just
+ * never get promoted, which is the safe direction.
+ *
+ * A shadow list of both sources, and the guard test only covers one of them —
+ * it catches a kind that leaves `SOURCE_DETECTORS`, but nothing here can see the
+ * skill's catalog change in another repo. So when step 5's option list grows,
+ * reconcile against it. If that becomes a habit, the fix is a field on
+ * `SourceDetector` rather than a third copy of this list.
  */
 export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   // Issue trackers / code hosts
@@ -350,16 +357,27 @@ export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   'Gitea',
   'Linear',
   'Jira',
-  // Error trackers
+  'Shortcut',
+  // Error tracking
   'Sentry',
   'Rollbar',
   'Bugsnag',
+  'Honeybadger',
+  'Raygun',
   // Support desks
   'Zendesk',
   'Freshdesk',
   'Front',
   'Gorgias',
-  'Intercom',
+  'Kustomer',
+  'Plain',
+  // Security scanners
+  'Snyk',
+  // Product feedback
+  'Canny',
+  'Productboard',
+  // Search analytics
+  'GoogleSearchConsole',
 ]);
 
 /**

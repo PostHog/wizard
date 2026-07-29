@@ -11,7 +11,10 @@ import {
   POSTHOG_MANIFESTS,
   SELF_DRIVING_DETECTED_TOOLS_KEY,
   SELF_DRIVING_TOOL_KINDS,
+  getSelfDrivingDetectedTools,
 } from '@lib/programs/self-driving/detect';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
+import { WizardStore } from '@ui/tui/store';
 import { SOURCE_DETECTORS } from '@lib/warehouse-sources/registry';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
@@ -112,6 +115,48 @@ describe('SELF_DRIVING_TOOL_KINDS', () => {
     expect([...SELF_DRIVING_TOOL_KINDS].filter((k) => !known.has(k))).toEqual(
       [],
     );
+  });
+});
+
+describe('the detect step does not leak into the composed integration run', () => {
+  // Driven through the REAL store, the way run-wizard does it
+  // (`await store.runReadyHooks()`), because the leak lived in the plumbing
+  // rather than in `detectConnectedTools`: writing the warehouse program's key
+  // here put the scan into the integration agent's prompt, since the
+  // integrate-run phase inherits a copy of this frameworkContext and
+  // `posthog-integration` reads that key to build its prompt. Asserting on the
+  // setter's argument alone would not have caught it.
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        dependencies: { '@sentry/node': '^7.0.0', pg: '^8.0.0' },
+      }),
+    );
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  it('stashes under its own key and leaves the warehouse key untouched', async () => {
+    const store = new WizardStore('self-driving');
+    store.session = buildSession({ installDir: tmpDir });
+    await store.runReadyHooks();
+
+    // Self-driving sees its tools...
+    expect(
+      getSelfDrivingDetectedTools(store.session).map((s) => s.kind),
+    ).toContain('Sentry');
+    // ...and the integration program, reading its own key off the session it
+    // inherits, sees nothing — so its prompt is byte-identical to a run without
+    // self-driving in front of it.
+    expect(getDetectedWarehouseSources(store.session)).toEqual([]);
+    const inherited = {
+      ...store.session,
+      frameworkContext: { ...store.session.frameworkContext },
+    };
+    expect(getDetectedWarehouseSources(inherited)).toEqual([]);
   });
 });
 
