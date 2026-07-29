@@ -699,29 +699,27 @@ describe('observeTransportLeak (passive telemetry)', () => {
   const LEAKED_LINE =
     "' }#+#+#+#+.functions.complete_task  (commentary  json.functions.complete_taskjson>tagger历山大发 { ";
 
-  it('captures the leak evidence, never the content', () => {
-    observeTransportLeak('Write', LEAKED_LINE, 'app/global-error.tsx');
+  it('reports which pattern fired and where — never any matched text', () => {
+    observeTransportLeak('Write', LEAKED_LINE);
     const call = vi
       .mocked(analytics.wizardCapture)
       .mock.calls.find(([e]) => e === 'file content leak observed');
     expect(call?.[1]).toMatchObject({
       tool: 'Write',
       leak: 'leaked tool-call tokens',
-      leak_token: '"functions.complete_task"',
+      leak_offset: LEAKED_LINE.indexOf('functions.'),
       content_length: LEAKED_LINE.length,
     });
+    expect(JSON.stringify(call?.[1])).not.toContain('complete_task');
   });
 
-  it('escapes DEL in the reported token', () => {
+  it('flags control characters by pattern only', () => {
     vi.mocked(analytics.wizardCapture).mockClear();
-    observeTransportLeak('Edit', 'trailing\x7f', 'x.ts');
+    observeTransportLeak('Edit', 'trailing\x7f');
     const call = vi
       .mocked(analytics.wizardCapture)
       .mock.calls.find(([e]) => e === 'file content leak observed');
-    expect(call?.[1]).toMatchObject({
-      leak: 'control characters',
-      leak_token: '"\\u007f"',
-    });
+    expect(call?.[1]).toMatchObject({ leak: 'control characters' });
   });
 
   it('stays silent on real source, including Firebase functions.* code', () => {
@@ -729,7 +727,6 @@ describe('observeTransportLeak (passive telemetry)', () => {
     observeTransportLeak(
       'Write',
       'const f = functions.https.onRequest(app);\nline\n\ttabbed\r\n',
-      'index.ts',
     );
     expect(
       vi

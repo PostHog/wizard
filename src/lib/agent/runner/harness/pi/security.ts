@@ -70,31 +70,21 @@ const TRANSPORT_LEAK_PATTERNS: readonly { pattern: RegExp; label: string }[] = [
   { pattern: /[\0-\x08\x0B\f\x0E-\x1F\x7F]/, label: 'control characters' },
 ];
 
-/** Capture one event per leaking write/edit: the matched token and where it sat, never the file content. */
-export function observeTransportLeak(
-  tool: string,
-  content: string,
-  filePath: string,
-): void {
+/** Capture one event per leaking write/edit: which pattern fired and where it sat — no matched text, ever. */
+export function observeTransportLeak(tool: string, content: string): void {
   for (const { pattern, label } of TRANSPORT_LEAK_PATTERNS) {
     const match = pattern.exec(content);
     if (!match) continue;
-    // JSON.stringify escapes C0 but not DEL.
-    const token = JSON.stringify(match[0].slice(0, 40)).replace(
-      /\x7f/g, // eslint-disable-line no-control-regex
-      '\\u007f',
-    );
     analytics.wizardCapture('file content leak observed', {
       tool,
       leak: label,
-      leak_token: token,
       leak_offset: match.index,
       content_length: content.length,
       // End-of-string leaks are the upstream decoder signature.
       at_end: content.length - match.index < 80,
     });
     logToFile(
-      `[transport-leak] observed ${tool}: ${label} token=${token} at ${match.index}/${content.length} path=${filePath}`,
+      `[transport-leak] observed ${tool}: ${label} at ${match.index}/${content.length}`,
     );
     return;
   }
@@ -325,7 +315,7 @@ async function preExecutionYaraBlock(
       return undefined;
   }
   if (!content) return undefined;
-  if (ctx === 'output') observeTransportLeak(tool, content, str(input.path));
+  if (ctx === 'output') observeTransportLeak(tool, content);
 
   let matches = await scanAndTriage(content, ctx, triage);
   if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
