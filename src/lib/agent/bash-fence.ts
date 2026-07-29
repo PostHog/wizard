@@ -88,8 +88,7 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
-  // Materializes the Xcode project from project.yml so xcodebuild can verify —
-  // build-equivalent risk (runs on the project's own spec).
+  // Materializes the Xcode project from the project's own spec — build-equivalent risk.
   xcodegen: ['generate'],
   // Zeitwerk eager-load check is Rails' typecheck equivalent — build-class risk.
   rails: ['zeitwerk:check'],
@@ -287,9 +286,7 @@ function commandDecision(command: string): BashFenceDecision {
   // A venv-local interpreter (`.venv/bin/pip`, `venv/bin/python3`) is the
   // sanctioned way to install on Python — judge it as the tool it is.
   const bin = raw.match(VENV_BIN)?.[1] ?? raw;
-  // A lint/format tool reached by a bin/ path (venv or Rails binstub) is the
-  // tool itself; anything else under bin/ stays denied (arbitrary exec) —
-  // except a binstub of an allowlisted manager (`bin/rails`), judged as it.
+  // A bin/-path lint tool or allowlisted-manager binstub is judged as the tool it is; any other bin/ target stays denied (arbitrary exec).
   const binTool = raw === bin ? raw.match(VENV_TOOL)?.[1] : undefined;
   if (binTool && isLintingTool(binTool)) return { allowed: true };
   const effectiveBin = binTool && SIMPLE_MANAGERS[binTool] ? binTool : bin;
