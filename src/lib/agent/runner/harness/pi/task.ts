@@ -277,6 +277,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const codingToolFactories = {
       read: () => withMode(createReadToolDefinition(dir), 'parallel'),
       edit: () =>
+        // Guards against gpt-5.x transport-token leaks (litellm#14260) — see content-guard.ts.
         withContentGuard(
           withMode(createEditToolDefinition(dir), 'sequential'),
           pickEditContent,

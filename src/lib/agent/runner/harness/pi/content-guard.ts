@@ -1,14 +1,31 @@
-// Rejects pi write/edit content carrying leaked model transport tokens (run 9704a73e shipped them into a customer file) before it reaches disk.
+/**
+ * Workaround, not a feature: rejects pi write/edit content carrying leaked
+ * model transport tokens before it reaches disk. gpt-5.x streaming with tools
+ * leaks its function-call grammar into string values — run 9704a73e wrote
+ * `' }#+#+#+#+.functions.complete_task (commentary …json>tagger…` plus a DEL
+ * byte into a customer's global-error.tsx, and exact-match edits could not
+ * remove it. Unfixed upstream; delete this module when the stack stops leaking:
+ * - litellm#14260 ("gpt5 with streaming and tool calls randomly produces
+ *   garbage in response": `functions.name_of_some_function <garbage bytes>`
+ *   in content — closed stale, not planned)
+ *   https://github.com/BerriAI/litellm/issues/14260
+ * - OpenAI community 1386422 (gpt-5.6-luna, Responses API: "garbage tokens
+ *   (foreign scripts / leaked reasoning) inside string values right before
+ *   the closing quote"; identical Chat Completions request is clean)
+ *   https://community.openai.com/t/1386422
+ */
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
 // Scoped to the wizard's own tool names — a generic `functions.*` match would false-positive on real code like Firebase's `functions.config()`.
 const LEAK_PATTERNS: readonly { pattern: RegExp; label: string }[] = [
   {
+    // The litellm#14260 signature: `functions.<tool name>` emitted as text.
     pattern: /functions\.(?:complete_task|enqueue_task|read_handoffs)/,
     label: 'leaked tool-call tokens',
   },
   {
+    // Harmony channel markers (openai/harmony#27-class leaks).
     pattern: /<\|(?:channel|constrain|message|call|end|start|return)\|>/,
     label: 'leaked channel markers',
   },

@@ -373,6 +373,7 @@ export const piBackend: AgentHarness = {
         // are the stock definitions. Reads run in parallel so a batched turn of
         // independent reads executes at once; edit/write/bash stay sequential.
         withMode(createReadToolDefinition(session.installDir), 'parallel'),
+        // Guards against gpt-5.x transport-token leaks (litellm#14260) — see content-guard.ts.
         withContentGuard(
           withMode(createEditToolDefinition(session.installDir), 'sequential'),
           pickEditContent,
