@@ -18,7 +18,14 @@ type Step = ProgramConfig['steps'][number];
 
 /** The session a run step's agent runs in: scoped to the step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged. */
+ * A step without `targetDir` runs in the live session, unchanged.
+ *
+ * The copy is shallow and unfiltered, so a composed sub-run inherits every
+ * frameworkContext key the host program wrote — including ones the sub-run's
+ * own program reads for its prompt. Name keys for the program that owns them
+ * (`selfDrivingDetectedTools`, not `detectedWarehouseSources`) so a host can't
+ * silently rewrite a spliced-in program's behaviour. If that collision shows up
+ * a second time, scope the inheritance here instead of renaming again. */
 async function prepareRunSession(
   step: Step,
   live: WizardSession,

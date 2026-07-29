@@ -4,9 +4,11 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
-import { SELF_DRIVING_ABORT_CASES } from './detect.js';
+import {
+  SELF_DRIVING_ABORT_CASES,
+  getSelfDrivingDetectedTools,
+} from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
 import { getContentBlocks } from './content/index.js';
@@ -44,7 +46,7 @@ const buildRun = (session: WizardSession): Promise<ProgramRun> =>
     skillId: SELF_DRIVING_SKILL_ID,
     integrationLabel: SELF_DRIVING_SKILL_ID,
     customPrompt: (ctx) =>
-      buildSelfDrivingPrompt(ctx, getDetectedWarehouseSources(session)),
+      buildSelfDrivingPrompt(ctx, getSelfDrivingDetectedTools(session)),
     successMessage: SUCCESS_MESSAGE,
     reportFile: REPORT_FILE,
     docsUrl: DOCS_URL,

@@ -31,7 +31,7 @@ import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';
@@ -43,6 +43,31 @@ export const POSTHOG_PRESENT_KEY = 'postHogPresent';
  * into the chosen sub-app, not the root.
  */
 export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
+
+/**
+ * frameworkContext key holding the tools this codebase uses that are worth
+ * promoting in the connected-tools ask. Self-driving's own key, not the
+ * warehouse program's `DETECTED_WAREHOUSE_SOURCES_KEY`: the integration program
+ * reads that one to build its prompt, and the integrate-run phase inherits a
+ * copy of this frameworkContext — so writing there would silently rewrite the
+ * integration agent's prompt on every self-driving run that installs PostHog
+ * first. (Its outro is safe: a composed run returns before `buildOutroData`.)
+ */
+export const SELF_DRIVING_DETECTED_TOOLS_KEY = 'selfDrivingDetectedTools';
+
+/**
+ * Read the detected tools out of frameworkContext. Single accessor shared by
+ * the detect step and the prompt builder so the key + cast live in one place.
+ */
+export function getSelfDrivingDetectedTools(
+  session: WizardSession,
+): DetectedSource[] {
+  return (
+    (session.frameworkContext[SELF_DRIVING_DETECTED_TOOLS_KEY] as
+      | DetectedSource[]
+      | undefined) ?? []
+  );
+}
 
 // Matches `posthog` at a dependency boundary (line start, or after "'/=:.@ or
 // whitespace): catches `com.posthog:posthog-android` and `@posthog/ai`, skips
@@ -299,12 +324,50 @@ export function detectSelfDrivingPrerequisites(
 }
 
 /**
- * Scan the codebase for the tools it uses (Sentry, Linear, GitHub, Stripe, …)
- * so STEP 5's connected-tools ask can surface detected tools first instead of
- * dumping the full ~500-source catalog on the user. Same deterministic scanner
- * the warehouse program uses, so the result lands under the shared
- * `DETECTED_WAREHOUSE_SOURCES_KEY` and is read back with
- * `getDetectedWarehouseSources`.
+ * Source kinds worth promoting in the connected-tools ask. The shared scanner
+ * matches the whole warehouse catalog (databases, payments, LLM vendors, ad
+ * platforms) and most of that has nothing to do with STEP 5: unfiltered, a
+ * routine repo leads the issue-tracker ask with Postgres (matched on
+ * `DATABASE_URL`), Stripe and OpenAI — the wall of irrelevant options this is
+ * supposed to remove.
+ *
+ * Exactly the kinds enumerated as inbox tools in #1022, which were sourced from
+ * the context-mill `self-driving` skill's connected-tools list. Deliberately no
+ * guesses beyond it: this list only decides what gets PROMOTED, so leaving a
+ * kind out costs a nudge (the skill still offers the tool), while putting a kind
+ * in that the inbox can't connect sends the agent after a source it can't
+ * create. When the skill's catalog grows, reconcile here.
+ *
+ * A shadow list of the registry, so it drifts in one direction the guard test
+ * can't catch: a new inbox-connectable kind added to `SOURCE_DETECTORS` has to
+ * be added here too or it never gets promoted. If that bites, the fix is a
+ * field on `SourceDetector` rather than a third copy of this list.
+ */
+export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
+  // Issue trackers / code hosts
+  'Github',
+  'GitLab',
+  'Gitea',
+  'Linear',
+  'Jira',
+  // Error trackers
+  'Sentry',
+  'Rollbar',
+  'Bugsnag',
+  // Support desks
+  'Zendesk',
+  'Freshdesk',
+  'Front',
+  'Gorgias',
+  'Intercom',
+]);
+
+/**
+ * Scan the codebase for the tools it uses that the inbox can connect (Sentry,
+ * Linear, GitHub, Zendesk, …) so STEP 5's connected-tools ask can surface those
+ * first instead of dumping the full source catalog on the user. Stashed under
+ * self-driving's own `SELF_DRIVING_DETECTED_TOOLS_KEY` and read back with
+ * `getSelfDrivingDetectedTools`.
  *
  * Best-effort: the connected-tools ask degrades to the skill's default
  * ordering when nothing is detected, so a scan failure must never break the
@@ -315,19 +378,29 @@ function detectConnectedTools(
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   try {
-    const sources = detectWarehouseSources(installDir);
-    if (sources.length === 0) return;
+    const tools = detectWarehouseSources(installDir).filter((s) =>
+      SELF_DRIVING_TOOL_KINDS.has(s.kind),
+    );
 
-    // Tag the run so the connected-tools funnel can slice on what the project
-    // had available. Deliberately NOT the `warehouse sources detected` event
-    // the integration flow emits — that metric's denominator is integration
+    // Tagged on every run that scans, including the empty case — without the
+    // zero rows there is no way to tell "the scan found nothing" from "this code
+    // path never ran", which is the first thing to check when the ask looks
+    // unprioritised. Deliberately NOT the `warehouse sources detected` event
+    // the integration flow emits: that metric's denominator is integration
     // runs, and firing it here would fold self-driving runs into it.
+    analytics.setTag('connected_tools_detected_count', tools.length);
+    if (tools.length === 0) return;
+
     analytics.setTag(
       'connected_tools_detected',
-      sources.map((s) => s.kind).join(','),
+      tools.map((s) => s.kind).join(','),
     );
-    setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+    setFrameworkContext(SELF_DRIVING_DETECTED_TOOLS_KEY, tools);
   } catch (error) {
+    // -1 rather than nothing: an absent tag would be indistinguishable from a
+    // build that never ran this scan, which is what the count is here to rule
+    // out. The captured exception carries the why.
+    analytics.setTag('connected_tools_detected_count', -1);
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'detectConnectedTools' },
