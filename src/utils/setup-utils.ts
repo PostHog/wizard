@@ -22,7 +22,10 @@ import { getUI } from '@ui';
 import { HostResolution } from '@lib/host-resolution';
 import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
-import { provisionNewAccount } from './provisioning';
+import {
+  ProvisionedAccountUnreadableError,
+  provisionNewAccount,
+} from './provisioning';
 import {
   fetchUserData,
   fetchProjectData,
@@ -702,8 +705,19 @@ async function askForProvisioningSignup(
       projectId: parseInt(result.projectId, 10) || 0,
     };
   } catch (error) {
-    spinner.stop('Account creation failed.');
     const message = error instanceof Error ? error.message : 'Unknown error';
+
+    // The account exists — reporting a failed signup would send the user off to create a
+    // second one on top of the org they already own.
+    if (error instanceof ProvisionedAccountUnreadableError) {
+      spinner.stop('Account created, but the project could not be read back.');
+      getUI().log.warn(message);
+      getUI().log.info('Signing you in to your new account instead...');
+
+      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+    }
+
+    spinner.stop('Account creation failed.');
 
     if (message.includes('already associated')) {
       getUI().log.info(
