@@ -16,14 +16,20 @@ const LEAKED_LINE =
   "' }#+#+#+#+.functions.complete_task  (commentary  json.functions.complete_taskjson>tagger历山大发 { ";
 
 describe('contentLeak', () => {
-  it('flags the observed transport-token leak', () => {
-    expect(contentLeak(LEAKED_LINE)).toBe('leaked tool-call tokens');
+  it('flags the observed transport-token leak with its evidence, not the content', () => {
+    const finding = contentLeak(LEAKED_LINE);
+    expect(finding?.label).toBe('leaked tool-call tokens');
+    expect(finding?.token).toBe('"functions.complete_task"');
+    expect(finding?.offset).toBe(LEAKED_LINE.indexOf('functions.'));
+    expect(finding?.contentLength).toBe(LEAKED_LINE.length);
   });
 
   it('flags channel markers and control characters', () => {
-    expect(contentLeak('x<|channel|>y')).toBe('leaked channel markers');
-    expect(contentLeak('trailing\x7f')).toBe('control characters');
-    expect(contentLeak('null\0byte')).toBe('control characters');
+    expect(contentLeak('x<|channel|>y')?.label).toBe('leaked channel markers');
+    const ctl = contentLeak('trailing\x7f');
+    expect(ctl?.label).toBe('control characters');
+    expect(ctl?.token).toBe('"\\u007f"');
+    expect(contentLeak('null\0byte')?.label).toBe('control characters');
   });
 
   it('passes real source content, including Firebase functions.* code', () => {

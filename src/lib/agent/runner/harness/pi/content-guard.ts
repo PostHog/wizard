@@ -34,9 +34,30 @@ const LEAK_PATTERNS: readonly { pattern: RegExp; label: string }[] = [
   { pattern: /[\0-\x08\x0B\f\x0E-\x1F\x7F]/, label: 'control characters' },
 ];
 
-/** The leak label when content is corrupted, else undefined. */
-export function contentLeak(content: string): string | undefined {
-  return LEAK_PATTERNS.find(({ pattern }) => pattern.test(content))?.label;
+/** What the guard reports about a leak — the pattern's evidence, never the surrounding file content. */
+export interface LeakFinding {
+  label: string;
+  /** The leaked token itself (JSON-escaped, capped) — transport grammar, not customer code. */
+  token: string;
+  /** Offset of the match within the content, and the content's length — locates the leak (end-of-string is the upstream signature) without carrying the string. */
+  offset: number;
+  contentLength: number;
+}
+
+/** The leak finding when content is corrupted, else undefined. */
+export function contentLeak(content: string): LeakFinding | undefined {
+  for (const { pattern, label } of LEAK_PATTERNS) {
+    const match = pattern.exec(content);
+    if (!match) continue;
+    // JSON.stringify escapes C0 but not DEL — force \uXXXX for every control char.
+    const token = JSON.stringify(match[0].slice(0, 40)).replace(
+      // eslint-disable-next-line no-control-regex
+      /[\x7F]/g,
+      (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+    );
+    return { label, token, offset: match.index, contentLength: content.length };
+  }
+  return undefined;
 }
 
 type GuardableTool = {
@@ -54,7 +75,7 @@ export function withContentGuard<T extends GuardableTool>(
   ) => Promise<unknown>;
   tool.execute = ((...args: unknown[]) => {
     const params = args[1];
-    let leak: string | undefined;
+    let leak: LeakFinding | undefined;
     try {
       leak = pick(params).map(contentLeak).find(Boolean);
     } catch {
@@ -63,15 +84,22 @@ export function withContentGuard<T extends GuardableTool>(
     if (leak) {
       analytics.wizardCapture('file content guard tripped', {
         tool: tool.name,
-        leak,
+        leak: leak.label,
+        leak_token: leak.token,
+        leak_offset: leak.offset,
+        content_length: leak.contentLength,
+        // End-of-string leaks are the upstream decoder signature (see header).
+        at_end: leak.contentLength - leak.offset < 80,
       });
-      logToFile(`[content-guard] blocked ${tool.name}: ${leak}`);
+      logToFile(
+        `[content-guard] blocked ${tool.name}: ${leak.label} token=${leak.token} at ${leak.offset}/${leak.contentLength}`,
+      );
       return Promise.resolve({
         content: [
           {
             type: 'text',
             text:
-              `Error: the new file content contains ${leak} from the model transport — ` +
+              `Error: the new file content contains ${leak.label} from the model transport — ` +
               'it was NOT written. Re-issue the call with only the intended file content.',
           },
         ],
