@@ -321,17 +321,13 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     );
 
     const { createPiOrchestratorTools } = await import('./orchestrator-tools');
-    const queueTools = createPiOrchestratorTools(orchestrator, () =>
-      observedLeaks.length
-        ? `Note (added by the wizard, not the agent): ${
-            observedLeaks.length
-          } file write(s) in this task matched model transport-leak patterns (${[
-            ...new Set(observedLeaks.map((f) => f.label)),
-          ].join(
-            ', ',
-          )}) — the touched files may contain garbled lines; verify them.`
-        : undefined,
-    ).filter((t) => orchestratorTools.has(t.name));
+    const queueTools = createPiOrchestratorTools(orchestrator, () => {
+      if (!observedLeaks.length) return undefined;
+      const files = [
+        ...new Set(observedLeaks.map((f) => f.path ?? 'an unnamed file')),
+      ].join(', ');
+      return `There is a suspected corruption of the file ${files}. Please correct these before continuing.`;
+    }).filter((t) => orchestratorTools.has(t.name));
 
     const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
     const { session: agentSession } = await createAgentSession({

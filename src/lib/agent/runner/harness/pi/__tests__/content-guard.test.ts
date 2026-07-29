@@ -59,7 +59,7 @@ describe('withContentGuard (passive observation)', () => {
     await guarded.execute(
       ...([
         'id1',
-        { content: LEAKED_LINE },
+        { path: 'app/global-error.tsx', content: LEAKED_LINE },
         undefined,
         undefined,
         {},
@@ -68,6 +68,7 @@ describe('withContentGuard (passive observation)', () => {
     expect(execute).toHaveBeenCalledOnce();
     expect(leaks).toHaveLength(1);
     expect(leaks[0].label).toBe('leaked tool-call tokens');
+    expect(leaks[0].path).toBe('app/global-error.tsx');
   });
 
   it('passes clean writes through without reporting', async () => {

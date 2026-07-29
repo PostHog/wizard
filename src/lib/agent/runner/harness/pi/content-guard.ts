@@ -42,6 +42,8 @@ export interface LeakFinding {
   /** Offset of the match within the content, and the content's length — locates the leak (end-of-string is the upstream signature) without carrying the string. */
   offset: number;
   contentLength: number;
+  /** The file the suspect content was written to — names the file in the handoff note. */
+  path?: string;
 }
 
 /** The leak finding when content is corrupted, else undefined. */
@@ -92,8 +94,14 @@ export function withContentGuard<T extends GuardableTool>(
         // End-of-string leaks are the upstream decoder signature (see header).
         at_end: leak.contentLength - leak.offset < 80,
       });
+      const path = (params as { path?: unknown })?.path;
+      if (typeof path === 'string') leak.path = path;
       logToFile(
-        `[content-guard] observed ${tool.name}: ${leak.label} token=${leak.token} at ${leak.offset}/${leak.contentLength}`,
+        `[content-guard] observed ${tool.name}: ${leak.label} token=${
+          leak.token
+        } at ${leak.offset}/${leak.contentLength}${
+          leak.path ? ` path=${leak.path}` : ''
+        }`,
       );
       onLeak?.(leak);
     }
