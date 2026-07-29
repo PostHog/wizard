@@ -9,7 +9,7 @@
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { IGNORED_DIRS } from '@utils/bounded-fs';
+import { IGNORED_DIRS, readProjectFile } from '@utils/bounded-fs';
 import {
   detectProjectsWithAgent,
   coerceAgenticReport,
@@ -95,16 +95,14 @@ export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
 
 /** Comment-stripped substring check for the Rust SDK in one manifest. */
 function manifestMentionsSdk(manifestPath: string): boolean {
-  try {
-    return readFileSync(manifestPath, 'utf-8')
-      .split('\n')
-      .some((line) => {
-        const code = line.split('#', 1)[0];
-        return code.includes(RUST_SDK_CRATE);
-      });
-  } catch {
-    return false;
-  }
+  const content = readProjectFile(manifestPath);
+  return (
+    content != null &&
+    content.split('\n').some((line) => {
+      const code = line.split('#', 1)[0];
+      return code.includes(RUST_SDK_CRATE);
+    })
+  );
 }
 
 /**
@@ -159,11 +157,39 @@ export function rustSdkVerifier(
 }
 
 /**
+ * True when go.mod actively `require`s the SDK — single-line requires and
+ * `require ( … )` blocks only, so a `module` declaration, `replace`, or
+ * `exclude` mention of the path never counts.
+ */
+function goModRequiresSdk(content: string): boolean {
+  let inBlock: 'require' | 'other' | null = null;
+  for (const raw of content.split('\n')) {
+    const code = raw.split('//', 1)[0].trim();
+    if (code === '') continue;
+    if (inBlock != null) {
+      if (code === ')') {
+        inBlock = null;
+      } else if (inBlock === 'require' && code.includes(GO_SDK_MODULE)) {
+        return true;
+      }
+      continue;
+    }
+    if (code.endsWith('(')) {
+      inBlock = code.startsWith('require') ? 'require' : 'other';
+      continue;
+    }
+    if (code.startsWith('require ') && code.includes(GO_SDK_MODULE)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Checks a project's go.mod for the Go SDK — the same authoritative override
- * as `rustSdkVerifier`, for the same reason. Comment-stripped (`//`)
- * substring matching; no multi-module walk — unlike Cargo workspaces, a Go
- * module's requirements always live in the selected module's own go.mod.
- * Exported for testing.
+ * as `rustSdkVerifier`, for the same reason. Only `require` directives count;
+ * no multi-module walk — unlike Cargo workspaces, a Go module's requirements
+ * always live in the selected module's own go.mod. Exported for testing.
  */
 export function goSdkVerifier(
   installDir: string,
@@ -171,16 +197,8 @@ export function goSdkVerifier(
   return (projectPath) => {
     const dir =
       projectPath === '.' ? installDir : join(installDir, projectPath);
-    try {
-      return readFileSync(join(dir, 'go.mod'), 'utf-8')
-        .split('\n')
-        .some((line) => {
-          const code = line.split('//', 1)[0];
-          return code.includes(GO_SDK_MODULE);
-        });
-    } catch {
-      return false;
-    }
+    const content = readProjectFile(join(dir, 'go.mod'));
+    return content != null && goModRequiresSdk(content);
   };
 }
 
