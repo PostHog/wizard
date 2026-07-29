@@ -170,13 +170,25 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     { content: 'Reports land in your Self-driving inbox.', pause: 4000 },
 
     {
-      content: 'Investigate with the agent, tag teammates, or kick off a PR.',
+      content: 'Investigate with the agent, or tag teammates to loop them in.',
+      pause: 5000,
+    },
+
+    {
+      content:
+        "And when a report has a clear fix, Self-driving opens a draft PR on its own — it doesn't wait to be asked.",
       pause: 6000,
     },
 
     {
       content:
-        'That PR is the only thing you pay for: a flat $15 per report that ships a PR. Watching is free.',
+        'That PR is the only thing you pay for: a flat $15 each. Scouts, signals, and reports are free.',
+      pause: 6000,
+    },
+
+    {
+      content:
+        'You stay in control: PR generation is a switch in your inbox, with a priority threshold next to it.',
       pause: 6000,
     },
 

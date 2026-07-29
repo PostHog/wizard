@@ -123,6 +123,13 @@ STEP 4 — Enable signal sources. (skill: "Enable sources")
    confirmed they use.
 
 STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
+   This is the most consequential ask in the run: connecting a tracker
+   means Self-driving reads every open issue in it and opens draft PRs
+   for the ones it judges fixable — by itself, with no approval step,
+   at a flat $15 per PR. Use the skill's question text verbatim,
+   including the per-option descriptions; never reduce an option to a
+   bare tool name. A user must not be able to pick a tracker here
+   thinking they only answered "which tools do you use?".
    One batched multi-select wizard_ask for the external tools the skill
    lists. The run auto-connects the ones it can (GitHub Issues, and
    Linear via a one-click OAuth link), verifying each with a single
@@ -161,5 +168,8 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
 STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
    deferred. Tell the user findings will start appearing in their inbox
-   at ${inboxUrl} within about 30 minutes.`;
+   at ${inboxUrl} within about 30 minutes. The report must also carry
+   the skill's autonomous-PR section — that PRs open without approval at
+   every priority, that they cost a flat $15 each while everything else
+   is free, and where to turn that off. Never drop or soften it.`;
 }

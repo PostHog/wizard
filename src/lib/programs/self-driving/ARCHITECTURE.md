@@ -91,7 +91,10 @@ and its `(skill: …)` reference never disagree on the number.
   shows in use. Support's source stays idle until a channel is connected (a
   follow-up).
 - **5 — Offer issue trackers** — one multi-select (GitHub Issues / Linear /
-  Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a
+  Zendesk / pganalyze). **The consent moment for autonomous PRs** — see §10;
+  every option carries a `description` naming what gets read and that a
+  fixable finding opens a draft PR unprompted at $15. Auto-connect what the
+  run can: GitHub Issues (pick a
   repo — a single connected repo is used by default with no repo research;
   research which repo matches only when several are connected) and Linear
   (one-click OAuth link → single silent `integrations-list` check → create,
@@ -858,6 +861,57 @@ repo), so it's a context-mill skill change, not platform work:
 - Refund operational process (no consent, no cap).
 - **MCP codegen + OAuth ceiling** are the only steps not in this repo's diff
   (build + manual prod edit; see 9.7).
+
+---
+
+## 10. Disclosure: autonomous PRs are the thing being consented to
+
+> [!IMPORTANT] Added after support ticket **#65283**, where a user picked Linear
+> from the step-5 multi-select reading it as "which tools do you use?", and woke
+> up to 14 unrequested PRs and a $345 bill against issues they had filed as
+> their own future work.
+
+**The behavior (posthog, unchanged — this is a disclosure fix, not a
+behavior change).** `maybe_autostart_implementation_task`
+(`products/signals/backend/auto_start.py`) opens a draft PR for any report
+judged `IMMEDIATELY_ACTIONABLE`, with **no human approval step**
+(`interaction_origin="signal_report"` makes the task auto-push and open the
+draft PR). It is **on by default**: `SignalTeamConfig.autostart_enabled` is
+nullable and only an explicit `False` disables it, and
+`default_autostart_priority` defaults to **P4 = all priorities**. When no
+suggested reviewer resolves to a GitHub-linked member, it runs under
+`_resolve_autostart_fallback_user` — "the earliest active member who enabled a
+`SignalSourceConfig`", i.e. **whoever ran this wizard**. That function's own
+docstring states the assumption this program has to earn:
+
+> _"Enabling a signal source is the team's opt-in to the signals product, of
+> which autonomous PRs are a part."_
+
+The user-facing control is the **PR generation** switch + **Threshold**
+segmented control in the Inbox
+(`posthog/frontend/src/scenes/inbox/components/config/SelfDrivingSection.tsx`).
+
+**The rule this program follows.** Enabling a source _is_ the consent, so the
+consent has to be informed at the moment it's given — and onboarding has to
+stay fast, which means **one dimmed line per option, never an extra
+question**. Concretely:
+
+| Surface                                                | Carries                                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Intro "More info" (`SelfDrivingIntroScreen.tsx`)       | Bullet: opens a draft PR by itself, flat $15                                |
+| Learn deck (`content/index.tsx`, scene 8)              | "opens a draft PR on its own — it doesn't wait to be asked" + the switch    |
+| Run tips (`content/tips.ts`)                           | `autonomy` tip + `pricing` tip                                              |
+| **Step-5 ask** (context-mill `5-connected-tools.md`)   | Prompt states the consequence; **per-option `description`** on every tool    |
+| Step-4 natives (context-mill `4-sources.md`)           | "what it reads / what Self-driving does with it" pair, carried into step 7   |
+| Report (context-mill `7-report.md`)                    | Mandatory **"Autonomous PRs and cost"** section + where to switch it off     |
+| Outro (`index.ts` `buildOutroData`)                    | `body` states unprompted PRs at every priority; next-step names the switch   |
+
+**Two traps.** (1) `description` renders **only in the multi-select path**
+(`PickerMenu.MultiPickerMenu`) — a `single` ask silently drops it, so
+consequence text for a single-select must go in the prompt string. (2) Copy
+that frames a PR as user-pulled ("kick off a PR when you like the fix") is
+worse than silence — it actively contradicts the default. Both the outro and
+the learn deck used to read that way; keep them describing a push, not a pull.
 
 ---
 

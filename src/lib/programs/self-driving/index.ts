@@ -82,13 +82,16 @@ const run: ProgramRun = {
         items: [
           'Investigate reports with the agent',
           'Tag teammates to loop them in',
-          'Kick off a PR when you like the proposed fix ($15 flat)',
+          'Turn PR generation off, or raise its priority threshold',
           'Or work from Slack (tag @PostHog) and MCP',
         ],
       },
       body:
-        'Pricing: scouts, signals, and reports are free. You pay a flat ' +
-        '$15 only when a report ships a PR.',
+        'Heads up: when a report has a clear fix, Self-driving opens a draft ' +
+        'PR on its own — no approval step, at every priority. That PR is the ' +
+        'only thing you pay for, a flat $15 each; scouts, signals, and ' +
+        'reports are free. Change it any time with PR generation in your ' +
+        'inbox.',
       reportFile: REPORT_FILE,
     };
   },

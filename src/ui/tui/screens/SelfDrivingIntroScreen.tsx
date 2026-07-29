@@ -67,6 +67,10 @@ export const SelfDrivingIntroScreen = ({
         <Text>{'•'} Groups signals into prioritized reports in your inbox</Text>
         <Text>{'•'} Researches findings in your code via GitHub</Text>
         <Text>
+          {'•'} Opens a draft PR by itself when a report has a clear fix – a
+          flat $15 each, and the only thing you pay for
+        </Text>
+        <Text>
           {'•'} Measures shipped fixes, and reopens the loop if the pattern
           persists
         </Text>
@@ -78,7 +82,7 @@ export const SelfDrivingIntroScreen = ({
       <Box flexDirection="column" marginTop={1}>
         <Text>
           PostHog watches how people really use your product, finds issues, and
-          proposes fixes.
+          opens PRs to fix them.
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1} alignItems="center">

@@ -36,10 +36,16 @@ export const SELF_DRIVING_TIPS: Tip[] = [
       'After a fix ships, PostHog measures the result. If the pattern persists, a new signal reopens the work.',
   },
   {
+    id: 'autonomy',
+    title: 'It acts on its own',
+    description:
+      'When a report has a clear fix, PostHog opens a draft PR without asking. Turn it off any time with PR generation in your inbox.',
+  },
+  {
     id: 'pricing',
     title: 'What it costs',
     description:
-      'Watching is free. You pay a flat $15 only when a report ships a PR.',
+      'Scouts, signals, and reports are free. A PR costs a flat $15 — the only thing you pay for.',
   },
   {
     id: 'work-anywhere',
