@@ -64,10 +64,9 @@ const HANDOFF_PARAMS = Type.Object({
   ),
 });
 
-/** The three queue tools bound to one agent's orchestrator context. `leakNote` reports transport-token leaks observed in this task's writes (see content-guard.ts); the note rides the handoff so the review stage checks the touched files. */
+/** The three queue tools bound to one agent's orchestrator context. */
 export function createPiOrchestratorTools(
   ctx: OrchestratorToolsContext,
-  leakNote?: () => string | undefined,
 ): ToolDefinition[] {
   const enqueueTask = defineTool({
     name: 'enqueue_task',
@@ -127,19 +126,14 @@ export function createPiOrchestratorTools(
       remark: Type.Optional(Type.String({ description: REMARK_ASK })),
     }),
     execute(_id, args) {
-      const complete = args as {
-        status: 'done' | 'failed' | 'not needed';
-        handoff: TaskHandoff;
-        remark?: string;
-      };
-      const note = leakNote?.();
-      if (note) {
-        complete.handoff.forNextAgent = [
-          complete.handoff.forNextAgent,
-          note,
-        ].join('\n');
-      }
-      const res = applyComplete(ctx, complete);
+      const res = applyComplete(
+        ctx,
+        args as {
+          status: 'done' | 'failed' | 'not needed';
+          handoff: TaskHandoff;
+          remark?: string;
+        },
+      );
       if (!res.ok) return Promise.resolve(text(`Error: ${res.message}`));
       return Promise.resolve(text('ok'));
     },

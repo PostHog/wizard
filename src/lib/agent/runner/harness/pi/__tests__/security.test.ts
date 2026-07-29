@@ -6,10 +6,16 @@ import {
   evaluateToolCall,
   createSecurityExtension,
   isScopedFileRemoval,
+  observeTransportLeak,
   overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn() },
+}));
 
 // @posthog/warlock resolves to __mocks__/@posthog/warlock.ts (ESM + WASM can't
 // load under the CJS test runner). Default: scan matches nothing; tests
@@ -685,5 +691,50 @@ describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)',
       content: 'x',
     });
     expect(decision.block).toBe(false);
+  });
+});
+
+describe('observeTransportLeak (passive telemetry)', () => {
+  // The exact garbage run 9704a73e wrote into a customer's global-error.tsx.
+  const LEAKED_LINE =
+    "' }#+#+#+#+.functions.complete_task  (commentary  json.functions.complete_taskjson>tagger历山大发 { ";
+
+  it('captures the leak evidence, never the content', () => {
+    observeTransportLeak('Write', LEAKED_LINE, 'app/global-error.tsx');
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({
+      tool: 'Write',
+      leak: 'leaked tool-call tokens',
+      leak_token: '"functions.complete_task"',
+      content_length: LEAKED_LINE.length,
+    });
+  });
+
+  it('escapes DEL in the reported token', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak('Edit', 'trailing\x7f', 'x.ts');
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({
+      leak: 'control characters',
+      leak_token: '"\\u007f"',
+    });
+  });
+
+  it('stays silent on real source, including Firebase functions.* code', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak(
+      'Write',
+      'const f = functions.https.onRequest(app);\nline\n\ttabbed\r\n',
+      'index.ts',
+    );
+    expect(
+      vi
+        .mocked(analytics.wizardCapture)
+        .mock.calls.some(([e]) => e === 'file content leak observed'),
+    ).toBe(false);
   });
 });
