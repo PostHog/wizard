@@ -16,6 +16,10 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
 
   it('ranks the cross-platform targets ahead of the native targets', () => {
     expect(SOURCE_MAPS_TARGETS).toContainEqual({
+      id: 'react-native',
+      name: 'React Native',
+    });
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({
       id: 'android',
       name: 'Android',
     });
@@ -227,13 +231,38 @@ describe('coerceReport', () => {
           },
         ],
       },
-      () => true,
+      { hasBuildTarget: () => true },
     );
 
     expect(report.projects[0]).toEqual({
       path: '.',
       framework: 'Flutter',
       variant: 'flutter',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('retains an Expo React Native project with PostHog as instrumentable', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'React Native',
+            targetId: 'react-native',
+            hasPostHog: true,
+          },
+        ],
+      },
+      { isExpoProject: () => true },
+    );
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'React Native',
+      variant: 'react-native',
       hasPostHog: true,
       instrumentable: true,
     });
@@ -254,7 +283,7 @@ describe('coerceReport', () => {
           },
         ],
       },
-      () => false,
+      { hasBuildTarget: () => false },
     );
 
     expect(report.projects[0]).toEqual(
@@ -262,6 +291,30 @@ describe('coerceReport', () => {
         variant: null,
         instrumentable: false,
         reason: expect.stringMatching(/no web, android or ios target/i),
+      }),
+    );
+  });
+
+  it('retains an Expo-labelled project resolved to react-native as instrumentable', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'Expo (React Native)',
+            targetId: 'react-native',
+            hasPostHog: true,
+          },
+        ],
+      },
+      { isExpoProject: () => true },
+    );
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'react-native',
+        instrumentable: true,
       }),
     );
   });
@@ -279,7 +332,7 @@ describe('coerceReport', () => {
           },
         ],
       },
-      () => true,
+      { hasBuildTarget: () => true },
     );
 
     expect(report.projects[0]).toEqual(
@@ -288,6 +341,76 @@ describe('coerceReport', () => {
         hasPostHog: false,
         instrumentable: false,
         reason: expect.stringMatching(/no posthog sdk/i),
+      }),
+    );
+  });
+
+  it('blocks a bare React Native project (no expo package)', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'React Native',
+          targetId: 'react-native',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: null,
+        instrumentable: false,
+        reason: expect.stringMatching(/bare react native/i),
+      }),
+    );
+  });
+
+  it('blocks an Expo React Native project that has no PostHog SDK yet', () => {
+    const report = coerceReport(
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'React Native',
+            targetId: 'react-native',
+            hasPostHog: false,
+          },
+        ],
+      },
+      { isExpoProject: () => true },
+    );
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'react-native',
+        hasPostHog: false,
+        instrumentable: false,
+        reason: expect.stringMatching(/no posthog sdk/i),
+      }),
+    );
+  });
+
+  it('blocks a Flutter project misclassified as React Native', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Flutter',
+          targetId: 'react-native',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: null,
+        instrumentable: false,
+        reason: expect.stringMatching(/isn't supported/i),
       }),
     );
   });
@@ -314,11 +437,11 @@ describe('coerceReport', () => {
     const report = coerceReport({
       repoType: 'monorepo',
       projects: [
-        // not in the automatable set
+        // no variant covers this stack
         {
-          path: 'apps/mobile',
-          framework: 'React Native',
-          targetId: 'react-native',
+          path: 'apps/desktop',
+          framework: 'Qt',
+          targetId: 'qt',
           hasPostHog: true,
         },
         // garbage value
