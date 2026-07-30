@@ -92,6 +92,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
+  reportFile: SETUP_REPORT_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask

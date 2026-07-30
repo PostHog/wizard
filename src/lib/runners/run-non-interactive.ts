@@ -161,6 +161,9 @@ export function runNonInteractive(
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
           : undefined,
+        handoffPath: config.reportFile
+          ? join(session.installDir, config.reportFile)
+          : undefined,
         enabled: !session.noTelemetry,
       });
       taskStream.attach();

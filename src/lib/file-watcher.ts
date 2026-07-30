@@ -1,5 +1,7 @@
 /**
- * JSON file watcher shared by runner and UI machinery.
+ * File watcher shared by runner and UI machinery. Parses JSON by default;
+ * `format: 'text'` delivers the raw file contents instead (for markdown
+ * artifacts like the setup report).
  *
  * `fs.watch` alone is unreliable for atomic-rename writes, so the watcher
  * pairs it with a continuous mtime-polled re-read. The poll catches missed
@@ -30,11 +32,14 @@ export interface FileWatcherOptions {
   ignoreInitialFile?: boolean;
   /** Refuse to read files larger than this many bytes. */
   maxFileSizeBytes?: number;
+  /** How to interpret the file: parsed JSON (default) or the raw text. */
+  format?: 'json' | 'text';
 }
 
-/** Watch `path` for JSON updates and call `onUpdate(parsed)` whenever the
- * file's mtime changes and the contents are valid JSON. Caller must invoke
- * `handle.stop()` to release the watcher. */
+/** Watch `path` for updates and call `onUpdate` whenever the file's mtime
+ * changes and the contents are readable (valid JSON, or any text with
+ * `format: 'text'` — then `onUpdate` receives the raw string). Caller must
+ * invoke `handle.stop()` to release the watcher. */
 export function startFileWatcher(
   path: string,
   onUpdate: (parsed: unknown) => void,
@@ -103,13 +108,16 @@ export function startFileWatcher(
       }
       if (!force && stat.mtimeMs === lastMtimeMs) return;
       lastMtimeMs = stat.mtimeMs;
-      const parsed: unknown = JSON.parse(fs.readFileSync(path, 'utf-8'));
+      const raw = fs.readFileSync(path, 'utf-8');
+      const parsed: unknown = options.format === 'text' ? raw : JSON.parse(raw);
       lastReadErrorSignature = null;
       onUpdate(parsed);
     } catch (error) {
       logReadError(
         `invalid:${fileSignature}:${String(error)}`,
-        `could not read valid JSON (${String(error)})`,
+        options.format === 'text'
+          ? `could not read the file (${String(error)})`
+          : `could not read valid JSON (${String(error)})`,
       );
     }
   };

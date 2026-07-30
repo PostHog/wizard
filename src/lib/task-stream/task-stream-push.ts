@@ -34,6 +34,7 @@ import {
   StreamEvent,
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
+import { HandoffWatcher } from './handoff-watcher';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -109,6 +110,9 @@ export interface TaskStreamPushOptions {
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
   eventPlanPath?: string;
+  /** Optional absolute path of the program's report file (the handoff doc),
+   * mirrored into the store whenever the agent (re)writes it. */
+  handoffPath?: string;
   /** When false, destination subscription/delivery remains disabled. */
   enabled?: boolean;
 }
@@ -120,6 +124,7 @@ export class TaskStreamPush {
   private readonly programId: string;
   private readonly sessionId: string;
   private readonly eventPlanWatcher: EventPlanWatcher | null;
+  private readonly handoffWatcher: HandoffWatcher | null;
 
   private enabled: boolean;
   private created = false;
@@ -141,6 +146,9 @@ export class TaskStreamPush {
     this.eventPlanWatcher = opts.eventPlanPath
       ? new EventPlanWatcher(this.store, opts.eventPlanPath)
       : null;
+    this.handoffWatcher = opts.handoffPath
+      ? new HandoffWatcher(this.store, opts.handoffPath)
+      : null;
     this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
@@ -158,6 +166,7 @@ export class TaskStreamPush {
    */
   attach(store?: WizardStore): void {
     this.eventPlanWatcher?.start();
+    this.handoffWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;
     const target = store ?? this.store;
@@ -167,6 +176,7 @@ export class TaskStreamPush {
   /** Stop subscribing. Does not flush. */
   detach(): void {
     this.eventPlanWatcher?.stop();
+    this.handoffWatcher?.stop();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -187,6 +197,9 @@ export class TaskStreamPush {
   ): Promise<void> {
     this.shuttingDown = true;
     this.eventPlanWatcher?.refresh();
+    // Force one last read so a report written moments before exit still makes
+    // the terminal flush even if the filesystem event never fired.
+    this.handoffWatcher?.refresh();
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -287,7 +300,7 @@ export class TaskStreamPush {
   }
 
   private async sendOnce(): Promise<void> {
-    const { session, tasks, eventPlan } = this.store;
+    const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
 
@@ -301,6 +314,9 @@ export class TaskStreamPush {
       event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
       error: buildError(phase, session.outroData),
       pending_input: buildPendingInput(session.pendingQuestion),
+      // Included on every push once captured; the backend keeps it sticky, so
+      // pushes that raced the capture cannot un-set it.
+      handoff_text: handoffText ?? undefined,
       timestamp: new Date().toISOString(),
     };
 
