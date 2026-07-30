@@ -333,7 +333,7 @@ describe('WizardStore', () => {
       });
     });
 
-    it('enableFeature tags additional_features with the joined queue', () => {
+    it('enableFeature tags additional_feature_kinds with the joined queue', () => {
       const store = createStore();
       store.enableFeature(AdditionalFeature.LLM);
       expect(analytics.setTag).toHaveBeenCalledWith(
@@ -348,6 +348,16 @@ describe('WizardStore', () => {
       expect(analytics.setTag).toHaveBeenCalledWith(
         'run_phase',
         RunPhase.Running,
+      );
+    });
+
+    it('completeRunStep resets the run_phase tag, not just the session', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Completed);
+      store.completeRunStep('integrate-run');
+      expect(analytics.setTag).toHaveBeenLastCalledWith(
+        'run_phase',
+        RunPhase.Idle,
       );
     });
 
