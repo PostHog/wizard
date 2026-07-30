@@ -18,7 +18,6 @@ export const featureFlagsConfig: ProgramConfig = {
   steps: AGENT_SKILL_STEPS,
   reportFile: FEATURE_FLAGS_REPORT_FILE,
   getContentBlocks,
-  allowedTools: ['Agent'],
   requires: ['posthog-integration'],
   run: {
     integrationLabel: 'feature-flags',
