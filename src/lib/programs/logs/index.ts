@@ -10,6 +10,26 @@ const LOGS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
 const LOGS_REPORT_FILE = 'posthog-logs-report.md';
 
 /**
+ * Project-level truth for whether session replay is on, read from
+ * `/api/projects/:id/` at auth time.
+ *
+ * The skill needs this to decide whether the `session` correlation tier is
+ * reachable at all, and repo-local evidence can't answer it — replay is
+ * routinely enabled from the snippet or from a separate frontend repo, so its
+ * absence here proves nothing. `null`/`undefined` means the opt-in wasn't in
+ * the payload, which is not the same as "off".
+ */
+function sessionReplayNote(enabled: boolean | null | undefined): string {
+  if (enabled === true) {
+    return 'Session replay is enabled on this PostHog project, so linking log records to recordings is achievable — aim for the `session` correlation tier.';
+  }
+  if (enabled === false) {
+    return 'Session replay is disabled on this PostHog project, so log records cannot link to recordings however they are wired. Aim for the `person` tier and say in the report that enabling session replay is what would unlock replay linking.';
+  }
+  return 'This run could not read whether session replay is enabled on this PostHog project. Wire correlation as normal and let the verify step establish which tier was actually reached, rather than assuming either way.';
+}
+
+/**
  * `[ABORT] <reason>` cases the `logs-setup` skill can emit. The reason string is
  * part of the skill contract — it is defined in the skill's `Abort statuses`
  * section (context-mill `context/skills/logs-setup`).
@@ -57,7 +77,9 @@ export const logsConfig: ProgramConfig = {
     // No `skillId`: linear.ts skips its pre-install step when one isn't set, so
     // the agent loads the menu and installs the variant that matches the
     // project. The prompt below tells it how.
-    customPrompt: () => `Set up PostHog Logs for this project.
+    customPrompt: (ctx) => `Set up PostHog Logs for this project.
+
+${sessionReplayNote(ctx.teamProductOptIns?.sessionReplay)}
 
 This flow has no pre-installed skill — you install the right one yourself:
 
