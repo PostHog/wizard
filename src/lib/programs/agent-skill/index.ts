@@ -48,9 +48,6 @@ export interface SkillProgramOptions {
   buildOutroData?: ProgramRun['buildOutroData'];
   /** Known `[ABORT] <reason>` cases the skill can emit. */
   abortCases?: AbortCase[];
-  /** When true, `publish_handoff` also publishes the report to the PostHog
-   *  session as `handoff_text`. Defaults to false. */
-  uploadToPostHog?: boolean;
 }
 
 export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
@@ -71,7 +68,6 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
       docsUrl: opts.docsUrl,
       spinnerMessage: opts.spinnerMessage,
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
-      uploadToPostHog: opts.uploadToPostHog,
       buildOutroData: opts.buildOutroData,
       abortCases: opts.abortCases,
     },

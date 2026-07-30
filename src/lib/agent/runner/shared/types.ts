@@ -49,12 +49,6 @@ export interface ProgramRun {
   reportFile: string;
   docsUrl: string;
   errorMessage?: string;
-  /**
-   * When true, the `publish_handoff` tool also publishes the report to the
-   * PostHog session as `handoff_text`. Defaults to false — only self-driving
-   * and basic-integration opt in.
-   */
-  uploadToPostHog?: boolean;
   additionalFeatureQueue?: readonly AdditionalFeature[];
   /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];

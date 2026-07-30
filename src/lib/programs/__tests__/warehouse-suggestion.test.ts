@@ -99,9 +99,7 @@ describe('outro suggestion', () => {
 
       expect(outro.message).toBe('Successfully installed PostHog!');
       expect(outro.changes).toContain('Added PostHog provider');
-      // No report file on disk anymore — publish_handoff publishes the
-      // report as a notebook + session handoff instead.
-      expect(outro.reportFile).toBeUndefined();
+      expect(outro.reportFile).toBe('posthog-setup-report.md');
     }
   });
 });

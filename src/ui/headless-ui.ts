@@ -21,8 +21,4 @@ export class HeadlessUI extends LoggingUI {
     super.syncTodos(todos);
     this.store.syncTodos(todos);
   }
-
-  setHandoffText(text: string): void {
-    this.store.setHandoffText(text);
-  }
 }
