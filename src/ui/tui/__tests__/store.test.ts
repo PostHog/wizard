@@ -333,6 +333,24 @@ describe('WizardStore', () => {
       });
     });
 
+    it('enableFeature tags additional_features with the joined queue', () => {
+      const store = createStore();
+      store.enableFeature(AdditionalFeature.LLM);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'additional_features',
+        'llm',
+      );
+    });
+
+    it('setRunPhase tags run_phase', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Running);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'run_phase',
+        RunPhase.Running,
+      );
+    });
+
     it('setMcpComplete fires mcp complete event', () => {
       const store = createStore();
       store.setMcpComplete(McpOutcome.Installed, ['Cursor', 'VS Code']);

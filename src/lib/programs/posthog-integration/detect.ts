@@ -73,6 +73,9 @@ export async function detectPostHogIntegration(
   for (const feature of discoverFeatures(installDir)) {
     ctx.addDiscoveredFeature(feature);
   }
+  // Explicit even at zero features — same denominator rationale as the
+  // warehouse-sources capture below.
+  analytics.setTag('discovered_features', session.discoveredFeatures.join(','));
 
   detectWarehouseSourcesForSuggestion(ctx, installDir);
 
