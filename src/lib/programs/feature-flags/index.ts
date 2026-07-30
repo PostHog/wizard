@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { OutroKind } from '@lib/wizard-session';
 import { getContentBlocks } from './content/index.js';
@@ -7,22 +7,27 @@ const FEATURE_FLAGS_REPORT_FILE = 'posthog-feature-flags-report.md';
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
 const SUCCESS_MESSAGE = 'Your feature flag is ready to test';
 
+const FEATURE_FLAGS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
+  step.id === 'intro' ? { ...step, screenId: 'feature-flags-intro' } : step,
+);
+
 /**
  * No fixed `skillId`: context-mill publishes one feature-flag skill per
  * framework, so the agent selects and installs the matching variant at runtime.
  */
 export const featureFlagsConfig: ProgramConfig = {
   command: 'feature-flags',
-  description: 'Add a PostHog feature flag to an existing app',
+  description: 'Ship an existing product change behind a PostHog feature flag',
   id: 'feature-flags',
-  steps: AGENT_SKILL_STEPS,
+  steps: FEATURE_FLAGS_STEPS,
   reportFile: FEATURE_FLAGS_REPORT_FILE,
   getContentBlocks,
   requires: ['posthog-integration'],
   run: {
     integrationLabel: 'feature-flags',
     customPrompt:
-      () => `Add one real PostHog feature flag to this existing application.
+      () => `Place one developer-approved product change behind a real PostHog
+feature flag in this existing application.
 
 This flow has no pre-installed skill:
 
@@ -75,7 +80,7 @@ Do not duplicate the detailed verification table.`,
     successMessage: SUCCESS_MESSAGE,
     reportFile: FEATURE_FLAGS_REPORT_FILE,
     docsUrl: FEATURE_FLAGS_DOCS_URL,
-    spinnerMessage: 'Adding a PostHog feature flag...',
+    spinnerMessage: 'Putting your change behind a PostHog feature flag...',
     estimatedDurationMinutes: 5,
     buildOutroData: (_session, credentials) => {
       const uiHost = credentials.host.appHost.replace(/\/$/, '');
