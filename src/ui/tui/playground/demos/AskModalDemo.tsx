@@ -32,12 +32,6 @@ enum DemoStep {
   Done = 'done',
 }
 
-/**
- * Counts we step through to exercise PickerMenu paging at the edges: a long
- * list that obviously pages, a just-past-the-cap list, and the degenerate
- * 1–2 item cases that (with tall rows) can still split into multiple pages.
- */
-
 /** Label-only options at a given count, e.g. "Option 1" ... "Option 100". */
 const countLabelOptions = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
@@ -45,11 +39,7 @@ const countLabelOptions = (n: number) =>
     value: `opt-${i + 1}`,
   }));
 
-/**
- * Options at a given count, each carrying a wrapping description so the row
- * is tall (label + ~3 wrapped lines). This is the configuration that drives
- * `rowCost` high enough to trip the multi-page bug on 1–2 item lists.
- */
+/** Options at a given count, each with a wrapping description so rows are tall. */
 const countDescOptions = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
     label: `Option ${i + 1}`,
@@ -58,11 +48,7 @@ const countDescOptions = (n: number) =>
       'A longer description that wraps onto multiple lines so each option row costs several terminal rows, exercising the viewport cap and the paging math at small counts.',
   }));
 
-/**
- * Repro of the self-driving-setup scout-proposal ask that paged 3 described
- * options one per page on a short terminal ("↓ 2 more [N] for next page").
- * With the MIN_COUNT_TO_PAGE fix, all three render on one page at any height.
- */
+/** Repro of the scout-proposal ask that paged 3 tall described options one per page. */
 const SCOUT_REPRO_OPTIONS = [
   {
     label: 'None — keep the built-in troop',
