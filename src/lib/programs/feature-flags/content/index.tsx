@@ -14,16 +14,16 @@ const FLAG_PATHS: ContentBlock = {
   pause: 6000,
   lines: [
     <Text>
-      <Text color={Colors.muted}>flag false</Text>
-      <Text dimColor>{'       -> control experience'}</Text>
+      <Text color={Colors.muted}>false</Text>
+      <Text dimColor>{'       -> control'}</Text>
     </Text>,
     <Text>
-      <Text color={Colors.accent}>flag true</Text>
-      <Text dimColor>{'        -> flagged experience'}</Text>
+      <Text color={Colors.accent}>true</Text>
+      <Text dimColor>{'        -> flagged'}</Text>
     </Text>,
     <Text>
-      <Text color={Colors.muted}>flag unavailable</Text>
-      <Text dimColor>{' -> control experience'}</Text>
+      <Text color={Colors.muted}>unavailable</Text>
+      <Text dimColor>{' -> control'}</Text>
     </Text>,
   ],
 };
