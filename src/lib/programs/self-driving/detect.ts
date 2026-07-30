@@ -27,8 +27,11 @@ import {
   type Dirent,
 } from 'fs';
 import { join } from 'path';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';
@@ -40,6 +43,20 @@ export const POSTHOG_PRESENT_KEY = 'postHogPresent';
  * into the chosen sub-app, not the root.
  */
 export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
+
+/** Self-driving's own detected-tools key — not the warehouse one, which the integration program reads. */
+export const SELF_DRIVING_DETECTED_TOOLS_KEY = 'selfDrivingDetectedTools';
+
+/** Read the detected tools out of frameworkContext. */
+export function getSelfDrivingDetectedTools(
+  session: WizardSession,
+): DetectedSource[] {
+  return (
+    (session.frameworkContext[SELF_DRIVING_DETECTED_TOOLS_KEY] as
+      | DetectedSource[]
+      | undefined) ?? []
+  );
+}
 
 // Matches `posthog` at a dependency boundary (line start, or after "'/=:.@ or
 // whitespace): catches `com.posthog:posthog-android` and `@posthog/ai`, skips
@@ -291,4 +308,66 @@ export function detectSelfDrivingPrerequisites(
   // screen: found → skip straight to self-driving; not found → ask to set up
   // PostHog first.
   setFrameworkContext(POSTHOG_PRESENT_KEY, detectPostHogPresent(installDir));
+
+  detectConnectedTools(installDir, setFrameworkContext);
+}
+
+/** Step 5's ask options intersected with `SOURCE_DETECTORS` — reconcile when the skill's catalog grows. */
+export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
+  // Issue trackers / code hosts
+  'Github',
+  'GitLab',
+  'Gitea',
+  'Linear',
+  'Jira',
+  'Shortcut',
+  // Error tracking
+  'Sentry',
+  'Rollbar',
+  'Bugsnag',
+  'Honeybadger',
+  'Raygun',
+  // Support desks
+  'Zendesk',
+  'Freshdesk',
+  'Front',
+  'Gorgias',
+  'Kustomer',
+  'Plain',
+  // Security scanners
+  'Snyk',
+  // Product feedback
+  'Canny',
+  'Productboard',
+  // Search analytics
+  'GoogleSearchConsole',
+]);
+
+/** Scan for inbox-connectable tools so STEP 5 can surface them first. Best-effort — never blocks detection. */
+function detectConnectedTools(
+  installDir: string,
+  setFrameworkContext: (key: string, value: unknown) => void,
+): void {
+  try {
+    const tools = detectWarehouseSources(installDir).filter((s) =>
+      SELF_DRIVING_TOOL_KINDS.has(s.kind),
+    );
+
+    // Tagged even at zero, so "found nothing" is distinguishable from "never ran".
+    analytics.setTag('connected_tools_detected_count', tools.length);
+    if (tools.length === 0) return;
+
+    analytics.setTag(
+      'connected_tools_detected',
+      tools.map((s) => s.kind).join(','),
+    );
+    setFrameworkContext(SELF_DRIVING_DETECTED_TOOLS_KEY, tools);
+  } catch (error) {
+    // -1, not absent, so a failed scan stays distinguishable from one that never ran.
+    analytics.setTag('connected_tools_detected_count', -1);
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectConnectedTools' },
+    );
+  }
 }

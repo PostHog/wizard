@@ -1,0 +1,94 @@
+name: Provisioning Probe
+
+# Signs up for real against the live provisioning API and asserts the wizard can read the
+# credentials back out. No mocked test can catch a field disappearing from that API — the
+# `service_id` removal broke every no-browser signup for two days while the whole suite
+# stayed green, because the fixtures asserted the shape we assumed rather than the shape
+# the server sends.
+#
+# Creates one throwaway account per run, so it stays inert until someone sets the
+# PROVISIONING_PROBE_EMAIL repository variable to an address they own.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Cloud region to probe'
+        required: false
+        default: 'us'
+        type: choice
+        options: [us, eu]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Provision a throwaway account (${{ inputs.region || 'us' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Check the probe is configured
+        id: config
+        env:
+          PROBE_EMAIL: ${{ vars.PROVISIONING_PROBE_EMAIL }}
+        run: |
+          if [ -z "$PROBE_EMAIL" ]; then
+            echo "PROVISIONING_PROBE_EMAIL is not set — skipping." >> "$GITHUB_STEP_SUMMARY"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install pnpm
+        if: steps.config.outputs.configured == 'true'
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.23.0
+          run_install: false
+
+      - name: Set up Node
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: steps.config.outputs.configured == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        if: steps.config.outputs.configured == 'true'
+        run: pnpm build
+
+      - name: Provision and verify the credentials come back
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PROBE_EMAIL: ${{ vars.PROVISIONING_PROBE_EMAIL }}
+          REGION: ${{ inputs.region || 'us' }}
+        run: |
+          set -o pipefail
+          # Unique per run so a replay never collides with an existing account.
+          email="${PROBE_EMAIL/@/+probe-${GITHUB_RUN_ID}@}"
+
+          node ./dist/index.js provision \
+            --email "$email" \
+            --region "$REGION" \
+            --json > result.json
+
+          # A response the wizard can't read is the failure this probe exists to catch,
+          # so assert on the fields the signup flow actually consumes.
+          node -e '
+            const r = require("./result.json");
+            const missing = ["projectApiKey", "host", "projectId"].filter((k) => !r[k]);
+            if (missing.length) {
+              console.error("provisioning returned no " + missing.join(", "));
+              process.exit(1);
+            }
+            console.log("provisioned project " + r.projectId + " on " + r.host);
+          '
