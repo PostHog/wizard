@@ -74,7 +74,10 @@ export const FeatureFlagsIntroScreen = ({
         <Text dimColor>It wires both experiences. You keep the rollout.</Text>
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>About five minutes. New flags start at 0%.</Text>
+        <Text dimColor>
+          Setup usually takes about five minutes. New flags start at 0% rollout,
+          so you decide when to release.
+        </Text>
       </Box>
     </Box>
   );
