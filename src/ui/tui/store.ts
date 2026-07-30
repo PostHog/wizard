@@ -688,8 +688,10 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
       analytics.setTag(
-        'additional_features',
+        'additional_feature_kinds',
         this.session.additionalFeatureQueue.join(','),
       );
     }
@@ -808,8 +810,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {

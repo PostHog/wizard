@@ -337,7 +337,7 @@ describe('WizardStore', () => {
       const store = createStore();
       store.enableFeature(AdditionalFeature.LLM);
       expect(analytics.setTag).toHaveBeenCalledWith(
-        'additional_features',
+        'additional_feature_kinds',
         'llm',
       );
     });

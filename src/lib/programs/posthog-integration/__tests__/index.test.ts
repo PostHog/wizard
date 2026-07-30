@@ -1,9 +1,9 @@
 /**
  * `typescript` tagging in the core integration's run() callback.
  *
- * This runs after the 'auth' step (see steps.ts ordering), so by the time it
- * tags, `analytics.setGroups` has already been called — the tag rides on
- * every capture from here on, org key included.
+ * `run()` resolves before `runProgram()` authenticates, so this tags ahead of
+ * `setGroups()`. Order doesn't matter: the tag bag is independent of group
+ * state, so the value rides on every later capture either way.
  */
 
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';

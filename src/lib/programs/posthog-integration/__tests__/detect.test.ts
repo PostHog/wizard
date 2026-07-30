@@ -52,14 +52,14 @@ function buildCtx(): ProgramReadyContext {
   };
 }
 
-describe('detectPostHogIntegration — discovered_features tag', () => {
+describe('detectPostHogIntegration — discovered feature tags', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (detectFramework as Mock).mockResolvedValue(null);
     (detectWarehouseSources as Mock).mockReturnValue([]);
   });
 
-  it('tags the joined feature list', async () => {
+  it('tags the joined feature list and its count', async () => {
     (discoverFeatures as Mock).mockReturnValue([
       DiscoveredFeature.Stripe,
       DiscoveredFeature.LLM,
@@ -68,16 +68,27 @@ describe('detectPostHogIntegration — discovered_features tag', () => {
     await detectPostHogIntegration(buildCtx());
 
     expect(analytics.setTag).toHaveBeenCalledWith(
-      'discovered_features',
+      'discovered_feature_kinds',
       'stripe,llm',
+    );
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'discovered_feature_count',
+      2,
     );
   });
 
-  it('tags an explicit empty string at zero — absence stays distinguishable from never-ran', async () => {
+  it('tags a zero count and no feature list at zero — absence stays distinguishable from never-ran', async () => {
     (discoverFeatures as Mock).mockReturnValue([]);
 
     await detectPostHogIntegration(buildCtx());
 
-    expect(analytics.setTag).toHaveBeenCalledWith('discovered_features', '');
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'discovered_feature_count',
+      0,
+    );
+    expect(analytics.setTag).not.toHaveBeenCalledWith(
+      'discovered_feature_kinds',
+      expect.anything(),
+    );
   });
 });
