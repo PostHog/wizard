@@ -490,6 +490,15 @@ export async function runOrchestrator(
           logToFile(
             `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
           );
+          // A task without its instructions must fail here, not run blind:
+          // run 91cf40eb's report task started after two EACCES install
+          // failures (unwritable external-volume cache) and died silently.
+          // The executor catches this, captures the exception, and fails the
+          // task through the normal outcome check.
+          throw new Error(
+            `Skill "${variantId}" for task "${task.type}" could not be installed (${result.kind}). ` +
+              'If this is a permissions error, check that the project directory is writable.',
+          );
         }
       }
       // Empty spinner messages suppress the per-task spinner line (the queue
