@@ -108,7 +108,7 @@ The final report is written to ./${LOGS_REPORT_FILE}.`,
     reportFile: LOGS_REPORT_FILE,
     docsUrl: 'https://posthog.com/docs/logs',
     spinnerMessage: 'Setting up PostHog Logs...',
-    estimatedDurationMinutes: 5,
+    estimatedDurationMinutes: 12,
     abortCases: LOGS_ABORT_CASES,
   },
 };
