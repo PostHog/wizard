@@ -1,58 +1,26 @@
 /**
- * Feature-flags learn deck. It explains the safety model while the agent picks
- * and runs the framework-specific Context Mill skill.
+ * Feature-flags learn deck. It explains when to use the program, then teaches
+ * the release, fallback, evaluation, and verification model while the agent
+ * runs the framework-specific Context Mill skill.
  */
 
 import { Text } from 'ink';
 import { Colors } from '@ui/tui/styles';
+import type { WizardStore } from '@ui/tui/store';
 import { TextRevealMode } from '@ui/tui/primitives/TextBlock';
 import type { ContentBlock } from '@ui/tui/primitives/content-types';
+import { StatusPeekTrigger } from '@ui/tui/components/StatusPeekTrigger';
+import {
+  EVALUATION_PLACEMENT,
+  RELEASE_SWITCH,
+  ROLLOUT_METER,
+  SAFE_PATHS,
+  VERIFICATION_LOOP,
+} from './visuals.js';
 
-const FLAG_PATHS: ContentBlock = {
-  type: 'lines',
-  interval: 500,
-  pause: 6000,
-  lines: [
-    <Text>
-      <Text color={Colors.muted}>false</Text>
-      <Text dimColor>{'       -> control'}</Text>
-    </Text>,
-    <Text>
-      <Text color={Colors.accent}>true</Text>
-      <Text dimColor>{'        -> flagged'}</Text>
-    </Text>,
-    <Text>
-      <Text color={Colors.muted}>unavailable</Text>
-      <Text dimColor>{' -> control'}</Text>
-    </Text>,
-  ],
-};
+const CLEAR: ContentBlock = { type: 'clear', pause: 1500 };
 
-const VERIFICATION: ContentBlock = {
-  type: 'lines',
-  interval: 500,
-  pause: 7000,
-  lines: [
-    <Text>
-      <Text color={Colors.accent}>{'  1  '}</Text>
-      <Text>Run the control path</Text>
-    </Text>,
-    <Text>
-      <Text color={Colors.accent}>{'  2  '}</Text>
-      <Text>Run the flagged path</Text>
-    </Text>,
-    <Text>
-      <Text color={Colors.accent}>{'  3  '}</Text>
-      <Text>Confirm the live evaluation</Text>
-    </Text>,
-    <Text>
-      <Text color={Colors.accent}>{'  4  '}</Text>
-      <Text>Restore the safe rollout</Text>
-    </Text>,
-  ],
-};
-
-export const getContentBlocks = (): ContentBlock[] => [
+export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   {
     content: 'Welcome.',
     pause: 3000,
@@ -61,67 +29,110 @@ export const getContentBlocks = (): ContentBlock[] => [
   },
   {
     content:
-      "I'm choosing the feature flag skill that best matches this application.",
+      "You have a change to ship, but you're not ready to release it to everyone.",
+    pause: 5000,
+  },
+  { content: "That's when you reach for a feature flag.", pause: 4000 },
+  {
+    content: 'The Wizard handles the wiring. You keep the rollout.',
     pause: 5000,
   },
 
-  { type: 'clear', pause: 1500 },
+  CLEAR,
 
   {
-    content: 'Feature flags separate deployment from release.',
-    pause: 4500,
-  },
-  {
-    content:
-      'The code can ship while the existing experience remains the default.',
     pause: 5000,
-  },
-  FLAG_PATHS,
-
-  { type: 'clear', pause: 1500 },
-
-  {
-    content: 'A safe flag has a boring fallback.',
-    pause: 4000,
+    persist: true,
+    content: <StatusPeekTrigger store={store} />,
   },
   {
-    content:
-      'False, unavailable, and still loading should all preserve the control experience.',
     pause: 6000,
+    content: (
+      <Text>
+        Press{' '}
+        <Text color={Colors.accent} bold>
+          S
+        </Text>{' '}
+        to expand or collapse the status.
+      </Text>
+    ),
+  },
+
+  CLEAR,
+
+  {
+    content: 'Deploying code and releasing it are different jobs.',
+    pause: 5000,
   },
   {
     content:
-      'A feature flag can control product behavior, but it must never be the security boundary.',
-    pause: 6500,
+      'Your deploy puts the code in production. The flag decides who meets it.',
+    pause: 5500,
   },
+  RELEASE_SWITCH,
 
-  { type: 'clear', pause: 1500 },
+  CLEAR,
 
   {
-    content: 'Where the flag is evaluated matters.',
+    content: 'New flags start at 0%. Nobody gets surprised.',
     pause: 4000,
   },
   {
     content:
-      'Use server-side evaluation for the first paint, then bootstrap the value into the client to avoid flicker.',
-    pause: 6500,
+      'Release to a small group, watch the result, then widen the rollout.',
+    pause: 5500,
   },
+  ROLLOUT_METER,
   {
     content:
-      'Client-side evaluation fits interactions that happen after the page has loaded.',
+      'If the release misbehaves, return the rollout to 0% instead of redeploying.',
     pause: 5500,
   },
 
-  { type: 'clear', pause: 1500 },
+  CLEAR,
 
-  {
-    content: 'Verification means exercising both experiences.',
-    pause: 4500,
-  },
-  VERIFICATION,
+  { content: 'A safe fallback should be gloriously boring.', pause: 4500 },
   {
     content:
-      'Done means the code works and PostHog received a real flag evaluation.',
+      'False, loading, or unavailable all lead back to the existing experience.',
+    pause: 5500,
+  },
+  SAFE_PATHS,
+  {
+    content:
+      'Flags choose an experience. Authentication and permissions stay in code.',
     pause: 6000,
   },
+
+  CLEAR,
+
+  {
+    content: 'Evaluate the flag where the experience begins.',
+    pause: 4000,
+  },
+  {
+    content:
+      'For the first paint, evaluate on the server and bootstrap the value to avoid flicker.',
+    pause: 6000,
+  },
+  {
+    content:
+      'For an interaction after load, client-side evaluation is a good fit.',
+    pause: 5000,
+  },
+  EVALUATION_PLACEMENT,
+
+  CLEAR,
+
+  {
+    content: 'Test both doors before inviting users in.',
+    pause: 4500,
+  },
+  VERIFICATION_LOOP,
+  {
+    content:
+      'Done means both experiences work and PostHog received a live evaluation.',
+    pause: 6000,
+  },
+  { content: 'Ship the code. Keep the release button.', pause: 8000 },
 ];
