@@ -645,6 +645,7 @@ export const WIZARD_TOOL_NAMES = {
   auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
   auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
   wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+  publishHandoff: `mcp__${SERVER_NAME}__publish_handoff`,
   enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
   completeTask: `mcp__${SERVER_NAME}__complete_task`,
   readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,

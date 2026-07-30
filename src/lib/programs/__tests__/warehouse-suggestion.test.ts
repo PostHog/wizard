@@ -99,7 +99,9 @@ describe('outro suggestion', () => {
 
       expect(outro.message).toBe('Successfully installed PostHog!');
       expect(outro.changes).toContain('Added PostHog provider');
-      expect(outro.reportFile).toBe('posthog-setup-report.md');
+      // No report file is written — the report is published via publish_handoff
+      // and mirrored into a notebook.
+      expect(outro.reportFile).toBeUndefined();
     }
   });
 });

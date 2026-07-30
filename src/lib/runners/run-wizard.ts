@@ -126,9 +126,6 @@ export function runWizard(
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
           : undefined,
-        handoffPath: config.reportFile
-          ? join(session.installDir, config.reportFile)
-          : undefined,
         enabled: taskStreamEnabled,
       });
       const activeStream = taskStream;

@@ -92,7 +92,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
-  reportFile: SETUP_REPORT_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
@@ -318,14 +317,18 @@ ${warehouseReportInstruction(session)}
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
-          reportFile: SETUP_REPORT_FILE,
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
           nextSteps: buildWarehouseNextSteps(sess),
-          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          // Set once the agent mirrors the report into a notebook and emits
+          // [NOTEBOOK_URL]. The report is published via publish_handoff, not
+          // written to a file, so the coding-agent prompt points at the
+          // notebook and is omitted when the run never captured one.
           notebookUrl: sess.notebookUrl ?? undefined,
-          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
+          handoffPrompt: sess.notebookUrl
+            ? buildCodingAgentPrompt(sess.notebookUrl)
+            : undefined,
         };
       },
     };
