@@ -121,6 +121,13 @@ const CHROME_OVERHEAD = 13;
 const MAX_LIST_ROWS = 12;
 /** Extra rows a multi-select adds below its options: marginTop + Confirm button. */
 const CONFIRM_CHROME = 3;
+/**
+ * Lists this short never page, whatever the row height. Tall described rows
+ * can push `count * rowCost` past the budget even at 2-3 options, which
+ * would split a handful of choices into pages of one — strictly worse than
+ * letting the few rows run past the viewport cap.
+ */
+const MIN_COUNT_TO_PAGE = 5;
 /** Width the multi-select wraps option descriptions to (matches the render). */
 const DESCRIPTION_WIDTH = 56;
 
@@ -156,7 +163,8 @@ function usePickerViewport(
     5,
     Math.min(termRows - CHROME_OVERHEAD - chromeBelow, MAX_LIST_ROWS),
   );
-  const needsScroll = enabled && count * rowCost > budget;
+  const needsScroll =
+    enabled && count >= MIN_COUNT_TO_PAGE && count * rowCost > budget;
   // Reserve two rows for the "↑/↓ N more" indicators.
   const perPage = needsScroll
     ? Math.max(1, Math.floor((budget - 2) / rowCost))
