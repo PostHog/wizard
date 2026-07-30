@@ -21,6 +21,23 @@ describe('feature flags program', () => {
     expect(featureFlagsConfig.requires).toEqual(['posthog-integration']);
   });
 
+  it('uses the existing SDK instead of installing or upgrading it', () => {
+    const run = featureFlagsConfig.run;
+    expect(run).toBeDefined();
+    expect(typeof run).not.toBe('function');
+
+    const prompt =
+      run && typeof run !== 'function' ? run.customPrompt?.({} as never) : '';
+
+    expect(prompt).toMatch(/Verify existing\s+PostHog SDK integration/);
+    expect(prompt).toContain(
+      'do not install, reinstall, or upgrade a PostHog SDK package',
+    );
+    expect(prompt).toContain(
+      '[ABORT] A working PostHog SDK integration is required.',
+    );
+  });
+
   it('leaves the feature flag workflow in the installed skill', () => {
     const run = featureFlagsConfig.run;
     expect(run).toBeDefined();
@@ -33,8 +50,52 @@ describe('feature flags program', () => {
       'The installed skill owns the feature-flag workflow',
     );
     expect(prompt).toContain('posthog-feature-flags-report.md');
+    expect(prompt).toContain('"Try your flag"');
+    expect(prompt).toContain('the control');
+    expect(prompt).toContain('the flagged behavior');
     expect(prompt).not.toContain('Do not capture user-entered text');
     expect(prompt).not.toContain('follow-up read confirms it');
+  });
+
+  it('ends with a project-specific flag verification handoff', () => {
+    const run = featureFlagsConfig.run;
+    expect(run).toBeDefined();
+    expect(typeof run).not.toBe('function');
+
+    const outro =
+      run && typeof run !== 'function'
+        ? run.buildOutroData?.(
+            {} as never,
+            {
+              projectId: 532532,
+              host: { appHost: 'https://us.posthog.com/' },
+            } as never,
+          )
+        : undefined;
+
+    expect(outro).toMatchObject({
+      message: 'Your feature flag is ready to test',
+      primaryLink: {
+        label: 'Open Feature Flags',
+        url: 'https://us.posthog.com/project/532532/feature_flags',
+      },
+      nextSteps: {
+        heading: 'Try your flag:',
+        items: [
+          'Exercise the control experience',
+          'Enable the flag for your test person and exercise the flagged experience',
+          'Confirm the live evaluation in PostHog, then restore the safe rollout',
+        ],
+      },
+      reportFile: 'posthog-feature-flags-report.md',
+      docsUrl: 'https://posthog.com/docs/feature-flags',
+    });
+    expect(outro?.handoffPrompt).toContain(
+      'complete any blocked or not-run checks',
+    );
+    expect(outro?.handoffPrompt).toContain(
+      'get my approval before changing the flag rollout',
+    );
   });
 
   it('maps the skill abort signals to actionable outros', () => {
