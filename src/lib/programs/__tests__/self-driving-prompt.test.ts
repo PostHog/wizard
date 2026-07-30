@@ -1,11 +1,25 @@
 import { buildSelfDrivingPrompt } from '@lib/programs/self-driving/prompt';
 import type { PromptContext } from '@lib/agent/agent-runner';
 import { HostResolution } from '@lib/host-resolution';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 const ctx: PromptContext = {
   projectId: 123,
   projectApiKey: 'phc_test',
   host: HostResolution.fromApiHost('https://us.posthog.com'),
+};
+
+const SENTRY: DetectedSource = {
+  kind: 'Sentry',
+  label: 'Sentry',
+  mode: 'in-cli',
+  matchedSignal: 'found `@sentry/node` in package.json',
+};
+const LINEAR: DetectedSource = {
+  kind: 'Linear',
+  label: 'Linear',
+  mode: 'deep-link',
+  matchedSignal: 'found `LINEAR_API_KEY` in .env',
 };
 
 describe('buildSelfDrivingPrompt', () => {
@@ -32,5 +46,47 @@ describe('buildSelfDrivingPrompt', () => {
     // Tail mirrors the skill: custom scouts is 6b, report is 7.
     expect(prompt).toContain('STEP 6b — Design custom scouts');
     expect(prompt).toContain('STEP 7 — Write the report and hand off');
+  });
+});
+
+describe('detected-tools block', () => {
+  it('lists each detected tool with its source_type and matched signal', () => {
+    const prompt = buildSelfDrivingPrompt(ctx, [SENTRY, LINEAR]);
+    expect(prompt).toContain('Tools detected in this codebase');
+    expect(prompt).toContain('Sentry (source_type: Sentry)');
+    expect(prompt).toContain('found `@sentry/node` in package.json');
+    expect(prompt).toContain('Linear (source_type: Linear)');
+  });
+
+  it('appears before STEP 5 so the connected-tools ask can read it', () => {
+    const prompt = buildSelfDrivingPrompt(ctx, [SENTRY]);
+    expect(prompt.indexOf('Tools detected in this codebase')).toBeLessThan(
+      prompt.indexOf('STEP 5 — Offer issue-tracker integrations'),
+    );
+  });
+
+  it('points STEP 5 at the detected list, basics, then others', () => {
+    const prompt = buildSelfDrivingPrompt(ctx, [SENTRY]);
+    // Scope to STEP 5's text (up to STEP 6) and ignore incidental wrapping.
+    const step5 = prompt
+      .slice(prompt.indexOf('STEP 5 —'), prompt.indexOf('STEP 6 —'))
+      .replace(/\s+/g, ' ');
+    expect(step5).toContain('Tools detected in this codebase');
+    expect(step5).toContain('SaaS basics');
+    expect(step5).toContain('others');
+  });
+
+  it('states nothing was found when the scan is empty (no invented scan)', () => {
+    const prompt = buildSelfDrivingPrompt(ctx, []);
+    expect(prompt).toContain('none found by the dependency + env scan');
+    expect(prompt).not.toContain('source_type:');
+  });
+
+  it('defaults to an empty scan when no sources are passed', () => {
+    // The single-arg call site (older tests, and the type default) must not throw.
+    expect(() => buildSelfDrivingPrompt(ctx)).not.toThrow();
+    expect(buildSelfDrivingPrompt(ctx)).toContain(
+      'none found by the dependency + env scan',
+    );
   });
 });
