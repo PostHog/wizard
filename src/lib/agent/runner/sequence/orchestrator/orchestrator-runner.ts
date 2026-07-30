@@ -181,6 +181,7 @@ export async function runOrchestrator(
   session: WizardSession,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
+  handoff?: import('../../../../wizard-tools/handoff').HandoffToolsContext,
 ): Promise<void> {
   const runId = randomUUID();
 
@@ -513,6 +514,10 @@ export async function runOrchestrator(
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),
+        // The report task publishes the handoff; other tasks simply won't
+        // call the tool. Threaded so publish_handoff registers for the one
+        // task that needs it.
+        handoff,
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],

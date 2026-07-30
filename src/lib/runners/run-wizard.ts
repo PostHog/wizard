@@ -10,9 +10,28 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { runCleanups } from '@utils/wizard-abort';
+import { buildHandoffContext } from '@lib/wizard-tools/handoff';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
+
+/**
+ * Build the handoff-publish context the wizard threads into `runAgent`:
+ * resolves the program's reportFile against the working directory and wires
+ * the live store so `publish_handoff` writes the report, sets handoff_text
+ * (→ task-stream push), and surfaces the notebook URL. Null when the program
+ * has no reportFile, so the tool stays unregistered.
+ */
+function handoffFor(store: WizardStore, config: ProgramConfig) {
+  return (
+    buildHandoffContext({
+      workingDirectory: store.session.installDir,
+      reportFile: config.reportFile,
+      store,
+      getCredentials: () => store.session.credentials,
+    }) ?? undefined
+  );
+}
 
 type Step = ProgramConfig['steps'][number];
 
@@ -50,7 +69,9 @@ async function advanceStep(
     await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runAgent(config, await prepareRunSession(step, store.session));
+    await runAgent(config, await prepareRunSession(step, store.session), {
+      handoff: handoffFor(store, config),
+    });
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -202,7 +223,9 @@ export function runWizard(
           projectId,
         });
       } else {
-        await runAgent(config, activeTui.store.session);
+        await runAgent(config, activeTui.store.session, {
+          handoff: handoffFor(activeTui.store, config),
+        });
       }
 
       const isDone = (): boolean =>

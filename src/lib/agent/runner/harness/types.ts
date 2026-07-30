@@ -23,6 +23,7 @@ import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';
 import type { OrchestratorToolsContext } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
+import type { HandoffToolsContext } from '@lib/wizard-tools/handoff';
 import type {
   EffortLevel,
   ThinkingLevel,
@@ -62,6 +63,13 @@ export interface BackendRunInputs {
   model: string;
   /** Switchboard-resolved reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
+  /**
+   * Handoff-publish context threaded into the wizard-tools server so the
+   * `publish_handoff` tool is registered. Built by the runner from the
+   * program's reportFile + the live WizardStore; absent in hosts without a
+   * store or a report (the tool stays unregistered, surface stable).
+   */
+  handoff?: HandoffToolsContext;
 }
 
 /** What a runner reports back: an error classification, or nothing on success. */
@@ -91,6 +99,12 @@ export interface TaskRunInputs {
   disallowedTools?: readonly string[];
   /** Queue-tools context threaded into the in-process wizard-tools MCP. */
   orchestrator: OrchestratorToolsContext;
+  /**
+   * Handoff-publish context. Threaded into the wizard-tools server so the
+   * report/notebook task agent can call `publish_handoff`. Absent when the
+   * orchestrator run has no report file (the tool stays unregistered).
+   */
+  handoff?: HandoffToolsContext;
   /** Spinner copy. Empty strings suppress the per-task line (queue panel shows progress). */
   spinnerMessage: string;
   successMessage: string;

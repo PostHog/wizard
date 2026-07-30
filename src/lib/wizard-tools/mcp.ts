@@ -47,6 +47,7 @@ import {
   type SkillEntry,
   AUDIT_STATUSES,
 } from './tools';
+import { publishHandoff, type HandoffToolsContext } from './handoff';
 
 const auditCheckSchema = z.object({
   id: z.string().min(1),
@@ -124,6 +125,14 @@ export interface WizardToolsOptions {
 
   /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
   triageProvider: LLMProvider;
+
+  /**
+   * Handoff-publish context. Present when the runner can supply the program's
+   * report path plus store hooks (interactive / headless with a reportFile);
+   * when set, the `publish_handoff` tool is registered. Absent in hosts
+   * without a store or a report, so the tool surface stays stable.
+   */
+  handoff?: HandoffToolsContext;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -145,6 +154,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     secretVault = createSecretVault(),
     orchestrator,
     triageProvider,
+    handoff,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -774,6 +784,68 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- publish_handoff -----------------------------------------------------
+
+  // The deterministic handoff: one call writes the report file, mirrors it
+  // into a PostHog notebook (direct HTTP, no agent IO), and sets the captured
+  // text on the store so the task-stream push carries handoff_text. Registered
+  // only when the runner supplied a handoff context (a report path + store
+  // hooks); programs without a reportFile keep the tool surface stable.
+  const publishHandoffTool = handoff
+    ? tool(
+        'publish_handoff',
+        "Publish the run's markdown setup report as the handoff doc in one call: " +
+          'writes the report file, mirrors it into a shareable PostHog notebook, and ' +
+          'pushes it to the PostHog session as handoff_text. Call this exactly once, ' +
+          'with the full report markdown — do not write the report file yourself, do ' +
+          'not call notebooks-create, and do not emit a [NOTEBOOK_URL] marker. Returns ' +
+          'the notebook URL (or null if the notebook could not be created).',
+        {
+          content: z
+            .string()
+            .min(1)
+            .describe(
+              'The full markdown setup report — the same content that would have ' +
+                'been written to the report file. Start with an H1 heading.',
+            ),
+          title: z
+            .string()
+            .optional()
+            .describe(
+              'Optional notebook title. Defaults to "PostHog setup (wizard)".',
+            ),
+        },
+        async (args: { content: string; title?: string }) => {
+          const result = await publishHandoff(args.content, args.title, {
+            reportPath: handoff.reportPath,
+            getCredentials: handoff.getCredentials,
+            hooks: handoff.hooks,
+            fetchImpl: handoff.fetchImpl,
+          });
+          if (!result.ok) {
+            return {
+              content: [{ type: 'text' as const, text: result.message }],
+              isError: true,
+            };
+          }
+          const notebookLine =
+            result.notebookUrl != null
+              ? `\nNotebook: ${result.notebookUrl}`
+              : '\nNo notebook was created (credentials unavailable or upload failed — the report file and the PostHog session handoff_text are still set).';
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Published handoff to ./${path.basename(
+                  result.reportPath,
+                )}.${notebookLine}`,
+              },
+            ],
+          };
+        },
+      )
+    : null;
+
   // -- Assemble server ------------------------------------------------------
 
   const orchestratorTools = orchestrator
@@ -793,6 +865,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      ...(publishHandoffTool ? [publishHandoffTool] : []),
       ...orchestratorTools,
     ],
   });

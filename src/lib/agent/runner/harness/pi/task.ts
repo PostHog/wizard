@@ -135,6 +135,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     allowedTools,
     disallowedTools,
     orchestrator,
+    handoff,
     spinnerMessage,
     successMessage,
     errorMessage,
@@ -291,15 +292,20 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // Wizard env + package-manager tools are always on — their handlers are
     // fenced, and init/build tasks depend on them.
     const { createWizardPiTools } = await import('./tools');
+    const wizardToolNames = [
+      'check_env_keys',
+      'set_env_values',
+      'detect_package_manager',
+      // The report/notebook task publishes the handoff; keep it when the
+      // runner supplied a handoff context for this task.
+      ...(handoff ? ['publish_handoff'] : []),
+    ];
     const wizardTools = createWizardPiTools({
       workingDirectory: dir,
       skillsBaseUrl: boot.skillsBaseUrl,
       triageProvider: boot.triageProvider,
-    }).filter((t) =>
-      ['check_env_keys', 'set_env_values', 'detect_package_manager'].includes(
-        t.name,
-      ),
-    );
+      handoff,
+    }).filter((t) => wizardToolNames.includes(t.name));
 
     const { createPiOrchestratorTools } = await import('./orchestrator-tools');
     const queueTools = createPiOrchestratorTools(orchestrator).filter((t) =>

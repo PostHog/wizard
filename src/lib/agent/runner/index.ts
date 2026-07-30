@@ -36,6 +36,7 @@ import {
 } from './switchboard';
 import { flushScanReport } from '../../yara-hooks';
 import { registerCleanup } from '../../../utils/wizard-abort';
+import type { HandoffToolsContext } from '../../wizard-tools/handoff';
 
 export type {
   ProgramRun,
@@ -53,7 +54,16 @@ export { shouldDisableAsk } from './shared/bootstrap';
 export async function runAgent(
   programConfig: ProgramConfig,
   session: WizardSession,
-  options: { composed?: boolean } = {},
+  options: {
+    composed?: boolean;
+    /**
+     * Handoff-publish context, built by the runner (which owns the WizardStore
+     * + the program's reportFile). Threaded into the wizard-tools server so
+     * the `publish_handoff` tool is registered. Absent in hosts without a
+     * store or a report — the tool stays unregistered, surface stable.
+     */
+    handoff?: HandoffToolsContext;
+  } = {},
 ): Promise<void> {
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
@@ -78,7 +88,11 @@ export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
   programConfig: ProgramConfig,
-  options: { composed?: boolean } = {},
+  options: {
+    composed?: boolean;
+    /** Threaded into the wizard-tools server as the `publish_handoff` context. */
+    handoff?: HandoffToolsContext;
+  } = {},
 ): Promise<void> {
   const boot = await bootstrapProgram(session, config, programConfig);
 
@@ -107,6 +121,7 @@ export async function runProgram(
       programConfig,
       boot,
       options.composed ?? false,
+      options.handoff,
     );
   } finally {
     flushScanReport(session);

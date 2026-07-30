@@ -31,6 +31,7 @@ import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { abortOnInstallFailure } from '../shared/errors';
 import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
 import { resolveHarness, getHarness } from '../switchboard';
+import type { HandoffToolsContext } from '../../../wizard-tools/handoff';
 
 export async function runLinearProgram(
   session: WizardSession,
@@ -38,6 +39,7 @@ export async function runLinearProgram(
   programConfig: ProgramConfig,
   boot: BootstrapResult,
   composed = false,
+  handoff?: HandoffToolsContext,
 ): Promise<void> {
   const { skillsBaseUrl, credentials, wizardFlags, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
@@ -137,6 +139,7 @@ export async function runLinearProgram(
     middleware,
     model: pick.model,
     thinkingLevel: pick.thinkingLevel,
+    handoff,
   });
 
   // 9. Error handling (full set from both runners)

@@ -27,6 +27,14 @@ export function normalizeHandoffText(raw: unknown): string | null {
  *
  * `ignoreInitialFile` keeps a stale report from a previous run out of the
  * session: only a file (re)written during this run counts.
+ *
+ * TODO(remove): this passive watcher is now a fallback. The `publish_handoff`
+ * wizard tool (src/lib/wizard-tools/handoff.ts) captures the report
+ * deterministically — it writes the file, sets handoff_text on the store, and
+ * mirrors it into a notebook in one host-side call. Once every program's
+ * skill content calls that tool, the watcher (and the force-read in
+ * TaskStreamPush.shutdown) can be deleted in favor of the tool being the
+ * sole capture path.
  */
 export class HandoffWatcher {
   private handle: FileWatcherHandle | null = null;

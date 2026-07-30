@@ -34,6 +34,7 @@ import {
 import type { LLMProvider } from '@posthog/warlock';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
 import { createSecretVault } from '@lib/secret-vault';
+import { publishHandoff } from '@lib/wizard-tools/handoff';
 import { withMode } from './index';
 import {
   detectNodePackageManagers,
@@ -62,6 +63,13 @@ export interface PiToolsContext {
   disallowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
+  /**
+   * Handoff-publish context. When present, the `publish_handoff` pi tool is
+   * registered — same behavior as the MCP facade (one call writes the report
+   * file, mirrors it into a notebook, and sets handoff_text on the store).
+   * Absent in hosts without a store or a report.
+   */
+  handoff?: import('@lib/wizard-tools/handoff').HandoffToolsContext;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -71,6 +79,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     askBridge,
     onAskPendingChange,
     triageProvider,
+    handoff,
   } = ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
@@ -388,6 +397,53 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     setEnvValues,
     detectPm,
   ];
+
+  // publish_handoff — same deterministic handoff as the MCP facade: one call
+  // writes the report file, mirrors it into a notebook, and sets handoff_text.
+  // Sequential: it writes a file and mutates the store, so a batched turn
+  // must never run two publishes (or a publish + a write) at once.
+  if (handoff) {
+    const publishHandoffTool = defineTool({
+      name: 'publish_handoff',
+      label: 'Publish handoff',
+      description:
+        "Publish the run's markdown setup report as the handoff doc in one call: writes the report file, mirrors it into a shareable PostHog notebook, and pushes it to the PostHog session as handoff_text. Call this exactly once, with the full report markdown — do not write the report file yourself, do not call notebooks-create, and do not emit a [NOTEBOOK_URL] marker. Returns the notebook URL (or null if the notebook could not be created).",
+      promptSnippet:
+        'publish_handoff(content, title?) — write the setup report + notebook + session handoff in one call',
+      parameters: Type.Object({
+        content: Type.String({
+          description:
+            'The full markdown setup report — the same content that would have been written to the report file. Start with an H1 heading.',
+        }),
+        title: Type.Optional(
+          Type.String({
+            description:
+              'Optional notebook title. Defaults to "PostHog setup (wizard)".',
+          }),
+        ),
+      }),
+      async execute(_id, args) {
+        const result = await publishHandoff(args.content, args.title, {
+          reportPath: handoff.reportPath,
+          getCredentials: handoff.getCredentials,
+          hooks: handoff.hooks,
+          fetchImpl: handoff.fetchImpl,
+        });
+        if (!result.ok) return text(result.message);
+        const notebookLine =
+          result.notebookUrl != null
+            ? `\nNotebook: ${result.notebookUrl}`
+            : '\nNo notebook was created (credentials unavailable or upload failed — the report file and the PostHog session handoff_text are still set).';
+        return text(
+          `Published handoff to ./${path.basename(
+            result.reportPath,
+          )}.${notebookLine}`,
+        );
+      },
+    });
+    tools.push(withMode(publishHandoffTool, 'sequential'));
+  }
+
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.
   // Sequential: the ask bridge holds a single in-flight question slot, so a

@@ -216,6 +216,14 @@ export type AgentConfig = {
    */
   orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**
+   * Handoff-publish context. When present, the `publish_handoff` wizard tool
+   * is registered — one deterministic call writes the report file, mirrors it
+   * into a notebook, and sets handoff_text on the store so the task-stream
+   * push carries it. Built by the runner (which owns the store + the program's
+   * reportFile), absent in hosts without a store or a report.
+   */
+  handoff?: import('@lib/wizard-tools/handoff').HandoffToolsContext;
+  /**
    * Optional AIO capture — mirrors each assistant SDK message into the
    * authenticated project as `$ai_generation`. No-op instance when
    * `--capture-aio` is off. Constructed once per run by the harness.
@@ -598,6 +606,7 @@ export async function initializeAgent(
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
+      handoff: config.handoff,
       triageProvider,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;

@@ -185,6 +185,7 @@ export const piBackend: AgentHarness = {
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;
     const modelId = inputs.model;
+    const handoff = inputs.handoff;
 
     const capture = createAioCapture({
       enabled: session.captureAio,
@@ -393,6 +394,9 @@ export const piBackend: AgentHarness = {
           // Skip wizard_ask when the program disallows it (bare pi tool names
           // don't match the MCP-prefixed disallow list at the security gate).
           disallowedTools: programConfig.disallowedTools,
+          // Deterministic handoff: one call writes the report + notebook +
+          // session handoff_text. Absent in hosts without a store or a report.
+          handoff,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.

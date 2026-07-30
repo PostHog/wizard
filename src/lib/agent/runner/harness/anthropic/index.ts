@@ -43,6 +43,7 @@ export const anthropicBackend: AgentHarness = {
       askBridge,
       middleware,
       model,
+      handoff,
     } = inputs;
     const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata } = boot;
     const { accessToken, host, projectApiKey } = credentials;
@@ -75,6 +76,7 @@ export const anthropicBackend: AgentHarness = {
         getPendingQuestion: () => session.pendingQuestion,
         modelOverride: model,
         capture,
+        handoff,
       },
       sessionToOptions(session),
     );
@@ -113,6 +115,7 @@ export const anthropicBackend: AgentHarness = {
       allowedTools,
       disallowedTools,
       orchestrator,
+      handoff,
       spinnerMessage,
       successMessage,
       errorMessage,
@@ -145,6 +148,7 @@ export const anthropicBackend: AgentHarness = {
         integrationLabel: programConfig.id,
         orchestrator,
         capture,
+        handoff,
       },
       options,
     );

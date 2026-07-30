@@ -5,6 +5,7 @@ import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { buildHandoffContext } from '@lib/wizard-tools/handoff';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
 import { join } from 'node:path';
@@ -229,7 +230,17 @@ export function runNonInteractive(
       }
 
       const { runAgent } = await import('@lib/agent/agent-runner');
-      await runAgent(config, session);
+      // The headless store is what the task-stream push reads handoff_text
+      // from; CI has no store, so publish_handoff stays unregistered there.
+      const handoff = store
+        ? buildHandoffContext({
+            workingDirectory: session.installDir,
+            reportFile: config.reportFile,
+            store,
+            getCredentials: () => session.credentials,
+          }) ?? undefined
+        : undefined;
+      await runAgent(config, session, { handoff });
       await settleStream(RunPhase.Completed);
     } catch (error) {
       const errorMessage =

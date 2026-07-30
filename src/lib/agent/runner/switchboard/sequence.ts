@@ -17,6 +17,7 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
+import type { HandoffToolsContext } from '../../../wizard-tools/handoff';
 import {
   DEFAULT_BINDING,
   PROGRAM_BINDINGS,
@@ -36,19 +37,21 @@ export interface SequenceRunner {
     boot: BootstrapResult,
     /** Composed sub-run (integration inside self-driving); linear-only. */
     composed: boolean,
+    /** Threaded into the wizard-tools server as the `publish_handoff` context. */
+    handoff?: HandoffToolsContext,
   ): Promise<void>;
 }
 
 export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {
   [Sequence.linear]: {
     name: Sequence.linear,
-    run: (session, config, programConfig, boot, composed) =>
-      runLinearProgram(session, config, programConfig, boot, composed),
+    run: (session, config, programConfig, boot, composed, handoff) =>
+      runLinearProgram(session, config, programConfig, boot, composed, handoff),
   },
   [Sequence.orchestrator]: {
     name: Sequence.orchestrator,
-    run: (session, _config, programConfig, boot, _composed) =>
-      runOrchestrator(session, programConfig, boot),
+    run: (session, _config, programConfig, boot, _composed, handoff) =>
+      runOrchestrator(session, programConfig, boot, handoff),
   },
 };
 
