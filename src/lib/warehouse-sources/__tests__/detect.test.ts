@@ -49,6 +49,26 @@ describe('detectWarehouseSources', () => {
     expect(detectWarehouseSources(tmpDir)).toEqual([]);
   });
 
+  it('still reads deps from a package.json with comments and trailing commas', () => {
+    // JSONC-style manifests exist in the wild; a strict parse used to drop
+    // every npm signal for the project.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      '{\n  // our db driver\n  "dependencies": { "pg": "^8.0.0", },\n}\n',
+    );
+    expect(kinds(tmpDir)).toEqual(['Postgres']);
+  });
+
+  it('skips an unparseable package.json without throwing', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), 'not json at all');
+    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+  });
+
+  it('skips a package.json holding a non-object', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '"pg"');
+    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+  });
+
   it('detects Postgres from an npm driver dependency', () => {
     writePackageJson(tmpDir, { pg: '^8.0.0' });
     expect(kinds(tmpDir)).toEqual(['Postgres']);

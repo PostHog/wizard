@@ -1,4 +1,5 @@
 import {
+  AgentOutputParseError,
   detectProjectsWithAgent,
   type AgenticProject,
 } from '@lib/detection/agentic';
@@ -179,6 +180,26 @@ describe('scopeInstallDirToProject', () => {
     expect(exceptionSpy).toHaveBeenCalledWith(failure, {
       step: 'agentic_detection',
     });
+  });
+
+  it('fires error without an exception when the agent output was truncated', async () => {
+    // Unparseable agent output is expected input, not a wizard bug — it must
+    // not show up in error tracking, but the outcome still has to be recorded.
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    scan.mockRejectedValue(
+      new AgentOutputParseError(
+        'Agent output was truncated before the JSON object ended',
+      ),
+    );
+    const session = buildSession({ installDir: '/repo' });
+    await scopeInstallDirToProject(session);
+
+    expect(session.installDir).toBe('/repo');
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'error',
+      error_message: 'Agent output was truncated before the JSON object ended',
+    });
+    expect(exceptionSpy).not.toHaveBeenCalled();
   });
 
   it('leaves the session untouched and fires timeout when the scan outruns the budget', async () => {

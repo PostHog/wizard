@@ -165,15 +165,72 @@ function buildPrompt(
   ].join('\n');
 }
 
-function extractJson(text: string): unknown {
+/**
+ * The agent's output didn't contain a usable JSON report. Expected input, not a
+ * wizard bug: callers report the outcome without also raising an exception.
+ */
+export class AgentOutputParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentOutputParseError';
+  }
+}
+
+/**
+ * Index of the `}` closing the object that opens at `start`, or -1 when the
+ * text ends first (the agent's output was cut off mid-object).
+ *
+ * Braces and brackets are balanced rather than reaching for the last `}`:
+ * with truncated single-line JSON the last `}` belongs to a nested project
+ * object, so the slice would end inside the `projects` array and JSON.parse
+ * would throw a raw SyntaxError.
+ */
+function findObjectEnd(text: string, start: number): number {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{' || char === '[') {
+      stack.push(char);
+    } else if (char === '}' || char === ']') {
+      if (stack.pop() !== (char === '}' ? '{' : '[')) return -1;
+      if (stack.length === 0) return i;
+    }
+  }
+  return -1;
+}
+
+export function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : text;
   const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start === -1 || end === -1 || end < start) {
-    throw new Error('Agent did not return a JSON object');
+  if (start === -1) {
+    throw new AgentOutputParseError('Agent did not return a JSON object');
   }
-  return JSON.parse(candidate.slice(start, end + 1));
+  const end = findObjectEnd(candidate, start);
+  if (end === -1) {
+    throw new AgentOutputParseError(
+      'Agent output was truncated before the JSON object ended',
+    );
+  }
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch (err) {
+    throw new AgentOutputParseError(
+      `Agent returned malformed JSON: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 }
 
 /**

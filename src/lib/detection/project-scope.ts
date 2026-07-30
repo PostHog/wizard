@@ -1,6 +1,7 @@
 /** Non-interactive project scoping — scan the repo agentically and pick which project the run integrates. */
 
 import {
+  AgentOutputParseError,
   detectProjectsWithAgent,
   resolveProjectDir,
   type AgenticDetectionReport,
@@ -96,7 +97,11 @@ export async function scopeInstallDirToProject(
     ]);
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
-    analytics.captureException(error, { step: 'agentic_detection' });
+    // Unparseable/truncated agent output is expected input, not a wizard bug —
+    // the outcome event records it, so it doesn't also need to be an exception.
+    if (!(error instanceof AgentOutputParseError)) {
+      analytics.captureException(error, { step: 'agentic_detection' });
+    }
     captureOutcome('error', {
       duration_ms: Date.now() - startedAt,
       error_message: error.message,

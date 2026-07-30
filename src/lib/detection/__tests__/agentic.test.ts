@@ -1,5 +1,7 @@
 import {
+  AgentOutputParseError,
   coerceAgenticReport,
+  extractJson,
   manifestGlob,
   resolveProjectDir,
 } from '@lib/detection/agentic';
@@ -107,6 +109,44 @@ describe('coerceAgenticReport', () => {
     expect(keep('apps/web')).toBe('apps/web');
     expect(keep('.')).toBe('.');
     expect(keep('ios')).toBe('ios');
+  });
+});
+
+describe('extractJson', () => {
+  const report =
+    '{"repoType":"monorepo","projects":[{"path":"apps/web","framework":"Next.js"}]}';
+
+  it('reads the object out of bare, fenced, and prose-wrapped output', () => {
+    expect(extractJson(report)).toMatchObject({ repoType: 'monorepo' });
+    expect(extractJson('```json\n' + report + '\n```')).toMatchObject({
+      repoType: 'monorepo',
+    });
+    expect(extractJson(`Here it is:\n${report}\nDone.`)).toMatchObject({
+      repoType: 'monorepo',
+    });
+  });
+
+  it('balances braces instead of reaching for the last one', () => {
+    // Trailing prose with a closing brace used to be swallowed into the slice.
+    expect(extractJson(`${report}\nAll set }`)).toMatchObject({
+      repoType: 'monorepo',
+    });
+  });
+
+  it('reports truncation instead of a raw SyntaxError when the object is cut short', () => {
+    // Single-line output cut mid-`projects`: the last `}` closes a nested
+    // project, so a lastIndexOf-based slice ends inside the array.
+    const truncated =
+      '{"repoType":"monorepo","projects":[{"path":"apps/web","framework":"Next.js"},{"path":"apps/api"';
+    expect(() => extractJson(truncated)).toThrow(AgentOutputParseError);
+    expect(() => extractJson(truncated)).toThrow(/truncated/i);
+  });
+
+  it('reports malformed JSON and missing objects as parse errors', () => {
+    expect(() => extractJson('{"repoType":"monorepo",}')).toThrow(
+      AgentOutputParseError,
+    );
+    expect(() => extractJson('no json here')).toThrow(AgentOutputParseError);
   });
 });
 
