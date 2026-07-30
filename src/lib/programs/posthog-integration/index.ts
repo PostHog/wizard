@@ -22,7 +22,6 @@ import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
-import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
@@ -190,6 +189,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
       successMessage: config.ui.successMessage,
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
       reportFile: SETUP_REPORT_FILE,
+      // publish_handoff publishes the setup report to the PostHog session.
+      uploadToPostHog: true,
       docsUrl: config.metadata.docsUrl,
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
@@ -318,14 +319,15 @@ ${warehouseReportInstruction(session)}
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
-          reportFile: SETUP_REPORT_FILE,
+          // No report file on disk: publish_handoff publishes the report as
+          // a PostHog notebook + the session handoff instead. The notebook
+          // link below is the artifact the user opens.
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
           nextSteps: buildWarehouseNextSteps(sess),
-          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          // Set when publish_handoff created the notebook.
           notebookUrl: sess.notebookUrl ?? undefined,
-          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
     };

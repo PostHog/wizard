@@ -221,6 +221,17 @@ export type AgentConfig = {
    * `--capture-aio` is off. Constructed once per run by the harness.
    */
   capture?: AioCapture;
+  /**
+   * Lazy credentials resolver for `publish_handoff`'s notebook upload —
+   * reads `session.credentials` at call time (null before auth).
+   */
+  getCredentials?: () => import('@lib/wizard-session').Credentials | null;
+  /**
+   * When true, `publish_handoff` also publishes the report to the PostHog
+   * session as `handoff_text`. Defaults to false; only opted-in programs
+   * (self-driving, basic-integration) set it.
+   */
+  uploadToPostHog?: boolean;
 };
 
 /**
@@ -599,6 +610,8 @@ export async function initializeAgent(
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
       triageProvider,
+      getCredentials: config.getCredentials,
+      uploadToPostHog: config.uploadToPostHog,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

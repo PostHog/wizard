@@ -269,6 +269,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setHandoffText(_text: string): void {
+    // No-op in CI mode — HeadlessUI tees it into the store
+  }
+
   addTokenUsage(_delta: TokenUsageDelta): void {
     // No-op — the hidden Ctrl+T HUD is TUI-only
   }

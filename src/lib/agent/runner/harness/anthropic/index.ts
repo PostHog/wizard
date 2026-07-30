@@ -75,6 +75,9 @@ export const anthropicBackend: AgentHarness = {
         getPendingQuestion: () => session.pendingQuestion,
         modelOverride: model,
         capture,
+        // publish_handoff reads credentials off the live session at call time.
+        getCredentials: () => session.credentials ?? null,
+        uploadToPostHog: config.uploadToPostHog,
       },
       sessionToOptions(session),
     );

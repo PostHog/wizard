@@ -44,6 +44,8 @@ const run: ProgramRun = {
   docsUrl: DOCS_URL,
   spinnerMessage: 'Setting up PostHog Self-driving...',
   estimatedDurationMinutes: 10,
+  // publish_handoff publishes the setup report to the PostHog session.
+  uploadToPostHog: true,
   abortCases: SELF_DRIVING_ABORT_CASES,
   // The flow legitimately needs several interactions (GitHub connect +
   // verify, issue-tracker picks, the scout-tailoring proposal), so raise
@@ -89,7 +91,8 @@ const run: ProgramRun = {
       body:
         'Pricing: scouts, signals, and reports are free. You pay a flat ' +
         '$15 only when a report ships a PR.',
-      reportFile: REPORT_FILE,
+      // No report file on disk: publish_handoff publishes the report as a
+      // PostHog notebook + the session handoff instead.
     };
   },
 };

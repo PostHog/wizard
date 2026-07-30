@@ -393,6 +393,9 @@ export const piBackend: AgentHarness = {
           // Skip wizard_ask when the program disallows it (bare pi tool names
           // don't match the MCP-prefixed disallow list at the security gate).
           disallowedTools: programConfig.disallowedTools,
+          // publish_handoff reads credentials off the live session at call time.
+          getCredentials: () => session.credentials ?? null,
+          uploadToPostHog: config.uploadToPostHog,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.

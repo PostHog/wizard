@@ -648,6 +648,7 @@ export const WIZARD_TOOL_NAMES = {
   enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
   completeTask: `mcp__${SERVER_NAME}__complete_task`,
   readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,
+  publishHandoff: `mcp__${SERVER_NAME}__publish_handoff`,
 } as const;
 
 // ---------------------------------------------------------------------------

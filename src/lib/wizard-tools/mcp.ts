@@ -47,6 +47,8 @@ import {
   type SkillEntry,
   AUDIT_STATUSES,
 } from './tools';
+import { publishHandoff, PUBLISH_HANDOFF_DESCRIPTION } from './handoff';
+import type { Credentials } from '../wizard-session';
 
 const auditCheckSchema = z.object({
   id: z.string().min(1),
@@ -124,6 +126,21 @@ export interface WizardToolsOptions {
 
   /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
   triageProvider: LLMProvider;
+
+  /**
+   * Lazy credentials resolver for `publish_handoff`'s notebook upload — reads
+   * `session.credentials` at call time (null before auth, which just skips
+   * the notebook). Omitted in hosts without a session (unit tests).
+   */
+  getCredentials?: () => Credentials | null;
+
+  /**
+   * When true, `publish_handoff` also sets the report on the store so the
+   * task-stream push publishes it to the PostHog session as `handoff_text`.
+   * Defaults to false — only opted-in programs (self-driving,
+   * basic-integration) upload.
+   */
+  uploadToPostHog?: boolean;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -145,6 +162,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     secretVault = createSecretVault(),
     orchestrator,
     triageProvider,
+    getCredentials,
+    uploadToPostHog = false,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -774,6 +793,48 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- publish_handoff ------------------------------------------------------
+
+  // The deterministic handoff: one call mirrors the report into a PostHog
+  // notebook and (when the program opted in) publishes it to the session as
+  // handoff_text. The usage contract lives in the tool description so program
+  // prompts never duplicate the report shape.
+  const publishHandoffTool = tool(
+    'publish_handoff',
+    PUBLISH_HANDOFF_DESCRIPTION,
+    {
+      content: z
+        .string()
+        .min(1)
+        .describe(
+          'The full setup report as markdown, starting with an H1 heading.',
+        ),
+      title: z
+        .string()
+        .optional()
+        .describe(
+          'Optional notebook title. Defaults to "PostHog setup (wizard)".',
+        ),
+    },
+    async (args: { content: string; title?: string }) => {
+      const result = await publishHandoff(args.content, args.title, {
+        getCredentials: getCredentials ?? (() => null),
+        uploadToPostHog,
+      });
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: result.message }],
+          isError: true,
+        };
+      }
+      const text =
+        result.notebookUrl !== null
+          ? `Handoff published. Notebook: ${result.notebookUrl}`
+          : 'Handoff published. No notebook was created (credentials unavailable or the upload failed) — do not retry and do not fall back to notebooks-create.';
+      return { content: [{ type: 'text' as const, text }] };
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   const orchestratorTools = orchestrator
@@ -793,6 +854,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      publishHandoffTool,
       ...orchestratorTools,
     ],
   });
