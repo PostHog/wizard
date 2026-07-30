@@ -829,11 +829,16 @@ export async function runAgent(
 
   try {
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
-    // enabled via the `skills` query option; PostHog MCP tools come through
-    // `mcpServers`. Neither belongs in this list.
+    // enabled via the `skills` query option. Mounted MCP servers' tools are
+    // allowlisted by wildcard: without this the main loop's posthog-wizard
+    // calls hit the permission gate, and agents improvise credential-bearing
+    // curl instead (runs 0dc72561, 7cee73c4 — warlock blocked the exfil, the
+    // dashboard/notebook were silently skipped). Subagents and chat mode
+    // already allow these; the main loop was the one surface that didn't.
     const disallow = new Set(agentConfig.disallowedTools ?? []);
     const allowedTools = [
       ...BASE_ALLOWED_TOOLS,
+      ...Object.keys(agentConfig.mcpServers).map((name) => `mcp__${name}__*`),
       ...(agentConfig.allowedTools ?? []),
     ].filter((t) => !disallow.has(t));
 
