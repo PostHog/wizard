@@ -9,7 +9,14 @@ import {
 import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
+  SELF_DRIVING_DETECTED_TOOLS_KEY,
+  SELF_DRIVING_TOOL_KINDS,
+  getSelfDrivingDetectedTools,
 } from '@lib/programs/self-driving/detect';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
+import { WizardStore } from '@ui/tui/store';
+import { SOURCE_DETECTORS } from '@lib/warehouse-sources/registry';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
 import {
   PROJECT_MANIFESTS,
@@ -58,6 +65,87 @@ describe('detectSelfDrivingPrerequisites', () => {
     detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toBeUndefined();
+  });
+
+  /** Kinds stashed for the connected-tools ask after a scan of `tmpDir`. */
+  const detectedKinds = (deps: Record<string, string>): string[] => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: deps }),
+    );
+    detectSelfDrivingPrerequisites(
+      buildSession({ installDir: tmpDir }),
+      setCtx,
+    );
+    const tools = ctx[SELF_DRIVING_DETECTED_TOOLS_KEY] as
+      | DetectedSource[]
+      | undefined;
+    return (tools ?? []).map((s) => s.kind);
+  };
+
+  it('stashes tools detected in the codebase for the connected-tools ask', () => {
+    expect(detectedKinds({ '@sentry/node': '^7.0.0' })).toContain('Sentry');
+  });
+
+  it('keeps only the tools the inbox can connect', () => {
+    // `pg` and `stripe` are warehouse sources, not connected tools.
+    expect(detectedKinds({ pg: '^8.0.0', stripe: '^14.0.0' })).toEqual([]);
+    expect(detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' })).toEqual([
+      'Sentry',
+    ]);
+  });
+
+  it('writes nothing when the codebase has no detectable tools', () => {
+    // Bare dir: valid, but no tools to prioritise, so the key stays unset.
+    const session = buildSession({ installDir: tmpDir });
+    detectSelfDrivingPrerequisites(session, setCtx);
+
+    expect(ctx.detectError).toBeUndefined();
+    expect(ctx[SELF_DRIVING_DETECTED_TOOLS_KEY]).toBeUndefined();
+  });
+});
+
+describe('SELF_DRIVING_TOOL_KINDS', () => {
+  it('names only kinds the source registry can actually detect', () => {
+    // A plain string set, so a registry rename would otherwise drop a tool silently.
+    const known = new Set(SOURCE_DETECTORS.map((d) => d.kind));
+    expect([...SELF_DRIVING_TOOL_KINDS].filter((k) => !known.has(k))).toEqual(
+      [],
+    );
+  });
+});
+
+describe('the detect step does not leak into the composed integration run', () => {
+  // Through the real store — the leak lived in the plumbing, not in detectConnectedTools.
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        dependencies: { '@sentry/node': '^7.0.0', pg: '^8.0.0' },
+      }),
+    );
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  it('stashes under its own key and leaves the warehouse key untouched', async () => {
+    const store = new WizardStore('self-driving');
+    store.session = buildSession({ installDir: tmpDir });
+    await store.runReadyHooks();
+
+    // Self-driving sees its tools...
+    expect(
+      getSelfDrivingDetectedTools(store.session).map((s) => s.kind),
+    ).toContain('Sentry');
+    // ...and the integration program, on the session it inherits, sees nothing.
+    expect(getDetectedWarehouseSources(store.session)).toEqual([]);
+    const inherited = {
+      ...store.session,
+      frameworkContext: { ...store.session.frameworkContext },
+    };
+    expect(getDetectedWarehouseSources(inherited)).toEqual([]);
   });
 });
 
