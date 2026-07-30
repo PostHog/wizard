@@ -3,8 +3,21 @@ import {
   coerceAgenticReport,
   extractJson,
   manifestGlob,
+  parseAgentReport,
   resolveProjectDir,
 } from '@lib/detection/agentic';
+
+const VALID_REPORT = {
+  repoType: 'monorepo',
+  projects: [
+    {
+      path: 'apps/web',
+      framework: 'Next.js',
+      targetId: 'nextjs',
+      hasPostHog: false,
+    },
+  ],
+};
 
 const TARGETS = ['nextjs', 'node', 'vite'];
 
@@ -35,6 +48,58 @@ describe('manifestGlob', () => {
       'gradle/libs.versions.toml',
     ]) {
       expect(glob).toContain(name);
+    }
+  });
+});
+
+describe('parseAgentReport', () => {
+  it('accepts a well-formed report', () => {
+    const result = parseAgentReport(JSON.stringify(VALID_REPORT));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(VALID_REPORT);
+  });
+
+  it('unwraps a report from a ```json code fence', () => {
+    const result = parseAgentReport(
+      'Sure, here it is:\n```json\n' + JSON.stringify(VALID_REPORT) + '\n```',
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('fails without throwing when there is no JSON object', () => {
+    const result = parseAgentReport('I could not find anything to report.');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.feedback).toMatch(/no json object/i);
+      expect(result.parsedJson).toBeUndefined();
+    }
+  });
+
+  it('fails with feedback (not a throw) on malformed JSON', () => {
+    // Has braces (so a candidate is extracted) but is not valid JSON.
+    const result = parseAgentReport('{"repoType": "single", "projects": [ }');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.feedback).toMatch(/not valid json/i);
+      expect(result.parsedJson).toBeUndefined();
+    }
+  });
+
+  it('reports per-field problems but keeps the parsed JSON for best-effort coercion', () => {
+    // Shape-invalid: repoType is wrong and hasPostHog is missing.
+    const parsedButInvalid = {
+      repoType: 'workspace',
+      projects: [{ path: 'apps/web', framework: 'Next.js', targetId: null }],
+    };
+    const result = parseAgentReport(JSON.stringify(parsedButInvalid));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.feedback).toMatch(/required shape/i);
+      // parsedJson survives so the caller can still coerce it after retries.
+      expect(result.parsedJson).toEqual(parsedButInvalid);
+      expect(coerceAgenticReport(result.parsedJson, ['nextjs']).repoType).toBe(
+        'single',
+      );
     }
   });
 });
