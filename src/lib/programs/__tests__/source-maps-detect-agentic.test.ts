@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   coerceReport,
+  goSdkVerifier,
   rustSdkVerifier,
   SOURCE_MAPS_TARGETS,
 } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
@@ -535,7 +536,29 @@ describe('coerceReport', () => {
     );
   });
 
-  it('recognises Go but blocks it as not yet supported', () => {
+  it('retains a Go project with PostHog as instrumentable', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Go (Gin)',
+          targetId: 'go',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'Go (Gin)',
+      variant: 'go',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('points a Go project without the SDK at a manual module install', () => {
     const report = coerceReport({
       repoType: 'single',
       projects: [
@@ -543,18 +566,76 @@ describe('coerceReport', () => {
           path: '.',
           framework: 'Go',
           targetId: 'go',
-          hasPostHog: true,
+          hasPostHog: false,
         },
       ],
     });
 
     expect(report.projects[0]).toEqual(
       expect.objectContaining({
-        variant: null,
+        variant: 'go',
         instrumentable: false,
-        reason: expect.stringMatching(/isn't supported/i),
+        reason: expect.stringMatching(/add the posthog-go module/i),
       }),
     );
+  });
+});
+
+describe('goSdkVerifier', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-go-detect-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('confirms the SDK from the module go.mod, root or nested', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\nrequire github.com/posthog/posthog-go v1.22.0\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'services', 'api'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'services', 'api', 'go.mod'),
+      'module example.com/api\n\ngo 1.22\n',
+    );
+
+    const verify = goSdkVerifier(tmpDir);
+    expect(verify('.')).toBe(true);
+    expect(verify('services/api')).toBe(false);
+  });
+
+  it('ignores a commented-out requirement', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\n// require github.com/posthog/posthog-go v1.22.0\n',
+    );
+    expect(goSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('finds the SDK inside a require block', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.10.0\n\tgithub.com/posthog/posthog-go v1.22.0\n)\n',
+    );
+    expect(goSdkVerifier(tmpDir)('.')).toBe(true);
+  });
+
+  it('ignores non-require mentions of the module path', () => {
+    // A replace/exclude directive (or the SDK's own module declaration) is
+    // not a dependency — only `require` counts.
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\nreplace github.com/posthog/posthog-go => ../fork\n\nexclude github.com/posthog/posthog-go v1.21.0\n',
+    );
+    expect(goSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('returns false when go.mod is missing', () => {
+    expect(goSdkVerifier(tmpDir)('.')).toBe(false);
   });
 });
 
