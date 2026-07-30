@@ -1,0 +1,35 @@
+{
+  "program": "logs",
+  "summary": "Happy path: confirm intro, push past health issues, let the agent pick + install the runtime variant, wire the export and correlation, delete installed skills.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first"
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "linear / anthropic / default model — parity with main"
+    }
+  ],
+  "path": [
+    { "screen": "logs-intro", "auto": "confirm & continue" },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage — proceed even if the readiness probe flags an issue"
+    },
+    { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "run",
+      "auto": "(external) — the agent loads the skill menu, picks the logs-setup-* variant matching the project's runtime, installs it, then walks the 7-step chain: detect, install the OTLP export, plan correlation, add the request identity context, attach posthogDistinctId + sessionId, verify, report. wizard_ask is answered with the first option, which covers the region prompt when no PostHog host is configured and the runtime pick in a repo holding both a frontend and a backend"
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    {
+      "screen": "keep-skills",
+      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
+    }
+  ]
+}

@@ -17,11 +17,13 @@ import {
 } from './e2e-profile.js';
 import posthogIntegrationE2e from '@lib/programs/posthog-integration/test/e2e.json';
 import aiObservabilityE2e from '@lib/programs/ai-observability/test/e2e.json';
+import logsE2e from '@lib/programs/logs/test/e2e.json';
 
 const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
   [Program.PostHogIntegration]:
     posthogIntegrationE2e.profile as WizardE2eProfile,
   [Program.AiObservability]: aiObservabilityE2e.profile as WizardE2eProfile,
+  [Program.Logs]: logsE2e.profile as WizardE2eProfile,
 };
 
 const VARIATIONS: Partial<Record<ProgramId, WizardE2eVariation[]>> = {
@@ -29,6 +31,7 @@ const VARIATIONS: Partial<Record<ProgramId, WizardE2eVariation[]>> = {
     posthogIntegrationE2e.variations as WizardE2eVariation[],
   [Program.AiObservability]:
     aiObservabilityE2e.variations as WizardE2eVariation[],
+  [Program.Logs]: logsE2e.variations as WizardE2eVariation[],
 };
 
 /** The e2e profile for a program, or the happy-path default if none is set. */

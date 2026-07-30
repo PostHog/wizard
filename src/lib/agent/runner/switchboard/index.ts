@@ -140,6 +140,7 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     harness: Harness.anthropic,
     model: SONNET_5_MODEL,
   },
+  logs: DEFAULT_BINDING,
   slack: DEFAULT_BINDING,
 };
 

@@ -25,6 +25,7 @@ export enum ScreenId {
   MigrationIntro = 'migration-intro',
   AgentSkillIntro = 'agent-skill-intro',
   AiObservabilityIntro = 'ai-observability-intro',
+  LogsIntro = 'logs-intro',
   SelfDrivingIntro = 'self-driving-intro',
   SelfDrivingIntegrationCheck = 'self-driving-integration-check',
   SelfDrivingIntegrationDetect = 'self-driving-integration-detect',
