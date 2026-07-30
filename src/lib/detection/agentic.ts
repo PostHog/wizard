@@ -19,6 +19,7 @@ import {
   AgentSignals,
 } from '@lib/agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
+import { z } from 'zod';
 import { detectNodePackageManagers } from './package-manager.js';
 import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -209,6 +210,13 @@ function findObjectEnd(text: string, start: number): number {
   return -1;
 }
 
+/**
+ * Locate the JSON object in the agent's output and parse it, tolerating
+ * markdown fences, prose wrappers, and trailing braces. Throws an
+ * `AgentOutputParseError` (not a raw SyntaxError) when there is no object, the
+ * object is truncated, or the JSON is malformed — so the caller can treat an
+ * unparseable reply as expected input. Exported for testing.
+ */
 export function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : text;
@@ -231,6 +239,108 @@ export function extractJson(text: string): unknown {
       }`,
     );
   }
+}
+
+/**
+ * Zod shape of the agent's RAW detection JSON. Validated before coercion so a
+ * malformed reply produces actionable, per-field feedback we can hand back to
+ * the agent for a retry — the security clamping (paths, targetIds, recommended
+ * dedup) still happens afterwards in coerceAgenticReport.
+ */
+const AgenticProjectJson = z.object({
+  path: z.string(),
+  framework: z.string(),
+  targetId: z.string().nullable(),
+  hasPostHog: z.boolean(),
+  recommended: z.boolean().optional(),
+});
+const AgenticReportJson = z.object({
+  repoType: z.enum(['monorepo', 'single']),
+  projects: z.array(AgenticProjectJson),
+});
+
+/** How many times the agent is asked to produce a valid report before we give up and fall through best-effort. */
+const MAX_DETECTION_ATTEMPTS = 3;
+
+type ParseReport =
+  | { ok: true; value: unknown }
+  /**
+   * `feedback` is the human-readable reason the reply was rejected, fed back
+   * into the next attempt. `parsedJson` is set whenever JSON.parse itself
+   * succeeded (only the schema failed), so the caller can still best-effort
+   * coerce a shape-invalid-but-parseable reply once retries run out.
+   */
+  | { ok: false; feedback: string; parsedJson?: unknown };
+
+/**
+ * Verify the agent's reply: pull the JSON out with `extractJson`, then validate
+ * it against the report schema with Zod. NEVER throws — a non-JSON, truncated,
+ * or off-shape reply comes back as `{ ok: false }` with feedback, so the caller
+ * drives the retry loop (reprompting the agent on a bad format) instead of a
+ * strict parse crashing the whole detection. Exported for testing.
+ */
+export function parseAgentReport(text: string): ParseReport {
+  let parsedJson: unknown;
+  try {
+    parsedJson = extractJson(text);
+  } catch (err) {
+    // No object, truncation, or malformed JSON — none of these carry a usable
+    // report, so there is no parsedJson to fall back to. Surface the specific
+    // reason so the agent knows what to fix on the retry.
+    const reason = err instanceof Error ? err.message : String(err);
+    const noObject = /did not return a JSON object/i.test(reason);
+    return {
+      ok: false,
+      feedback: noObject
+        ? 'No JSON object was found in your response. Respond with ONLY a single JSON object.'
+        : `Your response was not valid JSON (${reason}). Respond with ONLY a single, complete JSON object — no trailing commas, no truncation, no prose.`,
+    };
+  }
+
+  const validated = AgenticReportJson.safeParse(parsedJson);
+  if (!validated.success) {
+    const issues = validated.error.issues
+      .slice(0, 10)
+      .map((i) => `- ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('\n');
+    return {
+      ok: false,
+      parsedJson,
+      feedback: `Your JSON did not match the required shape. Fix these problems:\n${issues}`,
+    };
+  }
+
+  return { ok: true, value: validated.data };
+}
+
+/**
+ * Wrap the original task with corrective feedback for a retry. Each attempt is
+ * a fresh agent conversation, so we restate the failure, show a snippet of the
+ * rejected reply, and re-attach the full task prompt.
+ */
+function buildRetryPrompt(
+  basePrompt: string,
+  feedback: string,
+  previousOutput: string,
+  attempt: number,
+): string {
+  const snippet = previousOutput.trim().slice(0, 600);
+  return [
+    `Your previous detection response could not be used (attempt ${
+      attempt - 1
+    } of ${MAX_DETECTION_ATTEMPTS}).`,
+    '',
+    'What was wrong:',
+    feedback,
+    '',
+    ...(snippet
+      ? ['Your previous response began with:', '"""', snippet, '"""', '']
+      : []),
+    'Run the detection again and respond with ONLY a single valid JSON object matching the required shape exactly — no prose, no markdown code fences.',
+    '',
+    '--- Original task ---',
+    basePrompt,
+  ].join('\n');
 }
 
 /**
@@ -356,79 +466,118 @@ export async function detectProjectsWithAgent(
     runOptions,
   );
 
-  // Keeps only the transcript tail — the report JSON is the last output.
-  const MAX_TRANSCRIPT_CHARS = 256 * 1024;
-  const collected: string[] = [];
-  let collectedChars = 0;
-  const collect = (text: string): void => {
-    collected.push(text);
-    collectedChars += text.length;
-    while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
-      collectedChars -= collected.shift()!.length;
-    }
-  };
-  let resultText = '';
-
-  const middleware = {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onMessage: (message: any): void => {
-      if (message?.type === 'assistant') {
-        for (const block of message.message?.content ?? []) {
-          if (block?.type === 'text' && typeof block.text === 'string') {
-            collect(block.text);
-            const line = block.text.trim();
-            if (line && onEvent) {
-              onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
-            }
-          } else if (block?.type === 'tool_use') {
-            onEvent?.(formatToolUse(block));
-          }
-        }
-      } else if (
-        message?.type === 'result' &&
-        typeof message.result === 'string'
-      ) {
-        resultText = message.result;
+  // One agent conversation: drive the loop, collect the transcript tail (the
+  // report JSON is the last output), and return whatever text it produced.
+  const runDetectionAttempt = async (
+    attemptPrompt: string,
+  ): Promise<string> => {
+    const MAX_TRANSCRIPT_CHARS = 256 * 1024;
+    const collected: string[] = [];
+    let collectedChars = 0;
+    const collect = (text: string): void => {
+      collected.push(text);
+      collectedChars += text.length;
+      while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
+        collectedChars -= collected.shift()!.length;
       }
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    finalize: (_resultMessage: any, _durationMs: number): unknown => undefined,
+    };
+    let resultText = '';
+
+    const middleware = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: (message: any): void => {
+        if (message?.type === 'assistant') {
+          for (const block of message.message?.content ?? []) {
+            if (block?.type === 'text' && typeof block.text === 'string') {
+              collect(block.text);
+              const line = block.text.trim();
+              if (line && onEvent) {
+                onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
+              }
+            } else if (block?.type === 'tool_use') {
+              onEvent?.(formatToolUse(block));
+            }
+          }
+        } else if (
+          message?.type === 'result' &&
+          typeof message.result === 'string'
+        ) {
+          resultText = message.result;
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      finalize: (_resultMessage: any, _durationMs: number): unknown =>
+        undefined,
+    };
+
+    const result = await executeAgent(
+      agent,
+      attemptPrompt,
+      runOptions,
+      NOOP_SPINNER,
+      {
+        spinnerMessage: 'Scanning the repo...',
+        successMessage: 'Detection complete',
+        errorMessage: 'Detection failed',
+        requestRemark: false,
+      },
+      middleware,
+    );
+
+    if (result.error) {
+      throw new Error(result.message || `Agent error: ${result.error}`);
+    }
+
+    return resultText || collected.join('\n');
   };
 
-  const result = await executeAgent(
-    agent,
-    buildPrompt(cwd, targets, purpose, recommend),
-    runOptions,
-    NOOP_SPINNER,
-    {
-      spinnerMessage: 'Scanning the repo...',
-      successMessage: 'Detection complete',
-      errorMessage: 'Detection failed',
-      requestRemark: false,
-    },
-    middleware,
-  );
+  const basePrompt = buildPrompt(cwd, targets, purpose, recommend);
+  const validTargetIds = targets.map((t) => t.id);
 
-  if (result.error) {
-    throw new Error(result.message || `Agent error: ${result.error}`);
-  }
+  // Run detection, validate the reply with Zod, and on a malformed reply
+  // re-prompt the agent with the specific problems — up to MAX_DETECTION_ATTEMPTS
+  // times. The last reply that at least parsed as JSON is kept so we can
+  // best-effort coerce it if every attempt fails validation.
+  let prompt = basePrompt;
+  let lastParsedJson: unknown = undefined;
 
-  const output = resultText || collected.join('\n');
-  try {
-    return coerceAgenticReport(
-      extractJson(output),
-      targets.map((t) => t.id),
-      { recommend },
-    );
-  } catch (err) {
+  for (let attempt = 1; attempt <= MAX_DETECTION_ATTEMPTS; attempt++) {
+    const output = await runDetectionAttempt(prompt);
+
     // The prompt tells the agent to emit `[ABORT] detection failed` when the
-    // repo has no recognizable project manifests. Surface that (and any other
-    // non-JSON terminal output that carries the abort signal) as an empty
-    // report so the screen renders a friendly "nothing to instrument" state
-    // instead of a cryptic "Agent did not return a JSON object" error.
+    // repo has no recognizable manifests. Surface that as an empty report so
+    // the screen renders a friendly "nothing to instrument" state.
     if (output.includes(AgentSignals.ABORT)) {
       return { repoType: 'single', projects: [] };
     }
-    throw err;
+
+    const parsed = parseAgentReport(output);
+    if (parsed.ok) {
+      return coerceAgenticReport(parsed.value, validTargetIds, { recommend });
+    }
+
+    if (parsed.parsedJson !== undefined) lastParsedJson = parsed.parsedJson;
+
+    if (attempt < MAX_DETECTION_ATTEMPTS) {
+      onEvent?.(
+        `Detection response was malformed; retrying (${
+          attempt + 1
+        }/${MAX_DETECTION_ATTEMPTS})…`,
+      );
+      prompt = buildRetryPrompt(
+        basePrompt,
+        parsed.feedback,
+        output,
+        attempt + 1,
+      );
+    }
   }
+
+  // Retries exhausted. Best effort: coerce the last reply that at least parsed
+  // as JSON (coerceAgenticReport clamps/defaults every field, and treats
+  // `undefined` as an empty report). Returning an empty report rather than
+  // throwing means a headless monorepo run scopes to the install dir as-is
+  // instead of crashing on a SyntaxError and silently mis-targeting the root.
+  onEvent?.('Detection did not return a valid report; continuing best-effort.');
+  return coerceAgenticReport(lastParsedJson, validTargetIds, { recommend });
 }
