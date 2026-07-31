@@ -34,6 +34,7 @@ import {
   StreamEvent,
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
+import { logToFile } from '@utils/debug';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -306,6 +307,11 @@ export class TaskStreamPush {
       handoff_text: handoffText ?? undefined,
       timestamp: new Date().toISOString(),
     };
+    logToFile(
+      `[task-stream-push] push phase=${phase} handoff_text=${
+        handoffText === null ? 'absent' : `${handoffText.length} chars`
+      }`,
+    );
 
     let event: StreamEvent;
     if (!this.created) {
