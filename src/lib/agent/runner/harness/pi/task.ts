@@ -298,8 +298,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       handoff: buildHandoffContext({
         credentials: boot.credentials,
         installDir: dir,
-        reportFile: programConfig?.reportFile,
-        programLabel: programConfig?.id ?? 'wizard',
+        reportFile: programConfig.reportFile,
+        programId: programConfig.id,
+        programLabel: programConfig.description,
       }),
       skillsBaseUrl: boot.skillsBaseUrl,
       triageProvider: boot.triageProvider,

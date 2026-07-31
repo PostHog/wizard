@@ -68,16 +68,22 @@ export function buildHandoffContext(args: {
   installDir: string;
   /** The program's fallback report filename. */
   reportFile?: string;
-  /** Program id or label, used in the notebook title. */
-  programLabel: string;
+  /** The program id — names the fallback file, never the notebook title. */
+  programId: string;
+  /**
+   * Human name for the notebook title, e.g. "Set up PostHog SDK integration".
+   * The id is a slug, so it must not end up in a title the user reads in their
+   * notebook list; fall back to "setup" rather than leaking one.
+   */
+  programLabel?: string;
 }): PublishHandoffContext {
   return {
     credentials: args.credentials,
     installDir: args.installDir,
-    reportFile: args.reportFile ?? `posthog-${args.programLabel}-report.md`,
-    notebookTitle: `PostHog ${args.programLabel} (wizard) – ${path.basename(
-      args.installDir,
-    )}`,
+    reportFile: args.reportFile ?? `posthog-${args.programId}-report.md`,
+    notebookTitle: `PostHog ${
+      args.programLabel ?? 'setup'
+    } (wizard) – ${path.basename(args.installDir)}`,
   };
 }
 
@@ -148,16 +154,18 @@ export async function publishHandoff(
     })${fallbackPath ? `, wrote ${fallbackPath}` : ''}`,
   );
 
-  // Reported as ok: the handoff itself was published, and a retry would only
-  // duplicate it. The message tells the agent not to try the notebook again.
+  // With a file on disk this is still a success: the handoff is published, the
+  // report is readable, and a retry would only duplicate the notebook. With
+  // neither, the report reached nobody — say so, so the run doesn't report a
+  // handoff it didn't deliver.
   return {
-    ok: true,
+    ok: fallbackPath !== null,
     message:
       `${published} The notebook could not be created (${
         notebook.error ?? 'unknown error'
       })` +
       (fallbackPath
         ? `, so the report was written to \`${context.reportFile}\` instead. Do not retry.`
-        : ', and the report could not be written to disk either. Do not retry.'),
+        : ', and the report could not be written to disk either, so it reached nobody. Do not retry the call.'),
   };
 }

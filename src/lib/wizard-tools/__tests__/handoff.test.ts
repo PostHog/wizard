@@ -8,6 +8,7 @@ import { HostResolution } from '@lib/host-resolution';
 import type { Credentials } from '@lib/wizard-session';
 import {
   MAX_HANDOFF_TEXT_CHARS,
+  buildHandoffContext,
   publishHandoff,
   type PublishHandoffContext,
 } from '../handoff';
@@ -131,6 +132,24 @@ describe('publishHandoff', () => {
     expect(result.message).toContain('Do not retry');
   });
 
+  it('reports failure when neither the notebook nor the fallback file lands', async () => {
+    const result = await publishHandoff(
+      '# Report',
+      context({
+        // A directory that does not exist, so the fallback write throws.
+        installDir: path.join(tmpDir, 'missing'),
+        notebookOptions: {
+          fetchImpl: () =>
+            Promise.resolve(new Response('nope', { status: 403 })),
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('reached nobody');
+    expect(reportFiles).toEqual([]);
+  });
+
   it('skips the notebook entirely when there are no credentials', async () => {
     const result = await publishHandoff(
       '# Report',
@@ -148,5 +167,32 @@ describe('publishHandoff', () => {
     expect(captured).toEqual(['# Report']);
     expect(notebookUrls).toEqual([]);
     expect(reportFiles).toEqual([]);
+  });
+});
+
+describe('buildHandoffContext', () => {
+  it('keeps the program id out of the notebook title', () => {
+    const ctx = buildHandoffContext({
+      installDir: '/tmp/acme-shop',
+      reportFile: 'posthog-setup-report.md',
+      programId: 'posthog-integration',
+      programLabel: 'Set up PostHog SDK integration',
+    });
+
+    expect(ctx.notebookTitle).toBe(
+      'PostHog Set up PostHog SDK integration (wizard) – acme-shop',
+    );
+    expect(ctx.notebookTitle).not.toContain('posthog-integration');
+    expect(ctx.reportFile).toBe('posthog-setup-report.md');
+  });
+
+  it('falls back to a generic title and an id-derived filename', () => {
+    const ctx = buildHandoffContext({
+      installDir: '/tmp/acme-shop',
+      programId: 'audit',
+    });
+
+    expect(ctx.notebookTitle).toBe('PostHog setup (wizard) – acme-shop');
+    expect(ctx.reportFile).toBe('posthog-audit-report.md');
   });
 });

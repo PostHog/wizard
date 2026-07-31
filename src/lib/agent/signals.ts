@@ -35,6 +35,13 @@ export const AgentSignals = {
    * onto `session.dashboardUrl` and surfaced by programs in their outro.
    */
   DASHBOARD_URL: '[DASHBOARD_URL]',
+  /**
+   * Legacy notebook signal: `[NOTEBOOK_URL] <full https url>`. `publish_handoff`
+   * creates the notebook and sets the URL itself, so nothing emits this any
+   * more — it stays read-only for skill releases that still upload their own
+   * notebook, and can be retired once none do.
+   */
+  NOTEBOOK_URL: '[NOTEBOOK_URL]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];

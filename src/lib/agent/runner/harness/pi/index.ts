@@ -136,11 +136,14 @@ export function extractText(message: unknown): string {
  * the dashboard) into the outro link, mirroring the anthropic path's signal
  * parsing (#9). The marker carries the URL the MCP returned.
  *
- * The notebook has no marker: `publish_handoff` creates it and sets the URL.
+ * `[NOTEBOOK_URL]` is read for the same reason it still exists: `publish_handoff`
+ * sets the notebook URL itself, but skill releases that upload their own notebook
+ * only have the marker. Drop it once none do.
  */
 export function applyOutroMarkers(textBlock: string): void {
   const markers: Array<[string, (url: string) => void]> = [
     [AgentSignals.DASHBOARD_URL, (url) => getUI().setDashboardUrl(url)],
+    [AgentSignals.NOTEBOOK_URL, (url) => getUI().setNotebookUrl(url)],
   ];
   for (const [marker, apply] of markers) {
     const idx = textBlock.indexOf(marker);
@@ -387,7 +390,8 @@ export const piBackend: AgentHarness = {
             credentials: boot.credentials,
             installDir: session.installDir,
             reportFile: programConfig.reportFile,
-            programLabel: programConfig.id,
+            programId: programConfig.id,
+            programLabel: programConfig.description,
           }),
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask

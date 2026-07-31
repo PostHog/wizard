@@ -1607,8 +1607,21 @@ function handleSDKMessage(
               getUI().setDashboardUrl(dashboardMatch[1].trim());
             }
 
-            // No [NOTEBOOK_URL] marker to parse — `publish_handoff` creates the
-            // notebook itself and sets the URL directly.
+            // `publish_handoff` creates the notebook and sets the URL, so this
+            // marker is only still read for skills that haven't migrated yet and
+            // still upload a notebook themselves. Retire it once every released
+            // skill publishes through the tool.
+            const notebookRegex = new RegExp(
+              `${AgentSignals.NOTEBOOK_URL.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                '\\$&',
+              )}\\s*(\\S+)`,
+              'm',
+            );
+            const notebookMatch = block.text.match(notebookRegex);
+            if (notebookMatch) {
+              getUI().setNotebookUrl(notebookMatch[1].trim());
+            }
           }
 
           // Intercept Task* tool_use blocks for task progression.
