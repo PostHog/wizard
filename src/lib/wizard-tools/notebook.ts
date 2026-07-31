@@ -27,13 +27,11 @@ const MAX_RETRY_AFTER_MS = 60_000;
 /** The markdown node the PostHog notebook editor renders a report into. */
 const MARKDOWN_NODE_ID = 'markdown-notebook-v2';
 
-export interface CreateNotebookResult {
-  ok: boolean;
-  /** App URL of the created notebook, set when `ok`. */
-  url?: string;
-  /** Human-readable failure reason, set when `!ok` — surfaced to the agent. */
-  error?: string;
-}
+/** A union, so a successful result carries a url without the caller re-checking. */
+export type CreateNotebookResult =
+  | { ok: true; url: string }
+  /** `error` is human-readable — it ends up in the tool result the agent reads. */
+  | { ok: false; error: string };
 
 export interface CreateNotebookOptions {
   fetchImpl?: typeof fetch;
@@ -50,7 +48,7 @@ function parseRetryAfter(header: string | null): number {
 }
 
 /** The tiptap doc a `ph-markdown-notebook` notebook is one markdown node wide. */
-export function buildNotebookContent(markdown: string): object {
+function buildNotebookContent(markdown: string): object {
   return {
     type: 'doc',
     content: [

@@ -139,7 +139,7 @@ export async function publishHandoff(
     context.notebookOptions,
   );
 
-  if (notebook.ok && notebook.url) {
+  if (notebook.ok) {
     getUI().setNotebookUrl(notebook.url);
     return { ok: true, message: `${published} Notebook: ${notebook.url}` };
   }
@@ -149,9 +149,9 @@ export async function publishHandoff(
   const fallbackPath = writeFallbackReport(context, text);
   if (fallbackPath) getUI().setReportFile(context.reportFile);
   logToFile(
-    `publish_handoff: notebook creation failed (${
-      notebook.error ?? 'unknown'
-    })${fallbackPath ? `, wrote ${fallbackPath}` : ''}`,
+    `publish_handoff: notebook creation failed (${notebook.error})${
+      fallbackPath ? `, wrote ${fallbackPath}` : ''
+    }`,
   );
 
   // With a file on disk this is still a success: the handoff is published, the
@@ -161,9 +161,7 @@ export async function publishHandoff(
   return {
     ok: fallbackPath !== null,
     message:
-      `${published} The notebook could not be created (${
-        notebook.error ?? 'unknown error'
-      })` +
+      `${published} The notebook could not be created (${notebook.error})` +
       (fallbackPath
         ? `, so the report was written to \`${context.reportFile}\` instead. Do not retry.`
         : ', and the report could not be written to disk either, so it reached nobody. Do not retry the call.'),
