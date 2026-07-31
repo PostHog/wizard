@@ -626,12 +626,6 @@ export async function runOrchestrator(
     ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
 
-  // Prefer the report the run wrote; fall back to the raw queue if it is missing.
-  const reportPath = path.join(session.installDir, 'posthog-setup-report.md');
-  const reportFile = existsSync(reportPath)
-    ? 'posthog-setup-report.md'
-    : store.queuePath;
-
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
 
@@ -671,9 +665,8 @@ export async function runOrchestrator(
     kind: OutroKind.Success,
     message,
     body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the report.`
+      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
       : undefined,
-    reportFile,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
   });
   getUI().outro(message);

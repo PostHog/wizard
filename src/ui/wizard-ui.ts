@@ -225,6 +225,9 @@ export interface WizardUI {
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
 
+  /** Handoff doc from the `publish_handoff` tool; the task-stream push carries it as `handoff_text`. */
+  setHandoffText(text: string): void;
+
   /** Accumulate one assistant turn's token usage into the hidden Ctrl+T
    *  token/cost HUD's running estimate. No-op outside the TUI. */
   addTokenUsage(delta: TokenUsageDelta): void;

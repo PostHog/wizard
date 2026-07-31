@@ -318,14 +318,16 @@ ${warehouseReportInstruction(session)}
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
-          reportFile: SETUP_REPORT_FILE,
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
           nextSteps: buildWarehouseNextSteps(sess),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
-          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
+          // No report file — the prompt points at the notebook, when the run captured one.
+          handoffPrompt: sess.notebookUrl
+            ? buildCodingAgentPrompt(sess.notebookUrl)
+            : undefined,
         };
       },
     };
