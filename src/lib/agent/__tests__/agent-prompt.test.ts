@@ -53,6 +53,16 @@ describe('assemblePrompt', () => {
     expect(customFn).toHaveBeenCalledWith(ctx);
   });
 
+  it('sends the skill report through publish_handoff, not a report file', () => {
+    const prompt = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      skillPath: '/skills/test',
+    });
+
+    expect(prompt).toContain('publish_handoff');
+    expect(prompt).not.toContain('test-report.md');
+  });
+
   it('omits custom and skill sections when not configured', () => {
     const prompt = assemblePrompt(makeRunDef(), baseCtx);
 

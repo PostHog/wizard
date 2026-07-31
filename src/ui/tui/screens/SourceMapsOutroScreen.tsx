@@ -5,8 +5,8 @@
  * needs to actually get de-minified stack traces: that packages were installed
  * and upload credentials written to .env, plus the three gotchas (builds
  * upload, run the build, give CI the same credentials). All static guidance —
- * driven only by the program's `buildOutroData` (kind / message / report /
- * docs), no per-run data.
+ * driven only by the program's `buildOutroData` (kind / message / docs) plus
+ * the notebook link `publish_handoff` produced, no other per-run data.
  */
 
 import { join } from 'node:path';
@@ -17,6 +17,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
+import { useAutoOpenNotebook } from '@ui/tui/hooks/useAutoOpenNotebook';
 
 interface SourceMapsOutroScreenProps {
   store: WizardStore;
@@ -33,6 +34,9 @@ export const SourceMapsOutroScreen = ({
   useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
+
+  // The report lives in the notebook now, so put it in front of the user.
+  useAutoOpenNotebook(outroData?.notebookUrl);
 
   if (!outroData) {
     return (
@@ -76,7 +80,16 @@ export const SourceMapsOutroScreen = ({
             </Text>
           </Section>
 
-          {outroData.reportFile && (
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Details in{' '}
+                <Text color={Colors.primary}>{outroData.notebookUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {!outroData.notebookUrl && outroData.reportFile && (
             <Box marginTop={1}>
               <Text>
                 Details in{' '}

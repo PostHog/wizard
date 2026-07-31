@@ -269,6 +269,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setReportFile(_file: string): void {
+    // No-op without a store — HeadlessUI overrides to feed the session sync
+  }
+
   setHandoffText(_text: string): void {
     // No-op without a store — HeadlessUI overrides to feed the session sync
   }

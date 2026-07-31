@@ -14,6 +14,7 @@ import { Colors } from '@ui/tui/styles';
 import { getAuditChecks } from '@lib/programs/audit/types';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
+import { useAutoOpenNotebook } from '@ui/tui/hooks/useAutoOpenNotebook';
 
 interface AuditOutroScreenProps {
   store: WizardStore;
@@ -28,6 +29,9 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
   useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
+
+  // The report lives in the notebook now, so put it in front of the user.
+  useAutoOpenNotebook(outroData?.notebookUrl);
 
   if (!outroData) {
     return (

@@ -180,9 +180,9 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - query:read        run HogQL queries when the agent needs data
  * - dashboard:write   create the onboarding dashboard during setup
  * - insight:write     create the onboarding insights during setup
- * - notebook:write    upload the events-audit report as a PostHog notebook
- *                     in step 6 of the events-audit skill (notebooks-create
- *                     MCP tool requires this scope)
+ * - notebook:write    create the notebook that carries every program's
+ *                     report — the wizard's own `publish_handoff` tool posts
+ *                     it, and without this scope the call 403s
  * - event_definition:write
  *                     create event definitions from the completed wizard
  *                     session's event plan

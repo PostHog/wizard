@@ -834,6 +834,12 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setReportFile(file: string): void {
+    logToFile(`store.setReportFile: ${file}`);
+    this.$session.setKey('reportFile', file);
+    this.emitChange();
+  }
+
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);

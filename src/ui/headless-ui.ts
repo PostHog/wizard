@@ -25,4 +25,12 @@ export class HeadlessUI extends LoggingUI {
   setHandoffText(text: string): void {
     this.store.setHandoffText(text);
   }
+
+  setNotebookUrl(url: string): void {
+    this.store.setNotebookUrl(url);
+  }
+
+  setReportFile(file: string): void {
+    this.store.setReportFile(file);
+  }
 }

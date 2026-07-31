@@ -8,27 +8,26 @@ const baseParams = {
   host: 'https://us.i.posthog.com',
   settingsUrl: 'https://us.posthog.com/settings/user-api-keys',
   uiHost: 'https://us.posthog.com',
-  reportFile: 'posthog-source-maps-report.md',
 };
 
 describe('buildSourceMapsUploadPrompt hand-off report', () => {
-  it('instructs the agent to write the report file the outro points at', () => {
+  it('instructs the agent to publish the hand-off with publish_handoff', () => {
     const prompt = buildSourceMapsUploadPrompt(baseParams);
 
-    expect(prompt).toContain('Write the hand-off to');
-    expect(prompt).toContain('`posthog-source-maps-report.md`');
+    expect(prompt).toContain('`publish_handoff`');
+    expect(prompt).toContain('`content`');
   });
 
-  it('pins the report to the wizard working directory for monorepo projects', () => {
-    // The outro resolves reportFile against installDir, so a `backend/`
-    // scoped run must still write the report at the working directory.
+  it('never tells the agent to write the report to a file', () => {
+    // The report reaches the user as a notebook; a report file only exists
+    // when publish_handoff's own fallback fires, which the agent never drives.
     const prompt = buildSourceMapsUploadPrompt({
       ...baseParams,
       projectPath: 'backend',
     });
 
-    expect(prompt).toContain("WIZARD'S WORKING DIRECTORY");
-    expect(prompt).toContain('never prefixed with the selected');
+    expect(prompt).toContain('do not write the report to a file');
+    expect(prompt).not.toContain('posthog-source-maps-report.md');
   });
 });
 

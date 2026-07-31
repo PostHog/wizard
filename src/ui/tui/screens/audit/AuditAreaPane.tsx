@@ -51,21 +51,19 @@ const openLink = (url: string) => {
 
 interface AuditAreaPaneProps {
   checks: AuditCheck[];
-  reportPath: string;
   /** Slide registry to look the active area up in. Defaults to the doctor
-   * (`audit` program) slides; events-audit passes its own 6-phase set. */
+   * (`audit` program) slides; events-audit passes its own 7-phase set. */
   slides?: AreaSlide[];
   /** Dashboard URL once the agent emits `[DASHBOARD_URL]`. Shown as a sticky
    * footer so the user can grab the link while later phases still run. */
   dashboardUrl?: string | null;
-  /** Notebook URL once the agent emits `[NOTEBOOK_URL]`. Same sticky-footer
-   * treatment as the dashboard URL. */
+  /** Notebook URL once `publish_handoff` has created the notebook. Same
+   * sticky-footer treatment as the dashboard URL. */
   notebookUrl?: string | null;
 }
 
 export const AuditAreaPane = ({
   checks,
-  reportPath,
   slides = AUDIT_AREA_SLIDES,
   dashboardUrl,
   notebookUrl,
@@ -108,7 +106,7 @@ export const AuditAreaPane = ({
   // Every check is resolved and the agent is composing the report.
   return (
     <Box flexDirection="column">
-      <WritingReport reportPath={reportPath} />
+      <WritingReport />
       {urlsFooter}
     </Box>
   );
@@ -177,7 +175,7 @@ const UrlsFooter = ({
   </Box>
 );
 
-const WritingReport = ({ reportPath }: { reportPath: string }) => (
+const WritingReport = () => (
   <Box flexDirection="column" paddingX={1}>
     <Text bold color={Colors.accent}>
       We've wrapped up the review.
@@ -185,7 +183,8 @@ const WritingReport = ({ reportPath }: { reportPath: string }) => (
     <Box height={1} />
     <Text>
       To help you get the most out of your PostHog integration, we're preparing
-      a report for you at <Text color="cyan">{reportPath}</Text>.
+      a report for you. It goes into a{' '}
+      <Text color="cyan">PostHog notebook</Text> you can open and share.
     </Text>
     <Box height={1} />
     <Text>

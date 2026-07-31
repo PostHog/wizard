@@ -51,9 +51,14 @@ This flow has no pre-installed skill — you install the right one yourself:
    packages, wire OTel, set env vars, and describe verification.
 
 Make only additive changes — do not touch existing PostHog init, identify
-calls, event capture, or dashboards. Those belong to other skills. The
-final report is written to ./${AI_OBSERVABILITY_REPORT_FILE}.`,
-    successMessage: `AI Observability configured! View the report at ./${AI_OBSERVABILITY_REPORT_FILE}`,
+calls, event capture, or dashboards. Those belong to other skills.
+
+Publish the final report with a single \`publish_handoff\` call, passing the
+complete report markdown as \`content\`. That call creates the PostHog notebook
+the user reads it in, so do not write the report to a file and do not create a
+notebook yourself.`,
+    successMessage:
+      'AI Observability configured! Your report is in a PostHog notebook.',
     reportFile: AI_OBSERVABILITY_REPORT_FILE,
     docsUrl: 'https://posthog.com/docs/ai-observability',
     spinnerMessage: 'Setting up AI Observability...',

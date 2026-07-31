@@ -26,6 +26,7 @@ import {
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
+  type PublishHandoffContext,
 } from './handoff';
 import { createSecretVault, type SecretVault } from '../secret-vault';
 import {
@@ -130,6 +131,12 @@ export interface WizardToolsOptions {
 
   /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
   triageProvider: LLMProvider;
+
+  /**
+   * What `publish_handoff` needs to create the notebook. Absent → the handoff is
+   * still stored on the session and only the notebook step is skipped.
+   */
+  handoff?: PublishHandoffContext;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -788,8 +795,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
     },
-    (args: { content: string }) => {
-      const result = publishHandoff(args.content);
+    async (args: { content: string }) => {
+      const result = await publishHandoff(args.content, options.handoff);
       logToFile(`publish_handoff: ${result.message}`);
       return {
         content: [{ type: 'text' as const, text: result.message }],

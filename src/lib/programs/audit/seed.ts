@@ -4,10 +4,14 @@ import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
 /**
- * The 10 data-integrity checks the audit runs, plus one workflow row for the
- * notebook upload at the end (so the skill's `audit_resolve_checks` call for
- * `upload-notebook` succeeds — the skill writes the report to a PostHog
- * notebook as its final step).
+ * The 10 data-integrity checks the audit runs, plus two workflow rows for the
+ * hand-off at the end: the skill composes the report, then publishes it with
+ * one `publish_handoff` call, which creates the notebook it lands in.
+ *
+ * Both `write-report` and `upload-notebook` stay seeded because
+ * `audit_resolve_checks` errors on an unknown id, and released skill versions
+ * resolve both. Never drop an id here without retiring it from every skill
+ * first.
  */
 export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
@@ -73,13 +77,13 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
     id: 'write-report',
     area: 'Write report',
-    label: 'Create posthog-audit-report.md',
+    label: 'Write up the findings for the notebook',
     status: 'pending',
   },
   {
     id: 'upload-notebook',
-    area: 'Upload notebook',
-    label: 'Write the report into a PostHog notebook',
+    area: 'Publish report',
+    label: 'Publish the report to a PostHog notebook',
     status: 'pending',
   },
 ];

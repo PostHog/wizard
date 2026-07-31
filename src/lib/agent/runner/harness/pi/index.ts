@@ -29,6 +29,7 @@ import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { createAioCapture } from '@lib/agent/aio-capture';
+import { buildHandoffContext } from '@lib/wizard-tools/handoff';
 import type {
   AgentResult,
   AgentHarness,
@@ -131,14 +132,15 @@ export function extractText(message: unknown): string {
 }
 
 /**
- * Surface `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` markers the agent prints (after
- * the MCP creates them) into the outro link, mirroring the anthropic path's
- * signal parsing (#9). The marker carries the URL the MCP returned.
+ * Surface the `[DASHBOARD_URL]` marker the agent prints (after the MCP creates
+ * the dashboard) into the outro link, mirroring the anthropic path's signal
+ * parsing (#9). The marker carries the URL the MCP returned.
+ *
+ * The notebook has no marker: `publish_handoff` creates it and sets the URL.
  */
 export function applyOutroMarkers(textBlock: string): void {
   const markers: Array<[string, (url: string) => void]> = [
     [AgentSignals.DASHBOARD_URL, (url) => getUI().setDashboardUrl(url)],
-    [AgentSignals.NOTEBOOK_URL, (url) => getUI().setNotebookUrl(url)],
   ];
   for (const [marker, apply] of markers) {
     const idx = textBlock.indexOf(marker);
@@ -381,6 +383,12 @@ export const piBackend: AgentHarness = {
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
+          handoff: buildHandoffContext({
+            credentials: boot.credentials,
+            installDir: session.installDir,
+            reportFile: programConfig.reportFile,
+            programLabel: programConfig.id,
+          }),
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the

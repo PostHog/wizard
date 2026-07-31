@@ -321,7 +321,7 @@ ${warehouseReportInstruction(session)}
           docsUrl: config.metadata.docsUrl,
           continueUrl,
           nextSteps: buildWarehouseNextSteps(sess),
-          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          // Set once `publish_handoff` has created the run's notebook.
           notebookUrl: sess.notebookUrl ?? undefined,
           // No report file — the prompt points at the notebook, when the run captured one.
           handoffPrompt: sess.notebookUrl

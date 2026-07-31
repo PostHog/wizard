@@ -120,7 +120,6 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
-          reportFile: REPORT_FILE,
         });
       },
 
@@ -139,7 +138,6 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         return {
           kind: OutroKind.Success as const,
           message: 'Source maps wired up!',
-          reportFile: REPORT_FILE,
           docsUrl: DOCS_URL,
         };
       },

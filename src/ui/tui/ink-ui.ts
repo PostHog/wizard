@@ -245,6 +245,10 @@ export class InkUI implements WizardUI {
     this.store.setNotebookUrl(url);
   }
 
+  setReportFile(file: string): void {
+    this.store.setReportFile(file);
+  }
+
   setHandoffText(text: string): void {
     this.store.setHandoffText(text);
   }
@@ -258,17 +262,19 @@ export class InkUI implements WizardUI {
   }
 
   setOutroData(data: OutroData): void {
-    // Merge in URLs the agent emitted via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]`
-    // markers. These land on the live store during the run; agent-runner's
-    // `session` snapshot misses them (setKey forks the reference). The live
-    // store wins over the `data` payload so a real emission always beats any
-    // fallback the program's buildOutroData may have computed from the stale
-    // snapshot (e.g. events-audit defaults dashboardUrl to `${cloudUrl}/dashboard`).
+    // Merge in what the run produced late: the `[DASHBOARD_URL]` marker, and the
+    // notebook URL / fallback report file `publish_handoff` set. These land on
+    // the live store during the run; agent-runner's `session` snapshot misses
+    // them (setKey forks the reference). The live store wins over the `data`
+    // payload so a real value always beats any fallback the program's
+    // buildOutroData computed from the stale snapshot (e.g. events-audit
+    // defaults dashboardUrl to `${cloudUrl}/dashboard`).
     const live = this.store.session;
     this.store.setOutroData({
       ...data,
       dashboardUrl: live.dashboardUrl ?? data.dashboardUrl ?? undefined,
       notebookUrl: live.notebookUrl ?? data.notebookUrl ?? undefined,
+      reportFile: live.reportFile ?? data.reportFile ?? undefined,
     });
   }
 

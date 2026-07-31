@@ -340,6 +340,12 @@ export interface WizardSession {
   outroData: OutroData | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
+  /**
+   * Set only when `publish_handoff` could not create the notebook and fell back
+   * to writing the report to disk — the outro then names this file instead of a
+   * notebook link. Null on the happy path, where no file is written at all.
+   */
+  reportFile: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
@@ -439,6 +445,7 @@ export function buildSession(args: {
     outroData: null,
     dashboardUrl: null,
     notebookUrl: null,
+    reportFile: null,
     additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,

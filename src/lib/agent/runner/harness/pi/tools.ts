@@ -38,6 +38,7 @@ import {
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
+  type PublishHandoffContext,
 } from '@lib/wizard-tools/handoff';
 import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
@@ -68,6 +69,11 @@ export interface PiToolsContext {
   disallowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
+  /**
+   * What `publish_handoff` needs to create the notebook. Absent → the handoff is
+   * still stored on the session and only the notebook step is skipped.
+   */
+  handoff?: PublishHandoffContext;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -393,16 +399,16 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     label: 'Publish handoff',
     description: PUBLISH_HANDOFF_DESCRIPTION,
     promptSnippet:
-      'publish_handoff(content) — publish the full report markdown to the wizard session',
+      'publish_handoff(content) — publish the full report markdown to the wizard session and create its notebook',
     parameters: Type.Object({
       content: Type.String({
         description: PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
       }),
     }),
-    execute(_id, args) {
-      const result = publishHandoff(args.content);
+    async execute(_id, args) {
+      const result = await publishHandoff(args.content, ctx.handoff);
       logToFile(`[pi] publish_handoff: ${result.message}`);
-      return Promise.resolve(text(result.message));
+      return text(result.message);
     },
   });
 

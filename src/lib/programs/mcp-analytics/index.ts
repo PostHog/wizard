@@ -53,9 +53,10 @@ export const mcpAnalyticsConfig = createSkillProgram({
     '`mcp-analytics` skill end-to-end: detect the server style, install ' +
     '`@posthog/mcp` and `posthog-node`, wrap the server (or use `PostHogMCP` ' +
     'for a custom dispatcher), wire the project API key and host, and verify. ' +
-    'Make only additive changes — do not alter tool behavior. The final report ' +
-    `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
-  successMessage: `MCP analytics configured! View the report at ./${MCP_ANALYTICS_REPORT_FILE}`,
+    'Make only additive changes — do not alter tool behavior. Publish the final ' +
+    'report with a single `publish_handoff` call.',
+  successMessage:
+    'MCP analytics configured! Your report is in a PostHog notebook.',
   reportFile: MCP_ANALYTICS_REPORT_FILE,
   docsUrl: 'https://posthog.com/docs/mcp-analytics',
   spinnerMessage: 'Setting up MCP analytics...',

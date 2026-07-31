@@ -3,7 +3,7 @@ import { VisualBox, type AreaSlide } from './shared.js';
 
 const NotebookVisual = () => (
   <VisualBox>
-    <Text dimColor>posthog-audit-report.md</Text>
+    <Text dimColor>Audit report</Text>
     <Text dimColor>{'  │'}</Text>
     <Text>
       <Text dimColor>{'  ▼ '}</Text>
@@ -16,11 +16,11 @@ const NotebookVisual = () => (
 );
 
 export const UploadNotebookSlide: AreaSlide = {
-  area: 'Upload notebook',
+  area: 'Publish report',
   intro: [
-    'Next we upload the report into a PostHog notebook so you can share it with your team as a URL.',
+    'Now we publish the report into a PostHog notebook so you can open it and share it with your team as a URL.',
     'Hang tight.',
-    'The markdown file on disk is still there for you to read locally.',
+    'Nothing lands in your project — the notebook is the copy you keep.',
   ],
   visual: <NotebookVisual />,
   docsUrl: 'https://posthog.com/docs/notebooks',

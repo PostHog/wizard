@@ -236,9 +236,10 @@ export interface ProgramConfig {
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
-   * Path (relative to installDir) of the report file the program writes.
-   * Mirrors `run.reportFile` but lifted to the top level so UI screens can
-   * read it synchronously without resolving a deferred `run` function.
+   * Filename (relative to installDir) `publish_handoff` writes the report to
+   * when it cannot create the notebook. Mirrors `run.reportFile` but lifted to
+   * the top level so the harnesses can build the tool's context without
+   * resolving a deferred `run` function.
    */
   reportFile?: string;
   /**
