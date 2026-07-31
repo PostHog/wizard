@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.57.0](https://github.com/PostHog/wizard/compare/v2.56.0...v2.57.0) (2026-07-31)
+
+
+### Features
+
+* **switchboard:** let the harness axis route on the cloud surface ([#1048](https://github.com/PostHog/wizard/issues/1048)) ([492b4ce](https://github.com/PostHog/wizard/commit/492b4ce9a15358049fee6038e317fc8aa989ecda))
+
+
+### Bug Fixes
+
+* **wizard:** Whack a mole part 5: report per-task instead of the unused binding model on orchestrator runs ([#1019](https://github.com/PostHog/wizard/issues/1019)) ([20e94fb](https://github.com/PostHog/wizard/commit/20e94fb5642e3680f3f42b213cbab85afe28fc10))
+
 ## [2.56.0](https://github.com/PostHog/wizard/compare/v2.55.0...v2.56.0) (2026-07-31)
 
 
