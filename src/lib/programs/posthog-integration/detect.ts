@@ -70,20 +70,8 @@ export async function detectPostHogIntegration(
   }
 
   // Feature discovery
-  const discovered = discoverFeatures(installDir);
-  for (const feature of discovered) {
+  for (const feature of discoverFeatures(installDir)) {
     ctx.addDiscoveredFeature(feature);
-  }
-  // Distinct key from `sessionProperties()`'s array-valued `discovered_features`
-  // — one property name can't hold both an array and a joined string without
-  // the type flip-flopping per event. Tagged off the scan result rather than the
-  // session, which the non-interactive runner stubs out; reading it back would
-  // report zero features for every CI run. The count carries the denominator (a
-  // joined string can't be aggregated on), so it's tagged even at zero, matching
-  // the warehouse-source and connected-tool detectors.
-  analytics.setTag('discovered_feature_count', discovered.length);
-  if (discovered.length > 0) {
-    analytics.setTag('discovered_feature_kinds', discovered.join(','));
   }
 
   detectWarehouseSourcesForSuggestion(ctx, installDir);
