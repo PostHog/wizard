@@ -144,6 +144,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
       installDir: session.installDir,
     });
     session.typescript = typeScriptDetected;
+    analytics.setTag('typescript', typeScriptDetected);
 
     // Read package.json and resolve framework version
     const usesPackageJson = config.detection.usesPackageJson !== false;
