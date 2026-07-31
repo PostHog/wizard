@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.56.0](https://github.com/PostHog/wizard/compare/v2.55.0...v2.56.0) (2026-07-31)
+
+
+### Features
+
+* automate Rust debug-symbol upload in upload-source-maps ([#938](https://github.com/PostHog/wizard/issues/938)) ([a62ab3c](https://github.com/PostHog/wizard/commit/a62ab3cb2444aaa0f9b899710eae821e0b732e69))
+* **source-maps:** automate Go debug-symbol upload ([#1030](https://github.com/PostHog/wizard/issues/1030)) ([e15eb65](https://github.com/PostHog/wizard/commit/e15eb6518a70e17f38fa1df9bcb42f7164654b0e))
+
+
+### Bug Fixes
+
+* **analytics:** tag session facts so post-auth events carry them ([#1042](https://github.com/PostHog/wizard/issues/1042)) ([7dc977a](https://github.com/PostHog/wizard/commit/7dc977af5dd9a6381efe13402cf7bc7541f3566e))
+* **tui:** never page picker lists of 4 or fewer options ([#1041](https://github.com/PostHog/wizard/issues/1041)) ([a3d2008](https://github.com/PostHog/wizard/commit/a3d2008c758977531001c4347bd00b1781275477))
+
 ## [2.55.0](https://github.com/PostHog/wizard/compare/v2.54.0...v2.55.0) (2026-07-29)
 
 
