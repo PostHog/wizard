@@ -1,5 +1,10 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   coerceReport,
+  goSdkVerifier,
+  rustSdkVerifier,
   SOURCE_MAPS_TARGETS,
 } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
 import { AUTOMATABLE_VARIANTS } from '@lib/programs/error-tracking-upload-source-maps/detect';
@@ -52,6 +57,15 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
   it('ranks the generic web fallback last among JS targets', () => {
     for (const other of ['react', 'node', 'vite']) {
       expect(rank(other)).toBeLessThan(rank('web'));
+    }
+  });
+
+  it('ranks native binaries after JS targets but ahead of the web fallback', () => {
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({ id: 'rust', name: 'Rust' });
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({ id: 'go', name: 'Go' });
+    for (const native of ['go', 'rust']) {
+      expect(rank('node')).toBeLessThan(rank(native));
+      expect(rank(native)).toBeLessThan(rank('web'));
     }
   });
 });
@@ -476,5 +490,231 @@ describe('coerceReport', () => {
   it('returns an empty report when projects is absent', () => {
     expect(coerceReport({}).projects).toEqual([]);
     expect(coerceReport(null).projects).toEqual([]);
+  });
+
+  it('retains a Rust project with PostHog as instrumentable', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Rust (Axum)',
+          targetId: 'rust',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'Rust (Axum)',
+      variant: 'rust',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('points a Rust project without the SDK at a manual crate install', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Rust',
+          targetId: 'rust',
+          hasPostHog: false,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'rust',
+        instrumentable: false,
+        reason: expect.stringMatching(/add the posthog-rs crate/i),
+      }),
+    );
+  });
+
+  it('retains a Go project with PostHog as instrumentable', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Go (Gin)',
+          targetId: 'go',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'Go (Gin)',
+      variant: 'go',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('points a Go project without the SDK at a manual module install', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Go',
+          targetId: 'go',
+          hasPostHog: false,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'go',
+        instrumentable: false,
+        reason: expect.stringMatching(/add the posthog-go module/i),
+      }),
+    );
+  });
+});
+
+describe('goSdkVerifier', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-go-detect-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('confirms the SDK from the module go.mod, root or nested', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\nrequire github.com/posthog/posthog-go v1.22.0\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'services', 'api'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'services', 'api', 'go.mod'),
+      'module example.com/api\n\ngo 1.22\n',
+    );
+
+    const verify = goSdkVerifier(tmpDir);
+    expect(verify('.')).toBe(true);
+    expect(verify('services/api')).toBe(false);
+  });
+
+  it('ignores a commented-out requirement', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\n// require github.com/posthog/posthog-go v1.22.0\n',
+    );
+    expect(goSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('finds the SDK inside a require block', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.10.0\n\tgithub.com/posthog/posthog-go v1.22.0\n)\n',
+    );
+    expect(goSdkVerifier(tmpDir)('.')).toBe(true);
+  });
+
+  it('ignores non-require mentions of the module path', () => {
+    // A replace/exclude directive (or the SDK's own module declaration) is
+    // not a dependency — only `require` counts.
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/svc\n\ngo 1.22\n\nreplace github.com/posthog/posthog-go => ../fork\n\nexclude github.com/posthog/posthog-go v1.21.0\n',
+    );
+    expect(goSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('returns false when go.mod is missing', () => {
+    expect(goSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+});
+
+describe('rustSdkVerifier', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-rust-detect-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('confirms the SDK from the project Cargo.toml, root or nested', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\nposthog-rs = "0.20"\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'crates', 'api'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'crates', 'api', 'Cargo.toml'),
+      '[package]\nname = "api"\n\n[dependencies]\nserde = "1"\n',
+    );
+
+    const verify = rustSdkVerifier(tmpDir);
+    expect(verify('.')).toBe(true);
+    expect(verify('crates/api')).toBe(false);
+  });
+
+  it('returns false when the manifest is missing', () => {
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('finds the SDK in a member when the workspace root manifest is virtual', () => {
+    // The rust-workspace fixture shape: the root Cargo.toml has no
+    // [dependencies] at all, only [workspace] — the SDK lives in a member.
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[workspace]\nresolver = "2"\nmembers = ["crates/api"]\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'crates', 'api'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'crates', 'api', 'Cargo.toml'),
+      '[package]\nname = "api"\n\n[dependencies]\nposthog-rs = "0.20"\n',
+    );
+
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(true);
+  });
+
+  it('ignores manifests under target/ when scanning members', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[workspace]\nmembers = ["crates/api"]\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'target', 'package', 'dep'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, 'target', 'package', 'dep', 'Cargo.toml'),
+      '[package]\nname = "dep"\n\n[dependencies]\nposthog-rs = "0.20"\n',
+    );
+
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('ignores a commented-out dependency', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\n# posthog-rs = "0.20"\nserde = "1"\n',
+    );
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('accepts a renamed dependency on the crate', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\nposthog = { package = "posthog-rs", version = "0.20" }\n',
+    );
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(true);
   });
 });
