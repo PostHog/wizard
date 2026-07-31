@@ -93,7 +93,11 @@ export async function runLinearProgram(
       });
 
   const middleware = session.benchmark
-    ? createBenchmarkPipeline(spinner, sessionToOptions(session))
+    ? createBenchmarkPipeline(
+        spinner,
+        sessionToOptions(session),
+        programConfig.id,
+      )
     : undefined;
 
   // 7. Build prompt

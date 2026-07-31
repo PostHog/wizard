@@ -67,6 +67,7 @@ export interface BenchmarkData {
 export function createBenchmarkPipeline(
   spinner: SpinnerHandle,
   options: WizardRunOptions,
+  programId?: string,
   configOverride?: BenchmarkConfig,
 ): MiddlewarePipeline {
   const config = configOverride ?? loadBenchmarkConfig(options.installDir);
@@ -96,7 +97,7 @@ export function createBenchmarkPipeline(
   );
 
   return new MiddlewarePipeline(plugins, {
-    phaseDetector: new PhaseDetector(),
+    phaseDetector: new PhaseDetector(programId),
     autoDetectPhases: true,
   });
 }
