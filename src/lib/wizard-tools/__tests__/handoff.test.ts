@@ -1,3 +1,5 @@
+import type { Mock } from 'vitest';
+
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -6,12 +8,32 @@ import { getUI, setUI } from '@ui';
 import type { WizardUI } from '@ui/wizard-ui';
 import { HostResolution } from '@lib/host-resolution';
 import type { Credentials } from '@lib/wizard-session';
+import { analytics } from '@utils/analytics';
 import {
   MAX_HANDOFF_TEXT_CHARS,
   buildHandoffContext,
   publishHandoff,
   type PublishHandoffContext,
 } from '../handoff';
+
+vi.mock('../../../utils/analytics.js', () => ({
+  analytics: {
+    capture: vi.fn(),
+    wizardCapture: vi.fn(),
+    captureException: vi.fn(),
+    setTag: vi.fn(),
+  },
+  sessionProperties: vi.fn(() => ({})),
+}));
+
+const wizardCaptureMock = analytics.wizardCapture as Mock;
+const captureExceptionMock = analytics.captureException as Mock;
+
+/** Properties of the one `wizard: <name>` event this call fired. */
+const capturedEvent = (name: string): Record<string, unknown> | undefined =>
+  wizardCaptureMock.mock.calls.find((c) => c[0] === name)?.[1] as
+    | Record<string, unknown>
+    | undefined;
 
 describe('publishHandoff', () => {
   const captured: string[] = [];
@@ -21,6 +43,8 @@ describe('publishHandoff', () => {
   let tmpDir: string;
 
   beforeEach(() => {
+    wizardCaptureMock.mockClear();
+    captureExceptionMock.mockClear();
     captured.length = 0;
     notebookUrls.length = 0;
     reportFiles.length = 0;
@@ -194,5 +218,105 @@ describe('buildHandoffContext', () => {
 
     expect(ctx.notebookTitle).toBe('PostHog setup (wizard) – acme-shop');
     expect(ctx.reportFile).toBe('posthog-audit-report.md');
+  });
+});
+
+describe('publishHandoff analytics', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-analytics-'));
+
+  const credentials = (): Credentials => ({
+    accessToken: 'phx_test',
+    projectApiKey: 'phc_test',
+    host: HostResolution.fromApiHost('https://us.i.posthog.com'),
+    projectId: 42,
+  });
+
+  beforeEach(() => {
+    wizardCaptureMock.mockClear();
+    captureExceptionMock.mockClear();
+  });
+
+  afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  it('records the call and the notebook outcome, tagged by program', async () => {
+    await publishHandoff('# Report', {
+      credentials: credentials(),
+      installDir: tmp,
+      reportFile: 'posthog-audit-report.md',
+      notebookTitle: 'PostHog audit (wizard) – app',
+      programId: 'audit',
+      notebookOptions: {
+        fetchImpl: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ short_id: 'abc123' }), {
+              status: 201,
+            }),
+          ),
+      },
+    });
+
+    expect(capturedEvent('handoff called')).toMatchObject({
+      program_id: 'audit',
+      handoff_chars: 8,
+      handoff_truncated: false,
+    });
+    expect(capturedEvent('handoff published')).toMatchObject({
+      program_id: 'audit',
+      handoff_outcome: 'notebook',
+    });
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it('records the notebook failure and the file it fell back to', async () => {
+    await publishHandoff('# Report', {
+      credentials: credentials(),
+      installDir: tmp,
+      reportFile: 'posthog-audit-report.md',
+      notebookTitle: 'PostHog audit (wizard) – app',
+      programId: 'audit',
+      notebookOptions: {
+        fetchImpl: () =>
+          Promise.resolve(new Response('denied', { status: 403 })),
+      },
+    });
+
+    expect(capturedEvent('handoff notebook failed')).toMatchObject({
+      program_id: 'audit',
+      handoff_fell_back_to_file: true,
+    });
+    expect(capturedEvent('handoff published')).toMatchObject({
+      handoff_outcome: 'fallback_file',
+    });
+    // A notebook we can recover from is not worth an exception.
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it('raises an exception only when the report reaches nobody', async () => {
+    await publishHandoff('# Report', {
+      credentials: credentials(),
+      installDir: path.join(tmp, 'missing'),
+      reportFile: 'posthog-audit-report.md',
+      notebookTitle: 'PostHog audit (wizard) – app',
+      programId: 'audit',
+      notebookOptions: {
+        fetchImpl: () =>
+          Promise.resolve(new Response('denied', { status: 403 })),
+      },
+    });
+
+    expect(capturedEvent('handoff published')).toMatchObject({
+      handoff_outcome: 'undelivered',
+    });
+    expect(captureExceptionMock).toHaveBeenCalled();
+  });
+
+  it('records a blank call as rejected, with no publish', async () => {
+    await publishHandoff('   ');
+
+    expect(capturedEvent('handoff called')).toBeDefined();
+    expect(capturedEvent('handoff rejected')).toMatchObject({
+      handoff_reject_reason: 'blank_content',
+    });
+    expect(capturedEvent('handoff published')).toBeUndefined();
   });
 });

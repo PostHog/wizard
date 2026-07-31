@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { Credentials } from '@lib/wizard-session';
 import { createNotebook, type CreateNotebookOptions } from './notebook';
@@ -54,6 +55,8 @@ export interface PublishHandoffContext {
   reportFile: string;
   /** Notebook title, e.g. `PostHog setup (wizard) – my-app`. */
   notebookTitle: string;
+  /** Program that published, e.g. `audit` — breaks the analytics down per program. */
+  programId?: string;
   /** Test seams for the notebook call. */
   notebookOptions?: CreateNotebookOptions;
 }
@@ -84,6 +87,7 @@ export function buildHandoffContext(args: {
     notebookTitle: `PostHog ${
       args.programLabel ?? 'setup'
     } (wizard) – ${path.basename(args.installDir)}`,
+    programId: args.programId,
   };
 }
 
@@ -102,6 +106,16 @@ function writeFallbackReport(
         err instanceof Error ? err.message : String(err)
       }`,
     );
+    // The last copy of the report just failed to land; the caller reports the
+    // undelivered handoff, this records why the write itself lost.
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      {
+        source: 'publish_handoff_fallback_write',
+        program_id: context.programId,
+        report_file: context.reportFile,
+      },
+    );
     return null;
   }
 }
@@ -110,7 +124,23 @@ export async function publishHandoff(
   content: string,
   context?: PublishHandoffContext,
 ): Promise<PublishHandoffResult> {
+  // Identifies the run for every event below. Size and truncation describe the
+  // report; the report's own text is never sent — it quotes the user's code.
+  const base = {
+    program_id: context?.programId,
+    handoff_chars: content.length,
+    handoff_truncated: content.length > MAX_HANDOFF_TEXT_CHARS,
+  };
+
+  // One event per call, before any work: the denominator for everything after
+  // it, and the only way to see calls that never produced an outcome at all.
+  analytics.wizardCapture('handoff called', base);
+
   if (content.trim() === '') {
+    analytics.wizardCapture('handoff rejected', {
+      ...base,
+      handoff_reject_reason: 'blank_content',
+    });
     return {
       ok: false,
       message:
@@ -129,18 +159,30 @@ export async function publishHandoff(
 
   if (!context?.credentials) {
     // No project to publish into (unauthenticated host, or a unit test).
+    analytics.wizardCapture('handoff published', {
+      ...base,
+      handoff_outcome: 'session_only',
+      handoff_skip_reason: 'no_credentials',
+    });
     return { ok: true, message: published };
   }
 
+  const startedAt = Date.now();
   const notebook = await createNotebook(
     context.credentials,
     context.notebookTitle,
     text,
     context.notebookOptions,
   );
+  const notebookMs = Date.now() - startedAt;
 
   if (notebook.ok) {
     getUI().setNotebookUrl(notebook.url);
+    analytics.wizardCapture('handoff published', {
+      ...base,
+      handoff_outcome: 'notebook',
+      handoff_notebook_ms: notebookMs,
+    });
     return { ok: true, message: `${published} Notebook: ${notebook.url}` };
   }
 
@@ -154,10 +196,37 @@ export async function publishHandoff(
     }`,
   );
 
+  analytics.wizardCapture('handoff notebook failed', {
+    ...base,
+    handoff_notebook_error: notebook.error,
+    handoff_notebook_ms: notebookMs,
+    handoff_fell_back_to_file: fallbackPath !== null,
+  });
+
+  // Losing the notebook is recoverable and expected (a token without
+  // notebook:write, say); losing the file too means the report reached nobody,
+  // which is the one case worth an exception we go looking for.
+  if (!fallbackPath) {
+    analytics.captureException(
+      new Error(`Handoff undelivered: ${notebook.error}`),
+      {
+        source: 'publish_handoff_tool',
+        report_file: context.reportFile,
+        ...base,
+      },
+    );
+  }
+
   // With a file on disk this is still a success: the handoff is published, the
   // report is readable, and a retry would only duplicate the notebook. With
   // neither, the report reached nobody — say so, so the run doesn't report a
   // handoff it didn't deliver.
+  analytics.wizardCapture('handoff published', {
+    ...base,
+    handoff_outcome: fallbackPath ? 'fallback_file' : 'undelivered',
+    handoff_notebook_error: notebook.error,
+  });
+
   return {
     ok: fallbackPath !== null,
     message:
