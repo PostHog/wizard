@@ -4,6 +4,7 @@
  */
 
 import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
 
 // Cap matching the backend serializer (MAX_HANDOFF_TEXT_LENGTH); an oversized push would 400.
 export const MAX_HANDOFF_TEXT_CHARS = 64 * 1024;
@@ -26,6 +27,10 @@ export interface PublishHandoffResult {
 
 export function publishHandoff(content: string): PublishHandoffResult {
   if (content.trim() === '') {
+    analytics.wizardCapture('handoff published', {
+      handoff_ok: false,
+      handoff_reject_reason: 'blank_content',
+    });
     return {
       ok: false,
       message:
@@ -35,6 +40,12 @@ export function publishHandoff(content: string): PublishHandoffResult {
   const truncated = content.length > MAX_HANDOFF_TEXT_CHARS;
   const text = truncated ? content.slice(0, MAX_HANDOFF_TEXT_CHARS) : content;
   getUI().setHandoffText(text);
+  // Size and truncation only — never the report itself, which quotes the user's code.
+  analytics.wizardCapture('handoff published', {
+    handoff_ok: true,
+    handoff_chars: text.length,
+    handoff_truncated: truncated,
+  });
   return {
     ok: true,
     message: `Handoff published (${text.length} chars${
