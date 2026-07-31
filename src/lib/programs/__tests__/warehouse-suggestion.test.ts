@@ -99,8 +99,7 @@ describe('outro suggestion', () => {
 
       expect(outro.message).toBe('Successfully installed PostHog!');
       expect(outro.changes).toContain('Added PostHog provider');
-      // No report file is written — the report is published via publish_handoff
-      // and mirrored into a notebook.
+      // No report file — the report goes out via publish_handoff + notebook.
       expect(outro.reportFile).toBeUndefined();
     }
   });

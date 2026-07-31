@@ -1014,10 +1014,10 @@ export class WizardStore {
     this.emitChange();
   }
 
-  /** No-op on identical text: the watcher re-reads on mtime changes, and an
-   *  emit here means a network push downstream. */
+  /** No-op on identical text: an emit here means a network push downstream. */
   setHandoffText(text: string): void {
     if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
     this.$handoffText.set(text);
     this.emitChange();
   }

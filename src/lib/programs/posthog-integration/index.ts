@@ -321,11 +321,9 @@ ${warehouseReportInstruction(session)}
           docsUrl: config.metadata.docsUrl,
           continueUrl,
           nextSteps: buildWarehouseNextSteps(sess),
-          // Set once the agent mirrors the report into a notebook and emits
-          // [NOTEBOOK_URL]. The report is published via publish_handoff, not
-          // written to a file, so the coding-agent prompt points at the
-          // notebook and is omitted when the run never captured one.
+          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
+          // No report file — the prompt points at the notebook, when the run captured one.
           handoffPrompt: sess.notebookUrl
             ? buildCodingAgentPrompt(sess.notebookUrl)
             : undefined,

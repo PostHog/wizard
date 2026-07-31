@@ -387,8 +387,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  // Native mirror of the MCP `publish_handoff` tool: same name and contract
-  // (shared description constant), so the skill content is harness-agnostic.
+  // Native mirror of the MCP `publish_handoff` tool (shared description, so no drift).
   const publishHandoffTool = defineTool({
     name: PUBLISH_HANDOFF_TOOL_NAME,
     label: 'Publish handoff',

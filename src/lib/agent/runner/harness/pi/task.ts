@@ -290,8 +290,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     // Wizard env + package-manager tools are always on — their handlers are
     // fenced, and init/build tasks depend on them. publish_handoff rides
-    // along so the report task can publish the run's handoff doc; its
-    // handler only touches the store, never the project.
+    // along (store-only handler) so the report task can publish the handoff.
     const { createWizardPiTools } = await import('./tools');
     const wizardTools = createWizardPiTools({
       workingDirectory: dir,

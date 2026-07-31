@@ -225,9 +225,7 @@ export interface WizardUI {
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
 
-  /** Set the run's handoff doc (the report markdown) so the task-stream push
-   *  publishes it to the wizard session as `handoff_text`. Called by the
-   *  `publish_handoff` wizard tool; no-op outside store-backed hosts. */
+  /** Handoff doc from the `publish_handoff` tool; the task-stream push carries it as `handoff_text`. */
   setHandoffText(text: string): void;
 
   /** Accumulate one assistant turn's token usage into the hidden Ctrl+T

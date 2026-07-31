@@ -1,19 +1,11 @@
 /**
- * publish_handoff — the run's handoff doc as one explicit tool call.
- *
- * The agent calls this once, at the end of the run, with the complete report
- * markdown. The content lands on the store via `getUI().setHandoffText(...)`,
- * from where the task-stream push publishes it to the wizard session as
- * `handoff_text`. This replaces the passive path (the agent writing a report
- * file and a watcher mirroring it into the store): no report file is written
- * to the user's project at all.
+ * publish_handoff — the agent publishes the run's handoff doc (the report
+ * markdown) in one explicit call, replacing the report file + watcher path.
  */
 
 import { getUI } from '@ui';
 
-// Character cap matching the backend serializer (MAX_HANDOFF_TEXT_LENGTH):
-// an oversized push would 400 and, because the payload is a full-state
-// snapshot, take every later session update down with it.
+// Cap matching the backend serializer (MAX_HANDOFF_TEXT_LENGTH); an oversized push would 400.
 export const MAX_HANDOFF_TEXT_CHARS = 64 * 1024;
 
 export const PUBLISH_HANDOFF_TOOL_NAME = 'publish_handoff';
@@ -32,8 +24,8 @@ export interface PublishHandoffResult {
   message: string;
 }
 
-export function publishHandoff(content: unknown): PublishHandoffResult {
-  if (typeof content !== 'string' || content.trim() === '') {
+export function publishHandoff(content: string): PublishHandoffResult {
+  if (content.trim() === '') {
     return {
       ok: false,
       message:

@@ -27,8 +27,8 @@ describe('publishHandoff', () => {
     expect(captured).toEqual(['# Setup report\n\nAll done.']);
   });
 
-  it('rejects a missing or blank content instead of publishing', () => {
-    for (const bad of [undefined, null, 42, '', '   \n']) {
+  it('rejects blank content instead of publishing', () => {
+    for (const bad of ['', '   \n']) {
       const result = publishHandoff(bad);
       expect(result.ok).toBe(false);
       expect(result.message).toContain('complete report markdown');
