@@ -434,6 +434,7 @@ export class WizardStore {
 
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -692,6 +693,12 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
+      analytics.setTag(
+        'additional_feature_kinds',
+        this.session.additionalFeatureQueue.join(','),
+      );
     }
     // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
@@ -808,8 +815,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {

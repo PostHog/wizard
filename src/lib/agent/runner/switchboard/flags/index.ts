@@ -38,8 +38,6 @@ export function resolveFlagRoute(
   flags: Record<string, string>,
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
-  // Harness experiments are disabled on the cloud (headless) run surface.
-  if (RUN_SURFACE === 'cloud') return undefined;
   const experiment = HARNESS_EXPERIMENTS.find((e) => e.program === program);
   return (
     experiment && routeFromConfigFlag(experiment.flags, flags, flagPayloads)

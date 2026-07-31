@@ -214,6 +214,22 @@ export async function runOrchestrator(
     );
   }
 
+  // The end decision the switchboard event defers to: the model each task will actually run on.
+  const taskModels = Object.fromEntries(
+    ['seed', ...registry.types].map((type) => {
+      const prompt = type === 'seed' ? seedPrompt : registry.get(type);
+      const pick = resolveHarness(switchboardCtx, type);
+      const specModel = prompt && promptModelFor(prompt, pick.harness).model;
+      return [type, isValidModel(specModel) ? specModel : pick.model];
+    }),
+  );
+  logToFile(
+    `[orchestrator] task models: ${Object.entries(taskModels)
+      .map(([t, m]) => `${t}=${m}`)
+      .join(' ')}`,
+  );
+  analytics.wizardCapture('orchestrator task models', taskModels);
+
   // Responsiveness is the headline metric of the dark launch: time to first
   // visible progress, and no single step dominating wall-clock. Track it from
   // queue transitions, with the resolved model so cheap work is attributable
