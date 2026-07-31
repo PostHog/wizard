@@ -280,12 +280,15 @@ export async function runLinearProgram(
   // the session reference — direct mutation then lands on a stale snapshot
   // that the screen never reads. UI.setOutroData() goes through the store
   // and also merges in any post-snapshot URLs from the live session.
+  //
+  // No `reportFile` here: `config.reportFile` is only the fallback filename
+  // `publish_handoff` would use, and the file exists solely when that fallback
+  // fired. The merge above carries it in on those runs.
   const outroData = config.buildOutroData
     ? config.buildOutroData(session, credentials)
     : {
         kind: OutroKind.Success,
         message: config.successMessage,
-        reportFile: config.reportFile,
         docsUrl: config.docsUrl,
         continueUrl: session.signup
           ? `${host.appHost}/products?source=wizard`

@@ -18,11 +18,9 @@ import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_CHECKS_KEY,
-  AUDIT_REPORT_FILE,
   coerceAuditChecks,
   getAuditChecks,
 } from '@lib/programs/audit/types';
-import { getProgramConfig } from '@lib/programs/program-registry';
 import { WIZARD_LOG_FILE } from '@utils/paths';
 
 interface AuditRunScreenProps {
@@ -45,10 +43,6 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
 
   const [columns] = useStdoutDimensions();
   const checks = getAuditChecks(store.session);
-  const reportFile =
-    getProgramConfig(store.router.activeProgram).reportFile ??
-    AUDIT_REPORT_FILE;
-  const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
   const slides =
     store.session.skillId === 'audit-events'
@@ -57,7 +51,6 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   const areaPane = (
     <AuditAreaPane
       checks={checks}
-      reportPath={reportPath}
       slides={slides}
       dashboardUrl={store.session.dashboardUrl}
       notebookUrl={store.session.notebookUrl}

@@ -48,13 +48,15 @@ Project context:
 - PostHog Host: ${ctx.host.apiHost}`;
 }
 
-function skillPrompt(skillPath: string, reportFile: string): string {
+function skillPrompt(skillPath: string): string {
   return `A PostHog skill has been installed at ${skillPath}/. Read ${skillPath}/SKILL.md and follow its instructions completely.
 
-After completing the skill workflow, write a brief markdown report to ./${reportFile} summarizing:
+After completing the skill workflow, publish a brief markdown report with a single \`publish_handoff\` call, passing the complete report as \`content\`. Cover:
 - What changes were made to the project
 - Which files were modified or created
 - Any manual steps the user should take next
+
+That call creates the PostHog notebook the user reads the report in, so do not write the report to a file and do not create a notebook yourself.
 
 Important: You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.`;
 }
@@ -75,7 +77,7 @@ export function assemblePrompt(runDef: ProgramRun, ctx: PromptContext): string {
 
   // Skill prompt (appended when a skill was pre-installed)
   if (ctx.skillPath) {
-    parts.push(skillPrompt(ctx.skillPath, runDef.reportFile));
+    parts.push(skillPrompt(ctx.skillPath));
   }
 
   return parts.join('\n\n');

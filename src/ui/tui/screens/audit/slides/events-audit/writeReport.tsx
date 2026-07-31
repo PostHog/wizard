@@ -3,7 +3,7 @@ import { VisualBox, type AreaSlide } from '../shared.js';
 
 const ReportVisual = () => (
   <VisualBox>
-    <Text dimColor>posthog-events-audit-report.md</Text>
+    <Text>Events audit report</Text>
     <Text>
       <Text dimColor>{'  # '}</Text>
       <Text>Identity &amp; segmentation</Text>
@@ -26,9 +26,9 @@ const ReportVisual = () => (
 export const WriteReportSlide: AreaSlide = {
   area: 'Write report',
   intro: [
-    'We package everything we found into one report at ./posthog-events-audit-report.md. This is what you hand to the team.',
+    'We package everything we found into one report. This is what you hand to the team.',
     'The report covers how users get identified, which parts of your codebase capture which events, data quality issues like duplicates and phantoms, and a volume map of every event your code captures.',
-    'Nothing in your project is modified. The report is the only file you keep.',
+    'Nothing in your project is modified — the report goes into a PostHog notebook in the next step, not into your repo.',
   ],
   visual: <ReportVisual />,
   docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',

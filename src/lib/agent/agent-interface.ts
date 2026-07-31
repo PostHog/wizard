@@ -30,6 +30,7 @@ import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import type { PublishHandoffContext } from '@lib/wizard-tools/handoff';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -184,6 +185,8 @@ export type AgentConfig = {
   detectPackageManager: PackageManagerDetector;
   /** Base URL for the skills server (context-mill dev or GitHub releases) */
   skillsBaseUrl: string;
+  /** What `publish_handoff` needs to create the run's notebook. */
+  handoff?: PublishHandoffContext;
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
@@ -599,6 +602,7 @@ export async function initializeAgent(
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
       triageProvider,
+      handoff: config.handoff,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -1603,7 +1607,10 @@ function handleSDKMessage(
               getUI().setDashboardUrl(dashboardMatch[1].trim());
             }
 
-            // Check for [NOTEBOOK_URL] markers
+            // `publish_handoff` creates the notebook and sets the URL, so this
+            // marker is only still read for skills that haven't migrated yet and
+            // still upload a notebook themselves. Retire it once every released
+            // skill publishes through the tool.
             const notebookRegex = new RegExp(
               `${AgentSignals.NOTEBOOK_URL.replace(
                 /[.*+?^${}()|[\]\\]/g,

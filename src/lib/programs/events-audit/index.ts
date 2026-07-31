@@ -25,8 +25,8 @@ export const eventsAuditConfig: ProgramConfig = {
   id: 'events-audit',
   skillId: 'events-audit',
   steps: EVENTS_AUDIT_PROGRAM,
-  // Top-level reportFile so AuditRunScreen can resolve the report path
-  // synchronously without unwrapping the deferred `run` function.
+  // Top-level reportFile so the harness can hand `publish_handoff` its
+  // fallback filename without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
@@ -39,7 +39,7 @@ export const eventsAuditConfig: ProgramConfig = {
 
     // Seed the audit ledger so AuditRunScreen has something to render
     // before the agent emits its first check update. The events-audit
-    // ledger is the 6-phase pipeline, not the doctor's 10 integrity checks.
+    // ledger is the 7-phase pipeline, not the doctor's 10 integrity checks.
     seedAuditLedger(session.installDir, EVENTS_AUDIT_SEED_CHECKS);
     session.frameworkContext[AUDIT_CHECKS_KEY] = EVENTS_AUDIT_SEED_CHECKS;
 
@@ -48,7 +48,7 @@ export const eventsAuditConfig: ProgramConfig = {
       integrationLabel: 'events-audit',
       spinnerMessage: SPINNER_MESSAGE,
       successMessage:
-        'Events audit complete! You can view the report at ./posthog-events-audit-report.md',
+        'Events audit complete! Your report is in a PostHog notebook.',
       estimatedDurationMinutes: 5,
       reportFile: SETUP_REPORT_FILE,
       docsUrl: DOCS_URL,
@@ -76,15 +76,14 @@ Project context:
         const dashboardUrl =
           sess.dashboardUrl ?? (cloudUrl ? `${cloudUrl}/dashboard` : undefined);
 
-        // The agent emits `[NOTEBOOK_URL] <url>` once it uploads the report
-        // to a PostHog notebook. No fallback: if the notebook upload was
-        // skipped (e.g. MCP unavailable) we just don't show a link.
+        // `publish_handoff` sets the notebook URL once it has created the
+        // notebook. No fallback: if the notebook could not be created we
+        // just don't show a link.
         const notebookUrl = sess.notebookUrl ?? undefined;
 
         return {
           kind: OutroKind.Success as const,
           message: 'Your events audit was successful',
-          reportFile: SETUP_REPORT_FILE,
           changes: [],
           docsUrl: DOCS_URL,
           continueUrl,

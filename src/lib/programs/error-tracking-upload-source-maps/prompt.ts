@@ -11,8 +11,6 @@ export type SourceMapsUploadPromptParams = {
   host: string;
   settingsUrl: string;
   uiHost: string;
-  /** Hand-off report the agent writes in STEP 9; the outro points the user at it. */
-  reportFile: string;
 };
 
 export const SOURCE_MAPS_DETECTION_FAILED_PROMPT = `Detection did not pick a source maps skill variant for this project.
@@ -31,7 +29,6 @@ export function buildSourceMapsUploadPrompt(
     host,
     settingsUrl,
     uiHost,
-    reportFile,
   } = params;
   const platformLabel = displayName ?? variant;
   const inSubproject = projectPath != null && projectPath !== '.';
@@ -208,16 +205,16 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    surface any failure in STEP 9.
 
 STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
-   Follow the skill's "Verify and hand off" step. Write the hand-off to
-   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
-   \`${reportFile}\` as the file path, never prefixed with the selected
-   project directory; this file is the one exception to the project-scope
-   rule above. Cover: the files you changed (paths only), the exact build
-   and upload commands, every CI secret the user still has to create, and
-   how to verify the upload — then give the same summary in chat. Never
-   write secret values into the report, only variable names. The success
-   screen points the user at this file, so do not skip it. The Symbol sets page for this project — where the user
-   confirms the upload landed — is:
+   Follow the skill's "Verify and hand off" step. Publish the hand-off with a
+   single \`publish_handoff\` call, passing the complete report markdown as
+   \`content\` — the tool creates the PostHog notebook the user reads it in, so
+   do not write the report to a file and do not create a notebook yourself.
+   Cover: the files you changed (paths only), the exact build and upload
+   commands, every CI secret the user still has to create, and how to verify
+   the upload — then give the same summary in chat. Never write secret values
+   into the report, only variable names. That call is the only way the report
+   reaches the user, so do not skip it. The Symbol sets page for this project
+   — where the user confirms the upload landed — is:
    ${uiHost}/project/${projectId}/error_tracking/configuration
 `;
 }

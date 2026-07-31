@@ -222,8 +222,11 @@ export interface WizardUI {
    *  Visualizer tab's NOW PLAYING display. Pass an AgentPhase value. */
   setStage(stage: string): void;
 
-  // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
+  /** Notebook URL, set by `publish_handoff` once it has created the notebook. */
   setNotebookUrl(url: string): void;
+
+  /** Fallback report filename, set only when the notebook could not be created. */
+  setReportFile(file: string): void;
 
   /** Handoff doc from the `publish_handoff` tool; the task-stream push carries it as `handoff_text`. */
   setHandoffText(text: string): void;

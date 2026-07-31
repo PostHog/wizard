@@ -1,6 +1,6 @@
 /**
  * Slide registry for the events-audit program. Each entry is keyed by
- * `AuditCheck.area` and corresponds to one phase of the 6-phase pipeline.
+ * `AuditCheck.area` and corresponds to one phase of the 7-phase pipeline.
  *
  * `AuditAreaPane` looks up the active phase's slide here when the active
  * program is events-audit.
@@ -11,8 +11,8 @@ import { DetectSdkSlide } from './detectSdk.js';
 import { ScanSitesSlide } from './scanSites.js';
 import { EnrichSitesSlide } from './enrichSites.js';
 import { QueryVolumeSlide } from './queryVolume.js';
-import { WriteReportSlide } from './writeReport.js';
 import { CreateDashboardSlide } from './createDashboard.js';
+import { WriteReportSlide } from './writeReport.js';
 import { UploadNotebookSlide } from './uploadNotebook.js';
 
 export const EVENTS_AUDIT_AREA_SLIDES: AreaSlide[] = [
@@ -20,7 +20,7 @@ export const EVENTS_AUDIT_AREA_SLIDES: AreaSlide[] = [
   ScanSitesSlide,
   EnrichSitesSlide,
   QueryVolumeSlide,
-  WriteReportSlide,
   CreateDashboardSlide,
+  WriteReportSlide,
   UploadNotebookSlide,
 ];

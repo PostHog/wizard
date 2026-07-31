@@ -13,6 +13,7 @@ import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
 import { withUtm } from '@utils/links';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
+import { useAutoOpenNotebook } from '@ui/tui/hooks/useAutoOpenNotebook';
 
 interface OutroScreenProps {
   store: WizardStore;
@@ -29,6 +30,9 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
   useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
+
+  // The report lives in the notebook now, so put it in front of the user.
+  useAutoOpenNotebook(outroData?.notebookUrl);
 
   if (!outroData) {
     return (

@@ -8,7 +8,9 @@ import type { AuditCheck } from '@lib/programs/audit/types';
  * Phase ids match what the skill's step files resolve via
  * `mcp__wizard-tools__audit_resolve_checks` as each phase completes. The
  * skill's step 1 also seeds these same ids — keep both in sync so the
- * wizard pre-seed and the skill's MCP seed agree.
+ * wizard pre-seed and the skill's MCP seed agree. `audit_resolve_checks`
+ * errors on an unknown id, so an id stays seeded until every released skill
+ * version has stopped resolving it.
  */
 export const EVENTS_AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
@@ -36,21 +38,21 @@ export const EVENTS_AUDIT_SEED_CHECKS: AuditCheck[] = [
     status: 'pending',
   },
   {
-    id: 'write-report',
-    area: 'Write report',
-    label: 'Create posthog-events-audit-report.md',
-    status: 'pending',
-  },
-  {
     id: 'create-dashboard',
     area: 'Create dashboard',
     label: 'Optional: dashboard for resolved events',
     status: 'pending',
   },
   {
+    id: 'write-report',
+    area: 'Write report',
+    label: 'Write up the findings for the notebook',
+    status: 'pending',
+  },
+  {
     id: 'upload-notebook',
-    area: 'Upload notebook',
-    label: 'Write the report into a PostHog notebook',
+    area: 'Publish report',
+    label: 'Publish the report to a PostHog notebook',
     status: 'pending',
   },
 ];

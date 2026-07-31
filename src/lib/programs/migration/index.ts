@@ -43,8 +43,9 @@ export const migrationConfig: ProgramConfig = {
       'skill end-to-end: follow the step chain starting at ' +
       'references/1-presence.md. Only replace existing source-SDK call sites ' +
       'with PostHog equivalents — make zero unrelated changes and no ' +
-      `net-new instrumentation. The final report is written to ./${MIGRATION_REPORT_FILE}.`,
-    successMessage: `Migration complete! View the report at ./${MIGRATION_REPORT_FILE}`,
+      'net-new instrumentation. Publish the final report with a single ' +
+      '`publish_handoff` call.',
+    successMessage: 'Migration complete! Your report is in a PostHog notebook.',
     reportFile: MIGRATION_REPORT_FILE,
     docsUrl: '',
     spinnerMessage: 'Migrating to PostHog...',

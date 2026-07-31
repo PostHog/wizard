@@ -12,7 +12,6 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
-import { SETUP_REPORT_FILE } from '@lib/programs/posthog-integration/index';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
 
 interface SelfDrivingHandoffScreenProps {
@@ -27,11 +26,14 @@ export const SelfDrivingHandoffScreen = ({
     () => store.getSnapshot(),
   );
 
-  // The integration ran in the picked project (a monorepo sub-app, or the
-  // root), so the report sits under that path.
+  // The integration report lives in the notebook `publish_handoff` created; a
+  // file exists only when that call had to fall back. The integration run is
+  // composed, so it never built outro data — read the live store instead. It
+  // ran in the picked project (a monorepo sub-app, or the root), so any
+  // fallback file sits under that path.
+  const { notebookUrl, reportFile } = store.session;
   const rel = store.session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY];
   const dir = typeof rel === 'string' && rel !== '.' ? `${rel}/` : '';
-  const reportPath = `./${dir}${SETUP_REPORT_FILE}`;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -62,12 +64,22 @@ export const SelfDrivingHandoffScreen = ({
         />
       </Box>
 
-      <Box marginTop={1}>
-        <Text dimColor>
-          You can find your PostHog integration report at{' '}
-          <Text bold>{reportPath}</Text>
-        </Text>
-      </Box>
+      {notebookUrl && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            Your PostHog integration report: <Text bold>{notebookUrl}</Text>
+          </Text>
+        </Box>
+      )}
+
+      {!notebookUrl && reportFile && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            You can find your PostHog integration report at{' '}
+            <Text bold>{`./${dir}${reportFile}`}</Text>
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 };

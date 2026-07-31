@@ -22,6 +22,7 @@ import { createAioCapture } from '@lib/agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
+import { buildHandoffContext } from '@lib/wizard-tools/handoff';
 import type {
   AgentResult,
   AgentHarness,
@@ -65,6 +66,13 @@ export const anthropicBackend: AgentHarness = {
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
         skillsBaseUrl,
+        handoff: buildHandoffContext({
+          credentials,
+          installDir: session.installDir,
+          reportFile: programConfig.reportFile,
+          programId: programConfig.id,
+          programLabel: programConfig.description,
+        }),
         wizardFlags,
         wizardMetadata,
         integrationLabel: config.integrationLabel,
@@ -140,6 +148,13 @@ export const anthropicBackend: AgentHarness = {
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
+        handoff: buildHandoffContext({
+          credentials: boot.credentials,
+          installDir: session.installDir,
+          reportFile: programConfig.reportFile,
+          programId: programConfig.id,
+          programLabel: programConfig.description,
+        }),
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
         integrationLabel: programConfig.id,

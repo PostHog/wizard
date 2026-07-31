@@ -36,9 +36,10 @@ export const AgentSignals = {
    */
   DASHBOARD_URL: '[DASHBOARD_URL]',
   /**
-   * Signal emitted when the agent has uploaded a report to a PostHog
-   * notebook. Format: `[NOTEBOOK_URL] <full https url>`. The URL is captured
-   * onto `session.notebookUrl` and surfaced by programs in their outro.
+   * Legacy notebook signal: `[NOTEBOOK_URL] <full https url>`. `publish_handoff`
+   * creates the notebook and sets the URL itself, so nothing emits this any
+   * more — it stays read-only for skill releases that still upload their own
+   * notebook, and can be retired once none do.
    */
   NOTEBOOK_URL: '[NOTEBOOK_URL]',
 } as const;

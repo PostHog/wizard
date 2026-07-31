@@ -29,6 +29,7 @@ import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { createAioCapture } from '@lib/agent/aio-capture';
+import { buildHandoffContext } from '@lib/wizard-tools/handoff';
 import type {
   AgentResult,
   AgentHarness,
@@ -131,9 +132,13 @@ export function extractText(message: unknown): string {
 }
 
 /**
- * Surface `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` markers the agent prints (after
- * the MCP creates them) into the outro link, mirroring the anthropic path's
- * signal parsing (#9). The marker carries the URL the MCP returned.
+ * Surface the `[DASHBOARD_URL]` marker the agent prints (after the MCP creates
+ * the dashboard) into the outro link, mirroring the anthropic path's signal
+ * parsing (#9). The marker carries the URL the MCP returned.
+ *
+ * `[NOTEBOOK_URL]` is read for the same reason it still exists: `publish_handoff`
+ * sets the notebook URL itself, but skill releases that upload their own notebook
+ * only have the marker. Drop it once none do.
  */
 export function applyOutroMarkers(textBlock: string): void {
   const markers: Array<[string, (url: string) => void]> = [
@@ -381,6 +386,13 @@ export const piBackend: AgentHarness = {
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
+          handoff: buildHandoffContext({
+            credentials: boot.credentials,
+            installDir: session.installDir,
+            reportFile: programConfig.reportFile,
+            programId: programConfig.id,
+            programLabel: programConfig.description,
+          }),
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the

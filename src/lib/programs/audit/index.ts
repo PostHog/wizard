@@ -41,8 +41,7 @@ const baseConfig = createSkillProgram({
   integrationLabel: 'audit',
   customPrompt:
     'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.',
-  successMessage:
-    'Audit complete! You can view the audit report at ./posthog-audit-report.md',
+  successMessage: 'Audit complete! Your report is in a PostHog notebook.',
   reportFile: AUDIT_REPORT_FILE,
   docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
   spinnerMessage: 'Auditing PostHog integration...',
@@ -65,9 +64,9 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
 
   return {
     ...baseRun,
-    // Override the default outro so the dashboard + notebook URLs the
-    // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
-    // on the post-run screen.
+    // Override the default outro so the dashboard URL the agent emits via
+    // `[DASHBOARD_URL]` and the notebook URL `publish_handoff` creates are
+    // surfaced on the post-run screen.
     buildOutroData: (sess, credentials) => {
       const cloudUrl = credentials.host.appHost;
       const continueUrl = sess.signup
@@ -83,7 +82,6 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
       return {
         kind: OutroKind.Success as const,
         message: baseRun.successMessage,
-        reportFile: baseRun.reportFile,
         docsUrl: baseRun.docsUrl,
         continueUrl,
         dashboardUrl: session.dashboardUrl ?? undefined,
