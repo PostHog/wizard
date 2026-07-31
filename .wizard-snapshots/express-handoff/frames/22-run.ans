@@ -1,0 +1,49 @@
+                              [0m[38;5;58;48;5;178m PostHog Wizard v2.54.0                                                                    Feedback: wizard@posthog.com [0m                              
+                                                                                                                                                                                    
+                                [0m[1;38;5;178mTips[0m                                                       [0m[1mTasks[0m                                                                                    
+                                                                                                                                                                                    
+                                [0m[38;5;178m◆ [0m[1mYou can also track people and groups with PostHog[0m        [0m[38;5;2m◼[0m Analyze project                                                                        
+                                [0m[2mEvents can be associated with the humans who generate [0m     [0m[38;5;2m◼[0m Install SDK                                                                            
+                                [0m[2mthem, letting you understand a specific user or [0m           [0m[38;5;2m◼[0m Set env vars                                                                           
+                                [0m[2mcustomer's situation.[0m                                      [0m[38;5;2m◼[0m Initialize PostHog                                                                     
+                                                                                           [0m[38;5;2m◼[0m Instrument events                                                                      
+                                [0m[38;5;178m◆ [0m[1mGet way more detail using properties[0m                     [0m[38;5;6m▶[0m Verifying integration                                                                  
+                                [0m[2mEvents and person records can have any properties you [0m     [0m[38;5;8m◻[0m [0m[2mCreate dashboard[0m                                                                       
+                                [0m[2mwant. Track things like how they found your website, [0m      [0m[38;5;8m◻[0m [0m[2mWrite setup report[0m                                                                     
+                                [0m[2mwhat subscription tier they choose, and much more.[0m                                                                                                  
+                                                                                           [0m[38;5;4m⠋[0m [0m[2mProgress: 5/8 completed[0m                                                                
+                                [0m[38;5;178m◆ [0m[1mUse PostHog in Slack[0m                                                                                                                              
+                                [0m[2mConnect the PostHog Slack app to analyze data and ship [0m                                                                                             
+                                [0m[2mproduct changes — deploy flags, open PRs, run queries — [0m                                                                                            
+                                [0m[2mjust by tagging @PostHog: [0m[2;38;5;6mhttps://posthog.com/slack[0m                                                                                                 
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                               [0m[38;5;8m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m                               
+                                [0m[2;38;5;8m┊ Edited index.js — PostHog client initialized, request context middleware registered, `hello page viewed` captured [0m                                
+                                [0m[2;38;5;8mon GET /, Express error handler wired, graceful shutdown on SIGINT/SIGTERM.[0m                                                                         
+                                [0m[38;5;8m◆ Finding and correcting errors.[0m                                                                                                                    
+                                                                                                                                                                                    
+                                [0m[1;7;38;5;178m Status [0m [0m[38;5;8m Tail logs [0m [0m[38;5;8m HN [0m                                                                                                                           
+                                                                                                                                                                                    
+                                [0m[1;38;5;8m←→[0m[2m switch tab[0m  [0m[1;38;5;8ms[0m[2m toggle status[0m                                                                                                                      

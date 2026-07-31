@@ -1,0 +1,49 @@
+                              [0m[38;5;58;48;5;178m PostHog Wizard v2.54.0                                                                    Feedback: wizard@posthog.com [0m                              
+                                                                                                                                                                                    
+                                [0m[1;38;5;178mLearn[0m                                                      [0m[1mTasks[0m                                                                                    
+                                                                                                                                                                                    
+                                [0m[2mOr funnels to reveal bottlenecks.[0m                          [0m[38;5;2m◼[0m Analyze project                                                                        
+                                                                                           [0m[38;5;2m◼[0m Install SDK                                                                            
+                                [0m[1m  Funnel · ride conversion[0m                                 [0m[38;5;2m◼[0m Set env vars                                                                           
+                                                                                           [0m[38;5;8m◻[0m [0m[2mInitialize PostHog[0m                                                                     
+                                  [0m[1m1[0m  app_launched                     [0m[1;38;5;2m100.00%[0m              [0m[38;5;8m◻[0m [0m[2mInstrument events[0m                                                                      
+                                [0m[38;5;6m     ██████████████████████████████[0m                        [0m[38;5;8m◻[0m [0m[2mVerify integration[0m                                                                     
+                                [0m[2m     → 1,200 users[0m                                         [0m[38;5;8m◻[0m [0m[2mCreate dashboard[0m                                                                       
+                                                                                           [0m[38;5;8m◻[0m [0m[2mWrite setup report[0m                                                                     
+                                  [0m[1m2[0m  ride_requested       [0m[2mavg 2m 30s[0m   [0m[1;38;5;2m72.00%[0m                                                                                                       
+                                     [0m[38;5;6m██████████████████████[0m[2m░░░░░░░░░[0m                       [0m[38;5;4m⠴[0m [0m[2mProgress: 3/8 completed[0m                                                                
+                                     [0m[2m→ 864 users[0m  [0m[38;5;1m↘[0m[2m 336 (28%)[0m                                                                                                                       
+                                                                                                                                                                                    
+                                  [0m[1m3[0m  ride_accepted        [0m[2mavg 5m 12s[0m   [0m[1;38;5;2m51.00%[0m                                                                                                       
+                                     [0m[38;5;6m██████████████████[0m[2m░░░░░░░░░░░░░[0m                                                                                                                
+                                     [0m[2m→ 612 users[0m  [0m[38;5;1m↘[0m[2m 252 (29%)[0m                                                                                                                       
+                                                                                                                                                                                    
+                                  [0m[1m4[0m  ride_started         [0m[2mavg 1m 45s[0m   [0m[1;38;5;2m38.00%[0m                                                                                                       
+                                     [0m[38;5;6m█████████████[0m[2m░░░░░░░░░░░░░░░░░░[0m                                                                                                                
+                                     [0m[2m→ 456 users[0m  [0m[38;5;1m↘[0m[2m 156 (25%)[0m                                                                                                                       
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                               [0m[38;5;8m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m                               
+                                [0m[2;38;5;8m┊ Verifying PostHog dependencies.[0m                                                                                                                   
+                                [0m[38;5;8m◆ Generating events based on project.[0m                                                                                                               
+                                                                                                                                                                                    
+                                [0m[1;7;38;5;178m Status [0m [0m[38;5;8m Tail logs [0m [0m[38;5;8m HN [0m                                                                                                                           
+                                                                                                                                                                                    
+                                [0m[1;38;5;8m←→[0m[2m switch tab[0m  [0m[1;38;5;8ms[0m[2m toggle status[0m                                                                                                                      

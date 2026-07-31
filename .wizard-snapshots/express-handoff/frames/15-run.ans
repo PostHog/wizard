@@ -1,0 +1,49 @@
+                              [0m[38;5;58;48;5;178m PostHog Wizard v2.54.0                                                                    Feedback: wizard@posthog.com [0m                              
+                                                                                                                                                                                    
+                                [0m[1;38;5;178mLearn[0m                                                      [0m[1mTasks[0m                                                                                    
+                                                                                                                                                                                    
+                                [0m[2mHere's the flow.[0m                                           [0m[38;5;2m◼[0m Analyze project                                                                        
+                                                                                           [0m[38;5;6m▶[0m Installing SDK                                                                         
+                                [0m[38;5;8m  ┌──────────────────────────────┐[0m                         [0m[38;5;8m◻[0m [0m[2mSet env vars[0m                                                                           
+                                [0m[38;5;8m  │ [0m[1;38;5;6mYour App[0m[38;5;8m                     │[0m                         [0m[38;5;8m◻[0m [0m[2mInitialize PostHog[0m                                                                     
+                                [0m[38;5;8m  │   │ [0mposthog.capture()[0m[38;5;8m        │[0m                         [0m[38;5;8m◻[0m [0m[2mInstrument events[0m                                                                      
+                                [0m[38;5;8m  │   │  [0m[2mcustom events[0m[38;5;8m           │[0m                         [0m[38;5;8m◻[0m [0m[2mVerify integration[0m                                                                     
+                                [0m[38;5;8m  │   │  [0m[2mcustom properties[0m[38;5;8m       │[0m                         [0m[38;5;8m◻[0m [0m[2mCreate dashboard[0m                                                                       
+                                [0m[38;5;8m  │   │  [0m[2mperson profiles[0m[38;5;8m         │[0m                         [0m[38;5;8m◻[0m [0m[2mWrite setup report[0m                                                                     
+                                [0m[38;5;8m  │   ↓  [0m[2mgroups[0m[38;5;8m                  │[0m                                                                                                                  
+                                [0m[38;5;8m  │ [0m[1;38;5;178mPostHog SDK[0m[38;5;8m                  │[0m                         [0m[38;5;4m⠋[0m [0m[2mProgress: 1/8 completed[0m                                                                
+                                [0m[38;5;8m  │   ↓ [0mHTTP[0m[38;5;8m                     │[0m                                                                                                                  
+                                [0m[38;5;8m  │ [0m[1;38;5;178mPostHog Cloud[0m[38;5;8m                │[0m                                                                                                                  
+                                [0m[38;5;8m  │   ↓ [0mquery + visualize[0m[38;5;8m        │[0m                                                                                                                  
+                                [0m[38;5;8m  │ [0m[1;38;5;2mDashboards & Insights[0m[38;5;8m        │[0m                                                                                                                  
+                                [0m[38;5;8m  └──────────────────────────────┘[0m                                                                                                                  
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                               [0m[38;5;8m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m                               
+                                [0m[2;38;5;8m┊ Verifying PostHog dependencies.[0m                                                                                                                   
+                                [0m[38;5;8m◆ Generating events based on project.[0m                                                                                                               
+                                                                                                                                                                                    
+                                [0m[1;7;38;5;178m Status [0m [0m[38;5;8m Tail logs [0m [0m[38;5;8m HN [0m                                                                                                                           
+                                                                                                                                                                                    
+                                [0m[1;38;5;8m←→[0m[2m switch tab[0m  [0m[1;38;5;8ms[0m[2m toggle status[0m                                                                                                                      

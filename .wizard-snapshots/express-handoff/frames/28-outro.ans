@@ -1,0 +1,24 @@
+                              [0m[38;5;58;48;5;178m PostHog Wizard v2.54.0                                                                    Feedback: wizard@posthog.com [0m                              
+                                                                                                                                                                                    
+                               [0m[1;38;5;2m✔ Successfully installed PostHog![0m                                                                                                                    
+                                                                                                                                                                                    
+                               Dashboard:                                                                                                                                           
+                               [0m[38;5;6mhttps://us.posthog.com/project/228144/dashboard/1932600?utm_source=wizard&utm_medium=cli&utm_content=outro-dashboard[0m                                 
+                                                                                                                                                                                    
+                               Notebook:                                                                                                                                            
+                               [0m[38;5;6mhttps://us.posthog.com/project/228144/notebooks/cnQzg9rC?utm_source=wizard&utm_medium=cli&utm_content=outro-notebook[0m                                 
+                                                                                                                                                                                    
+                               [0m[1;38;5;6mWhat the agent did:[0m                                                                                                                                  
+                               • Analyzed your Node.js project structure                                                                                                            
+                               • Installed the posthog-node package                                                                                                                 
+                               • Created PostHog initialization with proper configuration                                                                                           
+                               • Configured graceful shutdown for event flushing                                                                                                    
+                               • Added example code for events, feature flags, and error capture                                                                                    
+                               • Added environment variables to .env file                                                                                                           
+                                                                                                                                                                                    
+                               Learn more: [0m[38;5;6mhttps://posthog.com/docs/libraries/node?utm_source=wizard&utm_medium=cli&utm_content=outro-docs[0m                                          
+                                                                                                                                                                                    
+                               [0m[2mNote: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.[0m                                              
+                               [0m[2mHow did this work for you? Drop us a line: wizard@posthog.com[0m                                                                                        
+                                                                                                                                                                                    
+                               [0m[38;5;8mPress any key to continue[0m                                                                                                                            

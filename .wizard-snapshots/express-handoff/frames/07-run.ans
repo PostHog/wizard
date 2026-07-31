@@ -1,0 +1,49 @@
+                              [0m[38;5;58;48;5;178m PostHog Wizard v2.54.0                                                                    Feedback: wizard@posthog.com [0m                              
+                                                                                                                                                                                    
+                                [0m[1;38;5;178mLearn[0m                                                      [0m[1mTasks[0m                                                                                    
+                                                                                                                                                                                    
+                                You can view the Wizard's status below.                    [0m[38;5;8m◻[0m [0m[2mAnalyze project[0m                                                                        
+                                                                                           [0m[38;5;8m◻[0m [0m[2mInstall SDK[0m                                                                            
+                                                                                           [0m[38;5;8m◻[0m [0m[2mSet env vars[0m                                                                           
+                                                                                                                                                                                    
+                                                                                           [0m[38;5;4m⠼[0m [0m[2mProgress: 0/3 completed[0m                                                                
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                                                                                                                                                                                    
+                               [0m[38;5;8m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m                               
+                                [0m[2;38;5;8m┊ Using provided API key (CI mode - OAuth bypassed)[0m                                                                                                 
+                                [0m[2;38;5;8m┊ Initializing Claude agent...[0m                                                                                                                      
+                                [0m[2;38;5;8m┊ Verbose logs: /tmp/posthog-wizard.log[0m                                                                                                             
+                                [0m[2;38;5;8m┊ Agent initialized. Let's get cooking![0m                                                                                                             
+                                [0m[38;5;8m◆ Writing your PostHog setup with events, error capture and more...[0m                                                                                 
+                                                                                                                                                                                    
+                                [0m[1;7;38;5;178m Status [0m [0m[38;5;8m Tail logs [0m [0m[38;5;8m HN [0m                                                                                                                           
+                                                                                                                                                                                    
+                                [0m[1;38;5;8m←→[0m[2m switch tab[0m  [0m[1;38;5;8ms[0m[2m toggle status[0m                                                                                                                      
