@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.58.0](https://github.com/PostHog/wizard/compare/v2.57.0...v2.58.0) (2026-07-31)
+
+
+### Features
+
+* **task-stream:** publish the setup report as the session handoff doc ([#1045](https://github.com/PostHog/wizard/issues/1045)) ([ce8b70d](https://github.com/PostHog/wizard/commit/ce8b70d30490bf30f45c46389df589a232a3d21d))
+* **wizard-tools:** capture a handoff published event ([#1051](https://github.com/PostHog/wizard/issues/1051)) ([8949247](https://github.com/PostHog/wizard/commit/8949247132575c65d14063cbd83b44104d52a550))
+
 ## [2.57.0](https://github.com/PostHog/wizard/compare/v2.56.0...v2.57.0) (2026-07-31)
 
 
