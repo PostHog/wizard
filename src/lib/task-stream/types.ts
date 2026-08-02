@@ -83,6 +83,12 @@ export interface TaskStreamUpdate {
   event_plan?: StreamEventPlan;
   error?: TaskStreamError;
   pending_input?: StreamPendingInput;
+  /**
+   * The run's markdown handoff doc (the program's report file), included on
+   * every push once the agent has written it. The backend keeps the field
+   * sticky per session, so consumers never see it disappear again.
+   */
+  handoff_text?: string;
   /** UTC ISO 8601 timestamp of this payload. Latest update wins on conflict. */
   timestamp: string;
 }
