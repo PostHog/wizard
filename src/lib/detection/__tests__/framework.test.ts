@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { JAVA_AGENT_CONFIG } from '../../../frameworks/java/java-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -52,6 +53,18 @@ describe('Integration enum order (drives first-match detection)', () => {
   test('generic Node is the last resort of the entire detection', () => {
     // javascriptNode matches any package.json; anything after it is unreachable.
     expect(order[order.length - 1]).toBe(Integration.javascriptNode);
+  });
+
+  test('java is ordered after kmp, swift, and android (they claim gradle projects first)', () => {
+    for (const specific of [
+      Integration.kmp,
+      Integration.swift,
+      Integration.android,
+    ]) {
+      expect(order.indexOf(Integration.java)).toBeGreaterThan(
+        order.indexOf(specific),
+      );
+    }
   });
 
   test('kmp is ordered before android and swift (more specific detection wins)', () => {
@@ -137,6 +150,27 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Maven project resolves to java', async () => {
+    const opts = project({
+      'pom.xml':
+        '<project><groupId>com.example</groupId><artifactId>app</artifactId></project>',
+      'src/main/java/App.java': 'class App {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.java,
+    );
+  });
+
+  test('a plain Gradle JVM project resolves to java, not android', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'java' id 'org.springframework.boot' }`,
+      'src/main/java/App.java': 'class App {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.java,
+    );
+  });
+
   test('a Flutter project is not claimed by anything', async () => {
     const opts = project({
       'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
@@ -165,6 +199,58 @@ describe('android detect', () => {
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('java detect', () => {
+  const detect = JAVA_AGENT_CONFIG.detection.detect;
+
+  test('claims a Maven project', async () => {
+    const opts = project({ 'pom.xml': '<project></project>' });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a plain Gradle JVM project', async () => {
+    const opts = project({
+      'build.gradle.kts': `plugins { java }\ndependencies {}`,
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim an Android gradle project', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'com.android.application' }`,
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a gradle project with an AndroidManifest.xml subtree', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'java' }`,
+      'app/src/main/AndroidManifest.xml': '<manifest/>',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a KMP project', async () => {
+    const opts = project({
+      'build.gradle.kts': `plugins { kotlin("multiplatform") }`,
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a Flutter project', async () => {
+    const opts = project({
+      'pubspec.yaml': 'name: my_flutter_app\n',
+      'android/build.gradle': `plugins { id 'com.android.application' }`,
+      'settings.gradle': 'include ":app"',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project with no build files', async () => {
+    const opts = project({ 'src/main/java/App.java': 'class App {}' });
     await expect(detect(opts)).resolves.toBe(false);
   });
 });

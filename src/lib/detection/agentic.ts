@@ -74,12 +74,13 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
-  // Rust / Go / Elixir / JVM / .NET: no framework targets yet, but found so
+  // Java
+  'pom.xml',
+  // Rust / Go / Elixir / .NET: no framework targets yet, but found so
   // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   'Cargo.toml',
   'go.mod',
   'mix.exs',
-  'pom.xml',
   '*.csproj',
   // Mobile / native
   'Package.swift',
