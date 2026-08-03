@@ -61,8 +61,8 @@ const NPX_TOOLS = new Set([
 const PIP_SUBCOMMANDS = ['install', 'uninstall', 'show', 'list', 'index'];
 /** `.venv/bin/pip`, `venv/bin/python3` — a venv-local interpreter, judged as the tool it is. */
 const VENV_BIN = /^[\w./-]*\/bin\/(pip3?|python3?)$/;
-/** `.venv/bin/ruff`, `venv/bin/mypy` — a tool installed into the venv. Only lint/format tools qualify. */
-const VENV_TOOL = /^[\w./-]*\/bin\/([\w.-]+)$/;
+/** `.venv/bin/ruff`, `venv/bin/mypy`, `bin/rubocop` — a tool reached via a bin/ path (venv or Rails binstub). Only lint/format tools qualify. */
+const VENV_TOOL = /^[\w./-]*\bbin\/([\w.-]+)$/;
 const BUNDLE_SUBCOMMANDS = ['install', 'add', 'remove', 'update', 'show'];
 const MAVEN_GOALS = [
   'install',
@@ -88,14 +88,17 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
-  // Materializes the Xcode project from project.yml so xcodebuild can verify —
-  // build-equivalent risk (runs on the project's own spec).
+  // Materializes the Xcode project from the project's own spec — build-equivalent risk.
   xcodegen: ['generate'],
+  // Zeitwerk eager-load check is Rails' typecheck equivalent — build-class risk.
+  rails: ['zeitwerk:check'],
 };
 
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
 const GRADLE_EXACT_TASKS = new Set(['build', 'clean', 'dependencies']);
-const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint'];
+const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint', 'spotless'];
+// Gradle flags whose value is a separate bare token (`--configuration debugCompileClasspath`).
+const GRADLE_VALUE_FLAGS = new Set(['--configuration']);
 
 // xcodebuild's action follows its flags, and flag values are bare tokens, so a
 // positive action list is unparseable; only the test actions are out of contract.
@@ -110,7 +113,8 @@ const ALLOWED_TOOLS_SUMMARY =
   'any <venv>/bin/pip|python plus <venv>/bin/<lint tool>, ' +
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
-  'xcodegen (generate), xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
+  'xcodegen (generate), rails/bin/rails (zeitwerk:check), a bare lint/format tool (eslint, rubocop, ...) or its bin/ binstub, ' +
+  'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint*/spotless* tasks), ' +
   'mvn (install|compile|package|verify|dependency:tree).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
@@ -171,11 +175,16 @@ function nodeDecision(parts: string[], command: string): BashFenceDecision {
   if (!sub) return denyCommand(command, feedback);
   if (sub === 'run') {
     const target = parts[i + 1];
-    if (target && isNodeScriptName(target)) return { allowed: true };
+    // Bare `npm run` prints the script list — read-only, and how agents
+    // discover which build/lint scripts exist.
+    if (!target) return { allowed: true };
+    if (isNodeScriptName(target)) return { allowed: true };
     return denyCommand(command, feedback);
   }
   if (sub === 'exec') {
-    const target = parts[i + 1];
+    // `npm exec -- tsc` — the `--` only separates the tool from npm's flags.
+    const j = parts[i + 1] === '--' ? i + 2 : i + 1;
+    const target = parts[j];
     if (target && isLintingTool(target)) return { allowed: true };
     return denyCommand(command, feedback);
   }
@@ -203,7 +212,13 @@ function npxDecision(parts: string[], command: string): BashFenceDecision {
 
 function gradleDecision(parts: string[], command: string): BashFenceDecision {
   let sawTask = false;
-  for (const raw of parts.slice(1)) {
+  const rest = parts.slice(1);
+  for (let k = 0; k < rest.length; k++) {
+    const raw = rest[k];
+    if (GRADLE_VALUE_FLAGS.has(raw)) {
+      k++; // the flag's value is a bare token, not a task
+      continue;
+    }
     if (raw.startsWith('-')) continue;
     const task = raw.replace(/^(?::[\w.-]+)+:/, ''); // :app:assembleDebug -> assembleDebug
     const ok =
@@ -215,7 +230,7 @@ function gradleDecision(parts: string[], command: string): BashFenceDecision {
     if (!ok) {
       return denyCommand(
         command,
-        'Allowed gradle tasks: build, clean, dependencies, or assemble*/compile*/bundle*/lint* variants (flags OK).',
+        'Allowed gradle tasks: build, clean, dependencies, or assemble*/compile*/bundle*/lint*/spotless* variants (flags OK).',
       );
     }
     sawTask = true;
@@ -271,10 +286,12 @@ function commandDecision(command: string): BashFenceDecision {
   // A venv-local interpreter (`.venv/bin/pip`, `venv/bin/python3`) is the
   // sanctioned way to install on Python — judge it as the tool it is.
   const bin = raw.match(VENV_BIN)?.[1] ?? raw;
-  // A lint/format tool installed into the venv is reached by its venv path;
-  // anything else under `<venv>/bin/` stays denied (it would be arbitrary exec).
-  const venvTool = raw === bin ? raw.match(VENV_TOOL)?.[1] : undefined;
-  if (venvTool && isLintingTool(venvTool)) return { allowed: true };
+  // A bin/-path lint tool or allowlisted-manager binstub is judged as the tool it is; any other bin/ target stays denied (arbitrary exec).
+  const binTool = raw === bin ? raw.match(VENV_TOOL)?.[1] : undefined;
+  if (binTool && isLintingTool(binTool)) return { allowed: true };
+  const effectiveBin = binTool && SIMPLE_MANAGERS[binTool] ? binTool : bin;
+  // A bare curated lint/format tool on PATH (`eslint src`, `rubocop app/`).
+  if (isLintingTool(effectiveBin)) return { allowed: true };
   if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command);
   if (bin === 'npx') return npxDecision(parts, command);
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
@@ -332,14 +349,14 @@ function commandDecision(command: string): BashFenceDecision {
       )}, exec <lint tool>.`,
     );
   }
-  const subs = SIMPLE_MANAGERS[bin];
+  const subs = SIMPLE_MANAGERS[effectiveBin];
   if (subs) {
     if (parts[1] && subs.includes(parts[1])) return { allowed: true };
     const exec =
       bin === 'bundle' || bin === 'bundler' ? ', exec <lint tool>' : '';
     return denyCommand(
       command,
-      `Allowed ${bin} subcommands: ${subs.join(', ')}${exec}.`,
+      `Allowed ${effectiveBin} subcommands: ${subs.join(', ')}${exec}.`,
     );
   }
   return denyCommand(

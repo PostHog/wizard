@@ -142,6 +142,37 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('xcodegen dump')).toBe('deny');
   });
 
+  it('whack-a-mole 1: field-log denials that are build/lint-class work', () => {
+    // Rails binstubs + zeitwerk (the Ruby runs' verification step).
+    expect(allow('bin/rubocop Gemfile config/initializers/posthog.rb')).toBe(
+      'allow',
+    );
+    expect(allow('bin/rails zeitwerk:check')).toBe('allow');
+    expect(allow('rails zeitwerk:check')).toBe('allow');
+    expect(allow('bin/rails db:drop')).toBe('deny');
+    expect(allow('bin/evil-script')).toBe('deny');
+    expect(allow('sbin/rubocop')).toBe('deny');
+    // Bare curated lint tools on PATH.
+    expect(allow('eslint plugins/posthog.client.ts')).toBe('allow');
+    expect(allow('rubocop app/models/user.rb')).toBe('allow');
+    // `--` separator in exec, bare `npm run` script listing.
+    expect(allow('npm exec -- tsc --noEmit')).toBe('allow');
+    expect(allow('npm exec -- evil')).toBe('deny');
+    expect(allow('npm run')).toBe('allow');
+    expect(allow('npm run start')).toBe('deny'); // still no dev servers
+    // Gradle value-flags and spotless.
+    expect(
+      allow(
+        './gradlew :app:dependencies --configuration debugCompileClasspath',
+      ),
+    ).toBe('allow');
+    expect(allow('./gradlew spotlessCheck')).toBe('allow');
+    expect(allow('./gradlew :app:spotlessCheck')).toBe('allow');
+    expect(allow('./gradlew publishToMavenCentral --configuration x')).toBe(
+      'deny',
+    );
+  });
+
   it('android/jvm ecosystem', () => {
     expect(allow('./gradlew assembleDebug')).toBe('allow');
     expect(allow('./gradlew :app:assembleDebug')).toBe('allow');
