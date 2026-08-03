@@ -34,6 +34,7 @@ import {
   StreamEvent,
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
+import { logToFile } from '@utils/debug';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -287,7 +288,7 @@ export class TaskStreamPush {
   }
 
   private async sendOnce(): Promise<void> {
-    const { session, tasks, eventPlan } = this.store;
+    const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
 
@@ -301,8 +302,16 @@ export class TaskStreamPush {
       event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
       error: buildError(phase, session.outroData),
       pending_input: buildPendingInput(session.pendingQuestion),
+      // Included on every push once captured; the backend keeps it sticky, so
+      // pushes that raced the capture cannot un-set it.
+      handoff_text: handoffText ?? undefined,
       timestamp: new Date().toISOString(),
     };
+    logToFile(
+      `[task-stream-push] push phase=${phase} handoff_text=${
+        handoffText === null ? 'absent' : `${handoffText.length} chars`
+      }`,
+    );
 
     let event: StreamEvent;
     if (!this.created) {

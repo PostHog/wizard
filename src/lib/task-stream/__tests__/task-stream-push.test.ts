@@ -18,6 +18,7 @@ interface MockStoreState {
   skillId: string | null;
   tasks: TaskItem[];
   eventPlan: unknown[];
+  handoffText?: string | null;
   installDir?: string;
   pendingQuestion?: PendingQuestion | null;
 }
@@ -29,6 +30,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     skillId: 'test-skill',
     tasks: [],
     eventPlan: [],
+    handoffText: null,
     ...overrides,
   };
 
@@ -48,8 +50,15 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     get eventPlan() {
       return state.eventPlan;
     },
+    get handoffText() {
+      return state.handoffText ?? null;
+    },
     setEventPlan(eventPlan: unknown[]) {
       state.eventPlan = eventPlan;
+      for (const cb of listeners) cb();
+    },
+    setHandoffText(text: string) {
+      state.handoffText = text;
       for (const cb of listeners) cb();
     },
     subscribe(cb: Listener) {
@@ -255,6 +264,21 @@ describe('TaskStreamPush', () => {
       await push.push();
 
       expect(dest.calls[0][1].event_plan).toBeUndefined();
+    });
+
+    it('carries handoff_text once captured, omits it before', async () => {
+      // The backend keeps the field sticky per session, but only if pushes
+      // after capture actually carry it — dropping it here would leave the
+      // app with no doc for the rest of the run.
+      const store = createMockStore();
+      const { push, dest } = createPush(store);
+
+      await push.push();
+      expect(dest.calls[0][1].handoff_text).toBeUndefined();
+
+      store._set({ handoffText: '# Setup report' });
+      await push.push();
+      expect(dest.calls[1][1].handoff_text).toBe('# Setup report');
     });
 
     it('sanitizes workflow_id and skill_id to channel-safe chars', async () => {

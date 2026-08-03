@@ -16,12 +16,59 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { LONG_OPTIONS } from './InputDemo.js';
 
 enum DemoStep {
+  ScoutRepro = 'scout-repro',
+  CountLabel100 = 'count-label-100',
+  CountLabel10 = 'count-label-10',
+  CountLabel2 = 'count-label-2',
+  CountLabel1 = 'count-label-1',
+  CountDesc100 = 'count-desc-100',
+  CountDesc10 = 'count-desc-10',
+  CountDesc2 = 'count-desc-2',
+  CountDesc1 = 'count-desc-1',
   MultiLong = 'multi-long',
   MultiDescriptions = 'multi-descriptions',
   Single = 'single',
   Grouped = 'grouped',
   Done = 'done',
 }
+
+/** Label-only options at a given count, e.g. "Option 1" ... "Option 100". */
+const countLabelOptions = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    label: `Option ${i + 1}`,
+    value: `opt-${i + 1}`,
+  }));
+
+/** Options at a given count, each with a wrapping description so rows are tall. */
+const countDescOptions = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    label: `Option ${i + 1}`,
+    value: `opt-${i + 1}`,
+    description:
+      'A longer description that wraps onto multiple lines so each option row costs several terminal rows, exercising the viewport cap and the paging math at small counts.',
+  }));
+
+/** Repro of the scout-proposal ask that paged 3 tall described options one per page. */
+const SCOUT_REPRO_OPTIONS = [
+  {
+    label: 'None — keep the built-in troop',
+    value: 'none',
+    description:
+      'Skip custom scouts; the built-in troop already covers this project well enough, and adding more scheduled checks would mostly duplicate the coverage you already get out of the box.',
+  },
+  {
+    label: 'Playground snapshot drift scout',
+    value: 'snapshot-drift',
+    description:
+      'Watches CI snapshot runs and flags visual drift in the playground demos before it reaches a release, so a rendering regression in a picker or overlay never ships to users unnoticed.',
+  },
+  {
+    label: 'Benchmark regression scout',
+    value: 'benchmark',
+    description:
+      'Tracks wizard-benchmark timings week over week and opens an issue when a run regresses past the recorded baseline, catching slow drift in agent latency before customers feel it.',
+  },
+];
 
 const DESCRIBED_OPTIONS = [
   {
@@ -92,13 +139,105 @@ const AskModal = ({
 );
 
 export const AskModalDemo = () => {
-  const [step, setStep] = useState<DemoStep>(DemoStep.MultiLong);
+  const [step, setStep] = useState<DemoStep>(DemoStep.ScoutRepro);
   const [results, setResults] = useState<string[]>([]);
 
   const advance = (result: string, next: DemoStep) => {
     setResults((prev) => [...prev, result]);
     setStep(next);
   };
+
+  const countLabelSteps: Partial<
+    Record<DemoStep, { next: DemoStep; count: number }>
+  > = {
+    [DemoStep.CountLabel100]: {
+      next: DemoStep.CountLabel10,
+      count: 100,
+    },
+    [DemoStep.CountLabel10]: { next: DemoStep.CountLabel2, count: 10 },
+    [DemoStep.CountLabel2]: { next: DemoStep.CountLabel1, count: 2 },
+    [DemoStep.CountLabel1]: { next: DemoStep.CountDesc100, count: 1 },
+  };
+
+  const countDescSteps: Partial<
+    Record<DemoStep, { next: DemoStep; count: number }>
+  > = {
+    [DemoStep.CountDesc100]: { next: DemoStep.CountDesc10, count: 100 },
+    [DemoStep.CountDesc10]: { next: DemoStep.CountDesc2, count: 10 },
+    [DemoStep.CountDesc2]: { next: DemoStep.CountDesc1, count: 2 },
+    [DemoStep.CountDesc1]: { next: DemoStep.MultiLong, count: 1 },
+  };
+
+  if (step === DemoStep.ScoutRepro) {
+    return (
+      <AskModal prompt="Scouts are scheduled checks that watch your data and flag issues for your inbox. Based on your repo I found two gaps the built-in troop doesn't cover — add one, both, or none. (Repro: 3 described options must stay on ONE page even in a short terminal.)">
+        <PickerMenu
+          key={step}
+          mode="multi"
+          optionMarginBottom={1}
+          options={SCOUT_REPRO_OPTIONS}
+          onSelect={(values) => {
+            const arr = Array.isArray(values) ? values : [values];
+            advance(
+              `Scout repro: ${arr.length} picked`,
+              DemoStep.CountLabel100,
+            );
+          }}
+        />
+      </AskModal>
+    );
+  }
+
+  const labelStep = countLabelSteps[step];
+  if (labelStep) {
+    const { count, next } = labelStep;
+    return (
+      <AskModal
+        prompt={`Multi-select — ${count} label-only option${
+          count === 1 ? '' : 's'
+        }. Watch whether ${
+          count <= 2 ? 'this tiny list still pages' : 'paging kicks in'
+        }.`}
+      >
+        <PickerMenu
+          key={step}
+          mode="multi"
+          options={countLabelOptions(count)}
+          onSelect={(values) => {
+            const arr = Array.isArray(values) ? values : [values];
+            advance(`Count label (${count}): ${arr.length} picked`, next);
+          }}
+        />
+      </AskModal>
+    );
+  }
+
+  const descStep = countDescSteps[step];
+  if (descStep) {
+    const { count, next } = descStep;
+    return (
+      <AskModal
+        prompt={`Multi-select — ${count} option${
+          count === 1 ? '' : 's'
+        } with wrapping descriptions (tall rows). ${
+          count <= 2
+            ? 'This is where a tiny list can still split into multiple pages.'
+            : ''
+        }`}
+      >
+        <PickerMenu
+          key={step}
+          mode="multi"
+          optionMarginBottom={1}
+          options={countDescOptions(count)}
+          onSelect={(values) => {
+            const arr = Array.isArray(values) ? values : [values];
+            advance(`Count desc (${count}): ${arr.length} picked`, next);
+          }}
+        />
+      </AskModal>
+    );
+  }
 
   if (step === DemoStep.MultiLong) {
     return (

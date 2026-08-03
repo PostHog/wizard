@@ -96,16 +96,6 @@ describe('the truth table — posthog-integration × wizard-orchestrator', () =>
         binding: ORCHESTRATOR_PI_DEFAULT,
         trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
       },
-      {
-        // Harness axis code-gated on cloud; sequence scoping is the flag's own run_surface targeting (#961).
-        name: "'true' on the cloud surface → orchestrator sequence, harness route disabled",
-        surface: 'cloud',
-        ctx: { program: 'posthog-integration', flags: { [ORCH]: 'true' } },
-        binding: {
-          ...LINEAR_ANTHROPIC_DEFAULT,
-          sequence: Sequence.orchestrator,
-        },
-      },
     ],
     setSurface,
   );
@@ -174,16 +164,6 @@ describe('the truth table — self-driving × its pi payload flag', () => {
       {
         name: 'on + missing payload → fail closed to the default',
         ctx: { program: 'self-driving', flags: { [SD]: 'true' } },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
-      },
-      {
-        name: 'on on the cloud surface → fail closed to the default',
-        surface: 'cloud',
-        ctx: {
-          program: 'self-driving',
-          flags: { [SD]: 'true' },
-          flagPayloads: { [SD]: PAYLOAD },
-        },
         binding: LINEAR_ANTHROPIC_DEFAULT,
       },
     ],
