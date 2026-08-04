@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.58.0](https://github.com/PostHog/wizard/compare/v2.57.0...v2.58.0) (2026-07-31)
+
+
+### Features
+
+* **task-stream:** publish the setup report as the session handoff doc ([#1045](https://github.com/PostHog/wizard/issues/1045)) ([ce8b70d](https://github.com/PostHog/wizard/commit/ce8b70d30490bf30f45c46389df589a232a3d21d))
+* **wizard-tools:** capture a handoff published event ([#1051](https://github.com/PostHog/wizard/issues/1051)) ([8949247](https://github.com/PostHog/wizard/commit/8949247132575c65d14063cbd83b44104d52a550))
+
+## [2.57.0](https://github.com/PostHog/wizard/compare/v2.56.0...v2.57.0) (2026-07-31)
+
+
+### Features
+
+* **switchboard:** let the harness axis route on the cloud surface ([#1048](https://github.com/PostHog/wizard/issues/1048)) ([492b4ce](https://github.com/PostHog/wizard/commit/492b4ce9a15358049fee6038e317fc8aa989ecda))
+
+
+### Bug Fixes
+
+* **wizard:** Whack a mole part 5: report per-task instead of the unused binding model on orchestrator runs ([#1019](https://github.com/PostHog/wizard/issues/1019)) ([20e94fb](https://github.com/PostHog/wizard/commit/20e94fb5642e3680f3f42b213cbab85afe28fc10))
+
+## [2.56.0](https://github.com/PostHog/wizard/compare/v2.55.0...v2.56.0) (2026-07-31)
+
+
+### Features
+
+* automate Rust debug-symbol upload in upload-source-maps ([#938](https://github.com/PostHog/wizard/issues/938)) ([a62ab3c](https://github.com/PostHog/wizard/commit/a62ab3cb2444aaa0f9b899710eae821e0b732e69))
+* **source-maps:** automate Go debug-symbol upload ([#1030](https://github.com/PostHog/wizard/issues/1030)) ([e15eb65](https://github.com/PostHog/wizard/commit/e15eb6518a70e17f38fa1df9bcb42f7164654b0e))
+
+
+### Bug Fixes
+
+* **analytics:** tag session facts so post-auth events carry them ([#1042](https://github.com/PostHog/wizard/issues/1042)) ([7dc977a](https://github.com/PostHog/wizard/commit/7dc977af5dd9a6381efe13402cf7bc7541f3566e))
+* **tui:** never page picker lists of 4 or fewer options ([#1041](https://github.com/PostHog/wizard/issues/1041)) ([a3d2008](https://github.com/PostHog/wizard/commit/a3d2008c758977531001c4347bd00b1781275477))
+
 ## [2.55.0](https://github.com/PostHog/wizard/compare/v2.54.0...v2.55.0) (2026-07-29)
 
 

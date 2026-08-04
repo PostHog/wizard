@@ -14,6 +14,7 @@ import { FLASK_AGENT_CONFIG } from '@frameworks/flask/flask-wizard-agent';
 import { FASTAPI_AGENT_CONFIG } from '@frameworks/fastapi/fastapi-wizard-agent';
 import { LARAVEL_AGENT_CONFIG } from '@frameworks/laravel/laravel-wizard-agent';
 import { SVELTEKIT_AGENT_CONFIG } from '@frameworks/svelte/svelte-wizard-agent';
+import { FLUTTER_AGENT_CONFIG } from '@frameworks/flutter/flutter-wizard-agent';
 import { SWIFT_AGENT_CONFIG } from '@frameworks/swift/swift-wizard-agent';
 import { KMP_AGENT_CONFIG } from '@frameworks/kmp/kmp-wizard-agent';
 import { ANDROID_AGENT_CONFIG } from '@frameworks/android/android-wizard-agent';
@@ -38,6 +39,7 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.fastapi]: FASTAPI_AGENT_CONFIG,
   [Integration.laravel]: LARAVEL_AGENT_CONFIG,
   [Integration.sveltekit]: SVELTEKIT_AGENT_CONFIG,
+  [Integration.flutter]: FLUTTER_AGENT_CONFIG,
   [Integration.kmp]: KMP_AGENT_CONFIG,
   [Integration.swift]: SWIFT_AGENT_CONFIG,
   [Integration.android]: ANDROID_AGENT_CONFIG,

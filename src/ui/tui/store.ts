@@ -186,6 +186,7 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
@@ -387,6 +388,10 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get handoffText(): string | null {
+    return this.$handoffText.get();
+  }
+
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
   }
@@ -429,6 +434,7 @@ export class WizardStore {
 
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -687,6 +693,12 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
+      analytics.setTag(
+        'additional_feature_kinds',
+        this.session.additionalFeatureQueue.join(','),
+      );
     }
     // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
@@ -803,8 +815,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {
@@ -1006,6 +1017,14 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  /** No-op on identical text: an emit here means a network push downstream. */
+  setHandoffText(text: string): void {
+    if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
+    this.$handoffText.set(text);
     this.emitChange();
   }
 
