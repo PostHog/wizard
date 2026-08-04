@@ -21,6 +21,12 @@ import {
   type AuditStatus,
 } from '../programs/audit/types';
 import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
+import {
+  PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  publishHandoff,
+} from './handoff';
 import { createSecretVault, type SecretVault } from '../secret-vault';
 import {
   buildOrchestratorTools,
@@ -774,6 +780,24 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- publish_handoff ------------------------------------------------------
+
+  const publishHandoffTool = tool(
+    PUBLISH_HANDOFF_TOOL_NAME,
+    PUBLISH_HANDOFF_DESCRIPTION,
+    {
+      content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
+    },
+    (args: { content: string }) => {
+      const result = publishHandoff(args.content);
+      logToFile(`publish_handoff: ${result.message}`);
+      return {
+        content: [{ type: 'text' as const, text: result.message }],
+        ...(result.ok ? {} : { isError: true }),
+      };
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   const orchestratorTools = orchestrator
@@ -793,6 +817,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      publishHandoffTool,
       ...orchestratorTools,
     ],
   });

@@ -23,6 +23,7 @@ import type {
   StreamEvent,
 } from '@lib/task-stream/types';
 import type { Credentials } from '@lib/wizard-session';
+import { logToFile } from '@utils/debug';
 
 export interface PostHogDestinationOptions {
   /**
@@ -143,7 +144,10 @@ export class PostHogDestination implements TaskStreamDestination {
         continue;
       }
 
-      if (response.ok) return;
+      if (response.ok) {
+        logToFile(`[task-stream] wizard/sessions push ok: ${response.status}`);
+        return;
+      }
 
       const status = response.status;
 

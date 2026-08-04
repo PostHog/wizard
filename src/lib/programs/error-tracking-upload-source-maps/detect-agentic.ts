@@ -7,8 +7,9 @@
  * instruments the chosen project.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { IGNORED_DIRS, readProjectFile } from '@utils/bounded-fs';
 import {
   detectProjectsWithAgent,
   coerceAgenticReport,
@@ -20,6 +21,9 @@ import type { WizardSession } from '@lib/wizard-session';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,
+  MANUAL_SDK_INSTALL,
+  RUST_SDK_CRATE,
+  GO_SDK_MODULE,
   type SkillVariant,
 } from './detect.js';
 
@@ -67,6 +71,15 @@ const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
   'rollup',
   'react',
   'node',
+  // Native binaries: only chosen when no JS target matches the project, but
+  // ahead of the generic web fallback so a go.mod / Cargo.toml project
+  // resolves to its debug-symbols variant instead of `web`. Deliberate
+  // tradeoff for the same-directory mixed case: a Go/Rust project with a
+  // tooling-only package.json (common) beats a root-level JS app sharing a
+  // directory with go.mod / Cargo.toml (rare — frontends usually live in a
+  // subdirectory, which classifies as its own project).
+  'go',
+  'rust',
   'web',
 ];
 
@@ -79,6 +92,115 @@ const precedenceRank = (v: SkillVariant): number => {
 export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
+
+/** Comment-stripped substring check for the Rust SDK in one manifest. */
+function manifestMentionsSdk(manifestPath: string): boolean {
+  const content = readProjectFile(manifestPath);
+  return (
+    content != null &&
+    content.split('\n').some((line) => {
+      const code = line.split('#', 1)[0];
+      return code.includes(RUST_SDK_CRATE);
+    })
+  );
+}
+
+/**
+ * A workspace root is often a virtual manifest (`[workspace]` only, no
+ * `[dependencies]`) — the SDK then lives in a member crate's manifest, so a
+ * miss on the root must fall through to a bounded walk over nested
+ * manifests. Depth 3 covers the common `crates/<name>/` layouts.
+ */
+function anyNestedManifestMentionsSdk(dir: string, depth: number): boolean {
+  if (depth > 3) return false;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue;
+    if (IGNORED_DIRS.has(entry.name) || entry.name === 'target') continue;
+    const child = join(dir, entry.name);
+    if (manifestMentionsSdk(join(child, 'Cargo.toml'))) return true;
+    if (anyNestedManifestMentionsSdk(child, depth + 1)) return true;
+  }
+  return false;
+}
+
+/**
+ * Checks a project's Cargo manifests for the Rust SDK. The agentic detector
+ * reports a single `hasPostHog` boolean for ANY PostHog dependency in the
+ * project — for `rust` that could be satisfied by an unrelated JS SDK in the
+ * same directory, so the deterministic manifest read is authoritative.
+ * Comment-stripped substring matching, not TOML parsing: it still catches
+ * renamed (`package = "posthog-rs"`) and workspace-inherited deps, while a
+ * commented-out dependency no longer counts. Known miss: selecting a
+ * workspace MEMBER whose dep is aliased at the workspace root
+ * (`posthog.workspace = true` with the `package = "posthog-rs"` mapping only
+ * in the root manifest, which sits above the member) — accepted; resolving
+ * that needs full workspace metadata. Exported for testing.
+ */
+export function rustSdkVerifier(
+  installDir: string,
+): (projectPath: string) => boolean {
+  return (projectPath) => {
+    const dir =
+      projectPath === '.' ? installDir : join(installDir, projectPath);
+    return (
+      manifestMentionsSdk(join(dir, 'Cargo.toml')) ||
+      anyNestedManifestMentionsSdk(dir, 0)
+    );
+  };
+}
+
+/**
+ * True when go.mod actively `require`s the SDK — single-line requires and
+ * `require ( … )` blocks only, so a `module` declaration, `replace`, or
+ * `exclude` mention of the path never counts.
+ */
+function goModRequiresSdk(content: string): boolean {
+  let inBlock: 'require' | 'other' | null = null;
+  for (const raw of content.split('\n')) {
+    const code = raw.split('//', 1)[0].trim();
+    if (code === '') continue;
+    if (inBlock != null) {
+      if (code === ')') {
+        inBlock = null;
+      } else if (inBlock === 'require' && code.includes(GO_SDK_MODULE)) {
+        return true;
+      }
+      continue;
+    }
+    if (code.endsWith('(')) {
+      inBlock = code.startsWith('require') ? 'require' : 'other';
+      continue;
+    }
+    if (code.startsWith('require ') && code.includes(GO_SDK_MODULE)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Checks a project's go.mod for the Go SDK — the same authoritative override
+ * as `rustSdkVerifier`, for the same reason. Only `require` directives count;
+ * no multi-module walk — unlike Cargo workspaces, a Go module's requirements
+ * always live in the selected module's own go.mod. Exported for testing.
+ */
+export function goSdkVerifier(
+  installDir: string,
+): (projectPath: string) => boolean {
+  return (projectPath) => {
+    const dir =
+      projectPath === '.' ? installDir : join(installDir, projectPath);
+    const content = readProjectFile(join(dir, 'go.mod'));
+    return content != null && goModRequiresSdk(content);
+  };
+}
 
 function isAutomatableVariant(value: string | null): value is SkillVariant {
   return value !== null && AUTOMATABLE_VARIANTS.includes(value as SkillVariant);
@@ -104,6 +226,15 @@ export type ProjectProbes = {
   hasBuildTarget: (path: string) => boolean;
   /** React Native: is the `expo` package installed in the project? */
   isExpoProject: (path: string) => boolean;
+  /**
+   * Rust: does the project's Cargo manifest tree carry the posthog-rs crate?
+   * Unlike the gate probes above, absence means "trust the agent's
+   * `hasPostHog`", not `false` — the probe REPLACES the agent's boolean when
+   * present, because any unrelated PostHog dependency can satisfy it.
+   */
+  verifyRustSdk?: (path: string) => boolean;
+  /** Go: does the project's go.mod require posthog-go? Same semantics as `verifyRustSdk`. */
+  verifyGoSdk?: (path: string) => boolean;
 };
 
 const NO_PROBES: ProjectProbes = {
@@ -152,10 +283,20 @@ function classifyProject(
   p: AgenticDetectionReport['projects'][number],
   probes: ProjectProbes,
 ): DetectedProject {
+  // For the native-binary variants the deterministic manifest read overrides
+  // the agent's single hasPostHog boolean, which any unrelated PostHog
+  // dependency can satisfy.
+  const sdkVerifier =
+    p.targetId === 'rust'
+      ? probes.verifyRustSdk
+      : p.targetId === 'go'
+      ? probes.verifyGoSdk
+      : undefined;
+  const hasPostHog = sdkVerifier ? sdkVerifier(p.path) : p.hasPostHog;
   const base = {
     path: p.path,
     framework: p.framework,
-    hasPostHog: p.hasPostHog,
+    hasPostHog,
   };
 
   // A React Native or Flutter labelled project only counts when it resolved to
@@ -196,12 +337,16 @@ function classifyProject(
     };
   }
 
-  if (!p.hasPostHog) {
+  if (!hasPostHog) {
+    // The wizard's default flow can't install the Go/Rust SDKs, so don't
+    // point users at it for those stacks.
+    const install =
+      MANUAL_SDK_INSTALL[p.targetId] ?? 'run `npx @posthog/wizard` first';
     return {
       ...base,
       variant: p.targetId,
       instrumentable: false,
-      reason: 'No PostHog SDK installed yet — run `npx @posthog/wizard` first',
+      reason: `No PostHog SDK installed yet — ${install}`,
     };
   }
 
@@ -252,5 +397,7 @@ export async function detectSourceMapsProjects(
   return toSourceMapsReport(report, {
     hasBuildTarget: (path) => projectHasBuildTarget(session.installDir, path),
     isExpoProject: (path) => projectHasExpo(session.installDir, path),
+    verifyRustSdk: rustSdkVerifier(session.installDir),
+    verifyGoSdk: goSdkVerifier(session.installDir),
   });
 }
