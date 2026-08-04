@@ -1,13 +1,21 @@
-import fs from 'fs';
 import path from 'path';
+import { writeJsonAtomic } from '@utils/atomic-ledger';
 import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
 /**
- * The 10 data-integrity checks the audit runs, plus one workflow row for the
- * notebook upload at the end (so the skill's `audit_resolve_checks` call for
- * `upload-notebook` succeeds — the skill writes the report to a PostHog
- * notebook as its final step).
+ * The 10 source-tree checks the audit runs, plus one row for the PostHog-side
+ * sweep and two workflow rows at the end (so the skill's
+ * `audit_resolve_checks` calls for `write-report` and `upload-notebook`
+ * succeed — the skill writes the report to disk, then mirrors it into a
+ * PostHog notebook as its final step).
+ *
+ * `posthog-side-findings` is a sweep row, not a rule: the skill reads what
+ * PostHog itself already computed for this project (error-tracking
+ * recommendations, health issues) and appends one row per open finding via
+ * `audit_add_checks`. That's why the seed can't enumerate them — the list is
+ * whatever the project's data says today, and it grows as PostHog ships new
+ * checks, with no wizard release needed.
  */
 export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
@@ -71,6 +79,14 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     status: 'pending',
   },
   {
+    id: 'live-data-findings',
+    // Area is capped at COL_AREA_WIDTH (18) in the checks viewer and never
+    // flexes, so it has to fit. Labels get the flexed column.
+    area: 'Live Data',
+    label: 'Open findings in PostHog',
+    status: 'pending',
+  },
+  {
     id: 'write-report',
     area: 'Write report',
     label: 'Create posthog-audit-report.md',
@@ -95,8 +111,6 @@ export function seedAuditLedger(
   checks: AuditCheck[] = AUDIT_SEED_CHECKS,
 ): void {
   const target = path.join(installDir, AUDIT_CHECKS_FILE);
-  const tmp = `${target}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(checks, null, 2), 'utf8');
-  fs.renameSync(tmp, target);
+  writeJsonAtomic(target, checks);
   logToFile(`seedAuditLedger: wrote ${checks.length} entries to ${target}`);
 }
