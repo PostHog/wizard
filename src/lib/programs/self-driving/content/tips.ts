@@ -39,7 +39,9 @@ export const SELF_DRIVING_TIPS: Tip[] = [
     id: 'pricing',
     title: 'What it costs',
     description:
-      'Watching is free. You pay a flat $15 only when a report ships a PR.',
+      'Watching is free. You pay a flat $15 only when a report ships a PR. ' +
+      'No spending limit is set by default, so add one under Usage in your ' +
+      'inbox if you want a ceiling.',
   },
   {
     id: 'work-anywhere',

@@ -91,12 +91,14 @@ const buildRun = (session: WizardSession): Promise<ProgramRun> =>
             'Investigate reports with the agent',
             'Tag teammates to loop them in',
             'Kick off a PR when you like the proposed fix ($15 flat)',
+            'Set a monthly limit on PRs under Usage',
             'Or work from Slack (tag @PostHog) and MCP',
           ],
         },
         body:
           'Pricing: scouts, signals, and reports are free. You pay a flat ' +
-          '$15 only when a report ships a PR.',
+          '$15 only when a report ships a PR. There is no spending limit ' +
+          'set by default. You can add one under Usage in your inbox.',
         reportFile: REPORT_FILE,
       };
     },

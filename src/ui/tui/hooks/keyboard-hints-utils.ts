@@ -18,6 +18,14 @@ export enum KeyMatch {
   Return = 'return',
   Escape = 'escape',
   Space = 'space',
+  Backspace = 'backspace',
+  /**
+   * Any single printable character typed without a modifier. Broad by design,
+   * so a binding using it must sit last: `matchesKey` is evaluated in order and
+   * the first match wins, which is what lets a specific char binding (or space)
+   * still take precedence over free typing.
+   */
+  Printable = 'printable',
 }
 
 /** A key match: either a KeyMatch enum value or a literal character string (e.g. 'a', 's'). */
@@ -30,6 +38,8 @@ const DEFAULT_PRIORITY: Record<string, number> = {
   [KeyMatch.LeftArrow]: 1,
   [KeyMatch.RightArrow]: 1,
   [KeyMatch.Space]: 10,
+  [KeyMatch.Printable]: 12,
+  [KeyMatch.Backspace]: 13,
   [KeyMatch.Escape]: 20,
   [KeyMatch.Return]: 21,
 };
@@ -63,6 +73,24 @@ export function matchesKey(
       return !!key.escape;
     case KeyMatch.Space:
       return input === ' ';
+    case KeyMatch.Backspace:
+      return !!key.backspace || !!key.delete;
+    case KeyMatch.Printable:
+      // Ink reports arrows/enter/etc. via key flags with input often non-empty,
+      // so gate on the flags too rather than on the string alone.
+      return (
+        input.length === 1 &&
+        input >= ' ' &&
+        !key.ctrl &&
+        !key.meta &&
+        !key.escape &&
+        !key.return &&
+        !key.tab &&
+        !key.upArrow &&
+        !key.downArrow &&
+        !key.leftArrow &&
+        !key.rightArrow
+      );
     default:
       return input === m;
   }
