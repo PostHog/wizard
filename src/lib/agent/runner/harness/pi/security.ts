@@ -31,6 +31,7 @@ import {
 } from '@lib/yara-hooks';
 import { scanVerdict, type ScanContext } from '@lib/yara-policy';
 import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 /** warlock ScanMatch → the report shape `recordExternalScan` expects. */
 function toReportViolation(m: ScanMatch) {
@@ -44,6 +45,50 @@ function toReportViolation(m: ScanMatch) {
 
 /** Runaway backstop: hard cap on tool calls per (sub)agent session. */
 export const MAX_TOOL_CALLS = 250;
+
+/**
+ * Passive telemetry for an unfixed upstream failure: gpt-5.x streaming with
+ * tools leaks its function-call grammar into string values, and the leak lands
+ * on disk (run 9704a73e shipped `…functions.complete_task (commentary…` plus a
+ * DEL byte inside a customer's global-error.tsx). Observe-only — never blocks.
+ * Prior art: https://github.com/BerriAI/litellm/issues/14260 (closed stale),
+ * https://community.openai.com/t/1386422 (gpt-5.6-luna, no fix).
+ */
+const TRANSPORT_LEAK_PATTERNS: readonly { pattern: RegExp; label: string }[] = [
+  // The litellm#14260 signature, scoped to the wizard's own tool names — a
+  // generic `functions.*` would false-positive on real code (Firebase).
+  {
+    pattern: /functions\.(?:complete_task|enqueue_task|read_handoffs)/,
+    label: 'leaked tool-call tokens',
+  },
+  {
+    pattern: /<\|(?:channel|constrain|message|call|end|start|return)\|>/,
+    label: 'leaked channel markers',
+  },
+  // C0 controls and DEL minus tab/newline/CR — never valid in source text.
+  // eslint-disable-next-line no-control-regex
+  { pattern: /[\0-\x08\x0B\f\x0E-\x1F\x7F]/, label: 'control characters' },
+];
+
+/** Capture one event per leaking write/edit: which pattern fired and where it sat — no matched text, ever. */
+export function observeTransportLeak(tool: string, content: string): void {
+  for (const { pattern, label } of TRANSPORT_LEAK_PATTERNS) {
+    const match = pattern.exec(content);
+    if (!match) continue;
+    analytics.wizardCapture('file content leak observed', {
+      tool,
+      leak: label,
+      leak_offset: match.index,
+      content_length: content.length,
+      // End-of-string leaks are the upstream decoder signature.
+      at_end: content.length - match.index < 80,
+    });
+    logToFile(
+      `[transport-leak] observed ${tool}: ${label} at ${match.index}/${content.length}`,
+    );
+    return;
+  }
+}
 
 export interface ToolGateContext {
   disallowedTools?: readonly string[];
@@ -270,6 +315,7 @@ async function preExecutionYaraBlock(
       return undefined;
   }
   if (!content) return undefined;
+  if (ctx === 'output') observeTransportLeak(tool, content);
 
   let matches = await scanAndTriage(content, ctx, triage);
   if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
