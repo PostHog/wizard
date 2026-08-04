@@ -1,3 +1,5 @@
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
+
 /**
  * Sidebar tips for the self-driving run — short footnotes on the
  * vocabulary ladder (signal source → scout → signal → report → measured
@@ -38,10 +40,7 @@ export const SELF_DRIVING_TIPS: Tip[] = [
   {
     id: 'pricing',
     title: 'What it costs',
-    description:
-      'Watching is free. You pay a flat $15 only when a report ships a PR. ' +
-      'No spending limit is set by default, so add one under Usage in your ' +
-      'inbox if you want a ceiling.',
+    description: `${PRICING_LONG} ${NO_DEFAULT_LIMIT}`,
   },
   {
     id: 'work-anywhere',

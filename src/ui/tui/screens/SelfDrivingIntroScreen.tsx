@@ -14,6 +14,11 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
+import {
+  NO_DEFAULT_LIMIT,
+  PRICING_LONG,
+  PRICING_SHORT,
+} from '@lib/programs/self-driving/content/pricing.js';
 import type { SelfDrivingDetectError } from '@lib/programs/self-driving/index';
 
 interface SelfDrivingIntroScreenProps {
@@ -72,14 +77,8 @@ export const SelfDrivingIntroScreen = ({
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1}>
-        <Text>
-          Scouts, signals, and reports are free. A report that ships a pull
-          request costs a flat $15.
-        </Text>
-        <Text>
-          No spending limit is set by default. You can add a monthly one under
-          Usage in your inbox once setup finishes.
-        </Text>
+        <Text>{PRICING_LONG}</Text>
+        <Text>{NO_DEFAULT_LIMIT}</Text>
       </Box>
     </Box>
   ) : (
@@ -99,9 +98,7 @@ export const SelfDrivingIntroScreen = ({
         <Text dimColor>
           About 10 minutes, with a few questions along the way.
         </Text>
-        <Text dimColor>
-          Setup and monitoring are free. You pay $15 when a report ships a PR.
-        </Text>
+        <Text dimColor>{PRICING_SHORT}</Text>
       </Box>
     </Box>
   );

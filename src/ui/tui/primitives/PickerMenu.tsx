@@ -234,10 +234,8 @@ export const PickerMenu = <T,>({
     [options, filter, canFilter],
   );
 
-  // Multi-select ticks live here, not in MultiPickerMenu, and are keyed by label
-  // rather than index: filtering rewrites the list under them, so an index-keyed
-  // set would silently re-point at whatever now sits at that position, and the
-  // remount below would drop it entirely.
+  // Keyed by label, and owned here rather than by MultiPickerMenu: filtering
+  // rewrites the list under the ticks, and the remount below would drop them.
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const shared = {
@@ -253,7 +251,7 @@ export const PickerMenu = <T,>({
 
   // A filtered list is a fresh list with its own focus and paging, so remount on
   // each query rather than leaving stale indices to be re-validated.
-  const key = `${visible.length}:${filter}`;
+  const key = String(filter);
 
   if (mode === 'multi') {
     return (
@@ -365,14 +363,14 @@ const SinglePickerMenu = <T,>({
       action: 'navigate',
       handler: (_input, key) => {
         const dir = key.upArrow ? -1 : 1;
-        // Walks the whole list, not just the visible page. `start`/`end` derive
-        // from `focused`, so stepping past an edge flips the page on its own —
-        // previously this wrapped inside the page, stranding anyone who didn't
-        // know to press n.
+        // `start`/`end` derive from `focused`, so stepping past a page edge
+        // flips the page rather than needing a bound here.
         setFocused(stepEnabled(options, rows, focused, dir));
       },
     },
-    ...(viewport.needsScroll
+    // Not while filtering: `n` and `p` are then just characters, and the arrows
+    // already flip pages on their own.
+    ...(viewport.needsScroll && filter === null
       ? [
           {
             match: ['n', 'p'] as KeyMatchOrChar[],
@@ -488,7 +486,9 @@ const SinglePickerMenu = <T,>({
         <Box flexDirection="column">
           <Text dimColor>
             {viewport.hiddenAbove > 0
-              ? `↑ ${viewport.hiddenAbove} more [P] for previous page`
+              ? `↑ ${viewport.hiddenAbove} more${
+                  filter === null ? ' [P] for previous page' : ''
+                }`
               : ' '}
           </Text>
           {options
@@ -496,7 +496,9 @@ const SinglePickerMenu = <T,>({
             .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
           <Text dimColor>
             {viewport.hiddenBelow > 0
-              ? `↓ ${viewport.hiddenBelow} more [N] for next page`
+              ? `↓ ${viewport.hiddenBelow} more${
+                  filter === null ? ' [N] for next page' : ''
+                }`
               : ' '}
           </Text>
         </Box>
@@ -593,8 +595,8 @@ const MultiPickerMenu = <T,>({
   }, [options, focused]);
 
   const confirm = () => {
-    // Resolved against the unfiltered list and in its order, so a pick made
-    // under one filter still submits after the query moved on.
+    // In `allOptions` order, so a pick made under one filter still submits
+    // after the query moved on.
     const values = allOptions
       .filter((option) => selected.has(option.label))
       .map((option) => option.value);
@@ -618,20 +620,6 @@ const MultiPickerMenu = <T,>({
           );
           return;
         }
-        if (columns === 1) {
-          // Walks the whole list, so arrows cross page edges (the page follows
-          // `focused`) and only the list's true ends fall through to Confirm.
-          let r = focused + dir;
-          while (r >= 0 && r < options.length && options[r]?.disabled) {
-            r += dir;
-          }
-          if (r >= 0 && r < options.length) {
-            setFocused(r);
-          } else {
-            setOnButton(true);
-          }
-          return;
-        }
         const col = Math.floor(focused / rows);
         const row = focused % rows;
         const colLen = Math.min(rows, options.length - col * rows);
@@ -648,7 +636,9 @@ const MultiPickerMenu = <T,>({
         }
       },
     },
-    ...(viewport.needsScroll
+    // Not while filtering: `n` and `p` are then just characters, and the arrows
+    // already flip pages on their own.
+    ...(viewport.needsScroll && filter === null
       ? [
           {
             match: ['n', 'p'] as KeyMatchOrChar[],
@@ -690,8 +680,8 @@ const MultiPickerMenu = <T,>({
           if (options[focused]?.exclusive) {
             return new Set([label]);
           }
-          // Checked against the unfiltered list: the exclusive pick being
-          // cleared may not be on screen under the current query.
+          // Against `allOptions`: the pick being cleared may be off-screen
+          // under the current query.
           for (const picked of next) {
             if (allOptions.find((o) => o.label === picked)?.exclusive) {
               next.delete(picked);
@@ -809,7 +799,9 @@ const MultiPickerMenu = <T,>({
         >
           <Text dimColor>
             {viewport.hiddenAbove > 0
-              ? `↑ ${viewport.hiddenAbove} more [P] for previous page`
+              ? `↑ ${viewport.hiddenAbove} more${
+                  filter === null ? ' [P] for previous page' : ''
+                }`
               : ' '}
           </Text>
           {options
@@ -817,7 +809,9 @@ const MultiPickerMenu = <T,>({
             .map((opt, relIdx) => renderOption(opt, viewport.start + relIdx))}
           <Text dimColor>
             {viewport.hiddenBelow > 0
-              ? `↓ ${viewport.hiddenBelow} more [N] for next page`
+              ? `↓ ${viewport.hiddenBelow} more${
+                  filter === null ? ' [N] for next page' : ''
+                }`
               : ' '}
           </Text>
         </Box>

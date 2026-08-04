@@ -21,9 +21,8 @@ export enum KeyMatch {
   Backspace = 'backspace',
   /**
    * Any single printable character typed without a modifier. Broad by design,
-   * so a binding using it must sit last: `matchesKey` is evaluated in order and
-   * the first match wins, which is what lets a specific char binding (or space)
-   * still take precedence over free typing.
+   * so a binding using it must sit last — the first match wins, which is what
+   * lets a specific char binding still take precedence over free typing.
    */
   Printable = 'printable',
 }
@@ -76,20 +75,11 @@ export function matchesKey(
     case KeyMatch.Backspace:
       return !!key.backspace || !!key.delete;
     case KeyMatch.Printable:
-      // Ink reports arrows/enter/etc. via key flags with input often non-empty,
-      // so gate on the flags too rather than on the string alone.
+      // Ink sets a flag for every non-text key while still passing a non-empty
+      // `input`, so any flag but shift rules out typing.
       return (
-        input.length === 1 &&
-        input >= ' ' &&
-        !key.ctrl &&
-        !key.meta &&
-        !key.escape &&
-        !key.return &&
-        !key.tab &&
-        !key.upArrow &&
-        !key.downArrow &&
-        !key.leftArrow &&
-        !key.rightArrow
+        /^[ -~]$/.test(input) &&
+        Object.entries(key).every(([flag, on]) => !on || flag === 'shift')
       );
     default:
       return input === m;

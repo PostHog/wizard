@@ -10,6 +10,11 @@ import {
   getSelfDrivingDetectedTools,
 } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
+import {
+  NO_DEFAULT_LIMIT,
+  PRICE_PER_PR_USD,
+  PRICING_LONG,
+} from './content/pricing.js';
 import { getTips } from './content/tips.js';
 import { getContentBlocks } from './content/index.js';
 
@@ -90,15 +95,12 @@ const buildRun = (session: WizardSession): Promise<ProgramRun> =>
           items: [
             'Investigate reports with the agent',
             'Tag teammates to loop them in',
-            'Kick off a PR when you like the proposed fix ($15 flat)',
+            `Kick off a PR when you like the proposed fix ($${PRICE_PER_PR_USD} flat)`,
             'Set a monthly limit on PRs under Usage',
             'Or work from Slack (tag @PostHog) and MCP',
           ],
         },
-        body:
-          'Pricing: scouts, signals, and reports are free. You pay a flat ' +
-          '$15 only when a report ships a PR. There is no spending limit ' +
-          'set by default. You can add one under Usage in your inbox.',
+        body: `${PRICING_LONG} ${NO_DEFAULT_LIMIT}`,
         reportFile: REPORT_FILE,
       };
     },
