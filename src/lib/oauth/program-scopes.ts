@@ -254,3 +254,37 @@ export function getOAuthScopesForProgram(
   }
   return merged;
 }
+
+/**
+ * Scopes requested here that may not yet exist in the wizard OAuth app's
+ * server-side ceiling (`OAuthApplication.scopes`), because widening it is a
+ * manual Django-admin edit on both prod regions that lands separately from
+ * the code that starts requesting the scope.
+ *
+ * Until that edit is made, PostHog rejects the authorize request with
+ * `invalid_scope` — and it rejects the WHOLE request, so one pending scope
+ * locks the user out of login entirely rather than degrading the one step
+ * that needs it. `performOAuthFlow` retries once without these, which turns
+ * that hard failure into a working run with a reduced grant.
+ *
+ * **Add a scope here in the same PR that starts requesting it. Remove it
+ * once the ceiling edit is confirmed live in both regions** — an entry that
+ * outlives its edit silently permits a degraded grant instead of surfacing
+ * a real misconfiguration.
+ */
+export const PENDING_CEILING_SCOPES: readonly string[] = [];
+
+/**
+ * The requested scopes minus any awaiting a ceiling edit, order preserved.
+ * Returns an equal-length copy when there is nothing to drop, so callers can
+ * compare lengths to decide whether a retry is worth attempting.
+ *
+ * `pending` is injectable for tests only — the shipped list is empty whenever
+ * every requested scope is live, which is the steady state.
+ */
+export function scopesWithoutPendingCeiling(
+  scopes: readonly string[],
+  pending: readonly string[] = PENDING_CEILING_SCOPES,
+): string[] {
+  return scopes.filter((s) => !pending.includes(s));
+}

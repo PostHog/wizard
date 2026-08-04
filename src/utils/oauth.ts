@@ -12,6 +12,7 @@ import {
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { scopesWithoutPendingCeiling } from '@lib/oauth/program-scopes';
 import { getOAuthUrl, resolveBaseUrl } from './urls';
 import { abort } from './setup-utils';
 import { openTrackedLink, withUtm } from './links';
@@ -404,10 +405,13 @@ export async function performOAuthFlow(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   let shouldRetry = false;
+  // Mutable for the one-shot `invalid_scope` retry below, which re-runs the
+  // flow with the pending-ceiling scopes removed.
+  let scopes = [...config.scopes];
 
   logToFile(
     `[oauth] starting flow against ${oauthUrl}, ` +
-      `requested scopes: ${config.scopes.join(' ')}`,
+      `requested scopes: ${scopes.join(' ')}`,
   );
 
   do {
@@ -427,7 +431,7 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('code_challenge', codeChallenge);
       authUrl.searchParams.set('code_challenge_method', 'S256');
-      authUrl.searchParams.set('scope', config.scopes.join(' '));
+      authUrl.searchParams.set('scope', scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
       if (config.projectId !== undefined) {
         // Pre-select this project on the consent screen so the user just clicks Authorize.
@@ -527,6 +531,37 @@ export async function performOAuthFlow(
           );
         }
 
+        // A scope missing from the OAuth app's server-side ceiling fails the
+        // WHOLE authorize request, so one scope awaiting its manual ceiling
+        // edit locks the user out of login entirely instead of degrading the
+        // single step that needs it. Drop those and try once more: a reduced
+        // grant beats no run at all. Bounded to one attempt — the retry
+        // requests nothing pending, so this branch can't match twice.
+        const reducedScopes = scopesWithoutPendingCeiling(scopes);
+        if (
+          flowError?.code === 'invalid_scope' &&
+          reducedScopes.length < scopes.length
+        ) {
+          const dropped = scopes.filter((s) => !reducedScopes.includes(s));
+          logToFile(
+            `[oauth] invalid_scope: retrying without pending-ceiling scopes ${dropped.join(
+              ' ',
+            )}`,
+          );
+          analytics.wizardCapture('oauth pending ceiling scopes dropped', {
+            dropped_scopes: dropped.join(' '),
+            client_id: clientId,
+          });
+          getUI().log.warn(
+            `PostHog rejected ${dropped.join(
+              ', ',
+            )}, so anything needing those permissions will be skipped this run.\n\nRetrying login without them.`,
+          );
+          scopes = reducedScopes;
+          shouldRetry = true;
+          break;
+        }
+
         const accessDenied = flowError
           ? flowError.code === 'access_denied'
           : error.message.includes('access_denied');
@@ -544,7 +579,7 @@ export async function performOAuthFlow(
           getUI().log.error(
             buildOAuthFailureMessage({
               error,
-              requestedScopes: config.scopes,
+              requestedScopes: scopes,
               clientId,
               oauthUrl,
               // Same condition that selects the dev client ID: a resolvable
@@ -568,7 +603,7 @@ export async function performOAuthFlow(
           oauth_error_code: oauthErrorCode,
           oauth_error_description: flowError?.description,
           client_id: clientId,
-          requested_scopes: config.scopes.join(' '),
+          requested_scopes: scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue
           // instead of fragmenting by each user's install path in the stack trace.
           $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
@@ -578,6 +613,11 @@ export async function performOAuthFlow(
         throw error;
       }
     }
+
+    // The scope-degradation retry above broke out of the port loop with the
+    // next attempt already armed — no port was exhausted, so skip the
+    // port-conflict path and re-enter the flow.
+    if (shouldRetry) continue;
 
     if (!lastProcessInfo) {
       throw new Error('No OAuth callback ports configured');

@@ -9,7 +9,11 @@ import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@lib/constants';
-import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
+import {
+  getOAuthScopesForProgram,
+  PENDING_CEILING_SCOPES,
+  scopesWithoutPendingCeiling,
+} from '@lib/oauth/program-scopes';
 
 describe('extractOAuthCode', () => {
   it('extracts the code from a full callback URL', () => {
@@ -118,6 +122,43 @@ describe('wizard OAuth scopes', () => {
       'wizard_session:write',
       'event_definition:write',
     ]);
+  });
+});
+
+describe('pending-ceiling scope degradation', () => {
+  it('drops only the pending scopes, preserving order', () => {
+    expect(
+      scopesWithoutPendingCeiling(
+        ['user:read', 'replay_scanner:read', 'project:read'],
+        ['replay_scanner:read'],
+      ),
+    ).toEqual(['user:read', 'project:read']);
+  });
+
+  it('leaves the request untouched when nothing is pending', () => {
+    const requested = getOAuthScopesForProgram('self-driving');
+
+    expect(scopesWithoutPendingCeiling(requested, [])).toEqual([...requested]);
+  });
+
+  // The retry only fires when this shrinks the set, so a no-op list must not
+  // arm it — otherwise an invalid_scope for an unrelated reason would loop.
+  it('shrinks the set only when a pending scope was actually requested', () => {
+    const requested = getOAuthScopesForProgram('self-driving');
+
+    expect(
+      scopesWithoutPendingCeiling(requested, ['not:requested']).length,
+    ).toBe(requested.length);
+  });
+
+  // Degrading a base scope would hand back a token that authenticates but
+  // can't run the wizard, turning a loud failure into a confusing one.
+  it('never lists a base wizard scope as pending', () => {
+    expect(
+      PENDING_CEILING_SCOPES.filter((s) =>
+        (WIZARD_OAUTH_SCOPES as readonly string[]).includes(s),
+      ),
+    ).toEqual([]);
   });
 });
 
