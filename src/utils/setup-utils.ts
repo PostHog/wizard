@@ -61,6 +61,14 @@ interface ProjectData {
    * inferring it from repo evidence. Null on signup flows.
    */
   project?: ApiProject | null;
+  /**
+   * Refresh token and access-token expiry from the OAuth grant, when the token
+   * endpoint issued them. Wizard access tokens live an hour, which a long run
+   * outlives, so the agent's credential helper uses these to rotate mid-run.
+   * Absent for CI runs (a personal API key, which doesn't expire).
+   */
+  refreshToken?: string;
+  expiresAt?: number;
 }
 
 export interface CliSetupConfig {
@@ -410,6 +418,8 @@ export async function getOrAskForProjectData(
   host: HostResolution;
   projectApiKey: string;
   accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
   projectId: number;
   roleAtOrganization: string | null;
   user: ApiUser | null;
@@ -475,6 +485,8 @@ export async function getOrAskForProjectData(
     host,
     projectApiKey,
     accessToken,
+    refreshToken,
+    expiresAt,
     projectId,
     roleAtOrganization,
     user,
@@ -506,6 +518,8 @@ ${cloudUrl}/settings/project#variables`);
 
   return {
     accessToken,
+    refreshToken,
+    expiresAt,
     host,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
@@ -648,6 +662,8 @@ async function askForWizardLogin(options: {
 
   const data = {
     accessToken: tokenResponse.access_token,
+    refreshToken: tokenResponse.refresh_token,
+    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
     projectApiKey: projectData.api_token,
     host,
     distinctId: userData.distinct_id,

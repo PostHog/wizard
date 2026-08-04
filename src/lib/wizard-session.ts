@@ -23,6 +23,12 @@ export interface Credentials {
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
   projectId: number;
+  /**
+   * Refresh token and access-token expiry, when the OAuth grant issued them.
+   * Absent for CI runs (personal API key). See {@link ProjectData}.
+   */
+  refreshToken?: string;
+  expiresAt?: number;
 }
 
 function parseProjectIdArg(value: string | undefined): number | undefined {

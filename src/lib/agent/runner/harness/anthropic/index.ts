@@ -22,12 +22,31 @@ import { createAioCapture } from '@lib/agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
+import { getRotatingCredential } from '@lib/agent/rotating-credential';
+import { getTokenEndpoint } from '@utils/oauth';
+import type { WizardSession } from '@lib/wizard-session';
 import type {
   AgentResult,
   AgentHarness,
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
+
+/**
+ * A run can outlive its one-hour access token, and the agent subprocess can't be
+ * handed a new one after spawn — so give the SDK a helper it can re-run. Only
+ * possible when the grant issued a refresh token; CI keys don't expire.
+ */
+function rotatingCredentialFor(session: WizardSession): string | undefined {
+  const { refreshToken, expiresAt } = session.credentials ?? {};
+  if (!refreshToken || !expiresAt) return undefined;
+  return getRotatingCredential({
+    accessToken: session.credentials!.accessToken,
+    refreshToken,
+    expiresAt,
+    ...getTokenEndpoint(session.baseUrl),
+  });
+}
 
 export const anthropicBackend: AgentHarness = {
   name: Harness.anthropic,
@@ -60,6 +79,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: session.installDir,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
+        apiKeyHelperPath: rotatingCredentialFor(session),
         host,
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
@@ -137,6 +157,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: session.installDir,
         posthogMcpUrl: boot.credentials.host.mcpUrl,
         posthogApiKey: boot.credentials.accessToken,
+        apiKeyHelperPath: rotatingCredentialFor(session),
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,

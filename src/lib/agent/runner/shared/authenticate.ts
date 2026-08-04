@@ -28,6 +28,8 @@ export async function authenticate(
     projectApiKey,
     host,
     accessToken,
+    refreshToken,
+    expiresAt,
     projectId,
     roleAtOrganization,
     user,
@@ -44,7 +46,14 @@ export async function authenticate(
     programId,
   });
 
-  session.credentials = { accessToken, projectApiKey, host, projectId };
+  session.credentials = {
+    accessToken,
+    refreshToken,
+    expiresAt,
+    projectApiKey,
+    host,
+    projectId,
+  };
   session.apiProject = project;
   session.roleAtOrganization = roleAtOrganization;
   session.apiUser = user;

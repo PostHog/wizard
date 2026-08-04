@@ -27,6 +27,7 @@ import {
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
+import { HELPER_CACHE_TTL_MS } from './rotating-credential';
 import type { HostResolution } from '@lib/host-resolution';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
@@ -179,6 +180,13 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
+  /**
+   * Script the SDK re-runs to get a currently-valid gateway token, from
+   * `rotating-credential.ts`. Set when the OAuth grant issued a refresh token;
+   * absent (CI runs on a non-expiring personal API key) keeps `posthogApiKey`
+   * fixed for the run.
+   */
+  apiKeyHelperPath?: string;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
@@ -296,6 +304,12 @@ type AgentRunConfig = {
   model: string;
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
+  /**
+   * Script the SDK re-runs to get a currently-valid gateway token. Set when the
+   * run has a refresh token; when set it replaces the fixed `ANTHROPIC_AUTH_TOKEN`
+   * in the subprocess env rather than sitting alongside it.
+   */
+  apiKeyHelperPath?: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -616,6 +630,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      apiKeyHelperPath: config.apiKeyHelperPath,
       suppressTaskRender: !!config.orchestrator,
       capture: config.capture,
       triageProvider,
@@ -623,6 +638,11 @@ export async function initializeAgent(
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
     };
+
+    logToFile(
+      'Gateway token rotation:',
+      config.apiKeyHelperPath ? 'on' : 'off (no refresh token)',
+    );
 
     logToFile('Agent config:', {
       workingDirectory: agentRunConfig.workingDirectory,
@@ -898,6 +918,9 @@ export async function runAgent(
               : undefined,
           },
         },
+        settings: agentConfig.apiKeyHelperPath
+          ? { apiKeyHelper: agentConfig.apiKeyHelperPath }
+          : undefined,
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
         // Enable all discovered skills. Omitting this is NOT "skills off" —
@@ -969,8 +992,17 @@ export async function runAgent(
           // process.env for in-process readers; the strip above removed them
           // from the inherited copy, so re-add the wizard's own values here).
           ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // With a rotating credential the helper is the single source of the
+          // token; leaving these set would pin the spawn-time value alongside it.
+          ANTHROPIC_AUTH_TOKEN: agentConfig.apiKeyHelperPath
+            ? undefined
+            : process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_OAUTH_TOKEN: agentConfig.apiKeyHelperPath
+            ? undefined
+            : process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          CLAUDE_CODE_API_KEY_HELPER_TTL_MS: agentConfig.apiKeyHelperPath
+            ? String(HELPER_CACHE_TTL_MS)
+            : undefined,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.

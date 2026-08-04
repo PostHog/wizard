@@ -115,6 +115,21 @@ function getOAuthClientId(baseUrl?: string): string {
     : POSTHOG_PROXY_CLIENT_ID;
 }
 
+/**
+ * The token endpoint and client id for a grant. Shared by the initial code
+ * exchange and by the agent's credential helper, which runs as its own process
+ * and so needs both values handed to it rather than resolved in-module.
+ */
+export function getTokenEndpoint(baseUrl?: string): {
+  tokenUrl: string;
+  clientId: string;
+} {
+  return {
+    tokenUrl: `${getOAuthUrl(baseUrl)}/oauth/token`,
+    clientId: getOAuthClientId(baseUrl),
+  };
+}
+
 function getLocalOAuthOrigin(port: number): string {
   return `http://localhost:${port}`;
 }
@@ -334,14 +349,13 @@ async function exchangeCodeForToken(
   callbackUrl: string,
   baseUrl?: string,
 ): Promise<OAuthTokenResponse> {
-  const clientId = getOAuthClientId(baseUrl);
-  const oauthUrl = getOAuthUrl(baseUrl);
+  const { tokenUrl, clientId } = getTokenEndpoint(baseUrl);
 
-  logToFile(`[oauth] exchanging code for token at ${oauthUrl}/oauth/token`);
+  logToFile(`[oauth] exchanging code for token at ${tokenUrl}`);
   let response;
   try {
     response = await axios.post(
-      `${oauthUrl}/oauth/token`,
+      tokenUrl,
       {
         grant_type: 'authorization_code',
         code,

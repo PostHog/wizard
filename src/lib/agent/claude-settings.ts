@@ -48,6 +48,10 @@ const BLOCKING_ENV_KEYS = [
   'CLAUDE_CODE_OAUTH_TOKEN',
   ...BLOCKED_AGENT_ENV_KEYS,
 ];
+// A settings *file* setting these redirects the agent's credentials, so it's a
+// conflict. The wizard sets `apiKeyHelper` itself, but via the SDK's inline
+// `settings` option (see `rotating-credential.ts`) — a different tier that these
+// on-disk scans never see, so the two don't collide.
 const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
 
 /** Where a settings conflict was found. */
