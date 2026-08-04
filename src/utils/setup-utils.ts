@@ -603,7 +603,9 @@ async function askForWizardLogin(options: {
   );
   if (!resolution.ok) {
     const error = new Error(
-      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested}. Re-run and grant access to project ${resolution.requested} on the authorization screen.`,
+      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested} (from --project-id). ` +
+        `If ${resolution.requested} is not a project you own — a copy-pasted example value, say — re-run without --project-id, or with the id shown in your PostHog project settings. ` +
+        `If it is yours, re-run and grant access to project ${resolution.requested} on the authorization screen.`,
     );
     analytics.captureException(error, {
       step: 'wizard_login',
