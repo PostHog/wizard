@@ -22,7 +22,7 @@ import { createAioCapture } from '@lib/agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
-import { getRotatingCredential } from '@lib/agent/rotating-credential';
+import { getAuthStatePath } from '@lib/agent/rotating-credential';
 import { getTokenEndpoint } from '@utils/oauth';
 import type { WizardSession } from '@lib/wizard-session';
 import type {
@@ -33,10 +33,10 @@ import type {
 } from '../types';
 
 /** Undefined without a refresh token, which is the CI case (keys don't expire). */
-function rotatingCredentialFor(session: WizardSession): string | undefined {
+function authStateFor(session: WizardSession): string | undefined {
   const { refreshToken, expiresAt } = session.credentials ?? {};
   if (!refreshToken || !expiresAt) return undefined;
-  return getRotatingCredential({
+  return getAuthStatePath({
     accessToken: session.credentials!.accessToken,
     refreshToken,
     expiresAt,
@@ -75,7 +75,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: session.installDir,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
-        apiKeyHelperPath: rotatingCredentialFor(session),
+        authStatePath: authStateFor(session),
         host,
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
@@ -153,7 +153,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: session.installDir,
         posthogMcpUrl: boot.credentials.host.mcpUrl,
         posthogApiKey: boot.credentials.accessToken,
-        apiKeyHelperPath: rotatingCredentialFor(session),
+        authStatePath: authStateFor(session),
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,

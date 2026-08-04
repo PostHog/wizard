@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: ['bin.ts'],
+  // auth-helper is a second entry because the agent SDK execs it standalone.
+  // Named explicitly so it lands at dist/auth-helper.js, beside the bundle that
+  // resolves it (see AUTH_HELPER_PATH).
+  entry: { bin: 'bin.ts', 'auth-helper': 'src/lib/agent/auth-helper.ts' },
   outDir: 'dist',
   format: 'esm',
   platform: 'node',

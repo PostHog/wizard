@@ -27,7 +27,8 @@ import {
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
-import { HELPER_CACHE_TTL_MS } from './rotating-credential';
+import { AUTH_STATE_ENV, HELPER_CACHE_TTL_MS } from './auth-constants';
+import { AUTH_HELPER_PATH } from './rotating-credential';
 import type { HostResolution } from '@lib/host-resolution';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
@@ -181,7 +182,7 @@ export type AgentConfig = {
   posthogMcpUrl: string;
   posthogApiKey: string;
   /** Absent (CI, on a non-expiring key) keeps `posthogApiKey` fixed for the run. */
-  apiKeyHelperPath?: string;
+  authStatePath?: string;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
@@ -299,8 +300,8 @@ type AgentRunConfig = {
   model: string;
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
-  /** See {@link AgentConfig.apiKeyHelperPath}. */
-  apiKeyHelperPath?: string;
+  /** See {@link AgentConfig.authStatePath}. */
+  authStatePath?: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -621,7 +622,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
-      apiKeyHelperPath: config.apiKeyHelperPath,
+      authStatePath: config.authStatePath,
       suppressTaskRender: !!config.orchestrator,
       capture: config.capture,
       triageProvider,
@@ -632,7 +633,7 @@ export async function initializeAgent(
 
     logToFile(
       'Gateway token rotation:',
-      config.apiKeyHelperPath ? 'on' : 'off (no refresh token)',
+      config.authStatePath ? 'on' : 'off (no refresh token)',
     );
 
     logToFile('Agent config:', {
@@ -909,8 +910,8 @@ export async function runAgent(
               : undefined,
           },
         },
-        settings: agentConfig.apiKeyHelperPath
-          ? { apiKeyHelper: agentConfig.apiKeyHelperPath }
+        settings: agentConfig.authStatePath
+          ? { apiKeyHelper: AUTH_HELPER_PATH }
           : undefined,
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
@@ -984,15 +985,16 @@ export async function runAgent(
           // from the inherited copy, so re-add the wizard's own values here).
           ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
           // Leaving these set alongside the helper would pin the spawn-time value.
-          ANTHROPIC_AUTH_TOKEN: agentConfig.apiKeyHelperPath
+          ANTHROPIC_AUTH_TOKEN: agentConfig.authStatePath
             ? undefined
             : process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: agentConfig.apiKeyHelperPath
+          CLAUDE_CODE_OAUTH_TOKEN: agentConfig.authStatePath
             ? undefined
             : process.env.CLAUDE_CODE_OAUTH_TOKEN,
-          CLAUDE_CODE_API_KEY_HELPER_TTL_MS: agentConfig.apiKeyHelperPath
+          CLAUDE_CODE_API_KEY_HELPER_TTL_MS: agentConfig.authStatePath
             ? String(HELPER_CACHE_TTL_MS)
             : undefined,
+          [AUTH_STATE_ENV]: agentConfig.authStatePath,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.
