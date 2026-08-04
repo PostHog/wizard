@@ -43,9 +43,45 @@ describe('buildSelfDrivingPrompt', () => {
     expect(prompt.indexOf('STEP 3b — Enable products')).toBeLessThan(
       prompt.indexOf('STEP 4 — Enable signal sources'),
     );
-    // Tail mirrors the skill: custom scouts is 6b, report is 7.
+    // Tail mirrors the skill: custom scouts is 6b, scanners 6c, report is 7.
     expect(prompt).toContain('STEP 6b — Design custom scouts');
+    expect(prompt).toContain('STEP 6c — Set up Replay Vision scanners');
     expect(prompt).toContain('STEP 7 — Write the report and hand off');
+    expect(prompt.indexOf('STEP 6b — Design custom scouts')).toBeLessThan(
+      prompt.indexOf('STEP 6c — Set up Replay Vision scanners'),
+    );
+    expect(
+      prompt.indexOf('STEP 6c — Set up Replay Vision scanners'),
+    ).toBeLessThan(prompt.indexOf('STEP 7 — Write the report and hand off'));
+  });
+
+  it('lists every step as a task so the TUI task list matches the STEPs', () => {
+    const prompt = buildSelfDrivingPrompt(ctx);
+    // The task list is the contract with the TUI — a STEP with no task silently
+    // drops off the user's progress view.
+    expect(prompt).toContain('6c. Set up Replay Vision scanners');
+    expect(prompt.indexOf('6c. Set up Replay Vision scanners')).toBeLessThan(
+      prompt.indexOf('7. Write report and hand off'),
+    );
+  });
+});
+
+describe('STEP 6c — Replay Vision scanners', () => {
+  it('keeps the trust-critical bits and the never-abort contract', () => {
+    const prompt = buildSelfDrivingPrompt(ctx);
+    // Scope to STEP 6c's text and ignore incidental wrapping.
+    const step6c = prompt
+      .slice(prompt.indexOf('STEP 6c —'), prompt.indexOf('STEP 7 —'))
+      .replace(/\s+/g, ' ');
+    // emits_signals is the entire mechanism — without it the scanners run but
+    // nothing reaches the inbox, which is the whole point of the step.
+    expect(step6c).toContain('emits_signals ON');
+    // The skeletons' locked fields must not be rewritten by the agent.
+    expect(step6c).toContain('locked fields');
+    // Scanners spend Replay Vision quota, unlike anything else in the run.
+    expect(step6c).toContain('quota');
+    // Every failure here is a follow-up — this step must never end the run.
+    expect(step6c).toContain('never an abort');
   });
 });
 

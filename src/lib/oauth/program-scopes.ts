@@ -158,6 +158,18 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     toggles without the far broader `project:write`. NOTE: net-new —
  *     must be added to the wizard OAuth app's scope ceiling on the
  *     PostHog side before it can be granted (see README / ARCHITECTURE §9).
+ *   • replay_scanner:read / replay_scanner:write — the Replay Vision
+ *     scanners step (skill step 6c) lists the team's existing scanners
+ *     and creates the `emits_signals` ones whose findings land in the
+ *     inbox (`vision-scanners-list` / `-create` / `-update`, and the
+ *     advisory `vision-scanners-estimate-create` / `vision-quota-retrieve`).
+ *     The scope OBJECT is `replay_scanner` — the `vision-scanners-*`
+ *     names are MCP tool names, not scopes. Configuring a scanner also
+ *     requires `session_recording:read` (the API pairs the two, since a
+ *     scanner's config indirectly exposes recording contents); that one
+ *     is already in this list for the step-2 usage probes. NOTE: net-new
+ *     — needs the same OAuth-ceiling edit as `product_enablement:write`
+ *     (see README / ARCHITECTURE §10).
  */
 export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'task:read',
@@ -173,6 +185,8 @@ export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'llm_skill:read',
   'llm_skill:write',
   'product_enablement:write',
+  'replay_scanner:read',
+  'replay_scanner:write',
 ] as const;
 
 /**

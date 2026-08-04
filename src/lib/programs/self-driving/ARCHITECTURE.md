@@ -58,14 +58,15 @@ install dir (checked in `detect.ts`).
 
 ---
 
-## 2. The run (9 steps)
+## 2. The run (10 steps)
 
-The agent makes its 9-item task list up front (one `TaskCreate`), drives it with
+The agent makes its 10-item task list up front (one `TaskCreate`), drives it with
 `TaskUpdate`, and asks the user only via `wizard_ask` (batched). Each prompt
 STEP names a skill reference whose matching context-mill file carries the HOW.
 **Step labels mirror the skill files exactly** — including the letter-suffix
-sub-steps `3b` (enable products) and `6b` (custom scouts) — so a prompt `STEP`
-and its `(skill: …)` reference never disagree on the number.
+sub-steps `3b` (enable products), `6b` (custom scouts), and `6c` (Replay Vision
+scanners) — so a prompt `STEP` and its `(skill: …)` reference never disagree on
+the number.
 
 **Step backbone (expected action, one line each):**
 
@@ -115,6 +116,18 @@ and its `(skill: …)` reference never disagree on the number.
   enforced run budget leaves less room, and zero is a valid outcome) (each a plain-language `label` + a dimmed `description`,
   behind a leading "None — keep the built-in troop" default option), create the
   approved subset (the only place custom scouts are made).
+- **6c — Replay Vision scanners** — the push layer: create the skill's two
+  fixed **skeletons** (Broken experiences / User frustration) with
+  `emits_signals: true`, filling only the `query` (scanner 1 targets this
+  product's key **completion** flow, read out of the repo) and a one-line
+  `{{PRODUCT_CONTEXT}}`. The two filter on deliberately different axes (URL vs
+  event) — **overlapping queries self-corroborate into promoted reports**, so
+  widening one means narrowing the other. `monitor` type, Gemini-only. Advisory
+  `vision-scanners-estimate-create` sanity-checks the query's breadth (**not** a
+  fits-in-quota test); `vision-quota-retrieve` + a confirm only when the team
+  already runs enabled scanners. Never aborts — no recordings, backend-only
+  project, no identifiable completion flow, or a deploy without the scanner API
+  are all recorded follow-ups. See §10.
 - **7 — Write report** — write `./posthog-self-driving-report.md` (everything
   changed + follow-ups); findings reach the inbox in ~30 min.
 
@@ -130,6 +143,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 5   | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (GitHub Issues: one connected repo → use it by default, no repo research; Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick.                                                                                                                                                                                                    |
 | 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); `scout-metadata-get` reports the enforced run budget (100 runs/day default); enable `general` + the **3–5 specialists** for the most-used products (agent judgment over step-2 evidence), keeping the whole troop at or under **~10 enabled scouts**, never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`.                                                                                                                                                                                  |
 | 6b  | Design custom scouts             | `6b-tailor-scouts.md`                 | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the troop, reading the repo's for-agents context first (AGENTS.md, CLAUDE.md, ARCHITECTURE.md, `.cursor/rules`) as the map of surfaces and vocabulary; propose **at most 5** in ONE `wizard_ask` (bounded by the ~10-scout troop ceiling and the enforced run budget), each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
+| 6c  | Replay Vision scanners           | `6c-replay-vision-scanners.md`        | `vision-scanners-list` then `vision-scanners-create` (or `-update` on the unique-per-team `name`) for **two** locked `monitor` skeletons with `emits_signals: true` (Broken experiences, URL-scoped to the completion flow; User frustration, `$rageclick`-gated). The agent fills only `query` + `{{PRODUCT_CONTEXT}}`. **Queries must not overlap** — same-session scans self-corroborate to `WEIGHT_THRESHOLD`. `vision-scanners-estimate-create` checks the query's breadth; `vision-quota-retrieve` only when enabled scanners already exist. **No `SignalSourceConfig` row** — `emits_signals` on the scanner *is* the per-source config (`replay_vision`/`scanner_finding` is self-authorizing server-side). Never aborts. See §10.                                                                                                                                                                                          |
 | 7   | Write report & hand off          | `7-report.md`                         | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard
@@ -142,11 +156,11 @@ repos.
 ## 3. Wizard internals
 
 **Program definition** (`src/lib/programs/self-driving/`, five files):
-`index.ts` (config + lifecycle), `prompt.ts` (the 9 steps + mechanics + project
+`index.ts` (config + lifecycle), `prompt.ts` (the 10 steps + mechanics + project
 URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
 screen sequence `detect → intro → health-check → auth → run → outro`), and
 `content/tips.ts` (the program-owned `Tips`-sidebar copy that defines signal
-sources + scouts in plain language, wired via `getTips`; `RunScreen` falls back
+sources + scouts + scanners in plain language, wired via `getTips`; `RunScreen` falls back
 to `DEFAULT_TIPS` for every other program, so nothing else is affected).
 `selfDrivingConfig` is built from the `createSkillProgram` factory
 (`src/lib/programs/agent-skill/`) with overrides. Notables in `index.ts`:
@@ -222,13 +236,14 @@ the agent's `TaskCreate`/`TaskUpdate` calls synced to the TUI.
 
 Source: `context-mill/context/skills/self-driving/`. `config.yaml`
 (`template: description.md`, `tags: [signals, self-driving]`, no fetched docs),
-`description.md` (becomes `SKILL.md`; declares the 8-step chain + the
+`description.md` (becomes `SKILL.md`; declares the 10-step chain + the
 cross-cutting rules: trust the setup report, list-before-create idempotency,
 only switch sources on, ask-then-connect, **canonical scout bodies never edited
 — new scouts only in step 6b**, decline-option-first on every `wizard_ask`
 except the required step-3 GitHub gate), and the `references/` chain
 `1-check-access → 2-read-context → 3-github → 4-sources → 5-connected-tools` (+
-`5a-github`, `5b-linear`) `→ 6-scouts → 6b-tailor-scouts → 7-report` (chained by
+`5a-github`, `5b-linear`) `→ 6-scouts → 6b-tailor-scouts →
+6c-replay-vision-scanners → 7-report` (chained by
 `next_step` frontmatter; what each does is in the §2 table).
 
 The canonical `signals-scout-*` skills do **not** live here — they're in posthog
@@ -379,12 +394,16 @@ must be running, or no scout ever dispatches.
 
 1. **OAuth scope ceiling (prod-admin DB action).** The prod
    `OAuthApplication.scopes` allow-list is exhaustive (`posthog/scopes.py`), so
-   add the **eight net-new objects** self-driving needs: `task:read`,
+   add the **ten net-new objects** self-driving needs: `task:read`,
    `task:write`, `signal_scout:read`, `signal_scout:write`,
    `external_data_source:read`, `external_data_source:write`, `llm_skill:read`,
-   `llm_skill:write`. (Its other four additions — `integration:read`,
-   `session_recording:read`, `survey:read`, `error_tracking:read` — are already
-   in the ceiling.) Edit the US prod client
+   `llm_skill:write`, `replay_scanner:read`, `replay_scanner:write`. (Its other
+   four additions — `integration:read`, `session_recording:read`, `survey:read`,
+   `error_tracking:read` — are already in the ceiling.) Note `product_enablement:write`
+   is tracked separately in 9.7 and is also still outstanding. **The scope
+   object for step 6c is `replay_scanner`** — `vision-scanners-*` are MCP tool
+   names, not scopes; getting this wrong grants nothing and the step 403s. Edit
+   the US prod client
    `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, and the dev client
    `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` on `localhost:8010`.
 2. **context-mill skill release.** Merge `self-driving-setup` to `main` with the
@@ -873,6 +892,140 @@ repo), so it's a context-mill skill change, not platform work:
 - Refund operational process (no consent, no cap).
 - **MCP codegen + OAuth ceiling** are the only steps not in this repo's diff
   (build + manual prod edit; see 9.7).
+
+---
+
+## 10. Replay Vision scanners (step 6c)
+
+> [!IMPORTANT] > **IMPLEMENTED** (step 6c), with **one manual step
+> outstanding**: the `replay_scanner:read` / `replay_scanner:write`
+> OAuth-ceiling edit on both regions (§7.1) — until it lands the wizard can't be
+> granted the scope and the step 403s. Spans **wizard + context-mill only**; the
+> posthog side was already done. Code anchors: posthog
+> `products/replay_vision/backend/models/replay_scanner.py`,
+> `api/scanners.py`, `temporal/activities/emit_observation_signal.py`,
+> `temporal/scanners/prompts/signals_step.jinja`; wizard `program-scopes.ts` +
+> `prompt.ts` + `content/tips.ts`; context-mill
+> `references/6c-replay-vision-scanners.md`.
+
+### 10.1 Why it's a separate layer from scouts
+
+Replay Vision has two layers against the same inbox, and conflating them is the
+easy mistake:
+
+- **Scanner = the sensor.** Watches **one session recording**, writes an
+  observation, pushes the per-session finding. This step.
+- **Scout = the analyst.** Reads **across** accumulated observations for trends
+  and scanner health. Already in the troop as `signals-scout-replay-vision`, off
+  by default. **Step 6c does not touch it** — and because 6c runs *after* step
+  6, a project that had no scanners before this run has no observations for that
+  scout to read, so it stays an evidence-based no in step 6.
+
+### 10.2 The one switch
+
+`emits_signals` (a bool on `ReplayScanner`, default `false`) is the entire
+mechanism. There is **no new contract, enum, or migration**:
+`replay_vision`/`scanner_finding` is already a registered signal source, and it
+is **self-authorizing** — `SignalSourceConfig.is_source_enabled` returns `True`
+for that pair unconditionally, because the flag on the scanner *is* the
+per-source config. Hence step 4's explicit "don't create a `replay_vision` row".
+
+### 10.3 Where the inbox findings actually come from
+
+**This is the part that surprises people, and it shapes the skeleton design.**
+Flipping `emits_signals` appends a **fixed extra turn** to every scan
+(`signals_step.jinja`, appended in `temporal/scanners/base.py`) — identical for
+every scanner, *not* driven by the scanner's own prompt. That turn hunts for a
+genuine product defect at a deliberately high bar (point at it on screen, it
+materially hurt the user, an engineer would unambiguously agree), defaults to an
+empty list, and drops anything under `MIN_SIGNAL_CONFIDENCE = 0.4`. Findings
+emit at `SIGNAL_WEIGHT = 0.5`, so promotion into a report (`total_weight >= 1.0`)
+needs corroboration — a scanner can't flood the inbox alone.
+
+Consequence: **the `query` is the real differentiator between scanners, not the
+prompt.** The prompt is the core observation task (what a human reads in the
+Replay Vision UI, and the context the model carries into the defect turn) — it
+shapes attention, it doesn't set the signal bar. The skill says so explicitly so
+the agent spends its effort on targeting.
+
+**And it's why scanner queries must not overlap — the load-bearing constraint of
+this step.** Two scanners matching the same session each produce their own
+observation (`source_id = observation:{id}:{index}`, unique per observation, so
+no idempotency dedup) and each run the *same* defect turn over the *same*
+recording, describing the same defect in near-identical words. Grouping matches
+signals **semantically, not by source** (`temporal/grouping.py`), so both land in
+one report: `0.5 + 0.5 = 1.0 = WEIGHT_THRESHOLD` → promoted, research spawned.
+Overlapping scanners **manufacture their own corroboration**, defeating the
+half-weight design. Hence two scanners on deliberately different filter axes, and
+an explicit "widen one, narrow the other" rule in the skill.
+
+### 10.4 Skeletons, not free authoring
+
+**Two** fixed `monitor` skeletons, each locking `scanner_type`, `emits_signals`,
+and the base prompt, and leaving two blanks — `query` and a one-line
+`{{PRODUCT_CONTEXT}}`. Curated perspective, tailored targeting; the same
+locked-vs-filled split step 3b uses for product recipes.
+
+1. **Broken experiences** — scoped to the product's **key completion flow** read
+   out of the repo (not a generic "key pages" list), `sampling_rate: 0.5`.
+2. **User frustration** — `$rageclick`-gated, `sampling_rate: 1.0`.
+
+**Two, not three, and the count is derived — not a budget compromise.** 10.3's
+no-overlap constraint means a third scanner would need a *third* filter axis
+neither of these touches, and typical products don't have one. An earlier draft
+had a separate "Blocked conversion" monitor; its query is a subset of scanner
+1's, so the pair would have double-scanned the same sessions and self-promoted
+single defects into researched reports. Its actual value was never the prompt
+wording (the defect turn is fixed) but the *targeting* — insisting the agent find
+the real completion path — so that folded into scanner 1's `query` instead. The
+two survivors filter on deliberately different axes: **where** the user is (URL)
+vs **what they did** (event).
+
+**Never gate the bug scanners on `$exception`.** That reduces them to sessions
+that already threw a JS error — what error tracking catches anyway — and blinds
+them to vision's actual edge: silent breakage with no exception. Scope by
+*where* it matters plus `sampling_rate`, never by an outcome event. `$rageclick`
+in scanner 2 is the deliberate exception: there the gating event **is** the
+friction rather than a proxy for it.
+
+### 10.5 Quota — a sanity check, not a gate
+
+Enabled scanners sweep on a schedule and burn monthly Replay Vision quota, with
+no check at creation time. The edge case looks scarier than it is: ~99% of
+wizard users are **fresh** (full quota, no scanners), so "will it fit in what's
+left" essentially never bites. The real risk is one too-broad scanner torching a
+fresh month in its first sweeps, and the pre-scoped queries + `sampling_rate < 1`
+handle that. So the step **just creates them**, using
+`vision-scanners-estimate-create` as a check on the agent's *query breadth*.
+`vision-quota-retrieve` + an interactive confirm fire only in the rare case
+where step 1's list already found enabled scanners.
+
+### 10.6 Gating & failure modes
+
+- **`replay-vision` feature flag** — endpoints 404 behind
+  `ReplayVisionEnabledPermission` when off. **Not a blocker in practice:** the
+  flag's first release condition is `properties: [], rollout_percentage: 100`,
+  i.e. everyone. The skill still treats a 404 as a recorded follow-up rather
+  than assuming availability.
+- **Scope pairing** — create/update require **both** `replay_scanner:write` and
+  `session_recording:read` (`ReplayScannerViewSet.dangerously_get_required_scopes`;
+  configuring a scanner indirectly exposes recording contents). The latter is
+  already in `SELF_DRIVING_SCOPE_ADDITIONS` for the step-2 usage probes, so only
+  the `replay_scanner` pair is net-new.
+- **Never aborts.** No recordings yet (scanners are armed and start when
+  recordings begin), backend-only project (skip the URL-scoped ones), no
+  identifiable completion flow (skip scanner 3), missing tool / 404 / 403, or a
+  single failed create — all follow-ups, then step 7.
+
+### 10.7 Don't-trip-up notes
+
+- **`name` is unique per team** — a duplicate create 400s; update the existing
+  row instead.
+- **`scanner_type` is immutable after creation** — a name collision with a
+  different type means leave it alone and record it.
+- **Gemini-only** (`ScannerProvider.GOOGLE`); `gemini-3.6-flash` is the skeleton
+  default.
+- `enabled` defaults to `true` on create, so no explicit flip is needed.
 
 ---
 

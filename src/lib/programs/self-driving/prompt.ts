@@ -58,7 +58,7 @@ export function buildSelfDrivingPrompt(
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings: ${integrationsSettingsUrl}
@@ -93,6 +93,7 @@ tasks, in this order:
   5. Offer issue-tracker integrations
   6. Configure the scout troop
   6b. Design custom scouts
+  6c. Set up Replay Vision scanners
   7. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g.
@@ -200,6 +201,26 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    before creating anything; the user declining everything (or finding
    no gap at all) is a valid outcome, not an abort. Mark the task
    completed either way.
+
+STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
+   Scouts pull; scanners push. A scanner is an LLM that watches individual
+   session recordings on a cadence and, with emits_signals on, pushes what
+   it finds straight into the inbox. Create the skill's scanner skeletons
+   with emits_signals ON, filling in only the two blanks each leaves you:
+   the query (which flows matter in THIS product, from the repo) and the
+   one-line product-context sentence. Never edit the locked fields — the
+   skeleton's scanner_type, emits_signals, and base prompt are the
+   trust-critical bits. Scanner names are unique per team, so update an
+   existing scanner rather than re-creating it, and scanner_type can never
+   be changed after creation. Keep the scanners' queries disjoint — two
+   scanners watching the same sessions report the same defect twice and
+   corroborate each other into the inbox, so if you widen one, narrow the
+   other. Scanners spend Replay Vision quota on a schedule, so keep the
+   skill's pre-scoped queries and sampling rates —
+   widen only with a reason. This step needs Session Replay on (STEP 3b),
+   and every failure here is a follow-up, never an abort: a project with no
+   recordings yet, an org already close to its quota, or a deploy without
+   the scanner API are all valid outcomes to record and move past.
 
 STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
