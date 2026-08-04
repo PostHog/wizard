@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.59.0](https://github.com/PostHog/wizard/compare/v2.58.0...v2.59.0) (2026-08-04)
+
+
+### Features
+
+* add Flutter framework support ([#942](https://github.com/PostHog/wizard/issues/942)) ([8e5537b](https://github.com/PostHog/wizard/commit/8e5537b8387b5b8ee82cf95b58a9d65eddd706fb))
+
+
+### Bug Fixes
+
+* **cli:** register the `skill <skill-name>` positional so strict parsing accepts it ([#1027](https://github.com/PostHog/wizard/issues/1027)) ([adf8de3](https://github.com/PostHog/wizard/commit/adf8de39840fa5a22853153cdc889bbe75602208))
+* **mcp-analytics:** correct abort copy and match the codemod's actual reason ([#1052](https://github.com/PostHog/wizard/issues/1052)) ([781235f](https://github.com/PostHog/wizard/commit/781235fd82551a1eae636556434c4f0250b97a1c))
+* **wizard:** Whack a mole part 10: project-mismatch error accounts for a bogus --project-id ([#1040](https://github.com/PostHog/wizard/issues/1040)) ([fee3778](https://github.com/PostHog/wizard/commit/fee3778f5008b980dd290a91d9801528d6587a27))
+* **wizard:** Whack a mole part 2: passive telemetry for leaked transport tokens in pi file writes ([#1017](https://github.com/PostHog/wizard/issues/1017)) ([af69880](https://github.com/PostHog/wizard/commit/af6988072b80a33269fd729cc353dab2d627969a))
+* **wizard:** Whack a mole part 9: fail the task when its skill cannot install ([#1039](https://github.com/PostHog/wizard/issues/1039)) ([7985e75](https://github.com/PostHog/wizard/commit/7985e759ac205d37a48fc372e28b2abf8a7bef64))
+
 ## [2.58.0](https://github.com/PostHog/wizard/compare/v2.57.0...v2.58.0) (2026-07-31)
 
 
