@@ -33,6 +33,12 @@ import {
 } from '@lib/wizard-tools/tools';
 import type { LLMProvider } from '@posthog/warlock';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  publishHandoff,
+} from '@lib/wizard-tools/handoff';
 import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
 import {
@@ -381,12 +387,33 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
+  // Native mirror of the MCP `publish_handoff` tool (shared description, so no drift).
+  const publishHandoffTool = defineTool({
+    name: PUBLISH_HANDOFF_TOOL_NAME,
+    label: 'Publish handoff',
+    description: PUBLISH_HANDOFF_DESCRIPTION,
+    promptSnippet:
+      'publish_handoff(content) — publish the full report markdown to the wizard session',
+    parameters: Type.Object({
+      content: Type.String({
+        description: PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+      }),
+    }),
+    execute(_id, args) {
+      const result = publishHandoff(args.content);
+      logToFile(`[pi] publish_handoff: ${result.message}`);
+      return Promise.resolve(text(result.message));
+    },
+  });
+
   const tools = [
     loadSkillMenu,
     installSkill,
     checkEnvKeys,
     setEnvValues,
     detectPm,
+    // Sequential: it mutates the store's handoff state.
+    withMode(publishHandoffTool, 'sequential'),
   ];
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.

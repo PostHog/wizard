@@ -22,7 +22,10 @@ import { getUI } from '@ui';
 import { HostResolution } from '@lib/host-resolution';
 import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
-import { provisionNewAccount } from './provisioning';
+import {
+  ProvisionedAccountUnreadableError,
+  provisionNewAccount,
+} from './provisioning';
 import {
   fetchUserData,
   fetchProjectData,
@@ -600,7 +603,9 @@ async function askForWizardLogin(options: {
   );
   if (!resolution.ok) {
     const error = new Error(
-      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested}. Re-run and grant access to project ${resolution.requested} on the authorization screen.`,
+      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested} (from --project-id). ` +
+        `If ${resolution.requested} is not a project you own — a copy-pasted example value, say — re-run without --project-id, or with the id shown in your PostHog project settings. ` +
+        `If it is yours, re-run and grant access to project ${resolution.requested} on the authorization screen.`,
     );
     analytics.captureException(error, {
       step: 'wizard_login',
@@ -702,8 +707,19 @@ async function askForProvisioningSignup(
       projectId: parseInt(result.projectId, 10) || 0,
     };
   } catch (error) {
-    spinner.stop('Account creation failed.');
     const message = error instanceof Error ? error.message : 'Unknown error';
+
+    // The account exists — reporting a failed signup would send the user off to create a
+    // second one on top of the org they already own.
+    if (error instanceof ProvisionedAccountUnreadableError) {
+      spinner.stop('Account created, but the project could not be read back.');
+      getUI().log.warn(message);
+      getUI().log.info('Signing you in to your new account instead...');
+
+      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+    }
+
+    spinner.stop('Account creation failed.');
 
     if (message.includes('already associated')) {
       getUI().log.info(
