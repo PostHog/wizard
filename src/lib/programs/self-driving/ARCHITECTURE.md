@@ -217,10 +217,17 @@ requested via a PKCE auth-code flow:
 | `external_data_source:read`, `external_data_source:write`      | Create/verify warehouse sources (STEP 5).                                                                                   |
 | `llm_skill:read`, `llm_skill:write`                            | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7).                                        |
 
-The prod `OAuthApplication.scopes` ceiling is an **exhaustive allow-list**
-(`posthog/scopes.py`, `scopes_within_ceiling`) — anything outside it is rejected
-at `/authorize`. Several of these additions are **net-new** to that ceiling and
-must be added before any real-team launch; §7 item 1 is the authoritative list.
+The prod `OAuthApplication.scopes` ceiling **uses the `@default` sentinel**
+(`posthog/scopes.py`, `resolve_ceiling`), not an exhaustive literal list. The
+live US value is `@default,llm_gateway:read,wizard_session:read,wizard_session:write`,
+where `@default` resolves to `UNPRIVILEGED_SCOPES` — every public
+(non-privileged, non-internal, non-hidden) `obj:action` scope, auto-tracking new
+ones. **Every addition above is a normal public scope object, so all are already
+inside the ceiling — no per-scope ceiling edit is needed.** Only a
+privileged/internal/hidden object would need a manual per-app edit; the wizard
+requests none. (An *exhaustive* ceiling — no `@default` — is possible and would
+reject anything unlisted, but the wizard apps aren't configured that way.) See §7
+item 1 and the README's "OAuth app scope ceiling".
 
 **Security & TUI.** YARA hooks (`src/lib/yara-hooks.ts`) scan
 Bash/Write/Edit/Read content and installed skills via the `warlock` scanner
@@ -388,24 +395,33 @@ must be running, or no scout ever dispatches.
 
 ## 7. Prod-merge checklist
 
-> [!IMPORTANT] Cross-repo launch actions. The OAuth-ceiling and flag items are
-> **manual config, not deploys** — easiest to forget. Update this list whenever
-> you add/rename a scope, flag, or backend surface.
+> [!IMPORTANT] Cross-repo launch actions. The flag items are **manual config,
+> not deploys** — easiest to forget. Update this list whenever you add/rename a
+> scope, flag, or backend surface.
 
-1. **OAuth scope ceiling (prod-admin DB action).** The prod
-   `OAuthApplication.scopes` allow-list is exhaustive (`posthog/scopes.py`), so
-   add the **ten net-new objects** self-driving needs: `task:read`,
-   `task:write`, `signal_scout:read`, `signal_scout:write`,
-   `external_data_source:read`, `external_data_source:write`, `llm_skill:read`,
-   `llm_skill:write`, `replay_scanner:read`, `replay_scanner:write`. (Its other
-   four additions — `integration:read`, `session_recording:read`, `survey:read`,
-   `error_tracking:read` — are already in the ceiling.) Note `product_enablement:write`
-   is tracked separately in 9.7 and is also still outstanding. **The scope
-   object for step 6c is `replay_scanner`** — `vision-scanners-*` are MCP tool
-   names, not scopes; getting this wrong grants nothing and the step 403s. Edit
-   the US prod client
-   `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, and the dev client
-   `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` on `localhost:8010`.
+1. **OAuth scope ceiling — NO ACTION NEEDED for self-driving's scopes.** The live
+   wizard apps' `OAuthApplication.scopes` use the `@default` sentinel
+   (`posthog/scopes.py`, `resolve_ceiling`) — US prod is
+   `@default,llm_gateway:read,wizard_session:read,wizard_session:write`.
+   `@default` resolves to `UNPRIVILEGED_SCOPES`, i.e. every public
+   (non-privileged, non-internal, non-hidden) scope, and auto-tracks new ones.
+   **All of self-driving's additions — `task:*`, `signal_scout:*`,
+   `external_data_source:*`, `llm_skill:*`, `product_enablement:write`,
+   `replay_scanner:*`, and the read-only probes — are normal public objects, so
+   they are already inside the ceiling.** Verify before launch rather than
+   assuming:
+   `python manage.py seed_oauth_app_scopes --client-id <id> --scopes @default,llm_gateway:read,wizard_session:read,wizard_session:write --dry-run`
+   (posthog), or evaluate the requested set against `resolve_ceiling`.
+   A ceiling edit is required **only** if a future addition is a
+   privileged/internal/hidden object (e.g. `llm_gateway:*`), which `@default`
+   excludes by design. **One naming trap for step 6c:** the scope object is
+   `replay_scanner` — `vision-scanners-*` are MCP tool names, not scopes;
+   request the tool name and nothing is granted, so the step 403s. Client IDs
+   (for reference, not for editing): US prod
+   `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, dev
+   `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` (`localhost:8010`), and the prod EU
+   app in the EU deployment (via `WIZARD_CLOUD_RUN_OAUTH_CLIENT_ID`) — each
+   should carry the same `@default,…` value.
 2. **context-mill skill release.** Merge `self-driving-setup` to `main` with the
    `mcp-publish` label so the `latest` release contains the skill ZIP — else the
    prod wizard can't fetch it. **Sequencing for the STEP 7 `description`
@@ -596,8 +612,10 @@ must be running, or no scout ever dispatches.
 >     **before** sources are enabled, via an intent-based `products-enable` MCP
 >     tool (one narrow `product_enablement:write` scope, server-owned recipes)
 >     instead of `project:write`; Support is flag-on + a report CTA. Full
->     design, decisions, and status in **§9**. The only outstanding piece is the
->     manual OAuth-ceiling edit (9.7).
+>     design, decisions, and status in **§9**. (An earlier draft flagged a
+>     manual OAuth-ceiling edit as outstanding — that was based on a stale reading
+>     of the ceiling; `product_enablement` is inside `@default`, so there is no
+>     such step. See §7 item 1.)
 
 ---
 
@@ -664,9 +682,11 @@ self-driving state and leave the products as they are.
 
 ## 9. Proactive product enablement (replay / error tracking / support)
 
-> [!IMPORTANT] > **IMPLEMENTED** (step 3b above), with **one manual step
-> outstanding**: the `product_enablement:write` OAuth-ceiling edit on both
-> regions (9.7) — until it lands the wizard can't be granted the scope. A new
+> [!IMPORTANT] > **IMPLEMENTED** (step 3b above), **no manual prod step
+> outstanding**: `product_enablement` is a normal public scope object, so
+> `product_enablement:write` is already inside the wizard apps' `@default`
+> ceiling — no OAuth-ceiling edit (§7 item 1; an earlier draft wrongly flagged
+> one). A new
 > step turns PostHog products ON (so the signal sources have data to read)
 > **before** sources are enabled. Spans **wizard + posthog + context-mill**.
 > Code anchors: posthog `products/signals/backend/product_enablement.py` (+
@@ -856,11 +876,11 @@ repo), so it's a context-mill skill change, not platform work:
   `pnpm --filter=@posthog/mcp generate-tools`. Run in posthog CI, not by hand
   (the spec must be rebuilt from the new endpoint first; the committed
   `openapi.json` is stale until then).
-- **OAuth ceiling — MANUAL, OUTSTANDING (both regions):** add
-  `product_enablement:write` to the wizard OAuth app `OAuthApplication.scopes` —
-  US prod client `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM` + dev
-  `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ`. Until done, the consent server
-  rejects the grant. (Mechanics: §7 item 1.)
+- **OAuth ceiling — NO ACTION.** `product_enablement:write` is inside the
+  `@default` ceiling the wizard apps use, so the consent server grants it with no
+  edit. (An earlier revision of this line claimed a manual edit was outstanding;
+  that was a misreading of the ceiling — see §7 item 1 for the `@default`
+  mechanics and how to verify.)
 - **wizard — DONE.** `product_enablement:write` in
   `SELF_DRIVING_SCOPE_ADDITIONS` (`program-scopes.ts`); STEP 3b "Enable
   products" in `prompt.ts` (label mirrors the skill's `3b-enable-products.md`; +
@@ -890,18 +910,23 @@ repo), so it's a context-mill skill change, not platform work:
   off deliberately** (the flag default `False` can't distinguish "never set"
   from "off on purpose") — accepted under "enable everyone."
 - Refund operational process (no consent, no cap).
-- **MCP codegen + OAuth ceiling** are the only steps not in this repo's diff
-  (build + manual prod edit; see 9.7).
+- **MCP codegen** is the only step not in this repo's diff (posthog CI build;
+  see 9.7). No OAuth-ceiling edit is required — the scope is inside `@default`
+  (§7 item 1).
 
 ---
 
 ## 10. Replay Vision scanners (step 6c)
 
-> [!IMPORTANT] > **IMPLEMENTED** (step 6c), with **one manual step
-> outstanding**: the `replay_scanner:read` / `replay_scanner:write`
-> OAuth-ceiling edit on both regions (§7.1) — until it lands the wizard can't be
-> granted the scope and the step 403s. Spans **wizard + context-mill only**; the
-> posthog side was already done. Code anchors: posthog
+> [!IMPORTANT] > **IMPLEMENTED** (step 6c), **no manual prod step outstanding**.
+> `replay_scanner` is a normal public scope object, so `replay_scanner:read` /
+> `replay_scanner:write` are already inside the wizard apps' `@default` ceiling —
+> no OAuth-ceiling edit (see §7 item 1). Spans **wizard + context-mill only**;
+> the posthog side was already done. Sequencing that does matter: land the wizard
+> npm release (the requested scope + the STEP) **before** the context-mill
+> `mcp-publish`, or the agent reads step 6c and 403s because its token predates
+> the scope — a reconnect, not a ceiling edit, is the fix there. Code anchors:
+> posthog
 > `products/replay_vision/backend/models/replay_scanner.py`,
 > `api/scanners.py`, `temporal/activities/emit_observation_signal.py`,
 > `temporal/scanners/prompts/signals_step.jinja`; wizard `program-scopes.ts` +
@@ -1009,13 +1034,16 @@ where step 1's list already found enabled scanners.
   than assuming availability.
 - **Scope pairing** — create/update require **both** `replay_scanner:write` and
   `session_recording:read` (`ReplayScannerViewSet.dangerously_get_required_scopes`;
-  configuring a scanner indirectly exposes recording contents). The latter is
-  already in `SELF_DRIVING_SCOPE_ADDITIONS` for the step-2 usage probes, so only
-  the `replay_scanner` pair is net-new.
+  configuring a scanner indirectly exposes recording contents). Both are in
+  `SELF_DRIVING_SCOPE_ADDITIONS` (`session_recording:read` was already there for
+  the step-2 usage probes), and both are inside the `@default` ceiling — so no
+  OAuth-ceiling edit (see §7 item 1). The `replay_scanner` pair is the only part
+  net-new to the *requested* set.
 - **Never aborts.** No recordings yet (scanners are armed and start when
-  recordings begin), backend-only project (skip the URL-scoped ones), no
-  identifiable completion flow (skip scanner 3), missing tool / 404 / 403, or a
-  single failed create — all follow-ups, then step 7.
+  recordings begin), backend-only project (skip the URL-scoped Broken
+  experiences scanner, keep User frustration if there are web sessions), no
+  identifiable completion flow (fall back to top-traffic paths), missing tool /
+  404 / 403, or a single failed create — all follow-ups, then step 7.
 
 ### 10.7 Don't-trip-up notes
 

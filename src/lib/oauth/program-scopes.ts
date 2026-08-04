@@ -155,9 +155,7 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     Session Replay / Error Tracking / Support so their sources have
  *     data to read (`products-enable`). A purpose-built scope: the
  *     server owns each enable recipe, so this can flip the product
- *     toggles without the far broader `project:write`. NOTE: net-new —
- *     must be added to the wizard OAuth app's scope ceiling on the
- *     PostHog side before it can be granted (see README / ARCHITECTURE §9).
+ *     toggles without the far broader `project:write`.
  *   • replay_scanner:read / replay_scanner:write — the Replay Vision
  *     scanners step (skill step 6c) lists the team's existing scanners
  *     and creates the `emits_signals` ones whose findings land in the
@@ -167,9 +165,14 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     names are MCP tool names, not scopes. Configuring a scanner also
  *     requires `session_recording:read` (the API pairs the two, since a
  *     scanner's config indirectly exposes recording contents); that one
- *     is already in this list for the step-2 usage probes. NOTE: net-new
- *     — needs the same OAuth-ceiling edit as `product_enablement:write`
- *     (see README / ARCHITECTURE §10).
+ *     is already in this list for the step-2 usage probes.
+ *
+ * No OAuth-ceiling edit is needed for any scope here: they are all normal
+ * public (unprivileged, non-internal, non-hidden) scope objects, and the
+ * live wizard apps' ceiling is the `@default` sentinel, which resolves to
+ * every such scope (`UNPRIVILEGED_SCOPES`) and auto-tracks new ones. Only a
+ * privileged/internal/hidden object (e.g. `llm_gateway:*`) would need a
+ * manual per-app edit. See README → "OAuth app scope ceiling".
  */
 export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'task:read',
