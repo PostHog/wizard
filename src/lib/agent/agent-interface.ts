@@ -180,12 +180,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
-  /**
-   * Script the SDK re-runs to get a currently-valid gateway token, from
-   * `rotating-credential.ts`. Set when the OAuth grant issued a refresh token;
-   * absent (CI runs on a non-expiring personal API key) keeps `posthogApiKey`
-   * fixed for the run.
-   */
+  /** Absent (CI, on a non-expiring key) keeps `posthogApiKey` fixed for the run. */
   apiKeyHelperPath?: string;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
@@ -304,11 +299,7 @@ type AgentRunConfig = {
   model: string;
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
-  /**
-   * Script the SDK re-runs to get a currently-valid gateway token. Set when the
-   * run has a refresh token; when set it replaces the fixed `ANTHROPIC_AUTH_TOKEN`
-   * in the subprocess env rather than sitting alongside it.
-   */
+  /** See {@link AgentConfig.apiKeyHelperPath}. */
   apiKeyHelperPath?: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
@@ -992,8 +983,7 @@ export async function runAgent(
           // process.env for in-process readers; the strip above removed them
           // from the inherited copy, so re-add the wizard's own values here).
           ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          // With a rotating credential the helper is the single source of the
-          // token; leaving these set would pin the spawn-time value alongside it.
+          // Leaving these set alongside the helper would pin the spawn-time value.
           ANTHROPIC_AUTH_TOKEN: agentConfig.apiKeyHelperPath
             ? undefined
             : process.env.ANTHROPIC_AUTH_TOKEN,

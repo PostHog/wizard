@@ -4,9 +4,6 @@ import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { createRotatingCredential } from '@lib/agent/rotating-credential';
 
-// The helper runs as its own process, so the only way to exercise it is to run
-// it. Two cases cover the whole contract: hand back what we have while it's
-// good, swap it when it isn't.
 describe('rotating gateway credential', () => {
   let server: Server;
   let tokenUrl: string;
@@ -64,8 +61,7 @@ describe('rotating gateway credential', () => {
       },
     ]);
 
-    // Reusing the spent refresh token would revoke the whole session, so the
-    // rotated one has to land on disk for the next invocation.
+    // Reusing a spent refresh token revokes the whole session.
     const state = JSON.parse(readFileSync(statePathFor(helperPath), 'utf8'));
     expect(state.refreshToken).toBe('refresh_rotated');
     expect(await run(helperPath)).toBe('pha_rotated');

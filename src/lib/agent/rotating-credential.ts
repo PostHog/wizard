@@ -1,21 +1,11 @@
 /**
  * A gateway credential the running agent can pick up fresh.
  *
- * Wizard access tokens live one hour (the OAuth app isn't first-party or
- * dynamically registered, so it gets the strict default TTL). The agent runs as
- * one long-lived subprocess whose env is fixed at spawn, so a token injected via
- * `ANTHROPIC_AUTH_TOKEN` can't be replaced once it goes stale — any run past the
- * hour dies on a 401. A `wizard_ask` that nobody answers makes that easy to hit:
- * the agent sits idle through its own token's expiry and only finds out when it
- * resumes.
- *
- * So instead of a fixed token we hand the SDK `settings.apiKeyHelper`, a script
- * it re-runs on its own cadence. The script refreshes when the token is nearly
- * out and prints whatever is currently valid, which keeps the access-token
- * window at an hour rather than widening it.
- *
- * Everything lives in a private temp dir the caller removes at exit. The refresh
- * token is a real credential, hence 0600 and a directory only the user can enter.
+ * Wizard access tokens live one hour, and the agent subprocess has its env fixed
+ * at spawn, so a token injected via `ANTHROPIC_AUTH_TOKEN` can never be replaced
+ * and any run past the hour dies on a 401. Handing the SDK a re-runnable
+ * `settings.apiKeyHelper` instead keeps the access-token window at an hour
+ * rather than widening it.
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,17 +22,12 @@ export interface RotatingCredentialInput {
   clientId: string;
 }
 
-/**
- * How long the SDK may cache one helper result, as
- * `CLAUDE_CODE_API_KEY_HELPER_TTL_MS`.
- */
+/** Set as `CLAUDE_CODE_API_KEY_HELPER_TTL_MS`. */
 export const HELPER_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Refresh once the token has less than this left. Must stay comfortably wider
- * than {@link HELPER_CACHE_TTL_MS}: a result cached for the full window has to
- * still be valid when the window ends, so the gap between the two is the real
- * safety margin.
+ * Must stay wider than {@link HELPER_CACHE_TTL_MS}, because a result cached for
+ * the full window has to still be valid when that window ends.
  */
 const REFRESH_SKEW_MS = 15 * 60 * 1000;
 
@@ -50,13 +35,9 @@ const REFRESH_SKEW_MS = 15 * 60 * 1000;
 const LOCK_STALE_MS = 30 * 1000;
 
 /**
- * Runs as its own process, so it gets no bundler and no dependencies — Node
- * built-ins and global `fetch` only. Reads its state file as a sibling rather
- * than an argument, because a shebang can't portably pass one.
- *
- * The lock matters more than it looks: PostHog rotates refresh tokens and
- * enforces reuse protection, so two concurrent refreshes with the same token
- * revoke every token in the session.
+ * Runs as its own process, so no bundler and no dependencies: Node built-ins and
+ * global `fetch` only. It locates its state file as a sibling because a shebang
+ * cannot portably pass an argument.
  */
 const helperSource = (): string => `#!${process.execPath}
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -70,7 +51,8 @@ const LOCK_STALE_MS = ${LOCK_STALE_MS};
 const readState = () => JSON.parse(readFileSync(statePath, 'utf8'));
 const isHealthy = (state) => state.expiresAt - Date.now() > REFRESH_SKEW_MS;
 
-/** Take the lock, or report that someone else holds it. Steals an orphan. */
+// PostHog rotates refresh tokens with reuse protection on, so two concurrent
+// refreshes using the same token revoke every token in the session.
 function tryLock() {
   try {
     mkdirSync(lockPath);
@@ -84,8 +66,6 @@ function tryLock() {
     mkdirSync(lockPath);
     return true;
   } catch {
-    // Lost a race to steal it, or the holder released it first. Either way
-    // someone else is on it.
     return false;
   }
 }
@@ -109,8 +89,8 @@ async function fetchNewToken(state) {
     refreshToken: body.refresh_token ?? state.refreshToken,
     expiresAt: Date.now() + body.expires_in * 1000,
   };
-  // Rename so a reader never sees a half-written file, and so the rotated
-  // refresh token is durable before we hand out the access token it came with.
+  // Rename so the rotated refresh token is durable before we hand out the access
+  // token it came with, and so no reader sees a half-written file.
   const tmpPath = statePath + '.tmp';
   writeFileSync(tmpPath, JSON.stringify(next), { mode: 0o600 });
   renameSync(tmpPath, statePath);
@@ -120,16 +100,14 @@ async function fetchNewToken(state) {
 const state = readState();
 let token = state.accessToken;
 
-// Only contend for the lock when a refresh is actually due — the common case is
-// a healthy token and a plain read.
 if (!isHealthy(state) && tryLock()) {
   try {
-    // Re-read: whoever held the lock before us may have already refreshed.
+    // Whoever held the lock before us may have already refreshed.
     const current = readState();
     token = isHealthy(current) ? current.accessToken : await fetchNewToken(current);
   } catch (err) {
-    // Fall back to what we have. If it really is expired the agent gets the same
-    // 401 it would have got without any of this, so don't make it worse.
+    // Falling back to the token we have yields the same 401 the agent would have
+    // hit without any of this, so a failed refresh never makes things worse.
     process.stderr.write('[posthog-wizard] token refresh failed: ' + err.message + '\\n');
   } finally {
     rmSync(lockPath, { recursive: true, force: true });
@@ -139,19 +117,18 @@ if (!isHealthy(state) && tryLock()) {
 process.stdout.write(token);
 `;
 
-/** Writes the helper and its state, returning the path to run. */
 export function createRotatingCredential(
   input: RotatingCredentialInput,
 ): string {
-  // mkdtemp already creates the directory 0700.
+  // mkdtemp creates the directory 0700, which the refresh token inside needs.
   const dir = mkdtempSync(path.join(tmpdir(), 'posthog-wizard-auth-'));
   const helperPath = path.join(dir, 'helper.mjs');
 
   writeFileSync(path.join(dir, 'state.json'), JSON.stringify(input), {
     mode: 0o600,
   });
-  // Executable, and pinned to the Node already running us rather than to
-  // whatever PATH the SDK resolves the helper against.
+  // Pinned to the Node already running us, because the SDK resolves the helper
+  // against a PATH that may not have one.
   writeFileSync(helperPath, helperSource(), { mode: 0o700 });
 
   registerCleanup(() => rmSync(dir, { recursive: true, force: true }));
@@ -159,11 +136,9 @@ export function createRotatingCredential(
 }
 
 /**
- * One per process, because every caller shares the invocation's single OAuth
- * session. Two credentials would mean two state files holding the same refresh
- * token, and the lock only serializes within a file — parallel orchestrator
- * tasks would then refresh concurrently and reuse protection would revoke the
- * whole session.
+ * One per process, because the lock above only serializes within a single state
+ * file. Two credentials would mean two files holding the same refresh token, so
+ * parallel orchestrator tasks could refresh concurrently.
  */
 let shared: string | undefined;
 

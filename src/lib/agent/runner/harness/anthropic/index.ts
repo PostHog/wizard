@@ -32,11 +32,7 @@ import type {
   TaskRunInputs,
 } from '../types';
 
-/**
- * A run can outlive its one-hour access token, and the agent subprocess can't be
- * handed a new one after spawn — so give the SDK a helper it can re-run. Only
- * possible when the grant issued a refresh token; CI keys don't expire.
- */
+/** Undefined without a refresh token, which is the CI case (keys don't expire). */
 function rotatingCredentialFor(session: WizardSession): string | undefined {
   const { refreshToken, expiresAt } = session.credentials ?? {};
   if (!refreshToken || !expiresAt) return undefined;
