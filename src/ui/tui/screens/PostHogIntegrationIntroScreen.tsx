@@ -13,13 +13,14 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
+import { getSubcommandPrograms } from '@lib/programs/program-registry';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { analytics } from '@utils/analytics';
 
-type View = 'default' | 'more-info' | 'privacy';
+type View = 'default' | 'more-info' | 'privacy' | 'commands';
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -161,6 +162,27 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
+  } else if (view === 'commands') {
+    body = (
+      <Box flexDirection="column" width={64} flexShrink={0}>
+        <Text>The wizard can do more than integrate with your project:</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {getSubcommandPrograms().map((program) => (
+            <Box key={program.command}>
+              <Box width={22} flexShrink={0}>
+                <Text color="cyan">{program.command}</Text>
+              </Box>
+              <Text dimColor>{program.description}</Text>
+            </Box>
+          ))}
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Run any of these later: npx @posthog/wizard {'<command>'}
+          </Text>
+        </Box>
+      </Box>
+    );
   } else if (view === 'privacy') {
     body = <PrivacyPanel />;
   } else if (showContinue) {
@@ -246,7 +268,7 @@ export const PostHogIntegrationIntroScreen = ({
       { label: 'Back', value: 'back' },
       { label: 'Privacy & data usage', value: 'privacy' },
     ];
-  } else if (view === 'privacy') {
+  } else if (view === 'privacy' || view === 'commands') {
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
     const continueLabel = session.posthogSdkDetected
@@ -256,6 +278,9 @@ export const PostHogIntegrationIntroScreen = ({
       { label: continueLabel, value: 'continue' },
       { label: 'Change framework', value: 'framework' },
       { label: 'More info', value: 'more-info' },
+      ...(session.posthogSdkDetected
+        ? [{ label: 'Other wizard tricks', value: 'commands' }]
+        : []),
       { label: 'Cancel', value: 'cancel' },
     ];
   }
@@ -269,6 +294,8 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
+    } else if (value === 'commands') {
+      setView('commands');
     } else if (value === 'privacy') {
       setView('privacy');
     } else if (value === 'back') {
