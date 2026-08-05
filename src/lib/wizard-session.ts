@@ -222,6 +222,9 @@ export interface WizardSession {
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
 
+  /** A PostHog SDK appears in a project manifest (set by detect). Dependency-level signal, not a verified install */
+  posthogSdkDetected: boolean;
+
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
 
@@ -405,6 +408,7 @@ export function buildSession(args: {
     frameworkContext: {},
     typescript: false,
     detectedFrameworkLabel: null,
+    posthogSdkDetected: false,
     detectionComplete: false,
     unsupportedVersion: null,
 
