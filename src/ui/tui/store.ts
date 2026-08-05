@@ -301,6 +301,7 @@ export class WizardStore {
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
@@ -481,6 +482,11 @@ export class WizardStore {
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
     analytics.setTag('detected_framework', label);
+    this.emitChange();
+  }
+
+  setPosthogSdkDetected(detected: boolean): void {
+    this.$session.setKey('posthogSdkDetected', detected);
     this.emitChange();
   }
 
