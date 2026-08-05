@@ -190,6 +190,13 @@ export const PostHogIntegrationIntroScreen = ({
     });
   }
 
+  if (session.posthogSdkDetected) {
+    detectionRows.push({
+      label: 'PostHog',
+      value: 'detected in package.json',
+    });
+  }
+
   // ── Children (between rows and menu) ───────────────────────────────
 
   let bodyChildren: ReactNode = null;
@@ -242,8 +249,11 @@ export const PostHogIntegrationIntroScreen = ({
   } else if (view === 'privacy') {
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
+    const continueLabel = session.posthogSdkDetected
+      ? 'Continue anyway'
+      : 'Continue';
     menuOptions = [
-      { label: 'Continue', value: 'continue' },
+      { label: continueLabel, value: 'continue' },
       { label: 'Change framework', value: 'framework' },
       { label: 'More info', value: 'more-info' },
       { label: 'Cancel', value: 'cancel' },
