@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.60.0](https://github.com/PostHog/wizard/compare/v2.59.0...v2.60.0) (2026-08-06)
+
+
+### Features
+
+* **audit:** seed a Live Data sweep into the comprehensive audit ([#1061](https://github.com/PostHog/wizard/issues/1061)) ([00ae80a](https://github.com/PostHog/wizard/commit/00ae80a9898909cdce1ff45964fcaedaa836dd90))
+* **self-driving:** Replay Vision scanners step ([#1055](https://github.com/PostHog/wizard/issues/1055)) ([bb61dda](https://github.com/PostHog/wizard/commit/bb61ddae84ca60d78f29398b51bd2d494349b512))
+
 ## [2.59.0](https://github.com/PostHog/wizard/compare/v2.58.0...v2.59.0) (2026-08-04)
 
 
