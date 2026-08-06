@@ -11,6 +11,7 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useMemo, useState } from 'react';
+import { buildPickerIndex, rankOptions } from './picker-filter.js';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
 import { ConfirmButton } from './ConfirmButton.js';
@@ -202,18 +203,6 @@ interface PickerMenuProps<T> {
  *  where a filter row costs more rows than it saves. */
 const FILTER_MIN_OPTIONS = 10;
 
-function matchesFilter<T>(option: PickerOption<T>, query: string): boolean {
-  const haystack = `${option.label} ${option.hint ?? ''} ${
-    option.description ?? ''
-  }`.toLowerCase();
-  // Every whitespace-separated term must appear, so "git iss" finds "GitHub issue".
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((term) => haystack.includes(term));
-}
-
 export const PickerMenu = <T,>({
   message,
   options,
@@ -226,12 +215,13 @@ export const PickerMenu = <T,>({
 }: PickerMenuProps<T>) => {
   const canFilter = filterable ?? options.length >= FILTER_MIN_OPTIONS;
   const [filter, setFilter] = useState('');
+  const fuse = useMemo(
+    () => (canFilter ? buildPickerIndex(options) : null),
+    [options, canFilter],
+  );
   const visible = useMemo(
-    () =>
-      canFilter && filter
-        ? options.filter((option) => matchesFilter(option, filter))
-        : options,
-    [options, filter, canFilter],
+    () => (fuse ? rankOptions(fuse, options, filter) ?? options : options),
+    [fuse, options, filter],
   );
 
   // Keyed by label, and owned here rather than by MultiPickerMenu: filtering
