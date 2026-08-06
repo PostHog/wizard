@@ -30,6 +30,8 @@ export interface FileWatcherOptions {
   ignoreInitialFile?: boolean;
   /** Refuse to read files larger than this many bytes. */
   maxFileSizeBytes?: number;
+  /** Called (deduplicated per error) when the file can't be read as JSON. */
+  onReadError?: (message: string) => void;
 }
 
 /** Watch `path` for JSON updates and call `onUpdate(parsed)` whenever the
@@ -73,6 +75,7 @@ export function startFileWatcher(
     if (lastReadErrorSignature === errorSignature) return;
     lastReadErrorSignature = errorSignature;
     logToFile(`[file-watcher] ${message}: ${path}`);
+    options.onReadError?.(`${message}: ${path}`);
   };
 
   const read = (force = false) => {

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { join } from 'node:path';
+import { resolve } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -35,8 +35,15 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   );
 
   // Mirror the agent's audit ledger into the store.
-  useFileWatcher(join(store.session.installDir, AUDIT_CHECKS_FILE), (parsed) =>
-    store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
+  const ledgerPath = resolve(store.session.installDir, AUDIT_CHECKS_FILE);
+  useFileWatcher(
+    ledgerPath,
+    (parsed) =>
+      store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
+    {
+      onReadError: (message) =>
+        store.pushStatus(`Audit checklist file unreadable — ${message}`),
+    },
   );
 
   const statuses =
@@ -48,7 +55,9 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     getProgramConfig(store.router.activeProgram).reportFile ??
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
-  const pendingChecksList = <PendingChecksList checks={checks} />;
+  const pendingChecksList = (
+    <PendingChecksList checks={checks} ledgerPath={ledgerPath} />
+  );
   const slides = getAreaSlides(store.session.skillId);
   const areaPane = (
     <AuditAreaPane
