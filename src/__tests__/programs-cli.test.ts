@@ -26,6 +26,7 @@ import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { selfDrivingCommand } from '../commands/self-driving';
 import {
+  buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
 } from '@lib/programs/dispatch-family';
@@ -33,6 +34,7 @@ import type { Command } from '../commands/command';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { auditConfig } from '@lib/programs/audit/index';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
+import { featureFlagsDoctorConfig } from '@lib/programs/feature-flags-doctor/index';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
 const mockFetchSkillMenu = fetchSkillMenu as MockedFunction<
@@ -142,6 +144,37 @@ describe('dispatchFamily', () => {
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
     expect(config.id).toBe(webAnalyticsDoctorConfig.id);
+  });
+
+  test('runs the wizard-native handler for `audit feature-flags`, shadowing the published skill entry', async () => {
+    // context-mill still publishes a cliEntry for `audit feature-flags`;
+    // the native handler must win without any network fetch.
+    await dispatchFamily('audit', makeArgv({ skill: 'feature-flags' }));
+    expect(mockFetchSkillMenu).not.toHaveBeenCalled();
+    expect(mockRunWizard).toHaveBeenCalledTimes(1);
+    const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
+    expect(config.id).toBe(featureFlagsDoctorConfig.id);
+  });
+
+  test('picker de-dupes a native handler that shadows a published cliEntry', () => {
+    const children = buildFamilyPickerChildren('audit', [
+      entry({
+        skillId: 'audit-feature-flags',
+        command: 'feature-flags',
+        parentCommand: 'audit',
+      }),
+      entry({
+        skillId: 'audit-events',
+        command: 'events',
+        parentCommand: 'audit',
+      }),
+    ]);
+    const names = children.map((c) => c.name);
+    expect(names.filter((n) => n === 'feature-flags')).toHaveLength(1);
+    expect(names).toContain('events');
+    // the surviving feature-flags child is the native program, not the skill
+    const ff = children.find((c) => c.name === 'feature-flags')!;
+    expect(ff.description).toBe(featureFlagsDoctorConfig.description);
   });
 
   test('the comprehensive `audit all` runs the specialized auditConfig, not agent-skill', async () => {

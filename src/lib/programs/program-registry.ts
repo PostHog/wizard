@@ -19,6 +19,7 @@ import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
+import { featureFlagsDoctorConfig } from './feature-flags-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
@@ -72,6 +73,7 @@ export const PROGRAM_REGISTRY = [
   eventsAuditConfig,
   posthogDoctorConfig,
   webAnalyticsDoctorConfig,
+  featureFlagsDoctorConfig,
   migrationConfig,
   selfDrivingConfig,
   agentSkillConfig,
@@ -98,6 +100,7 @@ export const Program = {
   EventsAudit: eventsAuditConfig.id,
   PosthogDoctor: posthogDoctorConfig.id,
   WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
+  FeatureFlagsDoctor: featureFlagsDoctorConfig.id,
   SelfDriving: selfDrivingConfig.id,
   AgentSkill: agentSkillConfig.id,
   McpAdd: mcpAddConfig.id,
