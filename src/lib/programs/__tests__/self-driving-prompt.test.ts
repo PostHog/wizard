@@ -67,21 +67,37 @@ describe('buildSelfDrivingPrompt', () => {
 });
 
 describe('STEP 6c — Replay Vision scanners', () => {
-  it('keeps the trust-critical bits and the never-abort contract', () => {
+  // The prompt owns order + mechanics; the HOW (skeletons, the disjoint-query
+  // rule, quota) lives in the context-mill skill so it can change without a
+  // wizard release. These assertions cover the wizard's contract, not the
+  // scanner content — restating skill mechanics here is the drift to avoid.
+  const step6c = (): string => {
     const prompt = buildSelfDrivingPrompt(ctx);
-    // Scope to STEP 6c's text and ignore incidental wrapping.
-    const step6c = prompt
+    return prompt
       .slice(prompt.indexOf('STEP 6c —'), prompt.indexOf('STEP 7 —'))
       .replace(/\s+/g, ' ');
-    // emits_signals is the entire mechanism — without it the scanners run but
-    // nothing reaches the inbox, which is the whole point of the step.
-    expect(step6c).toContain('emits_signals ON');
-    // The skeletons' locked fields must not be rewritten by the agent.
-    expect(step6c).toContain('locked fields');
-    // Scanners spend Replay Vision quota, unlike anything else in the run.
-    expect(step6c).toContain('quota');
-    // Every failure here is a follow-up — this step must never end the run.
-    expect(step6c).toContain('never an abort');
+  };
+
+  it('defers the HOW to the skill', () => {
+    expect(step6c()).toContain('(skill: "Replay Vision scanners")');
+  });
+
+  it('states the never-abort posture (a wizard-owned contract)', () => {
+    expect(step6c()).toContain('never an abort');
+  });
+
+  it('names the STEP 3b (Session Replay) dependency', () => {
+    // Cross-step ordering is the wizard's to own, not the skill's.
+    expect(step6c()).toContain('STEP 3b');
+  });
+
+  it('does not restate the skill-owned scanner mechanics', () => {
+    // Guards against re-drift: these are the skill's to specify and tune.
+    const body = step6c();
+    expect(body).not.toContain('sampling_rate');
+    expect(body).not.toContain('scanner_type');
+    expect(body).not.toContain('emits_signals');
+    expect(body).not.toContain('quota');
   });
 });
 

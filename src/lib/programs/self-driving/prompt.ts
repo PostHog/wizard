@@ -203,24 +203,11 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    completed either way.
 
 STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
-   Scouts pull; scanners push. A scanner is an LLM that watches individual
-   session recordings on a cadence and, with emits_signals on, pushes what
-   it finds straight into the inbox. Create the skill's scanner skeletons
-   with emits_signals ON, filling in only the two blanks each leaves you:
-   the query (which flows matter in THIS product, from the repo) and the
-   one-line product-context sentence. Never edit the locked fields — the
-   skeleton's scanner_type, emits_signals, and base prompt are the
-   trust-critical bits. Scanner names are unique per team, so update an
-   existing scanner rather than re-creating it, and scanner_type can never
-   be changed after creation. Keep the scanners' queries disjoint — two
-   scanners watching the same sessions report the same defect twice and
-   corroborate each other into the inbox, so if you widen one, narrow the
-   other. Scanners spend Replay Vision quota on a schedule, so keep the
-   skill's pre-scoped queries and sampling rates —
-   widen only with a reason. This step needs Session Replay on (STEP 3b),
-   and every failure here is a follow-up, never an abort: a project with no
-   recordings yet, an org already close to its quota, or a deploy without
-   the scanner API are all valid outcomes to record and move past.
+   Create the scanner skeletons the skill defines, filling the per-product
+   blanks it leaves you from this repo's code. Scanners need Session Replay
+   on (STEP 3b). Every failure here — no recordings yet, a backend-only
+   project, the scanner API missing — is a follow-up, never an abort; mark
+   the task completed regardless.
 
 STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
