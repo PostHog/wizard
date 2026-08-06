@@ -12,11 +12,13 @@ import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { runtimeEnv } from '@env';
+import type { AioCapture } from '@lib/agent/aio-capture';
 import {
+  Harness,
+  Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
@@ -26,7 +28,7 @@ import {
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
-import { LINTING_TOOLS } from '@lib/safe-tools';
+import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
@@ -34,7 +36,8 @@ import {
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
-import { getWizardCommandments } from './commandments';
+import type { LLMProvider } from '@posthog/warlock';
+import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
@@ -212,6 +215,12 @@ export type AgentConfig = {
    * tools register.
    */
   orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
+  /**
+   * Optional AIO capture — mirrors each assistant SDK message into the
+   * authenticated project as `$ai_generation`. No-op instance when
+   * `--capture-aio` is off. Constructed once per run by the harness.
+   */
+  capture?: AioCapture;
 };
 
 /**
@@ -285,6 +294,8 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  /** The run's OAuth access token — the MCP config resolves it in the child. */
+  posthogApiKey: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -298,6 +309,21 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * The orchestrator owns the TUI task panel (it renders its queue), so its
+   * runs suppress the agent's own TaskCreate/TaskUpdate rendering. Set from
+   * the run's queue context, never from the raw flag — the flag being on must
+   * not touch other programs' linear runs.
+   */
+  suppressTaskRender?: boolean;
+  /** AIO capture, forwarded from AgentConfig. Undefined when disabled. */
+  capture?: AioCapture;
+  /** Scan-triage classifier, built from this run's gateway auth. */
+  triageProvider: LLMProvider;
+  /** Program id, for the program-axis commandments. */
+  program?: string;
+  /** Resolved sequence, for the sequence-axis commandments. */
+  sequence: Sequence;
 };
 
 /**
@@ -363,92 +389,13 @@ export function buildAgentEnv(
   return encoded;
 }
 
-/**
- * Package managers that can be used to run commands.
- */
-const PACKAGE_MANAGERS = [
-  // JavaScript
-  'npm',
-  'pnpm',
-  'yarn',
-  'bun',
-  'npx',
-  // Python
-  'pip',
-  'pip3',
-  'poetry',
-  'pipenv',
-  'uv',
-];
-
-/**
- * Safe scripts/commands that can be run with any package manager.
- * Uses startsWith matching, so 'build' matches 'build', 'build:prod', etc.
- * Note: Linting tools are in LINTING_TOOLS and checked separately.
- */
-const SAFE_SCRIPTS = [
-  // Package installation
-  'install',
-  'add',
-  'ci',
-  // Build
-  'build',
-  // Type checking (various naming conventions)
-  'tsc',
-  'typecheck',
-  'type-check',
-  'check-types',
-  'types',
-  // Linting/formatting script names (actual tools are in LINTING_TOOLS)
-  'lint',
-  'format',
-];
-
-/**
- * Dangerous shell operators that could allow command injection.
- * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
- */
-const DANGEROUS_OPERATORS = /[;`$()]/;
-
 // Re-export for backwards compatibility — canonical source is skill-install.ts
 export { isSkillInstallCommand } from '@lib/skill-install';
 
 /**
- * Check if command is an allowed package manager command.
- * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
- */
-function matchesAllowedPrefix(command: string): boolean {
-  const parts = command.split(/\s+/);
-  if (parts.length === 0 || !PACKAGE_MANAGERS.includes(parts[0])) {
-    return false;
-  }
-
-  // Skip 'run' or 'exec' if present
-  let scriptIndex = 1;
-  if (parts[scriptIndex] === 'run' || parts[scriptIndex] === 'exec') {
-    scriptIndex++;
-  }
-
-  // `i` is the npm/pnpm/bun shorthand for `install`. Exact-token match —
-  // adding 'i' to SAFE_SCRIPTS would startsWith-allow anything i-prefixed.
-  if (parts[scriptIndex] === 'i') return true;
-
-  // Get the script/command portion (may include args)
-  const scriptPart = parts.slice(scriptIndex).join(' ');
-
-  // Check if script starts with any safe script name or linting tool
-  return (
-    SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe)) ||
-    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool))
-  );
-}
-
-/**
- * Permission hook that allows only safe commands.
- * - Package manager install commands
- * - Build/typecheck/lint commands for verification
- * - Piping to tail/head for output limiting is allowed
- * - Stderr redirection (2>&1) is allowed
+ * Permission hook that allows only safe commands. Bash commands are gated by
+ * the exact per-manager fence in bash-fence.ts (install/build/typecheck/lint
+ * commands, single | tail/head, 2>&1).
  *
  * `wizardAskPending` is true while a wizard_ask overlay is open — when set,
  * Write/Edit calls are denied as a defense-in-depth measure against a
@@ -491,11 +438,16 @@ export function wizardCanUseTool(
     };
   }
 
-  // Block direct reads/writes of .env files — use wizard-tools MCP instead
+  // Block direct reads/writes of real .env files — use wizard-tools MCP instead.
+  // Example/template files (.env.example, .env.sample, .env.template, .env.dist)
+  // carry no secrets and are meant to be committed, so they stay writable.
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    if (basename.startsWith('.env')) {
+    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
+      basename,
+    );
+    if (basename.startsWith('.env') && !isEnvExample) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -531,80 +483,20 @@ export function wizardCanUseTool(
     typeof input.command === 'string' ? input.command : ''
   ).trim();
 
-  // Block definitely dangerous operators: ; ` $ ( )
-  if (DANGEROUS_OPERATORS.test(command)) {
-    logToFile(`Denying bash command with dangerous operators: ${command}`);
-    debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'dangerous operators',
-      command,
-    });
-    return {
-      behavior: 'deny',
-      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
-    };
-  }
-
-  // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
-  const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
-
-  // Check for pipe to tail/head (safe output limiting)
-  const pipeMatch = normalized.match(/^(.+?)\s*\|\s*(tail|head)(\s+\S+)*\s*$/);
-  if (pipeMatch) {
-    const baseCommand = pipeMatch[1].trim();
-
-    // Block if base command has pipes or & (multiple chaining)
-    if (/[|&]/.test(baseCommand)) {
-      logToFile(`Denying bash command with multiple pipes: ${command}`);
-      debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.wizardCapture('bash denied', {
-        reason: 'multiple pipes',
-        command,
-      });
-      return {
-        behavior: 'deny',
-        message: `Bash command not allowed. Only single pipe to tail/head is permitted.`,
-      };
-    }
-
-    if (matchesAllowedPrefix(baseCommand)) {
-      logToFile(`Allowing bash command with output limiter: ${command}`);
-      debug(`Allowing bash command with output limiter: ${command}`);
-      return { behavior: 'allow', updatedInput: input };
-    }
-  }
-
-  // Block remaining pipes and & (not covered by tail/head case above)
-  if (/[|&]/.test(normalized)) {
-    logToFile(`Denying bash command with pipe/&: ${command}`);
-    debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'disallowed pipe',
-      command,
-    });
-    return {
-      behavior: 'deny',
-      message: `Bash command not allowed. Pipes are only permitted with tail/head for output limiting.`,
-    };
-  }
-
-  // Check if command starts with any allowed prefix (package manager commands)
-  if (matchesAllowedPrefix(normalized)) {
+  const decision = evaluateBashCommand(command);
+  if (decision.allowed) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
   }
 
-  logToFile(`Denying bash command: ${command}`);
-  debug(`Denying bash command: ${command}`);
+  logToFile(`Denying bash command (${decision.analyticsReason}): ${command}`);
+  debug(`Denying bash command (${decision.analyticsReason}): ${command}`);
   analytics.wizardCapture('bash denied', {
-    reason: 'not in allowlist',
+    reason: decision.analyticsReason,
     command,
   });
-  return {
-    behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
-  };
+  return { behavior: 'deny', message: decision.message };
 }
 
 /**
@@ -631,6 +523,13 @@ export async function initializeAgent(
 
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+
+    // Same values the env vars above carry, handed over explicitly so triage
+    // never has to read them back out of the environment.
+    const triageProvider = createTriageLLMProvider(
+      { baseURL: gatewayUrl, authToken: config.posthogApiKey },
+      Harness.anthropic,
+    );
 
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
@@ -673,8 +572,12 @@ export async function initializeAgent(
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
-          Authorization: `Bearer ${config.posthogApiKey}`,
-          'User-Agent': WIZARD_USER_AGENT,
+          // Env reference, not the token: the SDK puts this config on the
+          // spawned CLI's argv, where `ps` shows it to any local process.
+          Authorization: 'Bearer ${POSTHOG_MCP_TOKEN}',
+          // Tag the UA with the running program so the backend can attribute what this
+          // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
+          'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
         },
         // CLI mode's single `exec` tool carries the full command reference on
         // its schema — keep it in context, never deferred behind tool search.
@@ -695,6 +598,7 @@ export async function initializeAgent(
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
+      triageProvider,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -706,11 +610,18 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model,
+      posthogApiKey: config.posthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      suppressTaskRender: !!config.orchestrator,
+      capture: config.capture,
+      triageProvider,
+      program: config.integrationLabel,
+      // A queue context is present only on a task run; that is the sequence.
+      sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
     };
 
     logToFile('Agent config:', {
@@ -773,6 +684,8 @@ export async function runAgent(
     emitStepEvents?: boolean;
     /** Request the end-of-run reflection remark. Defaults to true. */
     requestRemark?: boolean;
+    /** Scan-triage classifier resolved in bootstrap. Absent → rebuilt from the gateway auth on the env. */
+    triageProvider?: LLMProvider;
     /**
      * Extra properties attached to this run's `agent completed` / `agent
      * aborted` events (e.g. the orchestrator's task type and id).
@@ -932,10 +845,7 @@ export async function runAgent(
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
-    // LLM provider for warlock triage (reuses the gateway auth set on
-    // process.env by initializeAgent). Undefined if auth is missing — hooks
-    // then skip triage and fail closed.
-    const triageProvider = createTriageLLMProvider();
+    const triageProvider = agentConfig.triageProvider;
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
@@ -955,6 +865,13 @@ export async function runAgent(
       logToFile('[warlock] scanning disabled for run (local env override)');
       analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
     }
+
+    // Seed the AIO capture with the initial prompt so the first assistant
+    // generation carries `$ai_input`. The prompt goes to the SDK subprocess
+    // via `createPromptStream()` below and is never echoed on the return
+    // stream, so this is the only place we can capture it. No-op when
+    // capture is disabled.
+    agentConfig.capture?.setInitialPrompt(prompt);
 
     const response = query({
       prompt: createPromptStream(),
@@ -1055,6 +972,9 @@ export async function runAgent(
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+          // The MCP config resolves this in the child; sending the value would
+          // put it on the CLI's argv.
+          POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
           // (audit programs call audit_seed_checks on turn 1, integration
@@ -1084,9 +1004,14 @@ export async function runAgent(
         systemPrompt: {
           type: 'preset',
           preset: 'claude_code',
-          // Append wizard-wide commandments rather than replacing
-          // the preset so we keep default Claude Code behaviors.
-          append: getWizardCommandments(),
+          // Append the run's commandments rather than replacing the preset so
+          // we keep default Claude Code behaviors. An orchestrator context is
+          // present only on a task run — that is what picks the sequence.
+          append: assembleCommandments({
+            program: agentConfig.program,
+            sequence: agentConfig.sequence,
+            harness: Harness.anthropic,
+          }),
         },
         tools: { type: 'preset', preset: 'claude_code' },
         // Capture stderr from CLI subprocess for debugging
@@ -1150,6 +1075,12 @@ export async function runAgent(
         loggedInitialContext = true;
       }
 
+      // Mirror the assistant turn into the authenticated project's AIO tab.
+      // No-op when `--capture-aio` is off (dev/test builds only). Fire-and-
+      // forget: failures are debug-logged inside the module and never touch
+      // the stream loop.
+      agentConfig.capture?.captureFromAnthropicSDKMessage(message);
+
       // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
       // output for post-success cleanup errors while still logging them to file
       handleSDKMessage(
@@ -1159,8 +1090,7 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
-        (agentConfig.wizardFlags ?? {})[WIZARD_ORCHESTRATOR_FLAG_KEY] ===
-          'true',
+        agentConfig.suppressTaskRender ?? false,
         emitStepEvents,
       );
 

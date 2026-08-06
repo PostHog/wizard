@@ -1,4 +1,5 @@
 import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
+import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -6,6 +7,7 @@ import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import { join } from 'node:path';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -24,8 +26,8 @@ function modeLabel(mode: NonInteractiveMode): string {
 }
 
 /**
- * The single non-interactive validation layer: defaults region and requires
- * api-key and install-dir. Every non-interactive entry point routes through
+ * The single non-interactive validation layer: requires api-key and
+ * install-dir. Every non-interactive entry point routes through
  * `runNonInteractive`, so this is the one place these checks live. UI must be
  * initialized before calling.
  */
@@ -38,7 +40,6 @@ export function validateNonInteractiveOptions(
     mode === 'headless'
       ? 'personal API key phx_xxx or pha_ OAuth access token'
       : 'personal API key phx_xxx';
-  if (!options.region) options.region = 'us';
   if (!options.apiKey) {
     getUI().intro('PostHog Wizard');
     getUI().log.error(`${label} mode requires --api-key (${keyHint})`);
@@ -117,7 +118,11 @@ export function runNonInteractive(
       harness: options.harness as Harness | undefined,
       sequence: options.sequence as Sequence | undefined,
       model: options.model as string | undefined,
+      captureAio: options.captureAio as boolean | undefined,
       ...env,
+      // After the spread: yargs already resolves flag-over-env for --region,
+      // so the parsed value must win over the raw env bag.
+      region: (options.region ?? env.region) as CloudRegion | undefined,
     });
     session.programLabel = config.id;
     if (config.skillId) {
@@ -153,6 +158,9 @@ export function runNonInteractive(
             onError: (e) => logToFile('[headless task-stream]', e.message),
           }),
         ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         enabled: !session.noTelemetry,
       });
       taskStream.attach();

@@ -217,14 +217,14 @@ describe('yargs parsing for the audit family', () => {
   test('accepts upload-source-maps and legacy upload-sourcemaps alias', async () => {
     const canonical = await parseCommand(
       uploadSourcemapsCommand,
-      'upload-source-maps --region eu',
+      'upload-source-maps --debug',
     );
     const legacy = await parseCommand(
       uploadSourcemapsCommand,
-      'upload-sourcemaps --region eu',
+      'upload-sourcemaps --debug',
     );
-    expect(canonical.region).toBe('eu');
-    expect(legacy.region).toBe('eu');
+    expect(canonical.debug).toBe(true);
+    expect(legacy.debug).toBe(true);
   });
 });
 

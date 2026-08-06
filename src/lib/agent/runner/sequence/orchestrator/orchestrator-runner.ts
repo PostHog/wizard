@@ -11,21 +11,41 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { existsSync, rmSync } from 'fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
+import {
+  POSTHOG_DOCS_URL,
+  WIZARD_CONTACT_EMAIL,
+  type Integration,
+} from '@lib/constants';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import {
+  installSkillById,
+  fetchSkillMenu,
+  type SkillEntry,
+} from '@lib/wizard-tools';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
 import {
   getHarness,
   resolveHarness,
+  resolveStageOverrides,
   type HarnessPick,
 } from '../../switchboard';
+import { isValidModel, requireKnownModel } from '../../switchboard/models';
 import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
@@ -40,10 +60,54 @@ import {
   assembleSeedPrompt,
   assembleTaskPrompt,
   loadAgentRegistry,
+  promptModelFor,
   resolveTask,
-  taskModel,
+  taskModelSpec,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
+
+/** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
+const isDocPage = (name: string): boolean =>
+  name.endsWith('.md') && name === name.toLowerCase() && !/^\d/.test(name);
+
+/** Copy only the framework docs pages out of the run cache into .claude/skills — the one durable artifact an orchestrator run leaves. Never clobbers an existing install. */
+export function promoteReferenceSkill(
+  referenceDir: string,
+  claudeSkillsDir: string,
+  referenceSkillId: string,
+): void {
+  const target = path.join(claudeSkillsDir, referenceSkillId);
+  const refs = path.join(referenceDir, 'references');
+  if (!existsSync(refs) || existsSync(target)) return;
+  const docs = readdirSync(refs).filter(isDocPage);
+  if (docs.length === 0) return;
+  mkdirSync(path.join(target, 'references'), { recursive: true });
+  for (const f of docs) {
+    cpSync(path.join(refs, f), path.join(target, 'references', f));
+  }
+  writeFileSync(path.join(target, '.posthog-wizard'), '');
+}
+
+/**
+ * Remove skills that task agents installed durably mid-run (load_skill):
+ * wizard-marked, new this run, and not the framework reference docs.
+ * User-authored and pre-existing skills stay.
+ */
+export function sweepRunInstalledSkills(
+  claudeSkillsDir: string,
+  preexistingSkills: ReadonlySet<string>,
+  referenceSkillId: string | undefined,
+): void {
+  if (!existsSync(claudeSkillsDir)) return;
+  for (const id of readdirSync(claudeSkillsDir)) {
+    if (preexistingSkills.has(id) || id === referenceSkillId) continue;
+    if (!existsSync(path.join(claudeSkillsDir, id, '.posthog-wizard'))) {
+      continue;
+    }
+    rmSync(path.join(claudeSkillsDir, id), { recursive: true, force: true });
+    logToFile(`[orchestrator] removed run-installed skill ${id}`);
+  }
+}
 
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
@@ -78,25 +142,39 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
+/** Every skill entry the menu knows, across categories. */
+async function fetchSkillMenuEntries(
+  skillsBaseUrl: string,
+): Promise<SkillEntry[]> {
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return [];
+  return Object.values(menu.categories).flat();
+}
+
+/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
+export function resolveSkillVariantId(
+  entries: readonly SkillEntry[],
+  skillId: string,
+  framework: string | undefined,
+): string | undefined {
+  if (entries.some((e) => e.id === skillId)) return skillId;
+  if (!framework) return undefined;
+  const family = entries.filter(
+    (e) => e.group === skillId && e.framework === framework,
+  );
+  return (family.find((e) => e.default) ?? family[0])?.id;
+}
+
 /**
  * The framework reference is the full `integration` skill. `session.skillId` is
  * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`. Resolve to the menu id: exact `integration-<framework>`
- * (the 1:1 frameworks — django, python, flask, …), else the first granular variant
- * under it (e.g. `integration-nextjs-app-router`). Undefined when none exists.
+ * `integration-<variant>`.
  */
-async function resolveReferenceSkillId(
-  skillsBaseUrl: string,
+function resolveReferenceSkillId(
+  entries: readonly SkillEntry[],
   framework: string,
-): Promise<string | undefined> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return undefined;
-  const ids = Object.values(menu.categories)
-    .flat()
-    .map((s) => s.id);
-  const exact = `integration-${framework}`;
-  if (ids.includes(exact)) return exact;
-  return ids.find((id) => id.startsWith(`integration-${framework}-`));
+): string | undefined {
+  return resolveSkillVariantId(entries, 'integration', framework);
 }
 
 export async function runOrchestrator(
@@ -110,6 +188,7 @@ export async function runOrchestrator(
   const switchboardCtx = {
     program: programConfig.id,
     flags: boot.wizardFlags,
+    flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
     cliSequence: session.sequence,
     cliModel: session.model,
@@ -118,17 +197,38 @@ export async function runOrchestrator(
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
-  const registry = await loadAgentRegistry(
-    boot.skillsBaseUrl,
-    programConfig.id,
-    { exclude: ciExcludedTaskTypes() },
-  );
+  const flow = programConfig.agentFlow ?? programConfig.id;
+  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+    exclude: ciExcludedTaskTypes(),
+    // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
+    overrides: resolveStageOverrides(
+      programConfig.id,
+      boot.wizardFlags,
+      boot.wizardFlagPayloads,
+    ),
+  });
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${programConfig.id}" is available from ${boot.skillsBaseUrl}.`,
+      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
     );
   }
+
+  // The end decision the switchboard event defers to: the model each task will actually run on.
+  const taskModels = Object.fromEntries(
+    ['seed', ...registry.types].map((type) => {
+      const prompt = type === 'seed' ? seedPrompt : registry.get(type);
+      const pick = resolveHarness(switchboardCtx, type);
+      const specModel = prompt && promptModelFor(prompt, pick.harness).model;
+      return [type, isValidModel(specModel) ? specModel : pick.model];
+    }),
+  );
+  logToFile(
+    `[orchestrator] task models: ${Object.entries(taskModels)
+      .map(([t, m]) => `${t}=${m}`)
+      .join(' ')}`,
+  );
+  analytics.wizardCapture('orchestrator task models', taskModels);
 
   // Responsiveness is the headline metric of the dark launch: time to first
   // visible progress, and no single step dominating wall-clock. Track it from
@@ -143,9 +243,12 @@ export async function runOrchestrator(
 
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
+      const pick = resolveHarness(switchboardCtx, task.type);
+      // Mirror dispatch's allow-list fallback so attribution names the model that runs.
+      const specModel = taskModelSpec(registry, task, pick.harness).model;
       const base = {
         type: task.type,
-        model: taskModel(registry, task),
+        model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -196,17 +299,23 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  let referenceInstallPath: string | undefined;
+  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
-    ? await resolveReferenceSkillId(boot.skillsBaseUrl, session.skillId)
+    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
       session.installDir,
       boot.skillsBaseUrl,
-      path.join(QUEUE_DIR_NAME, 'reference'),
+      {
+        skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
+        triage: boot.triageProvider,
+      },
     );
     if (ref.kind === 'ok') {
+      referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
       if (existsSync(path.join(session.installDir, example))) {
         examplePath = example;
@@ -224,6 +333,46 @@ export async function runOrchestrator(
     logToFile(
       `[orchestrator] no integration skill for framework "${session.skillId}"`,
     );
+  }
+
+  // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
+  const missingVariants: string[] = [];
+  for (const type of registry.types) {
+    for (const skillId of registry.get(type)?.skills ?? []) {
+      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+        continue;
+      }
+      missingVariants.push(`${type}/${skillId}`);
+      logToFile(
+        `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
+          session.skillId ?? 'none'
+        }`,
+      );
+      analytics.wizardCapture('orchestrator skill variant missing', {
+        task_type: type,
+        skill: skillId,
+        framework: session.skillId,
+      });
+    }
+  }
+  if (missingVariants.length > 0) {
+    // The framework's own docs page from its config; generic docs when detection found none.
+    const docsUrl = session.skillId
+      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+      : undefined;
+    await wizardAbort({
+      message:
+        'Setup instructions for this project failed to download.\n' +
+        'Please try again, or contact wizard@posthog.com.\n\n' +
+        'You can also set up with your agent by downloading the skills here:\n' +
+        '  https://github.com/PostHog/context-mill/releases\n' +
+        'or integrate manually here:\n' +
+        `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
+      error: new WizardError('Orchestrator preflight: skill variant missing', {
+        missing: missingVariants.join(', '),
+        framework: session.skillId,
+      }),
+    });
   }
 
   // The client injects the basics (project context + the I/O contract) around
@@ -278,19 +427,20 @@ export async function runOrchestrator(
   // prompt is silent.
   const seedPick = resolveHarness(switchboardCtx, 'seed');
   const seedHarness = requireTaskHarness(seedPick);
+  const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
     session,
     programConfig,
     boot,
     prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
     spinner,
-    model: seedPrompt.model ?? seedPick.model,
+    model: requireKnownModel(seedModel.model, seedPick.model),
+    effort: seedModel.effort,
     ...agentRunTools(seedPrompt),
     orchestrator: orchestratorCtx(),
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
-    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -311,7 +461,13 @@ export async function runOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
-  let remarkRequested = false;
+  // Task agents can install durable skills mid-run (load_skill), and only the
+  // framework reference docs earn a place — snapshot what was already there so
+  // the sweeps remove exactly what this run added.
+  const claudeSkillsDir = path.join(session.installDir, '.claude', 'skills');
+  const preexistingSkills = new Set(
+    existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
+  );
   const runTask: RunTask = async (task) => {
     renderQueue();
     try {
@@ -322,32 +478,45 @@ export async function runOrchestrator(
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
-        const result = await installSkillById(
+        // Agent prompts name the bare step-skill (`integration-v2-install`);
+        // SDK-divergent steps ship per-framework variants, so resolve against
+        // the menu with the session's framework before installing.
+        const variantId = resolveSkillVariantId(
+          menuSkillEntries,
           skillId,
+          session.skillId,
+        );
+        if (!variantId) {
+          logToFile(
+            `[orchestrator] no skill variant type=${
+              task.type
+            } skill=${skillId} framework=${session.skillId ?? 'none'}`,
+          );
+          continue;
+        }
+        const result = await installSkillById(
+          variantId,
           session.installDir,
           boot.skillsBaseUrl,
-          taskSkillsRoot,
+          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
         } else {
           logToFile(
-            `[orchestrator] skill install failed type=${task.type} skill=${skillId} ${result.kind}`,
+            `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
+          );
+          // A task without its instructions must fail here, not run blind:
+          // run 91cf40eb's report task started after two EACCES install
+          // failures (unwritable external-volume cache) and died silently.
+          // The executor catches this, captures the exception, and fails the
+          // task through the normal outcome check.
+          throw new Error(
+            `Skill "${variantId}" for task "${task.type}" could not be installed (${result.kind}). ` +
+              'If this is a permissions error, check that the project directory is writable.',
           );
         }
       }
-      // The run-end reflection fires once, on the task that is last in the
-      // queue when it starts — nothing else pending or running alongside it.
-      const isLastTask = !store
-        .list()
-        .some(
-          (t) =>
-            t.id !== task.id &&
-            (t.status === TaskStatus.Pending ||
-              t.status === TaskStatus.Running),
-        );
-      const requestRemark = isLastTask && !remarkRequested;
-      if (requestRemark) remarkRequested = true;
       // Empty spinner messages suppress the per-task spinner line (the queue
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
@@ -357,20 +526,21 @@ export async function runOrchestrator(
       // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
+      const taskModel = taskModelSpec(registry, task, taskPick.harness);
       await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: resolved.model ?? taskPick.model,
+        model: requireKnownModel(taskModel.model, taskPick.model),
+        effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
-        requestRemark,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -378,12 +548,38 @@ export async function runOrchestrator(
         },
       });
     } finally {
+      // Durable skills a task installed are irrelevant to later tasks — and
+      // the sdk harness auto-loads .claude/skills into every agent — so sweep
+      // as each task ends, not only at run end.
+      try {
+        sweepRunInstalledSkills(
+          claudeSkillsDir,
+          preexistingSkills,
+          referenceSkillId,
+        );
+      } catch (err) {
+        logToFile(`[orchestrator] per-task skill sweep failed: ${String(err)}`);
+      }
       renderQueue();
     }
   };
   try {
     await drainQueue(store, runTask);
   } finally {
+    try {
+      if (referenceSkillId && referenceInstallPath) {
+        promoteReferenceSkill(
+          path.join(session.installDir, referenceInstallPath),
+          claudeSkillsDir,
+          referenceSkillId,
+        );
+      }
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_reference_promote' },
+      );
+    }
     // Success or failure, no run artifact outlives the run — wipe the whole
     // cache folder (queue, handoffs, reference example, installed task
     // instructions). The .DELETE-ME.md inside is the fallback if we don't.
@@ -398,6 +594,18 @@ export async function runOrchestrator(
         { step: 'orchestrator_cache_cleanup' },
       );
     }
+    try {
+      sweepRunInstalledSkills(
+        claudeSkillsDir,
+        preexistingSkills,
+        referenceSkillId,
+      );
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_skill_sweep' },
+      );
+    }
   }
 
   renderQueue();
@@ -406,11 +614,12 @@ export async function runOrchestrator(
   logToFile(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
+
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,
     tasks_failed: summary.failed,
-    tasks_skipped: summary.skipped,
+    tasks_skipped: summary[TaskStatus.Skipped],
     total_duration_ms: Date.now() - runStartMs,
     ...metrics.summary(),
     dynamic_enqueue_count: store
@@ -419,29 +628,54 @@ export async function runOrchestrator(
     retried_task_count: store.list().filter((t) => t.attempts > 1).length,
   });
 
-  // The build step flags any unresolved conflict in its handoff; surface the
+  // The review step flags any unresolved conflict in its handoff; surface the
   // one-liner here and point the user at the report for the detail.
-  const buildTask = store.list().find((t) => t.type === 'build');
-  const conflict = buildTask
-    ? store.readHandoff(buildTask.id)?.conflict
+  const reviewTask = store.list().find((t) => t.type === 'review');
+  const conflict = reviewTask
+    ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
 
-  // Prefer the report the run wrote; fall back to the raw queue if it is missing.
-  const reportPath = path.join(session.installDir, 'posthog-setup-report.md');
-  const reportFile = existsSync(reportPath)
-    ? 'posthog-setup-report.md'
-    : store.queuePath;
+  // Not-needed tasks were never work, so they leave the denominator too.
+  const notRequired = summary[TaskStatus.Skipped];
+
+  // A drain that ends with failed tasks (retries exhausted) or tasks still
+  // pending (blocked behind a failed dependency) did NOT set PostHog up —
+  // abort like a linear agent failure instead of claiming success.
+  const blocked = summary[TaskStatus.Pending];
+  if (summary.failed > 0 || blocked > 0) {
+    const failedTypes = store
+      .list()
+      .filter((t) => t.status === TaskStatus.Failed)
+      .map((t) => t.type)
+      .join(', ');
+    await wizardAbort({
+      message: `The wizard was unable to set up PostHog: ${
+        failedTypes
+          ? `the ${failedTypes} step failed`
+          : `${blocked} steps never ran`
+      }.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError('orchestrator drain ended with failed tasks', {
+        tasks_failed: summary.failed,
+        tasks_blocked: blocked,
+        failed_types: failedTypes,
+        queue_state: JSON.stringify(store.list()),
+      }),
+    });
+  }
 
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
-    : `PostHog set up: ${summary.done}/${summary.total} steps completed.`;
+    : `PostHog set up: ${summary.done}/${
+        summary.total - notRequired
+      } steps completed${
+        notRequired > 0 ? ` (${notRequired} skipped as not required)` : ''
+      }.`;
   getUI().setOutroData({
     kind: OutroKind.Success,
     message,
     body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the report.`
+      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
       : undefined,
-    reportFile,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
   });
   getUI().outro(message);

@@ -9,6 +9,7 @@ import {
   __test,
   ensureGitignoreCoverage,
   evaluateAskCap,
+  fetchSkillMenu,
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
@@ -408,6 +409,89 @@ describe('extractZipArchive', () => {
   });
 });
 
+describe('extractBundle', () => {
+  let dest: string;
+
+  const bundle = (files: Record<string, string>) => ({
+    id: 'integration-v2-capture',
+    variants: { django: files },
+  });
+
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-bundle-'));
+  });
+
+  afterEach(() => {
+    cleanup(dest);
+  });
+
+  it('writes only the named variant, including nested paths', () => {
+    const written = __test.extractBundle(
+      bundle({ 'SKILL.md': '# skill', 'references/deep/notes.md': 'notes' }),
+      dest,
+      'integration-v2-capture-django',
+    );
+
+    expect(written).toBe(2);
+    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
+      '# skill',
+    );
+    expect(
+      fs.readFileSync(path.join(dest, 'references/deep/notes.md'), 'utf8'),
+    ).toBe('notes');
+  });
+
+  it('rejects entries that escape the destination', () => {
+    expect(() =>
+      __test.extractBundle(
+        bundle({ '../evil.txt': 'pwned' }),
+        dest,
+        'integration-v2-capture-django',
+      ),
+    ).toThrow(/escapes destination/);
+    expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
+  });
+
+  it('rejects absolute entry paths', () => {
+    expect(() =>
+      __test.extractBundle(
+        bundle({ '/etc/evil.txt': 'pwned' }),
+        dest,
+        'integration-v2-capture-django',
+      ),
+    ).toThrow(/escapes destination/);
+  });
+
+  it('throws when the bundle lacks the named variant', () => {
+    expect(() =>
+      __test.extractBundle(
+        bundle({ 'SKILL.md': '# skill' }),
+        dest,
+        'integration-v2-capture-nextjs',
+      ),
+    ).toThrow(/has no variant/);
+  });
+
+  it('throws a clean error on JSON that is not a bundle', () => {
+    for (const malformed of [
+      null,
+      [],
+      'oops',
+      { id: 'x' },
+      { variants: {} },
+      { id: 'x', variants: null },
+    ]) {
+      expect(() =>
+        __test.extractBundle(
+          malformed as never,
+          dest,
+          'integration-v2-capture-django',
+        ),
+      ).toThrow(/malformed bundle/);
+    }
+  });
+});
+
 describe('downloadWithRetry', () => {
   const url = 'https://example.com/skill.zip';
   const noSleep = () => Promise.resolve();
@@ -488,5 +572,49 @@ describe('downloadWithRetry', () => {
         maxAttempts: 3,
       }),
     ).rejects.toThrow(/attempt 1.*attempt 2.*attempt 3/s);
+  });
+});
+
+describe('fetchSkillMenu', () => {
+  const noSleep = () => Promise.resolve();
+  const menu = { categories: { integration: [] } };
+  const menuResponse = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: () => Promise.resolve(menu),
+    });
+
+  it('retries a flaky menu fetch before succeeding', async () => {
+    let attempts = 0;
+
+    const result = await fetchSkillMenu('http://localhost:8765', {
+      fetchImpl: (() => {
+        attempts += 1;
+        if (attempts < 3) return Promise.reject(new Error('reset'));
+        return menuResponse();
+      }) as any,
+      sleepImpl: noSleep,
+    });
+
+    expect(attempts).toBe(3);
+    expect(result).toEqual(menu);
+  });
+
+  it('returns null after exhausting retries', async () => {
+    let attempts = 0;
+
+    const result = await fetchSkillMenu('http://localhost:8765', {
+      fetchImpl: (() => {
+        attempts += 1;
+        return Promise.reject(new Error('network down'));
+      }) as any,
+      sleepImpl: noSleep,
+      maxAttempts: 3,
+    });
+
+    expect(attempts).toBe(3);
+    expect(result).toBeNull();
   });
 });

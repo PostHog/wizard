@@ -11,6 +11,8 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate } from './authenticate';
+import { createTriageLLMProvider } from '@lib/agent/triage-provider';
+import { resolveHarness } from '../switchboard';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
@@ -250,6 +252,7 @@ export async function bootstrapProgram(
   // lives at the resolution sites (`runner/index.ts` for sequence,
   // `resolveHarness` for harness), not here.
   const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardFlagPayloads = analytics.getWizardFlagPayloads();
 
   // Gateway trace tags for this run. The runner stamps its variant onto this
   // after the fork (see runProgram), so the value reflects which arm ran.
@@ -264,11 +267,31 @@ export async function bootstrapProgram(
   // Credentials (incl. the resolved host family and its MCP url) live on
   // `session.credentials`; narrow once at this boundary — `authenticate` above
   // set them — so downstream readers get a non-null type without asserting.
+  const credentials = session.credentials!;
+
   return {
     skillsBaseUrl,
-    credentials: session.credentials!,
+    credentials,
     wizardFlags,
+    wizardFlagPayloads,
     wizardMetadata,
     project,
+    // Resolved once, here: the only place holding both the switchboard inputs
+    // and the gateway auth. Every skill install downstream reads it off boot.
+    triageProvider: createTriageLLMProvider(
+      {
+        baseURL: credentials.host.gatewayUrl,
+        authToken: credentials.accessToken,
+        wizardMetadata,
+        wizardFlags,
+      },
+      resolveHarness({
+        program: programConfig.id,
+        flags: wizardFlags,
+        flagPayloads: wizardFlagPayloads,
+        cliHarness: session.harness,
+        cliModel: session.model,
+      }).harness,
+    ),
   };
 }

@@ -245,6 +245,10 @@ export class InkUI implements WizardUI {
     this.store.setNotebookUrl(url);
   }
 
+  setHandoffText(text: string): void {
+    this.store.setHandoffText(text);
+  }
+
   addTokenUsage(delta: TokenUsageDelta): void {
     this.store.addTokenUsage(delta);
   }

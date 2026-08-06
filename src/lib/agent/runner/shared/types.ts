@@ -10,6 +10,7 @@ import type {
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import type { ApiProject } from '@lib/api';
+import type { LLMProvider } from '@posthog/warlock';
 
 export type { PromptContext, Credentials };
 
@@ -98,7 +99,11 @@ export interface BootstrapResult {
   /** Auth outputs (incl. the resolved host family and its MCP url), narrowed at the boundary. */
   credentials: Credentials;
   wizardFlags: Record<string, string>;
+  /** Flag payloads from the same snapshot (e.g. the self-driving pi `{model, effort?, harness?, sequence?}`). */
+  wizardFlagPayloads: Record<string, unknown>;
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */
   project: ApiProject | null;
+  /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
+  triageProvider: LLMProvider | undefined;
 }

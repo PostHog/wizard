@@ -2,7 +2,6 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
-import { HEADLESS_FLAG } from '@lib/headless-mode';
 import { Harness, Sequence } from '@lib/constants';
 import { toCommandModule, type Command } from './commands/command';
 
@@ -19,11 +18,6 @@ export const GLOBAL_OPTIONS = {
     default: false,
     describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
     type: 'boolean' as const,
-  },
-  region: {
-    describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
-    choices: ['us', 'eu'] as const,
-    type: 'string' as const,
   },
   signup: {
     default: false,
@@ -54,17 +48,9 @@ export const GLOBAL_OPTIONS = {
   },
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
-  [HEADLESS_FLAG]: {
-    default: false,
-    // EXPERIMENTAL + UNSTABLE: the non-interactive published-build run path.
-    // Declared unconditionally (unlike --ci) so it works in the shipped
-    // package, but hidden and intentionally ugly-named — the contract may
-    // break without notice, so it must not be advertised. See @lib/headless-mode.
-    describe:
-      'EXPERIMENTAL — do not use. Unstable, subject to breaking changes.',
-    type: 'boolean' as const,
-    hidden: true,
-  },
+  // NB: the experimental headless flag is deliberately NOT global — it's
+  // declared per-command (basic integration + audit) via `headlessOption`
+  // in @lib/headless-mode, so no other command accepts it.
   'local-mcp': {
     default: false,
     describe:
@@ -107,9 +93,11 @@ export class Wizard {
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
-    // flag (declared unconditionally in GLOBAL_OPTIONS, see @lib/headless-mode);
-    // --ci and headless are kept as separate flags so they can diverge — see
-    // basic-integration's dispatch. headless is deliberately not advertised.
+    // flag — declared per-command on basic integration + audit via
+    // `headlessOption` (see @lib/headless-mode), not globally, so no other
+    // command accepts it. --ci and headless are kept as separate flags so they
+    // can diverge — see basic-integration's dispatch. headless is deliberately
+    // not advertised.
     if (!IS_PRODUCTION_BUILD) {
       cli = cli
         .option('ci', {
@@ -138,6 +126,13 @@ export class Wizard {
           describe:
             'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
           type: 'string',
+          hidden: true,
+        })
+        .option('capture-aio', {
+          default: false,
+          describe:
+            "Capture wizard LLM calls as $ai_generation events in the authenticated project's AI Observability tab.\nenv: POSTHOG_WIZARD_CAPTURE_AIO",
+          type: 'boolean',
           hidden: true,
         });
     }
@@ -198,8 +193,9 @@ export class Wizard {
         process.exit(1);
       }
 
-      // --harness / --sequence / --model are dev/test-only. In published builds
-      // the env vars would silently no-op, so reject them explicitly instead.
+      // --harness / --sequence / --model / --capture-aio are dev/test-only.
+      // In published builds the env vars would silently no-op, so reject them
+      // explicitly instead.
       const argvHasOverride = args.some(
         (a) =>
           a === '--harness' ||
@@ -207,7 +203,10 @@ export class Wizard {
           a === '--sequence' ||
           a.startsWith('--sequence=') ||
           a === '--model' ||
-          a.startsWith('--model='),
+          a.startsWith('--model=') ||
+          a === '--capture-aio' ||
+          a === '--no-capture-aio' ||
+          a.startsWith('--capture-aio='),
       );
       const envHasOverride =
         (process.env.POSTHOG_WIZARD_HARNESS != null &&
@@ -215,10 +214,12 @@ export class Wizard {
         (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
           process.env.POSTHOG_WIZARD_SEQUENCE !== '') ||
         (process.env.POSTHOG_WIZARD_MODEL != null &&
-          process.env.POSTHOG_WIZARD_MODEL !== '');
+          process.env.POSTHOG_WIZARD_MODEL !== '') ||
+        (process.env.POSTHOG_WIZARD_CAPTURE_AIO != null &&
+          process.env.POSTHOG_WIZARD_CAPTURE_AIO !== '');
       if (argvHasOverride || envHasOverride) {
         process.stderr.write(
-          `\n\x1b[1;91m✖ The --harness, --sequence, and --model overrides are not available in published builds.\x1b[0m\n\n`,
+          `\n\x1b[1;91m✖ The --harness, --sequence, --model, and --capture-aio overrides are not available in published builds.\x1b[0m\n\n`,
         );
         process.exit(1);
       }

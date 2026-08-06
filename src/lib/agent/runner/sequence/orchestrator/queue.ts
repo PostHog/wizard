@@ -21,7 +21,7 @@ export const TaskStatus = {
   Pending: 'pending',
   Running: 'running',
   Done: 'done',
-  Skipped: 'skipped',
+  Skipped: 'not needed',
   Failed: 'failed',
 } as const;
 
@@ -66,6 +66,10 @@ export interface TaskHandoff {
   did: string;
   forNextAgent: string;
   filesTouched?: string[];
+  /** How the agent knows it worked — what it ran or observed. */
+  evidence?: string;
+  /** What the agent assumed about the app and could not verify. */
+  assumptions?: string;
   /** A one-line summary of any unresolved conflict, surfaced in the outro. */
   conflict?: string;
 }
@@ -261,7 +265,7 @@ export class QueueStore {
 
   private finish(
     id: string,
-    status: 'done' | 'skipped' | 'failed',
+    status: 'done' | 'not needed' | 'failed',
     handoff?: TaskHandoff,
   ): QueuedTask {
     const t = this.require(id);

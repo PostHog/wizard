@@ -333,6 +333,34 @@ describe('WizardStore', () => {
       });
     });
 
+    it('enableFeature tags additional_feature_kinds with the joined queue', () => {
+      const store = createStore();
+      store.enableFeature(AdditionalFeature.LLM);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'additional_feature_kinds',
+        'llm',
+      );
+    });
+
+    it('setRunPhase tags run_phase', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Running);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'run_phase',
+        RunPhase.Running,
+      );
+    });
+
+    it('completeRunStep resets the run_phase tag, not just the session', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Completed);
+      store.completeRunStep('integrate-run');
+      expect(analytics.setTag).toHaveBeenLastCalledWith(
+        'run_phase',
+        RunPhase.Idle,
+      );
+    });
+
     it('setMcpComplete fires mcp complete event', () => {
       const store = createStore();
       store.setMcpComplete(McpOutcome.Installed, ['Cursor', 'VS Code']);
@@ -1483,6 +1511,31 @@ describe('WizardStore', () => {
 
     it('--integrate pre-resolves the decision to true', () => {
       expect(buildSession({ integrate: true }).integrate).toBe(true);
+    });
+  });
+
+  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
+    it('flips signup and records email + region, and integrates', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+
+      store.chooseProvisionAccount('dev@example.com', 'eu');
+
+      expect(store.session.signup).toBe(true);
+      expect(store.session.email).toBe('dev@example.com');
+      expect(store.session.region).toBe('eu');
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('emits exactly one change event', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.chooseProvisionAccount('dev@example.com', 'us');
+
+      expect(cb).toHaveBeenCalledTimes(1);
     });
   });
 });

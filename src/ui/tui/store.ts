@@ -27,6 +27,7 @@ import {
   type DiscoveredFeature,
   type PendingQuestion,
   type AskAnswers,
+  type CloudRegion,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
@@ -185,6 +186,7 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
@@ -386,6 +388,10 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get handoffText(): string | null {
+    return this.$handoffText.get();
+  }
+
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
   }
@@ -428,6 +434,7 @@ export class WizardStore {
 
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -686,6 +693,12 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
+      analytics.setTag(
+        'additional_feature_kinds',
+        this.session.additionalFeatureQueue.join(','),
+      );
     }
     // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
@@ -760,6 +773,29 @@ export class WizardStore {
   }
 
   /**
+   * Self-driving "no PostHog account" branch of the integration check. The
+   * project has no SDK, so we always integrate (`integrate = true`); and since
+   * the user has no account, we flip `signup` and record the `email` / `region`
+   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
+   * the provisioning path (create account + email a login link) instead of
+   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
+   * leaves `signup` false so auth runs the normal OAuth login.
+   */
+  chooseProvisionAccount(email: string, region: CloudRegion): void {
+    this.$session.setKey('signup', true);
+    this.$session.setKey('email', email);
+    this.$session.setKey('region', region);
+    this.$session.setKey('integrate', true);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: true,
+      self_driving_has_account: false,
+      provision_region: region,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
    * Self-driving handoff confirmed — the user acknowledged the post-integration
    * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
    */
@@ -779,8 +815,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {
@@ -982,6 +1017,14 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  /** No-op on identical text: an emit here means a network push downstream. */
+  setHandoffText(text: string): void {
+    if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
+    this.$handoffText.set(text);
     this.emitChange();
   }
 

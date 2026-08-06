@@ -47,7 +47,7 @@ const OAUTH_CALLBACK_STYLES = `
   </style>
 `;
 
-const OAuthTokenResponseSchema = z.object({
+export const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),
   expires_in: z.number(),
   token_type: z.string(),
@@ -55,9 +55,28 @@ const OAuthTokenResponseSchema = z.object({
   refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
+  // Sent by PostHog Cloud (and passed through the oauth.posthog.com proxy); absent on
+  // self-hosted. `.catch(undefined)` so an unrecognized value degrades to the probe
+  // fallback instead of failing the whole login.
+  posthog_region: z.enum(['us', 'eu']).optional().catch(undefined),
+  posthog_base_url: z.string().optional().catch(undefined),
 });
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
+
+export const WIZARD_COMPLETION_SCOPE = 'event_definition:write';
+
+export function parseOAuthScopes(scope: string): string[] {
+  return scope.split(/\s+/).filter(Boolean);
+}
+
+export function assertWizardCompletionScope(scope: string): void {
+  if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
+
+  throw new Error(
+    `Your existing PostHog Wizard authorization is missing the ${WIZARD_COMPLETION_SCOPE} permission required to finish setup. Reconnect the wizard and approve the updated permissions. If PostHog reuses the old approval, revoke the existing Wizard authorization first, then rerun the wizard.`,
+  );
+}
 
 // Stable marker for the authorization-flow timeout. Detection keys off the exact
 // message rather than a loose substring — `.includes('timeout')` never matched
@@ -362,6 +381,7 @@ async function exchangeCodeForToken(
   const token = OAuthTokenResponseSchema.parse(response.data);
   logToFile(
     `[oauth] token exchange succeeded, granted scopes: ${token.scope}` +
+      `${token.posthog_region ? `, region: ${token.posthog_region}` : ''}` +
       `${
         token.scoped_teams
           ? `, scoped_teams: [${token.scoped_teams.join(', ')}]`

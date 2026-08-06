@@ -2,32 +2,25 @@
  * Agentic (Haiku) detection for self-driving's integration phase.
  *
  * Mirrors source-maps: the integration-detect screen runs `detectSelfDriving-
- * IntegrationProjects` (the shared Haiku detector with the integration framework
- * targets), shows a project map, and the user picks one. This file supplies the
- * targets, maps the result back to `Integration`s, and classifies each project
+ * IntegrationProjects` (the shared integration scan from
+ * @lib/detection/project-scope), shows a project map, and the user picks one.
+ * This file maps the result back to `Integration`s and classifies each project
  * as instrumentable (a framework the wizard supports that doesn't already have
  * PostHog). The screen writes the choice to the session; `prepSelfDriving-
  * Integration` then gathers the chosen project's framework context before the
  * integration agent runs (the runner scopes the install dir).
  */
 
-import {
-  detectProjectsWithAgent,
-  type DetectTarget,
-  type AgenticDetectionReport,
-  type DetectEvent,
+import type {
+  AgenticDetectionReport,
+  DetectEvent,
 } from '@lib/detection/agentic';
+import { detectIntegrationProjects } from '@lib/detection/project-scope';
 import { gatherFrameworkContext } from '@lib/detection/index';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { Integration } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 
 export type { DetectEvent };
-
-/** Integration framework targets for the agentic detector (id → display name). */
-const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
-  FRAMEWORK_REGISTRY,
-).map(([id, config]) => ({ id, name: config.metadata.name }));
 
 const INTEGRATION_IDS = new Set<string>(Object.values(Integration));
 
@@ -98,11 +91,7 @@ export async function detectSelfDrivingIntegrationProjects(
   session: WizardSession,
   onEvent?: DetectEvent,
 ): Promise<IntegrationDetectionReport> {
-  const report = await detectProjectsWithAgent(session, {
-    targets: INTEGRATION_TARGETS,
-    purpose: 'set up a PostHog SDK integration',
-    onEvent,
-  });
+  const report = await detectIntegrationProjects(session, { onEvent });
   return toIntegrationReport(report);
 }
 

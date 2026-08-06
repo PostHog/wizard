@@ -8,9 +8,14 @@
  */
 
 import type { Dirent } from 'fs';
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { IGNORED_DIRS } from '@utils/file-utils';
+import {
+  IGNORED_DIRS,
+  MAX_DIR_ENTRIES,
+  MAX_WALK_FILES,
+  safeReadFile,
+} from '@utils/bounded-fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 
@@ -32,7 +37,9 @@ export type SkillVariant =
   | 'ios'
   | 'vite'
   | 'webpack'
-  | 'rollup';
+  | 'rollup'
+  | 'go'
+  | 'rust';
 
 const DISPLAY_NAME: Record<SkillVariant, string> = {
   web: 'Web (JavaScript)',
@@ -48,14 +55,27 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
   vite: 'Vite',
   webpack: 'Webpack',
   rollup: 'Rollup',
+  go: 'Go',
+  rust: 'Rust',
 };
 
 /**
- * Variants the wizard can wire up source-map upload for automatically. The
- * native variants (react-native, android, flutter, ios) are recognised but not
- * yet automatable, so the agentic picker treats them as non-instrumentable.
+ * Variants the wizard can wire up source-map upload for automatically. Go and
+ * Rust upload native debug symbols (`posthog-cli symbol-sets upload`) instead
+ * of source maps, but the wiring is the same shape.
+ *
+ * Invariant: every variant listed here must have a published
+ * `error-tracking-upload-source-maps-<variant>` skill in context-mill —
+ * STEP 2 of the run installs that exact id, so an entry without a shipped
+ * skill fails every run for that stack.
  */
 export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
+  'android',
+  'ios',
+  'react-native',
+  'flutter',
+  'go',
+  'rust',
   'web',
   'nextjs',
   'node',
@@ -67,13 +87,52 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'rollup',
 ];
 
-const POSTHOG_SDKS = [
+/**
+ * Variants the wizard pre-installs a machine-global `posthog-cli` for — their
+ * build shells out to it with no npx / local-dep fallback. Web JS variants stay
+ * out. React Native counts as native here — its Xcode build phases and Gradle
+ * tasks invoke the global CLI. Flutter counts too despite emitting plain
+ * `.js.map` files: a Flutter project has no `package.json`, so there is no npx
+ * or local dependency to fall back to when the post-build step invokes the CLI.
+ */
+export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
+  new Set(['ios', 'android', 'react-native', 'flutter', 'go', 'rust']);
+
+/**
+ * Automatable variants whose SDK the wizard's default flow cannot install —
+ * remediation for a missing SDK is a manual install (posthog-go /
+ * posthog-rs), not `npx @posthog/wizard`. Drives the missing-SDK copy in the
+ * picker and the classifier.
+ */
+export const MANUAL_SDK_INSTALL: Partial<Record<SkillVariant, string>> = {
+  go: 'add the posthog-go module first',
+  rust: 'add the posthog-rs crate first',
+};
+
+export const MANUAL_SDK_VARIANTS: readonly SkillVariant[] = Object.keys(
+  MANUAL_SDK_INSTALL,
+) as SkillVariant[];
+
+/** Dependency string that identifies the Rust SDK in Cargo.toml. */
+export const RUST_SDK_CRATE = 'posthog-rs';
+
+/** Module path that identifies the Go SDK in go.mod. */
+export const GO_SDK_MODULE = 'github.com/posthog/posthog-go';
+
+const POSTHOG_SDKS = new Set([
   'posthog-js',
   'posthog-node',
   'posthog-react-native',
   'posthog-android',
   'posthog-ios',
-];
+]);
+
+const GRADLE_FILES = new Set([
+  'build.gradle',
+  'build.gradle.kts',
+  'settings.gradle',
+  'settings.gradle.kts',
+]);
 
 /**
  * Structured detection errors. The screen renders each kind into JSX
@@ -97,7 +156,9 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
     body:
       'The agent could not find a PostHog SDK in your project. ' +
       'Source map upload requires the SDK to already be installed so it can ' +
-      'report errors. Run `npx @posthog/wizard` first to install the SDK.',
+      'report errors. Run `npx @posthog/wizard` first to install the SDK ' +
+      '(for Go and Rust, add posthog-go / posthog-rs by hand first — the ' +
+      'wizard cannot install the SDK for those stacks yet).',
     docsUrl: 'https://posthog.com/docs/error-tracking',
   },
   {
@@ -108,6 +169,16 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
       'upload runs as part of the production build. Add a build script to ' +
       'your project and run this wizard again.',
     docsUrl: 'https://posthog.com/docs/error-tracking/upload-source-maps',
+  },
+  {
+    match: /^bare react native not supported$/i,
+    message: 'Bare React Native is not supported',
+    body:
+      'Source-map upload for React Native requires Expo, and this project ' +
+      'has no `expo` package. Bare React Native builds cannot inject the ' +
+      'chunk IDs PostHog needs to resolve stack traces.',
+    docsUrl:
+      'https://posthog.com/docs/error-tracking/upload-source-maps/react-native',
   },
 ];
 
@@ -134,15 +205,22 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
     scannedFileCount: 0,
   };
 
-  function scan(dir: string, depth: number): void {
-    if (depth > maxDepth) return;
+  // Explicit stack — no call-stack recursion.
+  const stack: Array<{ dir: string; depth: number }> = [
+    { dir: installDir, depth: 0 },
+  ];
+
+  while (stack.length > 0 && signals.scannedFileCount < MAX_WALK_FILES) {
+    const { dir, depth } = stack.pop()!;
 
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
-      return;
+      continue;
     }
+    // A directory contributes at most MAX_DIR_ENTRIES entries.
+    if (entries.length > MAX_DIR_ENTRIES) entries.length = MAX_DIR_ENTRIES;
 
     for (const entry of entries) {
       if (entry.name.startsWith('.') && entry.name !== '.') continue;
@@ -153,8 +231,10 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
       if (entry.isFile()) {
         signals.scannedFileCount += 1;
         if (entry.name === 'package.json') {
+          const content = safeReadFile(fullPath);
+          if (content === null) continue;
           try {
-            const pkg = JSON.parse(readFileSync(fullPath, 'utf-8')) as {
+            const pkg = JSON.parse(content) as {
               dependencies?: Record<string, string>;
               devDependencies?: Record<string, string>;
             };
@@ -175,25 +255,19 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
           signals.hasSwiftPackage = true;
         } else if (entry.name === 'pubspec.yaml') {
           signals.hasPubspec = true;
-        } else if (
-          entry.name === 'build.gradle' ||
-          entry.name === 'build.gradle.kts' ||
-          entry.name === 'settings.gradle' ||
-          entry.name === 'settings.gradle.kts'
-        ) {
+        } else if (GRADLE_FILES.has(entry.name)) {
           signals.hasGradle = true;
         }
       } else if (entry.isDirectory()) {
         if (entry.name.endsWith('.xcodeproj')) {
           signals.hasXcodeProject = true;
-        } else {
-          scan(fullPath, depth + 1);
+        } else if (depth < maxDepth) {
+          stack.push({ dir: fullPath, depth: depth + 1 });
         }
       }
     }
   }
 
-  scan(installDir, 0);
   return signals;
 }
 
@@ -305,8 +379,8 @@ export function detectSourceMapsPrerequisites(
   const signals = collectSignals(installDir);
   const variant = selectVariant(signals);
 
-  // This program currently targets JS-like stacks only. Avoid selecting native
-  // platforms until dedicated skill variants are available.
+  // The legacy filesystem detector does not automate native platforms. The
+  // live source-map picker uses detectSourceMapsProjects instead.
   if (
     variant &&
     ['react-native', 'flutter', 'ios', 'android'].includes(variant)

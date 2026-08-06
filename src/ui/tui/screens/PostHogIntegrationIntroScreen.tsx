@@ -9,33 +9,17 @@
  */
 
 import { Box, Text } from 'ink';
-import { spawnSync } from 'node:child_process';
 import type { ReactNode } from 'react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { Integration, WIZARD_TOOLS_MENU_FLAG_KEY } from '@lib/constants';
+import { Integration } from '@lib/constants';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
-import { releaseTerminal } from '@ui/tui/start-tui';
 import { analytics } from '@utils/analytics';
 
-const TOOLS = [
-  { label: 'Troubleshoot Integration', command: 'doctor' },
-] as const;
-
-type View = 'default' | 'more-info' | 'privacy' | 'tools';
-
-function launchTool(command: string, installDir: string): never {
-  releaseTerminal();
-  const result = spawnSync(
-    process.execPath,
-    [process.argv[1], command, `--install-dir=${installDir}`],
-    { stdio: 'inherit' },
-  );
-  process.exit(result.status ?? 0);
-}
+type View = 'default' | 'more-info' | 'privacy';
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -84,18 +68,6 @@ export const PostHogIntegrationIntroScreen = ({
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
   const [view, setView] = useState<View>('default');
-  const [toolsEnabled, setToolsEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void analytics.getAllFlagsForWizard().then((flags) => {
-      const value = flags[WIZARD_TOOLS_MENU_FLAG_KEY];
-      if (!cancelled && value && value !== 'false') setToolsEnabled(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const { session } = store;
   const config = session.frameworkConfig;
@@ -262,12 +234,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   let menuOptions: { label: string; value: string }[] | null = null;
 
-  if (view === 'tools') {
-    menuOptions = [
-      ...TOOLS.map((t) => ({ label: t.label, value: t.command })),
-      { label: 'Back', value: 'back' },
-    ];
-  } else if (view === 'more-info') {
+  if (view === 'more-info') {
     menuOptions = [
       { label: 'Back', value: 'back' },
       { label: 'Privacy & data usage', value: 'privacy' },
@@ -278,7 +245,6 @@ export const PostHogIntegrationIntroScreen = ({
     menuOptions = [
       { label: 'Continue', value: 'continue' },
       { label: 'Change framework', value: 'framework' },
-      ...(toolsEnabled ? [{ label: 'Tools', value: 'tools' }] : []),
       { label: 'More info', value: 'more-info' },
       { label: 'Cancel', value: 'cancel' },
     ];
@@ -286,11 +252,6 @@ export const PostHogIntegrationIntroScreen = ({
 
   const handleSelect = (value: string) => {
     analytics.wizardCapture('intro menu selected', { value, view });
-    if (view === 'tools') {
-      if (value === 'back') setView('default');
-      else launchTool(value, session.installDir);
-      return;
-    }
     if (value === 'cancel') {
       process.exit(0);
     } else if (value === 'framework') {
@@ -300,8 +261,6 @@ export const PostHogIntegrationIntroScreen = ({
       setView('more-info');
     } else if (value === 'privacy') {
       setView('privacy');
-    } else if (value === 'tools') {
-      setView('tools');
     } else if (value === 'back') {
       setView(view === 'privacy' ? 'more-info' : 'default');
     } else {

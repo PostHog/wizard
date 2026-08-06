@@ -1,0 +1,35 @@
+{
+  "program": "ai-observability",
+  "summary": "Happy path: confirm intro, push past health issues, let the agent pick + install the provider variant, delete installed skills.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first"
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "linear / anthropic / sonnet — parity with main"
+    }
+  ],
+  "path": [
+    { "screen": "ai-observability-intro", "auto": "confirm & continue" },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage — proceed even if the readiness probe flags an issue"
+    },
+    { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "run",
+      "auto": "(external) — the agent loads the skill menu, picks the ai-observability-* variant matching the project's LLM SDK (wizard_ask answered with the first option if ambiguous), installs it, and instruments the LLM calls"
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    {
+      "screen": "keep-skills",
+      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
+    }
+  ]
+}

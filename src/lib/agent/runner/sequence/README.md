@@ -61,7 +61,7 @@ Each step is one markdown file whose frontmatter declares its shape:
 ```yaml
 ---
 type: dashboard
-flow: posthog-integration
+flow: integration-v2
 label: Create a starter dashboard
 model: claude-sonnet-4-6
 skills: [basic-integration-dashboard]

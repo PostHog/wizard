@@ -20,7 +20,7 @@ describe('applyCiFlagOverrides', () => {
   describe('in CI builds', () => {
     it('returns the flags untouched when no override is set', () => {
       const flags = { 'wizard-orchestrator': 'false' };
-      expect(applyCiFlagOverrides(flags)).toEqual(flags);
+      expect(applyCiFlagOverrides(flags)).toEqual({ flags, payloads: {} });
     });
 
     it('merges overrides over the fetched flags, stringifying values', () => {
@@ -32,11 +32,29 @@ describe('applyCiFlagOverrides', () => {
         applyCiFlagOverrides({
           'wizard-orchestrator': 'false',
           'wizard-react-router': 'true',
-        }),
+        }).flags,
       ).toEqual({
         'wizard-orchestrator': 'true',
         'wizard-next-v2': 'legacy',
         'wizard-react-router': 'true',
+      });
+    });
+
+    it('routes an object override to the payloads map and turns the flag on', () => {
+      process.env[ENV_KEY] = JSON.stringify({
+        'wizard-self-driving-use-pi-harness': {
+          model: 'gpt-5-4',
+          effort: 'low',
+        },
+      });
+      expect(applyCiFlagOverrides({})).toEqual({
+        flags: { 'wizard-self-driving-use-pi-harness': 'true' },
+        payloads: {
+          'wizard-self-driving-use-pi-harness': {
+            model: 'gpt-5-4',
+            effort: 'low',
+          },
+        },
       });
     });
 
@@ -61,7 +79,10 @@ describe('applyCiFlagOverrides', () => {
         'wizard-orchestrator': 'false',
       });
       process.env.NODE_ENV = prevNodeEnv;
-      expect(result).toEqual({ 'wizard-orchestrator': 'false' });
+      expect(result).toEqual({
+        flags: { 'wizard-orchestrator': 'false' },
+        payloads: {},
+      });
     });
   });
 });

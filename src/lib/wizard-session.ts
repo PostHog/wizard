@@ -58,12 +58,12 @@ export enum AdditionalFeature {
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'LLM analytics',
+  [AdditionalFeature.LLM]: 'AI observability',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
@@ -148,6 +148,12 @@ export type AskAnswers = Record<string, string | string[]>;
 export interface PendingQuestion {
   id: string;
   questions: AskQuestion[];
+  /**
+   * UTC ISO 8601 timestamp of when the ask was created. Published on the
+   * task stream as `pending_input.asked_at` so the web app can age the
+   * prompt; stable across pushes for the lifetime of one ask.
+   */
+  askedAt?: string;
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
   /**
@@ -191,6 +197,14 @@ export interface WizardSession {
   yaraReport: boolean;
   projectId?: number;
   noTelemetry: boolean;
+
+  /**
+   * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
+   * into the authenticated project's AI Observability tab. Dev/test builds
+   * only — the flag is undeclared in published builds so this stays `false`
+   * there. See `src/lib/agent/aio-capture.ts`.
+   */
+  captureAio: boolean;
 
   /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
   harness?: Harness;
@@ -280,11 +294,15 @@ export interface WizardSession {
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
-   * `null` until decided — the integration-check screen asks "do you already
-   * have PostHog?" and sets it (No → true, Yes → false). The `--integrate`
-   * flag pre-sets it to `true`, skipping the question. When `true`, the
-   * self-driving prompt has the agent set up the SDK before the Self-driving
-   * steps. Unused by other programs.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
    */
   integrate: boolean | null;
 
@@ -360,6 +378,7 @@ export function buildSession(args: {
   sequence?: Sequence;
   model?: string;
   integrate?: boolean;
+  captureAio?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -376,6 +395,7 @@ export function buildSession(args: {
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    captureAio: args.captureAio ?? false,
     harness: args.harness,
     sequence: args.sequence,
     model: args.model,

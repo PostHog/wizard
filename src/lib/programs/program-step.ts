@@ -197,6 +197,12 @@ export interface ProgramConfig {
   /** Unique program id — matches the Program enum value */
   id: string;
   /**
+   * Content-mill flow the orchestrator loads its agent prompts + step-skills
+   * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
+   * the content-mill flow name diverges from the program id.
+   */
+  agentFlow?: string;
+  /**
    * Whether this program's agent run requires third-party AI services.
    *
    * When true (the default), the wizard checks
@@ -235,6 +241,13 @@ export interface ProgramConfig {
    * read it synchronously without resolving a deferred `run` function.
    */
   reportFile?: string;
+  /**
+   * Agent-authored event-plan artifact to mirror into the wizard session.
+   * Relative to `session.installDir`. Programs that do not produce an event
+   * plan leave this unset, so generic runner machinery does not inspect a
+   * stale or unrelated `.posthog-events.json` file.
+   */
+  eventPlanFile?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.

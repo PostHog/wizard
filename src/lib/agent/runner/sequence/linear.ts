@@ -50,6 +50,7 @@ export async function runLinearProgram(
       config.skillId,
       session.installDir,
       skillsBaseUrl,
+      { triage: boot.triageProvider },
     );
     if (installResult.kind !== 'ok') {
       await abortOnInstallFailure(config.integrationLabel, installResult);
@@ -120,6 +121,7 @@ export async function runLinearProgram(
   const pick = resolveHarness({
     program: programConfig.id,
     flags: wizardFlags,
+    flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
     cliModel: session.model,
   });
@@ -134,6 +136,7 @@ export async function runLinearProgram(
     askBridge,
     middleware,
     model: pick.model,
+    thinkingLevel: pick.thinkingLevel,
   });
 
   // 9. Error handling (full set from both runners)

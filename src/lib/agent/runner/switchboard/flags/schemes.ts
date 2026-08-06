@@ -1,0 +1,164 @@
+/**
+ * Flag config schemes — the shapes a PostHog flag set can take to route a
+ * program to the pi harness, plus the shared vocabulary and the per-config
+ * resolution. Experiment modules in this folder declare *which* flags they
+ * use; this module owns *how* a config resolves to a route.
+ */
+import { z } from 'zod';
+import {
+  DEFAULT_AGENT_MODEL,
+  GPT5_6_LUNA_MODEL,
+  GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
+  Harness,
+  Sequence,
+  SONNET_5_MODEL,
+} from '@lib/constants';
+import type { ProgramId } from '@lib/programs/program-registry';
+import { logToFile } from '@utils/debug';
+import type { EffortLevel } from '../models';
+
+// ── Shared vocabulary ─────────────────────────────────────────────────────
+
+/** Model variant key → gateway id. */
+const MODEL_FLAG_VARIANTS: Record<string, string> = {
+  'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
+  'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
+  'gpt-5-6-sol': GPT5_6_SOL_MODEL,
+  'sonnet-4-6': DEFAULT_AGENT_MODEL,
+  'sonnet-5': SONNET_5_MODEL,
+};
+
+/** Valid effort variants; anything else leaves the model's table default. */
+const EFFORT_FLAG_VARIANTS = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const satisfies readonly EffortLevel[];
+
+/** A resolved flag route. Absent fields keep the axis's default (pi harness, sequence resolved by its own chain, table effort). */
+export interface FlagRoute {
+  model?: string;
+  thinkingLevel?: EffortLevel;
+  harness?: Harness;
+  sequence?: Sequence;
+}
+
+// ── Config schemes ────────────────────────────────────────────────────────
+
+/** Harness-only scheme: the useFlag routes the harness; model/effort stay at the binding default so prompt frontmatter governs. */
+export interface HarnessConfigFlag {
+  useFlag: string;
+  harness: Harness;
+}
+
+/** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
+export interface PayloadConfigFlag {
+  useFlag: string;
+  harness?: never;
+}
+
+export type ConfigFlag = HarnessConfigFlag | PayloadConfigFlag;
+
+/**
+ * A harness-axis experiment: ONE program and the flags that route it. The
+ * scope is part of the declaration — the flags are inert for every other
+ * program.
+ */
+export interface HarnessExperiment {
+  program: ProgramId;
+  flags: ConfigFlag;
+}
+
+/** A sequence-axis experiment: one boolean flag, inert outside its listed programs. */
+export interface SequenceExperiment {
+  programs: readonly ProgramId[];
+  flag: string;
+  /** Sequence the flag routes covered programs to. */
+  sequence: Sequence;
+}
+
+/** Variant key validated against the shared vocabulary, transformed to its gateway id. */
+const modelVariantSchema = z
+  .string()
+  .refine((key) => key in MODEL_FLAG_VARIANTS)
+  .transform((key) => MODEL_FLAG_VARIANTS[key]);
+
+/** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
+const payloadConfigFlagSchema = z.object({
+  model: modelVariantSchema,
+  effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
+  harness: z.nativeEnum(Harness).optional(),
+  sequence: z.nativeEnum(Sequence).optional(),
+});
+
+/**
+ * PostHog serves a variant's payload as a JSON string, e.g. the
+ * wizard-orchestrator-override `terra-review` variant arrives as
+ * `'{"review":{"model":"gpt-5-6-terra","effort":"medium"}}'`; local CI
+ * overrides inject the same payloads as already-parsed objects. Coerce both
+ * to the value; anything unparseable is undefined.
+ */
+function coerceJson(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+// ── Resolution ────────────────────────────────────────────────────────────
+
+/** Per-stage overrides keyed by stage; a whole-payload parse failure fails closed to frontmatter everywhere. */
+const stageOverridesSchema = z.record(
+  z.object({
+    model: modelVariantSchema.optional(),
+    effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
+  }),
+);
+
+export type StageOverride = { model?: string; effort?: EffortLevel };
+
+/** Validate a stage-override payload (object or JSON string); undefined on any unexpected shape. */
+export function stageOverridesFromPayload(
+  raw: unknown,
+): Record<string, StageOverride> | undefined {
+  const parsed = stageOverridesSchema.safeParse(coerceJson(raw));
+  return parsed.success ? parsed.data : undefined;
+}
+
+/** Validate a payload (object or JSON string) into a route; undefined on any unexpected shape. */
+function parseFlagPayload(raw: unknown): FlagRoute | undefined {
+  const parsed = payloadConfigFlagSchema.safeParse(coerceJson(raw));
+  if (!parsed.success) return undefined;
+  return {
+    model: parsed.data.model,
+    thinkingLevel: parsed.data.effort,
+    harness: parsed.data.harness,
+    sequence: parsed.data.sequence,
+  };
+}
+
+/**
+ * Resolve one config against the flag snapshot, or undefined when it doesn't
+ * validly route: use flag off, or a payload that fails validation — the
+ * caller then keeps the non-flagged binding default.
+ */
+export function routeFromConfigFlag(
+  cfg: ConfigFlag,
+  flags: Record<string, string>,
+  flagPayloads?: Record<string, unknown>,
+): FlagRoute | undefined {
+  if (flags[cfg.useFlag] !== 'true') return undefined;
+  if (cfg.harness) return { harness: cfg.harness };
+  const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
+  if (!route) {
+    logToFile(
+      `[switchboard] ${cfg.useFlag} on but payload missing/invalid — keeping the non-flagged default`,
+    );
+  }
+  return route;
+}

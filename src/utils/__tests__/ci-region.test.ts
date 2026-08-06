@@ -1,6 +1,7 @@
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { detectRegion } from '@utils/urls';
-import { fetchProjectData } from '@lib/api';
+import { fetchProjectData, fetchUserData } from '@lib/api';
+import { performOAuthFlow } from '@utils/oauth';
 
 vi.mock('@ui', () => ({
   getUI: () => ({
@@ -26,11 +27,17 @@ vi.mock('@utils/analytics', () => ({
     setTag: vi.fn(),
   },
 }));
+vi.mock('@utils/oauth', () => ({
+  performOAuthFlow: vi.fn(),
+  assertWizardCompletionScope: vi.fn(),
+}));
 
 const mockedDetect = detectRegion as unknown as ReturnType<typeof vi.fn>;
 const mockedFetchProject = fetchProjectData as unknown as ReturnType<
   typeof vi.fn
 >;
+const mockedFetchUser = fetchUserData as unknown as ReturnType<typeof vi.fn>;
+const mockedOAuthFlow = performOAuthFlow as unknown as ReturnType<typeof vi.fn>;
 
 const project = {
   id: 123,
@@ -75,5 +82,57 @@ describe('getOrAskForProjectData CI region', () => {
     });
 
     expect(mockedDetect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getOrAskForProjectData OAuth login region', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockResolvedValue({
+      distinct_id: 'user-1',
+      role_at_organization: null,
+    });
+  });
+
+  it('uses posthog_region from the token response and never probes @me', async () => {
+    mockedOAuthFlow.mockResolvedValue({
+      access_token: 'pha_test',
+      scope: 'event_definition:write',
+      scoped_teams: [123],
+      posthog_region: 'eu',
+    });
+
+    const result = await getOrAskForProjectData({
+      ci: false,
+      signup: false,
+      projectId: 123,
+    });
+
+    expect(mockedDetect).not.toHaveBeenCalled();
+    expect(mockedFetchProject).toHaveBeenCalledWith(
+      'pha_test',
+      123,
+      'https://eu.posthog.com',
+    );
+    expect(result.host.region).toBe('eu');
+  });
+
+  it('falls back to detection when the token response has no region', async () => {
+    mockedOAuthFlow.mockResolvedValue({
+      access_token: 'pha_test',
+      scope: 'event_definition:write',
+      scoped_teams: [123],
+    });
+    mockedDetect.mockResolvedValue('eu');
+
+    await getOrAskForProjectData({ ci: false, signup: false, projectId: 123 });
+
+    expect(mockedDetect).toHaveBeenCalledTimes(1);
+    expect(mockedFetchProject).toHaveBeenCalledWith(
+      'pha_test',
+      123,
+      'https://eu.posthog.com',
+    );
   });
 });

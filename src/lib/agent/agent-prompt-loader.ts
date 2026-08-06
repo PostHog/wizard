@@ -21,7 +21,13 @@ import type {
 } from './runner/sequence/orchestrator/queue';
 import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@lib/host-resolution';
-import { DEFAULT_AGENT_MODEL } from '@lib/constants';
+import {
+  isThinkingLevel,
+  type ThinkingLevel,
+} from './runner/switchboard/models';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { fetchWithRetry } from '@lib/fetch-retry';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -60,7 +66,22 @@ function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
 }
 
-const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`skipped\` and say why, rather than marking it done.`;
+/**
+ * The task's own tool list, injected so an agent never has to discover a tool's
+ * absence by trying it — and never reports that absence as a finding. Later
+ * tasks hold tools this one does not, so work it cannot do is handed on rather
+ * than attempted.
+ */
+/** Renders the inventory from the tool names a harness actually registered for
+ *  the run — the one complete list, in the vocabulary the agent will call. */
+export function renderToolInventory(toolNames: readonly string[]): string {
+  if (toolNames.length === 0) return '';
+  return `Your tools for this task: ${toolNames.join(
+    ', ',
+  )}. Do not look for a tool that is not listed or treat its absence as a problem to report. Later tasks in this run hold tools you do not: when your task needs one, hand that work off in your handoff for the task that can do it, or note it for the final report.`;
+}
+
+const TASK_BASICS = `You are one step in a larger PostHog workflow made of several tasks, run as a fresh agent with no memory of the other tasks beyond the context you are given. Other tasks — before and after you — own the rest of the work, so stay strictly on your own task: do not do a neighbouring step's job, redo what an upstream handoff already did, or reach beyond what you were asked. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`not needed\` and say why, rather than marking it done.`;
 
 const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
@@ -101,9 +122,6 @@ export function assembleSeedPrompt(
   return [projectContext(ctx), SEED_BASICS, body].join('\n\n');
 }
 
-/** Used when neither the enqueue call nor the prompt frontmatter names a model. */
-const DEFAULT_TASK_MODEL = DEFAULT_AGENT_MODEL;
-
 /** Orchestrator tools are MCP tools under the `posthog-wizard` server. Frontmatter
  *  names them short (e.g. `enqueue_task`); the SDK gates on the full name. */
 const ORCHESTRATOR_TOOL_PREFIX = 'mcp__posthog-wizard__';
@@ -112,6 +130,15 @@ const ORCHESTRATOR_TOOLS = new Set([
   'complete_task',
   'read_handoffs',
 ]);
+
+/** The queue tools a task holds — all of them minus its disallows. Short names.
+ *  Single source for both the injected inventory and the harness's tool grant. */
+export function queueTools(disallowedTools: readonly string[]): string[] {
+  const disallowed = new Set(
+    disallowedTools.map((n) => n.replace(ORCHESTRATOR_TOOL_PREFIX, '')),
+  );
+  return [...ORCHESTRATOR_TOOLS].filter((t) => !disallowed.has(t));
+}
 
 /** A parsed agent prompt. The frontmatter fields plus the markdown body. */
 export interface AgentPrompt {
@@ -122,12 +149,30 @@ export interface AgentPrompt {
   flow?: string;
   /** Marks the flow's planner: it seeds the queue and is not an enqueueable task. */
   seed: boolean;
-  model?: string;
+  /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
+   * harness. The mapping is not 1:1 across providers, so each agent names both. */
+  modelPi?: string;
+  effortPi?: ThinkingLevel;
+  modelSdk?: string;
+  effortSdk?: ThinkingLevel;
   skills: string[];
   allowedTools: string[];
   disallowedTools: string[];
   dependsOn: string[];
   body: string;
+}
+
+/** The model + effort an agent runs on for a given harness — `pi` picks the gpt
+ * column, anything else the sdk (anthropic) column. */
+export function promptModelFor(
+  prompt: AgentPrompt,
+  harness: string,
+): { model?: string; effort?: ThinkingLevel } {
+  const pi = harness === 'pi';
+  return {
+    model: pi ? prompt.modelPi : prompt.modelSdk,
+    effort: pi ? prompt.effortPi : prompt.effortSdk,
+  };
 }
 
 export interface AgentRegistry {
@@ -142,15 +187,30 @@ export interface AgentRegistry {
 export function buildRegistry(
   prompts: readonly AgentPrompt[],
   flow: string,
-  opts?: { exclude?: readonly string[] },
+  opts?: {
+    exclude?: readonly string[];
+    /** Per-stage pi model/effort overlays, keyed by task type ('seed' for the planner). Applied here — the one place prompts enter the wizard — so every downstream read sees the effective spec. */
+    overrides?: Record<
+      string,
+      { model?: string; effort?: ThinkingLevel } | undefined
+    >;
+  },
 ): AgentRegistry {
   // The harness can exclude task types (CI excludes dashboards). An excluded
   // type does not exist for the run: the seed cannot enqueue it and no agent
   // is ever spun up for it.
   const excluded = new Set(opts?.exclude ?? []);
-  const inFlow = prompts.filter(
-    (p) => p.flow === flow && !excluded.has(p.type),
-  );
+  const inFlow = prompts
+    .filter((p) => p.flow === flow && !excluded.has(p.type))
+    .map((p) => {
+      const o = opts?.overrides?.[p.seed ? 'seed' : p.type];
+      if (!o) return p;
+      return {
+        ...p,
+        modelPi: o.model ?? p.modelPi,
+        effortPi: o.effort ?? p.effortPi,
+      };
+    });
   const byType = new Map(inFlow.map((p) => [p.type, p]));
   return {
     types: inFlow.filter((p) => !p.seed).map((p) => p.type),
@@ -160,7 +220,8 @@ export function buildRegistry(
 }
 
 interface AgentMenu {
-  agents: { id: string; downloadUrl: string }[];
+  /** `flow` arrived with context-mill's flow-scoped agents folder; older menus omit it. */
+  agents: { id: string; flow?: string; downloadUrl: string }[];
 }
 
 /** A native tool passes through; an orchestrator tool gets its MCP-qualified name. */
@@ -190,12 +251,13 @@ function toStringArray(value: unknown): string[] {
  * Parse the leading `---` frontmatter block and the markdown body. The
  * frontmatter is a small, known schema (scalars and inline `[a, b]` arrays), so
  * a tiny parser covers it without a YAML dependency. Inline `# comments` after a
- * value are stripped. `fallbackType` is the menu id, used when the body omits
- * `type:`.
+ * value are stripped. `fallbackType` (the menu id) and `fallbackFlow` (the
+ * menu entry's flow) apply when the frontmatter omits `type:`/`flow:`.
  */
 export function parseAgentPrompt(
   text: string,
   fallbackType: string,
+  fallbackFlow?: string,
 ): AgentPrompt {
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   const frontmatter = match ? match[1] : '';
@@ -219,13 +281,30 @@ export function parseAgentPrompt(
     }
   }
 
-  const model = typeof fields.model === 'string' ? fields.model : undefined;
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
+  const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
+    if (v === undefined) return undefined;
+    if (isThinkingLevel(v)) return v;
+    logToFile(
+      `[agent-prompt] ${fallbackType}: ignoring invalid ${key} "${String(v)}"`,
+    );
+    analytics.wizardCapture('agent prompt invalid effort', {
+      task_type: fallbackType,
+      key,
+      value: String(v),
+    });
+    return undefined;
+  };
   return {
     type: typeof fields.type === 'string' ? fields.type : fallbackType,
     label: typeof fields.label === 'string' ? fields.label : undefined,
-    flow: typeof fields.flow === 'string' ? fields.flow : undefined,
+    flow: typeof fields.flow === 'string' ? fields.flow : fallbackFlow,
     seed: fields.seed === 'true',
-    model,
+    modelPi: str(fields.model_pi),
+    effortPi: effort(fields.effort_pi, 'effort_pi'),
+    modelSdk: str(fields.model_sdk),
+    effortSdk: effort(fields.effort_sdk, 'effort_sdk'),
     skills: toStringArray(fields.skills),
     allowedTools: toStringArray(fields.allowedTools),
     disallowedTools: toStringArray(fields.disallowedTools),
@@ -235,10 +314,7 @@ export function parseAgentPrompt(
 }
 
 async function fetchText(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Fetch ${url} failed: ${res.status} ${res.statusText}`);
-  }
+  const res = await fetchWithRetry(url);
   return res.text();
 }
 
@@ -250,15 +326,21 @@ async function fetchText(url: string): Promise<string> {
 export async function loadAgentRegistry(
   skillsBaseUrl: string,
   flow: string,
-  opts?: { exclude?: readonly string[] },
+  opts?: Parameters<typeof buildRegistry>[2],
 ): Promise<AgentRegistry> {
   const menuRaw = await fetchText(`${skillsBaseUrl}/agent-menu.json`);
   const menu = JSON.parse(menuRaw) as AgentMenu;
 
+  // Menus that carry a flow per entry let us skip other flows' prompts before
+  // fetching them; entries without one are fetched and filtered by their
+  // frontmatter in buildRegistry, as before.
+  const entries = (menu.agents ?? []).filter(
+    (entry) => !entry.flow || entry.flow === flow,
+  );
   const prompts = await Promise.all(
-    (menu.agents ?? []).map(async (entry) => {
+    entries.map(async (entry) => {
       const text = await fetchText(entry.downloadUrl);
-      return parseAgentPrompt(text, entry.id);
+      return parseAgentPrompt(text, entry.id, entry.flow);
     }),
   );
 
@@ -320,6 +402,12 @@ function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
     if (handoff.filesTouched?.length) {
       lines.push(`- files: ${handoff.filesTouched.join(', ')}`);
     }
+    if (handoff.evidence) {
+      lines.push(`- evidence: ${handoff.evidence}`);
+    }
+    if (handoff.assumptions) {
+      lines.push(`- assumed: ${handoff.assumptions}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) return '';
@@ -351,14 +439,27 @@ export function resolveTask(
     .join('\n\n');
 
   return {
-    model: taskModel(registry, task),
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
   };
 }
 
-/** The model a task runs on: enqueue override, then prompt frontmatter, then default. */
-export function taskModel(registry: AgentRegistry, task: QueuedTask): string {
-  return task.model ?? registry.get(task.type)?.model ?? DEFAULT_TASK_MODEL;
+/** The model + effort a task runs on for a harness: enqueue override, then the
+ * prompt's per-profile frontmatter; the caller's switchboard pick is the fallback. */
+export function taskModelSpec(
+  registry: AgentRegistry,
+  task: QueuedTask,
+  harness: string,
+): { model?: string; effort?: ThinkingLevel } {
+  const picked = promptModelFor(
+    registry.get(task.type) ?? EMPTY_PROMPT,
+    harness,
+  );
+  return {
+    model: task.model ?? picked.model,
+    effort: picked.effort,
+  };
 }
+
+const EMPTY_PROMPT = {} as AgentPrompt;

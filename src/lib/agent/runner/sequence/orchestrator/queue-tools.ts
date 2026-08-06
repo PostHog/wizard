@@ -9,11 +9,19 @@
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import {
+  isValidModel,
+  VALID_MODELS,
+} from '@lib/agent/runner/switchboard/models';
+import {
   TaskStatus,
   type QueueStore,
   type QueuedTask,
   type TaskHandoff,
 } from './queue';
+
+/** The per-task remark ask, shared by both harnesses' complete_task schemas. */
+export const REMARK_ASK =
+  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
 
 export interface OrchestratorToolsContext {
   store: QueueStore;
@@ -92,6 +100,19 @@ export function checkEnqueueGuards(
     };
   }
 
+  // Reject an agent pinning a task to a non-allow-listed model.
+  if (args.model !== undefined && !isValidModel(args.model)) {
+    return {
+      ok: false,
+      guard: 'invalid-model',
+      message: `Model "${
+        args.model
+      }" is not allowed. Omit model to use the task default, or pick one of: ${[
+        ...VALID_MODELS,
+      ].join(', ')}.`,
+    };
+  }
+
   for (const dep of args.dependsOn ?? []) {
     if (!ctx.store.get(dep)) {
       return {
@@ -145,7 +166,11 @@ export type CompleteResult = { ok: true } | { ok: false; message: string };
 
 export function applyComplete(
   ctx: OrchestratorToolsContext,
-  args: { status: 'done' | 'failed' | 'skipped'; handoff: TaskHandoff },
+  args: {
+    status: 'done' | 'failed' | 'not needed';
+    handoff: TaskHandoff;
+    remark?: string;
+  },
 ): CompleteResult {
   const id = ctx.currentTaskId;
   if (!id) {
@@ -153,6 +178,12 @@ export function applyComplete(
       ok: false,
       message: 'complete_task can only be called by a running task agent.',
     };
+  }
+  if (args.remark) {
+    analytics.wizardCapture('orchestrator remark', {
+      task_type: ctx.store.get(id)?.type,
+      remark: args.remark,
+    });
   }
   if (args.status === TaskStatus.Failed) {
     ctx.store.fail(
@@ -188,13 +219,44 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
+// Caps each LLM-authored free-text field; queue.json rewrites whole per transition.
+const HANDOFF_TEXT_MAX = 8_000;
+
 const HANDOFF_SHAPE = {
-  goals: z.string().describe('What this task was asked to achieve.'),
-  did: z.string().describe('What you actually did.'),
-  forNextAgent: z.string().describe('What the next agent should know.'),
-  filesTouched: z.array(z.string()).optional(),
+  goals: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .describe('What this task was asked to achieve.'),
+  did: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .describe(
+      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+    ),
+  forNextAgent: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .describe('What the next agent should know.'),
+  filesTouched: z
+    .array(z.string().max(1_000))
+    .max(200)
+    .optional()
+    .describe('Paths of every file you edited.'),
+  evidence: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(
+      'How you know it worked — what you ran or observed, not what you expect.',
+    ),
+  assumptions: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe('What you assumed about the app and could not verify.'),
   conflict: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
     .describe(
       'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
@@ -257,14 +319,16 @@ export function buildOrchestratorTools(
 
   const completeTask = tool(
     'complete_task',
-    "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'skipped' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
+    "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
     {
-      status: z.enum(['done', 'failed', 'skipped']),
+      status: z.enum(['done', 'failed', 'not needed']),
       handoff: z.object(HANDOFF_SHAPE),
+      remark: z.string().optional().describe(REMARK_ASK),
     },
     ((args: {
-      status: 'done' | 'failed' | 'skipped';
+      status: 'done' | 'failed' | 'not needed';
       handoff: TaskHandoff;
+      remark?: string;
     }) => {
       const res = applyComplete(ctx, args);
       if (!res.ok) return textResult(res.message, true);

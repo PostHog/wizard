@@ -273,15 +273,46 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
-`src/lib/oauth/program-scopes.ts`) must be present in that list. This is
-the allow-list to keep in sync — a net-new scope (e.g.
-`product_enablement:write`) must be added to the live
-`OAuthApplication.scopes` on the PostHog side before a token can be granted
-it:
+`src/lib/oauth/program-scopes.ts`) must be grantable under that ceiling, or
+`/authorize` drops it and the call that needs it 403s.
+
+**The live wizard apps use the `@default` sentinel, so most net-new scopes need
+no ceiling edit.** The prod US app's `scopes` is:
 
 ```
-user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write,product_enablement:write
+@default,llm_gateway:read,wizard_session:read,wizard_session:write
 ```
+
+`@default` resolves (in `posthog/scopes.py`, `resolve_ceiling`) to
+`UNPRIVILEGED_SCOPES` — **every** public `obj:action` scope except three
+excluded sets: privileged (`llm_gateway:*`), internal-only objects, and
+hidden/alpha objects. It auto-tracks unprivileged scopes added to PostHog later,
+which is the whole reason it exists. The three explicit entries alongside it are
+exactly the ones `@default` excludes and that the wizard still needs
+(`llm_gateway:read` is privileged; the `wizard_session:*` pair is
+provisioning-only).
+
+So the rule for a net-new scope this repo starts requesting is:
+
+- **A normal public scope object** (`replay_scanner`, `product_enablement`,
+  `task`, `signal_scout`, `external_data_source`, `llm_skill`, …) — already
+  inside `@default`. **No ceiling edit.** Confirm with
+  `python manage.py seed_oauth_app_scopes --client-id <id> --scopes @default,… --dry-run`
+  (posthog), or evaluate the requested scope against `resolve_ceiling`.
+- **A privileged, internal, or hidden object** — `@default` deliberately
+  excludes it, so it must be added explicitly to each app's `scopes` (Django
+  admin / the `seed_oauth_app_scopes` command), per region. This is the only
+  case that needs a manual prod edit.
+
+Client IDs are per-region DB rows, not committed here — the prod US app is
+`c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, the dev app (localhost:8010) is
+`DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ`; the prod EU app's ID lives in the EU
+deployment (referenced via `WIZARD_CLOUD_RUN_OAUTH_CLIENT_ID`) and should be
+seeded the same `@default,…` way.
+
+If an existing Wizard authorization predates a newly required scope, reconnect
+the Wizard OAuth app. Refresh tokens retain their original grant and cannot be
+used to silently add permissions.
 
 # Command changes (CLI overhaul)
 

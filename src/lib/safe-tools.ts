@@ -253,6 +253,9 @@ export const LINTING_TOOLS: string[] = [
   'sqlfmt',
   'squawk',
 
+  // Svelte
+  'svelte-check',
+
   // SVG
   'svgo',
 

@@ -3,7 +3,7 @@ import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { composerPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
-import fg from 'fast-glob';
+import { boundedGlob } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -85,9 +85,9 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
         }
       }
 
-      const hasLaravelStructure = await fg(
+      const hasLaravelStructure = await boundedGlob(
         ['**/bootstrap/app.php', '**/app/Http/Kernel.php'],
-        { cwd: installDir, ignore: ['**/vendor/**'] },
+        { cwd: installDir, limit: 1 },
       );
 
       return hasLaravelStructure.length > 0;

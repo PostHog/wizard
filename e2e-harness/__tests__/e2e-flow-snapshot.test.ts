@@ -34,8 +34,9 @@ import { profileFor } from '../profiles';
  */
 function traceFlow(
   integration: Integration,
+  program: (typeof Program)[keyof typeof Program] = Program.PostHogIntegration,
 ): Array<{ screen: string; action: string }> {
-  const store = new WizardStore(Program.PostHogIntegration);
+  const store = new WizardStore(program);
   setUI(new InkUI(store));
   const session = buildSession({ installDir: '/tmp/e2e-snap', ci: true });
   session.integration = integration;
@@ -43,7 +44,7 @@ function traceFlow(
   store.session = session;
 
   const driver = new WizardCiDriver(store);
-  const profile = profileFor(Program.PostHogIntegration);
+  const profile = profileFor(program);
 
   const trace: Array<{ screen: string; action: string }> = [];
   for (let guard = 0; guard < 40; guard++) {
@@ -92,6 +93,16 @@ describe('e2e flow snapshot — posthog-integration', () => {
     expect({
       program: 'posthog-integration',
       trace: traceFlow(Integration.javascriptNode),
+    }).toMatchSnapshot();
+  });
+});
+
+describe('e2e flow snapshot — ai-observability', () => {
+  it('walks intro → health → auth → run → outro → skills', () => {
+    expect({
+      program: 'ai-observability',
+      profile: profileFor(Program.AiObservability),
+      trace: traceFlow(Integration.javascriptNode, Program.AiObservability),
     }).toMatchSnapshot();
   });
 });

@@ -17,10 +17,13 @@ import fs from 'fs';
 import net from 'net';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@lib/version';
-import { Program } from '@lib/programs/program-registry';
+import {
+  Program,
+  getProgramConfig,
+  type ProgramId,
+} from '@lib/programs/program-registry';
 import type { Harness, Sequence } from '@lib/constants';
 import { buildSession } from '@lib/wizard-session';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { runAgent } from '@lib/agent/agent-runner';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
@@ -43,13 +46,22 @@ async function main() {
   ).trim();
   const projectId = process.env.PROJECT_ID!;
 
-  const { store } = startTUI(VERSION, Program.PostHogIntegration);
+  // Which program to drive — PROGRAM env from the workbench e2e runner;
+  // defaults to the integration flow. getProgramConfig throws on unknown ids.
+  const programId = (process.env.PROGRAM ||
+    Program.PostHogIntegration) as ProgramId;
+  const programConfig = getProgramConfig(programId);
+
+  const { store } = startTUI(VERSION, programId);
   store.session = buildSession({
     installDir: process.env.APP_DIR!,
     ci: true,
     apiKey,
     projectId,
     region: 'us',
+    // Local skills + MCP (context-mill dev server on :8765, MCP on :8787) —
+    // same env-backed flag the bin's --local-mcp reads.
+    localMcp: process.env.POSTHOG_WIZARD_LOCAL_MCP === 'true',
     // Switchboard variation overrides (see e2e.json `variations`), threaded by
     // the snapshot driver as one run per variation. Empty ⇒ resolved default.
     harness: (process.env.SNAP_HARNESS || undefined) as Harness | undefined,
@@ -66,7 +78,7 @@ async function main() {
       ci: true,
       apiKey,
       projectId: Number(projectId),
-      programId: Program.PostHogIntegration,
+      programId,
     });
     store.setCredentials({
       accessToken: d.accessToken,
@@ -76,12 +88,12 @@ async function main() {
     });
   };
 
-  // Pass the intro and health-check gates and run the real integration agent.
+  // Pass the intro and health-check gates and run the program's real agent.
   // The auth and run screens never advance on their own; this is what moves them.
   const runIntegration = async () => {
     await store.getGate('intro');
     await store.getGate('health-check');
-    await runAgent(posthogIntegrationConfig, store.session);
+    await runAgent(programConfig, store.session);
   };
 
   if (process.env.MODE === 'serve') return serve();
@@ -166,7 +178,7 @@ async function main() {
   // ---- CI route: self-drive the fixed profile, snapshot each screen ----
   async function fixed() {
     const CTRL = process.env.SNAP_CTRL!;
-    const profile: WizardE2eProfile = profileFor(Program.PostHogIntegration);
+    const profile: WizardE2eProfile = profileFor(programId);
     const screenPath: string[] = [];
     // Snapshot on key moments — a screen change, a task-list update, or a
     // runPhase change — so the run screen's progression (the agent working) is

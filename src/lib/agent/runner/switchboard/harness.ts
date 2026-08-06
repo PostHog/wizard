@@ -2,22 +2,13 @@
  * Harness axis: registry, middleware, resolver. Mirrors `sequence.ts`.
  */
 
-import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
-import {
-  DEFAULT_AGENT_MODEL,
-  GPT5_4_MODEL,
-  GPT5_MINI_MODEL,
-  GPT5_MODEL,
-  Harness,
-  SONNET_5_MODEL,
-  WIZARD_PI_MODEL_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
-} from '@lib/constants';
+import { IS_PRODUCTION_BUILD } from '@env';
+import { Harness } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import type { ProgramId } from '@lib/programs/program-registry';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
+import { resolveFlagRoute } from './flags';
 import {
   DEFAULT_BINDING,
   PROGRAM_BINDINGS,
@@ -40,34 +31,24 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/** `wizard-pi-model` variant key → gateway id (variant keys can't carry `/` or `.`). */
-const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
-  'gpt-5': GPT5_MODEL,
-  'gpt-5-4': GPT5_4_MODEL,
-  'gpt-5-mini': GPT5_MINI_MODEL,
-  'sonnet-4-6': DEFAULT_AGENT_MODEL,
-  'sonnet-5': SONNET_5_MODEL,
-};
-
-/** Programs the wizard-use-pi-harness flag may switch to pi; off this set the flag is a no-op and the binding default stands. */
-const PI_FLAG_PROGRAMS = new Set<ProgramId>(['posthog-integration']);
-
 /**
- * `wizard-use-pi-harness` on → pi, paired with the `wizard-pi-model` variant
- * (unknown/missing variant → gpt-5.4). Off `PI_FLAG_PROGRAMS`, the flag is
- * ignored and the binding default stands.
+ * PostHog-flag routing to pi (see `./flags`). No valid route — flag off, no
+ * config, or an invalid payload — keeps the non-flagged binding default.
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
-  // The pi experiment is disabled on the cloud (headless) run surface.
-  if (RUN_SURFACE === 'cloud') return pick;
-  if (!PI_FLAG_PROGRAMS.has(ctx.program)) return pick;
-  if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
+  const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
+  if (!route) return pick;
+  if (ctx.trace) {
+    ctx.trace.harness = 'flag';
+    // Harness-only routes keep the binding's model — trace it truthfully so
+    // analytics never attributes the fallback model to the flag.
+    if (route.model) ctx.trace.model = 'flag';
+  }
   return {
-    harness: Harness.pi,
-    model: PI_MODEL_FLAG_VARIANTS[variant] ?? GPT5_4_MODEL,
+    harness: route.harness ?? Harness.pi,
+    model: route.model ?? pick.model,
+    thinkingLevel: route.thinkingLevel ?? pick.thinkingLevel,
   };
 };
 
@@ -109,6 +90,7 @@ export function resolveHarness(
     return {
       harness: binding.harness,
       model: binding.model,
+      thinkingLevel: binding.thinkingLevel,
       ...binding.contextMillOverride?.[role],
     };
   });

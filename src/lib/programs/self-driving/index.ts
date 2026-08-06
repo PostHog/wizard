@@ -2,10 +2,13 @@ import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
-import { SELF_DRIVING_ABORT_CASES } from './detect.js';
+import {
+  SELF_DRIVING_ABORT_CASES,
+  getSelfDrivingDetectedTools,
+} from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
 import { getContentBlocks } from './content/index.js';
@@ -35,61 +38,69 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
   await rm(skillDir, { recursive: true, force: true }).catch(() => undefined);
 }
 
-const run: ProgramRun = {
-  skillId: SELF_DRIVING_SKILL_ID,
-  integrationLabel: SELF_DRIVING_SKILL_ID,
-  customPrompt: buildSelfDrivingPrompt,
-  successMessage: SUCCESS_MESSAGE,
-  reportFile: REPORT_FILE,
-  docsUrl: DOCS_URL,
-  spinnerMessage: 'Setting up PostHog Self-driving...',
-  estimatedDurationMinutes: 10,
-  abortCases: SELF_DRIVING_ABORT_CASES,
-  // The flow legitimately needs several interactions (GitHub connect +
-  // verify, issue-tracker picks, the scout-tailoring proposal), so raise
-  // the wizard_ask budget a little above the default 10.
-  maxQuestions: 13,
-  // This flow hands the user long OAuth/authorize URLs (Linear, GitHub
-  // fallback, Zendesk) in wizard_ask prompts. Render them as OSC 8
-  // hyperlinks + clipboard copy so the overlay's line wrapping can't break
-  // the click target. Scoped to this program only.
-  richLinks: true,
-  // STEP 3 (GitHub App install) and STEP 5 (Linear OAuth) park on wizard_ask
-  // while the user does slow browser work; a first-time GitHub App install
-  // routinely exceeds the 5-min default, and a timeout is indistinguishable
-  // from a decline (both resolve to __cancelled__). Match upload-source-maps.
-  askTimeoutMs: 30 * 60 * 1000,
+// A session closure (not a static object) so `customPrompt` can read the
+// tools detected in the codebase — written to frameworkContext by the detect
+// step — and hand them to the prompt for STEP 4/STEP 5 prioritisation.
+const buildRun = (session: WizardSession): Promise<ProgramRun> =>
+  Promise.resolve({
+    skillId: SELF_DRIVING_SKILL_ID,
+    integrationLabel: SELF_DRIVING_SKILL_ID,
+    customPrompt: (ctx) =>
+      buildSelfDrivingPrompt(ctx, getSelfDrivingDetectedTools(session)),
+    successMessage: SUCCESS_MESSAGE,
+    reportFile: REPORT_FILE,
+    docsUrl: DOCS_URL,
+    spinnerMessage: 'Setting up PostHog Self-driving...',
+    estimatedDurationMinutes: 10,
+    abortCases: SELF_DRIVING_ABORT_CASES,
+    // The flow legitimately needs several interactions (GitHub connect +
+    // verify, issue-tracker picks, the scout-tailoring proposal), so raise
+    // the wizard_ask budget a little above the default 10.
+    maxQuestions: 13,
+    // This flow hands the user long OAuth/authorize URLs (Linear, GitHub
+    // fallback, Zendesk) in wizard_ask prompts. Render them as OSC 8
+    // hyperlinks + clipboard copy so the overlay's line wrapping can't break
+    // the click target. Scoped to this program only.
+    richLinks: true,
+    // STEP 3 (GitHub App install) and STEP 5 (Linear OAuth) park on wizard_ask
+    // while the user does slow browser work; a first-time GitHub App install
+    // routinely exceeds the 5-min default, and a timeout is indistinguishable
+    // from a decline (both resolve to __cancelled__). Match upload-source-maps.
+    askTimeoutMs: 30 * 60 * 1000,
 
-  // Emit a `wizard: step` analytics event on each agent task transition so we
-  // can build a step-level drop-off funnel (where a run stops — GitHub connect,
-  // scout enable, etc.), including silent steps with no wizard_ask. Opt-in, so
-  // only self-driving runs emit these; every other program is unchanged.
-  trackStepProgress: true,
+    // Emit a `wizard: step` analytics event on each agent task transition so we
+    // can build a step-level drop-off funnel (where a run stops — GitHub connect,
+    // scout enable, etc.), including silent steps with no wizard_ask. Opt-in, so
+    // only self-driving runs emit these; every other program is unchanged.
+    trackStepProgress: true,
 
-  postRun: async (session) => {
-    await removeInstalledSkill(session.installDir);
-  },
+    postRun: async (session) => {
+      await removeInstalledSkill(session.installDir);
+    },
 
-  buildOutroData: (_session, credentials) => {
-    const uiHost = credentials.host.appHost.replace(/\/$/, '');
-    const inboxUrl = `${uiHost}/project/${credentials.projectId}/inbox`;
-    return {
-      kind: OutroKind.Success as const,
-      message: SUCCESS_MESSAGE,
-      primaryLink: { label: 'Your Self-driving inbox', url: inboxUrl },
-      nextSteps: {
-        heading: 'In your inbox you can:',
-        items: [
-          'Investigate reports with the agent',
-          'Tag teammates to loop them in',
-          'Kick off a PR when you like the proposed fix',
-          'Or work from Slack (tag @PostHog) and MCP',
-        ],
-      },
-      reportFile: REPORT_FILE,
-    };
-  },
-};
+    buildOutroData: (_session, credentials) => {
+      const uiHost = credentials.host.appHost.replace(/\/$/, '');
+      const inboxUrl = `${uiHost}/project/${credentials.projectId}/inbox`;
+      return {
+        kind: OutroKind.Success as const,
+        message: SUCCESS_MESSAGE,
+        primaryLink: { label: 'Your Self-driving inbox', url: inboxUrl },
+        nextSteps: {
+          heading: 'In your inbox you can:',
+          items: [
+            'Investigate reports with the agent',
+            'Tag teammates to loop them in',
+            'Kick off a PR when you like the proposed fix ($15 flat)',
+            'Or work from Slack (tag @PostHog) and MCP',
+          ],
+        },
+        body:
+          'Pricing: scouts, signals, and reports are free. You pay a flat ' +
+          '$15 only when a report ships a PR.',
+        reportFile: REPORT_FILE,
+      };
+    },
+  });
 
 export const selfDrivingConfig: ProgramConfig = {
   ...createSkillProgram({
@@ -107,7 +118,7 @@ export const selfDrivingConfig: ProgramConfig = {
     abortCases: SELF_DRIVING_ABORT_CASES,
   }),
   steps: SELF_DRIVING_PROGRAM,
-  run,
+  run: buildRun,
   getTips,
   getContentBlocks,
 };

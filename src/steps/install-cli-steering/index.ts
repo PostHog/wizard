@@ -66,6 +66,13 @@ export interface SteeringInstallResult {
 export interface CliInstallResult {
   success: boolean;
   error?: string;
+  /**
+   * The underlying failure as an Error, for callers that report to error
+   * tracking. Carries the real spawn error (with its stack) when npm couldn't
+   * launch; a synthesized Error for a non-zero exit. Set whenever success is
+   * false.
+   */
+  errorObject?: Error;
 }
 
 const spawnOptions = {
@@ -90,17 +97,20 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
     return {
       success: false,
       error: `Failed to run npm: ${result.error.message}. Is Node.js installed?`,
+      errorObject: result.error,
     };
   }
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || '').trim();
+    const message =
+      detail ||
+      `npm install --global @posthog/cli@latest exited with status ${
+        result.status ?? 'unknown'
+      }`;
     return {
       success: false,
-      error:
-        detail ||
-        `npm install --global @posthog/cli@latest exited with status ${
-          result.status ?? 'unknown'
-        }`,
+      error: message,
+      errorObject: new Error(message),
     };
   }
   return { success: true };

@@ -10,6 +10,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { runCleanups } from '@utils/wizard-abort';
+import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -17,7 +18,8 @@ type Step = ProgramConfig['steps'][number];
 
 /** The session a run step's agent runs in: scoped to the step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged. */
+ * A step without `targetDir` runs in the live session, unchanged.
+ * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
   step: Step,
   live: WizardSession,
@@ -101,6 +103,7 @@ export function runWizard(
         sequence: options.sequence as Sequence | undefined,
         model: options.model as string | undefined,
         integrate: options.integrate as boolean | undefined,
+        captureAio: options.captureAio as boolean | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -121,6 +124,9 @@ export function runWizard(
             onError: (err) => logToFile('[task-stream-push]', err.message),
           }),
         ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         enabled: taskStreamEnabled,
       });
       const activeStream = taskStream;

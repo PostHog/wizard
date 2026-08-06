@@ -11,6 +11,7 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
+import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
@@ -18,9 +19,11 @@ import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@lib/host-resolution';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
+import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -34,6 +37,52 @@ function resolveContinueUrl(
   return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
 }
 
+/**
+ * Outro suggestion for data sources found in the project but not connected.
+ *
+ * A pointer at `wizard warehouse`, not an inline flow. Connecting a source
+ * needs interactive credential collection, and chaining that as a second agent
+ * run before the outro would let any of its terminal failure paths
+ * `process.exit()` — costing the user the success outro and the post-outro
+ * MCP / Slack steps on a run where PostHog installed fine.
+ *
+ * Returns undefined when nothing was detected, so the outro is unchanged for
+ * projects with no connectable source.
+ */
+function buildWarehouseNextSteps(
+  sess: WizardSession,
+): { heading: string; items: string[] } | undefined {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return undefined;
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return {
+    heading: 'Query your other data in PostHog:',
+    items: [
+      `Found in this project: ${labels}`,
+      'Import it into the data warehouse with: npx @posthog/wizard warehouse',
+    ],
+  };
+}
+
+/**
+ * Prompt fragment asking the agent to note the detected data sources in the
+ * setup report's checklist.
+ *
+ * Empty string when nothing was detected, so the prompt is byte-identical to
+ * today for projects with no connectable source. Best-effort by nature — the
+ * agent may word it differently or skip it. That is acceptable here precisely
+ * because it is a note in a report: the outro `nextSteps` bullet carries the
+ * same information deterministically, so nothing is lost if the agent drops it.
+ */
+function warehouseReportInstruction(sess: WizardSession): string {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return '';
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
+}
+
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export { EVENT_PLAN_FILE } from './constants.js';
 
@@ -41,6 +90,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   command: 'integrate',
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
+  agentFlow: 'integration-v2',
+  eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
@@ -52,6 +103,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (session: WizardSession): Promise<void> => {
+    await scopeInstallDirToProject(session);
+
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
@@ -91,6 +144,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
       installDir: session.installDir,
     });
     session.typescript = typeScriptDetected;
+    analytics.setTag('typescript', typeScriptDetected);
 
     // Read package.json and resolve framework version
     const usesPackageJson = config.detection.usesPackageJson !== false;
@@ -197,7 +251,7 @@ STEP 5: Set up environment variables for PostHog using the wizard-tools MCP serv
 
 Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses, then run its install command to add the SDK. Do not manually search for lockfiles or config files. If a file already EXISTS, read it immediately before you edit or overwrite it — writing from a stale read causes a tool failure. Creating a brand-new file needs no prior read: never read a path that does not exist yet; just write it.
 
-
+${warehouseReportInstruction(session)}
 `;
       },
 
@@ -264,13 +318,16 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
-          reportFile: SETUP_REPORT_FILE,
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          nextSteps: buildWarehouseNextSteps(sess),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
-          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
+          // No report file — the prompt points at the notebook, when the run captured one.
+          handoffPrompt: sess.notebookUrl
+            ? buildCodingAgentPrompt(sess.notebookUrl)
+            : undefined,
         };
       },
     };

@@ -30,6 +30,7 @@ import {
   mcpTutorialConfig,
 } from './mcp/index.js';
 import { mcpAnalyticsConfig } from './mcp-analytics/index.js';
+import { aiObservabilityConfig } from './ai-observability/index.js';
 import { slackConnectConfig } from './slack/index.js';
 
 // Generic skill program — runs an arbitrary context-mill skill chosen at
@@ -78,6 +79,7 @@ export const PROGRAM_REGISTRY = [
   mcpRemoveConfig,
   mcpTutorialConfig,
   mcpAnalyticsConfig,
+  aiObservabilityConfig,
   slackConnectConfig,
 ] as const satisfies readonly ProgramConfig[];
 
@@ -102,6 +104,7 @@ export const Program = {
   McpRemove: mcpRemoveConfig.id,
   McpTutorial: mcpTutorialConfig.id,
   McpAnalytics: mcpAnalyticsConfig.id,
+  AiObservability: aiObservabilityConfig.id,
   SlackConnect: slackConnectConfig.id,
 } as const;
 

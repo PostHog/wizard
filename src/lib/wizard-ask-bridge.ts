@@ -91,6 +91,7 @@ export function createWizardAskBridge(
         questions,
         source: opts.getSource(),
         richLinks: opts.richLinks ?? false,
+        askedAt: new Date().toISOString(),
       };
 
       const startedAt = Date.now();

@@ -52,6 +52,27 @@ export interface StreamEventPlan {
   events: Array<{ name: string; description?: string }>;
 }
 
+/**
+ * An in-flight `wizard_ask` request, published so the web app can tell
+ * the user their terminal is waiting on them. Null/absent means no input
+ * is pending — consumers treat the next push without this field as the
+ * dismissal signal.
+ */
+export interface StreamPendingInput {
+  /** PendingQuestion id — stable for the lifetime of one ask. */
+  id: string;
+  /** UTC ISO 8601 timestamp of when the overlay opened. */
+  asked_at: string;
+  question_count: number;
+  /** True when any question is marked sensitive (secrets, API keys). */
+  sensitive: boolean;
+  /**
+   * Prompt texts, omitted entirely when `sensitive` is true so secret
+   * prompts never reach the team-visible session row.
+   */
+  prompts?: string[];
+}
+
 export interface TaskStreamUpdate {
   session_id: string;
   workflow_id: string;
@@ -61,6 +82,13 @@ export interface TaskStreamUpdate {
   tasks: StreamTask[];
   event_plan?: StreamEventPlan;
   error?: TaskStreamError;
+  pending_input?: StreamPendingInput;
+  /**
+   * The run's markdown handoff doc (the program's report file), included on
+   * every push once the agent has written it. The backend keeps the field
+   * sticky per session, so consumers never see it disappear again.
+   */
+  handoff_text?: string;
   /** UTC ISO 8601 timestamp of this payload. Latest update wins on conflict. */
   timestamp: string;
 }

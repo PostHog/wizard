@@ -1,4 +1,8 @@
-import { coerceAgenticReport, manifestGlob } from '@lib/detection/agentic';
+import {
+  coerceAgenticReport,
+  manifestGlob,
+  resolveProjectDir,
+} from '@lib/detection/agentic';
 
 const TARGETS = ['nextjs', 'node', 'vite'];
 
@@ -103,5 +107,89 @@ describe('coerceAgenticReport', () => {
     expect(keep('apps/web')).toBe('apps/web');
     expect(keep('.')).toBe('.');
     expect(keep('ios')).toBe('ios');
+  });
+});
+
+describe('resolveProjectDir', () => {
+  it('scopes to the chosen sub-app inside the repo', () => {
+    expect(resolveProjectDir('/repo', 'apps/web')).toBe('/repo/apps/web');
+    expect(resolveProjectDir('/repo', '.')).toBe('/repo');
+  });
+
+  it('keeps the root for non-string values (session round-trips are unknown)', () => {
+    expect(resolveProjectDir('/repo', undefined)).toBe('/repo');
+    expect(resolveProjectDir('/repo', 42)).toBe('/repo');
+  });
+
+  it('falls back to the repo root when the path escapes it', () => {
+    // Defense-in-depth on top of coercePath: the value is LLM output.
+    expect(resolveProjectDir('/repo', '../../etc')).toBe('/repo');
+    expect(resolveProjectDir('/repo', '/etc')).toBe('/repo');
+    expect(resolveProjectDir('/repo', 'a/../..')).toBe('/repo');
+  });
+});
+
+describe('coerceAgenticReport recommendation', () => {
+  const projects = [
+    {
+      path: 'apps/api',
+      framework: 'Express',
+      targetId: 'node',
+      hasPostHog: false,
+    },
+    {
+      path: 'apps/web',
+      framework: 'Next.js',
+      targetId: 'nextjs',
+      hasPostHog: false,
+      recommended: true,
+    },
+  ];
+
+  it('strips recommended entirely when the scan did not ask for it', () => {
+    // Consumers that never opted in must never see the field, even when the agent emits it anyway.
+    const report = coerceAgenticReport({ projects }, TARGETS);
+    for (const p of report.projects) {
+      expect('recommended' in p).toBe(false);
+    }
+  });
+
+  it('keeps the recommended label when the scan asked for it', () => {
+    const report = coerceAgenticReport({ projects }, TARGETS, {
+      recommend: true,
+    });
+    expect(report.projects.map((p) => p.recommended)).toEqual([false, true]);
+  });
+
+  it('keeps at most one recommended project — the first', () => {
+    const doubled = projects.map((p) => ({ ...p, recommended: true }));
+    const report = coerceAgenticReport({ projects: doubled }, TARGETS, {
+      recommend: true,
+    });
+    expect(report.projects.map((p) => p.recommended)).toEqual([true, false]);
+  });
+
+  it('coerces malformed recommended values to false', () => {
+    const report = coerceAgenticReport(
+      {
+        projects: [
+          { path: '.', recommended: 'yes' },
+          { path: 'ios', recommended: 1 },
+        ],
+      },
+      TARGETS,
+      { recommend: true },
+    );
+    expect(report.projects.map((p) => p.recommended)).toEqual([false, false]);
+  });
+
+  it('keeps the label while an escaping path clamps to "."', () => {
+    const report = coerceAgenticReport(
+      { projects: [{ path: '/etc', recommended: true }] },
+      TARGETS,
+      { recommend: true },
+    );
+    expect(report.projects[0].path).toBe('.');
+    expect(report.projects[0].recommended).toBe(true);
   });
 });

@@ -31,7 +31,7 @@ export const VENDOR_STACK_BLOCK: ContentBlock = {
     </Text>,
     <Text>
       <Text color="gray">{'  Braintrust'}</Text>
-      <Text>{'     LLM analytics       '}</Text>
+      <Text>{'     AI observability    '}</Text>
       <Text color="red">{'$50/mo+'}</Text>
     </Text>,
     <Text color="gray">{'  ─────────────────────────────────────'}</Text>,
