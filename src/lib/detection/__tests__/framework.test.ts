@@ -292,19 +292,29 @@ describe('wordpress detect', () => {
     await expect(detect(opts)).resolves.toBe(true);
   });
 
-  test('claims a standalone plugin directory by its Plugin Name header', async () => {
+  test('does not claim a standalone plugin directory — only full sites', async () => {
     const opts = project({
       'my-plugin.php': '<?php\n/**\n * Plugin Name: My Plugin\n */\n',
     });
-    await expect(detect(opts)).resolves.toBe(true);
+    await expect(detect(opts)).resolves.toBe(false);
   });
 
-  test('claims a standalone theme directory by its Theme Name header', async () => {
+  test('does not claim a standalone theme directory — only full sites', async () => {
     const opts = project({
       'style.css': '/*\nTheme Name: My Theme\n*/\n',
       'index.php': '<?php',
     });
-    await expect(detect(opts)).resolves.toBe(true);
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a plugin that pulls wpackagist dependencies via Composer', async () => {
+    const opts = project({
+      'my-plugin.php': '<?php\n/**\n * Plugin Name: My Plugin\n */\n',
+      'composer.json': JSON.stringify({
+        require: { 'wpackagist-plugin/woocommerce': '^9.0' },
+      }),
+    });
+    await expect(detect(opts)).resolves.toBe(false);
   });
 
   test('does not claim a Laravel project that merely has composer.json', async () => {

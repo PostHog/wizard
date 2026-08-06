@@ -4,22 +4,17 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import { composerPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  WordPressProjectType,
-  findPluginHeaderFile,
   findPluginsDir,
-  getWordPressProjectType,
-  getWordPressProjectTypeName,
   getWordPressVersion,
   getWordPressVersionBucket,
   hasComposerWordPress,
-  hasThemeHeader,
   hasWordPressCore,
 } from './utils';
 
 type WordPressContext = {
-  projectType?: WordPressProjectType;
+  /** Classic install owns core at the root; Bedrock manages it via Composer. */
+  installKind?: 'classic' | 'composer';
   pluginsDir?: string;
-  pluginHeaderFile?: string;
 };
 
 export const WORDPRESS_AGENT_CONFIG: FrameworkConfig<WordPressContext> = {
@@ -28,15 +23,13 @@ export const WORDPRESS_AGENT_CONFIG: FrameworkConfig<WordPressContext> = {
     integration: Integration.wordpress,
     docsUrl: 'https://posthog.com/docs/libraries/wordpress',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/php',
-    gatherContext: (options: WizardRunOptions) => {
-      const projectType = getWordPressProjectType(options);
-
-      return Promise.resolve({
-        projectType,
+    gatherContext: (options: WizardRunOptions) =>
+      Promise.resolve({
+        installKind: hasWordPressCore(options.installDir)
+          ? ('classic' as const)
+          : ('composer' as const),
         pluginsDir: findPluginsDir(options.installDir),
-        pluginHeaderFile: findPluginHeaderFile(options.installDir),
-      });
-    },
+      }),
   },
 
   detection: {
@@ -50,17 +43,13 @@ export const WORDPRESS_AGENT_CONFIG: FrameworkConfig<WordPressContext> = {
     detect: (options) => {
       const { installDir } = options;
 
-      // A full site: wp-config.php and friends, or Composer-managed core.
-      if (hasWordPressCore(installDir) || hasComposerWordPress(installDir)) {
-        return Promise.resolve(true);
-      }
-
-      // A single plugin or theme directory, worked on outside a site tree.
-      if (findPluginHeaderFile(installDir) || hasThemeHeader(installDir)) {
-        return Promise.resolve(true);
-      }
-
-      return Promise.resolve(false);
+      // Only a full site is claimed: wp-config.php and friends at the root,
+      // or Composer-managed core (Bedrock). A standalone plugin or theme
+      // directory is deliberately not — the integration writes a plugin into
+      // a site tree, so it needs one to exist.
+      return Promise.resolve(
+        hasWordPressCore(installDir) || hasComposerWordPress(installDir),
+      );
     },
     detectPackageManager: composerPackageManager,
   },
@@ -75,42 +64,28 @@ export const WORDPRESS_AGENT_CONFIG: FrameworkConfig<WordPressContext> = {
 
   analytics: {
     getTags: (context) => ({
-      projectType: context.projectType || 'unknown',
+      installKind: context.installKind || 'unknown',
     }),
   },
 
   prompts: {
     projectTypeDetection:
-      'This is a WordPress project. Look for wp-config.php, wp-content/, or a PHP file with a `Plugin Name:` header to confirm. Composer-managed installs (Bedrock) keep core out of the root — check composer.json for johnpbloch/wordpress or roots/wordpress.',
+      'This is a WordPress site. Look for wp-config.php, wp-load.php, and the wp-includes/ directory to confirm. Composer-managed installs (Bedrock) keep core out of the root — check composer.json for johnpbloch/wordpress or roots/wordpress.',
     packageInstallation:
       'Use Composer to install packages. Run `composer require posthog/posthog-php` without pinning a specific version, from inside the plugin directory that will own the dependency — not the site root.',
     getAdditionalContextLines: (context) => {
-      const projectTypeName = context.projectType
-        ? getWordPressProjectTypeName(context.projectType)
-        : 'unknown';
-
       // Integration rules (plugin over functions.php, ABSPATH, esc_js, flush)
       // live in context-mill's wordpress commandments and reach the agent with
       // the skill. Only project-shape facts the skill cannot know belong here.
       const lines = [
-        `Project type: ${projectTypeName}`,
+        `Project type: WordPress site (${
+          context.installKind ?? 'classic'
+        } install)`,
         `Framework docs ID: php (use posthog://docs/frameworks/php for documentation)`,
       ];
 
       if (context.pluginsDir) {
         lines.push(`Plugins directory: ${context.pluginsDir}`);
-      }
-
-      if (context.pluginHeaderFile) {
-        lines.push(
-          `Existing plugin entry file: ${context.pluginHeaderFile} (add to this plugin rather than creating a new one)`,
-        );
-      }
-
-      if (context.projectType === WordPressProjectType.THEME) {
-        lines.push(
-          'This directory is a theme. Prefer creating a companion plugin next to it so tracking survives a theme change; only fall back to the theme if the user insists.',
-        );
       }
 
       return lines;
@@ -120,28 +95,14 @@ export const WORDPRESS_AGENT_CONFIG: FrameworkConfig<WordPressContext> = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
-    getOutroChanges: (context) => {
-      const projectTypeName = context.projectType
-        ? getWordPressProjectTypeName(context.projectType)
-        : 'WordPress project';
-
-      const changes = [
-        `Analyzed your ${projectTypeName}`,
-        'Installed the PostHog PHP package via Composer',
-      ];
-
-      if (context.projectType === WordPressProjectType.SITE) {
-        changes.push('Added a PostHog plugin under wp-content/plugins');
-      } else {
-        changes.push('Added PostHog initialization to your plugin entry file');
-      }
-
-      changes.push(
-        'Wired client-side autocapture on wp_head and a server-side capture on a WordPress action',
-      );
-
-      return changes;
-    },
+    getOutroChanges: (context) => [
+      'Analyzed your WordPress site',
+      'Installed the PostHog PHP package via Composer',
+      `Added a PostHog plugin under ${
+        context.pluginsDir ?? 'wp-content/plugins'
+      }`,
+      'Wired client-side autocapture on wp_head and a server-side capture on a WordPress action',
+    ],
     getOutroNextSteps: () => [
       'Activate the PostHog plugin from Plugins in wp-admin',
       'Load any page on the site, then check your PostHog dashboard for incoming events',
