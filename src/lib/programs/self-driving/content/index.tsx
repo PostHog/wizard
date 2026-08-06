@@ -176,7 +176,9 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     },
 
     {
-      content: `That PR is the only thing you pay for. ${PRICING_LONG}`,
+      // No lead-in: PRICING_LONG already names the PR as what's charged, and the
+      // pane only fits ~148 chars per beat.
+      content: PRICING_LONG,
       pause: 5000,
     },
 

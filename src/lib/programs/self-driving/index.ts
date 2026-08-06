@@ -96,7 +96,7 @@ const buildRun = (session: WizardSession): Promise<ProgramRun> =>
             'Investigate reports with the agent',
             'Tag teammates to loop them in',
             `Kick off a PR when you like the proposed fix ($${PRICE_PER_PR_USD} flat)`,
-            'Set a monthly limit on PRs under Usage',
+            'Cap the spend with a monthly PR limit in the sidebar',
             'Or work from Slack (tag @PostHog) and MCP',
           ],
         },
