@@ -22,3 +22,22 @@ export const AUDIT_AREA_SLIDES: AreaSlide[] = [
   WriteReportSlide,
   UploadNotebookSlide,
 ];
+
+/**
+ * Deck registry keyed by `session.skillId`. Programs on the audit-run
+ * screen get the deck matching their skill; anything unlisted falls back
+ * to the comprehensive-audit deck. To give a new audit program its own
+ * deck, add a `<skill>/index.ts` deck module and one entry here.
+ */
+import { EVENTS_AUDIT_AREA_SLIDES } from './events-audit/index.js';
+import { FEATURE_FLAGS_AREA_SLIDES } from './feature-flags/index.js';
+
+const SLIDES_BY_SKILL: Record<string, AreaSlide[]> = {
+  'audit-events': EVENTS_AUDIT_AREA_SLIDES,
+  'events-audit': EVENTS_AUDIT_AREA_SLIDES,
+  'audit-feature-flags': FEATURE_FLAGS_AREA_SLIDES,
+};
+
+export function getAreaSlides(skillId: string | null | undefined): AreaSlide[] {
+  return (skillId && SLIDES_BY_SKILL[skillId]) || AUDIT_AREA_SLIDES;
+}
