@@ -93,6 +93,19 @@ describe('wizard OAuth scopes', () => {
     );
   });
 
+  it('grants the feature-flags doctor the flag scopes its roster and fix phase need', () => {
+    const scopes = getOAuthScopesForProgram('feature-flags-doctor');
+
+    // Without feature_flag:read the roster call (`feature-flag-get-all`)
+    // 403s and every roster-dependent check silently degrades to
+    // mcp_skipped — the exact failure the first live run surfaced.
+    expect(scopes).toContain('feature_flag:read');
+    // The fix phase archives/disables approved cleanup candidates.
+    expect(scopes).toContain('feature_flag:write');
+    // Base scopes are never dropped by an addition.
+    expect(scopes).toEqual(expect.arrayContaining([...WIZARD_OAUTH_SCOPES]));
+  });
+
   it('grants self-driving the scanner scopes STEP 6c needs', () => {
     const scopes = getOAuthScopesForProgram('self-driving');
 
