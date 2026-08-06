@@ -7,6 +7,13 @@
  * suggestion never turns into an inline run.
  */
 
+vi.mock('@utils/analytics', () => ({
+  analytics: {
+    setTag: vi.fn(),
+    wizardCapture: vi.fn(),
+  },
+}));
+
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { POSTHOG_INTEGRATION_PROGRAM } from '@lib/programs/posthog-integration/steps';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
@@ -81,13 +88,31 @@ describe('outro suggestion', () => {
     );
   });
 
-  it('is absent when nothing was detected — outro unchanged', async () => {
+  it('drops the warehouse bullet when nothing was detected, keeping the activation CTA', async () => {
     const s = sessionWith([]);
     const runDef = await resolveRun(s);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
 
-    expect(outro.nextSteps).toBeUndefined();
+    // The activation CTA is unconditional — the warehouse pointer is additive.
+    expect(outro.nextSteps).toBeDefined();
+    expect(outro.nextSteps!.items.join(' ')).not.toContain(
+      'npx @posthog/wizard warehouse',
+    );
+  });
+
+  it('always nudges the user to run locally, confirm events, then deploy', async () => {
+    const s = sessionWith([]);
+    const runDef = await resolveRun(s);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+
+    const text = outro.nextSteps!.items.join(' ');
+    expect(text).toContain('Run your app locally');
+    expect(text).toContain('deploy');
+    // Project-scoped live-events link so the user lands on their own events.
+    expect(outro.primaryLink).toBeDefined();
+    expect(outro.primaryLink!.url).toContain('/project/1/activity/explore');
   });
 
   it('keeps the PostHog headline and change list intact either way', async () => {
