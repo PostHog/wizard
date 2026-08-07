@@ -1,4 +1,5 @@
-import { Analytics, groupsFromUser } from '@utils/analytics';
+import { Analytics, groupsFromUser, sessionProperties } from '@utils/analytics';
+import { buildSession } from '@lib/wizard-session';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
@@ -629,6 +630,16 @@ describe('Analytics', () => {
       const beforeSend = getBeforeSend();
 
       expect(beforeSend(null)).toBeNull();
+    });
+  });
+
+  describe('sessionProperties', () => {
+    it('includes the posthog_sdk_detected verdict', () => {
+      const session = buildSession({});
+      expect(sessionProperties(session).posthog_sdk_detected).toBe(false);
+
+      session.posthogSdkDetected = true;
+      expect(sessionProperties(session).posthog_sdk_detected).toBe(true);
     });
   });
 
