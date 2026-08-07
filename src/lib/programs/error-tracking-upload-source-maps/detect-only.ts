@@ -110,35 +110,74 @@ export function resolveRepository(
   return remote ? `${remote.org}/${remote.repo}` : null;
 }
 
-async function postDetection(
+/**
+ * Retry budget for the detection POST. By this point the POST is all that
+ * stands between an up-to-five-minute scan and losing its result, and the
+ * upsert is idempotent — so transient failures (network errors, 429, 5xx)
+ * retry with capped backoff. Other 4xx responses won't heal and fail fast.
+ */
+const POST_TIMEOUT_MS = 30_000; // per attempt
+const POST_MAX_ATTEMPTS = 3;
+const POST_BACKOFF_MS = 500; // doubles each retry
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function postDetection(
   creds: Credentials,
   payload: DetectionUpsertPayload,
+  opts: {
+    fetchImpl?: typeof fetch;
+    sleepImpl?: (ms: number) => Promise<void>;
+  } = {},
 ): Promise<void> {
+  const { fetchImpl = fetch, sleepImpl = sleep } = opts;
   const url = `${creds.host.apiHost.replace(/\/$/, '')}/api/projects/${
     creds.projectId
   }/wizard/repository_detections/`;
-  const response = await fetch(url, {
+  const init = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${creds.accessToken}`,
     },
     body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
+  };
+
+  let lastError: Error | undefined;
+  for (let attempt = 1; attempt <= POST_MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      await sleepImpl(POST_BACKOFF_MS * 2 ** (attempt - 2));
+    }
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        ...init,
+        signal: AbortSignal.timeout(POST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      continue;
+    }
+    if (response.ok) return;
     const body = await response.text().catch(() => '');
-    throw new Error(
+    lastError = new Error(
       `Posting the detection failed (HTTP ${response.status}): ${body.slice(
         0,
         500,
       )}`,
     );
+    if (response.status !== 429 && response.status < 500) throw lastError;
   }
+  throw lastError!;
 }
 
 /**
- * Entry point for `upload-source-maps --detect-only`. Owns its exits: 0 when
- * a result (success or recorded failure) reached PostHog, 1 otherwise.
+ * Entry point for `upload-source-maps --detect-only`. Owns its exits: 0 only
+ * when a successful detection was saved to PostHog; 1 on any failure — the
+ * failure is still recorded server-side best-effort so the app can show it,
+ * but the run itself reports as failed.
  */
 export async function runDetectOnly(
   options: Record<string, unknown>,

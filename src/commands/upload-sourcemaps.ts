@@ -2,6 +2,7 @@ import { runWizard, runWizardCI } from '@lib/runners';
 import { errorTrackingUploadSourceMapsConfig } from '@lib/programs/error-tracking-upload-source-maps/index';
 import { runDetectOnly } from '@lib/programs/error-tracking-upload-source-maps/detect-only';
 import { regionOption } from '@lib/headless-mode';
+import { runCommandHandler } from './factories/shared';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 
@@ -37,7 +38,7 @@ export const uploadSourcemapsCommand: Command = {
       ) ?? {};
     const options = { ...argv, ...extras };
     if (options.detectOnly) {
-      void runDetectOnly(options);
+      runCommandHandler(() => runDetectOnly(options));
     } else if (options.ci) {
       runWizardCI(errorTrackingUploadSourceMapsConfig, options);
     } else {
