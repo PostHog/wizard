@@ -77,8 +77,12 @@ export function matchesKey(
     case KeyMatch.Printable:
       // Ink sets a flag for every non-text key while still passing a non-empty
       // `input`, so any flag but shift rules out typing.
+      // Any single non-control character, not just ASCII — a filter query can
+      // hold an accented or non-Latin letter.
       return (
-        /^[ -~]$/.test(input) &&
+        input.length === 1 &&
+        input >= ' ' &&
+        input !== '\x7f' &&
         Object.entries(key).every(([flag, on]) => !on || flag === 'shift')
       );
     default:

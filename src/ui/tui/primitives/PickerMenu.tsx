@@ -358,8 +358,9 @@ const SinglePickerMenu = <T,>({
         setFocused(stepEnabled(options, rows, focused, dir));
       },
     },
-    // Not while filtering: `n` and `p` are then just characters, and the arrows
-    // already flip pages on their own.
+    // Only on a non-filterable list. Once a filter row exists `n` and `p` are
+    // characters, not commands — so they go for good, not just once a query is
+    // typed, and the arrows carry paging instead by walking the whole list.
     ...(viewport.needsScroll && filter === null
       ? [
           {
@@ -626,8 +627,9 @@ const MultiPickerMenu = <T,>({
         }
       },
     },
-    // Not while filtering: `n` and `p` are then just characters, and the arrows
-    // already flip pages on their own.
+    // Only on a non-filterable list. Once a filter row exists `n` and `p` are
+    // characters, not commands — so they go for good, not just once a query is
+    // typed, and the arrows carry paging instead by walking the whole list.
     ...(viewport.needsScroll && filter === null
       ? [
           {
@@ -657,8 +659,11 @@ const MultiPickerMenu = <T,>({
           confirm();
           return;
         }
-        if (options[focused]?.disabled) return;
-        const label = options[focused].label;
+        // `focused` can point past the end: filtering to zero matches leaves
+        // nothing under the cursor, and enter is the natural thing to try there.
+        const option = options[focused];
+        if (!option || option.disabled) return;
+        const label = option.label;
         setSelected((prev) => {
           const next = new Set(prev);
           if (next.has(label)) {
@@ -667,7 +672,7 @@ const MultiPickerMenu = <T,>({
           }
           // Enforce mutual exclusivity: an exclusive option clears every other
           // pick; any other option clears previously-picked exclusive ones.
-          if (options[focused]?.exclusive) {
+          if (option.exclusive) {
             return new Set([label]);
           }
           // Against `allOptions`: the pick being cleared may be off-screen
