@@ -46,6 +46,7 @@ export function sessionProperties(
     discovered_features: session.discoveredFeatures,
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
+    posthog_sdk_detected: session.posthogSdkDetected,
   };
 }
 
