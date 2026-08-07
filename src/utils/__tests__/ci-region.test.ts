@@ -2,6 +2,7 @@ import { getOrAskForProjectData } from '@utils/setup-utils';
 import { detectRegion } from '@utils/urls';
 import { fetchProjectData, fetchUserData } from '@lib/api';
 import { performOAuthFlow } from '@utils/oauth';
+import { analytics } from '@utils/analytics';
 
 vi.mock('@ui', () => ({
   getUI: () => ({
@@ -27,9 +28,11 @@ vi.mock('@utils/analytics', () => ({
     setTag: vi.fn(),
   },
 }));
-vi.mock('@utils/oauth', () => ({
+vi.mock('@utils/oauth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/oauth')>()),
+  // Only the network-driven flow is stubbed; the completion-scope helper stays
+  // real so the login path's degrade/retry branch is exercised, not faked.
   performOAuthFlow: vi.fn(),
-  assertWizardCompletionScope: vi.fn(),
 }));
 
 const mockedDetect = detectRegion as unknown as ReturnType<typeof vi.fn>;
@@ -134,5 +137,77 @@ describe('getOrAskForProjectData OAuth login region', () => {
       123,
       'https://eu.posthog.com',
     );
+  });
+});
+
+describe('getOrAskForProjectData missing completion scope', () => {
+  const mockedCapture = analytics.captureException as unknown as ReturnType<
+    typeof vi.fn
+  >;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockResolvedValue({
+      distinct_id: 'user-1',
+      role_at_organization: null,
+    });
+  });
+
+  it('re-requests consent when a reused grant lacks the completion scope', async () => {
+    // First login reuses the pre-existing grant and skips consent, so the token
+    // comes back without event_definition:write; the forced-consent retry then
+    // returns the widened grant.
+    mockedOAuthFlow
+      .mockResolvedValueOnce({
+        access_token: 'pha_test',
+        scope: 'user:read wizard_session:write',
+        scoped_teams: [123],
+        posthog_region: 'us',
+      })
+      .mockResolvedValueOnce({
+        access_token: 'pha_test',
+        scope: 'user:read wizard_session:write event_definition:write',
+        scoped_teams: [123],
+        posthog_region: 'us',
+      });
+
+    await getOrAskForProjectData({ ci: false, signup: false, projectId: 123 });
+
+    expect(mockedOAuthFlow).toHaveBeenCalledTimes(2);
+    expect(mockedOAuthFlow.mock.calls[1][0]).toMatchObject({
+      promptConsent: true,
+    });
+    // Consent widened the grant, so nothing is captured as degraded.
+    expect(mockedCapture).not.toHaveBeenCalled();
+  });
+
+  it('degrades instead of aborting when consent still cannot widen the grant', async () => {
+    // The OAuth server ignored prompt=consent (or the user declined), so both
+    // attempts return the narrow scope set.
+    mockedOAuthFlow.mockResolvedValue({
+      access_token: 'pha_test',
+      scope: 'user:read wizard_session:write',
+      scoped_teams: [123],
+      posthog_region: 'us',
+    });
+
+    const result = await getOrAskForProjectData({
+      ci: false,
+      signup: false,
+      projectId: 123,
+    });
+
+    expect(mockedOAuthFlow).toHaveBeenCalledTimes(2);
+    // Run continues (no abort) and returns a usable project.
+    expect(result.projectId).toBe(123);
+    // The degraded run is captured once with a stable fingerprint so error
+    // tracking collapses it into a single issue.
+    expect(mockedCapture).toHaveBeenCalledTimes(1);
+    expect(mockedCapture.mock.calls[0][1]).toMatchObject({
+      step: 'wizard_login',
+      missing_scope: 'event_definition:write',
+      $exception_fingerprint: 'wizard_oauth_missing_completion_scope',
+    });
   });
 });
