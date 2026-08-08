@@ -236,9 +236,12 @@ const IntegrationsResponseSchema = z.object({
 
 /**
  * Check whether the project already has a Slack integration connected.
- * Requires the `integration:read` scope. Throws on failure — callers
- * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
+ * Requires the `integration:read` scope. Throws a typed {@link ApiError} on
+ * failure (via {@link handleApiError}) — callers (including the
+ * SlackConnectScreen poll) inspect `statusCode` to decide how to degrade
+ * and are responsible for capturing the error exactly once. Routing through
+ * `handleApiError` means an auth failure surfaces as a clean `ApiError`
+ * rather than a raw `AxiosError` with a bundled `dist/` stack trace.
  */
 export async function fetchSlackConnected(
   accessToken: string,
@@ -246,19 +249,23 @@ export async function fetchSlackConnected(
   baseUrl: string,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  const response = await axios.get(
-    `${baseUrl}/api/projects/${projectId}/integrations/`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
+  try {
+    const response = await axios.get(
+      `${baseUrl}/api/projects/${projectId}/integrations/`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        signal,
       },
-      signal,
-    },
-  );
-  const parsed = IntegrationsResponseSchema.safeParse(response.data);
-  if (!parsed.success) return false;
-  return parsed.data.results.some((i) => i.kind === 'slack');
+    );
+    const parsed = IntegrationsResponseSchema.safeParse(response.data);
+    if (!parsed.success) return false;
+    return parsed.data.results.some((i) => i.kind === 'slack');
+  } catch (error) {
+    throw handleApiError(error, 'check Slack connection');
+  }
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {
