@@ -118,6 +118,22 @@ describe('wizardAbort', () => {
     expect(mockAnalytics.captureException).not.toHaveBeenCalled();
   });
 
+  it('skips captureException and shuts down as "cancelled" for an expected abort', async () => {
+    const error = new WizardError('Agent aborted: github connection declined', {
+      integration: 'nextjs',
+      error_type: 'ABORT',
+    });
+
+    await expect(wizardAbort({ error, expected: true })).rejects.toThrow(
+      'process.exit called',
+    );
+
+    expect(mockAnalytics.captureException).not.toHaveBeenCalled();
+    expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
+    // The friendly outro should still render.
+    expect(getUI().outroError).toHaveBeenCalled();
+  });
+
   it('includes WizardError context in analytics capture', async () => {
     const error = new WizardError('MCP missing', {
       integration: 'nextjs',
