@@ -93,6 +93,21 @@ describe('wizard OAuth scopes', () => {
     );
   });
 
+  it('grants self-driving the scanner scopes STEP 6c needs', () => {
+    const scopes = getOAuthScopesForProgram('self-driving');
+
+    // The scope OBJECT is `replay_scanner` — `vision-scanners-*` are MCP tool
+    // names, not scopes. Requesting the tool name grants nothing and STEP 6c
+    // 403s on every scanner call.
+    expect(scopes).toContain('replay_scanner:read');
+    expect(scopes).toContain('replay_scanner:write');
+    // Creating/updating a scanner requires session_recording:read alongside
+    // replay_scanner:write (the API pairs them), so losing it breaks 6c too.
+    expect(scopes).toContain('session_recording:read');
+    // Base scopes are never dropped by an addition.
+    expect(scopes).toEqual(expect.arrayContaining([...WIZARD_OAUTH_SCOPES]));
+  });
+
   it('accepts a newly issued token with the completion scope', () => {
     expect(() =>
       assertWizardCompletionScope(

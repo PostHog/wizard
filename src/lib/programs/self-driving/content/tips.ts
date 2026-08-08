@@ -26,6 +26,12 @@ export const SELF_DRIVING_TIPS: Tip[] = [
       'An agent on a schedule, watching your sources for anomalies and patterns. Your project gets up to 100 scout runs a day by default.',
   },
   {
+    id: 'scanner',
+    title: 'Scanner',
+    description:
+      'Where a scout reads your data, a scanner watches session recordings — an LLM spotting what broke on screen. It spends Replay Vision quota, so it stays scoped to your key flows.',
+  },
+  {
     id: 'signal-report',
     title: 'Signal → report',
     description:
