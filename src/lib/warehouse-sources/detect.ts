@@ -9,7 +9,7 @@
  * Note we only read `.env` KEY NAMES, never values.
  */
 
-import { analytics } from '@utils/analytics';
+import * as jsonc from 'jsonc-parser';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import type { PackageJson } from '@utils/package-json';
 import {
@@ -147,20 +147,20 @@ function ingestorFor(name: string): Ingestor | null {
 }
 
 function addNpmDeps(content: string, signals: ProjectSignals): void {
-  try {
-    const pkg = JSON.parse(content) as PackageJson;
-    for (const dep of Object.keys({
-      ...pkg.dependencies,
-      ...pkg.devDependencies,
-    })) {
-      addCapped(signals.npm, dep);
-    }
-  } catch (error) {
-    // Malformed package.json — skip it, but record that we hit it.
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'detectWarehouseSources.parsePackageJson' },
-    );
+  // Tolerant parse: the walk hands us every file named package.json in the
+  // tree, and some carry comments or trailing commas. A strict JSON.parse
+  // throws on those, so the project silently loses all its npm signals.
+  const pkg = jsonc.parse(content, undefined, {
+    allowTrailingComma: true,
+    disallowComments: false,
+  }) as PackageJson | undefined;
+  if (typeof pkg !== 'object' || pkg === null) return;
+
+  for (const dep of Object.keys({
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+  })) {
+    addCapped(signals.npm, dep);
   }
 }
 
