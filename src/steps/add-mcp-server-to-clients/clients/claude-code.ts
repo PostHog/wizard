@@ -19,6 +19,83 @@ export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
 export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
+/**
+ * `claude plugin install <name>` only resolves against marketplaces the user
+ * already has registered. The posthog plugin ships in Anthropic's official
+ * marketplace, which Claude Code registers when it *starts interactively* — the
+ * wizard shells straight into the non-interactive `plugin` subcommand, so on a
+ * machine that never opened Claude Code the catalog isn't there and the install
+ * dies with `Plugin "posthog" not found in any configured marketplace`. Register
+ * the marketplace first, the same way the Codex client does.
+ */
+const PLUGIN_MARKETPLACE = 'claude-plugins-official';
+const PLUGIN_MARKETPLACE_SOURCE = 'anthropics/claude-plugins-official';
+const PLUGIN_REF = `posthog@${PLUGIN_MARKETPLACE}`;
+const RETRY_COMMAND = `claude plugin install ${PLUGIN_REF}`;
+
+/**
+ * Failures that live entirely in the user's environment. We can't fix these
+ * from the wizard and reporting them only creates unactionable issues, so we
+ * hand the user a hint and move on.
+ */
+const EXPECTED_INSTALL_FAILURES: Array<{ match: RegExp; hint: string }> = [
+  {
+    match: /unknown command|unknown option|unknown argument|error: unknown/i,
+    hint: `your Claude Code CLI is too old for plugins — update it, then run \`${RETRY_COMMAND}\``,
+  },
+  {
+    match:
+      /invalid schema|invalid json|not valid json|unexpected token|failed to parse|parse error|SyntaxError/i,
+    hint: `Claude Code couldn't read its own config — fix the JSON it reports, then run \`${RETRY_COMMAND}\``,
+  },
+  {
+    match: /ENOBUFS|ENOMEM|EAGAIN|EMFILE|maxBuffer/i,
+    hint: `Claude Code ran out of room to report its output — run \`${RETRY_COMMAND}\` yourself`,
+  },
+  {
+    match:
+      /ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN|EHOSTUNREACH|timed out|timeout|could not resolve host|failed to clone|host key|publickey|proxy|certificate/i,
+    hint: `Claude Code couldn't reach GitHub to download the plugin — check your network, then run \`${RETRY_COMMAND}\``,
+  },
+  {
+    match:
+      /EACCES|EPERM|permission denied|read-only file system|not permitted/i,
+    hint: `Claude Code couldn't write to its plugin directory — fix the permissions, then run \`${RETRY_COMMAND}\``,
+  },
+  {
+    match: /not allowed|blocked by|managed settings|disallowed|restricted/i,
+    hint: 'your organization blocks Claude Code plugin marketplaces — the MCP server is set up either way',
+  },
+];
+
+const FALLBACK_HINT = `the PostHog plugin didn't install — run \`${RETRY_COMMAND}\` to retry`;
+
+/**
+ * Replace home directories with `~` so one root cause groups as one issue
+ * instead of one per user, and so usernames never reach error tracking.
+ */
+const scrubPaths = (text: string): string => {
+  const home = os.homedir();
+  const withoutHome = home ? text.split(home).join('~') : text;
+  return withoutHome
+    .replace(/\/(?:Users|home)\/[^/\s'"]+/g, '~')
+    .replace(/[A-Za-z]:\\Users\\[^\\\s'"]+/gi, '~');
+};
+
+/** execSync throws an error whose stderr/stdout carry the useful detail. */
+const describeExecError = (error: unknown): string => {
+  const parts = [
+    error instanceof Error ? error.message : String(error),
+    ...(['stderr', 'stdout'] as const).map((key) => {
+      const value = (error as Record<string, unknown> | null)?.[key];
+      return value ? String(value) : '';
+    }),
+  ];
+  return parts.filter(Boolean).join('\n');
+};
+
+type ClaudeRun = { ok: boolean; output: string };
+
 export class ClaudeCodeMCPClient
   extends DefaultMCPClient
   implements PluginCapable
@@ -192,21 +269,90 @@ export class ClaudeCodeMCPClient
     }
   }
 
+  private runClaude(binary: string, args: string[]): ClaudeRun {
+    const command = `${binary} ${args.map((a) => JSON.stringify(a)).join(' ')}`;
+    try {
+      const output = execSync(command, { stdio: 'pipe' });
+      return { ok: true, output: output?.toString() ?? '' };
+    } catch (error) {
+      return { ok: false, output: describeExecError(error) };
+    }
+  }
+
+  /**
+   * Register the marketplace the posthog plugin is published in, unless it's
+   * already there. Best-effort: a failure here is only worth reporting if the
+   * install that follows also fails.
+   */
+  private ensurePluginMarketplace(binary: string): ClaudeRun | null {
+    const listed = this.runClaude(binary, ['plugin', 'marketplace', 'list']);
+    if (listed.ok && listed.output.includes(PLUGIN_MARKETPLACE)) {
+      debug(`  Marketplace ${PLUGIN_MARKETPLACE} already registered`);
+      return null;
+    }
+
+    const added = this.runClaude(binary, [
+      'plugin',
+      'marketplace',
+      'add',
+      PLUGIN_MARKETPLACE_SOURCE,
+    ]);
+    if (added.ok || /already/i.test(added.output)) return null;
+
+    debug(`  Marketplace add failed: ${added.output}`);
+    return added;
+  }
+
   installPlugin(): Promise<PluginInstallResult> {
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve({ success: false });
-    try {
-      execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
-      return Promise.resolve({ success: true });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('already installed') || msg.includes('already exists')) {
-        return Promise.resolve({ success: true, alreadyInstalled: true });
-      }
-      analytics.captureException(
-        new Error(`Claude Code plugin install failed: ${msg}`),
-      );
-      return Promise.resolve({ success: false });
+
+    const marketplaceFailure = this.ensurePluginMarketplace(binary);
+
+    let result = this.runClaude(binary, ['plugin', 'install', PLUGIN_REF]);
+
+    // A registered-but-stale catalog still reports the plugin as missing.
+    if (!result.ok && /not found in/i.test(result.output)) {
+      this.runClaude(binary, [
+        'plugin',
+        'marketplace',
+        'update',
+        PLUGIN_MARKETPLACE,
+      ]);
+      result = this.runClaude(binary, ['plugin', 'install', PLUGIN_REF]);
     }
+
+    // Last resort: let Claude Code resolve the bare name against whichever
+    // marketplaces the user does have, the way the wizard used to.
+    if (!result.ok && /not found in/i.test(result.output)) {
+      result = this.runClaude(binary, ['plugin', 'install', 'posthog']);
+    }
+
+    if (result.ok) return Promise.resolve({ success: true });
+
+    if (/already installed|already exists/i.test(result.output)) {
+      return Promise.resolve({ success: true, alreadyInstalled: true });
+    }
+
+    const stage = marketplaceFailure ? 'marketplace-add' : 'install';
+    const details = scrubPaths(
+      [marketplaceFailure?.output, result.output].filter(Boolean).join('\n'),
+    );
+
+    const expected = EXPECTED_INSTALL_FAILURES.find((f) =>
+      f.match.test(details),
+    );
+    if (expected) {
+      debug(`  Claude Code plugin install failed (expected): ${details}`);
+      return Promise.resolve({ success: false, hint: expected.hint });
+    }
+
+    // Keep the message constant so one root cause is one issue — the resolved
+    // binary path and the raw stderr go in properties, not the title.
+    analytics.captureException(
+      new Error(`Claude Code plugin install failed (${stage})`),
+      { stage, binary: path.basename(binary), details },
+    );
+    return Promise.resolve({ success: false, hint: FALLBACK_HINT });
   }
 }
