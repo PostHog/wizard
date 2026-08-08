@@ -155,10 +155,14 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // Capture once and stop polling — repeating a failing call
-          // every tick would spam error tracking. The nudge copy is
-          // the fallback either way; a failed check counts as not
-          // connected so the screen doesn't sit on the loading state.
+          // Only genuine, non-transient errors reach here now —
+          // `fetchSlackConnected` rides out flaky-network blips itself and
+          // degrades to "not connected" without throwing. So capture once
+          // and stop polling: a persistent 401/403/malformed response
+          // won't fix itself, and repeating it every tick would spam error
+          // tracking. The nudge copy is the fallback either way; a failed
+          // check counts as not connected so the screen doesn't sit on the
+          // loading state.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
           }
