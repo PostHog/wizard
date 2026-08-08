@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.61.0](https://github.com/PostHog/wizard/compare/v2.60.0...v2.61.0) (2026-08-08)
+
+
+### Features
+
+* **self-driving:** fix the onboarding papercuts a customer run surfaced ([#1057](https://github.com/PostHog/wizard/issues/1057)) ([cf768c8](https://github.com/PostHog/wizard/commit/cf768c836340a592ecbbd6263fdc10a46197171c))
+
 ## [2.60.0](https://github.com/PostHog/wizard/compare/v2.59.0...v2.60.0) (2026-08-06)
 
 
