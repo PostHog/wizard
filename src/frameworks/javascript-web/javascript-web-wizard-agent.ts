@@ -8,9 +8,11 @@ import { hasDeclaredDependency } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import {
   FRAMEWORK_PACKAGES,
+  SERVER_PACKAGES,
   detectJsPackageManager,
   detectBundler,
   hasIndexHtml,
+  hasRootIndexHtml,
   type JavaScriptContext,
 } from './utils';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
@@ -38,6 +40,10 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
     detectPackageManager: detectNodePackageManagers,
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
+
+      // A site with no package.json at all is deliberately left unclaimed: the
+      // snippet is the whole integration and there is nothing for the wizard to
+      // do. PostHog/posthog.com#18390 routes those users to it from the docs.
       if (!packageJson) {
         return false;
       }
@@ -70,6 +76,20 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
       // - a lockfile, and
       // - at least one frontend signal (index.html or bundler)
       if (hasLockfile && (hasIndexHtmlFlag || hasBundler)) {
+        return true;
+      }
+
+      // No lockfile. `javascriptNode` matches any package.json, so falling
+      // through here hands a browser-only project the server SDK. Claim it
+      // instead, but only on evidence strong enough to stand without the
+      // lockfile: an index.html in the ROOT (the site's entry point, not a
+      // `docs/` page or a generated report), and no server framework in
+      // `dependencies`. A site under `public/` or `dist/` is left alone —
+      // that shape is indistinguishable from a server's asset directory.
+      const declaresServer = SERVER_PACKAGES.some(
+        (pkg) => packageJson?.dependencies?.[pkg] !== undefined,
+      );
+      if (hasRootIndexHtml(options) && !declaresServer) {
         return true;
       }
 

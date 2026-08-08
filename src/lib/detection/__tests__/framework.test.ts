@@ -127,6 +127,107 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a browser project with no committed lockfile is not handed to javascript_node', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({
+        name: 'portfolio',
+        scripts: { build: 'tailwindcss -o dist/style.css' },
+      }),
+      'index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascript_web,
+    );
+  });
+
+  test('an Express server with a root index.html stays on javascript_node', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ dependencies: { express: '^4' } }),
+      'index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascriptNode,
+    );
+  });
+
+  test('a Node library with a docs/index.html stays on javascript_node', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ name: 'lib' }),
+      'src/index.js': 'module.exports = {}',
+      'docs/index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascriptNode,
+    );
+  });
+
+  test('a server framework we do not list is still safe if index.html is not at the root', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ dependencies: { hono: '^4' } }),
+      'public/index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascriptNode,
+    );
+  });
+
+  test('a server kept in devDependencies to preview a site is not read as a backend', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({
+        name: 'portfolio',
+        devDependencies: { express: '^4' },
+      }),
+      'index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascript_web,
+    );
+  });
+
+  // Known limit: indistinguishable from a server's asset directory without a
+  // lockfile, so it is left to javascript_node rather than guessed at.
+  test('a site whose index.html lives under public/ is not claimed without a lockfile', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ name: 'site' }),
+      'public/index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascriptNode,
+    );
+  });
+
+  test('a lockfile project keeps matching on a nested index.html (unchanged)', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ name: 'site' }),
+      'package-lock.json': '{}',
+      'public/index.html': '<!doctype html><html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascript_web,
+    );
+  });
+
+  test('a Node project with no frontend signal stays on javascript_node', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ dependencies: { lodash: '^4' } }),
+      'index.js': 'module.exports = {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascriptNode,
+    );
+  });
+
+  // A site with no package.json is left unclaimed on purpose — the snippet is
+  // the whole integration. PostHog/posthog.com#18390 routes those users to it.
+  test('a hand-written static site is deliberately claimed by nobody', async () => {
+    const opts = project({
+      'index.html': '<!doctype html><html><head></head><body>hi</body></html>',
+      'about.html': '<!doctype html><html></html>',
+      'css/style.css': 'body { color: black }',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBeUndefined();
+  });
+
   test('a Kotlin Multiplatform project resolves to kmp', async () => {
     const opts = project({
       'settings.gradle.kts': 'include(":shared")',
