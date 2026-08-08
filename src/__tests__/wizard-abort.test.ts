@@ -2,6 +2,7 @@
 import {
   wizardAbort,
   WizardError,
+  abortFingerprint,
   registerCleanup,
   clearCleanup,
   runCleanups,
@@ -108,7 +109,9 @@ describe('wizardAbort', () => {
 
     await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
 
-    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {});
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
+      $exception_fingerprint: 'wizard_abort_something_broke',
+    });
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
   });
 
@@ -127,8 +130,21 @@ describe('wizardAbort', () => {
     await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
 
     expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
+      $exception_fingerprint: 'wizard_abort_mcp_missing',
       integration: 'nextjs',
       error_type: 'MCP_MISSING',
+    });
+  });
+
+  it('lets a WizardError context override the default fingerprint', async () => {
+    const error = new WizardError('OAuth error: timeout', {
+      $exception_fingerprint: 'wizard_oauth_timeout',
+    });
+
+    await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
+
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
+      $exception_fingerprint: 'wizard_oauth_timeout',
     });
   });
 
@@ -175,6 +191,56 @@ describe('wizardAbort', () => {
     );
 
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
+  });
+});
+
+describe('abortFingerprint', () => {
+  it('is identical for the same cause raised from different install paths', () => {
+    const fromNpx = new WizardError(
+      'orchestrator drain ended with failed tasks',
+    );
+    fromNpx.stack =
+      'WizardError\n    at /home/u/.npm/_npx/2f0a/node_modules/@posthog/wizard/dist/index.js:1:1';
+    const fromPnpmDlx = new WizardError(
+      'orchestrator drain ended with failed tasks',
+    );
+    fromPnpmDlx.stack =
+      'WizardError\n    at /root/.cache/pnpm/dlx/9b7c1f/node_modules/@posthog/wizard/dist/index.js:1:1';
+
+    expect(abortFingerprint(fromNpx)).toBe(abortFingerprint(fromPnpmDlx));
+    expect(abortFingerprint(fromNpx)).toBe(
+      'wizard_abort_orchestrator_drain_ended_with_failed_tasks',
+    );
+  });
+
+  it('separates the failed-tasks guard from the never-ran guard', () => {
+    expect(
+      abortFingerprint(
+        new WizardError('orchestrator drain ended with failed tasks'),
+      ),
+    ).not.toBe(
+      abortFingerprint(
+        new WizardError('orchestrator drain ended with tasks that never ran'),
+      ),
+    );
+  });
+
+  it('truncates long messages so a shared cause stays one group', () => {
+    const suffix =
+      'API Error: The socket connection was closed unexpectedly. For more information, pass `verbose: true`';
+    const once = new WizardError(`API error: ${suffix}`);
+    const twice = new WizardError(`API error: ${suffix}\n${suffix}`);
+
+    expect(abortFingerprint(once)).toBe(abortFingerprint(twice));
+    // Prefix + 80 chars of slug, and never a trailing separator.
+    expect(abortFingerprint(once).length).toBeLessThanOrEqual(
+      'wizard_abort_'.length + 80,
+    );
+    expect(abortFingerprint(once)).not.toMatch(/_$/);
+  });
+
+  it('falls back to the error name when there is no message', () => {
+    expect(abortFingerprint(new TypeError(''))).toBe('wizard_abort_typeerror');
   });
 });
 

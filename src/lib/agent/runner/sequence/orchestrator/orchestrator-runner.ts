@@ -54,6 +54,7 @@ import {
   type QueuedTask,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
+import { drainFailure } from './drain-failure';
 import { RunMetrics } from './run-metrics';
 import {
   agentRunTools,
@@ -639,22 +640,24 @@ export async function runOrchestrator(
   const notRequired = summary[TaskStatus.Skipped];
 
   // A drain that ends with failed tasks (retries exhausted) or tasks still
-  // pending (blocked behind a failed dependency) did NOT set PostHog up —
-  // abort like a linear agent failure instead of claiming success.
+  // pending (blocked behind a dependency that never completed) did NOT set
+  // PostHog up — abort like a linear agent failure instead of claiming success.
+  // `drainFailure` picks which of the two it was so the exception says so.
   const blocked = summary[TaskStatus.Pending];
-  if (summary.failed > 0 || blocked > 0) {
-    const failedTypes = store
-      .list()
-      .filter((t) => t.status === TaskStatus.Failed)
-      .map((t) => t.type)
-      .join(', ');
+  const failedTypes = store
+    .list()
+    .filter((t) => t.status === TaskStatus.Failed)
+    .map((t) => t.type)
+    .join(', ');
+  const failure = drainFailure({
+    failed: summary.failed,
+    blocked,
+    failedTypes,
+  });
+  if (failure) {
     await wizardAbort({
-      message: `The wizard was unable to set up PostHog: ${
-        failedTypes
-          ? `the ${failedTypes} step failed`
-          : `${blocked} steps never ran`
-      }.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
-      error: new WizardError('orchestrator drain ended with failed tasks', {
+      message: `The wizard was unable to set up PostHog: ${failure.reason}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(failure.error, {
         tasks_failed: summary.failed,
         tasks_blocked: blocked,
         failed_types: failedTypes,
