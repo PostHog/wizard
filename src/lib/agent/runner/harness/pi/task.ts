@@ -207,10 +207,13 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
 
     // The same fail-closed fence as the linear run, with the task's disallow
-    // list layered in (both the wizard-vocabulary and pi-short names).
+    // list layered in (both the wizard-vocabulary and pi-short names). The
+    // working directory gives scoped project-file `rm` the same containment
+    // boundary in task mode as linear mode.
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
+      workingDirectory: session.installDir,
       triageProvider: boot.triageProvider,
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
