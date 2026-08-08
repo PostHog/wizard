@@ -120,6 +120,21 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
+ * Extra scopes the feature-flags doctor needs on top of
+ * `WIZARD_OAUTH_SCOPES`. The doctor reads the flag roster
+ * (`feature-flag-get-all`) to cross-check delivery and code references,
+ * and archives/disables user-approved cleanup candidates
+ * (`feature-flag-update`) in the fix phase. Same pair the skill-backed
+ * dispatch path already gets via `AGENT_SKILL_SCOPE_ADDITIONS` — the
+ * native program must request them itself or the roster calls 403 and
+ * every roster-dependent check silently degrades to mcp_skipped.
+ */
+export const FEATURE_FLAGS_DOCTOR_SCOPE_ADDITIONS = [
+  'feature_flag:read',
+  'feature_flag:write',
+] as const;
+
+/**
  * Extra scopes the self-driving program needs on top of
  * `WIZARD_OAUTH_SCOPES`. All consumed by the PostHog MCP tools the
  * agent drives during the run:
@@ -236,6 +251,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'feature-flags-doctor': FEATURE_FLAGS_DOCTOR_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,

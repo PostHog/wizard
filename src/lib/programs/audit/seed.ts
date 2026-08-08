@@ -110,7 +110,7 @@ export function seedAuditLedger(
   installDir: string,
   checks: AuditCheck[] = AUDIT_SEED_CHECKS,
 ): void {
-  const target = path.join(installDir, AUDIT_CHECKS_FILE);
+  const target = path.resolve(installDir, AUDIT_CHECKS_FILE);
   writeJsonAtomic(target, checks);
   logToFile(`seedAuditLedger: wrote ${checks.length} entries to ${target}`);
 }

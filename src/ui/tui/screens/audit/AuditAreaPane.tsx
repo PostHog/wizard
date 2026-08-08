@@ -13,7 +13,7 @@
  * Pressing `O` opens the active slide's docs URL.
  */
 
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
 import { Colors } from '@ui/tui/styles';
@@ -47,6 +47,30 @@ const openLink = (url: string) => {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
 };
 
+// ── Deck walk ────────────────────────────────────────────────────────
+
+/** Minimum time a card stays up before the walk may advance past it. */
+export const DECK_MIN_DWELL_MS = 12_000;
+
+/** Deck index the walk heads toward: `slides.length` = run finished,
+ * `-1` = head area has no slide (caller shows a fallback card). */
+export function deckTargetIndex(
+  slides: AreaSlide[],
+  checks: AuditCheck[],
+): number {
+  const headArea = checks.find((c) => c.status === 'pending')?.area;
+  if (headArea === undefined) return slides.length;
+  return slides.findIndex((s) => s.area === headArea);
+}
+
+/** One walk step: advance one card toward the target, snap backward. */
+export function nextDeckIndex(displayed: number, target: number): number {
+  if (target < 0) return displayed;
+  if (target < displayed) return target;
+  if (target > displayed) return displayed + 1;
+  return displayed;
+}
+
 // ── Component ────────────────────────────────────────────────────────
 
 interface AuditAreaPaneProps {
@@ -70,11 +94,34 @@ export const AuditAreaPane = ({
   dashboardUrl,
   notebookUrl,
 }: AuditAreaPaneProps) => {
-  const pendingChecks = checks.filter((c) => c.status === 'pending');
-  const activeArea = pendingChecks[0]?.area;
-  const slide = activeArea
-    ? slides.find((s) => s.area === activeArea) ?? fallbackSlide(activeArea)
-    : null;
+  const activeArea = checks.find((c) => c.status === 'pending')?.area;
+  const target = deckTargetIndex(slides, checks);
+
+  const [displayedIdx, setDisplayedIdx] = useState(0);
+  const lastAdvanceRef = useRef(Date.now());
+
+  // Snap backward immediately; walk forward one card per dwell.
+  useEffect(() => {
+    if (target >= 0 && target < displayedIdx) {
+      lastAdvanceRef.current = Date.now();
+      setDisplayedIdx(target);
+      return;
+    }
+    if (target <= displayedIdx) return;
+    const timer = setInterval(() => {
+      if (Date.now() - lastAdvanceRef.current < DECK_MIN_DWELL_MS) return;
+      lastAdvanceRef.current = Date.now();
+      setDisplayedIdx((i) => nextDeckIndex(i, target));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [target, displayedIdx]);
+
+  const slide =
+    target === -1 && activeArea !== undefined
+      ? fallbackSlide(activeArea)
+      : displayedIdx < slides.length
+      ? slides[displayedIdx]
+      : null;
 
   useInput((input) => {
     if (input.toLowerCase() === 'o' && slide?.docsUrl) {
@@ -87,7 +134,11 @@ export const AuditAreaPane = ({
       <UrlsFooter dashboardUrl={dashboardUrl} notebookUrl={notebookUrl} />
     ) : null;
 
-  // Active area — agent is still resolving checks for this slide's area.
+  // Ledger empty — PendingChecksList owns the loading state.
+  if (checks.length === 0) {
+    return null;
+  }
+
   if (slide) {
     const hasFindings = checks.some(isFinding);
     return (
@@ -98,14 +149,7 @@ export const AuditAreaPane = ({
     );
   }
 
-  // Ledger empty — the seed hook fires synchronously at intro `onReady`,
-  // so this only happens if the seed file write failed. Render nothing
-  // rather than misleading the user with a "wrapped up" message.
-  if (checks.length === 0) {
-    return null;
-  }
-
-  // Every check is resolved and the agent is composing the report.
+  // Deck played out and every check resolved — report is being written.
   return (
     <Box flexDirection="column">
       <WritingReport reportPath={reportPath} />
@@ -123,7 +167,7 @@ const ActiveSlide = ({
   slide: AreaSlide;
   hasFindings: boolean;
 }) => (
-  <Box flexDirection="column" paddingX={1}>
+  <Box flexDirection="column" paddingX={1} flexShrink={0}>
     <Text bold color={Colors.accent}>
       Verifying {slide.area.toLowerCase()}
     </Text>

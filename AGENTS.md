@@ -64,7 +64,7 @@ command names.** Old names mostly no longer exist — only some are kept as alia
 | `wizard audit events` | event capture quality + cost (**default** leaf) |
 | `wizard audit all` | comprehensive audit across every area |
 | `wizard audit autocapture` | autocapture setup + cost |
-| `wizard audit feature-flags` | feature flag usage + cost |
+| `wizard audit feature-flags` | feature flags doctor — verify delivery, audit usage + cost, fix with consent (**wizard-native**) |
 | `wizard audit identify` | `$identify` implementation |
 | `wizard audit session-replay` | session replay setup |
 | `wizard audit web-analytics` | web analytics setup (**wizard-native**, not a skill) |

@@ -223,6 +223,60 @@ describe('audit ledger helpers', () => {
     });
   });
 
+  it('inserts additions inside their area group, ahead of later areas', () => {
+    const multiArea: AuditCheck[] = [
+      {
+        id: 'd-parent',
+        area: 'Delivery',
+        label: 'Flags delivered',
+        status: 'pending',
+      },
+      {
+        id: 'wf-fixes',
+        area: 'Workflow',
+        label: 'Apply fixes',
+        status: 'pending',
+      },
+      {
+        id: 'wf-report',
+        area: 'Workflow',
+        label: 'Write report',
+        status: 'pending',
+      },
+    ];
+
+    const { next, duplicates } = __test.applyAuditAdditions(multiArea, [
+      {
+        id: 'delivered-beta',
+        area: 'Delivery',
+        label: 'beta arrives as defined',
+        status: 'pending',
+      },
+      {
+        id: 'ghost-search',
+        area: 'Delivery',
+        label: 'search key missing in PostHog',
+        status: 'pending',
+      },
+      {
+        id: 'novel-row',
+        area: 'New Area',
+        label: 'novel area appends at tail',
+        status: 'pending',
+      },
+    ]);
+
+    expect(duplicates).toEqual([]);
+    expect(next.map((c) => c.id)).toEqual([
+      'd-parent',
+      'delivered-beta',
+      'ghost-search',
+      'wf-fixes',
+      'wf-report',
+      'novel-row',
+    ]);
+  });
+
   it('requires a seeded on-disk ledger before appending checks', () => {
     const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
 

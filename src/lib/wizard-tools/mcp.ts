@@ -453,7 +453,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   // -- audit_seed_checks ----------------------------------------------------
 
-  const auditLedgerPath = path.join(workingDirectory, AUDIT_CHECKS_FILE);
+  const auditLedgerPath = path.resolve(workingDirectory, AUDIT_CHECKS_FILE);
   const auditMutex = makeMutex();
 
   const auditSeedChecks = tool(

@@ -3,6 +3,7 @@ import type { Arguments } from 'yargs';
 import { auditConfig } from '@lib/programs/audit/index';
 import { agentSkillConfig } from '@lib/programs/program-registry';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
+import { featureFlagsDoctorConfig } from '@lib/programs/feature-flags-doctor/index';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { getSkillsBaseUrl } from '@lib/constants';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
@@ -45,7 +46,10 @@ async function exitDispatchError(
 
 /** Wizard-native subcommands keyed by family. */
 const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
-  audit: { 'web-analytics': webAnalyticsDoctorConfig },
+  audit: {
+    'web-analytics': webAnalyticsDoctorConfig,
+    'feature-flags': featureFlagsDoctorConfig,
+  },
 };
 
 /**
@@ -116,8 +120,10 @@ export async function dispatchFamily(
   }
 
   const available = [
-    ...Object.keys(NATIVE_HANDLERS[family] ?? {}),
-    ...familyEntries(family, entries).map((e) => e.command!),
+    ...new Set([
+      ...Object.keys(NATIVE_HANDLERS[family] ?? {}),
+      ...familyEntries(family, entries).map((e) => e.command!),
+    ]),
   ].sort();
   return exitDispatchError(
     'unknown subcommand',
@@ -145,17 +151,23 @@ export function buildFamilyPickerChildren(
       handler: (argv: Arguments) => dispatchProgram(program, argv),
     }),
   );
-  const live: Command[] = familyEntries(family, entries).map((entry) => ({
-    name: entry.command!,
-    description: entry.description,
-    handler: (argv: Arguments) => {
-      void dispatchFamily(family, {
-        ...argv,
-        skill: entry.command,
-      } as Arguments);
-    },
-    default: entry.default,
-  }));
+  // A native handler shadows a fetched entry with the same command (dispatch
+  // already prefers natives) — drop the fetched twin so the picker doesn't
+  // list the command twice while context-mill still publishes it.
+  const nativeNames = new Set(Object.keys(NATIVE_HANDLERS[family] ?? {}));
+  const live: Command[] = familyEntries(family, entries)
+    .filter((entry) => !nativeNames.has(entry.command!))
+    .map((entry) => ({
+      name: entry.command!,
+      description: entry.description,
+      handler: (argv: Arguments) => {
+        void dispatchFamily(family, {
+          ...argv,
+          skill: entry.command,
+        } as Arguments);
+      },
+      default: entry.default,
+    }));
   return [...natives, ...live];
 }
 

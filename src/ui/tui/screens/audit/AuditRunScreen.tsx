@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { join } from 'node:path';
+import { resolve } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -12,8 +12,7 @@ import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
-import { AUDIT_AREA_SLIDES } from './slides/index.js';
-import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
+import { getAreaSlides } from './slides/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -36,8 +35,15 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   );
 
   // Mirror the agent's audit ledger into the store.
-  useFileWatcher(join(store.session.installDir, AUDIT_CHECKS_FILE), (parsed) =>
-    store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
+  const ledgerPath = resolve(store.session.installDir, AUDIT_CHECKS_FILE);
+  useFileWatcher(
+    ledgerPath,
+    (parsed) =>
+      store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
+    {
+      onReadError: (message) =>
+        store.pushStatus(`Audit checklist file unreadable — ${message}`),
+    },
   );
 
   const statuses =
@@ -49,11 +55,10 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     getProgramConfig(store.router.activeProgram).reportFile ??
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
-  const pendingChecksList = <PendingChecksList checks={checks} />;
-  const slides =
-    store.session.skillId === 'audit-events'
-      ? EVENTS_AUDIT_AREA_SLIDES
-      : AUDIT_AREA_SLIDES;
+  const pendingChecksList = (
+    <PendingChecksList checks={checks} ledgerPath={ledgerPath} />
+  );
+  const slides = getAreaSlides(store.session.skillId);
   const areaPane = (
     <AuditAreaPane
       checks={checks}

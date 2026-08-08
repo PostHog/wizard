@@ -569,8 +569,10 @@ export function applyAuditUpdates(
 }
 
 /**
- * Append new checks to a seeded ledger. Duplicate ids are reported without
- * mutating the current ledger, including duplicates inside the additions.
+ * Add new checks to a seeded ledger, each after the last row sharing its
+ * `area` (novel areas append at the tail). Duplicate ids are reported
+ * without mutating the current ledger, including duplicates inside the
+ * additions.
  */
 function applyAuditAdditions(
   current: AuditCheck[],
@@ -592,7 +594,18 @@ function applyAuditAdditions(
     return { next: current, duplicates };
   }
 
-  return { next: [...current, ...additions], duplicates: [] };
+  const next = [...current];
+  for (const check of additions) {
+    let insertAt = next.length;
+    for (let i = next.length - 1; i >= 0; i--) {
+      if (next[i].area === check.area) {
+        insertAt = i + 1;
+        break;
+      }
+    }
+    next.splice(insertAt, 0, check);
+  }
+  return { next, duplicates: [] };
 }
 
 export function readLedger(targetPath: string): AuditCheck[] {
