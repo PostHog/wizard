@@ -215,6 +215,13 @@ describe('WizardStore', () => {
       expect(store.session.detectionComplete).toBe(true);
     });
 
+    it('setPosthogSdkDetected stores the verdict', () => {
+      const store = createStore();
+      expect(store.session.posthogSdkDetected).toBe(false);
+      store.setPosthogSdkDetected(true);
+      expect(store.session.posthogSdkDetected).toBe(true);
+    });
+
     it('setDetectedFramework sets the label', () => {
       const store = createStore();
       store.setDetectedFramework('Django');
