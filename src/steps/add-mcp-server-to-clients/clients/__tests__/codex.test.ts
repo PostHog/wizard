@@ -166,9 +166,19 @@ describe('CodexMCPClient', () => {
   });
 
   describe('supportsPlugin', () => {
-    it('returns true when codex is in PATH', () => {
+    it('returns true when codex knows the plugin marketplace subcommand', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: 'Usage: codex plugin marketplace <COMMAND>',
+        stderr: '',
+      });
       const client = new CodexMCPClient();
       expect(client.supportsPlugin()).toBe(true);
+      expect(spawnSyncMock).toHaveBeenCalledWith(
+        CODEX_PATH,
+        ['plugin', 'marketplace', '--help'],
+        { encoding: 'utf-8' },
+      );
     });
 
     it('returns false when codex binary is not found', () => {
@@ -177,6 +187,29 @@ describe('CodexMCPClient', () => {
       });
       const client = new CodexMCPClient();
       expect(client.supportsPlugin()).toBe(false);
+    });
+
+    it('returns false when codex is too old to know the marketplace subcommand', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 2,
+        stdout: '',
+        stderr: "error: unexpected argument 'marketplace' found",
+      });
+      const client = new CodexMCPClient();
+      expect(client.supportsPlugin()).toBe(false);
+    });
+
+    it('caches the feature-detection result across calls', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: 'Usage: codex plugin marketplace <COMMAND>',
+        stderr: '',
+      });
+      const client = new CodexMCPClient();
+      expect(client.supportsPlugin()).toBe(true);
+      expect(client.supportsPlugin()).toBe(true);
+      // Only one probe despite two calls.
+      expect(spawnSyncMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -218,6 +251,17 @@ describe('CodexMCPClient', () => {
           message: expect.stringContaining('network timeout'),
         }),
       );
+    });
+
+    it('skips cleanly without capturing an exception on older Codex versions', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 2,
+        stdout: '',
+        stderr: "error: unexpected argument 'marketplace' found",
+      });
+      const client = new CodexMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
     });
   });
 });
