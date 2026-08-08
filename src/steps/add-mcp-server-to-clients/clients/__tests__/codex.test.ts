@@ -122,6 +122,33 @@ describe('CodexMCPClient', () => {
         'POSTHOG_AUTH_HEADER',
       ]);
       expect(call[2].env.POSTHOG_AUTH_HEADER).toBe('Bearer phx_test');
+      // Bounded so it can never hang on Codex's OAuth deadline.
+      expect(call[2].timeout).toBeGreaterThan(0);
+    });
+
+    it('skips the OAuth-triggering add and does not shell out when no api key is provided', async () => {
+      const client = new CodexMCPClient();
+      await expect(client.addServer()).resolves.toEqual({ success: false });
+      // No `codex mcp add` invocation — that path would prompt for browser OAuth.
+      expect(spawnSyncMock).not.toHaveBeenCalled();
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('degrades gracefully without capturing an exception when the add times out', async () => {
+      const timeoutError = Object.assign(new Error('spawnSync ETIMEDOUT'), {
+        code: 'ETIMEDOUT',
+      });
+      spawnSyncMock.mockReturnValue({
+        status: null,
+        stdout: '',
+        stderr: '',
+        error: timeoutError,
+      });
+      const client = new CodexMCPClient();
+      await expect(client.addServer('phx_test')).resolves.toEqual({
+        success: false,
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
     });
 
     it('treats "already" stderr as success', async () => {
@@ -153,7 +180,7 @@ describe('CodexMCPClient', () => {
       expect(spawnSyncMock).toHaveBeenCalledWith(
         CODEX_PATH,
         ['mcp', 'remove', 'posthog'],
-        { stdio: 'ignore' },
+        { stdio: 'ignore', timeout: expect.any(Number) },
       );
     });
 
