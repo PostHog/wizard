@@ -13,6 +13,7 @@
  * function (start-tui.ts itself pulls in the whole render tree).
  */
 
+import { isAbsolute, join } from 'node:path';
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
@@ -56,9 +57,20 @@ export function getExitLine(store: WizardStore): string {
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
+    // `reportFile` reaching here means the file was verified on disk by the
+    // runner (see linear.ts / orchestrator-runner.ts), so we can promise it
+    // without over-claiming. Surface the resolved path — a bare `./` is wrong
+    // when the user passed --install-dir and ran from elsewhere. The
+    // orchestrator's queue-file fallback is already absolute, so only join
+    // relative report names against installDir.
+    const reportPath = outro.reportFile
+      ? isAbsolute(outro.reportFile)
+        ? outro.reportFile
+        : join(store.session.installDir, outro.reportFile)
+      : undefined;
     const reportSuffix =
-      outro.reportFile && !message.includes(outro.reportFile)
-        ? ` Check ./${outro.reportFile} for details.`
+      reportPath && outro.reportFile && !message.includes(outro.reportFile)
+        ? ` Check ${reportPath} for details.`
         : '';
     const headline = `${GREEN}${BOLD}✔${RESET_ATTRS} ${message}${reportSuffix}`;
 

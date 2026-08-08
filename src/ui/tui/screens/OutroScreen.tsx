@@ -6,6 +6,7 @@
  * ship their own screen component (see audit/AuditOutroScreen.tsx).
  */
 
+import { isAbsolute, join } from 'node:path';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
@@ -97,7 +98,13 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
           {outroData.reportFile && (
             <Box marginTop={1}>
               <Text>
-                Check <Text bold>./{outroData.reportFile}</Text> for details
+                Check{' '}
+                <Text bold>
+                  {isAbsolute(outroData.reportFile)
+                    ? outroData.reportFile
+                    : join(store.session.installDir, outroData.reportFile)}
+                </Text>{' '}
+                for details
               </Text>
             </Box>
           )}
