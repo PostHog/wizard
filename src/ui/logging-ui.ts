@@ -285,13 +285,18 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
-  setFrameworkContext(_key: string, _value: unknown): void {
-    // No-op in CI mode
+  // Non-interactive runs have no store, so framework context lives in a plain
+  // map here: a program's ciPreRun seeds it (e.g. upload-source-maps' project
+  // selection) and its run config reads it back through the same getUI()
+  // calls that reach the WizardStore in TUI mode.
+  private frameworkContext: Record<string, unknown> = {};
+
+  setFrameworkContext(key: string, value: unknown): void {
+    this.frameworkContext[key] = value;
   }
 
-  getFrameworkContext(_key: string): unknown {
-    // No frameworkContext in CI mode
-    return undefined;
+  getFrameworkContext(key: string): unknown {
+    return this.frameworkContext[key];
   }
 
   waitForGate(_stepId: string): Promise<void> {

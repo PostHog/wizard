@@ -181,7 +181,7 @@ export function runNonInteractive(
 
     try {
       if (config.ciPreRun) {
-        await config.ciPreRun(session);
+        await config.ciPreRun(session, options);
       } else {
         const readyCtx = {
           session,
