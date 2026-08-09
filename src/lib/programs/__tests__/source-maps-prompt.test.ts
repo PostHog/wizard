@@ -118,12 +118,21 @@ describe('buildSourceMapsUploadPrompt non-interactive mode', () => {
     expect(prompt).not.toContain('Want me to help you test');
   });
 
-  it('forbids real env files and env tools, allowing only committed examples', () => {
+  it('forbids real env file writes, allowing committed examples and reads', () => {
     expect(prompt).toContain('NEVER create or modify real env files');
     expect(prompt).toContain('committed env example file');
-    // The interactive flow's env tools write the vaulted key; without a key
-    // they must not run at all.
+    expect(prompt).toContain('check_env_keys is fine');
+    // The interactive flow's set_env_values writes the vaulted key; without
+    // a key it must not run at all.
     expect(prompt).not.toContain('Then call set_env_values');
+  });
+
+  it('routes dependency changes through the package manager', () => {
+    // A package.json edit without its lockfile fails npm ci in the PR.
+    expect(prompt).toContain(
+      'Dependency changes go through the package manager',
+    );
+    expect(prompt).toContain('lockfile');
   });
 
   it('hands the API key off as a documented follow-up', () => {

@@ -385,6 +385,12 @@ key:
 - Creating the key is the user's follow-up work; STEP 7's hand-off report
   documents exactly what they must do.
 
+Dependency changes go through the package manager, never hand-edits of
+package.json (or the platform's manifest): run e.g. \`npm install --save-dev
+<pkg>\` so the lockfile updates alongside the manifest. A manifest edit
+without its lockfile is a broken pull request — it fails clean installs in
+the user's CI.
+
 ${projectContextBlock(context)}
 
 ${scopeBlock}
@@ -419,9 +425,10 @@ ${credsReadableStep(3, '')}
 STEP 4 — Write the non-secret config. (skill: "Write credentials to the env file")
    The skill's step assumes an interactive run writing a real key into a
    local env file; adapt it for this run:
-   - NEVER create or modify real env files (.env, .env.local, ...), and do
-     not call check_env_keys or set_env_values — a local env file cannot
-     reach the pull request.
+   - NEVER create or modify real env files (.env, .env.local, ...) and
+     never call set_env_values — a local env file cannot reach the pull
+     request. check_env_keys is fine for reading what is already
+     configured.
    - If the project has a committed env example file (.env.example,
      .env.sample, .env.template, .env.dist), add the skill's variable names
      there with your normal file tools: the API key variable with an empty
