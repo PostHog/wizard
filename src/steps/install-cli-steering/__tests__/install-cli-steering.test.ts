@@ -92,6 +92,62 @@ describe('install-cli-steering', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Is Node.js installed?');
     });
+
+    it('retries against a user-writable prefix on a permission error', () => {
+      const originalPath = process.env.PATH;
+      spawnSyncMock
+        .mockReturnValueOnce({
+          status: 243,
+          stdout: '',
+          stderr:
+            "npm error code EACCES\nnpm error permission denied, mkdir '/nix/store/...-nodejs-slim-24.13.0/lib'\n",
+        })
+        .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' });
+
+      const result = installOrUpdatePostHogCli();
+
+      expect(result.success).toBe(true);
+      expect(spawnSyncMock).toHaveBeenCalledTimes(2);
+      const retryArgs = spawnSyncMock.mock.calls[1][1];
+      expect(retryArgs).toEqual([
+        'install',
+        '--global',
+        '--prefix',
+        path.join(os.homedir(), '.posthog'),
+        '@posthog/cli@latest',
+      ]);
+      const binDir = path.join(os.homedir(), '.posthog', 'bin');
+      expect((process.env.PATH ?? '').split(path.delimiter)).toContain(binDir);
+
+      process.env.PATH = originalPath;
+    });
+
+    it('does not retry when the failure is not a permission error', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'Error: network unreachable\n',
+      });
+
+      const result = installOrUpdatePostHogCli();
+
+      expect(result.success).toBe(false);
+      expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces the retry failure when the fallback prefix also fails', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 243,
+        stdout: '',
+        stderr: 'npm error code EACCES\npermission denied\n',
+      });
+
+      const result = installOrUpdatePostHogCli();
+
+      expect(result.success).toBe(false);
+      expect(spawnSyncMock).toHaveBeenCalledTimes(2);
+      expect(result.error).toContain('permission denied');
+    });
   });
 
   describe('installSteeringSnippet', () => {

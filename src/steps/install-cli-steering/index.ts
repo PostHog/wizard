@@ -66,13 +66,6 @@ export interface SteeringInstallResult {
 export interface CliInstallResult {
   success: boolean;
   error?: string;
-  /**
-   * The underlying failure as an Error, for callers that report to error
-   * tracking. Carries the real spawn error (with its stack) when npm couldn't
-   * launch; a synthesized Error for a non-zero exit. Set whenever success is
-   * false.
-   */
-  errorObject?: Error;
 }
 
 const spawnOptions = {
@@ -83,12 +76,31 @@ const spawnOptions = {
 };
 
 /**
- * Install or update the PostHog CLI in the user's environment. `npm install
- * --global @posthog/cli@latest` covers both first-time installs and upgrades
- * for existing npm-installed CLIs.
+ * User-writable prefix the CLI falls back to when npm's global prefix is
+ * read-only (e.g. a Nix-managed Node in `/nix/store`).
  */
-export function installOrUpdatePostHogCli(): CliInstallResult {
-  const args = ['install', '--global', '@posthog/cli@latest'];
+const FALLBACK_PREFIX = path.join(os.homedir(), '.posthog');
+
+/** npm drops global binaries in `<prefix>/bin` on Unix and `<prefix>` on Windows. */
+const fallbackBinDir =
+  process.platform === 'win32'
+    ? FALLBACK_PREFIX
+    : path.join(FALLBACK_PREFIX, 'bin');
+
+/** True when npm failed because it could not write to its global prefix. */
+function isPermissionError(detail: string): boolean {
+  return /EACCES|EROFS|EPERM|permission denied/i.test(detail);
+}
+
+/** Prepend a directory to PATH so later `posthog-cli` spawns resolve it. */
+function prependToPath(dir: string): void {
+  const current = process.env.PATH ?? '';
+  if (current.split(path.delimiter).includes(dir)) return;
+  process.env.PATH = current ? `${dir}${path.delimiter}${current}` : dir;
+}
+
+function runNpmInstall(extraArgs: string[]): CliInstallResult {
+  const args = ['install', '--global', ...extraArgs, '@posthog/cli@latest'];
   debug(`Running npm ${args.join(' ')}`);
 
   const result = spawnSync('npm', args, spawnOptions);
@@ -97,7 +109,6 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
     return {
       success: false,
       error: `Failed to run npm: ${result.error.message}. Is Node.js installed?`,
-      errorObject: result.error,
     };
   }
   if (result.status !== 0) {
@@ -110,10 +121,32 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
     return {
       success: false,
       error: message,
-      errorObject: new Error(message),
     };
   }
   return { success: true };
+}
+
+/**
+ * Install or update the PostHog CLI in the user's environment. `npm install
+ * --global @posthog/cli@latest` covers both first-time installs and upgrades
+ * for existing npm-installed CLIs.
+ *
+ * When npm's global prefix is read-only — a Nix-managed Node lives in the
+ * read-only `/nix/store`, so the global install dies with `EACCES` — retry
+ * against a user-writable prefix and put its `bin` directory on PATH so the
+ * later `posthog-cli` spawns resolve.
+ */
+export function installOrUpdatePostHogCli(): CliInstallResult {
+  const first = runNpmInstall([]);
+  if (first.success || !isPermissionError(first.error ?? '')) {
+    return first;
+  }
+
+  const retry = runNpmInstall(['--prefix', FALLBACK_PREFIX]);
+  if (retry.success) {
+    prependToPath(fallbackBinDir);
+  }
+  return retry;
 }
 
 /**
