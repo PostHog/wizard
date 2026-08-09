@@ -14,6 +14,7 @@ import {
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
+import { seedNonInteractiveSelection } from './non-interactive-selection.js';
 import { getUI } from '@ui';
 import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
 import { analytics } from '@utils/analytics';
@@ -59,8 +60,15 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   reportFile: REPORT_FILE,
   getContentBlocks,
   requires: ['posthog-integration'],
+  // Non-interactive runs have no detect+pick screen; the selection arrives as
+  // CLI flags and is seeded into framework context before the agent runs.
+  ciPreRun: seedNonInteractiveSelection,
 
-  run: (_session: WizardSession): Promise<ProgramRun> => {
+  run: (session: WizardSession): Promise<ProgramRun> => {
+    // `ci` is set once by buildSession and never changes, so it is safe to
+    // read here even though the store forks the session reference.
+    const nonInteractive = session.ci === true;
+
     // Read the picked project LIVE at prompt-build time, not here: the picker
     // screen runs AFTER this run config is resolved (post-auth), and the store
     // forks the session reference, so the `session` passed in never sees the
@@ -121,6 +129,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
           reportFile: REPORT_FILE,
+          nonInteractive,
         });
       },
 

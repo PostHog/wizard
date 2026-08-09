@@ -230,9 +230,15 @@ export interface ProgramConfig {
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
    * onReady hooks. Use for headless prerequisite work (e.g. framework
-   * detection) that the TUI performs via step onReady callbacks.
+   * detection) that the TUI performs via step onReady callbacks. Also receives
+   * the parsed CLI options bag, so program-specific flags (e.g.
+   * upload-source-maps' selection flags) can seed the session without
+   * threading new fields through buildSession.
    */
-  ciPreRun?: (session: WizardSession) => Promise<void>;
+  ciPreRun?: (
+    session: WizardSession,
+    options?: Record<string, unknown>,
+  ) => Promise<void>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**

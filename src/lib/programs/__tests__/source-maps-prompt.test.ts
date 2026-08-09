@@ -100,3 +100,56 @@ describe('buildSourceMapsUploadPrompt rust workspace scope', () => {
     expect(prompt).not.toContain('Cargo workspace exception');
   });
 });
+
+describe('buildSourceMapsUploadPrompt non-interactive mode', () => {
+  const prompt = buildSourceMapsUploadPrompt({
+    ...baseParams,
+    nonInteractive: true,
+  });
+
+  it('never references the ask tool or the API-key prompt', () => {
+    expect(prompt).not.toContain('wizard_ask');
+    expect(prompt).not.toContain('secretRef');
+    expect(prompt).not.toContain('Paste your PostHog personal API key');
+  });
+
+  it('drops the local-test offer', () => {
+    expect(prompt).not.toContain('Test the local setup');
+    expect(prompt).not.toContain('Want me to help you test');
+  });
+
+  it('forbids real env files and env tools, allowing only committed examples', () => {
+    expect(prompt).toContain('NEVER create or modify real env files');
+    expect(prompt).toContain('committed env example file');
+    // The interactive flow's env tools write the vaulted key; without a key
+    // they must not run at all.
+    expect(prompt).not.toContain('Then call set_env_values');
+  });
+
+  it('hands the API key off as a documented follow-up', () => {
+    expect(prompt).toContain('you\ncannot obtain one');
+    expect(prompt).toContain('"What you still need to do"');
+    expect(prompt).toContain(baseParams.settingsUrl);
+  });
+
+  it('keeps the monorepo scope rules', () => {
+    const monorepoPrompt = buildSourceMapsUploadPrompt({
+      ...baseParams,
+      projectPath: 'backend',
+      nonInteractive: true,
+    });
+
+    expect(monorepoPrompt).toContain('scope your work to `backend`');
+    expect(monorepoPrompt).toContain(
+      "Project directory (relative to the wizard's working directory): backend",
+    );
+  });
+
+  it('leaves the interactive prompt untouched', () => {
+    const interactive = buildSourceMapsUploadPrompt(baseParams);
+
+    expect(interactive).toContain('wizard_ask');
+    expect(interactive).toContain('Test the local setup');
+    expect(interactive).toContain('secretRef');
+  });
+});

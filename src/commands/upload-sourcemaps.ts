@@ -1,7 +1,7 @@
-import { runWizard, runWizardCI } from '@lib/runners';
+import { runWizard, runWizardCI, runWizardHeadless } from '@lib/runners';
 import { errorTrackingUploadSourceMapsConfig } from '@lib/programs/error-tracking-upload-source-maps/index';
 import { runDetectOnly } from '@lib/programs/error-tracking-upload-source-maps/detect-only';
-import { regionOption } from '@lib/headless-mode';
+import { headlessOption, isHeadless, regionOption } from '@lib/headless-mode';
 import { runCommandHandler } from './factories/shared';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
@@ -29,6 +29,22 @@ export const uploadSourcemapsCommand: Command = {
       type: 'string' as const,
       hidden: true,
     },
+    // Project selection for non-interactive runs, passed verbatim from a
+    // stored detection report row (the project the user picked in the
+    // PostHog app). Hidden like the headless flag: the contract is unstable.
+    'selected-path': {
+      describe:
+        "Project directory to instrument, relative to the repo root ('.' for the root). Non-interactive runs only.",
+      type: 'string' as const,
+      hidden: true,
+    },
+    'selected-variant': {
+      describe:
+        'Source-maps skill variant of the selected project (e.g. nextjs). Non-interactive runs only.',
+      type: 'string' as const,
+      hidden: true,
+    },
+    ...headlessOption,
     ...regionOption,
   },
   handler: (argv) => {
@@ -39,6 +55,8 @@ export const uploadSourcemapsCommand: Command = {
     const options = { ...argv, ...extras };
     if (options.detectOnly) {
       runCommandHandler(() => runDetectOnly(options));
+    } else if (isHeadless(options)) {
+      runWizardHeadless(errorTrackingUploadSourceMapsConfig, options);
     } else if (options.ci) {
       runWizardCI(errorTrackingUploadSourceMapsConfig, options);
     } else {

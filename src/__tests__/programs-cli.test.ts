@@ -1,11 +1,15 @@
-const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
-  mockRunWizard: vi.fn(),
-  mockRunWizardCI: vi.fn(),
-}));
+const { mockRunWizard, mockRunWizardCI, mockRunWizardHeadless } = vi.hoisted(
+  () => ({
+    mockRunWizard: vi.fn(),
+    mockRunWizardCI: vi.fn(),
+    mockRunWizardHeadless: vi.fn(),
+  }),
+);
 
 vi.mock('@lib/runners', () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
+  runWizardHeadless: mockRunWizardHeadless,
 }));
 
 vi.mock('@lib/wizard-tools', async (importOriginal) => {
@@ -225,6 +229,41 @@ describe('yargs parsing for the audit family', () => {
     );
     expect(canonical.debug).toBe(true);
     expect(legacy.debug).toBe(true);
+  });
+
+  test('parses the upload-source-maps headless selection flags', async () => {
+    const argv = await parseCommand(
+      uploadSourcemapsCommand,
+      'upload-source-maps --headless-DONOTUSE-EXPERIMENTAL --selected-path apps/web --selected-variant nextjs',
+    );
+    expect(argv['headless-DONOTUSE-EXPERIMENTAL']).toBe(true);
+    expect(argv.selectedPath).toBe('apps/web');
+    expect(argv.selectedVariant).toBe('nextjs');
+  });
+
+  test('routes headless upload-source-maps runs to runWizardHeadless', () => {
+    // This describe has no mock-clearing hook; earlier dispatch tests leave
+    // runner-mock calls behind, so start from a clean slate.
+    vi.clearAllMocks();
+    uploadSourcemapsCommand.handler?.(
+      makeArgv({
+        'headless-DONOTUSE-EXPERIMENTAL': true,
+        selectedPath: '.',
+        selectedVariant: 'nextjs',
+      }),
+    );
+    expect(mockRunWizardHeadless).toHaveBeenCalledTimes(1);
+    expect(mockRunWizard).not.toHaveBeenCalled();
+    expect(mockRunWizardCI).not.toHaveBeenCalled();
+    const [config, opts] = mockRunWizardHeadless.mock.calls[0] as [
+      { id?: string },
+      Record<string, unknown>,
+    ];
+    expect(config.id).toBe('error-tracking-upload-source-maps');
+    expect(opts).toMatchObject({
+      selectedPath: '.',
+      selectedVariant: 'nextjs',
+    });
   });
 });
 
