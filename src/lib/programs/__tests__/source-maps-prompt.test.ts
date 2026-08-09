@@ -118,12 +118,10 @@ describe('buildSourceMapsUploadPrompt non-interactive mode', () => {
     expect(prompt).not.toContain('Want me to help you test');
   });
 
-  it('forbids real env file writes, allowing committed examples and reads', () => {
-    expect(prompt).toContain('NEVER create or modify real env files');
+  it('forbids real env files and env tools, allowing only committed examples', () => {
+    expect(prompt).toContain('NEVER read, create, or modify real env files');
+    expect(prompt).toContain('never call check_env_keys or set_env_values');
     expect(prompt).toContain('committed env example file');
-    expect(prompt).toContain('check_env_keys is fine');
-    // The interactive flow's set_env_values writes the vaulted key; without
-    // a key it must not run at all.
     expect(prompt).not.toContain('Then call set_env_values');
   });
 
