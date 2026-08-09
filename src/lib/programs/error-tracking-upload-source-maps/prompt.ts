@@ -26,6 +26,115 @@ export const SOURCE_MAPS_DETECTION_FAILED_PROMPT = `Detection did not pick a sou
 Emit: ${AgentSignals.ABORT} unsupported-platform
 Then halt.`;
 
+// ── Shared fragments ─────────────────────────────────────────────────
+// Text that appears in both the interactive and non-interactive prompts
+// lives here once, so an edit propagates to both modes instead of
+// silently drifting. Step numbers (and small mode-specific clauses) are
+// parameters because the two flows number their steps differently.
+
+const opening = (platformLabel: string): string =>
+  `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.`;
+
+const projectContextBlock = (p: {
+  projectId: number;
+  host: string;
+  platformLabel: string;
+  skillId: string;
+  projectLine: string;
+  settingsUrl: string;
+}): string => `Project context:
+- PostHog Project ID: ${p.projectId}
+- PostHog Host: ${p.host}
+- Detected platform: ${p.platformLabel}
+- Skill to use: ${p.skillId}
+${p.projectLine}
+- Personal API keys settings page: ${p.settingsUrl}`;
+
+const skillSourceOfTruthBlock = (installStep: number): string =>
+  `The skill you install in STEP ${installStep} is the source of truth for the HOW of every
+step: its "## Steps" section has an overview, tips and per-technology
+examples for each named step, and its reference files carry the exact
+per-framework API. The STEPS below give the order, the conditionals, and the
+wizard-specific mechanics (which MCP tool to call, signals to emit) — read
+the matching skill step (named in parentheses) before doing the work, and do
+not invent steps the skill doesn't describe.`;
+
+const FOLLOW_IN_ORDER = 'Follow these steps IN ORDER. Do not skip or reorder.';
+
+const taskListIntro = (suffix: string): string =>
+  `Use exactly these tasks, in this order — do not collapse, rename, or omit
+any of them${suffix}`;
+
+const TASKUPDATE_RULE = `Drive the list with TaskUpdate — mark a task in_progress when you start it
+and completed when done.`;
+
+const installSkillStep = (
+  n: number,
+  skillId: string,
+  drivenSteps: string,
+): string => `STEP ${n} — Install the skill.
+   Call install_skill (wizard-tools MCP server) with skillId "${skillId}".
+   Do NOT run shell commands to install skills. Then read the installed
+   SKILL.md and its reference files — they drive STEPS ${drivenSteps}.
+   If install fails, emit ${AgentSignals.ERROR_RESOURCE_MISSING} skill ${skillId} could not be installed.`;
+
+const buildConfigStep = (
+  n: number,
+): string => `STEP ${n} — Apply build-config changes. (skill: "Apply build-config changes")
+   Make the bundler / build-config changes the skill's step instructs. The
+   skill and its reference are the source of truth for this platform.`;
+
+const credsReadableStep = (
+  n: number,
+  askClause: string,
+): string => `STEP ${n} — Make the credentials readable at build time. (skill: "Make credentials available at build time")
+   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
+   \`dotenv\`), install it SILENTLY${askClause}.
+   Skip this step entirely if the platform already auto-loads .env.`;
+
+const buildRunCommandsStep = (
+  n: number,
+): string => `STEP ${n} — Identify the build AND run commands. (skill: "Identify the build and run commands")
+   Per the skill, resolve the production BUILD command and the RUN command
+   for THIS project (use detect_package_manager for the package manager). Do
+   NOT run either yourself — the user runs them. If you cannot identify a
+   build command, emit ${AgentSignals.ABORT} build command not found.`;
+
+/**
+ * The CI step's shared skeleton. `credsIntro` finishes the "must carry"
+ * sentence (each mode references its own credentials step); `rules` is the
+ * mode's full "Wizard-specific rules on top" bullet list.
+ */
+const ciStep = (
+  n: number,
+  credsIntro: string,
+  rules: string,
+): string => `STEP ${n} — Set up CI for automatic uploads. (skill: "Set up CI for automatic uploads")
+   Source maps only upload when the production build runs, so the build's
+   CI/CD must carry ${credsIntro} Follow the
+   skill's "Set up CI for automatic uploads" step — it is the source of
+   truth for tracing where the production build runs and wiring the
+   credentials through every layer, whatever the CI provider.
+   Wizard-specific rules on top:
+${rules}`;
+
+const handOffHeader = (
+  n: number,
+  reportFile: string,
+): string => `STEP ${n} — Summarise and hand off. (skill: "Verify and hand off")
+   Follow the skill's "Verify and hand off" step. Write the hand-off to
+   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
+   \`${reportFile}\` as the file path, never prefixed with the selected
+   project directory; this file is the one exception to the project-scope
+   rule above.`;
+
+const symbolSetsFooter = (
+  uiHost: string,
+  projectId: number,
+): string => `The Symbol sets page for this project — where the user
+   confirms the upload landed — is:
+   ${uiHost}/project/${projectId}/error_tracking/configuration`;
+
 export function buildSourceMapsUploadPrompt(
   params: SourceMapsUploadPromptParams,
 ): string {
@@ -62,18 +171,24 @@ follow the skill's workspace guidance for which paths to use. Every other
 package stays off-limits.`
       : ''
   }`;
+  const context = {
+    projectId,
+    host,
+    platformLabel,
+    skillId,
+    projectLine,
+    settingsUrl,
+  };
 
   if (nonInteractive) {
     return buildNonInteractivePrompt({
-      platformLabel,
+      context,
+      scopeBlock,
       skillId,
       projectId,
-      host,
       settingsUrl,
       uiHost,
       reportFile,
-      projectLine,
-      scopeBlock,
     });
   }
 
@@ -85,49 +200,15 @@ package stays off-limits.`
       }`
     : `Tool filePaths are relative to the wizard's working directory. For an env file at this project root, pass \`.env\`; never prefix it with this directory's path inside an ancestor repository.`;
 
-  const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
-   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
-   \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
-   Skip this step entirely if the platform already auto-loads .env.
+  return `${opening(platformLabel)}
 
-STEP 5 — Write the credentials to the env file. (skill: "Write credentials to the env file")
-   Use the wizard-tools MCP server. Reuse the env file the skill tells you to
-   pick — the prerequisite PostHog integration usually already wrote
-   POSTHOG_* vars to one, so seed your keys alongside them.
-   - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly).
-   - Env tool path rule: ${envFilePathGuidance}
-   - Then call set_env_values, passing the STEP 1 secretRef as a value
-     object, not a literal string:
-       values: {
-         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
-         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${uiHost}"
-       }
-   Variable names follow the skill's per-uploader conventions. The wizard
-   resolves the ref locally before writing, so you never see the key value.`;
-
-  return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
-
-Project context:
-- PostHog Project ID: ${projectId}
-- PostHog Host: ${host}
-- Detected platform: ${platformLabel}
-- Skill to use: ${skillId}
-${projectLine}
-- Personal API keys settings page: ${settingsUrl}
+${projectContextBlock(context)}
 
 ${scopeBlock}
 
-The skill you install in STEP 2 is the source of truth for the HOW of every
-step: its "## Steps" section has an overview, tips and per-technology
-examples for each named step, and its reference files carry the exact
-per-framework API. The STEPS below give the order, the conditionals, and the
-wizard-specific mechanics (which MCP tool to call, signals to emit) — read
-the matching skill step (named in parentheses) before doing the work, and do
-not invent steps the skill doesn't describe.
+${skillSourceOfTruthBlock(2)}
 
-Follow these steps IN ORDER. Do not skip or reorder.
+${FOLLOW_IN_ORDER}
 
 Your FIRST message must contain ONLY parallel tool calls, in this order:
   - the STEP 1 wizard_ask call FIRST — tool calls execute as they stream,
@@ -139,9 +220,8 @@ Your FIRST message must contain ONLY parallel tool calls, in this order:
 Do not read files, explore the project, or write any text first, and keep
 any thinking before the calls to a single short sentence.
 
-Use exactly these tasks, in this order — do not collapse, rename, or omit
-any of them. Getting the API key is NOT a task — its prompt is already on
-screen by the time the list renders:
+${taskListIntro(`. Getting the API key is NOT a task — its prompt is already on
+screen by the time the list renders:`)}
   1. Install source maps skill
   2. Apply build-config changes (per skill)
   3. Make credentials readable at build time
@@ -150,8 +230,7 @@ screen by the time the list renders:
   6. Set up CI for auto-upload
   7. Test the local setup
   8. Summarise & hand off
-Drive the list with TaskUpdate — mark a task in_progress when you start it
-and completed when done. ALWAYS keep task 7 ("Test the local setup") in the
+${TASKUPDATE_RULE} ALWAYS keep task 7 ("Test the local setup") in the
 list even if the user declines it in STEP 8: mark it completed rather than
 deleting it, so the user can see it was offered.
 
@@ -172,36 +251,40 @@ STEP 1 — Get a personal API key from the user. (skill: "Get a personal API key
    If wizard_ask is unavailable (CI / non-interactive), emit
    ${AgentSignals.ABORT} requires-interactive-mode and halt.
 
-STEP 2 — Install the skill.
-   Call install_skill (wizard-tools MCP server) with skillId "${skillId}".
-   Do NOT run shell commands to install skills. Then read the installed
-   SKILL.md and its reference files — they drive STEPS 3-9.
-   If install fails, emit ${AgentSignals.ERROR_RESOURCE_MISSING} skill ${skillId} could not be installed.
+${installSkillStep(2, skillId, '3-9')}
 
-STEP 3 — Apply build-config changes. (skill: "Apply build-config changes")
-   Make the bundler / build-config changes the skill's step instructs. The
-   skill and its reference are the source of truth for this platform.
+${buildConfigStep(3)}
 
-${credentialSteps}
+${credsReadableStep(4, ' — do NOT ask the user or call wizard_ask')}
 
-STEP 6 — Identify the build AND run commands. (skill: "Identify the build and run commands")
-   Per the skill, resolve the production BUILD command and the RUN command
-   for THIS project (use detect_package_manager for the package manager). Do
-   NOT run either yourself — the user runs them. If you cannot identify a
-   build command, emit ${AgentSignals.ABORT} build command not found.
+STEP 5 — Write the credentials to the env file. (skill: "Write credentials to the env file")
+   Use the wizard-tools MCP server. Reuse the env file the skill tells you to
+   pick — the prerequisite PostHog integration usually already wrote
+   POSTHOG_* vars to one, so seed your keys alongside them.
+   - First call check_env_keys on that file (returns present/absent, never
+     values — don't read the file directly).
+   - Env tool path rule: ${envFilePathGuidance}
+   - Then call set_env_values, passing the STEP 1 secretRef as a value
+     object, not a literal string:
+       values: {
+         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
+         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
+         "POSTHOG_CLI_HOST": "${uiHost}"
+       }
+   Variable names follow the skill's per-uploader conventions. The wizard
+   resolves the ref locally before writing, so you never see the key value.
 
-STEP 7 — Set up CI for automatic uploads. (skill: "Set up CI for automatic uploads")
-   Source maps only upload when the production build runs, so the build's
-   CI/CD must carry the same upload credentials you wrote in STEP 5. Do this
-   step without asking — there is no opt-in question for it. Follow the
-   skill's "Set up CI for automatic uploads" step — it is the source of
-   truth for tracing where the production build runs and wiring the
-   credentials through every layer, whatever the CI provider.
-   Wizard-specific rules on top:
-   - Trace the deploy path by reading the project's files — do NOT ask the
+${buildRunCommandsStep(6)}
+
+${ciStep(
+  7,
+  `the same upload credentials you wrote in STEP 5. Do this
+   step without asking — there is no opt-in question for it.`,
+  `   - Trace the deploy path by reading the project's files — do NOT ask the
      user, and do NOT invent config that isn't there.
    - Carry every manual follow-up the skill has you hand off (secrets the
-     user must create, an untraceable build path) into STEP 9.
+     user must create, an untraceable build path) into STEP 9.`,
+)}
 
 STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    Call wizard_ask:
@@ -244,55 +327,48 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    After the user continues, revert the test code per the skill's rules and
    surface any failure in STEP 9.
 
-STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
-   Follow the skill's "Verify and hand off" step. Write the hand-off to
-   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
-   \`${reportFile}\` as the file path, never prefixed with the selected
-   project directory; this file is the one exception to the project-scope
-   rule above. Cover: the files you changed (paths only), the exact build
+${handOffHeader(
+  9,
+  reportFile,
+)} Cover: the files you changed (paths only), the exact build
    and upload commands, every CI secret the user still has to create, and
    how to verify the upload — then give the same summary in chat. Never
    write secret values into the report, only variable names. The success
-   screen points the user at this file, so do not skip it. The Symbol sets page for this project — where the user
-   confirms the upload landed — is:
-   ${uiHost}/project/${projectId}/error_tracking/configuration
+   screen points the user at this file, so do not skip it. ${symbolSetsFooter(
+     uiHost,
+     projectId,
+   )}
 `;
 }
 
 type NonInteractivePromptParts = {
-  platformLabel: string;
+  context: Parameters<typeof projectContextBlock>[0];
+  scopeBlock: string;
   skillId: string;
   projectId: number;
-  host: string;
   settingsUrl: string;
   uiHost: string;
   reportFile: string;
-  projectLine: string;
-  scopeBlock: string;
 };
 
 /**
- * The non-interactive (headless / CI) counterpart of the interactive prompt
- * above. Kept as its own document rather than conditionals inside one
- * template: the modes genuinely differ (no API-key ask, no local-test offer,
- * committed-files-only credential handling, own step numbering), and a
- * reviewable top-to-bottom prompt beats a fragment assembly. When editing a
- * step here, check whether its interactive sibling needs the same change.
+ * The non-interactive (headless / CI) prompt: no API-key ask, no local-test
+ * offer, committed-files-only credential handling, and its own step
+ * numbering. Assembled from the shared fragments above plus the sections
+ * that only exist in this mode.
  */
 function buildNonInteractivePrompt(parts: NonInteractivePromptParts): string {
   const {
-    platformLabel,
+    context,
+    scopeBlock,
     skillId,
     projectId,
-    host,
     settingsUrl,
     uiHost,
     reportFile,
-    projectLine,
-    scopeBlock,
   } = parts;
 
-  return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
+  return `${opening(context.platformLabel)}
 
 This is a non-interactive run: no user is present and there is no way to
 ask questions or pause for input — work straight through. Your changes
@@ -309,26 +385,14 @@ key:
 - Creating the key is the user's follow-up work; STEP 7's hand-off report
   documents exactly what they must do.
 
-Project context:
-- PostHog Project ID: ${projectId}
-- PostHog Host: ${host}
-- Detected platform: ${platformLabel}
-- Skill to use: ${skillId}
-${projectLine}
-- Personal API keys settings page: ${settingsUrl}
+${projectContextBlock(context)}
 
 ${scopeBlock}
 
-The skill you install in STEP 1 is the source of truth for the HOW of every
-step: its "## Steps" section has an overview, tips and per-technology
-examples for each named step, and its reference files carry the exact
-per-framework API. The STEPS below give the order, the conditionals, and the
-wizard-specific mechanics (which MCP tool to call, signals to emit) — read
-the matching skill step (named in parentheses) before doing the work, and do
-not invent steps the skill doesn't describe. Skill steps that gather input
+${skillSourceOfTruthBlock(1)} Skill steps that gather input
 from the user or pause for them do not apply to this run.
 
-Follow these steps IN ORDER. Do not skip or reorder.
+${FOLLOW_IN_ORDER}
 
 Your FIRST message must contain ONLY parallel TaskCreate tool calls — one
 call PER task below (the tool takes a single task per call). Keep every
@@ -336,8 +400,7 @@ description to a few words — never a sentence. Do not read files, explore
 the project, or write any text first, and keep any thinking before the
 calls to a single short sentence.
 
-Use exactly these tasks, in this order — do not collapse, rename, or omit
-any of them:
+${taskListIntro(':')}
   1. Install source maps skill
   2. Apply build-config changes (per skill)
   3. Make credentials readable at build time
@@ -345,23 +408,13 @@ any of them:
   5. Identify build & run commands
   6. Set up CI for auto-upload
   7. Summarise & hand off
-Drive the list with TaskUpdate — mark a task in_progress when you start it
-and completed when done.
+${TASKUPDATE_RULE}
 
-STEP 1 — Install the skill.
-   Call install_skill (wizard-tools MCP server) with skillId "${skillId}".
-   Do NOT run shell commands to install skills. Then read the installed
-   SKILL.md and its reference files — they drive STEPS 2-7.
-   If install fails, emit ${AgentSignals.ERROR_RESOURCE_MISSING} skill ${skillId} could not be installed.
+${installSkillStep(1, skillId, '2-7')}
 
-STEP 2 — Apply build-config changes. (skill: "Apply build-config changes")
-   Make the bundler / build-config changes the skill's step instructs. The
-   skill and its reference are the source of truth for this platform.
+${buildConfigStep(2)}
 
-STEP 3 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
-   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
-   \`dotenv\`), install it SILENTLY. Skip this step entirely if the platform
-   already auto-loads .env.
+${credsReadableStep(3, '')}
 
 STEP 4 — Write the non-secret config. (skill: "Write credentials to the env file")
    The skill's step assumes an interactive run writing a real key into a
@@ -378,33 +431,21 @@ STEP 4 — Write the non-secret config. (skill: "Write credentials to the env fi
      directly, prefer literals there over depending on a local env file.
    Variable names follow the skill's per-uploader conventions.
 
-STEP 5 — Identify the build AND run commands. (skill: "Identify the build and run commands")
-   Per the skill, resolve the production BUILD command and the RUN command
-   for THIS project (use detect_package_manager for the package manager). Do
-   NOT run either yourself — the user runs them. If you cannot identify a
-   build command, emit ${AgentSignals.ABORT} build command not found.
+${buildRunCommandsStep(5)}
 
-STEP 6 — Set up CI for automatic uploads. (skill: "Set up CI for automatic uploads")
-   Source maps only upload when the production build runs, so the build's
-   CI/CD must carry the upload credentials from STEP 4. Follow the skill's
-   "Set up CI for automatic uploads" step — it is the source of truth for
-   tracing where the production build runs and wiring the credentials
-   through every layer, whatever the CI provider.
-   Wizard-specific rules on top:
-   - Trace the deploy path by reading the project's files — do NOT invent
+${ciStep(
+  6,
+  'the upload credentials from STEP 4.',
+  `   - Trace the deploy path by reading the project's files — do NOT invent
      config that isn't there.
    - Reference the API key strictly as a CI secret, named exactly per the
      skill's convention. You cannot create the secret — the user does, so
      carry it into STEP 7's report.
    - Carry every other manual follow-up the skill has you hand off (an
-     untraceable build path, provider-side settings) into STEP 7 as well.
+     untraceable build path, provider-side settings) into STEP 7 as well.`,
+)}
 
-STEP 7 — Summarise and hand off. (skill: "Verify and hand off")
-   Follow the skill's "Verify and hand off" step. Write the hand-off to
-   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
-   \`${reportFile}\` as the file path, never prefixed with the selected
-   project directory; this file is the one exception to the project-scope
-   rule above.
+${handOffHeader(7, reportFile)}
    START the report with a "What you still need to do" section — numbered,
    copy-pasteable follow-ups:
    1. Create a personal API key with the 'Source map upload' preset:
@@ -416,8 +457,6 @@ STEP 7 — Summarise and hand off. (skill: "Verify and hand off")
    Then cover: the files you changed (paths only), the exact build and
    upload commands, and how to verify the upload — then give the same
    summary in chat. Never write secret values into the report, only
-   variable names. The Symbol sets page for this project — where the user
-   confirms the upload landed — is:
-   ${uiHost}/project/${projectId}/error_tracking/configuration
+   variable names. ${symbolSetsFooter(uiHost, projectId)}
 `;
 }
