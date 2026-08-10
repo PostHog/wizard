@@ -185,6 +185,13 @@ export interface SkillInstallOptions {
   skillsRoot?: string;
   /** Scan-triage classifier. `undefined` = no gateway, so a flagged skill fails closed. */
   triage: LLMProvider | undefined;
+  /**
+   * Menu entries the caller already fetched. Supplying them skips the per-install
+   * menu round trip — a caller that installs N skills otherwise re-downloads
+   * `skill-menu.json` N times, and every one of those is another chance for a
+   * transient GitHub blip to fail an install that had nothing to do with the menu.
+   */
+  menuEntries?: readonly SkillEntry[];
 }
 
 /**
@@ -268,9 +275,29 @@ export type InstallSkillResult =
   | { kind: 'download-failed'; message: string };
 
 /**
- * High-level "install a skill by ID" helper. Fetches the skill menu,
- * finds the skill, downloads and extracts it. Programs should use this
- * instead of composing fetchSkillMenu + downloadSkill themselves.
+ * What actually went wrong, in the user's terms. One vocabulary for every
+ * caller — a network failure must never be reported as a permissions problem.
+ */
+export function describeInstallFailure(
+  result: Exclude<InstallSkillResult, { kind: 'ok' }>,
+): string {
+  switch (result.kind) {
+    case 'menu-fetch-failed':
+      return 'Could not fetch the skill menu from context-mill.\nCheck your network connection and try again.';
+    case 'skill-not-found':
+      return `Could not find the "${result.skillId}" skill in the context-mill menu.\nPlease try again later.`;
+    case 'download-failed':
+      return `Failed to install skill: ${result.message}\nPlease try again.`;
+  }
+}
+
+/**
+ * High-level "install a skill by ID" helper. Finds the skill in the menu,
+ * downloads and extracts it. Programs should use this instead of composing
+ * fetchSkillMenu + downloadSkill themselves.
+ *
+ * Pass `options.menuEntries` when the menu is already in hand — installing
+ * without it costs one `skill-menu.json` fetch per skill.
  */
 export async function installSkillById(
   skillId: string,
@@ -278,12 +305,14 @@ export async function installSkillById(
   skillsBaseUrl: string,
   options: SkillInstallOptions,
 ): Promise<InstallSkillResult> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return { kind: 'menu-fetch-failed' };
+  let entries = options.menuEntries;
+  if (!entries) {
+    const menu = await fetchSkillMenu(skillsBaseUrl);
+    if (!menu) return { kind: 'menu-fetch-failed' };
+    entries = Object.values(menu.categories).flat();
+  }
 
-  const skill = Object.values(menu.categories)
-    .flat()
-    .find((s) => s.id === skillId);
+  const skill = entries.find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
   const result = await downloadSkill(skill, installDir, options);

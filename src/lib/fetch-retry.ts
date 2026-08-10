@@ -6,8 +6,11 @@
  */
 
 const DEFAULT_TIMEOUT_MS = 60000; // per attempt
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_BACKOFF_MS = 500; // doubles each retry
+// 4 attempts over ~7s of backoff. The old 3-over-1.5s gave up inside the
+// length of a typical GitHub release-download blip, so a whole run died on a
+// wobble that had cleared by the time the user retried by hand.
+const DEFAULT_MAX_ATTEMPTS = 4;
+const DEFAULT_BACKOFF_MS = 1000; // doubles each retry
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

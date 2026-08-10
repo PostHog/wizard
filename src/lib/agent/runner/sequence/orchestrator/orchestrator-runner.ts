@@ -28,6 +28,7 @@ import {
 } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
+  describeInstallFailure,
   installSkillById,
   fetchSkillMenu,
   type SkillEntry,
@@ -312,6 +313,7 @@ export async function runOrchestrator(
       {
         skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
         triage: boot.triageProvider,
+        menuEntries: menuSkillEntries,
       },
     );
     if (ref.kind === 'ok') {
@@ -498,7 +500,11 @@ export async function runOrchestrator(
           variantId,
           session.installDir,
           boot.skillsBaseUrl,
-          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
+          {
+            skillsRoot: taskSkillsRoot,
+            triage: boot.triageProvider,
+            menuEntries: menuSkillEntries,
+          },
         );
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
@@ -513,7 +519,7 @@ export async function runOrchestrator(
           // task through the normal outcome check.
           throw new Error(
             `Skill "${variantId}" for task "${task.type}" could not be installed (${result.kind}). ` +
-              'If this is a permissions error, check that the project directory is writable.',
+              describeInstallFailure(result),
           );
         }
       }

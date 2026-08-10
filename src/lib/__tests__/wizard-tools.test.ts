@@ -7,9 +7,11 @@ import {
   DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_TOOL_NAMES,
   __test,
+  describeInstallFailure,
   ensureGitignoreCoverage,
   evaluateAskCap,
   fetchSkillMenu,
+  installSkillById,
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
@@ -572,6 +574,68 @@ describe('downloadWithRetry', () => {
         maxAttempts: 3,
       }),
     ).rejects.toThrow(/attempt 1.*attempt 2.*attempt 3/s);
+  });
+});
+
+describe('installSkillById', () => {
+  const entries = [
+    { id: 'integration-v2-init-django', name: 'init', downloadUrl: 'u' },
+  ];
+
+  it('uses supplied menu entries instead of refetching the menu', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = (() => {
+      throw new Error('menu must not be refetched');
+    }) as any;
+
+    try {
+      const result = await installSkillById(
+        'not-in-menu',
+        '/tmp',
+        'https://x',
+        {
+          triage: undefined,
+          menuEntries: entries,
+        },
+      );
+
+      expect(result).toEqual({
+        kind: 'skill-not-found',
+        skillId: 'not-in-menu',
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+describe('describeInstallFailure', () => {
+  it('names the network as the cause of a menu fetch failure', () => {
+    const message = describeInstallFailure({ kind: 'menu-fetch-failed' });
+
+    expect(message).toMatch(/network/i);
+    // A menu fetch never touches the project directory — blaming permissions
+    // sent users to check `chmod` for what was a GitHub blip.
+    expect(message).not.toMatch(/permission|writable/i);
+  });
+
+  it('surfaces the underlying error of a failed download', () => {
+    const message = describeInstallFailure({
+      kind: 'download-failed',
+      message: 'HTTP 503 Service Unavailable',
+    });
+
+    expect(message).toContain('HTTP 503 Service Unavailable');
+    expect(message).not.toMatch(/permission|writable/i);
+  });
+
+  it('names the missing skill when the menu lacks it', () => {
+    const message = describeInstallFailure({
+      kind: 'skill-not-found',
+      skillId: 'integration-v2-init-django',
+    });
+
+    expect(message).toContain('integration-v2-init-django');
   });
 });
 
