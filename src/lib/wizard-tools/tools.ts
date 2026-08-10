@@ -185,13 +185,6 @@ export interface SkillInstallOptions {
   skillsRoot?: string;
   /** Scan-triage classifier. `undefined` = no gateway, so a flagged skill fails closed. */
   triage: LLMProvider | undefined;
-  /**
-   * Menu entries the caller already fetched. Supplying them skips the per-install
-   * menu round trip — a caller that installs N skills otherwise re-downloads
-   * `skill-menu.json` N times, and every one of those is another chance for a
-   * transient GitHub blip to fail an install that had nothing to do with the menu.
-   */
-  menuEntries?: readonly SkillEntry[];
 }
 
 /**
@@ -206,12 +199,15 @@ export async function downloadSkill(
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  let step: 'download' | 'extract' = 'download';
+  // Reported as `install_step`, not `step`: a numeric `step` is already defined
+  // project-wide, and the collision types this one numeric too, so every
+  // string value reads back null and the stage is invisible in queries.
+  let installStep: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
     const data = await downloadWithRetry(skillEntry.downloadUrl);
-    step = 'extract';
+    installStep = 'extract';
     const fileCount = skillEntry.bundle
       ? extractBundle(
           JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
@@ -230,7 +226,7 @@ export async function downloadSkill(
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
         skill_id: skillEntry.id,
-        step: 'scan',
+        install_step: 'scan',
         platform: process.platform,
         error: poisonReason.slice(0, 500),
       });
@@ -251,7 +247,7 @@ export async function downloadSkill(
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
       skill_id: skillEntry.id,
-      step,
+      install_step: installStep,
       platform: process.platform,
       error: String(err.message).slice(0, 500),
     });
@@ -292,12 +288,14 @@ export function describeInstallFailure(
 }
 
 /**
- * High-level "install a skill by ID" helper. Finds the skill in the menu,
- * downloads and extracts it. Programs should use this instead of composing
- * fetchSkillMenu + downloadSkill themselves.
+ * High-level "install a skill by ID" helper. Fetches the skill menu,
+ * finds the skill, downloads and extracts it. Programs should use this
+ * instead of composing fetchSkillMenu + downloadSkill themselves.
  *
- * Pass `options.menuEntries` when the menu is already in hand — installing
- * without it costs one `skill-menu.json` fetch per skill.
+ * Every exit reports `skill install failed`. `downloadSkill` only covers the
+ * failures it can see itself, so the two that resolve before it is ever called
+ * are captured here — otherwise a menu that won't load looks, in analytics,
+ * exactly like a skill that was never attempted.
  */
 export async function installSkillById(
   skillId: string,
@@ -305,15 +303,29 @@ export async function installSkillById(
   skillsBaseUrl: string,
   options: SkillInstallOptions,
 ): Promise<InstallSkillResult> {
-  let entries = options.menuEntries;
-  if (!entries) {
-    const menu = await fetchSkillMenu(skillsBaseUrl);
-    if (!menu) return { kind: 'menu-fetch-failed' };
-    entries = Object.values(menu.categories).flat();
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) {
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillId,
+      install_step: 'menu',
+      platform: process.platform,
+      error: 'menu-fetch-failed',
+    });
+    return { kind: 'menu-fetch-failed' };
   }
 
-  const skill = entries.find((s) => s.id === skillId);
-  if (!skill) return { kind: 'skill-not-found', skillId };
+  const skill = Object.values(menu.categories)
+    .flat()
+    .find((s) => s.id === skillId);
+  if (!skill) {
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillId,
+      install_step: 'resolve',
+      platform: process.platform,
+      error: 'skill-not-found',
+    });
+    return { kind: 'skill-not-found', skillId };
+  }
 
   const result = await downloadSkill(skill, installDir, options);
   if (!result.success) {

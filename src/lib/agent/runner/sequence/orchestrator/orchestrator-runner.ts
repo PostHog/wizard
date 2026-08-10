@@ -313,7 +313,6 @@ export async function runOrchestrator(
       {
         skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
         triage: boot.triageProvider,
-        menuEntries: menuSkillEntries,
       },
     );
     if (ref.kind === 'ok') {
@@ -500,11 +499,7 @@ export async function runOrchestrator(
           variantId,
           session.installDir,
           boot.skillsBaseUrl,
-          {
-            skillsRoot: taskSkillsRoot,
-            triage: boot.triageProvider,
-            menuEntries: menuSkillEntries,
-          },
+          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
