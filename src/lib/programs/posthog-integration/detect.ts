@@ -132,8 +132,8 @@ function detectWarehouseSourcesForSuggestion(
 
 /**
  * Scan for existing PostHog SDKs in the project. Dependency-level signal only,
- * not a verified (or complete) install. Besteffort: scan failure reports false
- * rather than breaking the detection step.
+ * not a verified (or complete) install. Best-effort: scan failure reports
+ * false rather than breaking the detection step.
  */
 export function detectExistingPostHog(
   ctx: Pick<ProgramReadyContext, 'setPosthogSdkDetected'>,
