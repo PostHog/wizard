@@ -36,7 +36,8 @@ import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
-import { wizardAbort, WizardError } from '@utils/wizard-abort';
+import { registerCleanup, wizardAbort, WizardError } from '@utils/wizard-abort';
+import { wipeOrchestratorCache } from './cache-cleanup';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
 import {
@@ -292,6 +293,9 @@ export async function runOrchestrator(
       }
     },
   });
+  // Abort/SIGINT run registerCleanup (success uses the finally below) — same
+  // dual-path pattern as flushScanReport in the program runner.
+  registerCleanup(() => wipeOrchestratorCache(session.installDir));
 
   // Give task agents the framework's finished reference integration to match,
   // the same EXAMPLE.md the linear flow uses. Install it under the run dir rather
@@ -583,17 +587,9 @@ export async function runOrchestrator(
     // Success or failure, no run artifact outlives the run — wipe the whole
     // cache folder (queue, handoffs, reference example, installed task
     // instructions). The .DELETE-ME.md inside is the fallback if we don't.
-    try {
-      rmSync(path.join(session.installDir, QUEUE_DIR_NAME), {
-        recursive: true,
-        force: true,
-      });
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'orchestrator_cache_cleanup' },
-      );
-    }
+    // Abort paths use the registerCleanup registered above instead of this
+    // finally (process.exit skips it).
+    wipeOrchestratorCache(session.installDir);
     try {
       sweepRunInstalledSkills(
         claudeSkillsDir,
