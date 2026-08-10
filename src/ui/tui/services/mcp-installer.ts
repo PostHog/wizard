@@ -53,8 +53,11 @@ export interface McpInstaller {
     apiKey?: string,
   ): Promise<McpClientResult[]>;
 
-  /** Remove the PostHog MCP server from all installed clients. Returns names of removed clients. */
-  remove(): Promise<string[]>;
+  /**
+   * Remove the PostHog MCP server from every client that has it. Returns one
+   * result per client so a failed removal isn't reported as a success.
+   */
+  remove(local?: boolean): Promise<McpClientResult[]>;
 
   /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
   installPlugins(clientNames: string[]): Promise<McpClientResult[]>;
@@ -132,11 +135,12 @@ export function createMcpInstaller(): McpInstaller {
       return results;
     },
 
-    async remove(): Promise<string[]> {
-      const installed = await getInstalledClients();
+    async remove(local?: boolean): Promise<McpClientResult[]> {
+      // `local` was dropped here, so `mcp remove --local` looked at (and
+      // reported on) the wrong server name.
+      const installed = await getInstalledClients(local);
       if (installed.length === 0) return [];
-      await removeMCPServer(installed);
-      return installed.map((c) => c.name);
+      return removeMCPServer(installed, local);
     },
 
     async installPlugins(clientNames: string[]): Promise<McpClientResult[]> {
@@ -148,16 +152,13 @@ export function createMcpInstaller(): McpInstaller {
       const pluginClients = getSupportedPluginClients(rawClients);
       const results = await runPluginInstall(pluginClients);
 
-      const already = namesWithStatus(
-        results,
-        McpClientStatus.AlreadyInstalled,
-      );
+      const already = namesWithStatus(results, McpClientStatus.Unchanged);
       analytics.wizardCapture('mcp plugins installed', {
         // `clients` keeps its original meaning — every client that ended up with
         // the plugin — so existing insights don't dip when a re-run reports
         // already-installed instead of a fresh write.
         clients: [
-          ...namesWithStatus(results, McpClientStatus.Installed),
+          ...namesWithStatus(results, McpClientStatus.Changed),
           ...already,
         ],
         already_installed: already,

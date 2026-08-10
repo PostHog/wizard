@@ -13,7 +13,10 @@ import {
   PluginCapable,
   PluginInstallResult,
 } from '@steps/add-mcp-server-to-clients/plugin-client';
-import type { InstallResult } from '@steps/add-mcp-server-to-clients/results';
+import {
+  redactSecrets,
+  type InstallResult,
+} from '@steps/add-mcp-server-to-clients/results';
 
 import { analytics } from '@utils/analytics';
 
@@ -98,25 +101,36 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
       if (ALREADY_INSTALLED_PATTERN.test(stderr)) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
       }
-      analytics.captureException(new Error(`Codex MCP add failed: ${stderr}`));
-      return Promise.resolve({ success: false, reason: stderr });
+      const reason = redactSecrets(stderr);
+      analytics.captureException(new Error(`Codex MCP add failed: ${reason}`));
+      return Promise.resolve({ success: false, reason });
     }
     return Promise.resolve({ success: true });
   }
 
-  removeServer(): Promise<{ success: boolean }> {
+  removeServer(local?: boolean): Promise<InstallResult> {
     const binary = this.findCodexBinary();
-    if (!binary) return Promise.resolve({ success: false });
+    if (!binary)
+      return Promise.resolve({
+        success: false,
+        reason: 'The codex CLI is no longer on your PATH.',
+      });
 
-    const result = spawnSync(binary, ['mcp', 'remove', 'posthog'], {
-      stdio: 'ignore',
+    // `local` was ignored here, so `mcp remove --local` reported success while
+    // leaving the posthog-local server in place.
+    const serverName = local ? 'posthog-local' : 'posthog';
+    const result = spawnSync(binary, ['mcp', 'remove', serverName], {
+      encoding: 'utf-8',
     });
 
     if (result.error || result.status !== 0) {
-      analytics.captureException(
-        new Error('Failed to remove server from Codex CLI.'),
+      const reason = redactSecrets(
+        result.error?.message ?? result.stderr ?? 'codex mcp remove failed',
       );
-      return Promise.resolve({ success: false });
+      analytics.captureException(
+        new Error(`Failed to remove server from Codex CLI: ${reason}`),
+      );
+      return Promise.resolve({ success: false, reason });
     }
 
     return Promise.resolve({ success: true });
@@ -194,10 +208,11 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
       ) {
         return { success: true, alreadyInstalled: true };
       }
+      const reason = redactSecrets(stderr);
       analytics.captureException(
-        new Error(`Codex plugin install failed: ${stderr}`),
+        new Error(`Codex plugin install failed: ${reason}`),
       );
-      return { success: false, reason: stderr };
+      return { success: false, reason };
     }
 
     return { success: true };

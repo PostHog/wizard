@@ -96,8 +96,8 @@ export const addMCPServerToClientsStep = async ({
     ),
   );
 
-  const installed = namesWithStatus(results, McpClientStatus.Installed);
-  const already = namesWithStatus(results, McpClientStatus.AlreadyInstalled);
+  const installed = namesWithStatus(results, McpClientStatus.Changed);
+  const already = namesWithStatus(results, McpClientStatus.Unchanged);
   const failed = results.filter((r) => r.status === McpClientStatus.Failed);
 
   // Report each outcome on its own — a blanket "Added the MCP server to: ..."
@@ -145,8 +145,12 @@ export const removeMCPServerFromClientsStep = async ({
   integration?: Integration;
   local?: boolean;
 }): Promise<string[]> => {
+  const ui = getUI();
   const installedClients = await getInstalledClients(local);
   if (installedClients.length === 0) {
+    ui.log.info(
+      'The PostHog MCP server is not installed for any supported client. Nothing to remove.',
+    );
     analytics.wizardCapture('mcp no servers to remove', {
       integration,
     });
@@ -154,17 +158,41 @@ export const removeMCPServerFromClientsStep = async ({
   }
 
   // Auto-remove from all installed clients
-  const results = await withProgress('removing mcp servers', async () => {
-    await removeMCPServer(installedClients, local);
-    return installedClients.map((c) => c.name);
-  });
+  const results = await withProgress('removing mcp servers', () =>
+    removeMCPServer(installedClients, local),
+  );
+
+  const removed = namesWithStatus(results, McpClientStatus.Changed);
+  const nothingToDo = namesWithStatus(results, McpClientStatus.Unchanged);
+  const failed = results.filter((r) => r.status === McpClientStatus.Failed);
+
+  // This step used to print nothing at all, so a non-TTY `mcp remove` gave no
+  // hint whether anything happened — let alone whether a client failed.
+  if (removed.length > 0) {
+    ui.log.success(`Removed the MCP server from:\n${bulletList(removed)}`);
+  }
+  if (nothingToDo.length > 0) {
+    ui.log.info(
+      `No PostHog MCP entry left to remove for:\n${bulletList(nothingToDo)}`,
+    );
+  }
+  if (failed.length > 0) {
+    ui.log.warn(
+      `Couldn't remove the MCP server from:\n${bulletList(
+        failed.map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name)),
+      )}`,
+    );
+  }
 
   analytics.wizardCapture('mcp servers removed', {
-    clients: results,
+    clients: removed,
+    nothing_to_remove_clients: nothingToDo,
+    failed_clients: failed.map((r) => r.name),
+    attempted_clients: installedClients.map((c) => c.name),
     integration,
   });
 
-  return results;
+  return removed;
 };
 
 export const getInstalledClients = async (
@@ -239,8 +267,22 @@ export const installPlugins = async (
 export const removeMCPServer = async (
   clients: MCPClient[],
   local?: boolean,
-): Promise<void> => {
+): Promise<McpClientResult[]> => {
+  const results: McpClientResult[] = [];
   for (const client of clients) {
-    await client.removeServer(local);
+    try {
+      results.push(
+        toClientResult(client.name, await client.removeServer(local)),
+      );
+    } catch (err) {
+      debug(`[removeMCPServer] removeServer threw for ${client.name}: ${err}`);
+      results.push(
+        toClientResult(client.name, {
+          success: false,
+          reason: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
+  return results;
 };

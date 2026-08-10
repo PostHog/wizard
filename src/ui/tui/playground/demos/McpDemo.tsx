@@ -39,7 +39,7 @@ function createMockInstaller(): McpInstaller {
       return clientNames.map((name, i) => ({
         name,
         status:
-          i === 1 ? McpClientStatus.AlreadyInstalled : McpClientStatus.Installed,
+          i === 1 ? McpClientStatus.Unchanged : McpClientStatus.Changed,
       }));
     },
     async installPlugins(clientNames) {
@@ -48,11 +48,20 @@ function createMockInstaller(): McpInstaller {
         .filter(
           (name) => MOCK_CLIENTS.find((c) => c.name === name)?.supportsPlugin,
         )
-        .map((name) => ({ name, status: McpClientStatus.Installed }));
+        .map((name) => ({ name, status: McpClientStatus.Changed }));
     },
     async remove() {
       await new Promise((r) => setTimeout(r, 1000));
-      return MOCK_CLIENTS.map((c) => c.name);
+      // Mixed outcomes so the demo shows the removal failure copy too.
+      return MOCK_CLIENTS.map((c, i) =>
+        i === 2
+          ? {
+              name: c.name,
+              status: McpClientStatus.Failed,
+              detail: 'EACCES: permission denied',
+            }
+          : { name: c.name, status: McpClientStatus.Changed },
+      );
     },
   };
 }

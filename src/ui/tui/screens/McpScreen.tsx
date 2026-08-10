@@ -30,6 +30,7 @@ import {
   McpClientStatus,
   namesWithStatus,
   isOk,
+  summarizeFailure,
 } from '@steps/add-mcp-server-to-clients/results';
 import {
   AVAILABLE_FEATURES,
@@ -67,6 +68,10 @@ const markDone = (
 
 const reportFeatures = (features: string[]): 'all' | string[] =>
   isAllFeaturesSelected(features) ? 'all' : features;
+
+const errorText = (err: unknown): string =>
+  summarizeFailure(err instanceof Error ? err.message : String(err)) ??
+  'unknown error';
 
 /**
  * One "✔ <title>" / "✖ <title>" block with a bullet per client, plus an optional
@@ -141,6 +146,11 @@ export const McpScreen = ({
   const [mcpResults, setMcpResults] = useState<McpClientResult[]>([]);
   const [pluginResults, setPluginResults] = useState<McpClientResult[]>([]);
   const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
+  // Detection and the install/remove call can both blow up. Keep the reason so
+  // a crash reads as a crash instead of as "you have nothing installed" or
+  // "you selected nothing".
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -153,9 +163,10 @@ export const McpScreen = ({
           setClients(detected);
           setPhase(Phase.Ask);
         }
-      } catch {
+      } catch (err) {
+        setDetectError(errorText(err));
         setPhase(Phase.None);
-        setTimeout(() => markDone(store, McpOutcome.Failed), 1500);
+        setTimeout(() => markDone(store, McpOutcome.Failed), 3000);
       }
     })();
   }, [installer]); // eslint-disable-line
@@ -249,13 +260,14 @@ export const McpScreen = ({
           features,
           store.session.apiKey,
         );
-      } catch {
-        // mcpResult stays []
+      } catch (err) {
+        setFlowError(errorText(err));
       }
       try {
         pluginResult = await installer.installPlugins(pluginCapableNames);
-      } catch {
-        // best-effort
+      } catch (err) {
+        // Best-effort, but still say so rather than showing an empty screen.
+        setFlowError(errorText(err));
       }
     } else {
       // 'custom' — MCP-only for every selected client. Plugin install is
@@ -266,8 +278,8 @@ export const McpScreen = ({
           features,
           store.session.apiKey,
         );
-      } catch {
-        // mcpResult stays []
+      } catch (err) {
+        setFlowError(errorText(err));
       }
     }
 
@@ -294,19 +306,26 @@ export const McpScreen = ({
 
   const doRemove = async () => {
     setPhase(Phase.Working);
-    let result: string[] = [];
+    let result: McpClientResult[] = [];
     try {
-      result = await installer.remove();
-    } catch {
-      result = [];
+      result = await installer.remove(store.session.localMcp);
+    } catch (err) {
+      setFlowError(errorText(err));
     }
-    setMcpResults(
-      result.map((name) => ({ name, status: McpClientStatus.Installed })),
-    );
+    setMcpResults(result);
     setPhase(Phase.Done);
+    const removed = result.filter(isOk);
     const outcome =
-      result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, result), 2000);
+      removed.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    setTimeout(
+      () =>
+        markDone(
+          store,
+          outcome,
+          removed.map((r) => r.name),
+        ),
+      2000,
+    );
   };
 
   // The "what you get" preview shown above the install confirmation —
@@ -331,19 +350,19 @@ export const McpScreen = ({
 
   const installedNow = namesWithStatus(
     mcpResults,
-    McpClientStatus.Installed,
+    McpClientStatus.Changed,
   ).filter((name) => !isConnectorName(name));
   const alreadyInstalled = namesWithStatus(
     mcpResults,
-    McpClientStatus.AlreadyInstalled,
+    McpClientStatus.Unchanged,
   ).filter((name) => !isConnectorName(name));
   const pluginInstalled = namesWithStatus(
     pluginResults,
-    McpClientStatus.Installed,
+    McpClientStatus.Changed,
   );
   const pluginAlreadyInstalled = namesWithStatus(
     pluginResults,
-    McpClientStatus.AlreadyInstalled,
+    McpClientStatus.Unchanged,
   );
   // A failure the user can act on — the name alone says nothing, so carry the
   // reason the underlying CLI or file write gave us.
@@ -373,12 +392,25 @@ export const McpScreen = ({
           <Text dimColor>Detecting supported editors...</Text>
         )}
 
-        {phase === Phase.None && (
-          <Text dimColor>
-            No {isRemove ? 'installed' : 'supported'} MCP clients detected.
-            Skipping...
-          </Text>
-        )}
+        {phase === Phase.None &&
+          (detectError ? (
+            <Box flexDirection="column">
+              <Text color="red" bold>
+                {'\u2716'} Couldn&apos;t check which editors are installed
+              </Text>
+              <Text dimColor> {detectError}</Text>
+              <Text dimColor>
+                {' '}
+                Run with --debug for the full output, or report it at
+                github.com/PostHog/wizard/issues.
+              </Text>
+            </Box>
+          ) : (
+            <Text dimColor>
+              No {isRemove ? 'installed' : 'supported'} MCP clients detected.
+              Skipping...
+            </Text>
+          ))}
 
         {phase === Phase.Ask && (
           <>
@@ -500,11 +532,25 @@ export const McpScreen = ({
         {phase === Phase.Done && (
           <Box flexDirection="column">
             {!hasAnyResult ? (
-              <Text dimColor>
-                {isRemove
-                  ? "Nothing to remove \u2014 the PostHog MCP server wasn't configured for any editor."
-                  : 'Nothing to install \u2014 no editor was selected.'}
-              </Text>
+              flowError ? (
+                <Box flexDirection="column">
+                  <Text color="red" bold>
+                    {'\u2716'} {isRemove ? 'Removal' : 'Installation'} failed
+                  </Text>
+                  <Text dimColor> {flowError}</Text>
+                  <Text dimColor>
+                    {' '}
+                    Run with --debug for the full output, or report it at
+                    github.com/PostHog/wizard/issues.
+                  </Text>
+                </Box>
+              ) : (
+                <Text dimColor>
+                  {isRemove
+                    ? "Nothing to remove \u2014 the PostHog MCP server wasn't configured for any editor."
+                    : 'Nothing to install \u2014 no editor was selected.'}
+                </Text>
+              )
             ) : (
               <>
                 <ResultGroup
@@ -529,11 +575,19 @@ export const McpScreen = ({
                   icon={'\u2714'}
                 />
                 <ResultGroup
-                  title="MCP server was already installed for:"
+                  title={
+                    isRemove
+                      ? 'No PostHog entry left to remove for:'
+                      : 'MCP server was already installed for:'
+                  }
                   items={alreadyInstalled}
                   color="green"
                   icon={'\u2714'}
-                  note="Left as-is. To change which PostHog areas it can reach, run `wizard mcp remove` first, then `wizard mcp add`."
+                  note={
+                    isRemove
+                      ? 'It was already gone, so nothing was changed.'
+                      : 'Left as-is. To change which PostHog areas it can reach, run `wizard mcp remove` first, then `wizard mcp add`.'
+                  }
                 />
                 <ResultGroup
                   title={`Couldn't ${isRemove ? 'remove from' : 'install for'}:`}

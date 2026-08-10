@@ -16,7 +16,7 @@ export abstract class MCPClient {
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult>;
-  abstract removeServer(local?: boolean): Promise<{ success: boolean }>;
+  abstract removeServer(local?: boolean): Promise<InstallResult>;
   abstract isClientSupported(): Promise<boolean>;
 }
 
@@ -130,12 +130,13 @@ export abstract class DefaultMCPClient extends MCPClient {
     }
   }
 
-  async removeServer(local?: boolean): Promise<{ success: boolean }> {
+  async removeServer(local?: boolean): Promise<InstallResult> {
+    let configPath = '';
     try {
-      const configPath = await this.getConfigPath();
+      configPath = await this.getConfigPath();
 
       if (!fs.existsSync(configPath)) {
-        return { success: false };
+        return { success: true, alreadyInstalled: true };
       }
 
       const configContent = await fs.promises.readFile(configPath, 'utf8');
@@ -166,10 +167,16 @@ export abstract class DefaultMCPClient extends MCPClient {
 
         return { success: true };
       }
-    } catch {
-      //
+      // No PostHog entry to delete — the config changed under us between the
+      // detection pass and now. Nothing failed, so don't report a failure.
+      return { success: true, alreadyInstalled: true };
+    } catch (error) {
+      return {
+        success: false,
+        reason: `${configPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
     }
-
-    return { success: false };
   }
 }

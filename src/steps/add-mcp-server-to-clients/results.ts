@@ -1,16 +1,21 @@
 /**
- * Per-client outcome of an MCP server / plugin install attempt.
+ * Per-client outcome of an MCP server / plugin install or removal.
  *
- * "Already installed" is a first-class outcome rather than a silent no-op:
+ * "Nothing to do" is a first-class outcome rather than a silent no-op:
  * re-running `mcp add` on a machine that's already set up is the common case,
  * and collapsing it into an empty result set is what made the flow report
  * "Installation skipped." with no explanation. Failures carry a short reason
  * for the same reason — an empty list tells the user nothing.
+ *
+ * The names are action-neutral because both `mcp add` and `mcp remove` report
+ * through them: `Changed` is "installed" or "removed" depending on the flow.
  */
 
 export enum McpClientStatus {
-  Installed = 'installed',
-  AlreadyInstalled = 'already-installed',
+  /** We made the change — wrote the config, installed or removed the server. */
+  Changed = 'changed',
+  /** Already in the requested state; nothing was touched. */
+  Unchanged = 'unchanged',
   Failed = 'failed',
 }
 
@@ -21,10 +26,10 @@ export interface McpClientResult {
   detail?: string;
 }
 
-/** Result shape every client's addServer/installPlugin returns. */
+/** Result shape every client's addServer/removeServer/installPlugin returns. */
 export interface InstallResult {
   success: boolean;
-  /** The PostHog server/plugin was already configured — nothing changed. */
+  /** Already in the requested state — nothing was written or removed. */
   alreadyInstalled?: boolean;
   /** Raw failure text from the underlying CLI or filesystem error. */
   reason?: string;
@@ -64,8 +69,8 @@ export const toClientResult = (
   return {
     name,
     status: result.alreadyInstalled
-      ? McpClientStatus.AlreadyInstalled
-      : McpClientStatus.Installed,
+      ? McpClientStatus.Unchanged
+      : McpClientStatus.Changed,
   };
 };
 

@@ -159,14 +159,28 @@ describe('CodexMCPClient', () => {
       expect(spawnSyncMock).toHaveBeenCalledWith(
         CODEX_PATH,
         ['mcp', 'remove', 'posthog'],
-        { stdio: 'ignore' },
+        { encoding: 'utf-8' },
       );
     });
 
-    it('returns false and captures exception on failure', async () => {
-      spawnSyncMock.mockReturnValue({ status: 1 });
+    it('targets the local server name when removing the local MCP', async () => {
+      spawnSyncMock.mockReturnValue({ status: 0 });
       const client = new CodexMCPClient();
-      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      await client.removeServer(true);
+      expect(spawnSyncMock).toHaveBeenCalledWith(
+        CODEX_PATH,
+        ['mcp', 'remove', 'posthog-local'],
+        { encoding: 'utf-8' },
+      );
+    });
+
+    it('returns the failure reason and captures exception on failure', async () => {
+      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'codex is locked' });
+      const client = new CodexMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({
+        success: false,
+        reason: 'codex is locked',
+      });
       expect(analytics.captureException).toHaveBeenCalled();
     });
   });

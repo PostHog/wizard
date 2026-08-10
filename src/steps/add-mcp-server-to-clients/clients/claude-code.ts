@@ -162,26 +162,33 @@ export class ClaudeCodeMCPClient
     }
   }
 
-  removeServer(local?: boolean): Promise<{ success: boolean }> {
+  removeServer(local?: boolean): Promise<InstallResult> {
     const claudeBinary = this.findClaudeBinary();
     if (!claudeBinary) {
-      return Promise.resolve({ success: false });
+      return Promise.resolve({
+        success: false,
+        reason: 'The claude CLI is no longer on your PATH.',
+      });
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
 
     try {
-      execSync(command);
+      execSync(command, { stdio: 'pipe' });
     } catch (error) {
-      analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
+      const reason = redactSecrets(
+        error instanceof Error ? error.message : String(error),
       );
-      return Promise.resolve({ success: false });
+      // Removing something that isn't there is the requested end state, not a
+      // failure to report.
+      if (/no( such)? mcp server|not found/i.test(reason)) {
+        return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      analytics.captureException(
+        new Error(`Failed to remove server from Claude Code: ${reason}`),
+      );
+      return Promise.resolve({ success: false, reason });
     }
 
     return Promise.resolve({ success: true });

@@ -11,14 +11,14 @@ describe('toClientResult', () => {
   it('maps a plain success to installed', () => {
     expect(toClientResult('Cursor', { success: true })).toEqual({
       name: 'Cursor',
-      status: McpClientStatus.Installed,
+      status: McpClientStatus.Changed,
     });
   });
 
   it('maps an already-installed success to its own status, not a silent no-op', () => {
     expect(
       toClientResult('Codex', { success: true, alreadyInstalled: true }),
-    ).toEqual({ name: 'Codex', status: McpClientStatus.AlreadyInstalled });
+    ).toEqual({ name: 'Codex', status: McpClientStatus.Unchanged });
   });
 
   it('keeps the failure reason so the user is told why', () => {
@@ -40,12 +40,10 @@ describe('toClientResult', () => {
 
 describe('isOk', () => {
   it('counts already-installed as a working install', () => {
-    expect(
-      isOk({ name: 'Codex', status: McpClientStatus.AlreadyInstalled }),
-    ).toBe(true);
-    expect(isOk({ name: 'Codex', status: McpClientStatus.Installed })).toBe(
+    expect(isOk({ name: 'Codex', status: McpClientStatus.Unchanged })).toBe(
       true,
     );
+    expect(isOk({ name: 'Codex', status: McpClientStatus.Changed })).toBe(true);
     expect(isOk({ name: 'Codex', status: McpClientStatus.Failed })).toBe(false);
   });
 });
@@ -92,11 +90,11 @@ describe('summarizeFailure', () => {
 describe('namesWithStatus', () => {
   it('filters by status', () => {
     const results = [
-      { name: 'Cursor', status: McpClientStatus.Installed },
-      { name: 'Codex', status: McpClientStatus.AlreadyInstalled },
+      { name: 'Cursor', status: McpClientStatus.Changed },
+      { name: 'Codex', status: McpClientStatus.Unchanged },
       { name: 'Zed', status: McpClientStatus.Failed },
     ];
-    expect(namesWithStatus(results, McpClientStatus.AlreadyInstalled)).toEqual([
+    expect(namesWithStatus(results, McpClientStatus.Unchanged)).toEqual([
       'Codex',
     ]);
   });

@@ -28,13 +28,13 @@ vi.mock('../../../utils/analytics.js', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
 
-const installed = (name: string) => ({
+const changed = (name: string) => ({
   name,
-  status: McpClientStatus.Installed,
+  status: McpClientStatus.Changed,
 });
 const alreadyInstalled = (name: string) => ({
   name,
-  status: McpClientStatus.AlreadyInstalled,
+  status: McpClientStatus.Unchanged,
 });
 
 describe('createMcpInstaller — installPlugins', () => {
@@ -51,7 +51,7 @@ describe('createMcpInstaller — installPlugins', () => {
 
   it('calls installPlugins on plugin-capable clients and returns their results', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue([installed('Claude Code')]);
+    mcpModule.installPlugins.mockResolvedValue([changed('Claude Code')]);
 
     const installer = createMcpInstaller();
     await installer.detectClients();
@@ -62,12 +62,12 @@ describe('createMcpInstaller — installPlugins', () => {
       mockCursorClient,
     ]);
     expect(mcpModule.installPlugins).toHaveBeenCalledWith([mockClaudeClient]);
-    expect(result).toEqual([installed('Claude Code')]);
+    expect(result).toEqual([changed('Claude Code')]);
   });
 
   it('emits mcp plugins installed analytics with clients and attempted', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue([installed('Claude Code')]);
+    mcpModule.installPlugins.mockResolvedValue([changed('Claude Code')]);
 
     const installer = createMcpInstaller();
     await installer.detectClients();
@@ -143,7 +143,7 @@ describe('createMcpInstaller — installPlugins', () => {
       mockCursorClient,
     ]);
     mcpModule.installPlugins.mockResolvedValue([
-      installed('Claude Code'),
+      changed('Claude Code'),
       { name: 'Cursor', status: McpClientStatus.Failed, detail: 'boom' },
     ]);
 
@@ -152,7 +152,7 @@ describe('createMcpInstaller — installPlugins', () => {
     const result = await installer.installPlugins(['Claude Code', 'Cursor']);
 
     expect(result).toEqual([
-      installed('Claude Code'),
+      changed('Claude Code'),
       { name: 'Cursor', status: McpClientStatus.Failed, detail: 'boom' },
     ]);
   });
@@ -189,7 +189,7 @@ describe('createMcpInstaller — install', () => {
     const result = await installer.install(['Cursor', 'Codex', 'Zed']);
 
     expect(result).toEqual([
-      installed('Cursor'),
+      changed('Cursor'),
       alreadyInstalled('Codex'),
       {
         name: 'Zed',
@@ -213,6 +213,53 @@ describe('createMcpInstaller — install', () => {
     await expect(installer.install(['Cursor'])).resolves.toEqual([
       { name: 'Cursor', status: McpClientStatus.Failed, detail: 'disk full' },
     ]);
+  });
+});
+
+describe('createMcpInstaller — remove', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('passes the local flag through so `mcp remove --local` targets the right server', async () => {
+    mcpModule.getInstalledClients.mockResolvedValue([{ name: 'Codex' }]);
+    mcpModule.removeMCPServer.mockResolvedValue([changed('Codex')]);
+
+    const installer = createMcpInstaller();
+    await installer.remove(true);
+
+    expect(mcpModule.getInstalledClients).toHaveBeenCalledWith(true);
+    expect(mcpModule.removeMCPServer).toHaveBeenCalledWith(
+      [{ name: 'Codex' }],
+      true,
+    );
+  });
+
+  it('returns per-client removal results instead of assuming success', async () => {
+    mcpModule.getInstalledClients.mockResolvedValue([
+      { name: 'Cursor' },
+      { name: 'Codex' },
+    ]);
+    mcpModule.removeMCPServer.mockResolvedValue([
+      changed('Cursor'),
+      { name: 'Codex', status: McpClientStatus.Failed, detail: 'codex locked' },
+    ]);
+
+    const installer = createMcpInstaller();
+
+    await expect(installer.remove()).resolves.toEqual([
+      changed('Cursor'),
+      { name: 'Codex', status: McpClientStatus.Failed, detail: 'codex locked' },
+    ]);
+  });
+
+  it('returns nothing when no client has the server installed', async () => {
+    mcpModule.getInstalledClients.mockResolvedValue([]);
+
+    const installer = createMcpInstaller();
+
+    await expect(installer.remove()).resolves.toEqual([]);
+    expect(mcpModule.removeMCPServer).not.toHaveBeenCalled();
   });
 });
 
