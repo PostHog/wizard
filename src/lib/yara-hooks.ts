@@ -569,13 +569,19 @@ async function triageFilter(
   matches: ScanMatch[],
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
+  triage: TriageExpectation,
 ): Promise<ScanMatch[]> {
   if (matches.length === 0) return [];
   if (!llmProvider) {
     logToFile(
       `[YARA] triage skipped (no provider) — treating ${matches.length} match(es) as real`,
     );
-    reportTriageUnavailable(matches, ctx, 'no-provider');
+    // Only a surface that expects triage produces a signal here. PreToolUse
+    // Bash passes no provider on purpose, and counting those would swamp the
+    // gateway failures this event exists to find.
+    if (triage === 'expected') {
+      reportTriageUnavailable(matches.map(ruleIdentity), ctx, 'no-provider');
+    }
     return matches;
   }
   try {
@@ -605,13 +611,37 @@ async function triageFilter(
   } catch (err) {
     logToFile('[YARA] triage failed — treating all matches as real:', err);
     reportTriageUnavailable(
-      matches,
+      matches.map(ruleIdentity),
       ctx,
       'error',
       err instanceof Error ? err.name : 'unknown',
     );
     return matches;
   }
+}
+
+/**
+ * A match's rule identity, with the scanned content stripped off.
+ *
+ * `ScanMatch.matchedStrings` holds the text that tripped the rule, lifted
+ * verbatim out of whatever was scanned — the user's source, their Bash
+ * commands, their secrets. Telemetry projects to this first so a `ScanMatch`
+ * never reaches an analytics call at all: there is then no field to spread and
+ * nothing to leak, rather than a full match object one careless edit away from
+ * shipping the content it carries.
+ */
+interface RuleIdentity {
+  rule: string;
+  severity: ScanMatch['metadata']['severity'];
+  category: Category | undefined;
+}
+
+function ruleIdentity(match: ScanMatch): RuleIdentity {
+  return {
+    rule: match.rule,
+    severity: match.metadata.severity,
+    category: match.metadata.category,
+  };
 }
 
 /**
@@ -626,26 +656,34 @@ async function triageFilter(
  * worked. Auth failures against the gateway are common enough that a chunk of
  * enforcement is very likely running blind.
  *
- * Deliberately omits the error's message and any scanned content — only the
- * rule metadata and a coarse error class leave the machine.
+ * Takes `RuleIdentity`, never `ScanMatch`, so the scanned content is already
+ * gone by the time telemetry is in scope. The error's message is omitted too —
+ * only a coarse error class leaves the machine.
  */
 function reportTriageUnavailable(
-  matches: ScanMatch[],
+  rules: readonly RuleIdentity[],
   ctx: ScanContext,
   reason: 'no-provider' | 'error',
   errorKind?: string,
 ): void {
-  for (const m of matches) {
+  for (const r of rules) {
     analytics.wizardCapture('yara triage unavailable', {
-      rule: m.rule,
-      severity: m.metadata.severity,
-      category: m.metadata.category,
+      rule: r.rule,
+      severity: r.severity,
+      category: r.category,
       scan_context: ctx,
       reason,
       ...(errorKind ? { error_kind: errorKind } : {}),
     });
   }
 }
+
+/**
+ * Whether the caller expected triage to run. `skipped-by-design` marks the
+ * surfaces that pass no provider deliberately, so a missing verdict there is
+ * the design working, not a gateway to go and investigate.
+ */
+type TriageExpectation = 'expected' | 'skipped-by-design';
 
 /** A chunk of scanned content together with the matches found inside it. */
 interface FlaggedChunk {
@@ -723,10 +761,11 @@ async function triageFlagged(
   flagged: FlaggedChunk[],
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
+  triage: TriageExpectation = 'expected',
 ): Promise<ScanMatch[]> {
   const triaged = await Promise.all(
     flagged.map(({ chunk, matches }) =>
-      triageFilter(chunk, matches, ctx, llmProvider),
+      triageFilter(chunk, matches, ctx, llmProvider, triage),
     ),
   );
   return dedupeByRule(triaged.flat());
@@ -741,9 +780,10 @@ export async function scanAndTriage(
   content: string,
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
+  triage: TriageExpectation = 'expected',
 ): Promise<ScanMatch[]> {
   const flagged = await scanForContext(content, ctx);
-  return triageFlagged(flagged, ctx, llmProvider);
+  return triageFlagged(flagged, ctx, llmProvider, triage);
 }
 
 // ─── PreToolUse Hooks ────────────────────────────────────────────
@@ -778,7 +818,12 @@ export function createPreToolUseYaraHooks(
             recordScan();
             // Skip triage on PreToolUse Bash: any flagged command is blocked
             // regardless of triage verdict, so the LLM call would be wasted.
-            const matches = await scanAndTriage(command, 'command', undefined);
+            const matches = await scanAndTriage(
+              command,
+              'command',
+              undefined,
+              'skipped-by-design',
+            );
             if (matches.length === 0) return {};
 
             const match = highestSeverityMatch(matches);

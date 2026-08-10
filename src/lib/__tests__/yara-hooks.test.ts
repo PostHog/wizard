@@ -731,6 +731,75 @@ describe('yara-hooks', () => {
         );
       });
 
+      it('never carries the scanned content that tripped the rule', async () => {
+        const m = match('posthog_pii_in_capture_call', {
+          category: 'posthog_pii',
+          severity: 'high',
+          scan_context: 'output',
+        });
+        // The literal text warlock lifts out of the user's file.
+        m.matchedStrings = ["capture('login', { email: user.email })"];
+        mockScan.mockResolvedValueOnce(matched(m));
+        mockTriage.mockRejectedValueOnce(new Error('gateway down'));
+
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        await hook(
+          input({
+            tool_name: 'Write',
+            tool_input: { content: "capture('login', { email: user.email })" },
+          }),
+          't3c',
+          { signal: dummySignal },
+        );
+
+        const call = mockAnalytics.analytics.wizardCapture.mock.calls.find(
+          (c: unknown[]) => c[0] === 'yara triage unavailable',
+        );
+        const payload = JSON.stringify(call?.[1]);
+        expect(payload).not.toContain('user.email');
+        expect(payload).not.toContain('capture(');
+        expect(payload).not.toContain('matchedStrings');
+        // Rule identity only.
+        expect(Object.keys(call?.[1] as object).sort()).toEqual([
+          'category',
+          'error_kind',
+          'reason',
+          'rule',
+          'scan_context',
+          'severity',
+        ]);
+      });
+
+      it('does not report the PreToolUse Bash skip, which is by design', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('destructive_rm_rf', {
+              category: 'destructive_operations',
+              severity: 'critical',
+              scan_context: 'command',
+            }),
+          ),
+        );
+
+        const hook = createPreToolUseYaraHooks(dummyProvider)[0].hooks[0];
+        const result = await hook(
+          input({ tool_name: 'Bash', tool_input: { command: 'rm -rf /' } }),
+          't4d',
+          { signal: dummySignal },
+        );
+
+        // The match really did fire — this isn't passing because nothing matched.
+        expect(result.decision).toBe('block');
+        // Bash blocks on any flagged command and passes no provider on purpose.
+        // Counting that as an outage would bury the real gateway failures.
+        expect(
+          mockAnalytics.analytics.wizardCapture.mock.calls.find(
+            (c: unknown[]) => c[0] === 'yara triage unavailable',
+          ),
+        ).toBeUndefined();
+      });
+
       it('stays silent when triage actually ran', async () => {
         const m = match('posthog_pii_in_capture_call', {
           category: 'posthog_pii',
