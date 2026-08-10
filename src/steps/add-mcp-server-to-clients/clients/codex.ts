@@ -13,8 +13,15 @@ import {
   PluginCapable,
   PluginInstallResult,
 } from '@steps/add-mcp-server-to-clients/plugin-client';
+import type { InstallResult } from '@steps/add-mcp-server-to-clients/results';
 
 import { analytics } from '@utils/analytics';
+
+/** Wording codex uses when the thing we're adding is already registered. */
+const ALREADY_INSTALLED_PATTERN =
+  /already (installed|exists|added|registered)/i;
+/** Wording that means the opposite: a cache entry exists but the plugin doesn't. */
+const STALE_MARKETPLACE_CACHE = /already added from a different source/i;
 
 export const CodexMCPConfig = DefaultMCPClientConfig;
 
@@ -67,9 +74,13 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
-  ): Promise<{ success: boolean }> {
+  ): Promise<InstallResult> {
     const binary = this.findCodexBinary();
-    if (!binary) return Promise.resolve({ success: false });
+    if (!binary)
+      return Promise.resolve({
+        success: false,
+        reason: 'The codex CLI is no longer on your PATH.',
+      });
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
@@ -84,11 +95,11 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     const result = spawnSync(binary, args, { encoding: 'utf-8', env });
     if (result.status !== 0) {
       const stderr = result.stderr ?? '';
-      if (stderr.toLowerCase().includes('already')) {
-        return Promise.resolve({ success: true });
+      if (ALREADY_INSTALLED_PATTERN.test(stderr)) {
+        return Promise.resolve({ success: true, alreadyInstalled: true });
       }
       analytics.captureException(new Error(`Codex MCP add failed: ${stderr}`));
-      return Promise.resolve({ success: false });
+      return Promise.resolve({ success: false, reason: stderr });
     }
     return Promise.resolve({ success: true });
   }
@@ -128,9 +139,20 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     }
   }
 
-  installPlugin(): Promise<PluginInstallResult> {
+  async installPlugin(): Promise<PluginInstallResult> {
     const binary = this.findCodexBinary();
-    if (!binary) return Promise.resolve({ success: false });
+    if (!binary)
+      return {
+        success: false,
+        reason: 'The codex CLI is no longer on your PATH.',
+      };
+
+    // `codex plugin marketplace add` exits non-zero once the marketplace is
+    // registered, so ask config.toml first. Without this the second run of
+    // `mcp add` looked like a failure and reported nothing at all.
+    if (await this.isPluginInstalled()) {
+      return { success: true, alreadyInstalled: true };
+    }
 
     const run = () =>
       spawnSync(binary, ['plugin', 'marketplace', 'add', 'PostHog/ai-plugin'], {
@@ -142,7 +164,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     // Stale cache directory with no config.toml entry — clear it and retry
     if (
       result.status !== 0 &&
-      (result.stderr ?? '').includes('already added from a different source')
+      STALE_MARKETPLACE_CACHE.test(result.stderr ?? '')
     ) {
       const staleDir = path.join(
         os.homedir(),
@@ -160,13 +182,25 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     }
 
     if (result.status !== 0) {
+      const stderr = result.stderr ?? '';
+      // The marketplace was registered by something other than us (a manual
+      // `codex plugin marketplace add`, or a version that writes config.toml
+      // differently) — that's still "already installed", not a failure. The
+      // stale-cache wording above is deliberately excluded: that one means the
+      // plugin is NOT registered, and it only reaches here if the retry failed.
+      if (
+        ALREADY_INSTALLED_PATTERN.test(stderr) &&
+        !STALE_MARKETPLACE_CACHE.test(stderr)
+      ) {
+        return { success: true, alreadyInstalled: true };
+      }
       analytics.captureException(
-        new Error(`Codex plugin install failed: ${result.stderr ?? ''}`),
+        new Error(`Codex plugin install failed: ${stderr}`),
       );
-      return Promise.resolve({ success: false });
+      return { success: false, reason: stderr };
     }
 
-    return Promise.resolve({ success: true });
+    return { success: true };
   }
 }
 

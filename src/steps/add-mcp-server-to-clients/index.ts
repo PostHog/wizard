@@ -14,6 +14,12 @@ import { OpenCodeMCPClient } from './clients/opencode';
 import { ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '@utils/debug';
 import { isPluginCapable, PluginCapable } from './plugin-client';
+import {
+  McpClientStatus,
+  namesWithStatus,
+  toClientResult,
+  type McpClientResult,
+} from './results';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
@@ -81,27 +87,56 @@ export const addMCPServerToClientsStep = async ({
   }
 
   // Auto-install to all supported clients
-  await withProgress('adding mcp servers', async () => {
-    await addMCPServer(
+  const results = await withProgress('adding mcp servers', () =>
+    addMCPServer(
       supportedClients,
       apiKey,
       features ?? [...ALL_FEATURE_VALUES],
       local,
-    );
-  });
-
-  ui.log.success(
-    `Added the MCP server to:
-  ${supportedClients.map((c) => `- ${c.name}`).join('\n  ')} `,
+    ),
   );
 
+  const installed = namesWithStatus(results, McpClientStatus.Installed);
+  const already = namesWithStatus(results, McpClientStatus.AlreadyInstalled);
+  const failed = results.filter((r) => r.status === McpClientStatus.Failed);
+
+  // Report each outcome on its own — a blanket "Added the MCP server to: ..."
+  // hid both the no-op re-runs and the outright failures.
+  if (installed.length > 0) {
+    ui.log.success(`Added the MCP server to:\n${bulletList(installed)}`);
+  }
+  if (already.length > 0) {
+    ui.log.info(
+      `The PostHog MCP server was already installed, so nothing changed for:\n${bulletList(
+        already,
+      )}`,
+    );
+  }
+  if (failed.length > 0) {
+    ui.log.warn(
+      `Couldn't add the MCP server to:\n${bulletList(
+        failed.map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name)),
+      )}`,
+    );
+  }
+
+  const withServer = [...installed, ...already];
+
   analytics.wizardCapture('mcp servers added', {
-    clients: supportedClients.map((c) => c.name),
+    // `clients` stays "every client that ended up with the MCP server", which is
+    // what it meant before — the new properties break that down.
+    clients: withServer,
+    already_installed_clients: already,
+    failed_clients: failed.map((r) => r.name),
+    attempted_clients: supportedClients.map((c) => c.name),
     integration,
   });
 
-  return supportedClients.map((c) => c.name);
+  return withServer;
 };
+
+const bulletList = (items: string[]): string =>
+  items.map((item) => `  - ${item}`).join('\n');
 
 export const removeMCPServerFromClientsStep = async ({
   integration,
@@ -152,10 +187,27 @@ export const addMCPServer = async (
   personalApiKey?: string,
   selectedFeatures?: string[],
   local?: boolean,
-): Promise<void> => {
+): Promise<McpClientResult[]> => {
+  const results: McpClientResult[] = [];
   for (const client of clients) {
-    await client.addServer(personalApiKey, selectedFeatures, local);
+    try {
+      const result = await client.addServer(
+        personalApiKey,
+        selectedFeatures,
+        local,
+      );
+      results.push(toClientResult(client.name, result));
+    } catch (err) {
+      debug(`[addMCPServer] addServer threw for ${client.name}: ${err}`);
+      results.push(
+        toClientResult(client.name, {
+          success: false,
+          reason: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
+  return results;
 };
 
 export const getSupportedPluginClients = (
@@ -166,17 +218,22 @@ export const getSupportedPluginClients = (
 
 export const installPlugins = async (
   clients: Array<MCPClient & PluginCapable>,
-): Promise<string[]> => {
-  const installed: string[] = [];
+): Promise<McpClientResult[]> => {
+  const results: McpClientResult[] = [];
   for (const client of clients) {
     try {
-      const result = await client.installPlugin();
-      if (result.success) installed.push(client.name);
+      results.push(toClientResult(client.name, await client.installPlugin()));
     } catch (err) {
       debug(`[installPlugins] installPlugin threw for ${client.name}: ${err}`);
+      results.push(
+        toClientResult(client.name, {
+          success: false,
+          reason: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
   }
-  return installed;
+  return results;
 };
 
 export const removeMCPServer = async (

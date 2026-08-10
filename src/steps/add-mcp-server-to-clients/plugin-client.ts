@@ -1,7 +1,6 @@
-export interface PluginInstallResult {
-  success: boolean;
-  alreadyInstalled?: boolean;
-}
+import type { InstallResult } from './results';
+
+export type PluginInstallResult = InstallResult;
 
 export interface PluginCapable {
   supportsPlugin(): boolean;

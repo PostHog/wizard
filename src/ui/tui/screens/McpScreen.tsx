@@ -24,7 +24,13 @@ import { Colors, Icons } from '@ui/tui/styles';
 import type {
   McpInstaller,
   McpClientInfo,
+  McpClientResult,
 } from '@ui/tui/services/mcp-installer';
+import {
+  McpClientStatus,
+  namesWithStatus,
+  isOk,
+} from '@steps/add-mcp-server-to-clients/results';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
@@ -63,6 +69,40 @@ const reportFeatures = (features: string[]): 'all' | string[] =>
   isAllFeaturesSelected(features) ? 'all' : features;
 
 /**
+ * One "✔ <title>" / "✖ <title>" block with a bullet per client, plus an optional
+ * dim explanation underneath. Rendered only when it has something to say.
+ */
+const ResultGroup = ({
+  title,
+  items,
+  color,
+  icon,
+  note,
+}: {
+  title: string;
+  items: string[];
+  color: string;
+  icon: string;
+  note?: string;
+}) => {
+  if (items.length === 0) return null;
+  return (
+    <Box flexDirection="column">
+      <Text color={color} bold>
+        {icon} {title}
+      </Text>
+      {items.map((item, i) => (
+        <Text key={`${title}-${i}`}>
+          {' '}
+          {'•'} {item}
+        </Text>
+      ))}
+      {note && <Text dimColor> {note}</Text>}
+    </Box>
+  );
+};
+
+/**
  * Connector step prompt — Enter continues (opens the connector page). There's
  * no skip: picking the connector commits to opening it.
  */
@@ -98,8 +138,8 @@ export const McpScreen = ({
   const [phase, setPhase] = useState<Phase>(Phase.Detecting);
   const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
-  const [resultClients, setResultClients] = useState<string[]>([]);
-  const [pluginClients, setPluginClients] = useState<string[]>([]);
+  const [mcpResults, setMcpResults] = useState<McpClientResult[]>([]);
+  const [pluginResults, setPluginResults] = useState<McpClientResult[]>([]);
   const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
 
   useEffect(() => {
@@ -130,11 +170,11 @@ export const McpScreen = ({
     // (e.g. Claude Desktop/Web) just open their connector page here, same as
     // before — no extra screen.
     if (chosenMode === 'all') {
-      void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
+      void doInstall(clientNames, [...ALL_FEATURE_VALUES], chosenMode);
       return;
     }
     if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures);
+      void doInstall(clientNames, store.session.mcpFeatures, chosenMode);
       return;
     }
 
@@ -179,10 +219,20 @@ export const McpScreen = ({
     markDone(store, McpOutcome.Skipped);
   };
 
-  const doInstall = async (names: string[], features?: string[]) => {
+  /**
+   * `chosenMode` is passed in rather than read from `installMode`: the tri-state
+   * picker sets that state and installs in the same tick when a single client
+   * is detected, so the closure would still hold the previous value and a
+   * one-editor machine would silently get the MCP-only path.
+   */
+  const doInstall = async (
+    names: string[],
+    features?: string[],
+    chosenMode: 'all' | 'custom' = installMode,
+  ) => {
     setPhase(Phase.Working);
-    let mcpResult: string[] = [];
-    let pluginResult: string[] = [];
+    let mcpResult: McpClientResult[] = [];
+    let pluginResult: McpClientResult[] = [];
 
     const pluginCapableSet = new Set(
       clients.filter((c) => c.supportsPlugin).map((c) => c.name),
@@ -190,7 +240,7 @@ export const McpScreen = ({
     const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
     const directNames = names.filter((n) => !pluginCapableSet.has(n));
 
-    if (installMode === 'all') {
+    if (chosenMode === 'all') {
       // Plugin-capable clients get the plugin (which bundles MCP).
       // Non-plugin-capable clients get a direct MCP config write.
       try {
@@ -221,18 +271,21 @@ export const McpScreen = ({
       }
     }
 
-    setResultClients(mcpResult);
-    setPluginClients(pluginResult);
+    setMcpResults(mcpResult);
+    setPluginResults(pluginResult);
     setPhase(Phase.Done);
-    const succeeded = mcpResult.length + pluginResult.length > 0;
-    const outcome = succeeded ? McpOutcome.Installed : McpOutcome.Failed;
+    // Already-installed counts as installed: the user ends up with a working
+    // MCP either way, so the follow-on steps (Slack, tutorial) still apply.
+    const ready = [...mcpResult, ...pluginResult].filter(isOk);
+    const outcome =
+      ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
     setTimeout(
       () =>
         markDone(
           store,
           outcome,
-          [...mcpResult, ...pluginResult],
+          ready.map((r) => r.name),
           featuresReport,
         ),
       2000,
@@ -244,10 +297,12 @@ export const McpScreen = ({
     let result: string[] = [];
     try {
       result = await installer.remove();
-      setResultClients(result);
     } catch {
-      setResultClients([]);
+      result = [];
     }
+    setMcpResults(
+      result.map((name) => ({ name, status: McpClientStatus.Installed })),
+    );
     setPhase(Phase.Done);
     const outcome =
       result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
@@ -265,14 +320,45 @@ export const McpScreen = ({
   // Clients connected via a browser page (e.g. Claude Desktop/Web) aren't truly
   // "installed" — the user finishes in the browser. Split them out of the
   // "installed for" list and render the finish instructions separately.
+  const okMcpNames = mcpResults.filter(isOk).map((r) => r.name);
   const finishNotes = clients.flatMap((c) =>
-    c.finish && resultClients.includes(c.name)
+    c.finish && okMcpNames.includes(c.name)
       ? [{ name: c.name, url: c.finish.url, instruction: c.finish.instruction }]
       : [],
   );
-  const installedNow = resultClients.filter(
-    (name) => !finishNotes.some((n) => n.name === name),
+  const isConnectorName = (name: string) =>
+    finishNotes.some((n) => n.name === name);
+
+  const installedNow = namesWithStatus(
+    mcpResults,
+    McpClientStatus.Installed,
+  ).filter((name) => !isConnectorName(name));
+  const alreadyInstalled = namesWithStatus(
+    mcpResults,
+    McpClientStatus.AlreadyInstalled,
+  ).filter((name) => !isConnectorName(name));
+  const pluginInstalled = namesWithStatus(
+    pluginResults,
+    McpClientStatus.Installed,
   );
+  const pluginAlreadyInstalled = namesWithStatus(
+    pluginResults,
+    McpClientStatus.AlreadyInstalled,
+  );
+  // A failure the user can act on — the name alone says nothing, so carry the
+  // reason the underlying CLI or file write gave us.
+  const failures = [...mcpResults, ...pluginResults]
+    .filter((r) => r.status === McpClientStatus.Failed)
+    .map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name));
+
+  const hasAnyResult =
+    installedNow.length +
+      alreadyInstalled.length +
+      pluginInstalled.length +
+      pluginAlreadyInstalled.length +
+      failures.length +
+      finishNotes.length >
+    0;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -413,40 +499,49 @@ export const McpScreen = ({
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {installedNow.length + pluginClients.length + finishNotes.length ===
-            0 ? (
+            {!hasAnyResult ? (
               <Text dimColor>
-                {isRemove ? 'Removal' : 'Installation'} skipped.
+                {isRemove
+                  ? "Nothing to remove \u2014 the PostHog MCP server wasn't configured for any editor."
+                  : 'Nothing to install \u2014 no editor was selected.'}
               </Text>
             ) : (
               <>
-                {pluginClients.length > 0 && (
-                  <>
-                    <Text color="green" bold>
-                      {'\u2714'} Plugin installed for:
-                    </Text>
-                    {pluginClients.map((name, i) => (
-                      <Text key={`p-${i}`}>
-                        {' '}
-                        {'\u2022'} {name}
-                      </Text>
-                    ))}
-                  </>
-                )}
-                {installedNow.length > 0 && (
-                  <>
-                    <Text color="green" bold>
-                      {'\u2714'} MCP server{' '}
-                      {isRemove ? 'removed from' : 'installed for'}:
-                    </Text>
-                    {installedNow.map((name, i) => (
-                      <Text key={`m-${i}`}>
-                        {' '}
-                        {'\u2022'} {name}
-                      </Text>
-                    ))}
-                  </>
-                )}
+                <ResultGroup
+                  title="Plugin installed for:"
+                  items={pluginInstalled}
+                  color="green"
+                  icon={'\u2714'}
+                />
+                <ResultGroup
+                  title="Plugin was already installed for:"
+                  items={pluginAlreadyInstalled}
+                  color="green"
+                  icon={'\u2714'}
+                  note="It was already set up, so nothing changed. You are good to go."
+                />
+                <ResultGroup
+                  title={`MCP server ${
+                    isRemove ? 'removed from' : 'installed for'
+                  }:`}
+                  items={installedNow}
+                  color="green"
+                  icon={'\u2714'}
+                />
+                <ResultGroup
+                  title="MCP server was already installed for:"
+                  items={alreadyInstalled}
+                  color="green"
+                  icon={'\u2714'}
+                  note="Left as-is. To change which PostHog areas it can reach, run `wizard mcp remove` first, then `wizard mcp add`."
+                />
+                <ResultGroup
+                  title={`Couldn't ${isRemove ? 'remove from' : 'install for'}:`}
+                  items={failures}
+                  color="red"
+                  icon={'\u2716'}
+                  note="Run with --debug for the full output, or report it at github.com/PostHog/wizard/issues."
+                />
                 {finishNotes.map((note) => (
                   <Box key={note.name} flexDirection="column" marginTop={1}>
                     <Text color="green" bold>

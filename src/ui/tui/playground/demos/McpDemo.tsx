@@ -11,6 +11,7 @@ import type {
   McpInstaller,
   McpClientInfo,
 } from '@ui/tui/services/mcp-installer';
+import { McpClientStatus } from '@steps/add-mcp-server-to-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [
   { name: 'Claude Code', supportsPlugin: true },
@@ -34,13 +35,20 @@ function createMockInstaller(): McpInstaller {
     },
     async install(clientNames) {
       await new Promise((r) => setTimeout(r, 1500));
-      return clientNames;
+      // Mixed outcomes so the demo shows every Done-phase section.
+      return clientNames.map((name, i) => ({
+        name,
+        status:
+          i === 1 ? McpClientStatus.AlreadyInstalled : McpClientStatus.Installed,
+      }));
     },
     async installPlugins(clientNames) {
       await new Promise((r) => setTimeout(r, 800));
-      return clientNames.filter(
-        (name) => MOCK_CLIENTS.find((c) => c.name === name)?.supportsPlugin,
-      );
+      return clientNames
+        .filter(
+          (name) => MOCK_CLIENTS.find((c) => c.name === name)?.supportsPlugin,
+        )
+        .map((name) => ({ name, status: McpClientStatus.Installed }));
     },
     async remove() {
       await new Promise((r) => setTimeout(r, 1000));
