@@ -36,6 +36,7 @@ import {
 } from './switchboard';
 import { flushScanReport } from '../../yara-hooks';
 import { registerCleanup } from '../../../utils/wizard-abort';
+import { enforceModelProviderReadiness } from '@lib/health-checks/provider-readiness';
 
 export type {
   ProgramRun,
@@ -82,6 +83,17 @@ export async function runProgram(
 ): Promise<void> {
   const boot = await bootstrapProgram(session, config, programConfig);
 
+  const binding = resolveProgramRunner(
+    session,
+    programConfig,
+    boot,
+    options.composed ?? false,
+  );
+
+  if (programConfig.steps.some((step) => step.screenId === 'health-check')) {
+    await enforceModelProviderReadiness(binding.model);
+  }
+
   // Flush the warlock scan report once, at this single seam, on every
   // termination path and for every harness (linear, orchestrator, or future):
   //   - registerCleanup covers the abort/cancel path (wizardAbort runs the
@@ -92,12 +104,6 @@ export async function runProgram(
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
   try {
-    const binding = resolveProgramRunner(
-      session,
-      programConfig,
-      boot,
-      options.composed ?? false,
-    );
     if (binding.sequence === Sequence.orchestrator) {
       getUI().log.info('Task-queue orchestrator enabled.');
     }

@@ -9,6 +9,8 @@ export {
 
 export {
   checkAnthropicHealth,
+  checkAnthropicApiHealth,
+  checkOpenAiResponsesHealth,
   checkGithubHealth,
   checkNpmOverallHealth,
   checkNpmComponentHealth,
@@ -36,3 +38,9 @@ export {
   type WizardReadinessResult,
   evaluateWizardReadiness,
 } from './readiness';
+
+export {
+  type ModelProviderReadiness,
+  evaluateModelProviderReadiness,
+  enforceModelProviderReadiness,
+} from './provider-readiness';
