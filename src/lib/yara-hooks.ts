@@ -576,9 +576,7 @@ async function triageFilter(
     logToFile(
       `[YARA] triage skipped (no provider) — treating ${matches.length} match(es) as real`,
     );
-    // Only a surface that expects triage produces a signal here. PreToolUse
-    // Bash passes no provider on purpose, and counting those would swamp the
-    // gateway failures this event exists to find.
+    // PreToolUse Bash passes no provider on purpose, so it isn't a signal.
     if (triage === 'expected') {
       reportTriageUnavailable(matches.map(ruleIdentity), ctx, 'no-provider');
     }
@@ -620,16 +618,7 @@ async function triageFilter(
   }
 }
 
-/**
- * A match's rule identity, with the scanned content stripped off.
- *
- * `ScanMatch.matchedStrings` holds the text that tripped the rule, lifted
- * verbatim out of whatever was scanned — the user's source, their Bash
- * commands, their secrets. Telemetry projects to this first so a `ScanMatch`
- * never reaches an analytics call at all: there is then no field to spread and
- * nothing to leak, rather than a full match object one careless edit away from
- * shipping the content it carries.
- */
+/** Rule identity with the scanned content stripped off, so telemetry never sees `matchedStrings`. */
 interface RuleIdentity {
   rule: string;
   severity: ScanMatch['metadata']['severity'];
@@ -644,22 +633,7 @@ function ruleIdentity(match: ScanMatch): RuleIdentity {
   };
 }
 
-/**
- * Report that a match was enforced *without* ever being triaged — the gateway
- * was missing, down, or timed out, so we failed closed on the rule author's
- * recommendation alone.
- *
- * Failing closed is the right call, but until now it was invisible: no event
- * was emitted, so an enforced match looked identical whether triage had
- * confirmed it or never ran. That makes a rule's real false-positive rate
- * unmeasurable, because `yara triage overruled` can only fire when triage
- * worked. Auth failures against the gateway are common enough that a chunk of
- * enforcement is very likely running blind.
- *
- * Takes `RuleIdentity`, never `ScanMatch`, so the scanned content is already
- * gone by the time telemetry is in scope. The error's message is omitted too —
- * only a coarse error class leaves the machine.
- */
+/** Report a match enforced without triage, so blind enforcement is measurable. */
 function reportTriageUnavailable(
   rules: readonly RuleIdentity[],
   ctx: ScanContext,
@@ -678,11 +652,7 @@ function reportTriageUnavailable(
   }
 }
 
-/**
- * Whether the caller expected triage to run. `skipped-by-design` marks the
- * surfaces that pass no provider deliberately, so a missing verdict there is
- * the design working, not a gateway to go and investigate.
- */
+/** Whether the caller expected triage to run, so a deliberate skip isn't reported as an outage. */
 type TriageExpectation = 'expected' | 'skipped-by-design';
 
 /** A chunk of scanned content together with the matches found inside it. */
@@ -1128,10 +1098,7 @@ export async function scanInstalledSkill(
     );
     return null;
   }
-  // A match carries a `triage` field only when the triage model actually ruled
-  // on it. Without one we failed closed on the rule alone — say so, so a
-  // first-party skill deleted because the gateway was unreachable is not
-  // reported to the user (or to error tracking) as a confirmed attack.
+  // Only a triaged match carries a verdict; without one we failed closed on the rule alone.
   const triaged = 'triage' in verdict.match;
   return (
     `Poisoned skill detected: ${verdict.match.rule} (${

@@ -199,9 +199,7 @@ export async function downloadSkill(
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  // Reported as `install_step`, not `step`: a numeric `step` is already defined
-  // project-wide, and the collision types this one numeric too, so every
-  // string value reads back null and the stage is invisible in queries.
+  // Reported as `install_step`; a project-wide numeric `step` collides and nulls this one out.
   let installStep: 'download' | 'extract' = 'download';
 
   try {
@@ -270,10 +268,7 @@ export type InstallSkillResult =
   | { kind: 'skill-not-found'; skillId: string }
   | { kind: 'download-failed'; message: string };
 
-/**
- * What actually went wrong, in the user's terms. One vocabulary for every
- * caller — a network failure must never be reported as a permissions problem.
- */
+/** One vocabulary for every caller, so a network failure isn't reported as a permissions problem. */
 export function describeInstallFailure(
   result: Exclude<InstallSkillResult, { kind: 'ok' }>,
 ): string {
@@ -292,10 +287,7 @@ export function describeInstallFailure(
  * finds the skill, downloads and extracts it. Programs should use this
  * instead of composing fetchSkillMenu + downloadSkill themselves.
  *
- * Every exit reports `skill install failed`. `downloadSkill` only covers the
- * failures it can see itself, so the two that resolve before it is ever called
- * are captured here — otherwise a menu that won't load looks, in analytics,
- * exactly like a skill that was never attempted.
+ * Reports the two failures that resolve before `downloadSkill` can capture them.
  */
 export async function installSkillById(
   skillId: string,
