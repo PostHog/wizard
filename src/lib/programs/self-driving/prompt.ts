@@ -184,6 +184,16 @@ STEP 6 — Configure the scout troop. (skill: "Scouts")
    whole troop, including step 6b's custom scouts, stays at or under
    ten enabled scouts.
 
+   Then tell the user what the troop is, before STEP 6b asks them to add
+   to it. Scouts are PostHog's built-in ones, and the user has not seen
+   the list: without it, STEP 6b asks them to approve additions to a
+   baseline they cannot picture. Send one short message naming each
+   scout you enabled with a plain one-line description of what it
+   watches, and say how many you left disabled and that they can turn
+   those on later from the inbox. No wizard_ask here, it is not a
+   question. Keep each line to one sentence and do not restate the
+   skill's internals.
+
 STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
