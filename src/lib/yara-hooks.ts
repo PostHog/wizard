@@ -575,6 +575,7 @@ async function triageFilter(
     logToFile(
       `[YARA] triage skipped (no provider) — treating ${matches.length} match(es) as real`,
     );
+    reportTriageUnavailable(matches, ctx, 'no-provider');
     return matches;
   }
   try {
@@ -603,7 +604,46 @@ async function triageFilter(
     return kept;
   } catch (err) {
     logToFile('[YARA] triage failed — treating all matches as real:', err);
+    reportTriageUnavailable(
+      matches,
+      ctx,
+      'error',
+      err instanceof Error ? err.name : 'unknown',
+    );
     return matches;
+  }
+}
+
+/**
+ * Report that a match was enforced *without* ever being triaged — the gateway
+ * was missing, down, or timed out, so we failed closed on the rule author's
+ * recommendation alone.
+ *
+ * Failing closed is the right call, but until now it was invisible: no event
+ * was emitted, so an enforced match looked identical whether triage had
+ * confirmed it or never ran. That makes a rule's real false-positive rate
+ * unmeasurable, because `yara triage overruled` can only fire when triage
+ * worked. Auth failures against the gateway are common enough that a chunk of
+ * enforcement is very likely running blind.
+ *
+ * Deliberately omits the error's message and any scanned content — only the
+ * rule metadata and a coarse error class leave the machine.
+ */
+function reportTriageUnavailable(
+  matches: ScanMatch[],
+  ctx: ScanContext,
+  reason: 'no-provider' | 'error',
+  errorKind?: string,
+): void {
+  for (const m of matches) {
+    analytics.wizardCapture('yara triage unavailable', {
+      rule: m.rule,
+      severity: m.metadata.severity,
+      category: m.metadata.category,
+      scan_context: ctx,
+      reason,
+      ...(errorKind ? { error_kind: errorKind } : {}),
+    });
   }
 }
 
@@ -1043,9 +1083,17 @@ export async function scanInstalledSkill(
     );
     return null;
   }
-  return `Poisoned skill detected: ${verdict.match.rule} (${
-    verdict.match.metadata.severity ?? 'unknown'
-  }) in ${absoluteSkillDir}`;
+  // A match carries a `triage` field only when the triage model actually ruled
+  // on it. Without one we failed closed on the rule alone — say so, so a
+  // first-party skill deleted because the gateway was unreachable is not
+  // reported to the user (or to error tracking) as a confirmed attack.
+  const triaged = 'triage' in verdict.match;
+  return (
+    `Poisoned skill detected: ${verdict.match.rule} (${
+      verdict.match.metadata.severity ?? 'unknown'
+    }) in ${absoluteSkillDir}` +
+    (triaged ? '' : ' — triage unavailable, failing closed on the rule alone')
+  );
 }
 
 /**
