@@ -137,4 +137,116 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       await expect(client.installPlugin()).resolves.toEqual({ success: false });
     });
   });
+
+  describe('removeServer', () => {
+    it('returns success when plugin uninstall succeeds and legacy entry is absent', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('plugin uninstall')) return Buffer.from('');
+        if (String(cmd).includes('mcp remove')) {
+          throw new Error(
+            'Command failed: claude mcp remove --scope user posthog\nNo user-scoped MCP server found with name: posthog',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('treats "No user-scoped MCP server found" as a successful no-op when plugin is also absent', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('Plugin "posthog" is not installed');
+        }
+        if (String(cmd).includes('mcp remove')) {
+          throw new Error(
+            'Command failed: claude mcp remove --scope user posthog\nNo user-scoped MCP server found with name: posthog',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('cleans up legacy MCP entry when plugin was never installed', async () => {
+      const calls: string[] = [];
+      execSyncMock.mockImplementation((cmd: string) => {
+        calls.push(String(cmd));
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('Plugin "posthog" is not installed');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(
+        calls.some((c) => c.includes('mcp remove --scope user posthog')),
+      ).toBe(true);
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('uses posthog-local as the legacy server name when local=true', async () => {
+      const calls: string[] = [];
+      execSyncMock.mockImplementation((cmd: string) => {
+        calls.push(String(cmd));
+        if (cmd === 'command -v claude') return Buffer.from('');
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await client.removeServer(true);
+      expect(
+        calls.some((c) => c.includes('mcp remove --scope user posthog-local')),
+      ).toBe(true);
+    });
+
+    it('returns failure and captures exception on a genuine plugin-uninstall error', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('network timeout');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('network timeout'),
+        }),
+      );
+    });
+
+    it('returns failure and captures exception on a genuine mcp-remove error', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        if (String(cmd).includes('plugin uninstall')) return Buffer.from('');
+        if (String(cmd).includes('mcp remove')) {
+          throw new Error('unexpected CLI failure');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('unexpected CLI failure'),
+        }),
+      );
+    });
+
+    it('returns failure when no binary is found', async () => {
+      execSyncMock.mockImplementation(() => {
+        throw new Error('not found');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+  });
 });
