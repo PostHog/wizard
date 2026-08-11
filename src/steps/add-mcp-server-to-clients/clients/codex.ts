@@ -93,22 +93,8 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     return Promise.resolve({ success: true });
   }
 
-  removeServer(): Promise<{ success: boolean }> {
-    const binary = this.findCodexBinary();
-    if (!binary) return Promise.resolve({ success: false });
-
-    const result = spawnSync(binary, ['mcp', 'remove', 'posthog'], {
-      stdio: 'ignore',
-    });
-
-    if (result.error || result.status !== 0) {
-      analytics.captureException(
-        new Error('Failed to remove server from Codex CLI.'),
-      );
-      return Promise.resolve({ success: false });
-    }
-
-    return Promise.resolve({ success: true });
+  async removeServer(): Promise<{ success: boolean }> {
+    return this.uninstallPlugin();
   }
 
   supportsPlugin(): boolean {
@@ -167,6 +153,34 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     }
 
     return Promise.resolve({ success: true });
+  }
+
+  uninstallPlugin(): Promise<{ success: boolean }> {
+    const binary = this.findCodexBinary();
+    if (!binary) return Promise.resolve({ success: false });
+
+    const result = spawnSync(
+      binary,
+      ['plugin', 'marketplace', 'remove', 'PostHog/ai-plugin'],
+      { encoding: 'utf-8' },
+    );
+
+    if (result.status === 0) return Promise.resolve({ success: true });
+
+    const stderr = (result.stderr ?? '').toLowerCase();
+    if (
+      stderr.includes('not installed') ||
+      stderr.includes('not found') ||
+      stderr.includes('does not exist') ||
+      stderr.includes('no such marketplace')
+    ) {
+      return Promise.resolve({ success: true });
+    }
+
+    analytics.captureException(
+      new Error(`Codex plugin uninstall failed: ${result.stderr ?? ''}`),
+    );
+    return Promise.resolve({ success: false });
   }
 }
 
