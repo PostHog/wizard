@@ -7,9 +7,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createJiti } from 'jiti';
-import { Type } from 'typebox';
-import { defineTool } from '@earendil-works/pi-coding-agent';
-import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { VERSION } from '@lib/version';
 import { logToFile } from '@utils/debug';
 
@@ -48,99 +45,6 @@ export async function fetchInstructions(
   } finally {
     await client.close().catch(() => undefined);
   }
-}
-
-/**
- * `posthog_exec` as a native pi tool for orchestrator tasks, speaking to the
- * PostHog MCP through the same SDK client `fetchInstructions` uses.
- *
- * The adapter cannot surface this tool in a task session: it registers direct
- * tools from its on-disk metadata cache at factory time, and the cache is keyed
- * on the bearer token (`computeServerHash`), which is fresh every run — so the
- * cache never validates, only the proxy `mcp` tool registers, and a task that
- * was granted `posthog_exec` finds nothing by that name. Registering the tool
- * natively puts its availability in our hands instead of a cache's.
- *
- * Connects lazily on first call; one client serves the whole task session.
- */
-export function createPostHogExecTool(opts: {
-  mcpUrl: string;
-  accessToken: string;
-  userAgent: string;
-}): { tool: ToolDefinition; cleanup: () => Promise<void> } {
-  const { mcpUrl, accessToken, userAgent } = opts;
-  let connecting: Promise<Client> | undefined;
-
-  const client = (): Promise<Client> => {
-    connecting ??= (async () => {
-      const c = new Client({ name: 'posthog-wizard', version: VERSION });
-      const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
-        requestInit: {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'User-Agent': userAgent,
-          },
-        },
-      });
-      await c.connect(transport);
-      logToFile('[pi-mcp] posthog_exec connected');
-      return c;
-    })().catch((err: unknown) => {
-      // A failed connect must not poison the memo — the next call retries.
-      connecting = undefined;
-      throw err;
-    });
-    return connecting;
-  };
-
-  const tool = defineTool({
-    name: 'posthog_exec',
-    label: 'PostHog',
-    description:
-      'Run a PostHog command. Pass a CLI-style string in `command`: `search <term>` to find a tool, `schema <tool>` to read its input, `call <tool> <json>` to run it.',
-    promptSnippet:
-      'posthog_exec(command) — search, inspect, and call PostHog tools',
-    parameters: Type.Object({
-      command: Type.String({
-        description:
-          'e.g. `search external-data-sources`, `schema external-data-sources-create`, `call external-data-sources-create {...}`',
-      }),
-    }),
-    async execute(_id, args) {
-      const result = (await (
-        await client()
-      ).callTool({
-        name: 'exec',
-        arguments: { command: args.command },
-      })) as { content?: { type: string; text?: string }[]; isError?: boolean };
-      const rendered = (result.content ?? [])
-        .map((part) => (part.type === 'text' ? part.text ?? '' : ''))
-        .join('\n')
-        .trim();
-      logToFile(
-        `[pi-mcp] posthog_exec "${args.command.slice(0, 80)}" → ${
-          rendered.length
-        } chars${result.isError ? ' (error)' : ''}`,
-      );
-      return {
-        content: [{ type: 'text' as const, text: rendered }],
-        details: {},
-        isError: result.isError,
-      };
-    },
-  });
-
-  return {
-    tool: tool as ToolDefinition,
-    cleanup: async () => {
-      if (!connecting) return;
-      await connecting.then(
-        (c) => c.close().catch(() => undefined),
-        () => undefined,
-      );
-      connecting = undefined;
-    },
-  };
 }
 
 export async function setupPostHogMcp(opts: {

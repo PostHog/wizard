@@ -35,7 +35,6 @@ import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
-import type { ToolDefinition as PiToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -243,23 +242,34 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
 
-    // PostHog MCP, for the tasks that asked for it in their prompt — as a
-    // native tool, so the granted name is registered by us, not resolved from
-    // the adapter's token-keyed cache that never validates in a task session.
+    // PostHog MCP, for the tasks whose prompt requests it. Tasks that never
+    // asked skip the handshake and never see a posthog tool.
     const extensionFactories = [security.factory] as Array<
       (pi: unknown) => void
     >;
-    let mcpCleanup: (() => Promise<void>) | undefined;
-    let posthogTool: PiToolDefinition | undefined;
+    let mcpCleanup: (() => void) | undefined;
+    let posthogMcp = false;
     if (allowsPostHogMcp(allowedTools)) {
-      const { createPostHogExecTool } = await import('./mcp');
-      const mcp = createPostHogExecTool({
-        mcpUrl: boot.credentials.host.mcpUrl,
-        accessToken: boot.credentials.accessToken,
-        userAgent: WIZARD_USER_AGENT,
-      });
-      posthogTool = mcp.tool;
-      mcpCleanup = mcp.cleanup;
+      try {
+        const { setupPostHogMcp } = await import('./mcp');
+        const mcp = await setupPostHogMcp({
+          mcpUrl: boot.credentials.host.mcpUrl,
+          accessToken: boot.credentials.accessToken,
+          userAgent: WIZARD_USER_AGENT,
+        });
+        extensionFactories.push(mcp.extensionFactory);
+        mcpCleanup = mcp.cleanup;
+        posthogMcp = true;
+      } catch (err) {
+        // Silent here reads as a task failure minutes later: a task that asked
+        // for this tool can only skip or fail without it.
+        logToFile(`[pi-task] PostHog MCP setup skipped: ${String(err)}`);
+        analytics.wizardCapture('mcp setup failed', {
+          harness: 'pi',
+          scope: 'task',
+          error: String(err).slice(0, 300),
+        });
+      }
     }
 
     const codingTools = allowedPiCodingTools(allowedTools);
@@ -272,7 +282,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         program: programConfig.id,
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        caps: { bash: codingTools.has('bash'), posthogMcp: !!posthogTool },
+        caps: { bash: codingTools.has('bash'), posthogMcp },
       }),
       noExtensions: true,
       noSkills: true,
@@ -325,12 +335,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       orchestratorTools.has(t.name),
     );
 
-    const customTools = [
-      ...codingToolDefs,
-      ...wizardTools,
-      ...queueTools,
-      ...(posthogTool ? [posthogTool] : []),
-    ];
+    const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
     const { session: agentSession } = await createAgentSession({
       model,
       modelRegistry: registry,
@@ -344,8 +349,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     await agentSession.bindExtensions({});
 
     // The one complete list: exactly the tools registered on this session, in
-    // the names the agent will call them by.
-    const toolNames = customTools.map((t) => t.name);
+    // the names the agent will call them by. posthog_exec binds as an extension.
+    const toolNames = [
+      ...customTools.map((t) => t.name),
+      ...(posthogMcp ? ['posthog_exec'] : []),
+    ];
     logToFile(`[pi-task] tools passed to model: ${toolNames.join(', ')}`);
     const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
@@ -429,7 +437,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       }
     } finally {
       unsubscribe();
-      void mcpCleanup?.();
+      mcpCleanup?.();
     }
 
     if (security.state.criticalViolation) {
