@@ -47,8 +47,10 @@ describe('ClaudeWebMCPClient', () => {
     );
   });
 
-  it('removeServer is a no-op that reports nothing removed', async () => {
-    await expect(client.removeServer()).resolves.toEqual({ success: false });
+  it('removeServer reports a failure that says where the connector lives', async () => {
+    const result = await client.removeServer();
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain('claude.ai');
     expect(openTrackedLinkMock).not.toHaveBeenCalled();
   });
 });

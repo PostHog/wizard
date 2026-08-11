@@ -93,6 +93,21 @@ export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
 
+// JS variants co-occur in one package.json (react+vite, node+rollup), so the
+// enumeration's priority winner may override the agent's pick among them.
+// Mobile/native stacks are mutually exclusive and stay pick-wins.
+const JS_RERANK_VARIANTS: readonly SkillVariant[] = [
+  'nextjs',
+  'nuxt',
+  'angular',
+  'vite',
+  'webpack',
+  'rollup',
+  'react',
+  'node',
+  'web',
+];
+
 /** Comment-stripped substring check for the Rust SDK in one manifest. */
 function manifestMentionsSdk(manifestPath: string): boolean {
   const content = readProjectFile(manifestPath);
@@ -392,6 +407,7 @@ export async function detectSourceMapsProjects(
   const report = await detectProjectsWithAgent(session, {
     targets: SOURCE_MAPS_TARGETS,
     purpose: 'set up PostHog Error Tracking source-map upload',
+    rerankIds: JS_RERANK_VARIANTS,
     onEvent,
   });
   return toSourceMapsReport(report, {
