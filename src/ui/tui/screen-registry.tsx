@@ -18,6 +18,7 @@ import { DoctorReportScreen } from './screens/doctor/DoctorReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
+import { TaskNoticeScreen } from './screens/TaskNoticeScreen.js';
 import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
@@ -74,6 +75,7 @@ export function createScreens(
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
+    [Overlay.TaskNotice]: <TaskNoticeScreen store={store} />,
     [Overlay.ManualAuthCode]: <ManualAuthCodeScreen store={store} />,
     [Overlay.AuthError]: <AuthErrorScreen store={store} />,
     [Overlay.SessionTimeout]: <SessionTimeoutScreen store={store} />,

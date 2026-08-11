@@ -55,6 +55,9 @@ import {
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
+import { uncoveredBySink } from './queue-tools';
+import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
+import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -63,6 +66,8 @@ import {
   promptModelFor,
   resolveTask,
   taskModelSpec,
+  ASK_TOOL,
+  type AgentPrompt,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
 
@@ -175,6 +180,62 @@ function resolveReferenceSkillId(
   framework: string,
 ): string | undefined {
   return resolveSkillVariantId(entries, 'integration', framework);
+}
+
+/**
+ * A task that asks the user waits on a person, not on a model: long enough to
+ * open a database console or mint a restricted API key. The drain waits it out
+ * — the executor holds the task's promise — so the only real limit is this one.
+ */
+const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+
+/** Whether a task's prompt lets it ask the user, and so needs the ask bridge. */
+function canAsk(prompt: AgentPrompt | undefined): boolean {
+  return (prompt?.allowedTools ?? []).includes(ASK_TOOL);
+}
+
+/** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
+function graphDepth(
+  task: QueuedTask,
+  byId: ReadonlyMap<string, QueuedTask>,
+  memo: Map<string, number>,
+): number {
+  const cached = memo.get(task.id);
+  if (cached !== undefined) return cached;
+  memo.set(task.id, 0); // breaks a cycle rather than recursing forever
+  const depth = task.dependsOn.reduce((deepest, id) => {
+    const dep = byId.get(id);
+    return dep ? Math.max(deepest, graphDepth(dep, byId, memo) + 1) : deepest;
+  }, 0);
+  memo.set(task.id, depth);
+  return depth;
+}
+
+/**
+ * The queue in the order the user should read it, which is not the order tasks
+ * were queued. Tasks the wizard seeded before the planner ran are queued first
+ * but are optional side quests, so they sit at the end of the tier they run in
+ * — the list reads as the run unfolds, and the first line is work that actually
+ * started. Ordering only; nothing here changes what runs when.
+ */
+export function displayOrder(
+  tasks: readonly QueuedTask[],
+  isOptional: (task: QueuedTask) => boolean,
+): QueuedTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const memo = new Map<string, number>();
+  const rank = tasks.map((task, index) => ({
+    task,
+    depth: graphDepth(task, byId, memo),
+    optional: isOptional(task) ? 1 : 0,
+    index,
+  }));
+  return rank
+    .sort(
+      (a, b) =>
+        a.depth - b.depth || a.optional - b.optional || a.index - b.index,
+    )
+    .map((entry) => entry.task);
 }
 
 export async function runOrchestrator(
@@ -399,7 +460,9 @@ export async function runOrchestrator(
     t.label ?? registry.get(t.type)?.label ?? t.type;
   const renderQueue = () =>
     getUI().syncTodos(
-      store.list().map((t) => ({
+      displayOrder(store.list(), (t) =>
+        registry.runnerSeededTypes.includes(t.type),
+      ).map((t) => ({
         content: labelFor(t),
         status: toTodoStatus(t.status),
         activeForm: labelFor(t),
@@ -412,9 +475,76 @@ export async function runOrchestrator(
   // context has no task id.
   const orchestratorCtx = (currentTaskId?: string) => ({
     store,
-    validTypes: registry.types,
+    // The planner is offered only the types an agent may queue. A runner-seeded
+    // type is not among them, so an attempt to queue one trips the unknown-type
+    // guard instead of duplicating work the wizard already placed.
+    validTypes: registry.enqueueableTypes,
+    sinkTypes: registry.sinkTypes,
     currentTaskId,
   });
+
+  // Tasks the wizard queues itself, from what detection found. They exist
+  // before the planner runs, so the sink guard forces the reporting task to
+  // depend on them, and no prompt has to remember they are there.
+  const seededTypes: string[] = [];
+  for (const seeded of programConfig.seedTasks?.(session) ?? []) {
+    if (!registry.runnerSeededTypes.includes(seeded.type)) {
+      logToFile(
+        `[orchestrator] skipping runner-seeded task "${seeded.type}": not a runner-seeded type in this flow`,
+      );
+      continue;
+    }
+    // A task that stops for the user is offered, not imposed: show its notice
+    // and drop it entirely when the user would rather not. Declining before
+    // the queue is planned is cheaper than skipping it once it is in there.
+    if (seeded.notice) {
+      const keep = await getUI().showTaskNotice(seeded.notice);
+      analytics.wizardCapture('orchestrator task notice answered', {
+        type: seeded.type,
+        kept: keep,
+      });
+      if (!keep) {
+        logToFile(`[orchestrator] user declined runner-seeded ${seeded.type}`);
+        continue;
+      }
+    }
+    store.enqueue({
+      type: seeded.type,
+      label: seeded.label,
+      inputs: seeded.inputs,
+      enqueuedBy: 'orchestrator',
+    });
+    seededTypes.push(seeded.type);
+    logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
+  }
+
+  // A run that stops to ask a person is not comparable with one that does not
+  // — its wall-clock is the user's, not the model's. Tag every event of the run
+  // from here on, so those runs filter out cleanly.
+  const askingTypes = seededTypes.filter((type) => canAsk(registry.get(type)));
+  analytics.setTag('orchestrator_awaits_user', askingTypes.length > 0);
+  analytics.setTag(
+    'orchestrator_runner_seeded_types',
+    seededTypes.join(',') || 'none',
+  );
+  if (askingTypes.length > 0) {
+    analytics.wizardCapture('orchestrator awaits user', {
+      task_types: askingTypes,
+      ask_timeout_ms: TASK_ASK_TIMEOUT_MS,
+    });
+  }
+
+  // One bridge for the run, handed only to a task whose prompt allows asking.
+  // Absent in CI and signup, where nobody can answer.
+  const askBridge = shouldDisableAsk(session)
+    ? undefined
+    : createWizardAskBridge({
+        getSource: () => session.skillId ?? programConfig.id,
+        showQuestion: (q) => getUI().requestQuestion(q),
+        cancelQuestion: () => getUI().cancelPendingQuestion(),
+        richLinks: false,
+        timeoutMs: TASK_ASK_TIMEOUT_MS,
+      });
 
   const spinner = getUI().spinner();
 
@@ -432,7 +562,7 @@ export async function runOrchestrator(
     session,
     programConfig,
     boot,
-    prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
+    prompt: assembleSeedPrompt(promptContext, seedPrompt.body, store.list()),
     spinner,
     model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,
@@ -455,6 +585,34 @@ export async function runOrchestrator(
     types: store.list().map((t) => t.type),
   });
   renderQueue();
+
+  // The enqueue guard rejects a sink that misses part of the queue, so a
+  // planner that respected its errors cannot get here with a broken graph.
+  // Check it again anyway: a run whose report never sees a task's handoff is
+  // worse than a run that stops and says so.
+  const unwaited = store
+    .list()
+    .filter((t) => registry.sinkTypes.includes(t.type))
+    .flatMap((sink) =>
+      uncoveredBySink(
+        { store, validTypes: registry.types, sinkTypes: registry.sinkTypes },
+        { type: sink.type, dependsOn: sink.dependsOn },
+      ).filter((t) => t.id !== sink.id),
+    );
+  if (unwaited.length > 0) {
+    analytics.wizardCapture('orchestrator sink invariant violated', {
+      uncovered_types: unwaited.map((t) => t.type),
+    });
+    await wizardAbort({
+      message: `The wizard could not plan this setup: the final step would have skipped ${unwaited
+        .map((t) => t.type)
+        .join(', ')}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError('orchestrator sink does not cover the queue', {
+        uncovered: unwaited.map((t) => `${t.type} (${t.id})`).join(', '),
+        queue_state: JSON.stringify(store.list()),
+      }),
+    });
+  }
 
   // 2. Drain the queue, one fresh agent per task; independent tasks run in
   // parallel, the seed's graph being the only schedule. Each task resolves to
@@ -537,6 +695,7 @@ export async function runOrchestrator(
         effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
+        askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
         orchestrator: orchestratorCtx(task.id),
         spinnerMessage: '',
         successMessage: '',

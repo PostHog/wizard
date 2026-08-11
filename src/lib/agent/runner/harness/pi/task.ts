@@ -26,6 +26,7 @@ import {
   WIZARD_USER_AGENT,
 } from '@lib/constants';
 import {
+  allowsPostHogMcp,
   queueTools,
   renderToolInventory,
 } from '@lib/agent/agent-prompt-loader';
@@ -34,6 +35,7 @@ import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
+import type { ToolDefinition as PiToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -56,9 +58,9 @@ const CODING_TOOL_MAP: Record<string, readonly string[]> = {
   Grep: ['grep'],
 };
 
-/** `mcp__posthog-wizard__enqueue_task` → `enqueue_task`; native names pass through. */
+/** `mcp__wizard-tools__wizard_ask` → `wizard_ask`; native names pass through. */
 function shortToolName(name: string): string {
-  return name.replace(/^mcp__posthog-wizard__/, '');
+  return name.replace(/^mcp__.+?__/, '');
 }
 
 /**
@@ -84,6 +86,30 @@ export function allowedOrchestratorTools(
   disallowedTools: readonly string[] | undefined,
 ): Set<string> {
   return new Set(queueTools(disallowedTools ?? []));
+}
+
+/**
+ * The wizard tools a task gets. Four are always on — their handlers are fenced
+ * and the coding tasks depend on them. `wizard_ask` is opt-in per task: it
+ * stops the run until a person answers, so only a task whose prompt asks for it
+ * may open that overlay.
+ */
+const ALWAYS_ON_WIZARD_TOOLS = [
+  'check_env_keys',
+  'set_env_values',
+  'detect_package_manager',
+  'publish_handoff',
+];
+
+export function allowedPiWizardTools(
+  allowedTools: readonly string[] | undefined,
+): Set<string> {
+  const allowed = (allowedTools ?? []).map(shortToolName);
+  return new Set(
+    allowed.includes('wizard_ask')
+      ? [...ALWAYS_ON_WIZARD_TOOLS, 'wizard_ask']
+      : ALWAYS_ON_WIZARD_TOOLS,
+  );
 }
 
 /**
@@ -134,6 +160,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     effort,
     allowedTools,
     disallowedTools,
+    askBridge,
     orchestrator,
     spinnerMessage,
     successMessage,
@@ -216,32 +243,23 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
 
-    // PostHog MCP, best-effort — the dashboard task creates real dashboards
-    // through it; every other task simply never calls a posthog_* tool.
+    // PostHog MCP, for the tasks that asked for it in their prompt — as a
+    // native tool, so the granted name is registered by us, not resolved from
+    // the adapter's token-keyed cache that never validates in a task session.
     const extensionFactories = [security.factory] as Array<
       (pi: unknown) => void
     >;
-    let mcpCleanup: (() => void) | undefined;
-    let posthogMcp = false;
-    try {
-      const { setupPostHogMcp } = await import('./mcp');
-      const mcp = await setupPostHogMcp({
+    let mcpCleanup: (() => Promise<void>) | undefined;
+    let posthogTool: PiToolDefinition | undefined;
+    if (allowsPostHogMcp(allowedTools)) {
+      const { createPostHogExecTool } = await import('./mcp');
+      const mcp = createPostHogExecTool({
         mcpUrl: boot.credentials.host.mcpUrl,
         accessToken: boot.credentials.accessToken,
         userAgent: WIZARD_USER_AGENT,
       });
-      extensionFactories.push(mcp.extensionFactory);
+      posthogTool = mcp.tool;
       mcpCleanup = mcp.cleanup;
-      posthogMcp = true;
-    } catch (err) {
-      // Silent here reads as a task failure minutes later: dashboard and report
-      // need `posthog_exec` and can only skip or fail without it.
-      logToFile(`[pi-task] PostHog MCP setup skipped: ${String(err)}`);
-      analytics.wizardCapture('mcp setup failed', {
-        harness: 'pi',
-        scope: 'task',
-        error: String(err).slice(0, 300),
-      });
     }
 
     const codingTools = allowedPiCodingTools(allowedTools);
@@ -254,7 +272,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         program: programConfig.id,
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        caps: { bash: codingTools.has('bash'), posthogMcp },
+        caps: { bash: codingTools.has('bash'), posthogMcp: !!posthogTool },
       }),
       noExtensions: true,
       noSkills: true,
@@ -292,25 +310,27 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // fenced, and init/build tasks depend on them. publish_handoff rides
     // along (store-only handler) so the report task can publish the handoff.
     const { createWizardPiTools } = await import('./tools');
+    const wizardToolNames = allowedPiWizardTools(allowedTools);
     const wizardTools = createWizardPiTools({
       workingDirectory: dir,
       skillsBaseUrl: boot.skillsBaseUrl,
       triageProvider: boot.triageProvider,
-    }).filter((t) =>
-      [
-        'check_env_keys',
-        'set_env_values',
-        'detect_package_manager',
-        'publish_handoff',
-      ].includes(t.name),
-    );
+      // Present only for a task allowed to ask; without it wizard_ask errors
+      // instead of hanging on a prompt nobody will ever see.
+      askBridge,
+    }).filter((t) => wizardToolNames.has(t.name));
 
     const { createPiOrchestratorTools } = await import('./orchestrator-tools');
     const queueTools = createPiOrchestratorTools(orchestrator).filter((t) =>
       orchestratorTools.has(t.name),
     );
 
-    const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
+    const customTools = [
+      ...codingToolDefs,
+      ...wizardTools,
+      ...queueTools,
+      ...(posthogTool ? [posthogTool] : []),
+    ];
     const { session: agentSession } = await createAgentSession({
       model,
       modelRegistry: registry,
@@ -324,11 +344,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     await agentSession.bindExtensions({});
 
     // The one complete list: exactly the tools registered on this session, in
-    // the names the agent will call them by. posthog_exec binds as an extension.
-    const toolNames = [
-      ...customTools.map((t) => t.name),
-      ...(posthogMcp ? ['posthog_exec'] : []),
-    ];
+    // the names the agent will call them by.
+    const toolNames = customTools.map((t) => t.name);
     logToFile(`[pi-task] tools passed to model: ${toolNames.join(', ')}`);
     const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
@@ -412,7 +429,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       }
     } finally {
       unsubscribe();
-      mcpCleanup?.();
+      void mcpCleanup?.();
     }
 
     if (security.state.criticalViolation) {

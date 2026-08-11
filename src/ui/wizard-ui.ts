@@ -11,7 +11,7 @@
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
-import type { Credentials } from '@lib/wizard-session';
+import type { Credentials, TaskNotice } from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -171,6 +171,12 @@ export interface WizardUI {
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void>;
+
+  /**
+   * Show an optional step's notice and return whether to keep that step. Hosts
+   * that cannot prompt resolve false: a step nobody can answer must not run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean>;
 
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;

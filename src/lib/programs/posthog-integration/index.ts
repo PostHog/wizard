@@ -20,12 +20,16 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
+import { shouldDisableAsk } from '@lib/agent/runner/shared/bootstrap';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+
+const WAREHOUSE_SOURCES_DOCS_URL =
+  'https://posthog.com/docs/data-warehouse/sources';
 
 function resolveContinueUrl(
   sess: WizardSession,
@@ -83,6 +87,54 @@ function warehouseReportInstruction(sess: WizardSession): string {
   return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
 }
 
+/**
+ * The orchestrator task that connects the data sources detection found in the
+ * project — the one step of the flow that stops to ask the user for
+ * credentials. Queued here rather than by the planner: whether it belongs in
+ * the run is a fact about the project the wizard already scanned, so a model
+ * can neither invent it nor forget it.
+ *
+ * Empty when nothing was detected, and in CI, signup, and any other run where
+ * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
+ * the task's whole timeout and then fail the run.
+ */
+const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
+  if (shouldDisableAsk(sess)) return [];
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return [];
+
+  analytics.wizardCapture('orchestrator warehouse task queued', {
+    warehouse_source_count: sources.length,
+    warehouse_source_kinds: sources.map((s) => s.kind),
+  });
+  return [
+    {
+      type: 'warehouse',
+      inputs: {
+        sources: sources.map((s) => ({
+          kind: s.kind,
+          label: s.label,
+          mode: s.mode,
+          matchedSignal: s.matchedSignal,
+        })),
+      },
+      notice: {
+        title: 'Connect your data sources',
+        body: [
+          "We detected some warehouse sources we can connect to enrich your PostHog data. To connect them, stick around, we'll prompt you to provide some credentials to setup warehouse sources.",
+          "You can select [Skip] if you'd like to do this later in PostHog.",
+        ],
+        items: sources.map((s) => s.label),
+        docsLabel: 'Learn more about warehouse sources',
+        docsUrl: WAREHOUSE_SOURCES_DOCS_URL,
+        prompt: 'Connect these during setup?',
+        confirmLabel: 'Continue [Enter]',
+        cancelLabel: 'Skip [Esc]',
+      },
+    },
+  ];
+};
+
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export { EVENT_PLAN_FILE } from './constants.js';
 
@@ -99,6 +151,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // list to the general-purpose subagent as well, so dispatched subagents
   // can't reach around the parent and ask either.
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+
+  seedTasks: warehouseSeedTasks,
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
