@@ -7,6 +7,10 @@ import {
   PluginCapable,
   PluginInstallResult,
 } from '@steps/add-mcp-server-to-clients/plugin-client';
+import {
+  redactSecrets,
+  type InstallResult,
+} from '@steps/add-mcp-server-to-clients/results';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '@utils/analytics';
@@ -113,9 +117,13 @@ export class ClaudeCodeMCPClient
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
-  ): Promise<{ success: boolean }> {
+  ): Promise<InstallResult> {
     const binary = this.findClaudeBinary();
-    if (!binary) return Promise.resolve({ success: false });
+    if (!binary)
+      return Promise.resolve({
+        success: false,
+        reason: 'The claude CLI is no longer on your PATH.',
+      });
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
@@ -139,37 +147,48 @@ export class ClaudeCodeMCPClient
       });
       return Promise.resolve({ success: true });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
+      // The failing command echoes back the Authorization header we passed, so
+      // redact before this reaches a log, the screen, or an exception report.
+      const msg = redactSecrets(
+        error instanceof Error ? error.message : String(error),
+      );
       if (msg.includes('already exists')) {
-        return Promise.resolve({ success: true });
+        return Promise.resolve({ success: true, alreadyInstalled: true });
       }
       analytics.captureException(
         new Error(`Claude Code MCP add failed: ${msg}`),
       );
-      return Promise.resolve({ success: false });
+      return Promise.resolve({ success: false, reason: msg });
     }
   }
 
-  removeServer(local?: boolean): Promise<{ success: boolean }> {
+  removeServer(local?: boolean): Promise<InstallResult> {
     const claudeBinary = this.findClaudeBinary();
     if (!claudeBinary) {
-      return Promise.resolve({ success: false });
+      return Promise.resolve({
+        success: false,
+        reason: 'The claude CLI is no longer on your PATH.',
+      });
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
 
     try {
-      execSync(command);
+      execSync(command, { stdio: 'pipe' });
     } catch (error) {
-      analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
+      const reason = redactSecrets(
+        error instanceof Error ? error.message : String(error),
       );
-      return Promise.resolve({ success: false });
+      // Removing something that isn't there is the requested end state, not a
+      // failure to report.
+      if (/no( such)? mcp server|not found/i.test(reason)) {
+        return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      analytics.captureException(
+        new Error(`Failed to remove server from Claude Code: ${reason}`),
+      );
+      return Promise.resolve({ success: false, reason });
     }
 
     return Promise.resolve({ success: true });
@@ -192,21 +211,32 @@ export class ClaudeCodeMCPClient
     }
   }
 
-  installPlugin(): Promise<PluginInstallResult> {
+  async installPlugin(): Promise<PluginInstallResult> {
     const binary = this.findClaudeBinary();
-    if (!binary) return Promise.resolve({ success: false });
+    if (!binary)
+      return {
+        success: false,
+        reason: 'The claude CLI is no longer on your PATH.',
+      };
+
+    // Ask before installing so a re-run reports "already installed" rather than
+    // relying on the CLI's error text to spot the no-op.
+    if (await this.isPluginInstalled()) {
+      return { success: true, alreadyInstalled: true };
+    }
+
     try {
       execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
-      return Promise.resolve({ success: true });
+      return { success: true };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already installed') || msg.includes('already exists')) {
-        return Promise.resolve({ success: true, alreadyInstalled: true });
+        return { success: true, alreadyInstalled: true };
       }
       analytics.captureException(
         new Error(`Claude Code plugin install failed: ${msg}`),
       );
-      return Promise.resolve({ success: false });
+      return { success: false, reason: msg };
     }
   }
 }

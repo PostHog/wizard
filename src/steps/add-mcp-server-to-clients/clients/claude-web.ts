@@ -1,4 +1,5 @@
 import { MCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
+import type { InstallResult } from '@steps/add-mcp-server-to-clients/results';
 import { BrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 import { openTrackedLink } from '@utils/links';
 
@@ -23,7 +24,7 @@ export class ClaudeWebMCPClient extends MCPClient implements BrowserFinishable {
     return Promise.resolve(false);
   }
 
-  addServer(): Promise<{ success: boolean }> {
+  addServer(): Promise<InstallResult> {
     // Not a PostHog property, so no UTMs — just the tracked open.
     openTrackedLink(this.connectorUrl, 'claude-web-connector', {
       auto: true,
@@ -32,8 +33,15 @@ export class ClaudeWebMCPClient extends MCPClient implements BrowserFinishable {
     return Promise.resolve({ success: true });
   }
 
-  removeServer(): Promise<{ success: boolean }> {
-    return Promise.resolve({ success: false });
+  removeServer(): Promise<InstallResult> {
+    // The connector lives in the user's Claude account, so `mcp remove` can't
+    // touch it. It never reaches here today (isServerInstalled is always
+    // false), but say where to go if it ever does.
+    return Promise.resolve({
+      success: false,
+      reason:
+        'This connector is managed in your Claude account — remove it at claude.ai/settings/connectors.',
+    });
   }
 
   getConfigPath(): Promise<string> {
