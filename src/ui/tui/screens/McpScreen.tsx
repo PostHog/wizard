@@ -12,7 +12,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '@ui/tui/store';
 import {
@@ -92,7 +92,7 @@ const ResultGroup = ({
 }) => {
   if (items.length === 0) return null;
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" marginBottom={1}>
       <Text color={color} bold>
         {icon} {title}
       </Text>
@@ -124,6 +124,27 @@ const ConnectorContinue = ({ onContinue }: { onContinue: () => void }) => {
   );
 };
 
+/**
+ * Done-phase prompt — Enter dismisses the results screen and moves the flow on.
+ * Explicit acknowledgement instead of a timeout: the previous 2s auto-dismiss
+ * whipped past too fast to read on a normal install, especially when several
+ * result groups were stacked.
+ */
+const DoneContinue = ({ onContinue }: { onContinue: () => void }) => {
+  useInput((_input, key) => {
+    if (key.return) {
+      onContinue();
+    }
+  });
+  return (
+    <Box marginTop={1}>
+      <Text color={Colors.primary}>
+        Press enter to continue {Icons.triangleRight}
+      </Text>
+    </Box>
+  );
+};
+
 export const McpScreen = ({
   store,
   installer,
@@ -151,6 +172,10 @@ export const McpScreen = ({
   // "you selected nothing".
   const [detectError, setDetectError] = useState<string | null>(null);
   const [flowError, setFlowError] = useState<string | null>(null);
+  // The action that finishes the screen once the user has read the results.
+  // Held in a ref so the useInput handler inside DoneContinue can invoke the
+  // freshest closure without re-registering listeners on every render.
+  const finishFlow = useRef<null | (() => void)>(null);
 
   useEffect(() => {
     void (async () => {
@@ -165,8 +190,10 @@ export const McpScreen = ({
         }
       } catch (err) {
         setDetectError(errorText(err));
+        // Long error text — wait for enter instead of a 3s auto-dismiss the
+        // user can't finish reading.
+        finishFlow.current = () => markDone(store, McpOutcome.Failed);
         setPhase(Phase.None);
-        setTimeout(() => markDone(store, McpOutcome.Failed), 3000);
       }
     })();
   }, [installer]); // eslint-disable-line
@@ -285,23 +312,19 @@ export const McpScreen = ({
 
     setMcpResults(mcpResult);
     setPluginResults(pluginResult);
-    setPhase(Phase.Done);
     // Already-installed counts as installed: the user ends up with a working
     // MCP either way, so the follow-on steps (Slack, tutorial) still apply.
     const ready = [...mcpResult, ...pluginResult].filter(isOk);
-    const outcome =
-      ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
-    setTimeout(
-      () =>
-        markDone(
-          store,
-          outcome,
-          ready.map((r) => r.name),
-          featuresReport,
-        ),
-      2000,
-    );
+    finishFlow.current = () =>
+      markDone(
+        store,
+        outcome,
+        ready.map((r) => r.name),
+        featuresReport,
+      );
+    setPhase(Phase.Done);
   };
 
   const doRemove = async () => {
@@ -313,19 +336,16 @@ export const McpScreen = ({
       setFlowError(errorText(err));
     }
     setMcpResults(result);
-    setPhase(Phase.Done);
     const removed = result.filter(isOk);
     const outcome =
       removed.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(
-      () =>
-        markDone(
-          store,
-          outcome,
-          removed.map((r) => r.name),
-        ),
-      2000,
-    );
+    finishFlow.current = () =>
+      markDone(
+        store,
+        outcome,
+        removed.map((r) => r.name),
+      );
+    setPhase(Phase.Done);
   };
 
   // The "what you get" preview shown above the install confirmation —
@@ -404,6 +424,7 @@ export const McpScreen = ({
                 Run with --debug for the full output, or report it at
                 github.com/PostHog/wizard/issues.
               </Text>
+              <DoneContinue onContinue={() => finishFlow.current?.()} />
             </Box>
           ) : (
             <Text dimColor>
@@ -531,27 +552,7 @@ export const McpScreen = ({
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {!hasAnyResult ? (
-              flowError ? (
-                <Box flexDirection="column">
-                  <Text color="red" bold>
-                    {'\u2716'} {isRemove ? 'Removal' : 'Installation'} failed
-                  </Text>
-                  <Text dimColor> {flowError}</Text>
-                  <Text dimColor>
-                    {' '}
-                    Run with --debug for the full output, or report it at
-                    github.com/PostHog/wizard/issues.
-                  </Text>
-                </Box>
-              ) : (
-                <Text dimColor>
-                  {isRemove
-                    ? "Nothing to remove \u2014 the PostHog MCP server wasn't configured for any editor."
-                    : 'Nothing to install \u2014 no editor was selected.'}
-                </Text>
-              )
-            ) : (
+            {hasAnyResult ? (
               <>
                 <ResultGroup
                   title="Plugin installed for:"
@@ -590,7 +591,9 @@ export const McpScreen = ({
                   }
                 />
                 <ResultGroup
-                  title={`Couldn't ${isRemove ? 'remove from' : 'install for'}:`}
+                  title={`Couldn't ${
+                    isRemove ? 'remove from' : 'install for'
+                  }:`}
                   items={failures}
                   color="red"
                   icon={'\u2716'}
@@ -615,7 +618,26 @@ export const McpScreen = ({
                   </Box>
                 ))}
               </>
+            ) : flowError ? (
+              <Box flexDirection="column">
+                <Text color="red" bold>
+                  {'\u2716'} {isRemove ? 'Removal' : 'Installation'} failed
+                </Text>
+                <Text dimColor> {flowError}</Text>
+                <Text dimColor>
+                  {' '}
+                  Run with --debug for the full output, or report it at
+                  github.com/PostHog/wizard/issues.
+                </Text>
+              </Box>
+            ) : (
+              <Text dimColor>
+                {isRemove
+                  ? "Nothing to remove \u2014 the PostHog MCP server wasn't configured for any editor."
+                  : 'Nothing to install \u2014 no editor was selected.'}
+              </Text>
             )}
+            <DoneContinue onContinue={() => finishFlow.current?.()} />
           </Box>
         )}
       </Box>
