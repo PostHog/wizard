@@ -261,6 +261,35 @@ export async function fetchSlackConnected(
   return parsed.data.results.some((i) => i.kind === 'slack');
 }
 
+/** Minimal shape of `/api/environments/:id/external_data_sources/` — we only read `source_type`. */
+const ExternalDataSourcesResponseSchema = z.object({
+  results: z.array(z.object({ source_type: z.string() })),
+});
+
+/**
+ * The source types currently connected to the project's data warehouse. Used
+ * to verify that sources a run claims to have created actually exist. Throws
+ * on transport/auth errors; callers treat verification as best-effort.
+ */
+export async function fetchExternalDataSourceTypes(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+): Promise<string[]> {
+  const response = await axios.get(
+    `${baseUrl}/api/environments/${projectId}/external_data_sources/`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
+      },
+    },
+  );
+  const parsed = ExternalDataSourcesResponseSchema.safeParse(response.data);
+  if (!parsed.success) return [];
+  return parsed.data.results.map((r) => r.source_type);
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

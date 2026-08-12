@@ -2,6 +2,7 @@ import type {
   WizardSession,
   DiscoveredFeature,
   TaskNotice,
+  Credentials,
 } from '@lib/wizard-session';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ProgramRun } from '@lib/agent/agent-runner';
@@ -56,6 +57,31 @@ export interface ProgramReadyContext {
   }) => void;
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
+}
+
+/** One task the wizard queues itself before the planner runs. */
+export interface SeedTaskEntry {
+  type: string;
+  label?: string;
+  inputs?: Record<string, unknown>;
+  /**
+   * Shown before the run starts, letting the user decline the task. The
+   * program owns the words — the runner and the modal only carry them. A
+   * task without one is queued silently.
+   */
+  notice?: TaskNotice;
+  /**
+   * Post-drain check that the task's work actually landed (the program owns
+   * what "landed" means — e.g. the sources it created exist in PostHog).
+   * Returns analytics properties for the runner's verification event, or
+   * undefined when nothing could be verified. Best-effort: a throw is
+   * reported, never fatal.
+   */
+  verify?: (
+    session: WizardSession,
+    credentials: Credentials,
+    task: { status: string; inputs: Record<string, unknown> },
+  ) => Promise<Record<string, unknown> | undefined>;
 }
 
 export interface ProgramStep {
@@ -244,17 +270,7 @@ export interface ProgramConfig {
    * decided here, in code, not by a model that could invent it or forget it.
    * Return an empty list to queue none.
    */
-  seedTasks?: (session: WizardSession) => Array<{
-    type: string;
-    label?: string;
-    inputs?: Record<string, unknown>;
-    /**
-     * Shown before the run starts, letting the user decline the task. The
-     * program owns the words — the runner and the modal only carry them. A
-     * task without one is queued silently.
-     */
-    notice?: TaskNotice;
-  }>;
+  seedTasks?: (session: WizardSession) => SeedTaskEntry[];
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**

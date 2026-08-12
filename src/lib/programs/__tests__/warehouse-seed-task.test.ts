@@ -15,6 +15,8 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
+vi.mock('@lib/api', () => ({ fetchExternalDataSourceTypes: vi.fn() }));
+
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 
@@ -102,5 +104,56 @@ describe('warehouse task notice', () => {
 
   it('names what was detected', () => {
     expect(notice()?.items).toEqual(['Postgres']);
+  });
+});
+
+describe('warehouse task verification', () => {
+  it('reports which detected in-cli kinds actually landed in the project', async () => {
+    const { fetchExternalDataSourceTypes } = await import('@lib/api');
+    vi.mocked(fetchExternalDataSourceTypes).mockResolvedValue([
+      'Postgres',
+      'Hubspot',
+    ]);
+
+    const sess = session({
+      frameworkContext: {
+        [DETECTED_WAREHOUSE_SOURCES_KEY]: [
+          POSTGRES,
+          {
+            kind: 'Stripe',
+            label: 'Stripe',
+            mode: 'in-cli',
+            matchedSignal: 's',
+          },
+          {
+            kind: 'Hubspot',
+            label: 'HubSpot',
+            mode: 'deep-link',
+            matchedSignal: 'h',
+          },
+        ],
+      },
+    });
+    const entry = seed(sess)[0];
+    const props = await entry.verify?.(
+      sess,
+      {
+        accessToken: 't',
+        projectApiKey: 'phc',
+        projectId: 1,
+        host: { apiHost: 'https://us.posthog.com' },
+      } as never,
+      { status: 'done', inputs: {} },
+    );
+
+    expect(props).toMatchObject({
+      detected_count: 3,
+      detected_in_cli_count: 2,
+      sources_connected_count: 1,
+      sources_connected_kinds: ['Postgres'],
+      sources_missing_kinds: ['Stripe'],
+      all_in_cli_connected: false,
+      task_status: 'done',
+    });
   });
 });

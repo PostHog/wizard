@@ -20,6 +20,7 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
+import { fetchExternalDataSourceTypes } from '@lib/api';
 import { shouldDisableAsk } from '@lib/agent/runner/shared/bootstrap';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
@@ -117,6 +118,31 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
           mode: s.mode,
           matchedSignal: s.matchedSignal,
         })),
+      },
+      // Did the sources land? Compare what the warehouse claims against what
+      // the project actually has connected, and report the delta.
+      verify: async (s, credentials, task) => {
+        const detected = getDetectedWarehouseSources(s);
+        const inCli = detected.filter((d) => d.mode === 'in-cli');
+        const connectedTypes = await fetchExternalDataSourceTypes(
+          credentials.accessToken,
+          credentials.projectId,
+          credentials.host.apiHost,
+        );
+        const connected = new Set(connectedTypes);
+        const added = inCli.filter((d) => connected.has(d.kind));
+        return {
+          detected_count: detected.length,
+          detected_in_cli_count: inCli.length,
+          sources_connected_count: added.length,
+          sources_connected_kinds: added.map((d) => d.kind),
+          sources_missing_kinds: inCli
+            .filter((d) => !connected.has(d.kind))
+            .map((d) => d.kind),
+          all_in_cli_connected:
+            inCli.length > 0 && added.length === inCli.length,
+          task_status: task.status,
+        };
       },
       notice: {
         title: 'Connect your data sources',

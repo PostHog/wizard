@@ -48,6 +48,13 @@ export interface QueuedTask {
   handoff?: TaskHandoff;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
+  /**
+   * An optional task's terminal failure is an outcome, not a verdict on the
+   * run: dependents proceed as if it were skipped, and the drain's failure
+   * check does not count it. Set by the wizard on the tasks it seeds itself —
+   * the run's own work is never optional.
+   */
+  optional?: boolean;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
@@ -84,6 +91,7 @@ export interface EnqueueInput {
   model?: string;
   maxAttempts?: number;
   enqueuedBy?: string;
+  optional?: boolean;
 }
 
 export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
@@ -154,11 +162,16 @@ export class QueueStore {
    * `skipped`). A skipped dependency does not block downstream work.
    */
   nextRunnable(): QueuedTask[] {
+    // A failed optional dependency satisfies like a skipped one: the work it
+    // would have contributed is absent either way, and its dependents read
+    // handoffs defensively. Only a required task's failure dams the graph.
     const doneIds = new Set(
       this.tasks
         .filter(
           (t) =>
-            t.status === TaskStatus.Done || t.status === TaskStatus.Skipped,
+            t.status === TaskStatus.Done ||
+            t.status === TaskStatus.Skipped ||
+            (t.status === TaskStatus.Failed && t.optional === true),
         )
         .map((t) => t.id),
     );
@@ -215,6 +228,7 @@ export class QueueStore {
       attempts: 0,
       maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
       enqueuedBy: input.enqueuedBy ?? 'orchestrator',
+      optional: input.optional,
       createdAt: nowIso(),
     };
     this.tasks.push(task);
