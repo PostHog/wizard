@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.62.0](https://github.com/PostHog/wizard/compare/v2.61.0...v2.62.0) (2026-08-12)
+
+
+### Features
+
+* **orchestrator:** flag-gate runner-seeded tasks ([#1079](https://github.com/PostHog/wizard/issues/1079)) ([5157b77](https://github.com/PostHog/wizard/commit/5157b779ba4d7894878d93beabd932cf31cdb0d9))
+
 ## [2.61.0](https://github.com/PostHog/wizard/compare/v2.60.0...v2.61.0) (2026-08-12)
 
 
