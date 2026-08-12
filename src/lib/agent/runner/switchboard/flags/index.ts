@@ -74,7 +74,7 @@ export function resolveStageOverrides(
   return overrides;
 }
 
-export { isOrchestratorEnabled } from './orchestrator';
+export { isOrchestratorEnabled, areSeededTasksEnabled } from './orchestrator';
 export type {
   ConfigFlag,
   FlagRoute,
