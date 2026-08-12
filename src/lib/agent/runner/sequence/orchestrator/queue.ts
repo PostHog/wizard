@@ -162,16 +162,22 @@ export class QueueStore {
    * `skipped`). A skipped dependency does not block downstream work.
    */
   nextRunnable(): QueuedTask[] {
-    // A failed optional dependency satisfies like a skipped one: the work it
-    // would have contributed is absent either way, and its dependents read
-    // handoffs defensively. Only a required task's failure dams the graph.
+    // A terminally failed optional dependency satisfies like a skipped one:
+    // the work it would have contributed is absent either way, and its
+    // dependents read handoffs defensively. Terminal only — an agent can
+    // self-report failure mid-session, before the executor decides on a
+    // retry, and a dependent must wait that retry out rather than start
+    // against an outcome that may still change. Only a required task's
+    // failure dams the graph.
     const doneIds = new Set(
       this.tasks
         .filter(
           (t) =>
             t.status === TaskStatus.Done ||
             t.status === TaskStatus.Skipped ||
-            (t.status === TaskStatus.Failed && t.optional === true),
+            (t.status === TaskStatus.Failed &&
+              t.optional === true &&
+              t.attempts >= t.maxAttempts),
         )
         .map((t) => t.id),
     );

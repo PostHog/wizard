@@ -199,12 +199,18 @@ describe('optional task failure', () => {
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  const failTerminally = (id: string) => {
+  const failOnce = (id: string) => {
     store.start(id);
     store.fail(id, { type: 'boom', message: 'x' });
   };
+  const failTerminally = (id: string) => {
+    const t = store.get(id);
+    while ((store.get(id)?.attempts ?? 0) < (t?.maxAttempts ?? 0)) {
+      failOnce(id);
+    }
+  };
 
-  it('does not block a dependent', () => {
+  it('does not block a dependent once terminally failed', () => {
     const warehouse = store.enqueue({ type: 'warehouse', optional: true });
     const report = store.enqueue({
       type: 'report',
@@ -216,10 +222,26 @@ describe('optional task failure', () => {
     expect(store.isDrained()).toBe(false);
   });
 
+  it('still blocks a dependent while a retry is possible', () => {
+    // An agent can self-report failure mid-session, before the executor
+    // requeues it. The dependent must wait the retry out.
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    store.enqueue({ type: 'report', dependsOn: [warehouse.id] });
+    failOnce(warehouse.id);
+
+    expect(store.get(warehouse.id)?.attempts).toBeLessThan(
+      store.get(warehouse.id)?.maxAttempts ?? 0,
+    );
+    expect(store.nextRunnable()).toEqual([]);
+  });
+
   it('a required task failing still blocks its dependents', () => {
     const install = store.enqueue({ type: 'install' });
     store.enqueue({ type: 'report', dependsOn: [install.id] });
     failTerminally(install.id);
+    expect(store.get(install.id)?.attempts).toBe(
+      store.get(install.id)?.maxAttempts,
+    );
 
     expect(store.nextRunnable()).toEqual([]);
     expect(store.isDrained()).toBe(true);
