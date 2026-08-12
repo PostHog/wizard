@@ -238,7 +238,14 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
+  // The integration run carries the Slack outro step, and — when detection
+  // finds data sources — the orchestrator's warehouse task, which creates
+  // sources through `external-data-sources-create`. Without the warehouse pair
+  // that call 403s on a token the user already granted.
+  'posthog-integration': [
+    ...CONNECT_SLACK_SCOPE_ADDITIONS,
+    ...WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
+  ],
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
 

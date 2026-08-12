@@ -7,8 +7,35 @@ import { describe, it, expect } from 'vitest';
 import {
   allowedPiCodingTools,
   allowedOrchestratorTools,
+  allowedPiWizardTools,
   fenceDisallowList,
 } from '../task';
+
+describe('allowedPiWizardTools', () => {
+  const always = ['check_env_keys', 'set_env_values', 'detect_package_manager'];
+
+  it('withholds wizard_ask from a task that did not ask for it', () => {
+    const tools = allowedPiWizardTools(['Read', 'Edit']);
+    for (const name of always) expect(tools.has(name)).toBe(true);
+    expect(tools.has('wizard_ask')).toBe(false);
+  });
+
+  it('grants wizard_ask to a task whose prompt allows it', () => {
+    expect(allowedPiWizardTools(['Read', 'wizard_ask']).has('wizard_ask')).toBe(
+      true,
+    );
+  });
+
+  it('reads the MCP-qualified name the loader emits', () => {
+    expect(
+      allowedPiWizardTools(['mcp__wizard-tools__wizard_ask']).has('wizard_ask'),
+    ).toBe(true);
+  });
+
+  it('withholds wizard_ask when a task states no tools at all', () => {
+    expect(allowedPiWizardTools(undefined).has('wizard_ask')).toBe(false);
+  });
+});
 
 describe('allowedPiCodingTools', () => {
   it('maps the wizard vocabulary to pi tool names', () => {

@@ -28,6 +28,13 @@ export interface OrchestratorToolsContext {
   /** Task types the registry knows about. enqueue_task rejects anything else. */
   validTypes: readonly string[];
   /**
+   * Types marked `sink: true` — the ones that run last and must therefore
+   * depend, transitively, on every other task in the queue. Enqueuing one with
+   * an incomplete closure is rejected, so a task the runner seeded before the
+   * planner ran can never be left un-awaited.
+   */
+  sinkTypes?: readonly string[];
+  /**
    * The id of the task this tool server is bound to. Each task agent gets its
    * own wizard-tools server, so attribution holds when independent tasks run
    * in parallel. Absent for the seed, which is not a task.
@@ -71,10 +78,41 @@ function dedupKey(type: string, inputs: Record<string, unknown>): string {
  */
 const MAX_QUEUE_TASKS = 30;
 
+/** Every task id reachable from `roots` through dependsOn edges, roots included. */
+export function dependencyClosure(
+  store: QueueStore,
+  roots: readonly string[],
+): Set<string> {
+  const seen = new Set<string>();
+  const visit = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    for (const dep of store.get(id)?.dependsOn ?? []) visit(dep);
+  };
+  for (const id of roots) visit(id);
+  return seen;
+}
+
+/**
+ * Tasks a sink would fail to wait for. A sink runs last by definition, so any
+ * queued task outside its dependency closure is work whose handoff the sink
+ * would miss — the exact failure mode of a task seeded before the planner ran.
+ * Empty for a non-sink type, and for a sink that covers everything.
+ */
+export function uncoveredBySink(
+  ctx: OrchestratorToolsContext,
+  args: Pick<EnqueueArgs, 'type' | 'dependsOn'>,
+): QueuedTask[] {
+  if (!ctx.sinkTypes?.includes(args.type)) return [];
+  const covered = dependencyClosure(ctx.store, args.dependsOn ?? []);
+  return ctx.store.list().filter((t) => !covered.has(t.id));
+}
+
 /**
  * Validate an enqueue. Structural checks only — a real type, real dependencies,
- * not a literal duplicate, and not past the runaway backstop. How much runs,
- * and in what shape, is the task graph's business, not a knob's.
+ * a sink that waits for everything, not a literal duplicate, and not past the
+ * runaway backstop. How much runs, and in what shape, is the task graph's
+ * business, not a knob's.
  */
 export function checkEnqueueGuards(
   ctx: OrchestratorToolsContext,
@@ -121,6 +159,21 @@ export function checkEnqueueGuards(
         message: `Dependency "${dep}" is not a known task id.`,
       };
     }
+  }
+
+  const uncovered = uncoveredBySink(ctx, args);
+  if (uncovered.length > 0) {
+    return {
+      ok: false,
+      guard: 'sink-closure',
+      message: `A "${
+        args.type
+      }" task runs last, so it must depend on every other task — directly or through its dependencies. These are not covered: ${uncovered
+        .map((t) => `${t.type} (${t.id})`)
+        .join(
+          ', ',
+        )}. Add them to dependsOn, or to a task already in dependsOn, and enqueue it again.`,
+    };
   }
 
   const key = dedupKey(args.type, args.inputs ?? {});
@@ -260,6 +313,13 @@ const HANDOFF_SHAPE = {
     .optional()
     .describe(
       'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
+    ),
+  reportSection: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(
+      'A finished markdown section about your work for the run report, written only when your task instructions ask for one. The reporting task includes it as its own section instead of rewriting it.',
     ),
 };
 

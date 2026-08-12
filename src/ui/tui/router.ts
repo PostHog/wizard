@@ -36,6 +36,7 @@ export enum Overlay {
   AuthError = 'auth-error',
   SessionTimeout = 'session-timeout',
   WizardAsk = 'wizard-ask',
+  TaskNotice = 'task-notice',
 }
 
 /** Union of all screen names */

@@ -32,6 +32,7 @@ import {
   McpOutcome,
   RunPhase,
   buildSession,
+  type TaskNotice,
 } from '@lib/wizard-session';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import {
@@ -219,6 +220,8 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Blocks the run until an optional step's notice is answered. */
+  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
@@ -574,6 +577,26 @@ export class WizardStore {
     this.popOverlay();
     this._resolvePortConflict?.();
     this._resolvePortConflict = null;
+  }
+
+  /**
+   * Show an optional step's notice and return whether to keep that step.
+   * Asked before the step runs, so nobody is surprised by a prompt mid-run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    this.$session.setKey('taskNotice', notice);
+    this.pushOverlay(Overlay.TaskNotice);
+    return new Promise((resolve) => {
+      this._resolveTaskNotice = resolve;
+    });
+  }
+
+  /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
+  resolveTaskNotice(keep: boolean): void {
+    this.$session.setKey('taskNotice', null);
+    this.popOverlay();
+    this._resolveTaskNotice?.(keep);
+    this._resolveTaskNotice = null;
   }
 
   /**

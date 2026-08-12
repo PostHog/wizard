@@ -141,6 +141,24 @@ export interface AskQuestion {
   sensitive?: boolean;
 }
 
+/**
+ * Copy for a modal shown before an optional step runs, so the user can decline
+ * it. The program that owns the step supplies the words; the runner and the
+ * screen only carry them.
+ */
+export interface TaskNotice {
+  title: string;
+  /** Paragraphs, in order. */
+  body: string[];
+  /** Optional highlighted list, e.g. what was detected. */
+  items?: string[];
+  docsLabel?: string;
+  docsUrl?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  prompt: string;
+}
+
 /** Map of question id → answer (string for single/text, string[] for multi). */
 export type AskAnswers = Record<string, string | string[]>;
 
@@ -340,6 +358,8 @@ export interface WizardSession {
     port: number;
     user: string;
   } | null;
+  /** Copy for the task-notice modal, set while it is open. */
+  taskNotice: TaskNotice | null;
   outroData: OutroData | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
@@ -440,6 +460,7 @@ export function buildSession(args: {
     settingsConflicts: null,
     authErrorDetail: null,
     portConflictProcess: null,
+    taskNotice: null,
     outroData: null,
     dashboardUrl: null,
     notebookUrl: null,
