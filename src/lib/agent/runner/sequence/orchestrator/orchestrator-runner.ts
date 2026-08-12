@@ -334,6 +334,10 @@ export async function runOrchestrator(
         type: task.type,
         model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
+        // Slices the optional path out of every per-task event — including
+        // 'orchestrator task failed', which is the failure report; a failed
+        // optional task aborts nothing (see drainVerdict).
+        optional: task.optional === true,
       };
       switch (event) {
         case 'enqueue':
@@ -806,27 +810,10 @@ export async function runOrchestrator(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
 
-  // An optional task's failure is reported here in full — with the run's
-  // shape intact around it — and then kept out of the run's verdict below.
   const optionalTasks = store.list().filter((t) => t.optional === true);
   const optionalFailed = optionalTasks.filter(
     (t) => t.status === TaskStatus.Failed,
   );
-  for (const task of optionalFailed) {
-    analytics.wizardCapture('orchestrator optional task failed', {
-      type: task.type,
-      attempts: task.attempts,
-      duration_ms: durationMs(task),
-      error: task.error?.type,
-      error_message: task.error?.message?.slice(0, 300),
-      run_continued: true,
-    });
-    logToFile(
-      `[orchestrator] optional ${task.type} failed; run continues (${
-        task.error?.type ?? 'unknown'
-      })`,
-    );
-  }
 
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
@@ -839,11 +826,11 @@ export async function runOrchestrator(
       .list()
       .filter((t) => t.enqueuedBy !== 'orchestrator').length,
     retried_task_count: store.list().filter((t) => t.attempts > 1).length,
-    // The optional path, sliceable on its own: how the seeded work ended and
-    // how long it held the run, next to the totals it sat inside.
+    // The optional path at run level: whether this run carried it, how it
+    // ended, and how long it held the run. Per-task detail is already on the
+    // transition events via the `optional` property.
     optional_task_count: optionalTasks.length,
     optional_tasks_failed: optionalFailed.length,
-    optional_task_statuses: optionalTasks.map((t) => `${t.type}:${t.status}`),
     optional_task_duration_ms: optionalTasks.reduce(
       (sum, t) => sum + (durationMs(t) ?? 0),
       0,
