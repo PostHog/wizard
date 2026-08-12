@@ -245,11 +245,15 @@ export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
+/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
+export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
+  'wizard-orchestrator-seeded-tasks';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 ] as const;

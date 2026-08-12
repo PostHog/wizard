@@ -164,4 +164,8 @@ export {
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export { isOrchestratorEnabled, resolveStageOverrides } from './flags';
+export {
+  isOrchestratorEnabled,
+  areSeededTasksEnabled,
+  resolveStageOverrides,
+} from './flags';
