@@ -183,3 +183,45 @@ describe('QueueStore', () => {
     expect(listened.get(t.id)?.status).toBe('done');
   });
 });
+
+/**
+ * An optional task's failure is an outcome, not a verdict: dependents proceed
+ * as if it were skipped. A required task's failure still dams the graph.
+ */
+describe('optional task failure', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-optional-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const failTerminally = (id: string) => {
+    store.start(id);
+    store.fail(id, { type: 'boom', message: 'x' });
+  };
+
+  it('does not block a dependent', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const report = store.enqueue({
+      type: 'report',
+      dependsOn: [warehouse.id],
+    });
+    failTerminally(warehouse.id);
+
+    expect(store.nextRunnable().map((t) => t.id)).toEqual([report.id]);
+    expect(store.isDrained()).toBe(false);
+  });
+
+  it('a required task failing still blocks its dependents', () => {
+    const install = store.enqueue({ type: 'install' });
+    store.enqueue({ type: 'report', dependsOn: [install.id] });
+    failTerminally(install.id);
+
+    expect(store.nextRunnable()).toEqual([]);
+    expect(store.isDrained()).toBe(true);
+  });
+});
