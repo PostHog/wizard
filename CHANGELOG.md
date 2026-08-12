@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.61.0](https://github.com/PostHog/wizard/compare/v2.60.0...v2.61.0) (2026-08-12)
+
+
+### Features
+
+* **orchestrator:** optional warehouse task, runner-seeded with per-agent tool grants ([#1077](https://github.com/PostHog/wizard/issues/1077)) ([b248857](https://github.com/PostHog/wizard/commit/b24885798d7cffe3bdfb6a5e46fa1d21e51820e0))
+* **self-driving:** fix the onboarding papercuts a customer run surfaced ([#1057](https://github.com/PostHog/wizard/issues/1057)) ([cf768c8](https://github.com/PostHog/wizard/commit/cf768c836340a592ecbbd6263fdc10a46197171c))
+
+
+### Bug Fixes
+
+* **detection:** make agentic project classification reliable ([#1071](https://github.com/PostHog/wizard/issues/1071)) ([05b2c34](https://github.com/PostHog/wizard/commit/05b2c3402b90273fabb30755888745f726305dfb))
+* **mcp:** tell the user when the MCP server or plugin is already installed ([#1075](https://github.com/PostHog/wizard/issues/1075)) ([4b7982a](https://github.com/PostHog/wizard/commit/4b7982a9dbee4c5eaff66517561cffb68aaeca08))
+* **tui:** guard Tumblers pin geometry and re-enable Visualizer tab ([#890](https://github.com/PostHog/wizard/issues/890)) ([74edd5f](https://github.com/PostHog/wizard/commit/74edd5f4ae86b41a97541a61cc058b6a53a34730))
+
 ## [2.60.0](https://github.com/PostHog/wizard/compare/v2.59.0...v2.60.0) (2026-08-06)
 
 
