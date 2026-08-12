@@ -195,6 +195,24 @@ function canAsk(prompt: AgentPrompt | undefined): boolean {
   return (prompt?.allowedTools ?? []).includes(ASK_TOOL);
 }
 
+/** Splits terminal failures into run-failing (required) and reported-only (optional). */
+export function drainVerdict(tasks: readonly QueuedTask[]): {
+  requiredFailedTypes: string[];
+  optionalFailedTypes: string[];
+  blocked: number;
+} {
+  const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
+  return {
+    requiredFailedTypes: failed
+      .filter((t) => t.optional !== true)
+      .map((t) => t.type),
+    optionalFailedTypes: failed
+      .filter((t) => t.optional === true)
+      .map((t) => t.type),
+    blocked: tasks.filter((t) => t.status === TaskStatus.Pending).length,
+  };
+}
+
 /** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
 function graphDepth(
   task: QueuedTask,
@@ -312,6 +330,8 @@ export async function runOrchestrator(
         type: task.type,
         model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
+        // A failed optional task aborts nothing (see drainVerdict).
+        optional: task.optional === true,
       };
       switch (event) {
         case 'enqueue':
@@ -519,6 +539,8 @@ export async function runOrchestrator(
       label: seeded.label,
       inputs: seeded.inputs,
       enqueuedBy: 'orchestrator',
+      // Terminal failure is reported per-task and never aborts the run.
+      optional: true,
     });
     seededTypes.push(seeded.type);
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
@@ -806,13 +828,11 @@ export async function runOrchestrator(
   // A drain that ends with failed tasks (retries exhausted) or tasks still
   // pending (blocked behind a failed dependency) did NOT set PostHog up —
   // abort like a linear agent failure instead of claiming success.
-  const blocked = summary[TaskStatus.Pending];
-  if (summary.failed > 0 || blocked > 0) {
-    const failedTypes = store
-      .list()
-      .filter((t) => t.status === TaskStatus.Failed)
-      .map((t) => t.type)
-      .join(', ');
+  // A failed optional task is exempt: reported per-task, never run-failing.
+  const verdict = drainVerdict(store.list());
+  const blocked = verdict.blocked;
+  if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
+    const failedTypes = verdict.requiredFailedTypes.join(', ');
     await wizardAbort({
       message: `The wizard was unable to set up PostHog: ${
         failedTypes
@@ -828,12 +848,20 @@ export async function runOrchestrator(
     });
   }
 
+  // A failed optional step leaves the denominator and is named instead.
+  const optionalFailedCount = verdict.optionalFailedTypes.length;
+  const stepNotes = [
+    notRequired > 0 ? `${notRequired} skipped as not required` : '',
+    optionalFailedCount > 0
+      ? `${optionalFailedCount} optional step failed`
+      : '',
+  ].filter(Boolean);
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
-        summary.total - notRequired
+        summary.total - notRequired - optionalFailedCount
       } steps completed${
-        notRequired > 0 ? ` (${notRequired} skipped as not required)` : ''
+        stepNotes.length > 0 ? ` (${stepNotes.join(', ')})` : ''
       }.`;
   getUI().setOutroData({
     kind: OutroKind.Success,

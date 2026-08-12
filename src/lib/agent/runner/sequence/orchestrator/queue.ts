@@ -48,6 +48,8 @@ export interface QueuedTask {
   handoff?: TaskHandoff;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
+  /** Wizard-seeded only: terminal failure unblocks dependents and never fails the run. */
+  optional?: boolean;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
@@ -84,6 +86,7 @@ export interface EnqueueInput {
   model?: string;
   maxAttempts?: number;
   enqueuedBy?: string;
+  optional?: boolean;
 }
 
 export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
@@ -154,11 +157,16 @@ export class QueueStore {
    * `skipped`). A skipped dependency does not block downstream work.
    */
   nextRunnable(): QueuedTask[] {
+    // A TERMINALLY failed optional dep satisfies like skipped; retryable failure still blocks.
     const doneIds = new Set(
       this.tasks
         .filter(
           (t) =>
-            t.status === TaskStatus.Done || t.status === TaskStatus.Skipped,
+            t.status === TaskStatus.Done ||
+            t.status === TaskStatus.Skipped ||
+            (t.status === TaskStatus.Failed &&
+              t.optional === true &&
+              t.attempts >= t.maxAttempts),
         )
         .map((t) => t.id),
     );
@@ -215,6 +223,7 @@ export class QueueStore {
       attempts: 0,
       maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
       enqueuedBy: input.enqueuedBy ?? 'orchestrator',
+      optional: input.optional,
       createdAt: nowIso(),
     };
     this.tasks.push(task);
