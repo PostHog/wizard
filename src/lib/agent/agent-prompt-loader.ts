@@ -28,6 +28,7 @@ import {
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { fetchWithRetry } from '@lib/fetch-retry';
+import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools/tools';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -83,7 +84,22 @@ export function renderToolInventory(toolNames: readonly string[]): string {
 
 const TASK_BASICS = `You are one step in a larger PostHog workflow made of several tasks, run as a fresh agent with no memory of the other tasks beyond the context you are given. Other tasks — before and after you — own the rest of the work, so stay strictly on your own task: do not do a neighbouring step's job, redo what an upstream handoff already did, or reach beyond what you were asked. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`not needed\` and say why, rather than marking it done.`;
 
-const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
+const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. The last task you queue, the one that reports on the run, must depend on every other task in the queue — directly, or through a task it already depends on. You are not a task yourself: do not call complete_task and do not edit the project.`;
+
+/**
+ * Tasks the wizard queued before the planner ran. It has to see them: they are
+ * part of the run it is planning around, and the task that reports last has to
+ * depend on them. Their ids are real, so it can wire the edge directly.
+ */
+function preQueuedTasks(
+  tasks: readonly { id: string; type: string }[],
+): string | null {
+  if (tasks.length === 0) return null;
+  const lines = tasks.map((t) => `- ${t.type} (id: ${t.id})`);
+  return `The queue already holds these tasks, placed by the wizard from what it found in this project. Do not queue them again — plan around them, and make sure the reporting task ends up depending on each one:\n${lines.join(
+    '\n',
+  )}`;
+}
 
 /**
  * Points the agent at its installed task instructions (the HOW). They live under
@@ -118,8 +134,11 @@ export function assembleTaskPrompt(
 export function assembleSeedPrompt(
   ctx: OrchestratorPromptContext,
   body: string,
+  preQueued: readonly { id: string; type: string }[] = [],
 ): string {
-  return [projectContext(ctx), SEED_BASICS, body].join('\n\n');
+  return [projectContext(ctx), SEED_BASICS, preQueuedTasks(preQueued), body]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /** Orchestrator tools are MCP tools under the `posthog-wizard` server. Frontmatter
@@ -130,6 +149,28 @@ const ORCHESTRATOR_TOOLS = new Set([
   'complete_task',
   'read_handoffs',
 ]);
+
+/** The one tool that stops a task until a person answers. Named short in frontmatter. */
+export const ASK_TOOL = 'wizard_ask';
+
+/**
+ * The PostHog MCP, as an agent asks for it in frontmatter. Every tool a task
+ * gets is granted by its own prompt, this one included: a task that never names
+ * it never has the server wired in, and one that does gets it under this name
+ * on both harnesses.
+ */
+export const POSTHOG_MCP_TOOL = 'posthog_exec';
+/** The same tool as the anthropic SDK names it, on the hosted PostHog server. */
+const POSTHOG_MCP_SDK_TOOL = 'mcp__posthog-wizard__exec';
+
+/** Whether a task asked for the PostHog MCP — accepts either spelling. */
+export function allowsPostHogMcp(
+  allowedTools: readonly string[] | undefined,
+): boolean {
+  return (allowedTools ?? []).some(
+    (name) => name === POSTHOG_MCP_TOOL || name === POSTHOG_MCP_SDK_TOOL,
+  );
+}
 
 /** The queue tools a task holds — all of them minus its disallows. Short names.
  *  Single source for both the injected inventory and the harness's tool grant. */
@@ -149,6 +190,14 @@ export interface AgentPrompt {
   flow?: string;
   /** Marks the flow's planner: it seeds the queue and is not an enqueueable task. */
   seed: boolean;
+  /** Marks a task that runs last: it must depend on every other task in the queue. */
+  sink: boolean;
+  /**
+   * Marks a task only the wizard may queue. The planner never sees the type, so
+   * whether it runs is a decision the client makes from what it detected, not
+   * one an agent can reach — it can neither invent the task nor forget it.
+   */
+  runnerSeeded: boolean;
   /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
    * harness. The mapping is not 1:1 across providers, so each agent names both. */
   modelPi?: string;
@@ -176,8 +225,14 @@ export function promptModelFor(
 }
 
 export interface AgentRegistry {
-  /** The flow's enqueueable task types — every prompt except the seed. */
+  /** The flow's task types — every prompt except the seed. */
   readonly types: string[];
+  /** The types an agent may enqueue: `types` minus the runner-seeded ones. */
+  readonly enqueueableTypes: string[];
+  /** The types that run last and must depend on the whole queue. */
+  readonly sinkTypes: string[];
+  /** The types only the wizard queues, from what it detected before the run. */
+  readonly runnerSeededTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
   get(type: string): AgentPrompt | undefined;
@@ -212,8 +267,12 @@ export function buildRegistry(
       };
     });
   const byType = new Map(inFlow.map((p) => [p.type, p]));
+  const tasks = inFlow.filter((p) => !p.seed);
   return {
-    types: inFlow.filter((p) => !p.seed).map((p) => p.type),
+    types: tasks.map((p) => p.type),
+    enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
+    sinkTypes: tasks.filter((p) => p.sink).map((p) => p.type),
+    runnerSeededTypes: tasks.filter((p) => p.runnerSeeded).map((p) => p.type),
     seed: inFlow.find((p) => p.seed),
     get: (type) => byType.get(type),
   };
@@ -224,8 +283,10 @@ interface AgentMenu {
   agents: { id: string; flow?: string; downloadUrl: string }[];
 }
 
-/** A native tool passes through; an orchestrator tool gets its MCP-qualified name. */
+/** A native tool passes through; an MCP tool gets its fully-qualified name. */
 function expandToolName(name: string): string {
+  if (name === ASK_TOOL) return WIZARD_TOOL_NAMES.wizardAsk;
+  if (name === POSTHOG_MCP_TOOL) return POSTHOG_MCP_SDK_TOOL;
   return ORCHESTRATOR_TOOLS.has(name)
     ? `${ORCHESTRATOR_TOOL_PREFIX}${name}`
     : name;
@@ -301,6 +362,8 @@ export function parseAgentPrompt(
     label: typeof fields.label === 'string' ? fields.label : undefined,
     flow: typeof fields.flow === 'string' ? fields.flow : fallbackFlow,
     seed: fields.seed === 'true',
+    sink: fields.sink === 'true',
+    runnerSeeded: fields.runnerSeeded === 'true',
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
@@ -407,6 +470,9 @@ function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
     }
     if (handoff.assumptions) {
       lines.push(`- assumed: ${handoff.assumptions}`);
+    }
+    if (handoff.reportSection) {
+      lines.push(`- report section:\n${handoff.reportSection}`);
     }
     lines.push('');
   }

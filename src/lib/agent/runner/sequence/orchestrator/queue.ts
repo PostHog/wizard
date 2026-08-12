@@ -72,6 +72,8 @@ export interface TaskHandoff {
   assumptions?: string;
   /** A one-line summary of any unresolved conflict, surfaced in the outro. */
   conflict?: string;
+  /** A finished section for the run's report, written by the task that owns the subject. */
+  reportSection?: string;
 }
 
 export interface EnqueueInput {
