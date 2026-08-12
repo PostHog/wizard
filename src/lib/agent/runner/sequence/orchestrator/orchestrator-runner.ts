@@ -40,6 +40,7 @@ import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
 import {
+  areSeededTasksEnabled,
   getHarness,
   resolveHarness,
   resolveStageOverrides,
@@ -486,8 +487,13 @@ export async function runOrchestrator(
   // Tasks the wizard queues itself, from what detection found. They exist
   // before the planner runs, so the sink guard forces the reporting task to
   // depend on them, and no prompt has to remember they are there.
+  // Kill switch: off (or unset), the wizard queues nothing itself and the run
+  // is byte-identical to a project with no detected sources.
+  const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
+    ? programConfig.seedTasks?.(session) ?? []
+    : [];
   const seededTypes: string[] = [];
-  for (const seeded of programConfig.seedTasks?.(session) ?? []) {
+  for (const seeded of seedEntries) {
     if (!registry.runnerSeededTypes.includes(seeded.type)) {
       logToFile(
         `[orchestrator] skipping runner-seeded task "${seeded.type}": not a runner-seeded type in this flow`,
