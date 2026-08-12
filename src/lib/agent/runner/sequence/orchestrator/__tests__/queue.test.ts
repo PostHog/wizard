@@ -184,10 +184,7 @@ describe('QueueStore', () => {
   });
 });
 
-/**
- * An optional task's failure is an outcome, not a verdict: dependents proceed
- * as if it were skipped. A required task's failure still dams the graph.
- */
+/** A terminally failed optional dep unblocks dependents; a required one dams the graph. */
 describe('optional task failure', () => {
   let dir: string;
   let store: QueueStore;
@@ -223,8 +220,7 @@ describe('optional task failure', () => {
   });
 
   it('still blocks a dependent while a retry is possible', () => {
-    // An agent can self-report failure mid-session, before the executor
-    // requeues it. The dependent must wait the retry out.
+    // Agents can self-report failure mid-session, before the executor requeues.
     const warehouse = store.enqueue({ type: 'warehouse', optional: true });
     store.enqueue({ type: 'report', dependsOn: [warehouse.id] });
     failOnce(warehouse.id);

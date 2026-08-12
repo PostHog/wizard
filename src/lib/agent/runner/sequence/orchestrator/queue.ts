@@ -48,12 +48,7 @@ export interface QueuedTask {
   handoff?: TaskHandoff;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
-  /**
-   * An optional task's terminal failure is an outcome, not a verdict on the
-   * run: dependents proceed as if it were skipped, and the drain's failure
-   * check does not count it. Set by the wizard on the tasks it seeds itself —
-   * the run's own work is never optional.
-   */
+  /** Wizard-seeded only: terminal failure unblocks dependents and never fails the run. */
   optional?: boolean;
   createdAt: string;
   startedAt?: string;
@@ -162,13 +157,7 @@ export class QueueStore {
    * `skipped`). A skipped dependency does not block downstream work.
    */
   nextRunnable(): QueuedTask[] {
-    // A terminally failed optional dependency satisfies like a skipped one:
-    // the work it would have contributed is absent either way, and its
-    // dependents read handoffs defensively. Terminal only — an agent can
-    // self-report failure mid-session, before the executor decides on a
-    // retry, and a dependent must wait that retry out rather than start
-    // against an outcome that may still change. Only a required task's
-    // failure dams the graph.
+    // A TERMINALLY failed optional dep satisfies like skipped; retryable failure still blocks.
     const doneIds = new Set(
       this.tasks
         .filter(

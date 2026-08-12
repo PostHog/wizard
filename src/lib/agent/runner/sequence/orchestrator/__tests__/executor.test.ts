@@ -153,12 +153,7 @@ describe('drainQueue', () => {
   });
 });
 
-/**
- * The drain and an optional task's failure. The run must WAIT the optional
- * task out — every attempt, to its terminal state — and only then let
- * dependents proceed. Nothing is ever silently skipped: every queued task
- * reaches a terminal status before drainQueue returns.
- */
+/** The drain waits a failing optional task to terminal state; nothing is silently skipped. */
 describe('drainQueue — optional task failure', () => {
   let dir: string;
   let q: QueueStore;

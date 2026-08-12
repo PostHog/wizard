@@ -1,7 +1,4 @@
-/**
- * The optional-task verdict: a runner-seeded task's failure is reported, never
- * inherited by the run. Only required failures and blocked work abort.
- */
+/** Only required failures and blocked work abort; optional failures never do. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

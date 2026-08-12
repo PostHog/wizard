@@ -195,11 +195,7 @@ function canAsk(prompt: AgentPrompt | undefined): boolean {
   return (prompt?.allowedTools ?? []).includes(ASK_TOOL);
 }
 
-/**
- * The drain's verdict: which failures fail the run. An optional task's
- * failure is reported as analytics and kept out of the verdict; a required
- * task's failure, or a task still pending behind one, aborts as before.
- */
+/** Splits terminal failures into run-failing (required) and reported-only (optional). */
 export function drainVerdict(tasks: readonly QueuedTask[]): {
   requiredFailedTypes: string[];
   optionalFailedTypes: string[];
@@ -334,9 +330,7 @@ export async function runOrchestrator(
         type: task.type,
         model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
-        // Slices the optional path out of every per-task event — including
-        // 'orchestrator task failed', which is the failure report; a failed
-        // optional task aborts nothing (see drainVerdict).
+        // A failed optional task aborts nothing (see drainVerdict).
         optional: task.optional === true,
       };
       switch (event) {
@@ -534,7 +528,6 @@ export async function runOrchestrator(
       analytics.wizardCapture('orchestrator task notice answered', {
         type: seeded.type,
         kept: keep,
-        items_count: seeded.notice.items?.length ?? 0,
       });
       if (!keep) {
         logToFile(`[orchestrator] user declined runner-seeded ${seeded.type}`);
@@ -546,8 +539,7 @@ export async function runOrchestrator(
       label: seeded.label,
       inputs: seeded.inputs,
       enqueuedBy: 'orchestrator',
-      // Its failure is reported, never inherited by the run: the user was
-      // promised an integration, and the side quest failing must not undo it.
+      // Terminal failure is reported per-task and never aborts the run.
       optional: true,
     });
     seededTypes.push(seeded.type);
@@ -810,11 +802,6 @@ export async function runOrchestrator(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
 
-  const optionalTasks = store.list().filter((t) => t.optional === true);
-  const optionalFailed = optionalTasks.filter(
-    (t) => t.status === TaskStatus.Failed,
-  );
-
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,
@@ -826,15 +813,6 @@ export async function runOrchestrator(
       .list()
       .filter((t) => t.enqueuedBy !== 'orchestrator').length,
     retried_task_count: store.list().filter((t) => t.attempts > 1).length,
-    // The optional path at run level: whether this run carried it, how it
-    // ended, and how long it held the run. Per-task detail is already on the
-    // transition events via the `optional` property.
-    optional_task_count: optionalTasks.length,
-    optional_tasks_failed: optionalFailed.length,
-    optional_task_duration_ms: optionalTasks.reduce(
-      (sum, t) => sum + (durationMs(t) ?? 0),
-      0,
-    ),
   });
 
   // The review step flags any unresolved conflict in its handoff; surface the
@@ -849,9 +827,8 @@ export async function runOrchestrator(
 
   // A drain that ends with failed tasks (retries exhausted) or tasks still
   // pending (blocked behind a failed dependency) did NOT set PostHog up —
-  // abort like a linear agent failure instead of claiming success. Optional
-  // tasks are exempt: their failure was reported above, their dependents were
-  // never blocked (see nextRunnable), and the integration itself stands.
+  // abort like a linear agent failure instead of claiming success.
+  // A failed optional task is exempt: reported per-task, never run-failing.
   const verdict = drainVerdict(store.list());
   const blocked = verdict.blocked;
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
@@ -871,18 +848,18 @@ export async function runOrchestrator(
     });
   }
 
-  // A failed optional step leaves the denominator (the promised work is the
-  // required steps) and is named instead, so the count still reads as whole.
+  // A failed optional step leaves the denominator and is named instead.
+  const optionalFailedCount = verdict.optionalFailedTypes.length;
   const stepNotes = [
     notRequired > 0 ? `${notRequired} skipped as not required` : '',
-    optionalFailed.length > 0
-      ? `${optionalFailed.length} optional step failed`
+    optionalFailedCount > 0
+      ? `${optionalFailedCount} optional step failed`
       : '',
   ].filter(Boolean);
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
-        summary.total - notRequired - optionalFailed.length
+        summary.total - notRequired - optionalFailedCount
       } steps completed${
         stepNotes.length > 0 ? ` (${stepNotes.join(', ')})` : ''
       }.`;
