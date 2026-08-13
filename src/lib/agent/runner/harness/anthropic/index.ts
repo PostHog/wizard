@@ -96,6 +96,7 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue: config.additionalFeatureQueue ?? [],
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
+        resolveStepKey: config.resolveStepKey,
         triageProvider: boot.triageProvider,
       },
       middleware,
