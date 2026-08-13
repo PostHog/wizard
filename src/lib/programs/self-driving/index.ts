@@ -10,6 +10,7 @@ import {
   getSelfDrivingDetectedTools,
 } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
+import { resolveSelfDrivingStepKey } from './step-keys.js';
 import {
   NO_DEFAULT_LIMIT,
   PRICE_PER_PR_USD,
@@ -78,6 +79,10 @@ const buildRun = (session: WizardSession): Promise<ProgramRun> =>
     // scout enable, etc.), including silent steps with no wizard_ask. Opt-in, so
     // only self-driving runs emit these; every other program is unchanged.
     trackStepProgress: true,
+
+    // Key those events by step as well as by label, so a funnel over them (GitHub connect
+    // conversion, scout enable rate) keeps counting when a run words its tasks differently.
+    resolveStepKey: resolveSelfDrivingStepKey,
 
     postRun: async (session) => {
       await removeInstalledSkill(session.installDir);
