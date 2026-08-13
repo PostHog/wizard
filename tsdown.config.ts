@@ -20,8 +20,23 @@ export default defineConfig({
     NODE_ENV: process.env.WIZARD_BUILD_NODE_ENV || 'production',
   },
 
-  // Keep npm dependencies external — they're installed at runtime.
-  skipNodeModulesBundle: true,
+  // Keep npm dependencies external — they're installed at runtime — except the
+  // ones listed in `deps.alwaysBundle`.
+  deps: {
+    // Bundle jsonc-parser in. Its UMD entry (the package `main` field) does a
+    // relative `require('./impl/format')` at load time. Left external, that
+    // require survives into a downstream single-file build and cannot resolve
+    // inside Node's embedded runtime, which crashes the wizard at boot.
+    alwaysBundle: [/^jsonc-parser/],
+  },
+
+  // Resolve jsonc-parser to its ESM build. The package `main` field is a UMD
+  // bundle whose runtime `require('./impl/format')` the bundler keeps verbatim;
+  // the ESM build uses static imports the bundler resolves and inlines at build
+  // time, so no runtime require survives.
+  alias: {
+    'jsonc-parser': 'jsonc-parser/lib/esm/main.js',
+  },
 
   sourcemap: true,
   clean: true,
