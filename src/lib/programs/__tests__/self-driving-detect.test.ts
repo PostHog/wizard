@@ -213,6 +213,34 @@ describe('selfDrivingConfig', () => {
     ).toBe('Your product drives itself.');
   });
 
+  it('ties the outro PR action to a GitHub connection, honest for a degraded run', async () => {
+    // A declined GitHub connection now reaches the success outro (STEP 3
+    // degrades instead of aborting), so the PR next-step must not read as
+    // immediately available — it names the GitHub prerequisite for the user
+    // who skipped it.
+    const { run } = selfDrivingConfig;
+    const resolved =
+      typeof run === 'function' ? await run(buildSession({})) : run;
+    const credentials = {
+      accessToken: 'tok',
+      projectApiKey: 'phc_test',
+      projectId: '1',
+      host: {
+        apiHost: 'https://us.i.posthog.com',
+        appHost: 'https://us.posthog.com',
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const outro = resolved!.buildOutroData!(
+      buildSession({}),
+      credentials as any,
+    );
+    const prItem = outro.nextSteps?.items.find((i: string) =>
+      i.includes('Kick off a PR'),
+    );
+    expect(prItem).toContain('connect GitHub first if you skipped it');
+  });
+
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
     // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;
