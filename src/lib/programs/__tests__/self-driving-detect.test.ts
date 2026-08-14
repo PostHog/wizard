@@ -166,6 +166,22 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     expect(matched[0].body).toBeTruthy();
   });
 
+  it('still matches the github-declined reason when the skill wraps it in stray punctuation', () => {
+    // The skill sometimes emits punctuation around the contract string; the
+    // reason must still resolve to the tailored screen, not the generic outro.
+    for (const reason of [
+      'github connection declined.',
+      "github connection declined`.')",
+      '`github connection declined`',
+    ]) {
+      const matched = SELF_DRIVING_ABORT_CASES.filter((c) =>
+        c.match.test(reason),
+      );
+      expect(matched).toHaveLength(1);
+      expect(matched[0].message).toBe('GitHub connection skipped');
+    }
+  });
+
   it('frames the unavailable-access abort as open beta, not a closed per-team beta', () => {
     // STEP 1 no longer gates on access — Self-driving is open beta — but the
     // abort is kept as a safety net. Its copy must say the product is still
