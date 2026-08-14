@@ -291,9 +291,18 @@ are clamped silently (`clamp_scopes_to_ceiling`) — neither path errors;
 carries what was requested: the token response's `scope` field is the truth.
 The wizard diffs granted vs requested at login (`missingOAuthScopes` in
 `src/utils/oauth.ts`), warns the user which permissions are missing, and emits
-`wizard: oauth grant narrowed` so narrowed runs are countable in analytics. A
-run step that needs a deselected scope should degrade or skip, not fail the
+`wizard: oauth grant narrowed` so narrowed runs are countable in analytics.
+The diff also rides on the session into every orchestrator prompt, so a run
+step that needs a deselected scope degrades or skips instead of failing the
 run.
+
+**To make scopes impossible to deselect, list them in the app's
+`required_scopes`** (same Django admin / seed procedure as `scopes`, per
+region). The consent screen force-includes every required scope, so the grant
+always carries them — this is the fix for "a user unticked a permission and a
+run step 403'd minutes later", and the wizard has no client-side lever for it.
+The base set the wizard always requests (`WIZARD_OAUTH_SCOPES`) is the natural
+`required_scopes` value; program-specific additions can stay deselectable.
 
 **The live wizard apps use the `@default` sentinel, so most net-new scopes need
 no ceiling edit.** The prod US app's `scopes` is:
