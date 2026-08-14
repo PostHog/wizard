@@ -261,13 +261,27 @@ The CLI args override environment variables in CI mode.
 
 ### Required API Key Scopes
 
-When creating your personal API key, ensure it has the following scopes enabled:
+When creating your personal API key, ensure it has the following scopes
+enabled. This is the base set the wizard requests (`WIZARD_OAUTH_SCOPES` in
+`src/lib/constants.ts` — the source of truth if this list drifts):
 
-- `user:read` - Required to fetch user information
-- `project:read` - Required to fetch project details and API token
-- `llm_gateway:read` - Required for LLM gateway access
-- `dashboard:write` - Required to create dashboards
-- `insight:write` - Required to create insights
+- `user:read` - Fetch user information
+- `project:read` - Fetch project details and API token
+- `llm_gateway:read` - LLM gateway access (without it every agent call 401s)
+- `dashboard:write` - Create the onboarding dashboard
+- `insight:write` - Create the onboarding insights
+- `query:read` - Run HogQL queries when the agent needs data
+- `notebook:write` - Upload the events-audit report as a PostHog notebook
+- `event_definition:write` - Create event definitions from the run's event plan
+- `health_issue:read` - Used by `wizard doctor`
+- `wizard_session:read` / `wizard_session:write` - Stream run state to PostHog
+- `organization:read` - Read the AI data-processing opt-in
+
+Some programs request more on top — see `PROGRAM_SCOPE_ADDITIONS` in
+`src/lib/oauth/program-scopes.ts`. The default integration flow adds
+`integration:read` (Connect-Slack step) and `external_data_source:read` /
+`external_data_source:write` (warehouse-source setup when detection finds
+connectable data sources).
 
 ### OAuth app scope ceiling
 
