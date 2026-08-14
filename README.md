@@ -296,13 +296,27 @@ The diff also rides on the session into every orchestrator prompt, so a run
 step that needs a deselected scope degrades or skips instead of failing the
 run.
 
-**To make scopes impossible to deselect, list them in the app's
-`required_scopes`** (same Django admin / seed procedure as `scopes`, per
-region). The consent screen force-includes every required scope, so the grant
-always carries them — this is the fix for "a user unticked a permission and a
-run step 403'd minutes later", and the wizard has no client-side lever for it.
-The base set the wizard always requests (`WIZARD_OAUTH_SCOPES`) is the natural
-`required_scopes` value; program-specific additions can stay deselectable.
+**To make scopes impossible to deselect, list them explicitly in the app's
+`scopes`.** `required_scopes` is not a separate field — it is derived
+(`posthog/models/oauth.py`): every explicit `obj:action` entry in `scopes` is
+required and locked at consent (the UI force-includes those rows, and the
+consent POST 400s with `invalid_scope` if the grant misses one), while scopes
+covered only by `@default` stay deselectable and `optional_scopes` are
+declinable extras. That is why `llm_gateway:read` and `wizard_session:*` are
+already un-deselectable today, and everything else is not. To pin the base set
+the wizard cannot run without, seed each region's app with `@default` plus
+every scope in `WIZARD_OAUTH_SCOPES`:
+
+```
+python manage.py seed_oauth_app_scopes --client-id <id> --dry-run \
+  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
+```
+
+then re-run without `--dry-run`. Keep `@default` in the list — dropping it
+narrows the ceiling to only the explicit entries and strips the
+program-specific additions. The wizard has no client-side lever for any of
+this; the login diff and prompt-threaded degrade above handle a narrowed
+grant, but only pinning prevents one.
 
 **The live wizard apps use the `@default` sentinel, so most net-new scopes need
 no ceiling edit.** The prod US app's `scopes` is:
