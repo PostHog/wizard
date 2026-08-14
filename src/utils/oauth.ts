@@ -437,12 +437,17 @@ function reportNarrowedGrant(
     missing_scopes: missing.join(' '),
     missing_scope_count: missing.length,
   });
+  const plural = missing.length > 1;
   getUI().log.warn(
     `Your PostHog authorization is missing ${
-      missing.length === 1 ? 'a permission' : `${missing.length} permissions`
+      plural ? `${missing.length} permissions` : 'a permission'
     } the wizard asked for: ${missing.join(', ')}. ` +
-      'Setup will continue, but steps that need them may fail or be skipped. ' +
-      'To grant them, re-run the wizard and approve all permissions on the ' +
+      `Setup will continue, but steps that need ${
+        plural ? 'them' : 'it'
+      } will be skipped. ` +
+      `To grant ${
+        plural ? 'them' : 'it'
+      }, re-run the wizard and approve all permissions on the ` +
       'authorization screen. If that screen does not reappear, revoke the ' +
       'existing PostHog Wizard authorization in your PostHog settings first.',
   );
