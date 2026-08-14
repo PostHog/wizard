@@ -32,6 +32,7 @@ export async function authenticate(
     roleAtOrganization,
     user,
     project,
+    missingScopes,
   } = await getOrAskForProjectData({
     signup: session.signup,
     ci: session.ci,
@@ -44,7 +45,13 @@ export async function authenticate(
     programId,
   });
 
-  session.credentials = { accessToken, projectApiKey, host, projectId };
+  session.credentials = {
+    accessToken,
+    projectApiKey,
+    host,
+    projectId,
+    missingScopes,
+  };
   session.apiProject = project;
   session.roleAtOrganization = roleAtOrganization;
   session.apiUser = user;

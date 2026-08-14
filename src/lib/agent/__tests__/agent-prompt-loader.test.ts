@@ -497,6 +497,34 @@ describe('assembleTaskPrompt', () => {
     const assembled = assembleTaskPrompt(ctx, 'do the task', []);
     expect(assembled).not.toContain('Your tools for this task');
   });
+
+  // A grant narrowed at consent must reach the agent as a known limitation to
+  // route around — not surface mid-task as a 403 that fails a required step.
+  it('names the permissions the user declined and forbids failing on them', () => {
+    const assembled = assembleTaskPrompt(
+      {
+        ...ctx,
+        missingScopes: ['notebook:write', 'external_data_source:write'],
+      },
+      'do the task',
+    );
+    expect(assembled).toContain(
+      'did not grant these PostHog permissions at login: notebook:write, external_data_source:write',
+    );
+    expect(assembled).toContain(
+      'Never let a missing permission fail your task',
+    );
+    expect(assembled).toContain('re-running the wizard');
+  });
+
+  it('says nothing about permissions when the grant matched the request', () => {
+    expect(
+      assembleTaskPrompt({ ...ctx, missingScopes: [] }, 'do the task'),
+    ).not.toContain('did not grant');
+    expect(assembleTaskPrompt(ctx, 'do the task')).not.toContain(
+      'did not grant',
+    );
+  });
 });
 
 describe('renderToolInventory', () => {
@@ -537,6 +565,19 @@ describe('assembleSeedPrompt', () => {
 
     expect(assembleSeedPrompt(ctx, 'plan it')).not.toContain(
       'The queue already holds',
+    );
+  });
+
+  it('tells the planner which permissions the user declined', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+      missingScopes: ['notebook:write'],
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    expect(assembleSeedPrompt(ctx, 'plan it')).toContain(
+      'did not grant these PostHog permissions at login: notebook:write',
     );
   });
 });
