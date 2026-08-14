@@ -276,6 +276,18 @@ carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
 `src/lib/oauth/program-scopes.ts`) must be grantable under that ceiling, or
 `/authorize` drops it and the call that needs it 403s.
 
+**A granted token can be narrower than the request even with a correct
+ceiling.** The consent screen lets the user deselect any scope the app doesn't
+mark required (`OAuthApplication.required_scopes`), and out-of-ceiling scopes
+are clamped silently (`clamp_scopes_to_ceiling`) — neither path errors;
+`/oauth/token` just returns a smaller `scope`. So never assume the token
+carries what was requested: the token response's `scope` field is the truth.
+The wizard diffs granted vs requested at login (`missingOAuthScopes` in
+`src/utils/oauth.ts`), warns the user which permissions are missing, and emits
+`wizard: oauth grant narrowed` so narrowed runs are countable in analytics. A
+run step that needs a deselected scope should degrade or skip, not fail the
+run.
+
 **The live wizard apps use the `@default` sentinel, so most net-new scopes need
 no ceiling edit.** The prod US app's `scopes` is:
 

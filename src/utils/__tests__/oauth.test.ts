@@ -2,6 +2,7 @@ import {
   assertWizardCompletionScope,
   extractOAuthCode,
   isAuthorizationTimeout,
+  missingOAuthScopes,
   OAuthTokenResponseSchema,
   parseOAuthScopes,
 } from '@utils/oauth';
@@ -132,6 +133,43 @@ describe('wizard OAuth scopes', () => {
       'project:read',
       'wizard_session:write',
       'event_definition:write',
+    ]);
+  });
+});
+
+// A grant can be narrower than the request with no error: the consent screen
+// lets users deselect non-required scopes, and out-of-ceiling scopes are
+// silently clamped server-side. The diff is how the wizard notices at login
+// instead of via a permission failure minutes into the run.
+describe('missingOAuthScopes', () => {
+  it('returns an empty list when the grant matches the request', () => {
+    expect(
+      missingOAuthScopes(
+        ['user:read', 'project:read'],
+        'user:read project:read',
+      ),
+    ).toEqual([]);
+  });
+
+  it('names the scopes a deselecting user unticked at consent', () => {
+    expect(
+      missingOAuthScopes(
+        ['user:read', 'notebook:write', 'external_data_source:read'],
+        'user:read',
+      ),
+    ).toEqual(['notebook:write', 'external_data_source:read']);
+  });
+
+  it('ignores extra granted scopes the wizard never asked for', () => {
+    expect(
+      missingOAuthScopes(['user:read'], 'user:read feature_flag:read'),
+    ).toEqual([]);
+  });
+
+  it('treats an empty grant as everything missing', () => {
+    expect(missingOAuthScopes(['user:read', 'query:read'], '')).toEqual([
+      'user:read',
+      'query:read',
     ]);
   });
 });

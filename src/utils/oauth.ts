@@ -70,6 +70,24 @@ export function parseOAuthScopes(scope: string): string[] {
   return scope.split(/\s+/).filter(Boolean);
 }
 
+/**
+ * Requested scopes the grant came back without.
+ *
+ * A token can legitimately carry fewer scopes than the wizard asked for: the
+ * consent screen lets the user deselect any scope the OAuth app doesn't mark
+ * required, and anything outside the app's ceiling is clamped server-side.
+ * Neither path is an error — `/oauth/token` just returns a narrower `scope`.
+ * Diff it at login, where the gap is fixable, rather than letting the run
+ * discover it as a permission failure on some API call minutes in.
+ */
+export function missingOAuthScopes(
+  requested: readonly string[],
+  grantedScope: string,
+): string[] {
+  const granted = new Set(parseOAuthScopes(grantedScope));
+  return requested.filter((scope) => !granted.has(scope));
+}
+
 export function assertWizardCompletionScope(scope: string): void {
   if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
 
@@ -396,6 +414,40 @@ async function exchangeCodeForToken(
   return token;
 }
 
+/**
+ * Warn — at login, while the user is still watching — when the grant came back
+ * narrower than the request, and record the gap so narrowed runs are countable.
+ * Non-fatal by design: deselecting an optional scope is the user's call, and
+ * most flows survive it. The one scope the wizard cannot run without has its
+ * own hard check (`assertWizardCompletionScope`).
+ */
+function reportNarrowedGrant(
+  requestedScopes: readonly string[],
+  grantedScope: string,
+): void {
+  const missing = missingOAuthScopes(requestedScopes, grantedScope);
+  if (missing.length === 0) return;
+
+  logToFile(
+    `[oauth] grant narrower than request, missing: ${missing.join(' ')}`,
+  );
+  analytics.wizardCapture('oauth grant narrowed', {
+    requested_scopes: [...requestedScopes].sort().join(' '),
+    granted_scopes: parseOAuthScopes(grantedScope).sort().join(' '),
+    missing_scopes: missing.join(' '),
+    missing_scope_count: missing.length,
+  });
+  getUI().log.warn(
+    `Your PostHog authorization is missing ${
+      missing.length === 1 ? 'a permission' : `${missing.length} permissions`
+    } the wizard asked for: ${missing.join(', ')}. ` +
+      'Setup will continue, but steps that need them may fail or be skipped. ' +
+      'To grant them, re-run the wizard and approve all permissions on the ' +
+      'authorization screen. If that screen does not reappear, revoke the ' +
+      'existing PostHog Wizard authorization in your PostHog settings first.',
+  );
+}
+
 export async function performOAuthFlow(
   config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
@@ -508,6 +560,8 @@ export async function performOAuthFlow(
         getUI().setLoginUrl(null);
         getUI().setAuthorizeUrl(null);
         loginSpinner.stop('Authorization complete!');
+
+        reportNarrowedGrant(config.scopes, token.scope);
 
         return token;
       } catch (e) {
