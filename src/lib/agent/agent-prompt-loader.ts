@@ -44,13 +44,6 @@ export interface OrchestratorPromptContext {
   examplePath?: string;
   /** Path to the framework's rules (COMMANDMENTS.md), if available. */
   commandmentsPath?: string;
-  /**
-   * OAuth scopes the user declined at login (or the app's ceiling clamped
-   * away). Injected into every prompt so a scope-gated step degrades up front
-   * instead of discovering the gap as a permission error mid-task and failing
-   * the run.
-   */
-  missingScopes?: readonly string[];
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
@@ -72,19 +65,6 @@ function exampleReference(ctx: OrchestratorPromptContext): string | null {
 function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   if (!ctx.commandmentsPath) return null;
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
-}
-
-/**
- * Scopes the run's PostHog token does NOT carry. Without this an agent finds
- * out via a 403 mid-task, treats it as a task failure, and — when the task is
- * required — kills a run whose install work already succeeded. Named up front,
- * a scope-gated step is a known limitation to route around, not an error.
- */
-function missingScopesNotice(ctx: OrchestratorPromptContext): string | null {
-  if (!ctx.missingScopes || ctx.missingScopes.length === 0) return null;
-  return `The user did not grant these PostHog permissions at login: ${ctx.missingScopes.join(
-    ', ',
-  )}. Any PostHog API or MCP call needing one of them will fail with a permission error — that is expected, not a bug. Never let a missing permission fail your task or the run: skip only the part that needs it, finish the rest of your task, and in your handoff (and the final report) note what was skipped and that the user can enable it by re-running the wizard and granting the permission during the OAuth authorization step. If skipping leaves your task nothing to do, report it as \`not needed\` with that same note — not \`failed\`.`;
 }
 
 /**
@@ -142,7 +122,6 @@ export function assembleTaskPrompt(
     projectContext(ctx),
     exampleReference(ctx),
     commandmentsReference(ctx),
-    missingScopesNotice(ctx),
     skillReference(skillPaths),
     TASK_BASICS,
     body,
@@ -157,13 +136,7 @@ export function assembleSeedPrompt(
   body: string,
   preQueued: readonly { id: string; type: string }[] = [],
 ): string {
-  return [
-    projectContext(ctx),
-    SEED_BASICS,
-    missingScopesNotice(ctx),
-    preQueuedTasks(preQueued),
-    body,
-  ]
+  return [projectContext(ctx), SEED_BASICS, preQueuedTasks(preQueued), body]
     .filter(Boolean)
     .join('\n\n');
 }

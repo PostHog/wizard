@@ -292,9 +292,9 @@ carries what was requested: the token response's `scope` field is the truth.
 The wizard diffs granted vs requested at login (`missingOAuthScopes` in
 `src/utils/oauth.ts`), warns the user which permissions are missing, and emits
 `wizard: oauth grant narrowed` so narrowed runs are countable in analytics.
-The diff also rides on the session into every orchestrator prompt, so a run
-step that needs a deselected scope degrades or skips instead of failing the
-run.
+The diff also rides on the session (`credentials.missingScopes`), so when a
+run does fail on a scope-gated step, the error names the missing permission
+and the fix instead of the generic report-a-bug line.
 
 **To make scopes impossible to deselect, list them explicitly in the app's
 `scopes`.** `required_scopes` is not a separate field — it is derived

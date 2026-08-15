@@ -444,7 +444,7 @@ function reportNarrowedGrant(
     } the wizard asked for: ${missing.join(', ')}. ` +
       `Setup will continue, but steps that need ${
         plural ? 'them' : 'it'
-      } will be skipped. ` +
+      } may fail. ` +
       `To grant ${
         plural ? 'them' : 'it'
       }, re-run the wizard and approve all permissions on the ` +

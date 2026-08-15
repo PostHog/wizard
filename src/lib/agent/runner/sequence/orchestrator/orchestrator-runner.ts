@@ -465,7 +465,6 @@ export async function runOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
-    missingScopes: boot.credentials.missingScopes,
   };
 
   logToFile(
