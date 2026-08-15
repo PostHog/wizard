@@ -117,10 +117,12 @@ describe('wizard OAuth scopes', () => {
     ).not.toThrow();
   });
 
-  it('asks legacy authorizations to reconnect before completion', () => {
+  it('aborts with the fix-first message when the completion scope is missing', () => {
     expect(() =>
       assertWizardCompletionScope('user:read wizard_session:write'),
-    ).toThrow(/missing.*event_definition:write.*Reconnect.*revoke/is);
+    ).toThrow(
+      /without the event_definition:write.*approving all permissions.*revoke/is,
+    );
   });
 
   it('preserves unrelated granted scopes when parsing the token response', () => {

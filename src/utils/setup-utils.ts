@@ -608,8 +608,9 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       missing_scope: 'event_definition:write',
     });
-    getUI().log.error(scopeError.message);
-    await abort();
+    // The outro is what the user reads on an aborted login; a bare abort()
+    // renders the generic "Wizard setup cancelled." over the real reason.
+    await abort(scopeError.message);
   }
 
   // `--project-id`, when provided, is authoritative — but only if the user actually

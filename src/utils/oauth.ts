@@ -92,7 +92,7 @@ export function assertWizardCompletionScope(scope: string): void {
   if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
 
   throw new Error(
-    `Your existing PostHog Wizard authorization is missing the ${WIZARD_COMPLETION_SCOPE} permission required to finish setup. Reconnect the wizard and approve the updated permissions. If PostHog reuses the old approval, revoke the existing Wizard authorization first, then rerun the wizard.`,
+    `This run was authorized without the ${WIZARD_COMPLETION_SCOPE} permission, which the wizard needs to finish setup. Please try again, approving all permissions on the PostHog authorization screen. If that screen does not reappear, revoke the existing PostHog Wizard authorization in your PostHog settings first.`,
   );
 }
 
