@@ -609,7 +609,9 @@ async function askForWizardLogin(options: {
       missing_scope: 'event_definition:write',
     });
     getUI().log.error(scopeError.message);
-    await abort();
+    // The message must ride into the outro — a bare abort() renders the
+    // generic "Wizard setup cancelled." and the reason is lost.
+    await abort(scopeError.message);
   }
 
   // `--project-id`, when provided, is authoritative — but only if the user actually
@@ -632,7 +634,7 @@ async function askForWizardLogin(options: {
       granted_project_id: resolution.granted,
     });
     getUI().log.error(error.message);
-    await abort();
+    await abort(error.message);
   }
 
   const projectId = resolution.ok ? resolution.projectId : undefined;
@@ -646,7 +648,7 @@ async function askForWizardLogin(options: {
       has_scoped_teams: !!tokenResponse.scoped_teams,
     });
     getUI().log.error(error.message);
-    await abort();
+    await abort(error.message);
   }
 
   // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
