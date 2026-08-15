@@ -608,8 +608,8 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       missing_scope: 'event_definition:write',
     });
-    // The outro is what the user reads on an aborted login; a bare abort()
-    // renders the generic "Wizard setup cancelled." over the real reason.
+    // The message must ride into the outro — a bare abort() renders the
+    // generic "Wizard setup cancelled." and the reason is lost.
     await abort(scopeError.message);
   }
 
@@ -633,7 +633,7 @@ async function askForWizardLogin(options: {
       granted_project_id: resolution.granted,
     });
     getUI().log.error(error.message);
-    await abort();
+    await abort(error.message);
   }
 
   const projectId = resolution.ok ? resolution.projectId : undefined;
@@ -647,7 +647,7 @@ async function askForWizardLogin(options: {
       has_scoped_teams: !!tokenResponse.scoped_teams,
     });
     getUI().log.error(error.message);
-    await abort();
+    await abort(error.message);
   }
 
   // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
