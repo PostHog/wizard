@@ -38,6 +38,7 @@ import {
 } from '@lib/api';
 import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
+import { OutroKind } from '@lib/wizard-session';
 
 interface ProjectData {
   projectApiKey: string;
@@ -604,13 +605,25 @@ async function askForWizardLogin(options: {
   } catch (error) {
     const scopeError =
       error instanceof Error ? error : new Error('OAuth scope check failed');
+    const missing = missingOAuthScopes(requestedScopes, tokenResponse.scope);
     analytics.captureException(scopeError, {
       step: 'wizard_login',
       missing_scope: 'event_definition:write',
     });
-    // The message must ride into the outro — a bare abort() renders the
-    // generic "Wizard setup cancelled." and the reason is lost.
-    await abort(scopeError.message);
+    await wizardAbort({
+      message: scopeError.message,
+      outroData: {
+        kind: OutroKind.Error,
+        message: 'Setup needs permissions that were not granted',
+        body: [
+          'Missing permissions:',
+          ...missing.map((scope) => `  • ${scope}`),
+          '',
+          'Re-run the wizard and approve all permissions on the PostHog authorization screen.',
+          'If that screen does not reappear, revoke the existing PostHog Wizard authorization in your PostHog settings first.',
+        ].join('\n'),
+      },
+    });
   }
 
   // `--project-id`, when provided, is authoritative — but only if the user actually
