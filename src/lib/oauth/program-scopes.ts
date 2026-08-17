@@ -13,7 +13,8 @@
  * Current additions: `McpTutorial` layers read-only on every product
  * surface (feature flags, experiments, surveys, replays, errors, web
  * analytics, LLM analytics, cohorts, persons) plus read/write on
- * annotations; `AgentSkill` adds feature-flag read/write; the default
+ * annotations and workflows; `AgentSkill` adds feature-flag read/write;
+ * the default
  * `PostHogIntegration` run and the standalone `slack` flow add
  * `integration:read` for the Connect-Slack step. Persistence writes (dashboard:write,
  * insight:write, notebook:write, query:read) come for free from the
@@ -53,6 +54,8 @@ import { WIZARD_OAUTH_SCOPES } from '@lib/constants';
  *   • feature_flag:write, experiment:write, survey:write,
  *     cohort:write, session_recording:write, error_tracking:write,
  *     alert:write, subscription:write
+ *
+ * `hog_flow:write` is the one exception — see the Workflows block below.
  */
 export const MCP_TUTORIAL_SCOPE_ADDITIONS = [
   // Explicit reads on the persistence surfaces. `*:write` usually
@@ -101,6 +104,15 @@ export const MCP_TUTORIAL_SCOPE_ADDITIONS = [
   'alert:read',
   'subscription:read',
   'integration:read',
+
+  // Workflows. The only write surface here, because "Workflows" in the
+  // MCP feature picker means authoring them — a read-only grant makes
+  // the feature useless. `group:read` pairs with the `person:read`
+  // above: the workflow tools resolve both when building trigger and
+  // filter conditions, and 403 on the group half without it.
+  'hog_flow:read',
+  'hog_flow:write',
+  'group:read',
 ] as const;
 
 /**
