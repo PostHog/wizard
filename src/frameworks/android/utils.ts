@@ -1,10 +1,8 @@
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
-import fg from 'fast-glob';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-
-const IGNORE_PATTERNS = ['**/build/**', '**/.gradle/**', '**/node_modules/**'];
 
 /**
  * Extract minSdk from the app-level build.gradle(.kts).
@@ -15,20 +13,17 @@ export async function getMinSdkVersion(
 ): Promise<string | undefined> {
   const { installDir } = options;
 
-  const buildFiles = await fg(['**/build.gradle', '**/build.gradle.kts'], {
-    cwd: installDir,
-    ignore: IGNORE_PATTERNS,
-  });
+  const buildFiles = await boundedGlob(
+    ['**/build.gradle', '**/build.gradle.kts'],
+    { cwd: installDir },
+  );
 
   for (const file of buildFiles) {
-    try {
-      const content = fs.readFileSync(path.join(installDir, file), 'utf-8');
-      // Match: minSdk = 24, minSdkVersion 21, minSdkVersion = 21
-      const match = content.match(/minSdk(?:Version)?\s*=?\s*(\d+)/);
-      if (match) return match[1];
-    } catch {
-      continue;
-    }
+    const content = readProjectFile(path.join(installDir, file));
+    if (!content) continue;
+    // Match: minSdk = 24, minSdkVersion 21, minSdkVersion = 21
+    const match = content.match(/minSdk(?:Version)?\s*=?\s*(\d+)/);
+    if (match) return match[1];
   }
 
   return undefined;

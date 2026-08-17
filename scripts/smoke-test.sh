@@ -7,6 +7,10 @@
 #      with the tailored "CI mode is not currently supported" error and a
 #      non-zero exit. Guards against a future change that re-enables --ci in
 #      published builds without anyone noticing.
+#   3. In production builds, the experimental headless flag IS accepted (the
+#      non-interactive published-build path) — it must not be rejected as an
+#      unknown argument. It is intentionally undocumented; this check only keeps
+#      the published binary from silently dropping the flag the cloud runs need.
 #
 # Runs from the wizard repo root via `pnpm test:smoke` (postbuild hook).
 set -e
@@ -24,7 +28,7 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
 # builds and tsdown strips it; its env var name appearing in dist/*.js means
 # dead-code elimination regressed and a prod surface leaked. Sourcemaps keep
 # the original source, so only .js output counts.
-OVERRIDE_MARKERS='WIZARD_CI_FLAG_OVERRIDES WIZARD_CI_EXCLUDE_TASKS'
+OVERRIDE_MARKERS='WIZARD_CI_FLAG_OVERRIDES WIZARD_CI_EXCLUDE_TASKS MCP_URL'
 if [ "${WIZARD_BUILD_NODE_ENV:-production}" = "ci" ]; then
   # CI builds must keep the paths — their absence means the overrides silently
   # stopped working and CI is back to testing live behavior.
@@ -74,5 +78,26 @@ if ! echo "$output" | grep -qi 'CI mode is not currently supported'; then
   echo 'Smoke test failed: --ci rejection message missing expected text' >&2
   echo "Output was:" >&2
   echo "$output" >&2
+  exit 1
+fi
+
+# ── 4. Experimental headless flag accepted in production builds ──────────────
+# The non-interactive path for published builds (cloud / CI runs). yargs must
+# not reject the flag, and it must not fall through to the --ci rejection. With
+# no api-key the run exits fast on "Headless mode requires --api-key" — all this
+# asserts is that the flag is recognized and live in the published binary. The
+# flag name is intentionally undocumented; keep it in sync with @lib/headless-mode.
+HEADLESS_FLAG='--headless-DONOTUSE-EXPERIMENTAL'
+hl_output=$(node "$DIST_BIN" "$HEADLESS_FLAG" --install-dir /tmp/wizard-smoke-probe 2>&1) || true
+if echo "$hl_output" | grep -qiE 'unknown argument|not currently supported'; then
+  echo 'Smoke test failed: headless flag not accepted in production build' >&2
+  echo "Output was:" >&2
+  echo "$hl_output" | head -5 >&2
+  exit 1
+fi
+if ! echo "$hl_output" | grep -qi 'Headless mode requires --api-key'; then
+  echo 'Smoke test failed: headless flag did not reach the headless install path' >&2
+  echo "Output was:" >&2
+  echo "$hl_output" | head -5 >&2
   exit 1
 fi

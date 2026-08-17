@@ -102,5 +102,18 @@ export function detectWarehousePrerequisites(
     return;
   }
 
+  // Tag every subsequent event (agent started/completed, setup wizard
+  // finished, …) with what was detected — without this the analytics can't
+  // say which source types a run attempted, only that a run happened.
+  analytics.setTag(
+    'warehouse_source_kinds',
+    sources.map((s) => s.kind).join(','),
+  );
+  analytics.setTag(
+    'warehouse_source_modes',
+    sources.map((s) => `${s.kind}:${s.mode}`).join(','),
+  );
+  analytics.setTag('warehouse_source_count', sources.length);
+
   setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
 }

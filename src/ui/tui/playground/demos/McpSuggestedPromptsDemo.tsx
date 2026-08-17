@@ -3,13 +3,17 @@
  * suggested-prompts screen.
  *
  * Mounts the real McpSuggestedPromptsScreen with mock services so every
- * phase (Choose → Authenticating → Greeting → PromptPicker → Running →
- * FollowUp) can be previewed without touching the network. The Greeting
- * phase auto-advances; FollowUp re-enters Running when a follow-up is
- * picked, building a conversation tree up to MAX_PROMPT_RUNS deep.
+ * phase (Choose → Authenticating → Scouting → [SeedOffer → Seeding] →
+ * Greeting → PromptPicker → Running → FollowUp → Goodbye) can be previewed
+ * without touching the network. The Greeting phase auto-advances; FollowUp
+ * re-enters Running when a follow-up is picked, building a conversation
+ * tree up to MAX_PROMPT_RUNS deep.
  *
  *   R   cycle role         (null → founder → product → ... → data → null)
  *   F   cycle framework    (null → nextjs → vue → swift → django → null)
+ *   T   cycle data tier    (rich → sparse → empty) — drives the scout:
+ *                          rich → generated quests from real events;
+ *                          empty → seed-offer fork; sparse → safe read.
  *   X   remount the screen (useful after Exit)
  *
  *   O   OAuth outcome:     success | error
@@ -17,10 +21,14 @@
  *   S   stream script:     short-text | with-tools | mid-stream-error
  *   C   chunk delay:       50ms | 200ms | 800ms
  *
- * Tip: switch S to "with-tools" and the FollowUp picker after the run
- * will show context-aware suggestions based on the last tool (mock
- * tool names are MCP-prefixed and pass through the normalization in
- * getFollowUps).
+ * Tips:
+ *  - Set T to "empty" to walk the seed-events fork (SeedOffer → Seeding),
+ *    which lands on a rich seeded profile.
+ *  - Switch S to "with-tools" and the FollowUp picker after the run will
+ *    show context-aware suggestions based on the last tool. The mock
+ *    calls are CLI-mode `exec` chunks (`mcp__posthog-wizard__exec` + a
+ *    `call <tool> …` command), so they exercise getFollowUps' inner-tool
+ *    extraction.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -30,7 +38,13 @@ import { McpSuggestedPromptsScreen } from '@ui/tui/screens/McpSuggestedPromptsSc
 import { Colors } from '@ui/tui/styles';
 import { Integration } from '@lib/constants';
 import { McpOutcome } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { TAILORED_ROLES } from '@lib/mcp-role-prompts';
+import {
+  assembleProfile,
+  type ProjectDataProfile,
+} from '@lib/mcp-project-profile';
+import { seededProfile } from '@lib/mcp-seed-events';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,
@@ -50,6 +64,46 @@ const ROLE_CYCLE: Array<string | null> = [null, ...TAILORED_ROLES];
 
 const LOGIN_DELAYS_MS = [0, 2000, 6000] as const;
 const CHUNK_DELAYS_MS = [50, 200, 800] as const;
+
+// Canned scout outcomes. 'rich' → generated quests from real events;
+// 'sparse' → safe read + a generated quest; 'empty' → seed-offer fork.
+const PROBE_TIER_CYCLE = ['rich', 'sparse', 'empty'] as const;
+type ProbeTier = (typeof PROBE_TIER_CYCLE)[number];
+
+// Every product absent, so activation cross-sells are eligible in the demo.
+const NO_PRODUCTS = {
+  sessionReplay: false,
+  surveys: false,
+  featureFlags: false,
+  experiments: false,
+  dataWarehouse: false,
+} as const;
+
+function mockProfile(tier: ProbeTier): ProjectDataProfile {
+  if (tier === 'empty') {
+    return assembleProfile([], NO_PRODUCTS);
+  }
+  if (tier === 'sparse') {
+    return assembleProfile(
+      [
+        { name: '$pageview', count: 12 },
+        { name: 'clicked', count: 5 },
+      ],
+      NO_PRODUCTS,
+    );
+  }
+  return assembleProfile(
+    [
+      { name: '$pageview', count: 100 },
+      { name: 'feature_used', count: 21 },
+      { name: 'signed_up', count: 10 },
+      { name: 'activated', count: 7 },
+      { name: 'upgraded_to_paid', count: 3 },
+    ],
+    NO_PRODUCTS,
+  );
+}
+
 type LoginOutcome = 'success' | 'error';
 type StreamScript = 'short-text' | 'with-tools' | 'mid-stream-error';
 const LOGIN_OUTCOMES: LoginOutcome[] = ['success', 'error'];
@@ -74,12 +128,14 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
     { kind: 'text', text: 'Looking up your project…' },
     {
       kind: 'tool-call',
-      toolName: 'mcp__posthog-wizard__query-trends',
-      detail: '{ event: "signup", interval: "day", window: "7d" }',
+      toolName: 'mcp__posthog-wizard__exec',
+      detail: 'call query-trends { event: "signup", interval: "day" }',
+      command:
+        'call query-trends {"event":"signup","interval":"day","window":"7d"}',
     },
     {
       kind: 'tool-result',
-      toolName: 'mcp__posthog-wizard__query-trends',
+      toolName: 'mcp__posthog-wizard__exec',
       detail: '{ rows: 7, total: 482, change: +8.4% }',
     },
     {
@@ -88,12 +144,14 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
     },
     {
       kind: 'tool-call',
-      toolName: 'mcp__posthog-wizard__create-insight',
-      detail: '{ name: "Weekly signups", query: <trends>, save: true }',
+      toolName: 'mcp__posthog-wizard__exec',
+      detail: 'call create-insight { name: "Weekly signups", save: true }',
+      command:
+        'call create-insight {"name":"Weekly signups","query":"<trends>","save":true}',
     },
     {
       kind: 'tool-result',
-      toolName: 'mcp__posthog-wizard__create-insight',
+      toolName: 'mcp__posthog-wizard__exec',
       detail:
         '{ id: "ins_abc123", url: "https://app.posthog.com/i/ins_abc123" }',
     },
@@ -107,8 +165,9 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
     { kind: 'text', text: 'Looking at the most recent errors…' },
     {
       kind: 'tool-call',
-      toolName: 'mcp__posthog-wizard__list-errors',
-      detail: '{ window: "7d", limit: 5 }',
+      toolName: 'mcp__posthog-wizard__exec',
+      detail: 'call query-error-tracking-issue { window: "7d", limit: 5 }',
+      command: 'call query-error-tracking-issue {"window":"7d","limit":5}',
     },
     {
       kind: 'error',
@@ -119,6 +178,7 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
 
 interface MockConfig {
   role: string | null;
+  tier: ProbeTier;
   loginOutcome: LoginOutcome;
   loginDelayMs: number;
   script: StreamScript;
@@ -156,7 +216,7 @@ function createMockServices(
         credentials: {
           accessToken: 'phx_mock',
           projectApiKey: 'phc_mock',
-          host: 'http://127.0.0.1:1',
+          host: HostResolution.fromApiHost('http://127.0.0.1:1'),
           projectId: 1,
         },
         roleAtOrganization: cfg.role,
@@ -195,6 +255,19 @@ function createMockServices(
     },
 
     runPromptStreaming: ({ signal }) => mockStream(configRef, signal),
+
+    probeProjectData: async () => {
+      // Brief delay so the Scouting spinner is visible.
+      await delay(800);
+      return mockProfile(configRef.current.tier);
+    },
+
+    seedDemoEvents: async ({ baseProfile }) => {
+      // No real ingestion in the playground — just show the spinner and
+      // return the same seeded profile the production seeder would yield.
+      await delay(1500);
+      return seededProfile(baseProfile, new Date());
+    },
   };
 }
 
@@ -217,6 +290,7 @@ export const McpSuggestedPromptsDemo = ({
 }: McpSuggestedPromptsDemoProps) => {
   const [roleIdx, setRoleIdx] = useState(2); // 'product' — has overrides
   const [familyIdx, setFamilyIdx] = useState(1); // nextjs (fullstack)
+  const [tierIdx, setTierIdx] = useState(0); // 'rich' — shows generated quests
   const [resetKey, setResetKey] = useState(0);
   const [loginOutcomeIdx, setLoginOutcomeIdx] = useState(0);
   const [loginDelayIdx, setLoginDelayIdx] = useState(1); // 2000ms default
@@ -225,6 +299,7 @@ export const McpSuggestedPromptsDemo = ({
 
   const role = ROLE_CYCLE[roleIdx];
   const integration = FAMILY_INTEGRATIONS[familyIdx];
+  const tier = PROBE_TIER_CYCLE[tierIdx];
   const loginOutcome = LOGIN_OUTCOMES[loginOutcomeIdx];
   const loginDelayMs = LOGIN_DELAYS_MS[loginDelayIdx];
   const script = STREAM_SCRIPTS[scriptIdx];
@@ -233,6 +308,7 @@ export const McpSuggestedPromptsDemo = ({
   // Ref-based config so hotkeys can update behavior without remounting.
   const configRef = useRef<MockConfig>({
     role,
+    tier,
     loginOutcome,
     loginDelayMs,
     script,
@@ -240,6 +316,7 @@ export const McpSuggestedPromptsDemo = ({
   });
   configRef.current = {
     role,
+    tier,
     loginOutcome,
     loginDelayMs,
     script,
@@ -264,6 +341,10 @@ export const McpSuggestedPromptsDemo = ({
     } else if (input === 'F' || input === 'f') {
       setFamilyIdx((i) => (i + 1) % FAMILY_INTEGRATIONS.length);
       setResetKey((k) => k + 1);
+    } else if (input === 'T' || input === 't') {
+      // Remount so the new tier is re-probed from the Scouting phase.
+      setTierIdx((i) => (i + 1) % PROBE_TIER_CYCLE.length);
+      setResetKey((k) => k + 1);
     } else if (input === 'X' || input === 'x') {
       store.setCredentials(null);
       store.setRoleAtOrganization(null);
@@ -284,12 +365,12 @@ export const McpSuggestedPromptsDemo = ({
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
       <Text dimColor>
-        R role · F framework · X reset · O oauth · L login-delay · S script · C
-        chunk-delay
+        R role · F framework · T data-tier · X reset · O oauth · L login-delay ·
+        S script · C chunk-delay
       </Text>
       <Text dimColor>
-        role={String(role)} · integration={familyLabel} · login={loginOutcome}/
-        {loginDelayMs}ms · script={script}/{chunkDelayMs}ms
+        role={String(role)} · integration={familyLabel} · tier={tier} · login=
+        {loginOutcome}/{loginDelayMs}ms · script={script}/{chunkDelayMs}ms
       </Text>
       <Box marginTop={1} flexDirection="column" flexGrow={1}>
         <McpSuggestedPromptsScreen

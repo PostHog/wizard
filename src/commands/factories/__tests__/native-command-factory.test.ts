@@ -1,7 +1,9 @@
-const mockRunWizard = jest.fn();
-const mockRunWizardCI = jest.fn();
+const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
+  mockRunWizard: vi.fn(),
+  mockRunWizardCI: vi.fn(),
+}));
 
-jest.mock('@lib/runners', () => ({
+vi.mock('@lib/runners', () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
 }));
@@ -30,7 +32,7 @@ function buildTestConfig(
 
 describe('nativeCommandFactory', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('uses command and description from the program config', () => {

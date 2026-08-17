@@ -1,0 +1,20 @@
+# CODEOWNERS
+# Docs: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+#
+# The last matching pattern wins per file. `team-wizard-docs` is the default
+# reviewer; team overrides below take precedence for team-owned programs.
+
+# Default owner
+*                                                       @PostHog/team-wizard-docs
+
+# Team-owned programs
+/src/lib/programs/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
+/src/lib/programs/mcp-analytics/                        @PostHog/team-mcp-analytics
+/src/lib/programs/posthog-integration/                  @PostHog/team-wizard-docs
+/src/lib/programs/revenue-analytics/                    @PostHog/team-web-analytics
+/src/lib/programs/self-driving/                         @PostHog/team-self-driving
+/src/lib/programs/warehouse-source/                     @PostHog/team-warehouse-sources
+/src/lib/programs/web-analytics-doctor/                 @PostHog/team-web-analytics
+
+# Agent runner (harness, model, and tools)
+/src/lib/agent/                                         @PostHog/team-wizard-docs

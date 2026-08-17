@@ -2,7 +2,7 @@
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { Integration } from '@lib/constants';
-import fg from 'fast-glob';
+import { boundedGlob } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -41,6 +41,11 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     detect: async (options) => {
       const { installDir } = options;
 
+      // pubspec.yaml means Flutter — its android/ subtree would match below.
+      if (fs.existsSync(path.join(installDir, 'pubspec.yaml'))) {
+        return false;
+      }
+
       // Strategy 1: Check for build.gradle(.kts) with Android plugin
       for (const name of ['build.gradle', 'build.gradle.kts']) {
         const buildGradlePath = path.join(installDir, name);
@@ -58,15 +63,15 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
 
       // Strategy 2: Check for AndroidManifest.xml with Kotlin source files
       // This could be an issue if we have Flutter in the mix, but we'll figure that out later.
-      const manifestFiles = await fg('**/AndroidManifest.xml', {
+      const manifestFiles = await boundedGlob('**/AndroidManifest.xml', {
         cwd: installDir,
-        ignore: ['**/build/**', '**/node_modules/**', '**/.gradle/**'],
+        limit: 1,
       });
 
       if (manifestFiles.length > 0) {
-        const kotlinFiles = await fg('**/*.kt', {
+        const kotlinFiles = await boundedGlob('**/*.kt', {
           cwd: installDir,
-          ignore: ['**/build/**', '**/node_modules/**', '**/.gradle/**'],
+          limit: 1,
         });
         if (kotlinFiles.length > 0) {
           return true;

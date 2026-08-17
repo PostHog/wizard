@@ -2,6 +2,7 @@ import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import type { Mock } from 'vitest';
 
 import {
   CLI_STEERING_TARGETS,
@@ -11,20 +12,20 @@ import {
   installSteeringSnippet,
 } from '@steps/install-cli-steering';
 
-jest.mock('../../../utils/debug');
-jest.mock('node:child_process', () => ({
-  spawnSync: jest.fn(),
+vi.mock('../../../utils/debug');
+vi.mock('node:child_process', () => ({
+  spawnSync: vi.fn(),
 }));
-jest.mock('node:fs', () => ({
-  existsSync: jest.fn(),
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
 }));
 
-const spawnSyncMock = childProcess.spawnSync as jest.Mock;
-const existsSyncMock = fs.existsSync as jest.Mock;
+const spawnSyncMock = childProcess.spawnSync as Mock;
+const existsSyncMock = fs.existsSync as Mock;
 
 describe('install-cli-steering', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('targets', () => {

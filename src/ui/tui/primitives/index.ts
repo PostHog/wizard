@@ -17,6 +17,7 @@ export { ModalOverlay } from './ModalOverlay.js';
 export { LinkText } from './LinkText.js';
 export {
   osc8Hyperlink,
+  truncateUrlLabel,
   extractUrls,
   splitPromptIntoSegments,
 } from './link-helpers.js';

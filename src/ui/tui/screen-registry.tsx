@@ -18,6 +18,7 @@ import { DoctorReportScreen } from './screens/doctor/DoctorReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
+import { TaskNoticeScreen } from './screens/TaskNoticeScreen.js';
 import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
@@ -27,7 +28,11 @@ import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
 import { SourceMapsDetectScreen } from './screens/SourceMapsDetectScreen.js';
 import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
+import { AiObservabilityIntroScreen } from './screens/AiObservabilityIntroScreen.js';
 import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
+import { SelfDrivingIntegrationCheckScreen } from './screens/SelfDrivingIntegrationCheckScreen.js';
+import { SelfDrivingIntegrationDetectScreen } from './screens/SelfDrivingIntegrationDetectScreen.js';
+import { SelfDrivingHandoffScreen } from './screens/SelfDrivingHandoffScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
 import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
@@ -70,6 +75,7 @@ export function createScreens(
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
+    [Overlay.TaskNotice]: <TaskNoticeScreen store={store} />,
     [Overlay.ManualAuthCode]: <ManualAuthCodeScreen store={store} />,
     [Overlay.AuthError]: <AuthErrorScreen store={store} />,
     [Overlay.SessionTimeout]: <SessionTimeoutScreen store={store} />,
@@ -84,7 +90,17 @@ export function createScreens(
     [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
+    [ScreenId.AiObservabilityIntro]: (
+      <AiObservabilityIntroScreen store={store} />
+    ),
     [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
+    [ScreenId.SelfDrivingIntegrationCheck]: (
+      <SelfDrivingIntegrationCheckScreen store={store} />
+    ),
+    [ScreenId.SelfDrivingIntegrationDetect]: (
+      <SelfDrivingIntegrationDetectScreen store={store} />
+    ),
+    [ScreenId.SelfDrivingHandoff]: <SelfDrivingHandoffScreen store={store} />,
     [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
     [ScreenId.AuditRun]: <AuditRunScreen store={store} />,
     [ScreenId.AuditOutro]: <AuditOutroScreen store={store} />,

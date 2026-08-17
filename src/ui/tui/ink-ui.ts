@@ -6,15 +6,22 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
+import type {
+  WizardUI,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 import { RunPhase, OutroKind } from '@lib/wizard-session';
 
@@ -76,12 +83,7 @@ export class InkUI implements WizardUI {
     });
   }
 
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(credentials: Credentials): void {
     this.store.setCredentials(credentials);
   }
 
@@ -151,6 +153,10 @@ export class InkUI implements WizardUI {
     return this.store.waitForManualAuthCode();
   }
 
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    return this.store.showTaskNotice(notice);
+  }
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
@@ -168,6 +174,10 @@ export class InkUI implements WizardUI {
 
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
     return this.store.requestQuestion(question);
+  }
+
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
   }
 
   startRun(): void {
@@ -238,6 +248,18 @@ export class InkUI implements WizardUI {
 
   setNotebookUrl(url: string): void {
     this.store.setNotebookUrl(url);
+  }
+
+  setHandoffText(text: string): void {
+    this.store.setHandoffText(text);
+  }
+
+  addTokenUsage(delta: TokenUsageDelta): void {
+    this.store.addTokenUsage(delta);
+  }
+
+  setFinalTokenCostUsd(costUsd: number): void {
+    this.store.setFinalTokenCostUsd(costUsd);
   }
 
   setOutroData(data: OutroData): void {

@@ -15,6 +15,11 @@ import { getOrAskForProjectData } from '@utils/setup-utils';
 import { Program } from '@lib/programs/program-registry';
 import type { WizardStore } from '@ui/tui/store';
 import type { ApiUser } from '@lib/api';
+import {
+  probeProjectData as runProbe,
+  type ProjectDataProfile,
+} from '@lib/mcp-project-profile';
+import { seedDemoEvents as runSeed } from '@lib/mcp-seed-events';
 
 /**
  * Discriminated union covering every kind of streamed event the screen
@@ -23,7 +28,9 @@ import type { ApiUser } from '@lib/api';
  */
 export type AgentChunk =
   | { kind: 'text'; text: string }
-  | { kind: 'tool-call'; toolName: string; detail: string }
+  /** `command` carries CLI mode's exec command string (`call <tool> …`) so the
+   *  screen can recover the inner tool for context-aware follow-ups. */
+  | { kind: 'tool-call'; toolName: string; detail: string; command?: string }
   | { kind: 'tool-result'; toolName: string; detail: string }
   | { kind: 'error'; text: string }
   /** Stream completed. `sessionId` is the SDK session ID of the just-
@@ -67,6 +74,27 @@ export interface McpSuggestedPromptsServices {
      *  the first prompt and after `[p]` restarts the conversation. */
     resumeSessionId?: string;
   }): AsyncIterable<AgentChunk>;
+
+  /**
+   * Scout the project after auth: a cheap, best-effort probe of event
+   * volume, the project's real event names, and which products have data.
+   * Drives the data-aware picker so the tutorial never offers a prompt
+   * that hits an empty result. Always resolves (degraded profile on
+   * failure) — never throws, never blocks the tutorial.
+   */
+  probeProjectData(credentials: Credentials): Promise<ProjectDataProfile>;
+
+  /**
+   * Send a small, backdated demo dataset to an empty project so the read
+   * quests have something to show. Resolves with the seeded profile;
+   * rejects if the send fails so the screen can fall back to the
+   * write-only empty path.
+   */
+  seedDemoEvents(args: {
+    credentials: Credentials;
+    baseProfile: ProjectDataProfile;
+    signal: AbortSignal;
+  }): Promise<ProjectDataProfile>;
 }
 
 /**
@@ -75,7 +103,7 @@ export interface McpSuggestedPromptsServices {
  * actually invoked.
  */
 export function createMcpSuggestedPromptsServices(
-  _store: WizardStore,
+  store: WizardStore,
 ): McpSuggestedPromptsServices {
   return {
     performLogin: async () => {
@@ -86,6 +114,7 @@ export function createMcpSuggestedPromptsServices(
         projectId: undefined,
         email: undefined,
         region: undefined,
+        baseUrl: store.session.baseUrl,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,
         // replays, errors, web/LLM analytics, cohorts, persons) plus
@@ -107,6 +136,21 @@ export function createMcpSuggestedPromptsServices(
     },
 
     runPromptStreaming: (args) => runProductionPromptStreaming(args),
+
+    probeProjectData: (credentials) =>
+      runProbe({
+        accessToken: credentials.accessToken,
+        projectId: credentials.projectId,
+        apiHost: credentials.host.apiHost,
+      }),
+
+    seedDemoEvents: ({ credentials, baseProfile, signal }) =>
+      runSeed({
+        projectApiKey: credentials.projectApiKey,
+        apiHost: credentials.host.apiHost,
+        baseProfile,
+        signal,
+      }),
   };
 }
 

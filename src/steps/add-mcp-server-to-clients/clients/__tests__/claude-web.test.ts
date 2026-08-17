@@ -2,11 +2,11 @@ import { ClaudeWebMCPClient } from '@steps/add-mcp-server-to-clients/clients/cla
 import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 import { openTrackedLink } from '@utils/links';
 
-jest.mock('@utils/links', () => ({
-  openTrackedLink: jest.fn(),
+vi.mock('@utils/links', () => ({
+  openTrackedLink: vi.fn(),
 }));
 
-const openTrackedLinkMock = openTrackedLink as jest.Mock;
+const openTrackedLinkMock = openTrackedLink as Mock;
 
 const CONNECTOR_URL = 'https://claude.ai/directory/connectors/posthog';
 
@@ -15,7 +15,7 @@ describe('ClaudeWebMCPClient', () => {
 
   beforeEach(() => {
     client = new ClaudeWebMCPClient();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('has the expected name and connector metadata', () => {
@@ -47,8 +47,10 @@ describe('ClaudeWebMCPClient', () => {
     );
   });
 
-  it('removeServer is a no-op that reports nothing removed', async () => {
-    await expect(client.removeServer()).resolves.toEqual({ success: false });
+  it('removeServer reports a failure that says where the connector lives', async () => {
+    const result = await client.removeServer();
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain('claude.ai');
     expect(openTrackedLinkMock).not.toHaveBeenCalled();
   });
 });

@@ -30,12 +30,12 @@ function writePackageJson(
 describe('detectWebAnalyticsPrerequisites', () => {
   let tmpDir: string;
   let ctx: Record<string, unknown>;
-  let setCtx: jest.Mock;
+  let setCtx: Mock;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     ctx = {};
-    setCtx = jest.fn((key: string, value: unknown) => {
+    setCtx = vi.fn((key: string, value: unknown) => {
       ctx[key] = value;
     });
   });

@@ -15,17 +15,24 @@
 
 import { atom, map } from 'nanostores';
 import { logToFile } from '@utils/debug';
-import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+  type TokenUsageDelta,
+} from '@ui/wizard-ui';
 import {
   type WizardSession,
   type OutroData,
   type DiscoveredFeature,
   type PendingQuestion,
   type AskAnswers,
+  type CloudRegion,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
   buildSession,
+  type TaskNotice,
 } from '@lib/wizard-session';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import {
@@ -50,6 +57,8 @@ import type {
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
+import { IS_DEV } from '@lib/constants';
+import { computeTokenCostUsd } from '@lib/agent/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -65,6 +74,42 @@ export interface TaskItem {
 export interface PlannedEvent {
   name: string;
   description: string;
+}
+
+/**
+ * Running token/cost estimate for the hidden Ctrl+T HUD. Accumulated live
+ * from each assistant turn's usage (see `agent-interface.ts`), then
+ * reconciled to the SDK's authoritative `total_cost_usd` once the run
+ * completes — `costIsFinal` flips so the HUD can show the number as exact
+ * rather than a running estimate.
+ */
+export interface TokenUsageSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costUsd: number;
+  costIsFinal: boolean;
+}
+
+const EMPTY_TOKEN_USAGE: TokenUsageSnapshot = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheCreationTokens: 0,
+  costUsd: 0,
+  costIsFinal: false,
+};
+
+/** Total tokens across all counters in a `TokenUsageSnapshot` — used by
+ *  both `TokenCostHud` and `exit-line.ts` to detect "no agent turns yet". */
+export function totalTokenCount(usage: TokenUsageSnapshot): number {
+  return (
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadTokens +
+    usage.cacheCreationTokens
+  );
 }
 
 interface GateEntry {
@@ -142,12 +187,19 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
   private $currentStage = atom<{ stage: string; startedAt: number } | null>(
     null,
   );
+  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
+  // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
+  // contributors see it without needing to know the shortcut; defaults off
+  // for the published build, where it stays genuinely hidden. Still
+  // Ctrl+T-toggleable either way.
+  private $tokenHudVisible = atom(IS_DEV);
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -168,6 +220,8 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Blocks the run until an optional step's notice is answered. */
+  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
@@ -279,6 +333,25 @@ export class WizardStore {
   }
 
   /**
+   * Resolve once `predicate(session)` is true. Unlike a gate, this is created
+   * at the await point and evaluated live against the current session, so it
+   * never latches on a startup value — the orchestrator uses it to wait for a
+   * decision (a project picked, a handoff acknowledged) without the "true while
+   * undecided" trap that latched gate predicates have.
+   */
+  waitUntil(predicate: (session: WizardSession) => boolean): Promise<void> {
+    if (predicate(this.session)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const unsub = this.subscribe(() => {
+        if (predicate(this.session)) {
+          unsub();
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
    * Re-evaluate every gate predicate against the current session and
    * resolve any whose predicate now returns true. Called after every
    * emitChange(), so gates unblock as soon as the session mutation
@@ -316,6 +389,10 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get handoffText(): string | null {
+    return this.$handoffText.get();
   }
 
   get currentStage(): { stage: string; startedAt: number } | null {
@@ -360,6 +437,7 @@ export class WizardStore {
 
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -496,6 +574,26 @@ export class WizardStore {
   }
 
   /**
+   * Show an optional step's notice and return whether to keep that step.
+   * Asked before the step runs, so nobody is surprised by a prompt mid-run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    this.$session.setKey('taskNotice', notice);
+    this.pushOverlay(Overlay.TaskNotice);
+    return new Promise((resolve) => {
+      this._resolveTaskNotice = resolve;
+    });
+  }
+
+  /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
+  resolveTaskNotice(keep: boolean): void {
+    this.$session.setKey('taskNotice', null);
+    this.popOverlay();
+    this._resolveTaskNotice?.(keep);
+    this._resolveTaskNotice = null;
+  }
+
+  /**
    * Return a promise that resolves when the user submits a manually-entered
    * OAuth code via the paste modal. The OAuth flow races this against the
    * local callback server — see `performOAuthFlow`.
@@ -618,6 +716,12 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
+      analytics.setTag(
+        'additional_feature_kinds',
+        this.session.additionalFeatureQueue.join(','),
+      );
     }
     // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
@@ -670,6 +774,71 @@ export class WizardStore {
   setSlackConnected(connected: boolean): void {
     this.$session.setKey('slackConnected', connected);
     this.emitChange();
+  }
+
+  /**
+   * Self-driving integration-check answer. `true` → integrate the SDK as part
+   * of this run; `false` → PostHog is already set up, go straight to
+   * Self-driving. Resolves `session.integrate` from null.
+   */
+  setIntegrate(
+    integrate: boolean,
+    extra?: { via?: string; path?: string },
+  ): void {
+    this.$session.setKey('integrate', integrate);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: integrate,
+      ...(extra?.via ? { self_driving_integrate_via: extra.via } : {}),
+      ...(extra?.path ? { self_driving_integrate_path: extra.path } : {}),
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving "no PostHog account" branch of the integration check. The
+   * project has no SDK, so we always integrate (`integrate = true`); and since
+   * the user has no account, we flip `signup` and record the `email` / `region`
+   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
+   * the provisioning path (create account + email a login link) instead of
+   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
+   * leaves `signup` false so auth runs the normal OAuth login.
+   */
+  chooseProvisionAccount(email: string, region: CloudRegion): void {
+    this.$session.setKey('signup', true);
+    this.$session.setKey('email', email);
+    this.$session.setKey('region', region);
+    this.$session.setKey('integrate', true);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: true,
+      self_driving_has_account: false,
+      provision_region: region,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving handoff confirmed — the user acknowledged the post-integration
+   * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
+   */
+  confirmSelfDrivingHandoff(): void {
+    this.$session.setKey('selfDrivingHandoffConfirmed', true);
+    this.emitChange();
+  }
+
+  /**
+   * Mark a composed run step complete (e.g. self-driving's `integrate-run`).
+   * Records the step id so its `isComplete` predicate holds, clears the task
+   * list, and resets run phase to Idle so the next run step starts fresh.
+   */
+  completeRunStep(stepId: string): void {
+    const done = this.session.completedRuns;
+    if (!done.includes(stepId)) {
+      this.$session.setKey('completedRuns', [...done, stepId]);
+    }
+    this.$tasks.set([]);
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {
@@ -804,6 +973,52 @@ export class WizardStore {
     this.emitChange();
   }
 
+  get tokenUsage(): TokenUsageSnapshot {
+    return this.$tokenUsage.get();
+  }
+
+  get tokenHudVisible(): boolean {
+    return this.$tokenHudVisible.get();
+  }
+
+  /** Hidden Ctrl+T shortcut — see ScreenContainer. Not registered as a
+   *  keyboard hint, so it never shows in the hints bar. */
+  toggleTokenHud(): void {
+    this.$tokenHudVisible.set(!this.$tokenHudVisible.get());
+    this.emitChange();
+  }
+
+  /**
+   * Accumulate one assistant turn's token usage into the running estimate.
+   * Approximate by design (no dedup for SDK-retried/replayed turns, unlike
+   * the benchmark middleware's TurnCounterPlugin) — it's a live indicator
+   * for a hidden debug HUD, not a billing record, and `setFinalTokenCostUsd`
+   * corrects the total once the run's authoritative cost is known.
+   */
+  addTokenUsage(delta: TokenUsageDelta): void {
+    const cur = this.$tokenUsage.get();
+    if (cur.costIsFinal) return;
+    const deltaCostUsd = computeTokenCostUsd(delta);
+    this.$tokenUsage.set({
+      inputTokens: cur.inputTokens + delta.inputTokens,
+      outputTokens: cur.outputTokens + delta.outputTokens,
+      cacheReadTokens: cur.cacheReadTokens + delta.cacheReadTokens,
+      cacheCreationTokens: cur.cacheCreationTokens + delta.cacheCreationTokens,
+      costUsd: cur.costUsd + deltaCostUsd,
+      costIsFinal: false,
+    });
+    this.emitChange();
+  }
+
+  /** Reconcile the running cost estimate to the SDK's authoritative total
+   *  once the agent run completes — same trick the benchmark's
+   *  CostTrackerPlugin.onFinalize uses to correct any per-turn drift. */
+  setFinalTokenCostUsd(costUsd: number): void {
+    const cur = this.$tokenUsage.get();
+    this.$tokenUsage.set({ ...cur, costUsd, costIsFinal: true });
+    this.emitChange();
+  }
+
   setTasks(tasks: TaskItem[]): void {
     this.$tasks.set(tasks);
     this.emitChange();
@@ -825,6 +1040,14 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  /** No-op on identical text: an emit here means a network push downstream. */
+  setHandoffText(text: string): void {
+    if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
+    this.$handoffText.set(text);
     this.emitChange();
   }
 

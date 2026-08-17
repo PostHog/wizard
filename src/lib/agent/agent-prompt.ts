@@ -8,6 +8,7 @@
  */
 
 import type { ProgramRun } from './agent-runner.js';
+import type { HostResolution } from '@lib/host-resolution';
 
 /**
  * Values available to prompt builders after OAuth completes.
@@ -15,7 +16,7 @@ import type { ProgramRun } from './agent-runner.js';
 export interface PromptContext {
   projectId: number;
   projectApiKey: string;
-  host: string;
+  host: HostResolution;
   /** Set when skillId was provided and the skill was installed successfully. */
   skillPath?: string;
   /**
@@ -44,7 +45,7 @@ function defaultProjectPrompt(ctx: PromptContext): string {
 Project context:
 - PostHog Project ID: ${ctx.projectId}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}`;
+- PostHog Host: ${ctx.host.apiHost}`;
 }
 
 function skillPrompt(skillPath: string, reportFile: string): string {

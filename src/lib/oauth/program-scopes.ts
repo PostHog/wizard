@@ -146,11 +146,33 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     what's actually connected (`external-data-sources-list`) instead
  *     of taking the user's word for it.
  *   • llm_skill:read / llm_skill:write — the custom-scouts step
- *     (skill step 7b): read the seeded `authoring-signals-scouts`
+ *     (skill step 6b): read the seeded `authoring-signals-scouts`
  *     guide and canonical scout bodies (`llma-skill-get` /
  *     `llma-skill-file-get`) and author the user-approved custom
  *     `signals-scout-*` skills (`llma-skill-create`). Canonical scout
  *     bodies are never edited.
+ *   • product_enablement:write — the "Enable products" step turns on
+ *     Session Replay / Error Tracking / Support so their sources have
+ *     data to read (`products-enable`). A purpose-built scope: the
+ *     server owns each enable recipe, so this can flip the product
+ *     toggles without the far broader `project:write`.
+ *   • replay_scanner:read / replay_scanner:write — the Replay Vision
+ *     scanners step (skill step 6c) lists the team's existing scanners
+ *     and creates the `emits_signals` ones whose findings land in the
+ *     inbox (`vision-scanners-list` / `-create` / `-update`, and the
+ *     advisory `vision-scanners-estimate-create` / `vision-quota-retrieve`).
+ *     The scope OBJECT is `replay_scanner` — the `vision-scanners-*`
+ *     names are MCP tool names, not scopes. Configuring a scanner also
+ *     requires `session_recording:read` (the API pairs the two, since a
+ *     scanner's config indirectly exposes recording contents); that one
+ *     is already in this list for the step-2 usage probes.
+ *
+ * No OAuth-ceiling edit is needed for any scope here: they are all normal
+ * public (unprivileged, non-internal, non-hidden) scope objects, and the
+ * live wizard apps' ceiling is the `@default` sentinel, which resolves to
+ * every such scope (`UNPRIVILEGED_SCOPES`) and auto-tracks new ones. Only a
+ * privileged/internal/hidden object (e.g. `llm_gateway:*`) would need a
+ * manual per-app edit. See README → "OAuth app scope ceiling".
  */
 export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'task:read',
@@ -165,6 +187,9 @@ export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'external_data_source:write',
   'llm_skill:read',
   'llm_skill:write',
+  'product_enablement:write',
+  'replay_scanner:read',
+  'replay_scanner:write',
 ] as const;
 
 /**
@@ -213,7 +238,14 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
+  // The integration run carries the Slack outro step, and — when detection
+  // finds data sources — the orchestrator's warehouse task, which creates
+  // sources through `external-data-sources-create`. Without the warehouse pair
+  // that call 403s on a token the user already granted.
+  'posthog-integration': [
+    ...CONNECT_SLACK_SCOPE_ADDITIONS,
+    ...WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
+  ],
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
 

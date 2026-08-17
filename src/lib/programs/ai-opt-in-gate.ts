@@ -18,9 +18,17 @@
  *
  * The predicates mirror Max's strict reading of
  * `organization.is_ai_data_processing_approved`: only literal `true`
- * proceeds; `null` / `undefined` / `false` all block. CI sessions skip
- * the gate — `--ci` auto-consents to AI usage per the README, and the
- * interactive kill screen would be unworkable headless.
+ * proceeds; `null` / `undefined` / `false` all block. CI and signup
+ * sessions skip the gate:
+ *   - `--ci` auto-consents to AI usage per the README, and the
+ *     interactive kill screen would be unworkable headless.
+ *   - signup (account provisioning) auto-consents too: the provisioning
+ *     access token deliberately omits the `organization:read` scope
+ *     (`WIZARD_PROVISIONING_SCOPES` in constants.ts), so the org's
+ *     approval can never be read back — `apiUser` stays null and the gate
+ *     could never clear. Creating an account through the wizard to run the
+ *     AI agent is itself the consent, mirroring how `shouldDisableAsk`
+ *     already treats `ci || signup` as one non-interactive mode.
  */
 
 import type { WizardSession } from '@lib/wizard-session';
@@ -53,9 +61,13 @@ export function withAiOptInGate(config: ProgramConfig): ProgramStep[] {
     // setCredentials and setApiUser there's a brief emitChange window
     // where apiUser is null, and we don't want to flash the gate then.
     show: (session) =>
-      !session.ci && session.apiUser != null && !aiApproved(session),
-    isComplete: (session) => session.ci || aiApproved(session),
-    gate: (session) => session.ci || aiApproved(session),
+      !session.ci &&
+      !session.signup &&
+      session.apiUser != null &&
+      !aiApproved(session),
+    isComplete: (session) =>
+      session.ci || session.signup || aiApproved(session),
+    gate: (session) => session.ci || session.signup || aiApproved(session),
   };
 
   return [

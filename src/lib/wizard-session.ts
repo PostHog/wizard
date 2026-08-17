@@ -10,16 +10,18 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import type { Integration } from './constants';
+import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
-import type { ApiUser } from './api';
+import type { ApiUser, ApiProject } from './api';
+import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
   projectApiKey: string;
-  host: string;
+  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
+  host: HostResolution;
   projectId: number;
 }
 
@@ -56,12 +58,12 @@ export enum AdditionalFeature {
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'LLM analytics',
+  [AdditionalFeature.LLM]: 'AI observability',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
@@ -139,6 +141,24 @@ export interface AskQuestion {
   sensitive?: boolean;
 }
 
+/**
+ * Copy for a modal shown before an optional step runs, so the user can decline
+ * it. The program that owns the step supplies the words; the runner and the
+ * screen only carry them.
+ */
+export interface TaskNotice {
+  title: string;
+  /** Paragraphs, in order. */
+  body: string[];
+  /** Optional highlighted list, e.g. what was detected. */
+  items?: string[];
+  docsLabel?: string;
+  docsUrl?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  prompt: string;
+}
+
 /** Map of question id → answer (string for single/text, string[] for multi). */
 export type AskAnswers = Record<string, string | string[]>;
 
@@ -146,6 +166,12 @@ export type AskAnswers = Record<string, string | string[]>;
 export interface PendingQuestion {
   id: string;
   questions: AskQuestion[];
+  /**
+   * UTC ISO 8601 timestamp of when the ask was created. Published on the
+   * task stream as `pending_input.asked_at` so the web app can age the
+   * prompt; stable across pushes for the lifetime of one ask.
+   */
+  askedAt?: string;
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
   /**
@@ -177,10 +203,33 @@ export interface WizardSession {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  /**
+   * Explicit PostHog base URL (`--base-url`). When set, it pins every PostHog
+   * origin — API host, cloud/app URL, OAuth server — and `region` is ignored.
+   * The runtime equivalent of the dev-build localhost routing; lets the shipped
+   * wizard target a local/self-hosted stack. Threaded into the URL helpers in
+   * `@utils/urls`. Empty/unset → region-based resolution.
+   */
+  baseUrl?: string;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
   noTelemetry: boolean;
+
+  /**
+   * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
+   * into the authenticated project's AI Observability tab. Dev/test builds
+   * only — the flag is undeclared in published builds so this stays `false`
+   * there. See `src/lib/agent/aio-capture.ts`.
+   */
+  captureAio: boolean;
+
+  /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
+  harness?: Harness;
+  /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
+  sequence?: Sequence;
+  /** `--model` override (gateway id), read by `resolveHarness`. Wins over the binding's model. */
+  model?: string;
 
   // From detection + screens
   setupConfirmed: boolean;
@@ -225,6 +274,14 @@ export interface WizardSession {
    */
   apiUser: ApiUser | null;
 
+  /**
+   * Project payload resolved at authentication, kept so a second agent run in
+   * the same invocation (e.g. self-driving's integration phase) reuses the
+   * first login wholesale instead of re-authenticating. The resolved region
+   * lives on `credentials.host.region`.
+   */
+  apiProject: ApiProject | null;
+
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
@@ -253,6 +310,35 @@ export interface WizardSession {
   skillsComplete: boolean;
   outroDismissed: boolean;
 
+  /**
+   * Self-driving only: whether to integrate PostHog as part of this run.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
+   */
+  integrate: boolean | null;
+
+  /**
+   * Ids of composed run steps that have completed — e.g. self-driving's
+   * `integrate-run`. Lets a run step's `isComplete` hold after it ran,
+   * independent of the shared `runPhase`.
+   */
+  completedRuns: string[];
+
+  /**
+   * Self-driving only: whether the user confirmed the handoff screen shown
+   * after the integration run ("PostHog is installed — now set up Self-driving").
+   * Gates the Self-driving run so it doesn't start until acknowledged. Only
+   * reached in the integrate path; the already-has-PostHog path skips it.
+   */
+  selfDrivingHandoffConfirmed: boolean;
+
   // Runtime
   readinessResult: WizardReadinessResult | null;
   outageDismissed: boolean;
@@ -269,6 +355,8 @@ export interface WizardSession {
     port: number;
     user: string;
   } | null;
+  /** Copy for the task-notice modal, set while it is open. */
+  taskNotice: TaskNotice | null;
   outroData: OutroData | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
@@ -300,11 +388,17 @@ export function buildSession(args: {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  baseUrl?: string;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
   noTelemetry?: boolean;
+  harness?: Harness;
+  sequence?: Sequence;
+  model?: string;
+  integrate?: boolean;
+  captureAio?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -316,10 +410,15 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
+    baseUrl: args.baseUrl,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    captureAio: args.captureAio ?? false,
+    harness: args.harness,
+    sequence: args.sequence,
+    model: args.model,
 
     setupConfirmed: false,
     integration: args.integration ?? null,
@@ -340,17 +439,24 @@ export function buildSession(args: {
     slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
+    // `--integrate` forces integration (skip the question); otherwise the
+    // integration-check screen resolves it from null.
+    integrate: args.integrate === true ? true : null,
+    completedRuns: [],
+    selfDrivingHandoffConfirmed: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
+    apiProject: null,
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,
     settingsConflicts: null,
     authErrorDetail: null,
     portConflictProcess: null,
+    taskNotice: null,
     outroData: null,
     dashboardUrl: null,
     notebookUrl: null,

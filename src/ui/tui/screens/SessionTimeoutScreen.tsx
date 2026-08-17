@@ -7,11 +7,12 @@
  * the only way forward is to re-run the wizard for a fresh login window.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors } from '@ui/tui/styles';
 import { OAUTH_TIMEOUT_MS } from '@lib/constants';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface SessionTimeoutScreenProps {
   store: WizardStore;
@@ -25,9 +26,7 @@ export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
-    process.exit(1);
-  });
+  useDismissOnAnyKey(() => process.exit(1));
 
   return (
     <Box flexDirection="column" flexGrow={1}>

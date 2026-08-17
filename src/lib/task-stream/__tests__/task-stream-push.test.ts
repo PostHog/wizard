@@ -5,7 +5,11 @@ import type {
   TaskStreamUpdate,
 } from '@lib/task-stream/types';
 import type { WizardStore, TaskItem } from '@ui/tui/store';
-import { RunPhase } from '@lib/wizard-session';
+import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
 
 type Listener = () => void;
 
@@ -14,6 +18,9 @@ interface MockStoreState {
   skillId: string | null;
   tasks: TaskItem[];
   eventPlan: unknown[];
+  handoffText?: string | null;
+  installDir?: string;
+  pendingQuestion?: PendingQuestion | null;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -23,6 +30,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     skillId: 'test-skill',
     tasks: [],
     eventPlan: [],
+    handoffText: null,
     ...overrides,
   };
 
@@ -32,6 +40,8 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         runPhase: state.runPhase,
         skillId: state.skillId,
         outroData: null,
+        installDir: state.installDir,
+        pendingQuestion: state.pendingQuestion ?? null,
       };
     },
     get tasks() {
@@ -39,6 +49,17 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     },
     get eventPlan() {
       return state.eventPlan;
+    },
+    get handoffText() {
+      return state.handoffText ?? null;
+    },
+    setEventPlan(eventPlan: unknown[]) {
+      state.eventPlan = eventPlan;
+      for (const cb of listeners) cb();
+    },
+    setHandoffText(text: string) {
+      state.handoffText = text;
+      for (const cb of listeners) cb();
     },
     subscribe(cb: Listener) {
       listeners.push(cb);
@@ -72,7 +93,7 @@ function createMockDestination(name = 'test'): TaskStreamDestination & {
   return {
     name,
     calls,
-    send: jest.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
+    send: vi.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
       calls.push([event, payload]);
       return Promise.resolve();
     }),
@@ -84,6 +105,7 @@ function createPush(
   opts: {
     dest?: ReturnType<typeof createMockDestination>;
     enabled?: boolean;
+    eventPlanPath?: string;
   } = {},
 ) {
   const dest = opts.dest ?? createMockDestination();
@@ -91,6 +113,7 @@ function createPush(
     store,
     programId: 'test-program',
     destinations: [dest],
+    eventPlanPath: opts.eventPlanPath,
     enabled: opts.enabled,
   });
   return { push, dest };
@@ -98,10 +121,51 @@ function createPush(
 
 describe('TaskStreamPush', () => {
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   // ── Existing event-sequencing behaviour ────────────────────────
+
+  it('populates the event plan when destination delivery is disabled', async () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'wizard-headless-plan-'));
+    const eventPlanPath = join(installDir, EVENT_PLAN_FILE);
+    const store = createMockStore({ installDir });
+    const { push, dest } = createPush(store, {
+      enabled: false,
+      eventPlanPath,
+    });
+
+    push.attach();
+    writeFileSync(
+      eventPlanPath,
+      JSON.stringify([{ event_name: 'created_workspace' }]),
+    );
+    await push.shutdown(2000);
+
+    expect(store.eventPlan).toEqual([
+      { name: 'created_workspace', description: '' },
+    ]);
+    expect(dest.calls).toHaveLength(0);
+
+    rmSync(installDir, { recursive: true, force: true });
+  });
+
+  it('does not inspect event-plan artifacts unless explicitly configured', () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'wizard-unrelated-plan-'));
+    writeFileSync(
+      join(installDir, EVENT_PLAN_FILE),
+      JSON.stringify([{ event_name: 'stale_event' }]),
+    );
+    const store = createMockStore({ installDir });
+    const { push } = createPush(store);
+
+    push.attach();
+
+    expect(store.eventPlan).toEqual([]);
+
+    push.detach();
+    rmSync(installDir, { recursive: true, force: true });
+  });
 
   describe('event ordering (imperative push)', () => {
     it('first push sends CREATE', async () => {
@@ -202,6 +266,21 @@ describe('TaskStreamPush', () => {
       expect(dest.calls[0][1].event_plan).toBeUndefined();
     });
 
+    it('carries handoff_text once captured, omits it before', async () => {
+      // The backend keeps the field sticky per session, but only if pushes
+      // after capture actually carry it — dropping it here would leave the
+      // app with no doc for the rest of the run.
+      const store = createMockStore();
+      const { push, dest } = createPush(store);
+
+      await push.push();
+      expect(dest.calls[0][1].handoff_text).toBeUndefined();
+
+      store._set({ handoffText: '# Setup report' });
+      await push.push();
+      expect(dest.calls[1][1].handoff_text).toBe('# Setup report');
+    });
+
     it('sanitizes workflow_id and skill_id to channel-safe chars', async () => {
       // Backend rejects anything outside ^[A-Za-z0-9_.-]{1,255}$ on
       // workflow_id / skill_id because they appear unescaped in Redis
@@ -223,6 +302,58 @@ describe('TaskStreamPush', () => {
       expect(payload.skill_id).toMatch(/^[A-Za-z0-9_.-]+$/);
     });
 
+    it('publishes pending_input while a wizard_ask is open', async () => {
+      const store = createMockStore({
+        runPhase: RunPhase.Running,
+        pendingQuestion: pendingQuestion(),
+      });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].pending_input).toEqual({
+        id: 'q-1',
+        asked_at: '2026-07-28T10:00:00.000Z',
+        question_count: 1,
+        sensitive: false,
+        prompts: ['Which region is your project in?'],
+      });
+    });
+
+    it('omits pending_input when no wizard_ask is open', async () => {
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].pending_input).toBeUndefined();
+    });
+
+    it('withholds prompts when any question is sensitive', async () => {
+      const store = createMockStore({
+        runPhase: RunPhase.Running,
+        pendingQuestion: pendingQuestion({
+          questions: [
+            {
+              id: 'key',
+              prompt: 'Paste your API key',
+              kind: 'text',
+              sensitive: true,
+            },
+            { id: 'region', prompt: 'Which region?', kind: 'text' },
+          ],
+        }),
+      });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      const pendingInput = dest.calls[0][1].pending_input;
+      expect(pendingInput?.sensitive).toBe(true);
+      expect(pendingInput?.question_count).toBe(2);
+      expect(pendingInput?.prompts).toBeUndefined();
+    });
+
     it('populates error when phase is Error', async () => {
       const store = createMockStore({ runPhase: RunPhase.Error });
       const { push, dest } = createPush(store);
@@ -242,7 +373,7 @@ describe('TaskStreamPush', () => {
       const good = createMockDestination('good');
       const bad: TaskStreamDestination = {
         name: 'bad',
-        send: jest.fn(() => Promise.reject(new Error('network down'))),
+        send: vi.fn(() => Promise.reject(new Error('network down'))),
       };
       const push = new TaskStreamPush({
         store,
@@ -260,7 +391,7 @@ describe('TaskStreamPush', () => {
       const store = createMockStore();
       const bad: TaskStreamDestination = {
         name: 'bad',
-        send: jest.fn(() => Promise.reject(new Error('fail'))),
+        send: vi.fn(() => Promise.reject(new Error('fail'))),
       };
       const push = new TaskStreamPush({
         store,
@@ -277,17 +408,17 @@ describe('TaskStreamPush', () => {
   describe('spec: deterministic session_id', () => {
     it('session_id is locked at construction with second-precision ISO', async () => {
       const fixedNow = new Date('2026-05-20T17:00:00.123Z');
-      jest.useFakeTimers();
-      jest.setSystemTime(fixedNow);
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
 
       const store = createMockStore();
       const { push, dest } = createPush(store);
 
       // Even if real time advances before the first push, session_id
       // is fixed.
-      jest.setSystemTime(new Date('2026-05-20T17:05:00.999Z'));
+      vi.setSystemTime(new Date('2026-05-20T17:05:00.999Z'));
       await push.push();
-      jest.setSystemTime(new Date('2026-05-20T17:10:00.000Z'));
+      vi.setSystemTime(new Date('2026-05-20T17:10:00.000Z'));
       await push.push();
 
       expect(dest.calls[0][1].session_id).toBe(
@@ -296,12 +427,12 @@ describe('TaskStreamPush', () => {
       expect(dest.calls[1][1].session_id).toBe(dest.calls[0][1].session_id);
       expect(dest.calls[0][1].started_at).toBe('2026-05-20T17:00:00Z');
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
   describe('spec: enabled=false', () => {
-    it('attach is a no-op and no destination ever fires', () => {
+    it('does not subscribe or deliver to destinations', () => {
       const store = createMockStore({ runPhase: RunPhase.Running });
       const { push, dest } = createPush(store, { enabled: false });
 
@@ -340,7 +471,7 @@ describe('TaskStreamPush', () => {
 
   describe('spec: debounces task updates', () => {
     it('five rapid emits in the running phase produce one HTTP call with the latest task list', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Running });
       const { push, dest } = createPush(store);
       push.attach();
@@ -354,12 +485,12 @@ describe('TaskStreamPush', () => {
       // Five rapid task emits within 100ms — none fire synchronously.
       for (let i = 1; i <= 5; i++) {
         store._setAndEmit({ tasks: tasksUpTo(i) });
-        await jest.advanceTimersByTimeAsync(20);
+        await vi.advanceTimersByTimeAsync(20);
       }
       expect(dest.calls).toHaveLength(1);
 
       // Advance past the 250ms debounce window — one push with the latest list.
-      await jest.advanceTimersByTimeAsync(250);
+      await vi.advanceTimersByTimeAsync(250);
       await flushMicrotasks();
 
       expect(dest.calls).toHaveLength(2);
@@ -369,7 +500,7 @@ describe('TaskStreamPush', () => {
 
   describe('spec: phase change bypasses debounce', () => {
     it('Running → Completed produces an immediate push', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Running });
       const { push, dest } = createPush(store);
       push.attach();
@@ -391,6 +522,31 @@ describe('TaskStreamPush', () => {
     });
   });
 
+  describe('spec: wizard_ask open/close bypasses debounce', () => {
+    it('question appearing and resolving each produce an immediate push', async () => {
+      vi.useFakeTimers();
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      const { push, dest } = createPush(store);
+      push.attach();
+
+      store._setAndEmit({ runPhase: RunPhase.Running });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(1);
+
+      // wizard_ask opens — no debounce wait.
+      store._setAndEmit({ pendingQuestion: pendingQuestion() });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(2);
+      expect(dest.calls[1][1].pending_input?.id).toBe('q-1');
+
+      // User answers — the clearing push is just as immediate.
+      store._setAndEmit({ pendingQuestion: null });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(3);
+      expect(dest.calls[2][1].pending_input).toBeUndefined();
+    });
+  });
+
   describe('spec: coalesces concurrent emits during in-flight push', () => {
     it('emits during a slow flush produce one follow-up push with the latest state', async () => {
       const store = createMockStore({ runPhase: RunPhase.Running });
@@ -401,7 +557,7 @@ describe('TaskStreamPush', () => {
       } = {
         name: 'slow',
         calls: [],
-        send: jest.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
+        send: vi.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
           dest.calls.push([event, payload]);
           if (dest.calls.length === 1) {
             return new Promise<void>((resolve) => {
@@ -441,6 +597,43 @@ describe('TaskStreamPush', () => {
   });
 
   describe('spec: shutdown flushes terminal phase', () => {
+    it('includes the captured event plan in the final Completed push', async () => {
+      const installDir = mkdtempSync(join(tmpdir(), 'wizard-final-plan-'));
+      const eventPlanPath = join(installDir, EVENT_PLAN_FILE);
+      const plan = [
+        { name: 'created_dashboard', description: 'User creates a dashboard' },
+      ];
+      const store = createMockStore({
+        installDir,
+        runPhase: RunPhase.Running,
+      });
+      const { push, dest } = createPush(store, { eventPlanPath });
+
+      try {
+        push.attach();
+        store._emit();
+        await flushMicrotasks();
+
+        writeFileSync(
+          eventPlanPath,
+          JSON.stringify([
+            {
+              event_name: plan[0].name,
+              event_description: plan[0].description,
+            },
+          ]),
+        );
+        store._setAndEmit({ runPhase: RunPhase.Completed });
+        await push.shutdown(2000);
+
+        expect(dest.calls.at(-1)?.[0]).toBe(StreamEvent.Complete);
+        expect(dest.calls.at(-1)?.[1].event_plan).toEqual({ events: plan });
+      } finally {
+        push.detach();
+        rmSync(installDir, { recursive: true, force: true });
+      }
+    });
+
     it('shutdown awaits one final push when phase is terminal', async () => {
       const store = createMockStore({ runPhase: RunPhase.Completed });
       const { push, dest } = createPush(store);
@@ -464,11 +657,11 @@ describe('TaskStreamPush', () => {
 
   describe('spec: shutdown honours timeout', () => {
     it('shutdown returns even when destination hangs forever', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Completed });
       const hanging: TaskStreamDestination = {
         name: 'hangs',
-        send: jest.fn(() => new Promise<void>(() => undefined)),
+        send: vi.fn(() => new Promise<void>(() => undefined)),
       };
       const push = new TaskStreamPush({
         store,
@@ -477,9 +670,9 @@ describe('TaskStreamPush', () => {
       });
 
       const shutdown = push.shutdown(500);
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
       await expect(shutdown).resolves.toBeUndefined();
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 });
@@ -502,6 +695,24 @@ function taskItem(label: string): TaskItem {
     activeForm: label,
     status: 'pending' as TaskItem['status'],
     done: false,
+  };
+}
+
+function pendingQuestion(
+  overrides: Partial<PendingQuestion> = {},
+): PendingQuestion {
+  return {
+    id: 'q-1',
+    source: 'test-skill',
+    askedAt: '2026-07-28T10:00:00.000Z',
+    questions: [
+      {
+        id: 'region',
+        prompt: 'Which region is your project in?',
+        kind: 'text',
+      },
+    ],
+    ...overrides,
   };
 }
 

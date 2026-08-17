@@ -7,14 +7,15 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
+  pubPackageManager,
 } from '@lib/detection/package-manager';
 
-jest.mock('../../../utils/debug');
-jest.mock('../../../telemetry', () => ({
+vi.mock('../../../utils/debug');
+vi.mock('../../../telemetry', () => ({
   withProgress: (_name: string, fn: () => unknown) => fn(),
 }));
-jest.mock('../../../utils/analytics', () => ({
-  analytics: { setTag: jest.fn() },
+vi.mock('../../../utils/analytics', () => ({
+  analytics: { setTag: vi.fn() },
 }));
 
 function makeTmpDir(): string {
@@ -188,6 +189,7 @@ describe('static package manager helpers', () => {
     { fn: composerPackageManager, name: 'composer' },
     { fn: swiftPackageManager, name: 'spm' },
     { fn: gradlePackageManager, name: 'gradle' },
+    { fn: pubPackageManager, name: 'pub' },
   ])('$name returns valid PackageManagerInfo', async ({ fn }) => {
     const result = await fn();
     expect(result.detected).toHaveLength(1);

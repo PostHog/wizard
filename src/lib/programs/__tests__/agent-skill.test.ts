@@ -5,6 +5,7 @@ import {
 } from '@lib/programs/agent-skill/index';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { buildSession, RunPhase } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 
 const baseOpts: SkillProgramOptions = {
   skillId: 'error-tracking-setup',
@@ -78,7 +79,7 @@ describe('AGENT_SKILL_STEPS', () => {
     session.credentials = {
       accessToken: 't',
       projectApiKey: 'k',
-      host: 'h',
+      host: HostResolution.fromApiHost('h'),
       projectId: 1,
     };
     expect(auth.isComplete!(session)).toBe(true);

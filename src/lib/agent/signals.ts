@@ -12,6 +12,14 @@ export const AgentSignals = {
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /**
+   * Signal emitted when `install_skill` failed and the agent is continuing
+   * the integration WITHOUT the skill (best-effort from its own knowledge).
+   * Format: "[SKILL-INSTALL-FAILED] <skill id — reason>". Non-fatal by
+   * design: a freestyled integration beats an outright failure, but the run
+   * must be measurable — the runner captures it as an analytics event.
+   */
+  SKILL_INSTALL_FAILED: '[SKILL-INSTALL-FAILED]',
+  /**
    * Signal emitted when the agent cannot complete the program and is
    * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
    * Programs can declare an onAbort handler to render a custom screen.
@@ -38,6 +46,14 @@ export const AgentSignals = {
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 
 /**
+ * End-of-run reflection ask, shared by both harnesses so remarks are
+ * comparable. The format clause comes FIRST and nothing trails the marker —
+ * literal models (gpt-5-mini) echo whatever text follows it. The parser also
+ * drops remarks that quote this instruction (see AgentOutputSignals.remark).
+ */
+export const REMARK_INSTRUCTION = `Reply with a single line that starts with ${AgentSignals.WIZARD_REMARK} and no other lines. In that line, state briefly what information or guidance would have been useful to have in the integration prompt or documentation for this run — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.`;
+
+/**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
  */
@@ -54,4 +70,8 @@ export enum AgentErrorType {
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
   /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
   ABORT = 'WIZARD_ABORT',
+  /** Agent ended without making a single tool call — a no-op run that did no work */
+  NO_PROGRESS = 'WIZARD_NO_PROGRESS',
+  /** Agent acted but stopped short — planned tasks left open and/or no skill installed */
+  INCOMPLETE_TASKS = 'WIZARD_INCOMPLETE_TASKS',
 }

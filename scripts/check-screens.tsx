@@ -9,7 +9,9 @@
 
 import React from 'react';
 import { render } from 'ink-testing-library';
+import { Box } from 'ink';
 import { AuthErrorScreen } from '@ui/tui/screens/AuthErrorScreen';
+import { ProgressList } from '@ui/tui/primitives/ProgressList';
 import { ManagedSettingsScreen } from '@ui/tui/screens/ManagedSettingsScreen';
 import { SettingsOverrideScreen } from '@ui/tui/screens/SettingsOverrideScreen';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
@@ -78,6 +80,31 @@ check(
 );
 
 check(
+  'AuthErrorScreen — managed login names conflicting credentials + places',
+  <AuthErrorScreen
+    store={fakeStore({
+      authErrorDetail: {
+        hasSettingsConflict: false,
+        usingManagedLogin: true,
+        credentialPlaces: [
+          'A logged-in Claude session: /home/dev/.claude/.credentials.json',
+          'A logged-in Claude session: macOS keychain item "Claude Code-credentials"',
+        ],
+        logFilePath: '/tmp/posthog-wizard.log',
+      },
+    })}
+  />,
+  [
+    'Conflicting Anthropic credentials',
+    '/home/dev/.claude/.credentials.json',
+    'Claude Code-credentials',
+    'claude auth logout',
+  ],
+  // Must not fall through to the generic key-guidance copy.
+  ['Region mismatch'],
+);
+
+check(
   'AuthErrorScreen — no conflict falls back to key guidance',
   <AuthErrorScreen
     store={fakeStore({
@@ -114,6 +141,30 @@ check(
     store={fakeStore({ settingsConflicts: [projectConflict] })}
   />,
   [projectConflict.path, 'ANTHROPIC_BASE_URL', 'Backup & continue'],
+);
+
+check(
+  'ProgressList — not-needed tasks leave the list, long rows truncate',
+  <Box width={34}>
+    <ProgressList
+      items={[
+        {
+          label: 'Install the PostHog SDK and configure the environment keys',
+          status: 'completed',
+        },
+        { label: 'Add user identification', status: 'skipped' },
+        { label: 'Write the setup report', status: 'pending' },
+      ]}
+    />
+  </Box>,
+  [
+    'Install the PostHog SDK',
+    '…',
+    'Progress: 1/2 completed',
+    '(1 skipped as not required)',
+  ],
+  // The not-needed task is gone and counts against nothing.
+  ['Add user identification', 'not needed', '1/3'],
 );
 
 if (failures > 0) {

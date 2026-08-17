@@ -1,4 +1,8 @@
-import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
+import type {
+  WizardSession,
+  DiscoveredFeature,
+  TaskNotice,
+} from '@lib/wizard-session';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { Integration } from '@lib/constants';
@@ -66,6 +70,30 @@ export interface ProgramStep {
    * Matches the ScreenId enum values (e.g. 'intro', 'run', 'outro').
    */
   screenId?: string;
+
+  /**
+   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
+   * exports a self-contained run step and another imports it into its step list
+   * — e.g. posthog-integration exports a run step that runs its agent, and
+   * self-driving imports it before its own run step. Omit to run the host
+   * program's own agent (`config.run`).
+   */
+  run?: (session: WizardSession) => Promise<void>;
+
+  /**
+   * For a run step: prepare a derived session before its agent runs — e.g.
+   * gather framework context for the chosen project. The session it receives is
+   * the run's own, so writes don't leak into later runs.
+   */
+  onRunPrep?: (session: WizardSession) => Promise<void>;
+
+  /**
+   * For a run step: the working directory its agent runs in, resolved from the
+   * session (e.g. self-driving's integration runs in the picked monorepo
+   * sub-app, not the repo root). The runner scopes a derived session to this
+   * dir for that run only. Defaults to `session.installDir`.
+   */
+  targetDir?: (session: WizardSession) => string;
 
   /**
    * Whether this step should be visible in the current program.
@@ -173,6 +201,12 @@ export interface ProgramConfig {
   /** Unique program id — matches the Program enum value */
   id: string;
   /**
+   * Content-mill flow the orchestrator loads its agent prompts + step-skills
+   * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
+   * the content-mill flow name diverges from the program id.
+   */
+  agentFlow?: string;
+  /**
    * Whether this program's agent run requires third-party AI services.
    *
    * When true (the default), the wizard checks
@@ -203,6 +237,24 @@ export interface ProgramConfig {
    * detection) that the TUI performs via step onReady callbacks.
    */
   ciPreRun?: (session: WizardSession) => Promise<void>;
+  /**
+   * Tasks the orchestrator queues itself, before the planner runs, from what
+   * the wizard detected. Their types are marked `runnerSeeded: true` in the
+   * agent prompt, so the planner never sees them: whether such a task runs is
+   * decided here, in code, not by a model that could invent it or forget it.
+   * Return an empty list to queue none.
+   */
+  seedTasks?: (session: WizardSession) => Array<{
+    type: string;
+    label?: string;
+    inputs?: Record<string, unknown>;
+    /**
+     * Shown before the run starts, letting the user decline the task. The
+     * program owns the words — the runner and the modal only carry them. A
+     * task without one is queued silently.
+     */
+    notice?: TaskNotice;
+  }>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
@@ -211,6 +263,13 @@ export interface ProgramConfig {
    * read it synchronously without resolving a deferred `run` function.
    */
   reportFile?: string;
+  /**
+   * Agent-authored event-plan artifact to mirror into the wizard session.
+   * Relative to `session.installDir`. Programs that do not produce an event
+   * plan leave this unset, so generic runner machinery does not inspect a
+   * stale or unrelated `.posthog-events.json` file.
+   */
+  eventPlanFile?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.

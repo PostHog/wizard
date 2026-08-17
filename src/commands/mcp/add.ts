@@ -4,6 +4,7 @@ import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';
 import type { Command } from '../command';
+import { isTUIUnavailable } from './tui-availability';
 
 export const mcpAddCommand: Command = {
   name: 'add',
@@ -43,6 +44,7 @@ function runMcpAdd(argv: Arguments): void {
         localMcp,
         mcpFeatures: features,
         apiKey,
+        baseUrl: argv.baseUrl as string | undefined,
       });
     } catch (error) {
       if (!isTUIUnavailable(error)) throw error;
@@ -53,18 +55,6 @@ function runMcpAdd(argv: Arguments): void {
       await addMCPServerToClientsStep({ local: localMcp, features, apiKey });
     }
   })();
-}
-
-/**
- * Ink throws "Raw mode is not supported" when stdin has no TTY (piped input,
- * CI, some IDE terminals). That is the only TUI failure we degrade to
- * LoggingUI for — any other error from the TUI path is a real bug and must
- * surface rather than be silently swallowed.
- */
-function isTUIUnavailable(error: unknown): boolean {
-  return (
-    error instanceof Error && /raw mode is not supported/i.test(error.message)
-  );
 }
 
 function parseFeatures(raw: unknown): string[] | undefined {

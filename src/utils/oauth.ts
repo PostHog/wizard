@@ -6,18 +6,23 @@ import { logToFile } from './debug';
 import { z } from 'zod';
 import { getUI } from '@ui';
 import {
-  IS_DEV,
-  ISSUES_URL,
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   POSTHOG_DEV_CLIENT_ID,
-  POSTHOG_OAUTH_URL,
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { getOAuthUrl, resolveBaseUrl } from './urls';
 import { abort } from './setup-utils';
 import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';
+import {
+  OAuthError,
+  buildCallbackErrorHtml,
+  buildOAuthFailureMessage,
+  oauthErrorFromCallbackParams,
+  oauthErrorFromTokenBody,
+} from './oauth-errors';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -42,7 +47,7 @@ const OAUTH_CALLBACK_STYLES = `
   </style>
 `;
 
-const OAuthTokenResponseSchema = z.object({
+export const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),
   expires_in: z.number(),
   token_type: z.string(),
@@ -50,9 +55,28 @@ const OAuthTokenResponseSchema = z.object({
   refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
+  // Sent by PostHog Cloud (and passed through the oauth.posthog.com proxy); absent on
+  // self-hosted. `.catch(undefined)` so an unrecognized value degrades to the probe
+  // fallback instead of failing the whole login.
+  posthog_region: z.enum(['us', 'eu']).optional().catch(undefined),
+  posthog_base_url: z.string().optional().catch(undefined),
 });
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
+
+export const WIZARD_COMPLETION_SCOPE = 'event_definition:write';
+
+export function parseOAuthScopes(scope: string): string[] {
+  return scope.split(/\s+/).filter(Boolean);
+}
+
+export function assertWizardCompletionScope(scope: string): void {
+  if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
+
+  throw new Error(
+    `Your existing PostHog Wizard authorization is missing the ${WIZARD_COMPLETION_SCOPE} permission required to finish setup. Reconnect the wizard and approve the updated permissions. If PostHog reuses the old approval, revoke the existing Wizard authorization first, then rerun the wizard.`,
+  );
+}
 
 // Stable marker for the authorization-flow timeout. Detection keys off the exact
 // message rather than a loose substring — `.includes('timeout')` never matched
@@ -66,6 +90,29 @@ export function isAuthorizationTimeout(error: Error): boolean {
 interface OAuthConfig {
   scopes: string[];
   signup?: boolean;
+  /** Project to pre-select on the consent screen (the `--project-id` flag). */
+  projectId?: number;
+  /**
+   * Explicit base URL override (`--base-url`, from `session.baseUrl`). Pins the
+   * OAuth server and selects the matching client ID.
+   */
+  baseUrl?: string;
+}
+
+/**
+ * OAuth client ID for the current target. A pinned base URL (`--base-url`, or
+ * IS_DEV's implicit localhost) means we're talking to a dev-seeded stack, which
+ * registers the dev client; prod uses the proxy client.
+ *
+ * TODO: this assumes any pinned base URL is a dev-seeded instance that
+ * registers POSTHOG_DEV_CLIENT_ID. If we ever point `--base-url` at a non-dev
+ * instance with its own OAuth app, make the client ID configurable (e.g. a
+ * `--oauth-client-id` flag) instead of always falling back to the dev client.
+ */
+function getOAuthClientId(baseUrl?: string): string {
+  return resolveBaseUrl(baseUrl)
+    ? POSTHOG_DEV_CLIENT_ID
+    : POSTHOG_PROXY_CLIENT_ID;
 }
 
 function getLocalOAuthOrigin(port: number): string {
@@ -169,9 +216,17 @@ async function startCallbackServer(
       const error = url.searchParams.get('error');
 
       if (error) {
-        const isAccessDenied = error === 'access_denied';
-        const safeError = error.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
-        logToFile(`[oauth] callback received with error: ${safeError}`);
+        // Carries error_description / error_uri (RFC 6749 §4.1.2.1) along
+        // with the code, so the terminal message can show the server's own
+        // explanation instead of just the bare code.
+        const callbackError = oauthErrorFromCallbackParams(url.searchParams);
+        const isAccessDenied = callbackError.code === 'access_denied';
+        logToFile(
+          `[oauth] callback received with error: ${callbackError.code}` +
+            (callbackError.description
+              ? ` (${callbackError.description})`
+              : ''),
+        );
         res.writeHead(isAccessDenied ? 200 : 400, {
           'Content-Type': 'text/html; charset=utf-8',
         });
@@ -185,17 +240,13 @@ async function startCallbackServer(
               ${OAUTH_CALLBACK_STYLES}
             </head>
             <body>
-              <p>${
-                isAccessDenied
-                  ? 'Authorization cancelled.'
-                  : `Authorization failed.`
-              }</p>
+              ${buildCallbackErrorHtml(callbackError)}
               <p>Return to your terminal. This window will close automatically.</p>
               <script>window.close();</script>
             </body>
           </html>
         `);
-        callbackReject(new Error(`OAuth error: ${error}`));
+        callbackReject(callbackError);
         return;
       }
 
@@ -281,16 +332,16 @@ async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
   callbackUrl: string,
+  baseUrl?: string,
 ): Promise<OAuthTokenResponse> {
-  const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
+  const clientId = getOAuthClientId(baseUrl);
+  const oauthUrl = getOAuthUrl(baseUrl);
 
-  logToFile(
-    `[oauth] exchanging code for token at ${POSTHOG_OAUTH_URL}/oauth/token`,
-  );
+  logToFile(`[oauth] exchanging code for token at ${oauthUrl}/oauth/token`);
   let response;
   try {
     response = await axios.post(
-      `${POSTHOG_OAUTH_URL}/oauth/token`,
+      `${oauthUrl}/oauth/token`,
       {
         grant_type: 'authorization_code',
         code,
@@ -311,12 +362,26 @@ async function exchangeCodeForToken(
       `[oauth] token exchange failed${status ? ` (HTTP ${status})` : ''}:`,
       e instanceof Error ? e.message : e,
     );
+    // Surface the OAuth error body (RFC 6749 §5.2) when the token endpoint
+    // sent one — otherwise `invalid_grant`, PKCE mismatches, etc. reach the
+    // user as a bare axios "Request failed with status code 400".
+    const exchangeError = axios.isAxiosError(e)
+      ? oauthErrorFromTokenBody(e.response?.data)
+      : null;
+    if (exchangeError) {
+      logToFile(
+        `[oauth] token endpoint error: ${exchangeError.code}` +
+          (exchangeError.description ? ` (${exchangeError.description})` : ''),
+      );
+      throw exchangeError;
+    }
     throw e;
   }
 
   const token = OAuthTokenResponseSchema.parse(response.data);
   logToFile(
     `[oauth] token exchange succeeded, granted scopes: ${token.scope}` +
+      `${token.posthog_region ? `, region: ${token.posthog_region}` : ''}` +
       `${
         token.scoped_teams
           ? `, scoped_teams: [${token.scoped_teams.join(', ')}]`
@@ -334,16 +399,15 @@ async function exchangeCodeForToken(
 export async function performOAuthFlow(
   config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
-  const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
+  const clientId = getOAuthClientId(config.baseUrl);
+  const oauthUrl = getOAuthUrl(config.baseUrl);
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   let shouldRetry = false;
 
   logToFile(
-    `[oauth] starting flow against ${POSTHOG_OAUTH_URL} ` +
-      `(${
-        IS_DEV ? 'dev' : 'prod'
-      } client), requested scopes: ${config.scopes.join(' ')}`,
+    `[oauth] starting flow against ${oauthUrl}, ` +
+      `requested scopes: ${config.scopes.join(' ')}`,
   );
 
   do {
@@ -357,7 +421,7 @@ export async function performOAuthFlow(
 
     for (const port of OAUTH_PORTS) {
       const callbackUrl = getCallbackUrl(port);
-      const authUrl = new URL(`${POSTHOG_OAUTH_URL}/oauth/authorize`);
+      const authUrl = new URL(`${oauthUrl}/oauth/authorize`);
       authUrl.searchParams.set('client_id', clientId);
       authUrl.searchParams.set('redirect_uri', callbackUrl);
       authUrl.searchParams.set('response_type', 'code');
@@ -365,15 +429,17 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('code_challenge_method', 'S256');
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
+      if (config.projectId !== undefined) {
+        // Pre-select this project on the consent screen so the user just clicks Authorize.
+        authUrl.searchParams.set('team_id', String(config.projectId));
+      }
 
       // UTM-tag both kickoff URLs so the journey into the app is
       // attributable to the wizard command that started it.
       const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
       const signupUrl = new URL(
         withUtm(
-          `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
-            taggedAuthUrl,
-          )}`,
+          `${oauthUrl}/signup?next=${encodeURIComponent(taggedAuthUrl)}`,
           'oauth-signup',
         ),
       );
@@ -435,6 +501,7 @@ export async function performOAuthFlow(
           code,
           codeVerifier,
           callbackUrl,
+          config.baseUrl,
         );
 
         server.close();
@@ -446,6 +513,7 @@ export async function performOAuthFlow(
       } catch (e) {
         const error = e instanceof Error ? e : new Error('Unknown error');
         const timedOut = isAuthorizationTimeout(error);
+        const flowError = error instanceof OAuthError ? error : null;
 
         loginSpinner.stop(
           timedOut ? 'Session timed out.' : 'Authorization failed.',
@@ -453,23 +521,43 @@ export async function performOAuthFlow(
         server.close();
 
         logToFile('[oauth] flow failed:', error);
+        if (flowError?.description) {
+          logToFile(
+            `[oauth] server error_description: ${flowError.description}`,
+          );
+        }
+
+        const accessDenied = flowError
+          ? flowError.code === 'access_denied'
+          : error.message.includes('access_denied');
 
         if (timedOut) {
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
           getUI().showSessionTimeout();
-        } else if (error.message.includes('access_denied')) {
+        } else if (accessDenied) {
           getUI().log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
           );
         } else {
           getUI().log.error(
-            `Authorization failed:\n\n${error.message}\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
+            buildOAuthFailureMessage({
+              error,
+              requestedScopes: config.scopes,
+              clientId,
+              oauthUrl,
+              // Same condition that selects the dev client ID: a resolvable
+              // base URL means a dev-seeded stack, where "fix your local
+              // OAuth app" beats pointing at the production runbook.
+              isDevStack: resolveBaseUrl(config.baseUrl) !== undefined,
+            }),
           );
         }
 
-        const oauthErrorCode = error.message.startsWith('OAuth error: ')
+        const oauthErrorCode = flowError
+          ? flowError.code
+          : error.message.startsWith('OAuth error: ')
           ? error.message.slice('OAuth error: '.length)
           : timedOut
           ? 'timeout'
@@ -478,6 +566,7 @@ export async function performOAuthFlow(
         analytics.captureException(error, {
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
+          oauth_error_description: flowError?.description,
           client_id: clientId,
           requested_scopes: config.scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue

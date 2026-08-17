@@ -5,12 +5,14 @@ export type SourceMapsUploadPromptParams = {
   displayName: string | undefined;
   variant: SkillVariant;
   skillId: string;
-  /** Project to instrument, relative to the repo root ("." or undefined = root). */
+  /** Project to instrument, relative to the wizard working directory ("." or undefined = root). */
   projectPath?: string;
   projectId: number;
   host: string;
   settingsUrl: string;
   uiHost: string;
+  /** Hand-off report the agent writes in STEP 9; the outro points the user at it. */
+  reportFile: string;
 };
 
 export const SOURCE_MAPS_DETECTION_FAILED_PROMPT = `Detection did not pick a source maps skill variant for this project.
@@ -29,12 +31,42 @@ export function buildSourceMapsUploadPrompt(
     host,
     settingsUrl,
     uiHost,
+    reportFile,
   } = params;
   const platformLabel = displayName ?? variant;
   const inSubproject = projectPath != null && projectPath !== '.';
   const projectLine = inSubproject
-    ? `- Project directory (relative to repo root): ${projectPath}`
-    : '- Project directory: the repo root';
+    ? `- Project directory (relative to the wizard's working directory): ${projectPath}`
+    : "- Project directory: the wizard's working directory (even when it sits inside a larger git repo, this directory is the project root)";
+  const envFilePathGuidance = inSubproject
+    ? `Tool filePaths are relative to the wizard's working directory, not the selected project directory. Treat the skill's env path as relative to the selected project and prefix it with \`${projectPath}/\` when calling the tools: for example, pass \`${projectPath}/.env\`, not \`.env\` (which would target the wizard's working directory).${
+        variant === 'rust'
+          ? ` Cargo workspace exception: when the skill places the env file at the workspace root instead, pass the path of the ROOT manifest's directory relative to the wizard's working directory (e.g. \`rust/.env\` for a workspace root at \`rust/\`, or plain \`.env\` when the workspace root IS the working directory) — not the member path.`
+          : ''
+      }`
+    : `Tool filePaths are relative to the wizard's working directory. For an env file at this project root, pass \`.env\`; never prefix it with this directory's path inside an ancestor repository.`;
+
+  const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
+   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
+   \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
+   Skip this step entirely if the platform already auto-loads .env.
+
+STEP 5 — Write the credentials to the env file. (skill: "Write credentials to the env file")
+   Use the wizard-tools MCP server. Reuse the env file the skill tells you to
+   pick — the prerequisite PostHog integration usually already wrote
+   POSTHOG_* vars to one, so seed your keys alongside them.
+   - First call check_env_keys on that file (returns present/absent, never
+     values — don't read the file directly).
+   - Env tool path rule: ${envFilePathGuidance}
+   - Then call set_env_values, passing the STEP 1 secretRef as a value
+     object, not a literal string:
+       values: {
+         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
+         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
+         "POSTHOG_CLI_HOST": "${uiHost}"
+       }
+   Variable names follow the skill's per-uploader conventions. The wizard
+   resolves the ref locally before writing, so you never see the key value.`;
 
   return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
 
@@ -50,7 +82,18 @@ All file changes, build/run commands, and config edits target the project direct
     inSubproject
       ? ` — this is a monorepo, so scope your work to \`${projectPath}\` and do not touch other packages`
       : ''
-  }.
+  }.${
+    variant === 'rust' && inSubproject
+      ? `
+Cargo workspace exception: if the selected project is a member of a Cargo
+workspace (resolve the root with \`cargo locate-project --workspace
+--message-format plain\`), the workspace root's Cargo.toml (for \`[profile.*]\`
+edits), the workspace-level \`target/\` directory, and a \`.env\` next to the
+root manifest are IN SCOPE — treat them as part of the selected project, and
+follow the skill's workspace guidance for which paths to use. Every other
+package stays off-limits.`
+      : ''
+  }
 
 The skill you install in STEP 2 is the source of truth for the HOW of every
 step: its "## Steps" section has an overview, tips and per-technology
@@ -117,26 +160,7 @@ STEP 3 — Apply build-config changes. (skill: "Apply build-config changes")
    Make the bundler / build-config changes the skill's step instructs. The
    skill and its reference are the source of truth for this platform.
 
-STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
-   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
-   \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
-   Skip this step entirely if the platform already auto-loads .env.
-
-STEP 5 — Write the credentials to the env file. (skill: "Write credentials to the env file")
-   Use the wizard-tools MCP server. Reuse the env file the skill tells you to
-   pick — the prerequisite PostHog integration usually already wrote
-   POSTHOG_* vars to one, so seed your keys alongside them.
-   - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly).
-   - Then call set_env_values, passing the STEP 1 secretRef as a value
-     object, not a literal string:
-       values: {
-         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
-         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${host}"
-       }
-   Variable names follow the skill's per-uploader conventions. The wizard
-   resolves the ref locally before writing, so you never see the key value.
+${credentialSteps}
 
 STEP 6 — Identify the build AND run commands. (skill: "Identify the build and run commands")
    Per the skill, resolve the production BUILD command and the RUN command
@@ -174,13 +198,24 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    If "yes", follow the skill's "Test the local setup" step for the
    platform-appropriate affordance, the captureException shape, the
    placement, and the read-before-edit / always-revert rules. Then pause for
-   the user with wizard_ask, baking the EXACT build and run commands from
-   STEP 6 (and the exact button label / route) into the prompt as literal,
-   copy-pasteable steps. Separate each numbered step with \\n\\n so the TUI
-   renders them as distinct lines:
+   the user with wizard_ask, baking the build-and-run flow (and the exact
+   button label / route) into the prompt as literal, copy-pasteable
+   numbered steps:
+   - Steps 1-2: the production build, then launching the app and
+     triggering the test affordance. Source them from STEP 6 and the
+     skill's "Test the local setup" step — when the skill gives the
+     platform's test flow as verbatim steps (IDE-driven platforms like
+     Xcode do), use its wording and do NOT invent CLI build commands,
+     debugger steps, or relaunch steps it doesn't state. Quote CLI
+     commands verbatim. When build and run are one action (an IDE Run),
+     fold them into step 1 and make step 2 just triggering the affordance.
+   - The last step is always the Error Tracking check, exactly as in the
+     template.
+   Separate each numbered step with \\n\\n so the TUI renders them as
+   distinct lines:
         {
           id: "test-done",
-          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test affordance.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
+          prompt: "1) <production build step — it uploads source maps and builds the app with the test affordance>\\n\\n2) <run step>, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
           kind: "single",
           options: [{ label: "Continue (revert test code)", value: "continue" }]
         }
@@ -188,8 +223,16 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    surface any failure in STEP 9.
 
 STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
-   Follow the skill's "Verify and hand off" step. The Symbol sets page for
-   this project — where the user confirms the upload landed — is:
+   Follow the skill's "Verify and hand off" step. Write the hand-off to
+   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
+   \`${reportFile}\` as the file path, never prefixed with the selected
+   project directory; this file is the one exception to the project-scope
+   rule above. Cover: the files you changed (paths only), the exact build
+   and upload commands, every CI secret the user still has to create, and
+   how to verify the upload — then give the same summary in chat. Never
+   write secret values into the report, only variable names. The success
+   screen points the user at this file, so do not skip it. The Symbol sets page for this project — where the user
+   confirms the upload landed — is:
    ${uiHost}/project/${projectId}/error_tracking/configuration
 `;
 }

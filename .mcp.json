@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "wizard-ci": {
+      "command": "npx",
+      "args": ["tsx", "scripts/wizard-ci-mcp.no-jest.ts"]
+    }
+  }
+}

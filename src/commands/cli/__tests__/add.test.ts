@@ -1,19 +1,27 @@
-const mockCliAddInstallOrUpdatePostHogCli = jest.fn();
-const mockCliAddInstallSteeringSnippet = jest.fn();
-const mockCliAddWizardCapture = jest.fn();
-const mockCliAddSetUI = jest.fn();
-const mockCliAddUi = {
-  intro: jest.fn(),
-  outro: jest.fn(),
-  log: {
-    error: jest.fn(),
-    info: jest.fn(),
-    success: jest.fn(),
-    warn: jest.fn(),
+const {
+  mockCliAddInstallOrUpdatePostHogCli,
+  mockCliAddInstallSteeringSnippet,
+  mockCliAddWizardCapture,
+  mockCliAddSetUI,
+  mockCliAddUi,
+} = vi.hoisted(() => ({
+  mockCliAddInstallOrUpdatePostHogCli: vi.fn(),
+  mockCliAddInstallSteeringSnippet: vi.fn(),
+  mockCliAddWizardCapture: vi.fn(),
+  mockCliAddSetUI: vi.fn(),
+  mockCliAddUi: {
+    intro: vi.fn(),
+    outro: vi.fn(),
+    log: {
+      error: vi.fn(),
+      info: vi.fn(),
+      success: vi.fn(),
+      warn: vi.fn(),
+    },
   },
-};
+}));
 
-jest.mock('@steps/install-cli-steering', () => ({
+vi.mock('@steps/install-cli-steering', () => ({
   CLI_STEERING_TARGETS: [
     {
       id: 'codex',
@@ -22,8 +30,8 @@ jest.mock('@steps/install-cli-steering', () => ({
       isDetected: () => true,
     },
   ],
-  detectTargets: jest.fn(),
-  findTarget: jest.fn(() => ({
+  detectTargets: vi.fn(),
+  findTarget: vi.fn(() => ({
     id: 'codex',
     name: 'Codex',
     instructionsPath: () => '/home/user/.codex/AGENTS.md',
@@ -32,14 +40,14 @@ jest.mock('@steps/install-cli-steering', () => ({
   installOrUpdatePostHogCli: mockCliAddInstallOrUpdatePostHogCli,
   installSteeringSnippet: mockCliAddInstallSteeringSnippet,
 }));
-jest.mock('@ui', () => ({
+vi.mock('@ui', () => ({
   getUI: () => mockCliAddUi,
   setUI: mockCliAddSetUI,
 }));
-jest.mock('@ui/logging-ui', () => ({
-  LoggingUI: jest.fn(),
+vi.mock('@ui/logging-ui', () => ({
+  LoggingUI: vi.fn(),
 }));
-jest.mock('@utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: mockCliAddWizardCapture },
 }));
 
@@ -49,8 +57,8 @@ describe('cli add command', () => {
   const originalExit = process.exit;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    process.exit = jest.fn() as unknown as typeof process.exit;
+    vi.clearAllMocks();
+    process.exit = vi.fn() as unknown as typeof process.exit;
     mockCliAddInstallOrUpdatePostHogCli.mockReturnValue({ success: true });
     mockCliAddInstallSteeringSnippet.mockReturnValue({
       success: true,

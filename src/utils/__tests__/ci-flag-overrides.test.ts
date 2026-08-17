@@ -3,9 +3,9 @@ import {
   ciExcludedTaskTypes,
 } from '@utils/ci-flag-overrides';
 
-jest.mock('@utils/debug', () => ({
-  logToFile: jest.fn(),
-  debug: jest.fn(),
+vi.mock('@utils/debug', () => ({
+  logToFile: vi.fn(),
+  debug: vi.fn(),
 }));
 
 const ENV_KEY = 'WIZARD_CI_FLAG_OVERRIDES';
@@ -20,7 +20,7 @@ describe('applyCiFlagOverrides', () => {
   describe('in CI builds', () => {
     it('returns the flags untouched when no override is set', () => {
       const flags = { 'wizard-orchestrator': 'false' };
-      expect(applyCiFlagOverrides(flags)).toEqual(flags);
+      expect(applyCiFlagOverrides(flags)).toEqual({ flags, payloads: {} });
     });
 
     it('merges overrides over the fetched flags, stringifying values', () => {
@@ -32,11 +32,29 @@ describe('applyCiFlagOverrides', () => {
         applyCiFlagOverrides({
           'wizard-orchestrator': 'false',
           'wizard-react-router': 'true',
-        }),
+        }).flags,
       ).toEqual({
         'wizard-orchestrator': 'true',
         'wizard-next-v2': 'legacy',
         'wizard-react-router': 'true',
+      });
+    });
+
+    it('routes an object override to the payloads map and turns the flag on', () => {
+      process.env[ENV_KEY] = JSON.stringify({
+        'wizard-self-driving-use-pi-harness': {
+          model: 'gpt-5-4',
+          effort: 'low',
+        },
+      });
+      expect(applyCiFlagOverrides({})).toEqual({
+        flags: { 'wizard-self-driving-use-pi-harness': 'true' },
+        payloads: {
+          'wizard-self-driving-use-pi-harness': {
+            model: 'gpt-5-4',
+            effort: 'low',
+          },
+        },
       });
     });
 
@@ -47,20 +65,24 @@ describe('applyCiFlagOverrides', () => {
   });
 
   describe('in production builds', () => {
-    it('is inert: overrides are ignored even when the env var is set', () => {
+    it('is inert: overrides are ignored even when the env var is set', async () => {
       const prevNodeEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
       process.env[ENV_KEY] = JSON.stringify({ 'wizard-orchestrator': true });
-      let result: Record<string, string> | undefined;
-      jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const prod = require('@utils/ci-flag-overrides') as {
-          applyCiFlagOverrides: typeof applyCiFlagOverrides;
-        };
-        result = prod.applyCiFlagOverrides({ 'wizard-orchestrator': 'false' });
+      // Re-import fresh so the module re-reads NODE_ENV at load time (the
+      // vitest equivalent of jest.isolateModules).
+      vi.resetModules();
+      const prod = (await import('@utils/ci-flag-overrides')) as {
+        applyCiFlagOverrides: typeof applyCiFlagOverrides;
+      };
+      const result = prod.applyCiFlagOverrides({
+        'wizard-orchestrator': 'false',
       });
       process.env.NODE_ENV = prevNodeEnv;
-      expect(result).toEqual({ 'wizard-orchestrator': 'false' });
+      expect(result).toEqual({
+        flags: { 'wizard-orchestrator': 'false' },
+        payloads: {},
+      });
     });
   });
 });
@@ -79,18 +101,17 @@ describe('ciExcludedTaskTypes', () => {
     expect(ciExcludedTaskTypes()).toEqual(['dashboard', 'report']);
   });
 
-  it('is inert in production builds', () => {
+  it('is inert in production builds', async () => {
     const prevNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     process.env.WIZARD_CI_EXCLUDE_TASKS = 'dashboard';
-    let result: readonly string[] | undefined;
-    jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const prod = require('@utils/ci-flag-overrides') as {
-        ciExcludedTaskTypes: typeof ciExcludedTaskTypes;
-      };
-      result = prod.ciExcludedTaskTypes();
-    });
+    // Re-import fresh so the module re-reads NODE_ENV at load time (the
+    // vitest equivalent of jest.isolateModules).
+    vi.resetModules();
+    const prod = (await import('@utils/ci-flag-overrides')) as {
+      ciExcludedTaskTypes: typeof ciExcludedTaskTypes;
+    };
+    const result = prod.ciExcludedTaskTypes();
     process.env.NODE_ENV = prevNodeEnv;
     expect(result).toEqual([]);
   });

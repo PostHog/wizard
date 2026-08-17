@@ -14,6 +14,11 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
+import {
+  NO_DEFAULT_LIMIT,
+  PRICING_LONG,
+  PRICING_SHORT,
+} from '@lib/programs/self-driving/content/pricing.js';
 import type { SelfDrivingDetectError } from '@lib/programs/self-driving/index';
 
 interface SelfDrivingIntroScreenProps {
@@ -60,25 +65,40 @@ export const SelfDrivingIntroScreen = ({
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1} paddingLeft={4}>
-        <Text>{'•'} Watches errors, replays, and connected tools</Text>
-        <Text>{'•'} Runs scouts — scheduled checks that scan for issues</Text>
+        <Text>
+          {'•'} Watches your signal sources: errors, replays, connected tools
+        </Text>
+        <Text>{'•'} Runs scouts – scheduled agents that scan for issues</Text>
+        <Text>{'•'} Groups signals into prioritized reports in your inbox</Text>
         <Text>{'•'} Researches findings in your code via GitHub</Text>
-        <Text>{'•'} Surfaces everything in your Self-driving inbox</Text>
+        <Text>
+          {'•'} Measures shipped fixes, and reopens the loop if the pattern
+          persists
+        </Text>
+      </Box>
+      <Box flexDirection="column" marginTop={1}>
+        <Text>{PRICING_LONG}</Text>
+        <Text>{NO_DEFAULT_LIMIT}</Text>
       </Box>
     </Box>
   ) : (
     <Box flexDirection="column" alignItems="center">
       <Text>Let's set up PostHog Self-driving.</Text>
       <Box flexDirection="column" marginTop={1}>
-        <Text>PostHog finds — and can fix — issues in your product.</Text>
+        <Text>
+          PostHog watches how people really use your product, finds issues, and
+          proposes fixes.
+        </Text>
       </Box>
       <Box flexDirection="column" marginTop={1} alignItems="center">
         <Text dimColor>
-          It turns on signal sources (errors, replays, connected tools)
+          An agent will connect GitHub, enable signal sources, and tune your
+          scouts.
         </Text>
         <Text dimColor>
-          and scouts — scheduled checks that flag issues to your inbox.
+          About 10 minutes, with a few questions along the way.
         </Text>
+        <Text dimColor>{PRICING_SHORT}</Text>
       </Box>
     </Box>
   );

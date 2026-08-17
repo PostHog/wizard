@@ -18,8 +18,8 @@ describe('createProgramSequence', () => {
   });
 
   it('falls back isComplete to gate, preferring explicit isComplete', () => {
-    const gateFn = jest.fn();
-    const isCompleteFn = jest.fn();
+    const gateFn = vi.fn();
+    const isCompleteFn = vi.fn();
 
     const steps: ProgramStep[] = [
       { id: 'a', label: 'A', screenId: 'a', gate: gateFn },
@@ -47,8 +47,8 @@ describe('createProgramSequence', () => {
         label: 'Welcome',
         screenId: 'intro',
         gate: () => true,
-        onInit: jest.fn(),
-        onReady: jest.fn(),
+        onInit: vi.fn(),
+        onReady: vi.fn(),
       },
     ];
 

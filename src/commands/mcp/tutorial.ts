@@ -28,7 +28,11 @@ function runMcpTutorial(argv: Arguments): void {
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.McpTutorial);
-      tui.store.session = buildSession({ debug, localMcp });
+      tui.store.session = buildSession({
+        debug,
+        localMcp,
+        baseUrl: argv.baseUrl as string | undefined,
+      });
     } catch (err) {
       // TUI unavailable — the tutorial has no headless fallback.
       setUI(new LoggingUI());

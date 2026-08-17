@@ -117,6 +117,47 @@ describe('detectWarehouseSources', () => {
     expect(byKind.Github).toBe('deep-link');
   });
 
+  it('detects LLM/AI SaaS sources by their SDK package as in-cli', () => {
+    writePackageJson(tmpDir, {
+      openai: '^4.0.0',
+      '@anthropic-ai/sdk': '^0.30.0',
+      'groq-sdk': '^0.9.0',
+    });
+    const byKind = Object.fromEntries(
+      detectWarehouseSources(tmpDir).map((s) => [s.kind, s.mode]),
+    );
+    expect(byKind.OpenAI).toBe('in-cli');
+    expect(byKind.Anthropic).toBe('in-cli');
+    expect(byKind.Groq).toBe('in-cli');
+  });
+
+  it('detects ad-platform sources as deep-link OAuth sources', () => {
+    writePackageJson(tmpDir, {
+      'google-ads-api': '^17.0.0',
+      'facebook-nodejs-business-sdk': '^20.0.0',
+    });
+    const byKind = Object.fromEntries(
+      detectWarehouseSources(tmpDir).map((s) => [s.kind, s.mode]),
+    );
+    expect(byKind.GoogleAds).toBe('deep-link');
+    expect(byKind.MetaAds).toBe('deep-link');
+  });
+
+  it('detects newly added sources from Python, Ruby, and env signals', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'requirements.txt'),
+      'python-gitlab==4.0.0\n',
+    );
+    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'newrelic_rpm'\n");
+    fs.writeFileSync(
+      path.join(tmpDir, '.env'),
+      'DATADOG_API_KEY=x\nSTYTCH_SECRET=y\n',
+    );
+    expect(kinds(tmpDir)).toEqual(
+      ['Datadog', 'GitLab', 'NewRelic', 'Stytch'].sort(),
+    );
+  });
+
   it('detects sources from Python and Ruby deps and env keys', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'requirements.txt'),

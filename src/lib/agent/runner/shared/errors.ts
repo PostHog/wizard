@@ -27,6 +27,11 @@ export async function abortOnInstallFailure(
     error: new WizardError(`Skill install failed: ${result.kind}`, {
       integration: integrationLabel,
       error_type: result.kind,
+      platform: process.platform,
+      // The kind can't separate missing-tool from network failures.
+      ...(result.kind === 'download-failed'
+        ? { error_detail: result.message.slice(0, 500) }
+        : {}),
     }),
   });
 }

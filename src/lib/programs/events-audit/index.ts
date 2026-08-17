@@ -4,14 +4,18 @@ import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { SPINNER_MESSAGE } from '@lib/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { getCloudUrlFromRegion } from '@utils/urls';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
 import { seedAuditLedger } from '@lib/programs/audit/seed';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
-export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';
+// SETUP_REPORT_FILE is also re-exported for backward compat with existing
+// imports from `@lib/programs/events-audit`. EVENT_INVENTORY_FILE and
+// EVENT_INVENTORY_PART_PATTERN are only used by yara-hooks, which imports
+// them directly from `./constants` — no re-export needed.
+import { SETUP_REPORT_FILE } from './constants.js';
+export { SETUP_REPORT_FILE };
 
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
@@ -58,17 +62,14 @@ Project context:
 - PostHog Project ID: ${ctx.projectId}
 - TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}
+- PostHog Host: ${ctx.host.apiHost}
 `,
 
-      buildOutroData: (sess, _credentials, cloudRegion) => {
-        const cloudUrl = cloudRegion
-          ? getCloudUrlFromRegion(cloudRegion)
+      buildOutroData: (sess, credentials) => {
+        const cloudUrl = credentials.host.appHost;
+        const continueUrl = sess.signup
+          ? `${cloudUrl}/products?source=wizard`
           : undefined;
-        const continueUrl =
-          sess.signup && cloudUrl
-            ? `${cloudUrl}/products?source=wizard`
-            : undefined;
         // The agent emits `[DASHBOARD_URL] <url>` once it creates the
         // dashboard; the SDK-message interceptor stores it on the session.
         // Fall back to the dashboards index if nothing was emitted.

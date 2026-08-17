@@ -3,6 +3,7 @@ import type {
   MiddlewareContext,
   MiddlewareStore,
 } from '@lib/middleware/types';
+import { computeTokenCostUsd } from '@lib/agent/token-pricing';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';
 
@@ -11,34 +12,14 @@ export interface CostData {
   phaseCosts: Array<{ phase: string; cost: number }>;
 }
 
-/** Claude Sonnet 4.6 pricing (USD per 1M tokens) */
-const PRICE_PER_MTOK = {
-  input: 3,
-  output: 15,
-  cacheRead: 0.3,
-  cacheCreation5m: 3.75,
-  cacheCreation1h: 6,
-} as const;
-
-function computeCost(
-  inputTokens: number,
-  outputTokens: number,
-  cacheReadTokens: number,
-  cacheCreation5m: number,
-  cacheCreation1h: number,
-  cacheCreationFallback: number,
-): number {
-  const hasBreakdown = cacheCreation5m > 0 || cacheCreation1h > 0;
-  return (
-    inputTokens * (PRICE_PER_MTOK.input / 1e6) +
-    outputTokens * (PRICE_PER_MTOK.output / 1e6) +
-    cacheReadTokens * (PRICE_PER_MTOK.cacheRead / 1e6) +
-    (hasBreakdown
-      ? cacheCreation5m * (PRICE_PER_MTOK.cacheCreation5m / 1e6) +
-        cacheCreation1h * (PRICE_PER_MTOK.cacheCreation1h / 1e6)
-      : cacheCreationFallback * (PRICE_PER_MTOK.cacheCreation5m / 1e6))
-  );
-}
+// Pricing table + formula moved to `@lib/agent/token-pricing` so the live
+// token/cost HUD's per-turn estimate can't drift from this benchmark's.
+// No model is passed to computeTokenCostUsd below (falls back to Sonnet
+// pricing) -- MiddlewareContext has no model field to thread through, and
+// `--benchmark` always measures the default flow, never a Haiku-overridden
+// program. Still reconciles to the SDK's authoritative total_cost_usd in
+// onFinalize below, same as the live HUD, so this only risks the
+// unreconciled per-phase breakdown.
 
 export class CostTrackerPlugin implements Middleware {
   readonly name = 'cost';
@@ -64,14 +45,14 @@ export class CostTrackerPlugin implements Middleware {
     const c1h = cacheSnap?.cacheCreation1h ?? 0;
     const baseIn = Math.max(0, totalIn - read - creation);
 
-    const phaseCost = computeCost(
-      baseIn,
-      tokenSnap?.outputTokens ?? 0,
-      read,
-      c5m,
-      c1h,
-      creation,
-    );
+    const phaseCost = computeTokenCostUsd({
+      inputTokens: baseIn,
+      outputTokens: tokenSnap?.outputTokens ?? 0,
+      cacheReadTokens: read,
+      cacheCreation5m: c5m,
+      cacheCreation1h: c1h,
+      cacheCreationTokens: creation,
+    });
 
     this.phaseCosts.push({ phase: fromPhase, cost: phaseCost });
     this.totalCost += phaseCost;
@@ -96,14 +77,14 @@ export class CostTrackerPlugin implements Middleware {
     const c1h = cacheSnap?.cacheCreation1h ?? 0;
     const baseIn = Math.max(0, totalIn - read - creation);
 
-    const lastPhaseCost = computeCost(
-      baseIn,
-      tokenSnap?.outputTokens ?? 0,
-      read,
-      c5m,
-      c1h,
-      creation,
-    );
+    const lastPhaseCost = computeTokenCostUsd({
+      inputTokens: baseIn,
+      outputTokens: tokenSnap?.outputTokens ?? 0,
+      cacheReadTokens: read,
+      cacheCreation5m: c5m,
+      cacheCreation1h: c1h,
+      cacheCreationTokens: creation,
+    });
 
     this.phaseCosts.push({ phase: ctx.currentPhase, cost: lastPhaseCost });
     this.totalCost += lastPhaseCost;

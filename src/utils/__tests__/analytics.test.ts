@@ -1,37 +1,53 @@
 import { Analytics, groupsFromUser } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
-import { ANALYTICS_TEAM_TAG } from '@lib/constants';
+import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
+import { VERSION } from '@lib/version';
 import type { ApiUser } from '@lib/api';
 
-jest.mock('posthog-node');
-jest.mock('uuid');
+vi.mock('posthog-node');
+vi.mock('uuid');
 
 // IS_PRODUCTION_BUILD is read live (property access) in the Analytics
 // constructor, so a getter backed by this mutable flag lets a test flip the
 // build type without re-importing the module. Defaults falsy → 'dev',
-// matching every other test. `var` (not `let`) so the hoisted jest.mock
-// factory can read it at import time without hitting the temporal dead zone;
-// the `mock` prefix satisfies jest's hoisting rule.
-// eslint-disable-next-line no-var
-var mockIsProductionBuild = false;
-jest.mock('@env', () => ({
-  ...jest.requireActual('@env'),
+// matching every other test. vi.hoisted() runs before the hoisted vi.mock
+// factory, so the getter can read the flag at import time without hitting the
+// temporal dead zone.
+const envState = vi.hoisted(() => ({
+  isProductionBuild: false,
+  runSurface: 'local' as 'cloud' | 'local',
+  taskRunId: undefined as string | undefined,
+  taskId: undefined as string | undefined,
+}));
+vi.mock('@env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@env')>()),
   get IS_PRODUCTION_BUILD() {
-    return mockIsProductionBuild;
+    return envState.isProductionBuild;
+  },
+  get RUN_SURFACE() {
+    return envState.runSurface;
+  },
+  get TASK_RUN_ID() {
+    return envState.taskRunId;
+  },
+  get TASK_ID() {
+    return envState.taskId;
   },
 }));
 
-const mockUuidv4 = uuidv4 as jest.MockedFunction<typeof uuidv4>;
-const MockedPostHog = PostHog as jest.MockedClass<typeof PostHog>;
+const mockUuidv4 = uuidv4 as unknown as MockedFunction<typeof uuidv4>;
+const MockedPostHog = PostHog as MockedClass<typeof PostHog>;
 
 describe('Analytics', () => {
   let analytics: Analytics;
-  let mockPostHogInstance: jest.Mocked<PostHog>;
+  let mockPostHogInstance: Mocked<PostHog>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockIsProductionBuild = false;
+    vi.clearAllMocks();
+    envState.isProductionBuild = false;
+    envState.taskRunId = undefined;
+    envState.taskId = undefined;
     // Each run mints several distinct uuids; mock them to different values
     // so the tests reflect reality (run_id !== $session_id) rather than
     // collapsing them. Call order: anonymousId, runId (both in the
@@ -45,11 +61,11 @@ describe('Analytics', () => {
     }) as any);
 
     mockPostHogInstance = {
-      capture: jest.fn(),
-      captureException: jest.fn(),
-      alias: jest.fn(),
-      identify: jest.fn(),
-      shutdown: jest.fn().mockResolvedValue(undefined),
+      capture: vi.fn(),
+      captureException: vi.fn(),
+      alias: vi.fn(),
+      identify: vi.fn(),
+      shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     MockedPostHog.mockImplementation(() => mockPostHogInstance);
@@ -72,6 +88,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           ...properties,
         },
       );
@@ -92,6 +110,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           testTag: 'testValue',
           ...properties,
         },
@@ -113,6 +133,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           $session_id: 'session-uuid',
         },
       );
@@ -131,6 +153,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
         },
       );
     });
@@ -140,7 +164,8 @@ describe('Analytics', () => {
       const properties = { integration: 'nextjs', step: 'installation' };
 
       analytics.setTag('environment', 'test');
-      analytics.setTag('version', '1.0.0');
+      // Not `version`: that key is now one of the constructor's own tags.
+      analytics.setTag('framework_version', '1.0.0');
       analytics.captureException(error, properties);
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
@@ -151,8 +176,10 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           environment: 'test',
-          version: '1.0.0',
+          framework_version: '1.0.0',
           integration: 'nextjs',
           step: 'installation',
         },
@@ -174,6 +201,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           integration: 'react',
         },
       );
@@ -192,8 +221,122 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
         },
       );
+    });
+  });
+
+  describe('flag exposure', () => {
+    // The getFlag spy *is* the exposure assertion — the SDK emits the event, not the wizard.
+    let snapshot: {
+      getFlag: MockedFunction<(key: string) => string | boolean | undefined>;
+      getFlagPayload: MockedFunction<() => undefined>;
+    };
+
+    function mockFlags(flags: Record<string, string | boolean>): void {
+      snapshot = {
+        getFlag: vi.fn((key: string) => flags[key]),
+        getFlagPayload: vi.fn(() => undefined),
+      };
+      (mockPostHogInstance as any).evaluateFlags = vi
+        .fn()
+        .mockResolvedValue(snapshot);
+    }
+
+    beforeEach(() => {
+      mockFlags({
+        'wizard-orchestrator': true,
+        'wizard-orchestrator-override': 'sol-review',
+        'unrelated-flag': 'variant-x',
+      });
+    });
+
+    it('reads each wizard flag through getFlag', async () => {
+      await analytics.getAllFlagsForWizard();
+      expect(snapshot.getFlag.mock.calls.map(([k]) => k)).toEqual([
+        ...WIZARD_FLAG_KEYS,
+      ]);
+    });
+
+    it("skips another team's flag", async () => {
+      await analytics.getAllFlagsForWizard();
+      expect(snapshot.getFlag).not.toHaveBeenCalledWith('unrelated-flag');
+    });
+
+    it('does not hand-roll $feature_flag_called', async () => {
+      await analytics.getAllFlagsForWizard();
+      const handRolled = mockPostHogInstance.capture.mock.calls.filter(
+        ([arg]) => (arg as any).event === '$feature_flag_called',
+      );
+      expect(handRolled).toEqual([]);
+    });
+
+    it('resolves only wizard flags into the map', async () => {
+      const flags = await analytics.getAllFlagsForWizard();
+      expect(flags).toEqual({
+        'wizard-orchestrator': 'true',
+        'wizard-orchestrator-override': 'sol-review',
+      });
+    });
+
+    it('stamps $feature/<key> for wizard flags only', async () => {
+      await analytics.getAllFlagsForWizard();
+      analytics.wizardCapture('switchboard resolved', { program: 'x' });
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
+      );
+      const props = (call![0] as any).properties;
+      expect(props['$feature/wizard-orchestrator']).toBe(true);
+      expect(props['$feature/wizard-orchestrator-override']).toBe('sol-review');
+      expect(props['$feature/unrelated-flag']).toBeUndefined();
+    });
+
+    it('lists only enabled wizard flags in $active_feature_flags', async () => {
+      mockFlags({
+        'wizard-orchestrator': true,
+        'wizard-self-driving-use-pi-harness': false,
+        'wizard-orchestrator-override': 'sol-review',
+        'unrelated-flag': 'variant-x',
+      });
+      await analytics.getAllFlagsForWizard();
+      analytics.wizardCapture('switchboard resolved');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
+      );
+      expect((call![0] as any).properties.$active_feature_flags).toEqual([
+        'wizard-orchestrator',
+        'wizard-orchestrator-override',
+      ]);
+    });
+
+    it("tags the SDK's exposure event", () => {
+      const beforeSend = MockedPostHog.mock.calls[0][1]!.before_send as (
+        e: any,
+      ) => any;
+      const sent = beforeSend({
+        event: '$feature_flag_called',
+        properties: { $feature_flag: 'wizard-orchestrator' },
+      });
+      expect(sent.properties).toMatchObject({
+        $feature_flag: 'wizard-orchestrator',
+        $app_name: 'wizard',
+        run_id: 'run-uuid',
+        run_surface: 'local',
+        build: 'dev',
+      });
+    });
+
+    it('carries no $feature props before the fetch', () => {
+      analytics.wizardCapture('early event');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: early event',
+      );
+      const keys = Object.keys((call![0] as any).properties).filter((k) =>
+        k.startsWith('$feature/'),
+      );
+      expect(keys).toEqual([]);
     });
   });
 
@@ -202,23 +345,73 @@ describe('Analytics', () => {
       analytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as jest.Mock).mock.calls.at(
-          -1,
-        )?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
       ).toMatchObject({ build: 'dev' });
     });
 
     it("tags production builds as 'prod'", () => {
-      mockIsProductionBuild = true;
+      envState.isProductionBuild = true;
       const prodAnalytics = new Analytics();
 
       prodAnalytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as jest.Mock).mock.calls.at(
-          -1,
-        )?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
       ).toMatchObject({ build: 'prod' });
+    });
+  });
+
+  describe('run_surface tag', () => {
+    it("defaults every event to 'local'", () => {
+      analytics.captureException(new Error('e'));
+
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ run_surface: 'local' });
+    });
+
+    it("tags 'cloud' on the headless launch surface", () => {
+      envState.runSurface = 'cloud';
+      try {
+        const cloud = new Analytics();
+        cloud.captureException(new Error('e'));
+
+        expect(
+          (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        ).toMatchObject({ run_surface: 'cloud' });
+      } finally {
+        envState.runSurface = 'local';
+      }
+    });
+  });
+
+  describe('task run tags', () => {
+    it('omits both ids on a run the sandbox did not launch', () => {
+      analytics.capture('wizard: test');
+
+      const properties = (mockPostHogInstance.capture as Mock).mock.calls.at(
+        -1,
+      )?.[0].properties;
+      expect(properties).not.toHaveProperty('task_run_id');
+      expect(properties).not.toHaveProperty('task_id');
+    });
+
+    it('tags every event with the launching task run', () => {
+      envState.taskRunId = 'task-run-uuid';
+      envState.taskId = 'task-uuid';
+      const cloud = new Analytics();
+
+      cloud.capture('wizard: test');
+      cloud.captureException(new Error('e'));
+
+      // Both paths merge the same tag bag, so the join back to the task run has
+      // to hold for exceptions too, not just explicit captures.
+      expect(
+        (mockPostHogInstance.capture as Mock).mock.calls.at(-1)?.[0].properties,
+      ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
     });
   });
 
@@ -245,9 +438,9 @@ describe('Analytics', () => {
       });
       // Alias only ever fires after identification.
       expect(
-        (mockPostHogInstance.identify as jest.Mock).mock.invocationCallOrder[0],
+        (mockPostHogInstance.identify as Mock).mock.invocationCallOrder[0],
       ).toBeLessThan(
-        (mockPostHogInstance.alias as jest.Mock).mock.invocationCallOrder[0],
+        (mockPostHogInstance.alias as Mock).mock.invocationCallOrder[0],
       );
     });
 
@@ -273,8 +466,8 @@ describe('Analytics', () => {
 
       // Pre-login: run_id is present, $session_id is not.
       analytics.captureException(error);
-      const beforeLogin = (mockPostHogInstance.captureException as jest.Mock)
-        .mock.calls[0][2];
+      const beforeLogin = (mockPostHogInstance.captureException as Mock).mock
+        .calls[0][2];
       expect(beforeLogin).toMatchObject({ run_id: 'run-uuid' });
       expect(beforeLogin).not.toHaveProperty('$session_id');
 
@@ -282,7 +475,7 @@ describe('Analytics', () => {
       analytics.identifyUser({ distinct_id: 'user-123' } as unknown as ApiUser);
       analytics.captureException(error);
       expect(
-        (mockPostHogInstance.captureException as jest.Mock).mock.calls[1][2],
+        (mockPostHogInstance.captureException as Mock).mock.calls[1][2],
       ).toMatchObject({ run_id: 'run-uuid', $session_id: 'session-uuid' });
     });
 
@@ -327,6 +520,8 @@ describe('Analytics', () => {
         $app_name: 'wizard',
         build: 'dev',
         run_id: 'run-uuid',
+        run_surface: 'local',
+        version: VERSION,
         command: 'slack',
         $exception_list: [{ type: 'Error' }],
       });
@@ -352,6 +547,24 @@ describe('Analytics', () => {
       expect(beforeSend(event)).toBe(event);
       expect(event.distinctId).toBe('d');
       expect(event.properties).toEqual({ a: 1 });
+    });
+  });
+
+  describe('shutdown', () => {
+    it('emits the terminal event once — the first status wins over the interrupt fallback', async () => {
+      analytics.setTag('program_id', 'warehouse-source');
+
+      await analytics.shutdown('success');
+      // start-tui's ctrl+c fallback fires this on every TUI teardown.
+      await analytics.shutdown('cancelled');
+
+      const finishedCalls = mockPostHogInstance.capture.mock.calls.filter(
+        ([arg]) => arg.event === 'setup wizard finished',
+      );
+      expect(finishedCalls).toHaveLength(1);
+      expect(finishedCalls[0][0].properties).toMatchObject({
+        status: 'success',
+      });
     });
   });
 
@@ -490,6 +703,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -515,6 +730,8 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
+          version: VERSION,
           $session_id: 'session-uuid',
           integration: 'svelte',
         },

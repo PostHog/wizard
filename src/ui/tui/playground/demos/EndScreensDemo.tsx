@@ -27,6 +27,7 @@ import { SlackConnectScreen } from '@ui/tui/screens/SlackConnectScreen';
 import { OutroScreen } from '@ui/tui/screens/OutroScreen';
 import { Colors } from '@ui/tui/styles';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 
 const VIEWS = ['slack-connect', 'outro'] as const;
 type View = (typeof VIEWS)[number];
@@ -87,7 +88,7 @@ export const EndScreensDemo = ({ store }: EndScreensDemoProps) => {
     store.setCredentials({
       accessToken: 'playground',
       projectApiKey: 'playground',
-      host: 'http://127.0.0.1:9',
+      host: HostResolution.fromApiHost('http://127.0.0.1:9'),
       projectId: 0,
     });
     return () => {

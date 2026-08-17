@@ -7,7 +7,7 @@ import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
-import { getCloudUrlFromRegion } from '@utils/urls';
+import { headlessOption, regionOption } from '@lib/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
@@ -68,14 +68,11 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
-    buildOutroData: (sess, _credentials, cloudRegion) => {
-      const cloudUrl = cloudRegion
-        ? getCloudUrlFromRegion(cloudRegion)
+    buildOutroData: (sess, credentials) => {
+      const cloudUrl = credentials.host.appHost;
+      const continueUrl = sess.signup
+        ? `${cloudUrl}/products?source=wizard`
         : undefined;
-      const continueUrl =
-        sess.signup && cloudUrl
-          ? `${cloudUrl}/products?source=wizard`
-          : undefined;
 
       // Note: `sess` here is the agent-runner's snapshot of session at
       // runAgent() invocation time. Any URL emissions during the run land
@@ -89,8 +86,8 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
         reportFile: baseRun.reportFile,
         docsUrl: baseRun.docsUrl,
         continueUrl,
-        dashboardUrl: sess.dashboardUrl ?? undefined,
-        notebookUrl: sess.notebookUrl ?? undefined,
+        dashboardUrl: session.dashboardUrl ?? undefined,
+        notebookUrl: session.notebookUrl ?? undefined,
       };
     },
   };
@@ -102,4 +99,8 @@ export const auditConfig: ProgramConfig = {
   run: auditRun,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+  // The experimental headless flag — declared on `audit` (and basic
+  // integration) rather than globally. mergeCommandOptions lands it on the
+  // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.
+  cliOptions: { ...headlessOption, ...regionOption },
 };
