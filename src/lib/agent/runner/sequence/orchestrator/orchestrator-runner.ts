@@ -764,6 +764,14 @@ export async function runOrchestrator(
     // dependency as satisfied, so the report still runs.
     const notice = seededNotices.get(task.id);
     if (notice) {
+      // Consume the offer so it is shown at most once per run. A requeue keeps
+      // the same task id, so without this delete a first attempt that fails or
+      // ends without reporting would re-offer the notice on retry — re-entering
+      // the very timeout stall this screen exists to prevent, double-firing the
+      // notice analytics, and (on a retry decline) overwriting attempt 1's real
+      // outcome with a skip. Later attempts fall through to the executor's
+      // normal retry flow instead.
+      seededNotices.delete(task.id);
       const { keep, timedOut } = await offerSeededTask(notice);
       analytics.wizardCapture('orchestrator task notice answered', {
         type: task.type,
