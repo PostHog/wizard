@@ -135,6 +135,7 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  'replay-vision': DEFAULT_BINDING,
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.anthropic,
