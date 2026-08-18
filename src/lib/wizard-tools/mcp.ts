@@ -677,7 +677,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         });
         return {
           content: [{ type: 'text' as const, text: capDecision.message }],
-          isError: true,
+          // The adjacency nudge is a one-time, retryable hint, not a failure:
+          // flagging it isError makes the model read it as a hard refusal and
+          // abandon the source to browser fallback. The max_questions cap is a
+          // genuine stop, so it stays an error.
+          isError: capDecision.reason !== 'adjacency',
         };
       }
 
