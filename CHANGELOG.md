@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.63.0](https://github.com/PostHog/wizard/compare/v2.62.0...v2.63.0) (2026-08-18)
+
+
+### Features
+
+* adding deps for runnerSeeded tasks; move dw sources to the end ([#1103](https://github.com/PostHog/wizard/issues/1103)) ([2942041](https://github.com/PostHog/wizard/commit/29420413ceb236a6698c776fae25cea913d79e3c))
+* **self-driving:** key step events by step, not by the agent's wording ([#1083](https://github.com/PostHog/wizard/issues/1083)) ([07758d1](https://github.com/PostHog/wizard/commit/07758d1e9b429e5c7905a9eb3a57427420a2c034))
+* **warehouse:** hand over a pre-filled link per detected source ([#1087](https://github.com/PostHog/wizard/issues/1087)) ([f6f80d3](https://github.com/PostHog/wizard/commit/f6f80d38578548577013aeff11652c3fb8038ddf))
+
+
+### Bug Fixes
+
+* avoid EISDIR crash when .env is a directory ([#721](https://github.com/PostHog/wizard/issues/721)) ([e923a33](https://github.com/PostHog/wizard/commit/e923a33f7136830574733133e98bd2dbc99adf73))
+* **orchestrator:** give pi agents the reportSection handoff field ([#1086](https://github.com/PostHog/wizard/issues/1086)) ([d232375](https://github.com/PostHog/wizard/commit/d232375b22cba7338fa112f60d798a381000c15f))
+* Warn at login when the OAuth grant is narrower than requested ([#1090](https://github.com/PostHog/wizard/issues/1090)) ([30579e6](https://github.com/PostHog/wizard/commit/30579e6c743d2f4fc8aa2212a73b39364e72ba27))
+* **wizard-ask:** frame the adjacency cap as a retryable nudge, not a refusal ([#1096](https://github.com/PostHog/wizard/issues/1096)) ([e223c11](https://github.com/PostHog/wizard/commit/e223c1176a83be4a98c0b56afe903d5c1a8fdcea))
+
 ## [2.62.0](https://github.com/PostHog/wizard/compare/v2.61.0...v2.62.0) (2026-08-12)
 
 
