@@ -90,13 +90,20 @@ const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue 
  * Tasks the wizard queued before the planner ran. It has to see them: they are
  * part of the run it is planning around, and the task that reports last has to
  * depend on them. Their ids are real, so it can wire the edge directly.
+ *
+ * The one-way rule matters as much as the sink edge. These tasks are deferred to
+ * the end of the drain after planning (`seeded-deps.ts`) and may block on a
+ * person, so a task the planner hangs off one would wait on the user too — which
+ * is the interruption deferring them removed. The resolver drops such a task
+ * from the seeded task's own dependencies to stay acyclic, so the damage is
+ * silent; saying so here is what prevents it.
  */
 function preQueuedTasks(
   tasks: readonly { id: string; type: string }[],
 ): string | null {
   if (tasks.length === 0) return null;
   const lines = tasks.map((t) => `- ${t.type} (id: ${t.id})`);
-  return `The queue already holds these tasks, placed by the wizard from what it found in this project. Do not queue them again — plan around them, and make sure the reporting task ends up depending on each one:\n${lines.join(
+  return `The queue already holds these tasks, placed by the wizard from what it found in this project. Do not queue them again. They run late — after every task you queue — and one may stop to ask the user for input, so make the reporting task depend on each one and hang nothing else off them: any other task you made depend on one would end up waiting on a person.\n${lines.join(
     '\n',
   )}`;
 }
@@ -207,6 +214,17 @@ export interface AgentPrompt {
   skills: string[];
   allowedTools: string[];
   disallowedTools: string[];
+  /**
+   * Task types this one runs after. Read differently by the two kinds of task:
+   *
+   * - **Enqueueable types**: advisory. The planner authors the real graph with
+   *   `enqueue_task`, passing ids, and its seed prompt describes the shape it
+   *   should build. Nothing resolves this field for them.
+   * - **`runnerSeeded` types**: authoritative. Such a task is queued before the
+   *   planner runs, so it cannot name ids; the runner resolves these types to
+   *   the ids the planner produced and applies them (see `seeded-deps.ts`).
+   *   Empty means "after everything that is not the sink".
+   */
   dependsOn: string[];
   body: string;
 }
