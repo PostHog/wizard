@@ -20,6 +20,7 @@ import {
   uncoveredBySink,
   type OrchestratorToolsContext,
 } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
+import { seededDependencies } from '@lib/agent/runner/sequence/orchestrator/seeded-deps';
 
 const VALID = ['warehouse', 'install', 'capture', 'report'];
 const SINKS = ['report'];
@@ -143,7 +144,10 @@ describe('displayOrder', () => {
       'capture',
       'report',
     ]);
-    // The optional task still has nothing to wait for, so it starts at once.
+    // This fixture is the queue as the planner leaves it, before the runner
+    // defers the seeded task — which is why displayOrder needed an
+    // optional-last rule at all. In a real run the deferral has happened by
+    // now and the task genuinely is last; see the deferred suites below.
     expect(store.nextRunnable().map((t) => t.type)).toContain('warehouse');
   });
 
@@ -169,5 +173,158 @@ describe('displayOrder', () => {
       'identify',
       'error-tracking',
     ]);
+  });
+});
+
+/**
+ * Deferring a runner-seeded task rewires the graph between planning and the
+ * drain, so the sink invariant has to survive it — and the guard that catches a
+ * planner which forgot the sink→seeded edge must keep catching it.
+ */
+describe('sink closure with a deferred seeded task', () => {
+  let dir: string;
+  let store: QueueStore;
+  let ctx: OrchestratorToolsContext;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sink-deferred-test-'));
+    store = new QueueStore(dir, 'run-1');
+    ctx = { store, validTypes: VALID, sinkTypes: SINKS };
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('still covers the whole queue once the seeded task runs last', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+    const capture = store.enqueue({ type: 'capture', dependsOn: [install.id] });
+    // The planner wires the sink to everything, seeded task included.
+    const report = store.enqueue({
+      type: 'report',
+      dependsOn: [capture.id, warehouse.id],
+    });
+
+    // Defer: warehouse now waits for the work it used to run alongside.
+    const deferred = seededDependencies(store, warehouse.id, [], SINKS);
+    store.addDependencies(warehouse.id, deferred.depIds);
+
+    const uncovered = uncoveredBySink(ctx, {
+      type: 'report',
+      dependsOn: report.dependsOn,
+    }).filter((t) => t.id !== report.id);
+    expect(uncovered).toEqual([]);
+  });
+
+  it('runs the seeded task after the code work but before the sink', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+    const capture = store.enqueue({ type: 'capture', dependsOn: [install.id] });
+    store.enqueue({ type: 'report', dependsOn: [capture.id, warehouse.id] });
+
+    const deferred = seededDependencies(store, warehouse.id, [], SINKS);
+    store.addDependencies(warehouse.id, deferred.depIds);
+
+    // Nothing runnable but install, so the ask cannot land yet.
+    expect(store.nextRunnable().map((t) => t.type)).toEqual(['install']);
+
+    const drain = (type: string) => {
+      const task = store.nextRunnable().find((t) => t.type === type);
+      if (!task) throw new Error(`${type} was not runnable`);
+      store.start(task.id);
+      store.complete(task.id);
+    };
+    drain('install');
+    drain('capture');
+
+    // Only now, with the code work done, does the human-blocking step open.
+    expect(store.nextRunnable().map((t) => t.type)).toEqual(['warehouse']);
+    drain('warehouse');
+    expect(store.nextRunnable().map((t) => t.type)).toEqual(['report']);
+  });
+
+  it('leaves a planner that forgot the sink edge still failing the invariant', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+    // The planner omits warehouse from the sink's dependencies.
+    const report = store.enqueue({ type: 'report', dependsOn: [install.id] });
+
+    const deferred = seededDependencies(store, warehouse.id, [], SINKS);
+    store.addDependencies(warehouse.id, deferred.depIds);
+
+    // Deferring must not paper this over by inverting the edge.
+    expect(store.get(warehouse.id)?.dependsOn).not.toContain(report.id);
+    const uncovered = uncoveredBySink(ctx, {
+      type: 'report',
+      dependsOn: report.dependsOn,
+    }).filter((t) => t.id !== report.id);
+    expect(uncovered.map((t) => t.type)).toEqual(['warehouse']);
+  });
+
+  it('sorts the deferred task last in the display order it now really runs in', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+    store.enqueue({ type: 'report', dependsOn: [install.id, warehouse.id] });
+
+    const deferred = seededDependencies(store, warehouse.id, [], SINKS);
+    store.addDependencies(warehouse.id, deferred.depIds);
+
+    const order = displayOrder(store.list(), (t) => t.type === 'warehouse').map(
+      (t) => t.type,
+    );
+    expect(order).toEqual(['install', 'warehouse', 'report']);
+  });
+});
+
+/**
+ * Declining the notice at run time. The offer moved from the top of the run to
+ * the moment the step would start, so by then the task is already queued and the
+ * sink already depends on it — declining has to skip it, not remove it.
+ */
+describe('a declined seeded task', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'declined-seeded-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('still lets the sink run, carrying a handoff that says it was declined', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+    const report = store.enqueue({
+      type: 'report',
+      dependsOn: [install.id, warehouse.id],
+    });
+    const deferred = seededDependencies(store, warehouse.id, [], SINKS);
+    store.addDependencies(warehouse.id, deferred.depIds);
+
+    store.start(install.id);
+    store.complete(install.id);
+
+    // The step comes up, the notice is shown, the user declines.
+    expect(store.nextRunnable().map((t) => t.type)).toEqual(['warehouse']);
+    store.start(warehouse.id);
+    store.skip(warehouse.id, {
+      goals: 'Connect your data sources',
+      did: 'Nothing — the user chose to skip this step when offered it.',
+      forNextAgent: 'This step was offered and declined, so it did no work.',
+    });
+
+    // The sink is not dammed by the decline, and can say what happened.
+    expect(store.nextRunnable().map((t) => t.id)).toEqual([report.id]);
+    expect(store.readHandoff(warehouse.id)?.did).toContain('chose to skip');
+  });
+
+  it('is not retried — a decline is an answer, not a failure', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    store.start(warehouse.id);
+    store.skip(warehouse.id);
+
+    expect(store.get(warehouse.id)?.status).toBe('not needed');
+    expect(store.nextRunnable()).toEqual([]);
+    expect(store.isDrained()).toBe(true);
   });
 });

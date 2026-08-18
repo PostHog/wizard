@@ -57,6 +57,7 @@ import {
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
 import { uncoveredBySink } from './queue-tools';
+import { deferSeededTasks } from './seeded-deps';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
@@ -514,6 +515,18 @@ export async function runOrchestrator(
     ? programConfig.seedTasks?.(session) ?? []
     : [];
   const seededTypes: string[] = [];
+  // Kept so their dependencies can be resolved once the planner has run — they
+  // are queued before it, so they cannot name what they wait for yet.
+  const seededTasks: QueuedTask[] = [];
+  // A seeded task's notice, held until the moment the task is about to run.
+  // Asked here at seed time it would be the first thing in the run — a modal
+  // before anything has happened, about work that will not start for minutes.
+  // The queue stays product-ignorant, so the copy waits here rather than on the
+  // task.
+  const seededNotices = new Map<
+    string,
+    NonNullable<(typeof seedEntries)[number]['notice']>
+  >();
   for (const seeded of seedEntries) {
     if (!registry.runnerSeededTypes.includes(seeded.type)) {
       logToFile(
@@ -521,21 +534,7 @@ export async function runOrchestrator(
       );
       continue;
     }
-    // A task that stops for the user is offered, not imposed: show its notice
-    // and drop it entirely when the user would rather not. Declining before
-    // the queue is planned is cheaper than skipping it once it is in there.
-    if (seeded.notice) {
-      const keep = await getUI().showTaskNotice(seeded.notice);
-      analytics.wizardCapture('orchestrator task notice answered', {
-        type: seeded.type,
-        kept: keep,
-      });
-      if (!keep) {
-        logToFile(`[orchestrator] user declined runner-seeded ${seeded.type}`);
-        continue;
-      }
-    }
-    store.enqueue({
+    const task = store.enqueue({
       type: seeded.type,
       label: seeded.label,
       inputs: seeded.inputs,
@@ -544,6 +543,8 @@ export async function runOrchestrator(
       optional: true,
     });
     seededTypes.push(seeded.type);
+    seededTasks.push(task);
+    if (seeded.notice) seededNotices.set(task.id, seeded.notice);
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
 
@@ -569,7 +570,12 @@ export async function runOrchestrator(
     ? undefined
     : createWizardAskBridge({
         getSource: () => session.skillId ?? programConfig.id,
-        showQuestion: (q) => getUI().requestQuestion(q),
+        showQuestion: (q) => {
+          // How late the first ask lands is the measure of this run shape: it
+          // should follow the autonomous work, not interrupt it.
+          metrics.recordAsk(Date.now());
+          return getUI().requestQuestion(q);
+        },
         cancelQuestion: () => getUI().cancelPendingQuestion(),
         richLinks: config.richLinks ?? false,
         timeoutMs: TASK_ASK_TIMEOUT_MS,
@@ -615,6 +621,49 @@ export async function runOrchestrator(
   });
   renderQueue();
 
+  // Now that the graph exists, give each runner-seeded task the dependencies it
+  // could not name when it was queued. Without this it sits at depth 0 and runs
+  // in the first tier — which for the warehouse step means its credential
+  // prompts arrive while the coding tasks are still writing files. Deferred, the
+  // one step that waits on a person waits until the autonomous work is done.
+  //
+  // Before the sink check below on purpose: sinks are never added as
+  // dependencies, so a planner that forgot to make its sink wait for a seeded
+  // task is still caught there rather than masked here.
+  const deferred = deferSeededTasks(
+    store,
+    seededTasks,
+    (type) => registry.get(type)?.dependsOn ?? [],
+    registry.sinkTypes,
+  );
+  for (const entry of deferred) {
+    logToFile(
+      `[orchestrator] deferred runner-seeded ${entry.type}: ` +
+        `${entry.added.length} deps (${
+          entry.declared
+            ? `declared: ${entry.declaredTypes.join(', ')}`
+            : 'default'
+        })${
+          entry.refused.length > 0 ? `, ${entry.refused.length} refused` : ''
+        }${
+          entry.unresolvedTypes.length > 0
+            ? `, unresolved: ${entry.unresolvedTypes.join(', ')}`
+            : ''
+        }`,
+    );
+    analytics.wizardCapture('orchestrator seeded task deferred', {
+      type: entry.type,
+      dep_count: entry.added.length,
+      declared: entry.declared,
+      declared_types: entry.declaredTypes,
+      unresolved_types: entry.unresolvedTypes,
+      // Non-empty means a cycle or an unknown id was rejected — the resolver and
+      // the queue disagreeing, never expected in a good run.
+      refused_count: entry.refused.length,
+    });
+  }
+  if (deferred.length > 0) renderQueue();
+
   // The enqueue guard rejects a sink that misses part of the queue, so a
   // planner that respected its errors cannot get here with a broken graph.
   // Check it again anyway: a run whose report never sees a task's handoff is
@@ -657,6 +706,36 @@ export async function runOrchestrator(
   );
   const runTask: RunTask = async (task) => {
     renderQueue();
+
+    // A task that stops for the user is offered, not imposed — and the offer
+    // belongs here, the moment before it runs, not at the top of the run. By now
+    // everything this task waits for is done, so the notice, the questions, and
+    // the work form one block at the end instead of a modal that interrupts
+    // before anything has happened.
+    //
+    // Declining skips the task rather than removing it: the planner has already
+    // wired the sink to depend on it, and `nextRunnable` treats a skipped
+    // dependency as satisfied, so the report still runs.
+    const notice = seededNotices.get(task.id);
+    if (notice) {
+      const keep = await getUI().showTaskNotice(notice);
+      analytics.wizardCapture('orchestrator task notice answered', {
+        type: task.type,
+        kept: keep,
+      });
+      if (!keep) {
+        logToFile(`[orchestrator] user declined runner-seeded ${task.type}`);
+        store.skip(task.id, {
+          goals: notice.title,
+          did: 'Nothing — the user chose to skip this step when offered it.',
+          forNextAgent:
+            'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.',
+        });
+        renderQueue();
+        return;
+      }
+    }
+
     try {
       const resolved = resolveTask(registry, task, store);
       // Task instructions are one-run scaffolding, not durable skills, so they
