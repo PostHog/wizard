@@ -83,6 +83,27 @@ export const SIGNUP_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
 // ---------------------------------------------------------------------------
 
 export async function checkAllExternalServices(): Promise<AllServicesHealth> {
+  // Deterministic-run escape hatch for the e2e/snapshot harness: a live
+  // status-page incident (e.g. Anthropic degraded) turns the health screen
+  // into a hard block whose any-key handler exits the process, killing the
+  // run before the screen under test ever renders. Snapshots assert our
+  // screens, not vendor status pages.
+  if (process.env.POSTHOG_WIZARD_ASSUME_HEALTHY === 'true') {
+    const healthy = { status: ServiceHealthStatus.Healthy };
+    return {
+      anthropic: healthy,
+      posthogOverall: healthy,
+      posthogComponents: { ...healthy, degradedOrDownComponents: [] },
+      github: healthy,
+      npmOverall: healthy,
+      npmComponents: { ...healthy, degradedOrDownComponents: [] },
+      cloudflareOverall: healthy,
+      cloudflareComponents: { ...healthy, degradedOrDownComponents: [] },
+      llmGateway: healthy,
+      mcp: healthy,
+      githubReleases: healthy,
+    };
+  }
   const [
     anthropic,
     posthogOverall,
