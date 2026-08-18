@@ -283,6 +283,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
       docsUrl: config.metadata.docsUrl,
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
+      // The seeded warehouse task's fallback, when a user cannot hand over a
+      // credential, is to give them the pre-filled new-source URL. That only
+      // works if the overlay renders it as a link they can open or copy.
+      richLinks: true,
 
       customPrompt: (ctx) => {
         const additionalLines = config.prompts.getAdditionalContextLines

@@ -275,53 +275,63 @@ export function applyReadHandoffs(
 // Caps each LLM-authored free-text field; queue.json rewrites whole per transition.
 const HANDOFF_TEXT_MAX = 8_000;
 
+/**
+ * The one description of every handoff field, shared by both harnesses'
+ * `complete_task` schemas — the zod shape below and the typebox mirror in
+ * `harness/pi/orchestrator-tools.ts`. A field an agent cannot see is a field it
+ * cannot fill, so the two drifting silently drops whatever the missing field
+ * carried; `__tests__/handoff-schema-parity.test.ts` holds them level.
+ */
+export const HANDOFF_FIELDS = {
+  goals: 'What this task was asked to achieve.',
+  did: 'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+  forNextAgent: 'What the next agent should know.',
+  filesTouched: 'Paths of every file you edited.',
+  evidence:
+    'How you know it worked — what you ran or observed, not what you expect.',
+  assumptions: 'What you assumed about the app and could not verify.',
+  conflict:
+    'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
+  reportSection:
+    'A finished markdown section about your work for the run report, written only when your task instructions ask for one. The reporting task includes it as its own section instead of rewriting it.',
+} as const satisfies Record<keyof Required<TaskHandoff>, string>;
+
 const HANDOFF_SHAPE = {
-  goals: z
-    .string()
-    .max(HANDOFF_TEXT_MAX)
-    .describe('What this task was asked to achieve.'),
-  did: z
-    .string()
-    .max(HANDOFF_TEXT_MAX)
-    .describe(
-      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
-    ),
+  goals: z.string().max(HANDOFF_TEXT_MAX).describe(HANDOFF_FIELDS.goals),
+  did: z.string().max(HANDOFF_TEXT_MAX).describe(HANDOFF_FIELDS.did),
   forNextAgent: z
     .string()
     .max(HANDOFF_TEXT_MAX)
-    .describe('What the next agent should know.'),
+    .describe(HANDOFF_FIELDS.forNextAgent),
   filesTouched: z
     .array(z.string().max(1_000))
     .max(200)
     .optional()
-    .describe('Paths of every file you edited.'),
+    .describe(HANDOFF_FIELDS.filesTouched),
   evidence: z
     .string()
     .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe(
-      'How you know it worked — what you ran or observed, not what you expect.',
-    ),
+    .describe(HANDOFF_FIELDS.evidence),
   assumptions: z
     .string()
     .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe('What you assumed about the app and could not verify.'),
+    .describe(HANDOFF_FIELDS.assumptions),
   conflict: z
     .string()
     .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe(
-      'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
-    ),
+    .describe(HANDOFF_FIELDS.conflict),
   reportSection: z
     .string()
     .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe(
-      'A finished markdown section about your work for the run report, written only when your task instructions ask for one. The reporting task includes it as its own section instead of rewriting it.',
-    ),
+    .describe(HANDOFF_FIELDS.reportSection),
 };
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const HANDOFF_SHAPE_KEYS: readonly string[] = Object.keys(HANDOFF_SHAPE);
 
 type SdkTool = (
   name: string,

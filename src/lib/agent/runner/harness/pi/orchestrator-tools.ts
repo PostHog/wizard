@@ -18,6 +18,7 @@ import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
+  HANDOFF_FIELDS,
   REMARK_ASK,
   type EnqueueArgs,
   type OrchestratorToolsContext,
@@ -31,38 +32,32 @@ function text(s: string): {
   return { content: [{ type: 'text', text: s }], details: {} };
 }
 
+/** Mirrors the zod `HANDOFF_SHAPE`; both read their text from HANDOFF_FIELDS. */
 const HANDOFF_PARAMS = Type.Object({
-  goals: Type.String({ description: 'What this task was asked to achieve.' }),
-  did: Type.String({
-    description:
-      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
-  }),
-  forNextAgent: Type.String({
-    description: 'What the next agent should know.',
-  }),
+  goals: Type.String({ description: HANDOFF_FIELDS.goals }),
+  did: Type.String({ description: HANDOFF_FIELDS.did }),
+  forNextAgent: Type.String({ description: HANDOFF_FIELDS.forNextAgent }),
   filesTouched: Type.Optional(
-    Type.Array(Type.String(), {
-      description: 'Paths of every file you edited.',
-    }),
+    Type.Array(Type.String(), { description: HANDOFF_FIELDS.filesTouched }),
   ),
   evidence: Type.Optional(
-    Type.String({
-      description:
-        'How you know it worked — what you ran or observed, not what you expect.',
-    }),
+    Type.String({ description: HANDOFF_FIELDS.evidence }),
   ),
   assumptions: Type.Optional(
-    Type.String({
-      description: 'What you assumed about the app and could not verify.',
-    }),
+    Type.String({ description: HANDOFF_FIELDS.assumptions }),
   ),
   conflict: Type.Optional(
-    Type.String({
-      description:
-        'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
-    }),
+    Type.String({ description: HANDOFF_FIELDS.conflict }),
+  ),
+  reportSection: Type.Optional(
+    Type.String({ description: HANDOFF_FIELDS.reportSection }),
   ),
 });
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const PI_HANDOFF_PARAM_KEYS: readonly string[] = Object.keys(
+  HANDOFF_PARAMS.properties,
+);
 
 /** The three queue tools bound to one agent's orchestrator context. */
 export function createPiOrchestratorTools(
