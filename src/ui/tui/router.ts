@@ -12,7 +12,7 @@
  * No switch statements, no hardcoded transitions in business logic.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import { RunPhase, type WizardSession } from '@lib/wizard-session';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
@@ -67,6 +67,20 @@ export class WizardRouter {
     for (const entry of this.sequence) {
       if (entry.show && !entry.show(session)) continue;
       if (entry.isComplete && entry.isComplete(session)) continue;
+      // A failed login aborts the run: wizardAbort renders the error outro
+      // and then waits for its dismissal. But the auth step only completes
+      // on credentials — which an aborted login never set — so the walk
+      // would park here forever: auth spinner up, outro unreachable, and
+      // that wait deadlocked. Route to the outro so the error can be read
+      // and dismissed. Auth only: the run steps already complete on
+      // RunPhase.Error, so later aborts reach their program's own outro.
+      if (
+        entry.id === ScreenId.Auth &&
+        session.runPhase === RunPhase.Error &&
+        session.outroData
+      ) {
+        return ScreenId.Outro;
+      }
       return entry.id;
     }
 

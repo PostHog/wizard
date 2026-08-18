@@ -30,6 +30,7 @@ vi.mock('@utils/analytics', () => ({
 vi.mock('@utils/oauth', () => ({
   performOAuthFlow: vi.fn(),
   assertWizardCompletionScope: vi.fn(),
+  missingOAuthScopes: vi.fn(() => []),
 }));
 
 const mockedDetect = detectRegion as unknown as ReturnType<typeof vi.fn>;
