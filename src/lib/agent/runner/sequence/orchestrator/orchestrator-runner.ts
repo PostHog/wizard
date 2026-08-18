@@ -833,16 +833,28 @@ export async function runOrchestrator(
   const blocked = verdict.blocked;
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
     const failedTypes = verdict.requiredFailedTypes.join(', ');
+    const whatFailed = failedTypes
+      ? `the ${failedTypes} step failed`
+      : `${blocked} steps never ran`;
+    // A grant narrowed at login is the one failure cause the user can fix
+    // alone — lead with the fix, and only fall back to the report-a-bug line
+    // when trying again doesn't work.
+    const missingScopes = boot.credentials.missingScopes ?? [];
+    const message =
+      missingScopes.length > 0
+        ? `The wizard could not finish setup: ${whatFailed}, and this run was authorized without the following permission${
+            missingScopes.length === 1 ? '' : 's'
+          }: ${missingScopes.join(
+            ', ',
+          )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
+        : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
     await wizardAbort({
-      message: `The wizard was unable to set up PostHog: ${
-        failedTypes
-          ? `the ${failedTypes} step failed`
-          : `${blocked} steps never ran`
-      }.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      message,
       error: new WizardError('orchestrator drain ended with failed tasks', {
         tasks_failed: summary.failed,
         tasks_blocked: blocked,
         failed_types: failedTypes,
+        missing_oauth_scopes: missingScopes.join(' '),
         queue_state: JSON.stringify(store.list()),
       }),
     });

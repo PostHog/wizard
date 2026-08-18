@@ -20,7 +20,11 @@ import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
 import { HostResolution } from '@lib/host-resolution';
-import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
+import {
+  assertWizardCompletionScope,
+  missingOAuthScopes,
+  performOAuthFlow,
+} from './oauth';
 import { resolveGrantedProject } from './project-resolution';
 import {
   ProvisionedAccountUnreadableError,
@@ -34,6 +38,7 @@ import {
 } from '@lib/api';
 import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
+import { OutroKind } from '@lib/wizard-session';
 
 interface ProjectData {
   projectApiKey: string;
@@ -61,6 +66,13 @@ interface ProjectData {
    * inferring it from repo evidence. Null on signup flows.
    */
   project?: ApiProject | null;
+  /**
+   * Requested OAuth scopes the grant came back without (consent deselection
+   * or ceiling clamp). Forwarded to `session.credentials.missingScopes` so
+   * runs can degrade scope-gated steps instead of failing on a 403. Empty on
+   * CI api-key and signup-provisioning paths.
+   */
+  missingScopes?: readonly string[];
 }
 
 export interface CliSetupConfig {
@@ -414,6 +426,8 @@ export async function getOrAskForProjectData(
   roleAtOrganization: string | null;
   user: ApiUser | null;
   project: ApiProject | null;
+  /** Requested OAuth scopes the grant came back without. Empty on CI/signup paths. */
+  missingScopes: readonly string[];
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
@@ -468,6 +482,9 @@ export async function getOrAskForProjectData(
       roleAtOrganization,
       user,
       project: projectData.project,
+      // A personal API key carries whatever scopes it carries — there is no
+      // per-run scope request to diff against.
+      missingScopes: [],
     };
   }
 
@@ -479,6 +496,7 @@ export async function getOrAskForProjectData(
     roleAtOrganization,
     user,
     project,
+    missingScopes,
   } = await withProgress('login', () =>
     askForWizardLogin({
       signup: _options.signup,
@@ -512,6 +530,7 @@ ${cloudUrl}/settings/project#variables`);
     roleAtOrganization: roleAtOrganization ?? null,
     user: user ?? null,
     project: project ?? null,
+    missingScopes: missingScopes ?? [],
   };
 }
 
@@ -573,8 +592,9 @@ async function askForWizardLogin(options: {
     );
   }
 
+  const requestedScopes = [...getOAuthScopesForProgram(options.programId)];
   const tokenResponse = await performOAuthFlow({
-    scopes: [...getOAuthScopesForProgram(options.programId)],
+    scopes: requestedScopes,
     signup: false,
     projectId: options.projectId,
     baseUrl: options.baseUrl,
@@ -585,12 +605,25 @@ async function askForWizardLogin(options: {
   } catch (error) {
     const scopeError =
       error instanceof Error ? error : new Error('OAuth scope check failed');
+    const missing = missingOAuthScopes(requestedScopes, tokenResponse.scope);
     analytics.captureException(scopeError, {
       step: 'wizard_login',
       missing_scope: 'event_definition:write',
     });
-    getUI().log.error(scopeError.message);
-    await abort();
+    await wizardAbort({
+      message: scopeError.message,
+      outroData: {
+        kind: OutroKind.Error,
+        message: 'Setup needs permissions that were not granted',
+        body: [
+          'Missing permissions:',
+          ...missing.map((scope) => `  • ${scope}`),
+          '',
+          'Re-run the wizard and approve all permissions on the PostHog authorization screen.',
+          'If that screen does not reappear, revoke the existing PostHog Wizard authorization in your PostHog settings first.',
+        ].join('\n'),
+      },
+    });
   }
 
   // `--project-id`, when provided, is authoritative — but only if the user actually
@@ -613,7 +646,7 @@ async function askForWizardLogin(options: {
       granted_project_id: resolution.granted,
     });
     getUI().log.error(error.message);
-    await abort();
+    await abort(error.message);
   }
 
   const projectId = resolution.ok ? resolution.projectId : undefined;
@@ -627,7 +660,7 @@ async function askForWizardLogin(options: {
       has_scoped_teams: !!tokenResponse.scoped_teams,
     });
     getUI().log.error(error.message);
-    await abort();
+    await abort(error.message);
   }
 
   // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
@@ -657,6 +690,9 @@ async function askForWizardLogin(options: {
     roleAtOrganization: userData.role_at_organization ?? null,
     user: userData,
     project: projectData,
+    // What the user declined at consent (or the ceiling clamped) — carried to
+    // the session so runs degrade scope-gated steps instead of 403ing blind.
+    missingScopes: missingOAuthScopes(requestedScopes, tokenResponse.scope),
   };
 
   getUI().log.success('Login complete.');
