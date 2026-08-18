@@ -50,6 +50,7 @@ import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
 import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
 import { aiObservabilityCommand } from './src/commands/ai-observability';
+import { metricsCommand } from './src/commands/metrics';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
@@ -81,6 +82,7 @@ Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
   .use(mcpAnalyticsCommand)
   .use(aiObservabilityCommand)
+  .use(metricsCommand)
   .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)
