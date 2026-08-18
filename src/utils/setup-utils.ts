@@ -20,7 +20,11 @@ import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
 import { HostResolution } from '@lib/host-resolution';
-import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
+import {
+  hasWizardCompletionScope,
+  performOAuthFlow,
+  WIZARD_COMPLETION_SCOPE,
+} from './oauth';
 import { resolveGrantedProject } from './project-resolution';
 import {
   ProvisionedAccountUnreadableError,
@@ -573,24 +577,55 @@ async function askForWizardLogin(options: {
     );
   }
 
-  const tokenResponse = await performOAuthFlow({
-    scopes: [...getOAuthScopesForProgram(options.programId)],
+  const scopes = [...getOAuthScopesForProgram(options.programId)];
+
+  let tokenResponse = await performOAuthFlow({
+    scopes,
     signup: false,
     projectId: options.projectId,
     baseUrl: options.baseUrl,
   });
 
-  try {
-    assertWizardCompletionScope(tokenResponse.scope);
-  } catch (error) {
-    const scopeError =
-      error instanceof Error ? error : new Error('OAuth scope check failed');
+  // A Wizard authorization issued before `event_definition:write` became
+  // required (#914, 2026-07-20) is reused by PostHog on re-login: it skips the
+  // consent screen and reissues the old, narrower scope set, so the fresh token
+  // lacks the scope the end-of-session event-definition creation needs. The
+  // wizard can't complete that step, but it also shouldn't hand the user a
+  // manual "revoke and rerun" chore — so force the consent screen once to widen
+  // the grant, then degrade rather than abort if that still doesn't yield it.
+  if (!hasWizardCompletionScope(tokenResponse.scope)) {
+    logToFile(
+      '[oauth] granted token missing completion scope; retrying with prompt=consent',
+    );
+    getUI().log.info(
+      'Your PostHog authorization predates a permission the wizard now needs. Re-approving updated permissions...',
+    );
+    tokenResponse = await performOAuthFlow({
+      scopes,
+      signup: false,
+      projectId: options.projectId,
+      baseUrl: options.baseUrl,
+      promptConsent: true,
+    });
+  }
+
+  if (!hasWizardCompletionScope(tokenResponse.scope)) {
+    // Re-consent didn't widen the grant (the OAuth server ignored
+    // prompt=consent, or the user declined the new permission). Continue anyway:
+    // the only casualty is the end-of-session event-definition creation, so a
+    // degraded run beats blocking onboarding entirely. Capture it with a stable
+    // fingerprint — mirroring src/utils/oauth.ts — so this collapses into one
+    // error-tracking issue instead of fragmenting across each user's npx cache
+    // path in the stack trace, which was hiding its real severity.
+    const scopeError = new Error(
+      `Continuing without ${WIZARD_COMPLETION_SCOPE}: your existing PostHog authorization does not grant it, so event definitions will not be created this run. To restore it, revoke the Wizard authorization in PostHog settings and rerun the wizard.`,
+    );
     analytics.captureException(scopeError, {
       step: 'wizard_login',
-      missing_scope: 'event_definition:write',
+      missing_scope: WIZARD_COMPLETION_SCOPE,
+      $exception_fingerprint: 'wizard_oauth_missing_completion_scope',
     });
-    getUI().log.error(scopeError.message);
-    await abort();
+    getUI().log.warn(scopeError.message);
   }
 
   // `--project-id`, when provided, is authoritative — but only if the user actually

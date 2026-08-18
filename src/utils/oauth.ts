@@ -70,8 +70,12 @@ export function parseOAuthScopes(scope: string): string[] {
   return scope.split(/\s+/).filter(Boolean);
 }
 
+export function hasWizardCompletionScope(scope: string): boolean {
+  return parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE);
+}
+
 export function assertWizardCompletionScope(scope: string): void {
-  if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
+  if (hasWizardCompletionScope(scope)) return;
 
   throw new Error(
     `Your existing PostHog Wizard authorization is missing the ${WIZARD_COMPLETION_SCOPE} permission required to finish setup. Reconnect the wizard and approve the updated permissions. If PostHog reuses the old approval, revoke the existing Wizard authorization first, then rerun the wizard.`,
@@ -97,6 +101,13 @@ interface OAuthConfig {
    * OAuth server and selects the matching client ID.
    */
   baseUrl?: string;
+  /**
+   * Force PostHog's consent screen with `prompt=consent`, even when the user
+   * already has a Wizard authorization. Used to re-request a scope that a
+   * reused, pre-existing grant is missing — otherwise PostHog silently reissues
+   * the old, narrower scope set and skips consent.
+   */
+  promptConsent?: boolean;
 }
 
 /**
@@ -429,6 +440,12 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('code_challenge_method', 'S256');
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
+      if (config.promptConsent) {
+        // Re-issue consent even when the wizard is already authorized, so a
+        // reused grant that predates a newly required scope gets widened
+        // instead of silently returning the old, narrower scope set.
+        authUrl.searchParams.set('prompt', 'consent');
+      }
       if (config.projectId !== undefined) {
         // Pre-select this project on the consent screen so the user just clicks Authorize.
         authUrl.searchParams.set('team_id', String(config.projectId));

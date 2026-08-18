@@ -1,6 +1,7 @@
 import {
   assertWizardCompletionScope,
   extractOAuthCode,
+  hasWizardCompletionScope,
   isAuthorizationTimeout,
   OAuthTokenResponseSchema,
   parseOAuthScopes,
@@ -120,6 +121,20 @@ describe('wizard OAuth scopes', () => {
     expect(() =>
       assertWizardCompletionScope('user:read wizard_session:write'),
     ).toThrow(/missing.*event_definition:write.*Reconnect.*revoke/is);
+  });
+
+  it('detects the completion scope without throwing', () => {
+    expect(
+      hasWizardCompletionScope(
+        'user:read wizard_session:write event_definition:write',
+      ),
+    ).toBe(true);
+    // A grant reused from before the scope was required lacks it — the login
+    // flow retries consent and then degrades, so it must be able to check
+    // without the assertion's hard throw.
+    expect(hasWizardCompletionScope('user:read wizard_session:write')).toBe(
+      false,
+    );
   });
 
   it('preserves unrelated granted scopes when parsing the token response', () => {
