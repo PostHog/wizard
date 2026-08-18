@@ -38,7 +38,7 @@ import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { BootstrapResult } from '../../shared/types';
+import type { BootstrapResult, ProgramRun } from '../../shared/types';
 import {
   areSeededTasksEnabled,
   getHarness,
@@ -259,6 +259,7 @@ export function displayOrder(
 
 export async function runOrchestrator(
   session: WizardSession,
+  config: ProgramRun,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
 ): Promise<void> {
@@ -570,7 +571,7 @@ export async function runOrchestrator(
         getSource: () => session.skillId ?? programConfig.id,
         showQuestion: (q) => getUI().requestQuestion(q),
         cancelQuestion: () => getUI().cancelPendingQuestion(),
-        richLinks: false,
+        richLinks: config.richLinks ?? false,
         timeoutMs: TASK_ASK_TIMEOUT_MS,
       });
 
