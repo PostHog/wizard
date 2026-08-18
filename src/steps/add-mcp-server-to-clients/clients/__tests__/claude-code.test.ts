@@ -18,6 +18,117 @@ vi.mock('../../../../utils/debug', () => ({
   debug: vi.fn(),
 }));
 
+describe('ClaudeCodeMCPClient — addServer', () => {
+  const execSyncMock = execSync as Mock;
+  const BASE_URL = 'https://mcp.posthog.com/mcp';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (cmd === 'command -v claude') return Buffer.from('');
+      return Buffer.from('');
+    });
+  });
+
+  const callsMatching = (fragment: string) =>
+    execSyncMock.mock.calls.filter((c) => String(c[0]).includes(fragment));
+
+  it('adds the server without any credentials in the command', async () => {
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer(['workflows'])).resolves.toEqual({
+      success: true,
+    });
+    const addCall = callsMatching('mcp" "add')[0]!;
+    expect(String(addCall[0])).toContain(`${BASE_URL}?features=workflows`);
+    expect(String(addCall[0])).not.toContain('Authorization');
+  });
+
+  it('leaves an existing entry alone when it already points at the same URL', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp" "add')) throw new Error('already exists');
+      if (c.includes('mcp get')) return Buffer.from(`  URL: ${BASE_URL}\n`);
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer()).resolves.toEqual({
+      success: true,
+      alreadyInstalled: true,
+    });
+    expect(callsMatching('mcp remove')).toHaveLength(0);
+  });
+
+  it('replaces the entry when it exists with a different URL', async () => {
+    let adds = 0;
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp" "add')) {
+        adds += 1;
+        if (adds === 1) throw new Error('already exists');
+        return Buffer.from('');
+      }
+      if (c.includes('mcp get'))
+        return Buffer.from(`  URL: ${BASE_URL}?features=flags\n`);
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer(['workflows'])).resolves.toEqual({
+      success: true,
+    });
+    expect(callsMatching('mcp remove')).toHaveLength(1);
+    expect(adds).toBe(2);
+  });
+
+  it('replaces the entry when the existing URL cannot be determined', async () => {
+    let adds = 0;
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp" "add')) {
+        adds += 1;
+        if (adds === 1) throw new Error('already exists');
+        return Buffer.from('');
+      }
+      if (c.includes('mcp get')) throw new Error('unknown command');
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer(['workflows'])).resolves.toEqual({
+      success: true,
+    });
+    expect(callsMatching('mcp remove')).toHaveLength(1);
+  });
+
+  it('reports a failed replacement with its reason', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp" "add')) throw new Error('already exists');
+      if (c.includes('mcp get'))
+        return Buffer.from(`  URL: ${BASE_URL}?features=flags\n`);
+      if (c.includes('mcp remove')) throw new Error('remove blew up');
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer(['workflows'])).resolves.toEqual({
+      success: false,
+      reason: 'remove blew up',
+    });
+    expect(analytics.captureException).toHaveBeenCalled();
+  });
+
+  it('returns failure with the reason on an unexpected add error', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (String(cmd).includes('mcp" "add')) throw new Error('spawn EPERM');
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer()).resolves.toEqual({
+      success: false,
+      reason: 'spawn EPERM',
+    });
+    expect(analytics.captureException).toHaveBeenCalled();
+  });
+});
+
 describe('ClaudeCodeMCPClient — plugin methods', () => {
   const execSyncMock = execSync as Mock;
 

@@ -50,7 +50,6 @@ export interface McpInstaller {
   install(
     clientNames: string[],
     features?: string[],
-    apiKey?: string,
   ): Promise<McpClientResult[]>;
 
   /**
@@ -86,7 +85,6 @@ export function createMcpInstaller(): McpInstaller {
     async install(
       clientNames: string[],
       features?: string[],
-      apiKey?: string,
     ): Promise<McpClientResult[]> {
       const resolvedFeatures = features ?? [...ALL_FEATURE_VALUES];
       const toInstall = cachedClients
@@ -107,11 +105,7 @@ export function createMcpInstaller(): McpInstaller {
       for (const client of toInstall) {
         const name = client.name as string;
         try {
-          const result = await client.addServer(
-            apiKey,
-            resolvedFeatures,
-            false,
-          );
+          const result = await client.addServer(resolvedFeatures, false);
           results.push(toClientResult(name, result));
           if (!result?.success) {
             // redactSecrets, not the raw reason: the CLIs we shell out to echo

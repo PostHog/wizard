@@ -60,14 +60,12 @@ export const addMCPServerToClientsStep = async ({
   ci = false,
   cloudRegion: _cloudRegion,
   features,
-  apiKey,
 }: {
   integration?: Integration;
   local?: boolean;
   ci?: boolean;
   cloudRegion?: CloudRegion;
   features?: string[];
-  apiKey?: string;
 }): Promise<string[]> => {
   const ui = getUI();
 
@@ -88,12 +86,7 @@ export const addMCPServerToClientsStep = async ({
 
   // Auto-install to all supported clients
   const results = await withProgress('adding mcp servers', () =>
-    addMCPServer(
-      supportedClients,
-      apiKey,
-      features ?? [...ALL_FEATURE_VALUES],
-      local,
-    ),
+    addMCPServer(supportedClients, features ?? [...ALL_FEATURE_VALUES], local),
   );
 
   const installed = namesWithStatus(results, McpClientStatus.Changed);
@@ -104,6 +97,9 @@ export const addMCPServerToClientsStep = async ({
   // hid both the no-op re-runs and the outright failures.
   if (installed.length > 0) {
     ui.log.success(`Added the MCP server to:\n${bulletList(installed)}`);
+    ui.log.info(
+      'Your editor handles authentication — approve the PostHog connection when it prompts (in Claude Code, run /mcp).',
+    );
   }
   if (already.length > 0) {
     ui.log.info(
@@ -212,18 +208,13 @@ export const getInstalledClients = async (
 
 export const addMCPServer = async (
   clients: MCPClient[],
-  personalApiKey?: string,
   selectedFeatures?: string[],
   local?: boolean,
 ): Promise<McpClientResult[]> => {
   const results: McpClientResult[] = [];
   for (const client of clients) {
     try {
-      const result = await client.addServer(
-        personalApiKey,
-        selectedFeatures,
-        local,
-      );
+      const result = await client.addServer(selectedFeatures, local);
       results.push(toClientResult(client.name, result));
     } catch (err) {
       debug(`[addMCPServer] addServer threw for ${client.name}: ${err}`);

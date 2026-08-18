@@ -72,13 +72,12 @@ export class OpenCodeMCPClient extends DefaultMCPClient {
   }
 
   override getServerConfig(
-    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
     return {
       type: 'remote',
-      ...getNativeHTTPServerConfig(apiKey, selectedFeatures, local),
+      ...getNativeHTTPServerConfig(selectedFeatures, local),
     };
   }
 }

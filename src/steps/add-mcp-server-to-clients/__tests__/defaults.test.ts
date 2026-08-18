@@ -25,50 +25,35 @@ describe('defaults', () => {
   });
 
   describe('getDefaultServerConfig', () => {
-    it('should return config with auth header when API key provided', () => {
-      const config = getDefaultServerConfig('phx_test123');
-      expect(config).toEqual({
-        command: 'npx',
-        args: [
-          '-y',
-          'mcp-remote@latest',
-          'https://mcp.posthog.com/mcp',
-          '--header',
-          'Authorization:${POSTHOG_AUTH_HEADER}',
-        ],
-        env: {
-          POSTHOG_AUTH_HEADER: 'Bearer phx_test123',
-        },
-      });
-    });
-
-    it('should return config without auth header for OAuth mode (no API key)', () => {
-      const config = getDefaultServerConfig(undefined);
+    it("should return a credential-free mcp-remote config (auth is the client's job)", () => {
+      const config = getDefaultServerConfig();
       expect(config).toEqual({
         command: 'npx',
         args: ['-y', 'mcp-remote@latest', 'https://mcp.posthog.com/mcp'],
       });
       expect(config).not.toHaveProperty('env');
     });
+
+    it('should encode the feature selection in the URL', () => {
+      const config = getDefaultServerConfig(['workflows']);
+      expect(config.args).toContain(
+        'https://mcp.posthog.com/mcp?features=workflows',
+      );
+    });
   });
 
   describe('getNativeHTTPServerConfig', () => {
-    it('should return config with headers when API key provided', () => {
-      const config = getNativeHTTPServerConfig('phx_test123');
-      expect(config).toEqual({
-        url: 'https://mcp.posthog.com/mcp',
-        headers: {
-          Authorization: 'Bearer phx_test123',
-        },
-      });
-    });
-
-    it('should return config without headers for OAuth mode (no API key)', () => {
-      const config = getNativeHTTPServerConfig(undefined);
+    it("should return a URL-only config with no headers (auth is the client's job)", () => {
+      const config = getNativeHTTPServerConfig();
       expect(config).toEqual({
         url: 'https://mcp.posthog.com/mcp',
       });
       expect(config).not.toHaveProperty('headers');
+    });
+
+    it('should encode the feature selection in the URL', () => {
+      const config = getNativeHTTPServerConfig(['workflows']);
+      expect(config.url).toBe('https://mcp.posthog.com/mcp?features=workflows');
     });
   });
 });

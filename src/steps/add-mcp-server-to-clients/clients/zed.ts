@@ -73,13 +73,12 @@ export class ZedClient extends DefaultMCPClient {
   }
 
   getServerConfig(
-    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
     return {
       enabled: true,
-      ...getNativeHTTPServerConfig(apiKey, selectedFeatures, local),
+      ...getNativeHTTPServerConfig(selectedFeatures, local),
     };
   }
 }

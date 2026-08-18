@@ -282,11 +282,7 @@ export const McpScreen = ({
       // Plugin-capable clients get the plugin (which bundles MCP).
       // Non-plugin-capable clients get a direct MCP config write.
       try {
-        mcpResult = await installer.install(
-          directNames,
-          features,
-          store.session.apiKey,
-        );
+        mcpResult = await installer.install(directNames, features);
       } catch (err) {
         setFlowError(errorText(err));
       }
@@ -300,11 +296,7 @@ export const McpScreen = ({
       // 'custom' — MCP-only for every selected client. Plugin install is
       // skipped so the user's feature selection is actually respected.
       try {
-        mcpResult = await installer.install(
-          names,
-          features,
-          store.session.apiKey,
-        );
+        mcpResult = await installer.install(names, features);
       } catch (err) {
         setFlowError(errorText(err));
       }
@@ -587,7 +579,7 @@ export const McpScreen = ({
                   note={
                     isRemove
                       ? 'It was already gone, so nothing was changed.'
-                      : 'Left as-is. To change which PostHog areas it can reach, run `wizard mcp remove` first, then `wizard mcp add`.'
+                      : 'It already matched this exact setup, so nothing changed — including any login your editor already holds.'
                   }
                 />
                 <ResultGroup
@@ -599,6 +591,17 @@ export const McpScreen = ({
                   icon={'\u2716'}
                   note="Run with --debug for the full output, or report it at github.com/PostHog/wizard/issues."
                 />
+                {!isRemove &&
+                  installedNow.length + alreadyInstalled.length > 0 && (
+                    <Box marginBottom={1}>
+                      <Text dimColor>
+                        Your editor handles authentication — approve the
+                        PostHog connection when it prompts (in Claude Code, run
+                        /mcp). Changing the enabled areas later means
+                        authenticating once more.
+                      </Text>
+                    </Box>
+                  )}
                 {finishNotes.map((note) => (
                   <Box key={note.name} flexDirection="column" marginTop={1}>
                     <Text color="green" bold>
