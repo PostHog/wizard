@@ -87,12 +87,7 @@ export async function detectPostHogIntegration(
   ctx.setDetectionComplete();
 }
 
-/**
- * frameworkContext key set on a scan failure. Read by
- * reportWarehouseSourcesDetected() so a crash doesn't get reported as a
- * clean scan that found nothing. Same intent as the -1 sentinel in
- * self-driving/detect.ts's detectConnectedTools().
- */
+/** Set on failure so a crash is not reported as a scan that found nothing. */
 const WAREHOUSE_SCAN_FAILED_KEY = 'warehouseScanFailed';
 
 /**
@@ -132,34 +127,19 @@ function detectWarehouseSourcesForSuggestion(
 }
 
 /**
- * Reports the warehouse-scan result to PostHog, once consent is known.
- *
- * The scan itself runs during `detect`, before the intro screen has been
- * seen, so reporting can't happen from inside it: `scanConsent` is still
- * 'undecided' at that point. This is called instead from the two places
- * `WizardStore` resolves consent, `completeSetup()` and the decline path,
- * so it's the single place scan results become telemetry. Both call sites
- * fire in the same run (the decline path always precedes a `completeSetup()`
- * call), so this is idempotent: it returns false, doing nothing, once
- * `session.warehouseSourcesReported` is already true. The caller sets that
- * flag when this returns true.
+ * The single place scan results become telemetry. Called from the two points
+ * `WizardStore` resolves consent, so it must stay idempotent.
  */
 export function reportWarehouseSourcesDetected(
   session: WizardSession,
 ): boolean {
   if (session.warehouseSourcesReported) return false;
-  // Only the idempotency check needs the three-way distinction (undecided
-  // means "come back later"); the "may we report" question below routes
-  // through the shared predicate.
+  // 'undecided' means come back later, not no.
   if (session.scanConsent === ScanConsent.Undecided) return false;
 
   if (mayReportScanResults(session)) {
-    // No capture on a failed scan, on purpose: a crash must not read as
-    // "scanned, found nothing". That's exactly what a zero-count row means
-    // to the denominator and detection-rate insights below.
-    // captureException already fired at the failure site; this only
-    // withholds the capture, matching pre-split behavior where a throw
-    // meant the capture inside the same try never ran.
+    // A crash must not read as "scanned, found nothing", which is what a
+    // zero-count row means. captureException already fired at the failure.
     if (session.frameworkContext[WAREHOUSE_SCAN_FAILED_KEY]) return true;
 
     const sources = getDetectedWarehouseSources(session);
@@ -183,13 +163,8 @@ export function reportWarehouseSourcesDetected(
       analytics.setTag('warehouse_source_count', sources.length);
     }
   }
-  // 'declined': no capture at all, on purpose. This event's contract is
-  // "detection ran, here is what it found", and several saved insights key
-  // off that (a denominator that counts every occurrence with no property
-  // filter, and a detection-rate ratio over it), so a decline row would
-  // corrupt both. The decline itself is already captured as 'intro menu
-  // selected' with value: 'continue-no-scan', fired unconditionally by the
-  // intro screen's selection handler.
+  // Nothing on 'declined': saved insights read every row of this event as a
+  // scan that ran. Decline rate comes from 'intro menu selected' instead.
 
   return true;
 }

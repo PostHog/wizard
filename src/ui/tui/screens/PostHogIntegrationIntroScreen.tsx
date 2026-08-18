@@ -41,12 +41,8 @@ const SUBTITLE = (
 );
 
 /**
- * The confirmed-detection menu. This screen passes `CONTINUE_MENU_WIDTH` to
- * IntroScreenLayout instead of taking the shared default, because the
- * opt-out label does not fit it. Each row spends 2 columns on the focus
- * marker and its gap, so a label may run to `CONTINUE_MENU_WIDTH - 2`.
- * Exported as a plain constant, not built inline, so a test can measure
- * every label without rendering the screen.
+ * Exported so a test can measure every label without rendering the screen.
+ * A row spends 2 columns on the focus marker and its gap.
  */
 export const CONTINUE_MENU_WIDTH = 30;
 

@@ -250,21 +250,12 @@ export interface WizardSession {
   // From detection + screens
   setupConfirmed: boolean;
   /**
-   * Consent to report what local detection found (the warehouse scan,
-   * feature discovery) to PostHog. Local detection always runs regardless,
-   * so product suggestions keep working either way; this only gates what
-   * gets reported. Starts 'undecided' for interactive runs and the intro
-   * screen resolves it to 'granted' or 'declined' before completeSetup().
-   * Non-interactive runs start 'granted'; see buildSession() for why.
-   * Reporting treats 'undecided' the same as 'declined': a code path that
-   * reports before the user was asked must send nothing, not everything.
+   * Gates reporting only; local detection runs either way. Reporting treats
+   * 'undecided' as 'declined', so a path that reports before the user was
+   * asked sends nothing rather than everything.
    */
   scanConsent: ScanConsent;
-  /**
-   * Set once reportWarehouseSourcesDetected() has run. It's called from
-   * both completeSetup() and the decline path (the two points where
-   * scanConsent resolves), so this guards against reporting twice.
-   */
+  /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
@@ -454,12 +445,8 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
-    // Non-interactive runs (CI, headless, and signup provisioning) have no
-    // screen that could ask, and this is a scripted run of a tool the user
-    // already installed and pointed at their own code, so default to
-    // granted: their telemetry stays exactly what it was before consent
-    // existed.
-    // Interactive runs start undecided; the intro screen resolves it.
+    // No screen can ask in a scripted run, and it is the user's own
+    // automation, so granting keeps their telemetry as it was.
     scanConsent:
       args.ci || args.signup ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
@@ -510,23 +497,12 @@ export function buildSession(args: {
   };
 }
 
-/**
- * The single "may we report local detection results" question. Consumers
- * that only need this boolean (the warehouse-scan report, the orchestrator
- * task capture) call this rather than comparing `scanConsent` themselves, so
- * a future rename or added state doesn't need updating in three places.
- */
+/** One place to ask, so a new consent state does not need three edits. */
 export function mayReportScanResults(session: WizardSession): boolean {
   return session.scanConsent === ScanConsent.Granted;
 }
 
-/**
- * `session.discoveredFeatures` if consent allows reporting it, else
- * `undefined`. Colocated with `scanConsent` so callers like
- * `sessionProperties()` (generic analytics infrastructure) don't need to
- * know what consent means or that this field is gated at all. They just
- * get a value to include or nothing to omit.
- */
+/** Lives here so analytics infrastructure never learns what consent means. */
 export function reportableDiscoveredFeatures(
   session: WizardSession,
 ): DiscoveredFeature[] | undefined {

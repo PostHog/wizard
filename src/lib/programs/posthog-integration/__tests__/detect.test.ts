@@ -1,12 +1,4 @@
-/**
- * Warehouse-scan reporting: the scan itself runs unconditionally during
- * `detect`, before the intro screen has been seen. Reporting what it found
- * has to wait for `scanConsent` to resolve, so it lives in a separate
- * function, `reportWarehouseSourcesDetected()`, called from the two places
- * `WizardStore` resolves consent (`completeSetup()` and the decline path).
- * These tests exercise that function directly, plus the split between
- * "detection always runs" and "reporting waits for consent".
- */
+/** Detection always runs; reporting waits for consent. */
 
 import * as fs from 'fs';
 import * as os from 'os';
@@ -21,9 +13,7 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
-// Wraps the real scanner (default tests still exercise real detection) so a
-// single test can force a throw without a hand-built fixture for "the scan
-// crashes".
+// Wrapped so one test can force a throw; the rest use the real scanner.
 vi.mock('@lib/warehouse-sources/detect', async (importOriginal) => {
   const actual = await importOriginal<
     typeof import('@lib/warehouse-sources/detect')
@@ -177,9 +167,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
 
     const fired = reportWarehouseSourcesDetected(session);
 
-    // Still resolves (consent is known, so the caller can mark it done).
-    // It just sends nothing, matching pre-split behavior where a throw
-    // meant the capture inside the same try never ran.
+    // Resolves so the caller marks it done, but sends nothing.
     expect(fired).toBe(true);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
     expect(analytics.setTag).not.toHaveBeenCalled();

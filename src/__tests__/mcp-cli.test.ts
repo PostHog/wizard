@@ -1,9 +1,6 @@
 // Mock variable names must be unique across .test.ts files (shared TS scope).
-// vi.hoisted() (not plain top-level const) because commands/mcp/*.ts import
-// analytics.ts statically, which now statically imports wizard-session.ts
-// for reportableDiscoveredFeatures(). That eager import graph resolves
-// before this file's own top-level statements run, so a plain const here
-// would still be in its temporal dead zone when the mock factory needs it.
+// Hoisted, not a plain const: analytics.ts now imports wizard-session.ts
+// statically, so the mock factory runs before a const would initialize.
 const { mockBuildSessionMcp, mockStartTUIMcp, mockReadApiKeyFromEnvMcp } =
   vi.hoisted(() => ({
     mockBuildSessionMcp: vi.fn((args: Record<string, unknown>) => args),

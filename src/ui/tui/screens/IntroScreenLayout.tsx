@@ -53,11 +53,7 @@ interface IntroScreenLayoutProps {
 
   /** Menu options. Pass null to hide the menu entirely. */
   menuOptions?: { label: string; value: string }[] | null;
-  /**
-   * Width of the centered menu box. The default 24 predates any long label
-   * and wraps anything past ~22 columns; a screen whose copy needs more
-   * opts in rather than every screen paying for it.
-   */
+  /** The default 24 wraps longer labels; a screen needing more opts in. */
   menuWidth?: number;
 
   /**

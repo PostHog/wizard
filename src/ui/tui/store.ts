@@ -430,12 +430,7 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /**
-   * Sets setupConfirmed. Gate resolves via _checkGates(). Also one of the
-   * two points scanConsent has resolved by (the other is declineSharing()),
-   * so this is where a 'granted' warehouse-scan result gets reported. See
-   * _markWarehouseSourcesReportedIfNeeded().
-   */
+  /** Sets setupConfirmed, and is one of the two points consent resolves by. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));

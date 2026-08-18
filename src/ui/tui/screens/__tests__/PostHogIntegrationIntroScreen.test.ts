@@ -1,10 +1,4 @@
-/**
- * A menu label longer than its column wraps mid-word and breaks the menu's
- * alignment, which is easy to miss until someone screenshots a terminal.
- * This measures every label against the width the screen actually asks for,
- * so widening the menu keeps the check honest instead of stranding a
- * hardcoded number.
- */
+/** A label past its column wraps mid-word and breaks the menu alignment. */
 
 import {
   CONTINUE_MENU_OPTIONS,
