@@ -169,6 +169,13 @@ export const PostHogIntegrationIntroScreen = ({
         <Box>
           <Text>Let's do two hours of work in eight minutes.</Text>
         </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            We check dependency files and .env variable names for tools you use.
+            We share what we find with PostHog to suggest features and
+            understand what customers build.
+          </Text>
+        </Box>
       </>
     );
   }
@@ -244,6 +251,10 @@ export const PostHogIntegrationIntroScreen = ({
   } else if (showContinue) {
     menuOptions = [
       { label: 'Continue', value: 'continue' },
+      {
+        label: 'Continue without sharing what you use',
+        value: 'continue-no-scan',
+      },
       { label: 'Change framework', value: 'framework' },
       { label: 'More info', value: 'more-info' },
       { label: 'Cancel', value: 'cancel' },
@@ -263,7 +274,11 @@ export const PostHogIntegrationIntroScreen = ({
       setView('privacy');
     } else if (value === 'back') {
       setView(view === 'privacy' ? 'more-info' : 'default');
+    } else if (value === 'continue-no-scan') {
+      store.declineSharing();
+      store.completeSetup();
     } else {
+      store.grantSharing();
       store.completeSetup();
     }
   };

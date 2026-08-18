@@ -43,7 +43,16 @@ export function sessionProperties(
     detected_framework: session.detectedFrameworkLabel,
     typescript: session.typescript,
     project_id: session.credentials?.projectId,
-    discovered_features: session.discoveredFeatures,
+    // Omitted (not sent as []) unless consent is granted: detection still
+    // runs locally so product suggestions work, but nothing about what it
+    // found should leave the machine without an explicit grant. Undecided
+    // is treated the same as declined, on purpose: a path that reports
+    // before the user has been asked must send nothing, not everything. An
+    // absent key is unambiguous; an empty array would read as "we looked
+    // and found nothing".
+    ...(session.scanConsent === 'granted'
+      ? { discovered_features: session.discoveredFeatures }
+      : {}),
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
   };

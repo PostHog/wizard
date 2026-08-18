@@ -233,6 +233,23 @@ export interface WizardSession {
 
   // From detection + screens
   setupConfirmed: boolean;
+  /**
+   * Consent to report what local detection found (the warehouse scan,
+   * feature discovery) to PostHog. Local detection always runs regardless,
+   * so product suggestions keep working either way; this only gates what
+   * gets reported. Starts 'undecided' for interactive runs and the intro
+   * screen resolves it to 'granted' or 'declined' before completeSetup().
+   * Non-interactive runs start 'granted'; see buildSession() for why.
+   * Reporting treats 'undecided' the same as 'declined': a code path that
+   * reports before the user was asked must send nothing, not everything.
+   */
+  scanConsent: 'undecided' | 'granted' | 'declined';
+  /**
+   * Set once reportWarehouseSourcesDetected() has run. It's called from
+   * both completeSetup() and the decline path (the two points where
+   * scanConsent resolves), so this guards against reporting twice.
+   */
+  warehouseSourcesReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -421,6 +438,14 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
+    // Non-interactive runs (CI, headless, and signup provisioning) have no
+    // screen that could ask, and this is a scripted run of a tool the user
+    // already installed and pointed at their own code, so default to
+    // granted: their telemetry stays exactly what it was before consent
+    // existed.
+    // Interactive runs start undecided; the intro screen resolves it.
+    scanConsent: args.ci || args.signup ? 'granted' : 'undecided',
+    warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,

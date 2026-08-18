@@ -103,10 +103,14 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return [];
 
-  analytics.wizardCapture('orchestrator warehouse task queued', {
-    warehouse_source_count: sources.length,
-    warehouse_source_kinds: sources.map((s) => s.kind),
-  });
+  // The task is queued either way. A decline withholds reporting, not the
+  // feature. See the matching gate in reportWarehouseSourcesDetected.
+  if (sess.scanConsent === 'granted') {
+    analytics.wizardCapture('orchestrator warehouse task queued', {
+      warehouse_source_count: sources.length,
+      warehouse_source_kinds: sources.map((s) => s.kind),
+    });
+  }
   return [
     {
       type: 'warehouse',

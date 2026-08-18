@@ -31,8 +31,11 @@ export const PrivacyPanel = () => {
     <Box flexDirection="column" width={64} flexShrink={0}>
       <Text>
         We use Anthropic's Claude via the PostHog LLM gateway to read your
-        source files as AI context. .env* files, secrets, and anything matched
-        by the security scanner stay on your machine.
+        source files as AI context. .env* file contents, secrets, and anything
+        matched by the security scanner stay on your machine. Some flows also
+        check dependency files and .env variable names to identify tools you
+        already use, and share what they find with PostHog to suggest features
+        and understand what our users are building.
       </Text>
 
       <Box marginTop={1}>

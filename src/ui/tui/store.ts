@@ -56,6 +56,7 @@ import type {
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
@@ -428,11 +429,52 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed. Gate resolves via _checkGates(). */
+  /**
+   * Sets setupConfirmed. Gate resolves via _checkGates(). Also one of the
+   * two points scanConsent has resolved by (the other is declineSharing()),
+   * so this is where a 'granted' warehouse-scan result gets reported. See
+   * _markWarehouseSourcesReportedIfNeeded().
+   */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
+    this._markWarehouseSourcesReportedIfNeeded();
     this.emitChange();
+  }
+
+  /**
+   * User picked "Continue" (not the decline option) on the intro screen.
+   * Set before completeSetup() resolves the intro gate.
+   */
+  grantSharing(): void {
+    this.$session.setKey('scanConsent', 'granted');
+    this.emitChange();
+  }
+
+  /**
+   * User picked "Continue without sharing what you use" on the intro
+   * screen. Set before completeSetup() resolves the intro gate. Suppresses
+   * reporting only, local detection still runs; see `scanConsent` on
+   * `WizardSession`. Reports immediately (idempotently) rather than waiting
+   * for completeSetup(), since consent has just resolved here too.
+   */
+  declineSharing(): void {
+    this.$session.setKey('scanConsent', 'declined');
+    this._markWarehouseSourcesReportedIfNeeded();
+    this.emitChange();
+  }
+
+  /**
+   * reportWarehouseSourcesDetected() is the single place scan results turn
+   * into telemetry; this just supplies its idempotency flag via the normal
+   * setter path (never mutate session directly). A no-op once
+   * `warehouseSourcesReported` is set, or for any program that never
+   * populated a warehouse-scan result in the first place.
+   */
+  private _markWarehouseSourcesReportedIfNeeded(): void {
+    if (reportWarehouseSourcesDetected(this.session)) {
+      this.$session.setKey('warehouseSourcesReported', true);
+    }
   }
 
   setRunPhase(phase: RunPhase): void {
