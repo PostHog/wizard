@@ -51,6 +51,13 @@ export enum DiscoveredFeature {
   LLM = 'llm',
 }
 
+/** Consent to report what local detection found (see `scanConsent` below). */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
+}
+
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
   LLM = 'llm',
@@ -243,7 +250,7 @@ export interface WizardSession {
    * Reporting treats 'undecided' the same as 'declined': a code path that
    * reports before the user was asked must send nothing, not everything.
    */
-  scanConsent: 'undecided' | 'granted' | 'declined';
+  scanConsent: ScanConsent;
   /**
    * Set once reportWarehouseSourcesDetected() has run. It's called from
    * both completeSetup() and the decline path (the two points where
@@ -444,7 +451,8 @@ export function buildSession(args: {
     // granted: their telemetry stays exactly what it was before consent
     // existed.
     // Interactive runs start undecided; the intro screen resolves it.
-    scanConsent: args.ci || args.signup ? 'granted' : 'undecided',
+    scanConsent:
+      args.ci || args.signup ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
@@ -491,4 +499,27 @@ export function buildSession(args: {
     frameworkConfig: null,
     pendingQuestion: null,
   };
+}
+
+/**
+ * The single "may we report local detection results" question. Consumers
+ * that only need this boolean (the warehouse-scan report, the orchestrator
+ * task capture) call this rather than comparing `scanConsent` themselves, so
+ * a future rename or added state doesn't need updating in three places.
+ */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/**
+ * `session.discoveredFeatures` if consent allows reporting it, else
+ * `undefined`. Colocated with `scanConsent` so callers like
+ * `sessionProperties()` (generic analytics infrastructure) don't need to
+ * know what consent means or that this field is gated at all. They just
+ * get a value to include or nothing to omit.
+ */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }

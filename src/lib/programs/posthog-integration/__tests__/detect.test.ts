@@ -21,7 +21,21 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
+// Wraps the real scanner (default tests still exercise real detection) so a
+// single test can force a throw without a hand-built fixture for "the scan
+// crashes".
+vi.mock('@lib/warehouse-sources/detect', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@lib/warehouse-sources/detect')
+  >();
+  return {
+    ...actual,
+    detectWarehouseSources: vi.fn(actual.detectWarehouseSources),
+  };
+});
+
 import { analytics } from '@utils/analytics';
+import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import {
   detectPostHogIntegration,
   reportWarehouseSourcesDetected,
@@ -32,6 +46,7 @@ import type { ProgramReadyContext } from '@lib/programs/program-step';
 import {
   buildSession,
   DiscoveredFeature,
+  ScanConsent,
   type WizardSession,
 } from '@lib/wizard-session';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
@@ -75,7 +90,7 @@ describe('detection always runs, independent of consent', () => {
 
   it('populates DETECTED_WAREHOUSE_SOURCES_KEY while consent is still undecided', async () => {
     const session = buildSession({ installDir: tmpDir });
-    expect(session.scanConsent).toBe('undecided');
+    expect(session.scanConsent).toBe(ScanConsent.Undecided);
     const ctx = makeCtx(session);
 
     await detectPostHogIntegration(ctx);
@@ -102,6 +117,75 @@ describe('detection always runs, independent of consent', () => {
   });
 });
 
+describe('a scan failure is distinguishable from a clean zero-source scan', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => cleanup(tmpDir));
+
+  it('scan succeeds with sources: the event fires with them', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
+    );
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'warehouse sources detected',
+      expect.objectContaining({ warehouse_source_count: 1 }),
+    );
+  });
+
+  it('scan succeeds with zero sources: the event still fires, with count 0', async () => {
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'warehouse sources detected',
+      {
+        warehouse_source_count: 0,
+        warehouse_source_kinds: [],
+        warehouse_source_modes: [],
+      },
+    );
+  });
+
+  it('scan throws: no event fires at all, but the exception is still captured', async () => {
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    const scanError = new Error('boom');
+    vi.mocked(detectWarehouseSources).mockImplementationOnce(() => {
+      throw scanError;
+    });
+
+    await detectPostHogIntegration(makeCtx(session));
+
+    expect(analytics.captureException).toHaveBeenCalledWith(scanError, {
+      step: 'detectWarehouseSourcesForSuggestion',
+    });
+
+    const fired = reportWarehouseSourcesDetected(session);
+
+    // Still resolves (consent is known, so the caller can mark it done).
+    // It just sends nothing, matching pre-split behavior where a throw
+    // meant the capture inside the same try never ran.
+    expect(fired).toBe(true);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+    expect(analytics.setTag).not.toHaveBeenCalled();
+  });
+});
+
 describe('reportWarehouseSourcesDetected', () => {
   let tmpDir: string;
 
@@ -124,7 +208,7 @@ describe('reportWarehouseSourcesDetected', () => {
   }
 
   it("'undecided' reports nothing and does not mark itself reported", async () => {
-    const session = await scannedSession('undecided');
+    const session = await scannedSession(ScanConsent.Undecided);
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -134,7 +218,7 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 
   it("'granted' reports the original property shape, nothing extra", async () => {
-    const session = await scannedSession('granted');
+    const session = await scannedSession(ScanConsent.Granted);
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -158,7 +242,7 @@ describe('reportWarehouseSourcesDetected', () => {
   it("'granted' with zero sources still captures the denominator row, no tags", async () => {
     const emptyDir = makeTmpDir();
     const session = buildSession({ installDir: emptyDir });
-    session.scanConsent = 'granted';
+    session.scanConsent = ScanConsent.Granted;
     await detectPostHogIntegration(makeCtx(session));
 
     const fired = reportWarehouseSourcesDetected(session);
@@ -177,7 +261,7 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 
   it("'declined' reports nothing, but the local suggestion still has its data", async () => {
-    const session = await scannedSession('declined');
+    const session = await scannedSession(ScanConsent.Declined);
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -191,7 +275,7 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 
   it('is idempotent: a second call, from either consent path, does nothing', async () => {
-    const session = await scannedSession('granted');
+    const session = await scannedSession(ScanConsent.Granted);
 
     expect(reportWarehouseSourcesDetected(session)).toBe(true);
     session.warehouseSourcesReported = true; // the store setter's job, done here directly
@@ -245,7 +329,7 @@ describe('the full decline contract, end to end', () => {
 
   it('sets the key, keeps the outro suggestion, and reports nothing, for a declined run', async () => {
     const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = 'declined';
+    session.scanConsent = ScanConsent.Declined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     session.frameworkConfig = FRAMEWORK_CONFIG as any;
 
@@ -287,16 +371,16 @@ describe('the full decline contract, end to end', () => {
 describe('non-interactive sessions start with consent already granted', () => {
   it('ci: true builds scanConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', ci: true });
-    expect(session.scanConsent).toBe('granted');
+    expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 
   it('signup: true builds scanConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', signup: true });
-    expect(session.scanConsent).toBe('granted');
+    expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 
   it('a plain interactive session starts undecided', () => {
     const session = buildSession({ installDir: '/tmp/app' });
-    expect(session.scanConsent).toBe('undecided');
+    expect(session.scanConsent).toBe(ScanConsent.Undecided);
   });
 });

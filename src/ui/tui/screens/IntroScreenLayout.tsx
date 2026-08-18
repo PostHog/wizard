@@ -53,6 +53,12 @@ interface IntroScreenLayoutProps {
 
   /** Menu options. Pass null to hide the menu entirely. */
   menuOptions?: { label: string; value: string }[] | null;
+  /**
+   * Width of the centered menu box. The default 24 predates any long label
+   * and wraps anything past ~22 columns; a screen whose copy needs more
+   * opts in rather than every screen paying for it.
+   */
+  menuWidth?: number;
 
   /**
    * Menu alignment. 'center' (default) matches the wizard's standard
@@ -103,6 +109,7 @@ export const IntroScreenLayout = ({
   children,
   menuOptions,
   menuAlign = 'center',
+  menuWidth,
   onSelect,
   programLabel,
   skillId,
@@ -199,7 +206,10 @@ export const IntroScreenLayout = ({
           </Box>
         )}
 
-        <Box width={menuAlign === 'left' ? 64 : 24} marginTop={1}>
+        <Box
+          width={menuWidth ?? (menuAlign === 'left' ? 64 : 24)}
+          marginTop={1}
+        >
           {resolvedMenuOptions && onSelect && (
             <Box
               justifyContent={menuAlign === 'left' ? 'flex-start' : 'center'}

@@ -2,7 +2,7 @@ import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
+import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -105,7 +105,7 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
 
   // The task is queued either way. A decline withholds reporting, not the
   // feature. See the matching gate in reportWarehouseSourcesDetected.
-  if (sess.scanConsent === 'granted') {
+  if (mayReportScanResults(sess)) {
     analytics.wizardCapture('orchestrator warehouse task queued', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),

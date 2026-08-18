@@ -31,6 +31,7 @@ import {
   AdditionalFeature,
   McpOutcome,
   RunPhase,
+  ScanConsent,
   buildSession,
   type TaskNotice,
 } from '@lib/wizard-session';
@@ -447,7 +448,7 @@ export class WizardStore {
    * Set before completeSetup() resolves the intro gate.
    */
   grantSharing(): void {
-    this.$session.setKey('scanConsent', 'granted');
+    this.$session.setKey('scanConsent', ScanConsent.Granted);
     this.emitChange();
   }
 
@@ -459,7 +460,7 @@ export class WizardStore {
    * for completeSetup(), since consent has just resolved here too.
    */
   declineSharing(): void {
-    this.$session.setKey('scanConsent', 'declined');
+    this.$session.setKey('scanConsent', ScanConsent.Declined);
     this._markWarehouseSourcesReportedIfNeeded();
     this.emitChange();
   }

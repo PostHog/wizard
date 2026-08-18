@@ -8,7 +8,7 @@ import {
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
-import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
@@ -184,7 +184,7 @@ describe('WizardStore', () => {
 
       store.grantSharing();
 
-      expect(store.session.scanConsent).toBe('granted');
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
       expect(cb).toHaveBeenCalled();
     });
 
@@ -195,7 +195,7 @@ describe('WizardStore', () => {
 
       store.declineSharing();
 
-      expect(store.session.scanConsent).toBe('declined');
+      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
       expect(cb).toHaveBeenCalled();
     });
 

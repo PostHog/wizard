@@ -10,7 +10,11 @@
  */
 
 import type { ProgramReadyContext } from '@lib/programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
+import {
+  mayReportScanResults,
+  ScanConsent,
+  type WizardSession,
+} from '@lib/wizard-session';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   detectFramework,
@@ -84,6 +88,14 @@ export async function detectPostHogIntegration(
 }
 
 /**
+ * frameworkContext key set on a scan failure. Read by
+ * reportWarehouseSourcesDetected() so a crash doesn't get reported as a
+ * clean scan that found nothing. Same intent as the -1 sentinel in
+ * self-driving/detect.ts's detectConnectedTools().
+ */
+const WAREHOUSE_SCAN_FAILED_KEY = 'warehouseScanFailed';
+
+/**
  * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
  * when found, stash them for a `wizard warehouse` suggestion on the outro.
  * Runs unconditionally during `detect`, before the intro screen has asked
@@ -111,6 +123,7 @@ function detectWarehouseSourcesForSuggestion(
     if (sources.length === 0) return;
     ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
   } catch (error) {
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_FAILED_KEY, true);
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'detectWarehouseSourcesForSuggestion' },
@@ -135,9 +148,20 @@ export function reportWarehouseSourcesDetected(
   session: WizardSession,
 ): boolean {
   if (session.warehouseSourcesReported) return false;
-  if (session.scanConsent === 'undecided') return false;
+  // Only the idempotency check needs the three-way distinction (undecided
+  // means "come back later"); the "may we report" question below routes
+  // through the shared predicate.
+  if (session.scanConsent === ScanConsent.Undecided) return false;
 
-  if (session.scanConsent === 'granted') {
+  if (mayReportScanResults(session)) {
+    // No capture on a failed scan, on purpose: a crash must not read as
+    // "scanned, found nothing". That's exactly what a zero-count row means
+    // to the denominator and detection-rate insights below.
+    // captureException already fired at the failure site; this only
+    // withholds the capture, matching pre-split behavior where a throw
+    // meant the capture inside the same try never ran.
+    if (session.frameworkContext[WAREHOUSE_SCAN_FAILED_KEY]) return true;
+
     const sources = getDetectedWarehouseSources(session);
 
     // Captured on every run, including the empty case. The denominator is

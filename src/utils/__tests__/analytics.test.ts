@@ -4,7 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
 import { VERSION } from '@lib/version';
 import type { ApiUser } from '@lib/api';
-import { buildSession, DiscoveredFeature } from '@lib/wizard-session';
+import {
+  buildSession,
+  DiscoveredFeature,
+  ScanConsent,
+} from '@lib/wizard-session';
 
 vi.mock('posthog-node');
 vi.mock('uuid');
@@ -745,7 +749,7 @@ describe('sessionProperties', () => {
   it('includes discovered_features once consent is granted', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];
-    session.scanConsent = 'granted';
+    session.scanConsent = ScanConsent.Granted;
 
     const properties = sessionProperties(session);
 
@@ -755,7 +759,7 @@ describe('sessionProperties', () => {
   it('omits discovered_features entirely when the user declined sharing', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];
-    session.scanConsent = 'declined';
+    session.scanConsent = ScanConsent.Declined;
 
     const properties = sessionProperties(session);
 
@@ -765,7 +769,7 @@ describe('sessionProperties', () => {
   it('omits discovered_features while consent is still undecided', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];
-    session.scanConsent = 'undecided';
+    session.scanConsent = ScanConsent.Undecided;
 
     const properties = sessionProperties(session);
 
@@ -777,7 +781,7 @@ describe('sessionProperties', () => {
   it('never sends an empty array in place of the omitted key', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [];
-    session.scanConsent = 'declined';
+    session.scanConsent = ScanConsent.Declined;
 
     const properties = sessionProperties(session);
 
@@ -788,7 +792,7 @@ describe('sessionProperties', () => {
 
   it('leaves every other property untouched by a decline', () => {
     const session = buildSession({ installDir: '/tmp/app' });
-    session.scanConsent = 'declined';
+    session.scanConsent = ScanConsent.Declined;
     session.integration = null;
     session.additionalFeatureQueue = [];
 
