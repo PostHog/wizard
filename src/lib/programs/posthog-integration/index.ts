@@ -42,30 +42,63 @@ function resolveContinueUrl(
 }
 
 /**
- * Outro suggestion for data sources found in the project but not connected.
+ * Post-run "what to do next" checklist for a successful integration.
  *
- * A pointer at `wizard warehouse`, not an inline flow. Connecting a source
- * needs interactive credential collection, and chaining that as a second agent
- * run before the outro would let any of its terminal failure paths
- * `process.exit()` — costing the user the success outro and the post-outro
- * MCP / Slack steps on a run where PostHog installed fine.
+ * The install only becomes real once events actually flow, so the outro closes
+ * the loop with a two-beat activation CTA — run the app locally and confirm
+ * events land, then deploy — modelled on SourceMapsOutroScreen's operational
+ * tone. The live-events link is project-scoped so the user lands on their own
+ * events, not a generic docs page.
  *
- * Returns undefined when nothing was detected, so the outro is unchanged for
- * projects with no connectable source.
+ * When the project also has connectable data sources, a warehouse pointer is
+ * appended (a pointer at `wizard warehouse`, not an inline flow — connecting a
+ * source needs interactive credential collection, and chaining that as a
+ * second agent run before the outro would let any of its terminal failure
+ * paths `process.exit()`, costing the user this success outro and the
+ * post-outro MCP / Slack steps on a run where PostHog installed fine).
+ *
+ * Always returns a checklist for a successful run — the activation CTA is
+ * unconditional; warehouse bullets are additive. The live-events URL itself is
+ * surfaced separately as the outro's `primaryLink` so it lands on its own
+ * triple-click-selectable line in scrollback (see getExitLine), leaving these
+ * bullets clean prose.
  */
-function buildWarehouseNextSteps(
-  sess: WizardSession,
-): { heading: string; items: string[] } | undefined {
-  const sources = getDetectedWarehouseSources(sess);
-  if (sources.length === 0) return undefined;
+function buildNextSteps(sess: WizardSession): {
+  heading: string;
+  items: string[];
+} {
+  const items = [
+    'Run your app locally and use it the way a user would — trigger the events you just instrumented.',
+    'Confirm they arrive in the live events view above, then commit and deploy.',
+  ];
 
-  const labels = sources.map((s) => s.label).join(', ');
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length > 0) {
+    const labels = sources.map((s) => s.label).join(', ');
+    items.push(
+      `Also found data sources PostHog can import (${labels}) — connect them with: npx @posthog/wizard warehouse`,
+    );
+  }
+
+  return { heading: 'Next: make it real', items };
+}
+
+/**
+ * Project-scoped live-events link the activation CTA points at. Scoped to the
+ * user's own project so they land on their real event stream, not a generic
+ * docs page. UTM-tagged for the outro-live-events source.
+ */
+function buildLiveEventsLink(
+  host: HostResolution,
+  projectId: number,
+): { label: string; url: string } {
+  const uiHost = host.appHost.replace(/\/$/, '');
   return {
-    heading: 'Query your other data in PostHog:',
-    items: [
-      `Found in this project: ${labels}`,
-      'Import it into the data warehouse with: npx @posthog/wizard warehouse',
-    ],
+    label: 'Watch your events arrive live',
+    url: withUtm(
+      `${uiHost}/project/${projectId}/activity/explore`,
+      'outro-live-events',
+    ),
   };
 }
 
@@ -369,13 +402,31 @@ ${warehouseReportInstruction(session)}
             : '',
         ].filter(Boolean);
 
+        const nextSteps = buildNextSteps(sess);
+        const primaryLink = buildLiveEventsLink(
+          credentials.host,
+          credentials.projectId,
+        );
+
+        // The success path fires no wizardCapture event of its own — success is
+        // only inferrable from the terminal `setup wizard finished` event — so
+        // there is no signal for the activation moment the CTA nudges toward.
+        // Emit one here so the run-locally → first-event → deploy prompt is
+        // measurable and the drop-off after a successful install stops being a
+        // telemetry blind spot.
+        analytics.wizardCapture('activation cta shown', {
+          integration: config.metadata.integration,
+          has_warehouse_sources: getDetectedWarehouseSources(sess).length > 0,
+        });
+
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
-          nextSteps: buildWarehouseNextSteps(sess),
+          primaryLink,
+          nextSteps,
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
           // No report file — the prompt points at the notebook, when the run captured one.
