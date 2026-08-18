@@ -320,12 +320,22 @@ describe('evaluateAskCap', () => {
     }
   });
 
-  it('returns the adjacency error once the threshold is hit', () => {
+  it('returns the adjacency nudge once the threshold is hit', () => {
     expect(evaluateAskCap(ASK_BATCH_THRESHOLD, MAX)).toEqual({
       kind: 'capped',
       reason: 'adjacency',
       message: expect.stringMatching(/batch/i),
     });
+  });
+
+  it('frames the adjacency nudge as retryable, not a refusal', () => {
+    // Agents abandon the source to browser fallback when this reads as a hard
+    // error — it must not start with "Error" and must say the ask can be re-sent.
+    const decision = evaluateAskCap(ASK_BATCH_THRESHOLD, MAX);
+    if (decision.kind !== 'capped') throw new Error('expected capped');
+    expect(decision.message).not.toMatch(/^Error/);
+    expect(decision.message).toMatch(/not an error/i);
+    expect(decision.message).toMatch(/not sent|again/i);
   });
 
   it('fires the adjacency nudge only once — later calls proceed up to the cap', () => {
