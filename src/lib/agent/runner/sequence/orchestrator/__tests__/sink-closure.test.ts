@@ -328,3 +328,162 @@ describe('a declined seeded task', () => {
     expect(store.isDrained()).toBe(true);
   });
 });
+
+/**
+ * The one-way rule, enforced.
+ *
+ * A runner-seeded task is deferred to the end and stops to ask the user for
+ * input, so anything waiting on it inherits that wait. Prose in the seed prompt
+ * cannot hold this: one planner edge empties the seeded task's resolved
+ * dependencies (the resolver drops anything downstream of it to stay acyclic)
+ * and drops it back to depth 0 — the exact placement deferring it removes.
+ */
+describe('one-way rule for runner-seeded tasks', () => {
+  let dir: string;
+  let store: QueueStore;
+  let ctx: OrchestratorToolsContext;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'one-way-test-'));
+    store = new QueueStore(dir, 'run-1');
+    ctx = {
+      store,
+      validTypes: VALID,
+      sinkTypes: SINKS,
+      runnerSeededTypes: ['warehouse'],
+    };
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('rejects a non-sink task that depends on the seeded task directly', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+
+    const r = checkEnqueueGuards(ctx, {
+      type: 'install',
+      dependsOn: [warehouse.id],
+      reason: 'x',
+    });
+
+    expect(r).toMatchObject({ ok: false, guard: 'seeded-dep' });
+    expect(r.ok === false && r.message).toContain('only the final reporting');
+  });
+
+  it('rejects one that reaches it through an intermediate hop', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    // The intermediate would itself be rejected; construct it directly to prove
+    // the guard walks the closure rather than only direct dependencies.
+    const install = store.enqueue({
+      type: 'install',
+      dependsOn: [warehouse.id],
+    });
+
+    const r = checkEnqueueGuards(ctx, {
+      type: 'capture',
+      dependsOn: [install.id],
+      reason: 'x',
+    });
+
+    expect(r).toMatchObject({ ok: false, guard: 'seeded-dep' });
+  });
+
+  it('still lets the sink depend on it — that edge is required', () => {
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+
+    expect(
+      checkEnqueueGuards(ctx, {
+        type: 'report',
+        dependsOn: [install.id, warehouse.id],
+        reason: 'x',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('leaves ordinary dependencies between planner tasks alone', () => {
+    store.enqueue({ type: 'warehouse', optional: true });
+    const install = store.enqueue({ type: 'install' });
+
+    expect(
+      checkEnqueueGuards(ctx, {
+        type: 'capture',
+        dependsOn: [install.id],
+        reason: 'x',
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it('is inert for a flow with no runner-seeded types', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+
+    expect(
+      checkEnqueueGuards(
+        { store, validTypes: VALID, sinkTypes: SINKS },
+        { type: 'install', dependsOn: [warehouse.id], reason: 'x' },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it('points a sink at the only legal placement for a seeded task', () => {
+    store.enqueue({ type: 'warehouse', optional: true });
+
+    const r = checkEnqueueGuards(ctx, { type: 'report', reason: 'x' });
+
+    expect(r).toMatchObject({ ok: false, guard: 'sink-closure' });
+    // The generic advice ("or to a task already in dependsOn") is what invited
+    // the broken shape in the first place.
+    expect(r.ok === false && r.message).not.toContain(
+      'a task already in dependsOn',
+    );
+    expect(r.ok === false && r.message).toContain('only legal spot');
+  });
+
+  it('keeps the generic sink advice when no seeded task is uncovered', () => {
+    const install = store.enqueue({ type: 'install' });
+    store.enqueue({ type: 'capture', dependsOn: [install.id] });
+
+    const r = checkEnqueueGuards(ctx, { type: 'report', reason: 'x' });
+
+    expect(r).toMatchObject({ ok: false, guard: 'sink-closure' });
+    expect(r.ok === false && r.message).toContain(
+      'a task already in dependsOn',
+    );
+  });
+
+  it('the guard is what keeps the seeded task at the end of the drain', () => {
+    // Without it: install depends on warehouse, the resolver drops install and
+    // everything downstream, and warehouse runs alone in the first tier.
+    const warehouse = store.enqueue({ type: 'warehouse', optional: true });
+    const rejected = checkEnqueueGuards(ctx, {
+      type: 'install',
+      dependsOn: [warehouse.id],
+      reason: 'x',
+    });
+    expect(rejected.ok).toBe(false);
+
+    // With the edge refused, the planner queues install unattached, and the
+    // deferral puts warehouse where it belongs.
+    const install = store.enqueue({ type: 'install' });
+    const capture = store.enqueue({ type: 'capture', dependsOn: [install.id] });
+    store.enqueue({ type: 'report', dependsOn: [capture.id, warehouse.id] });
+    const deferred = seededDependencies(store, warehouse.id, [], SINKS);
+    store.addDependencies(warehouse.id, deferred.depIds);
+
+    const tiers: string[][] = [];
+    for (;;) {
+      const runnable = store.nextRunnable();
+      if (runnable.length === 0) break;
+      tiers.push(runnable.map((t) => t.type).sort());
+      for (const t of runnable) {
+        store.start(t.id);
+        store.complete(t.id);
+      }
+    }
+    expect(tiers).toEqual([
+      ['install'],
+      ['capture'],
+      ['warehouse'],
+      ['report'],
+    ]);
+  });
+});

@@ -60,7 +60,7 @@ import {
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
-import { uncoveredBySink } from './queue-tools';
+import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
@@ -549,6 +549,11 @@ export async function runOrchestrator(
     // guard instead of duplicating work the wizard already placed.
     validTypes: registry.enqueueableTypes,
     sinkTypes: registry.sinkTypes,
+    // The edge to a runner-seeded task is one-way: the sink may wait for it,
+    // nothing else may. Enforced at enqueue, because prose alone cannot hold it
+    // — a single planner edge is enough to pull the task back to the front of
+    // the drain and put its prompt in front of the code work again.
+    runnerSeededTypes: registry.runnerSeededTypes,
     currentTaskId,
   });
 
@@ -710,6 +715,33 @@ export async function runOrchestrator(
   }
   if (deferred.length > 0) renderQueue();
 
+  // Canary for the one-way rule. The enqueue guard rejects the edge outright, so
+  // this should never fire — but if it ever does, the seeded task has been
+  // pulled back toward the front of the drain and its prompt lands mid-run
+  // again, which is precisely the failure this whole step exists to prevent.
+  // Silent regressions here would look like "the ordering just stopped
+  // working", so make it visible rather than abort a run that is otherwise fine.
+  for (const seeded of seededTasks) {
+    const dependants = store
+      .list()
+      .filter(
+        (t) =>
+          !registry.sinkTypes.includes(t.type) &&
+          t.id !== seeded.id &&
+          dependencyClosure(store, [t.id]).has(seeded.id),
+      );
+    if (dependants.length === 0) continue;
+    logToFile(
+      `[orchestrator] one-way rule broken: ${dependants
+        .map((t) => t.type)
+        .join(', ')} depend on runner-seeded ${seeded.type}`,
+    );
+    analytics.wizardCapture('orchestrator seeded task depended on', {
+      type: seeded.type,
+      dependant_types: dependants.map((t) => t.type),
+    });
+  }
+
   // The enqueue guard rejects a sink that misses part of the queue, so a
   // planner that respected its errors cannot get here with a broken graph.
   // Check it again anyway: a run whose report never sees a task's handoff is
@@ -750,6 +782,16 @@ export async function runOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
+  // One notice on screen at a time. The store keeps a single pending-notice
+  // slot, so a second `showTaskNotice` overwrites the first's resolver: the
+  // first promise never settles, its task hangs forever, and the overlay stack
+  // is left one deep. Seeding used to await its notices in a loop, which made
+  // that impossible; offering them from inside the drain does not, because the
+  // executor starts every runnable task at once. Today's graphs still serialize
+  // seeded tasks — the default deferral makes each wait for the one before —
+  // but that is a property of the current graph, not a guarantee, so gate it
+  // here where it cannot be undone by a future prompt declaring its own deps.
+  let noticeGate: Promise<unknown> = Promise.resolve();
   const runTask: RunTask = async (task) => {
     renderQueue();
 
@@ -772,7 +814,28 @@ export async function runOrchestrator(
       // outcome with a skip. Later attempts fall through to the executor's
       // normal retry flow instead.
       seededNotices.delete(task.id);
-      const { keep, timedOut } = await offerSeededTask(notice);
+      // Queue behind any notice already on screen. The catch keeps one
+      // offer's failure from poisoning the gate for the next.
+      const offer = noticeGate.then(() => offerSeededTask(notice));
+      noticeGate = offer.catch(() => undefined);
+      // Fail closed. The offer is consumed above, so letting a thrown error
+      // escape would hand the task to the executor's retry path with no notice
+      // left to show — and the second attempt would run the step, and start
+      // asking for credentials, without anyone ever having agreed to it. No UI
+      // implementation throws here today; this is about which way it breaks if
+      // one ever does.
+      const { keep, timedOut } = await offer.catch((err: unknown) => {
+        logToFile(
+          `[orchestrator] notice failed for ${task.type}, declining: ${String(
+            err,
+          )}`,
+        );
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_task_notice' },
+        );
+        return { keep: false, timedOut: false };
+      });
       analytics.wizardCapture('orchestrator task notice answered', {
         type: task.type,
         kept: keep,
