@@ -1,10 +1,11 @@
 /**
  * Data-warehouse-source suggestion in the default integration flow.
  *
- * The flow detects connectable sources and *points at* `wizard warehouse` —
- * it does not run it. These tests pin the two properties that matter:
- * projects with no detected source see a byte-identical flow, and the
- * suggestion never turns into an inline run.
+ * The flow detects connectable sources and *points at* them — it does not
+ * connect them. These tests pin the three properties that matter: the outro
+ * hands over a link that opens the right source's form, projects with no
+ * detected source see a byte-identical flow, and the suggestion never turns
+ * into an inline run.
  */
 
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
@@ -68,17 +69,39 @@ async function resolveRun(session: WizardSession) {
 }
 
 describe('outro suggestion', () => {
-  it('names the detected sources and points at the standalone command', async () => {
+  it('gives every detected source its own pre-filled link', async () => {
     const s = sessionWith([POSTGRES, STRIPE]);
     const runDef = await resolveRun(s);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+    const text = outro.nextSteps!.items.join('\n');
 
-    expect(outro.nextSteps).toBeDefined();
-    expect(outro.nextSteps!.items.join(' ')).toContain('Postgres, Stripe');
-    expect(outro.nextSteps!.items.join(' ')).toContain(
-      'npx @posthog/wizard warehouse',
+    // The project segment and the kind are what land the user on the source's
+    // own form. Drop the segment and the app renders 404; drop the kind and it
+    // renders the catalog.
+    expect(text).toContain(
+      'https://us.posthog.com/project/1/data-warehouse/new-source?kind=postgres',
     );
+    expect(text).toContain('kind=stripe');
+    expect(text).toContain('npx @posthog/wizard warehouse');
+  });
+
+  it('summarizes the tail instead of listing every link', async () => {
+    const many = ['a', 'b', 'c', 'd', 'e'].map((k) => ({
+      ...POSTGRES,
+      kind: k,
+      label: k.toUpperCase(),
+    }));
+    const s = sessionWith(many);
+    const runDef = await resolveRun(s);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+    const links = outro.nextSteps!.items.filter((i) =>
+      i.includes('new-source'),
+    );
+
+    expect(links).toHaveLength(3);
+    expect(outro.nextSteps!.items.join('\n')).toContain('And 2 more');
   });
 
   it('is absent when nothing was detected — outro unchanged', async () => {

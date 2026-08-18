@@ -23,6 +23,15 @@ export interface Credentials {
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
   projectId: number;
+  /**
+   * Requested OAuth scopes the grant came back without — deselected on the
+   * consent screen or clamped by the app's ceiling. Read when a run fails so
+   * the error can name the missing permission and the fix (re-run and grant
+   * it during the OAuth flow) instead of the generic report-a-bug line.
+   * Empty/absent on CI api-key runs, where there is no scope request to diff
+   * against.
+   */
+  missingScopes?: readonly string[];
 }
 
 function parseProjectIdArg(value: string | undefined): number | undefined {

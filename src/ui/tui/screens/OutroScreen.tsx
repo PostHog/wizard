@@ -12,6 +12,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
 import { withUtm } from '@utils/links';
+import { LinkText } from '@ui/tui/primitives/LinkText';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface OutroScreenProps {
@@ -60,8 +61,14 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
               <Text color="cyan" bold>
                 {outroData.nextSteps.heading}
               </Text>
+              {/* Items can carry a URL, so render through LinkText: it keeps the
+                  full address as the click target and shortens the visible label
+                  instead of wrapping it across lines. */}
               {outroData.nextSteps.items.map((item, i) => (
-                <Text key={i}>• {item}</Text>
+                <Box key={i} flexDirection="row">
+                  <Text>• </Text>
+                  <LinkText text={item} />
+                </Box>
               ))}
             </Box>
           )}
