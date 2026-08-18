@@ -82,13 +82,12 @@ export class VisualStudioCodeClient extends DefaultMCPClient {
   }
 
   getServerConfig(
-    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
     return {
       type: 'http',
-      ...getNativeHTTPServerConfig(apiKey, selectedFeatures, local),
+      ...getNativeHTTPServerConfig(selectedFeatures, local),
     };
   }
 }

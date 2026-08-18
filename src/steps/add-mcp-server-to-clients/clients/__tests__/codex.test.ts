@@ -108,10 +108,10 @@ describe('CodexMCPClient', () => {
   });
 
   describe('addServer', () => {
-    it('runs codex mcp add with the resolved URL and returns success on exit 0', async () => {
+    it('runs codex mcp add with the resolved URL and no credentials, and returns success on exit 0', async () => {
       spawnSyncMock.mockReturnValue({ status: 0, stderr: '' });
       const client = new CodexMCPClient();
-      await expect(client.addServer('phx_test')).resolves.toEqual({
+      await expect(client.addServer()).resolves.toEqual({
         success: true,
       });
       const call = spawnSyncMock.mock.calls[0]!;
@@ -122,28 +122,93 @@ describe('CodexMCPClient', () => {
         'posthog',
         '--url',
         'https://mcp.posthog.com/mcp',
-        '--bearer-token-env-var',
-        'POSTHOG_AUTH_HEADER',
       ]);
-      expect(call[2].env.POSTHOG_AUTH_HEADER).toBe('Bearer phx_test');
     });
 
-    it('reports "already" stderr as an already-installed success', async () => {
+    it('reports "already" stderr as already-installed when the entry has the same URL', async () => {
       spawnSyncMock.mockReturnValue({
         status: 1,
         stderr: "Server 'posthog' already exists",
       });
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp"\n',
+      );
       const client = new CodexMCPClient();
-      await expect(client.addServer('phx_test')).resolves.toEqual({
+      await expect(client.addServer()).resolves.toEqual({
         success: true,
         alreadyInstalled: true,
       });
+      // Only the add ran — the matching entry is left untouched.
+      expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('replaces the entry when it exists with a different URL', async () => {
+      spawnSyncMock
+        .mockReturnValueOnce({
+          status: 1,
+          stderr: "Server 'posthog' already exists",
+        })
+        .mockReturnValueOnce({ status: 0, stderr: '' }) // mcp remove
+        .mockReturnValueOnce({ status: 0, stderr: '' }); // mcp add retry
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp?features=flags"\n',
+      );
+      const client = new CodexMCPClient();
+      await expect(client.addServer(['workflows'])).resolves.toEqual({
+        success: true,
+      });
+      expect(spawnSyncMock.mock.calls[1]![1]).toEqual([
+        'mcp',
+        'remove',
+        'posthog',
+      ]);
+      expect(spawnSyncMock.mock.calls[2]![1]).toEqual([
+        'mcp',
+        'add',
+        'posthog',
+        '--url',
+        'https://mcp.posthog.com/mcp?features=workflows',
+      ]);
+    });
+
+    it('replaces the entry when the existing URL cannot be determined', async () => {
+      spawnSyncMock
+        .mockReturnValueOnce({
+          status: 1,
+          stderr: "Server 'posthog' already exists",
+        })
+        .mockReturnValueOnce({ status: 0, stderr: '' })
+        .mockReturnValueOnce({ status: 0, stderr: '' });
+      readFileSyncMock.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
+      const client = new CodexMCPClient();
+      await expect(client.addServer()).resolves.toEqual({ success: true });
+      expect(spawnSyncMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('returns failure when the replacement remove fails', async () => {
+      spawnSyncMock
+        .mockReturnValueOnce({
+          status: 1,
+          stderr: "Server 'posthog' already exists",
+        })
+        .mockReturnValueOnce({ status: 1, stderr: 'remove failed' });
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp?features=flags"\n',
+      );
+      const client = new CodexMCPClient();
+      await expect(client.addServer()).resolves.toEqual({
+        success: false,
+        reason: 'remove failed',
+      });
+      expect(analytics.captureException).toHaveBeenCalled();
     });
 
     it('returns failure with the reason and captures exception on unexpected error', async () => {
       spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
       const client = new CodexMCPClient();
-      await expect(client.addServer('phx_test')).resolves.toEqual({
+      await expect(client.addServer()).resolves.toEqual({
         success: false,
         reason: 'network timeout',
       });

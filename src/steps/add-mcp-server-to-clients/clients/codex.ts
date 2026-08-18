@@ -74,7 +74,6 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
   }
 
   addServer(
-    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult> {
@@ -88,24 +87,69 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
     const args = ['mcp', 'add', serverName, '--url', url];
-    const env = { ...process.env };
-    if (apiKey) {
-      const tokenVar = 'POSTHOG_AUTH_HEADER';
-      env[tokenVar] = `Bearer ${apiKey}`;
-      args.push('--bearer-token-env-var', tokenVar);
-    }
 
-    const result = spawnSync(binary, args, { encoding: 'utf-8', env });
+    const result = spawnSync(binary, args, { encoding: 'utf-8' });
     if (result.status !== 0) {
       const stderr = result.stderr ?? '';
       if (ALREADY_INSTALLED_PATTERN.test(stderr)) {
-        return Promise.resolve({ success: true, alreadyInstalled: true });
+        // The URL encodes the feature selection — an existing entry pointing
+        // elsewhere must be replaced or the new selection never takes effect.
+        // An identical entry is left untouched so codex keeps whatever auth
+        // state it holds for the server.
+        if (this.installedServerUrl(serverName) === url) {
+          return Promise.resolve({ success: true, alreadyInstalled: true });
+        }
+        return Promise.resolve(this.replaceServer(binary, serverName, args));
       }
       const reason = redactSecrets(stderr);
       analytics.captureException(new Error(`Codex MCP add failed: ${reason}`));
       return Promise.resolve({ success: false, reason });
     }
     return Promise.resolve({ success: true });
+  }
+
+  /**
+   * URL the existing entry points at, read from `~/.codex/config.toml` (where
+   * `codex mcp add` writes `[mcp_servers.<name>]` sections). Null when it
+   * can't be determined — the caller then replaces the entry, which converges
+   * on the right state either way.
+   */
+  private installedServerUrl(serverName: string): string | null {
+    try {
+      const contents = fs.readFileSync(
+        path.join(os.homedir(), '.codex', 'config.toml'),
+        'utf-8',
+      );
+      const section = contents
+        .split(/^\[/m)
+        .find((s) => s.startsWith(`mcp_servers.${serverName}]`));
+      const match = section?.match(/^\s*url\s*=\s*"([^"]+)"/m);
+      return match ? match[1]! : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private replaceServer(
+    binary: string,
+    serverName: string,
+    addArgs: string[],
+  ): InstallResult {
+    const removed = spawnSync(binary, ['mcp', 'remove', serverName], {
+      encoding: 'utf-8',
+    });
+    const retried =
+      removed.status === 0
+        ? spawnSync(binary, addArgs, { encoding: 'utf-8' })
+        : removed;
+    if (retried.status !== 0) {
+      const reason = redactSecrets(retried.stderr ?? 'codex mcp update failed');
+      analytics.captureException(
+        new Error(`Codex MCP update failed: ${reason}`),
+      );
+      return { success: false, reason };
+    }
+    return { success: true };
   }
 
   removeServer(local?: boolean): Promise<InstallResult> {

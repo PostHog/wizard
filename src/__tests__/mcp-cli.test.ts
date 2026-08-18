@@ -73,21 +73,17 @@ describe('mcp add handler', () => {
     );
   });
 
-  test('passes --api-key through to buildSession', async () => {
+  test('never puts credentials in the session — auth belongs to the MCP client', async () => {
+    // Even with a key on argv and one sitting in .env, the install flow must
+    // stay credential-free: a wizard-injected key overrides the editor's OAuth
+    // tokens forever and locks it into a rejected-reconnect loop.
+    mockReadApiKeyFromEnvMcp.mockReturnValueOnce('phx_from_env');
     mcpAddCommand.handler!(makeArgv({ apiKey: 'phx_from_flag' }));
     await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'phx_from_flag' }),
+    expect(mockBuildSessionMcp).not.toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: expect.anything() }),
     );
-  });
-
-  test('falls back to readApiKeyFromEnv when --api-key is omitted', async () => {
-    mockReadApiKeyFromEnvMcp.mockReturnValueOnce('phx_from_env');
-    mcpAddCommand.handler!(makeArgv());
-    await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'phx_from_env' }),
-    );
+    expect(mockReadApiKeyFromEnvMcp).not.toHaveBeenCalled();
   });
 
   test('parses --features into a trimmed array', async () => {
@@ -100,12 +96,11 @@ describe('mcp add handler', () => {
 });
 
 describe('mcp parsing (end-to-end yargs)', () => {
-  test('mcp add camelCases --api-key and parses its flags', async () => {
+  test('mcp add parses its flags', async () => {
     const argv = await parseCommand(
       mcpCommand,
-      'mcp add --api-key phx_x --local --features flags,errors',
+      'mcp add --local --features flags,errors',
     );
-    expect(argv.apiKey).toBe('phx_x');
     expect(argv.local).toBe(true);
     expect(argv.features).toBe('flags,errors');
   });

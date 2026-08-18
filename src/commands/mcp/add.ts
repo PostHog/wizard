@@ -19,10 +19,6 @@ export const mcpAddCommand: Command = {
       describe: 'Comma-separated list of features to enable (default: all)',
       type: 'string',
     },
-    'api-key': {
-      describe: 'PostHog personal API key (phx_xxx) for MCP authentication',
-      type: 'string',
-    },
   },
   handler: runMcpAdd,
 };
@@ -30,8 +26,6 @@ export const mcpAddCommand: Command = {
 function runMcpAdd(argv: Arguments): void {
   const features = parseFeatures(argv.features);
   void (async () => {
-    const { readApiKeyFromEnv } = await import('@utils/env-api-key');
-    const apiKey = (argv.apiKey as string | undefined) || readApiKeyFromEnv();
     const debug = argv.debug as boolean | undefined;
     const localMcp = argv.local as boolean | undefined;
 
@@ -43,7 +37,6 @@ function runMcpAdd(argv: Arguments): void {
         debug,
         localMcp,
         mcpFeatures: features,
-        apiKey,
         baseUrl: argv.baseUrl as string | undefined,
       });
     } catch (error) {
@@ -52,7 +45,7 @@ function runMcpAdd(argv: Arguments): void {
       const { addMCPServerToClientsStep } = await import(
         '@steps/add-mcp-server-to-clients/index'
       );
-      await addMCPServerToClientsStep({ local: localMcp, features, apiKey });
+      await addMCPServerToClientsStep({ local: localMcp, features });
     }
   })();
 }

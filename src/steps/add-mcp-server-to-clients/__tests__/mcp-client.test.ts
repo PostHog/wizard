@@ -28,7 +28,7 @@ describe('DefaultMCPClient — addServer', () => {
   const writeFileMock = fs.promises.writeFile as Mock;
 
   const serverConfigFor = () =>
-    new TestClient().getServerConfig(undefined, ['flags'], false);
+    new TestClient().getServerConfig(['flags'], false);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,9 +37,9 @@ describe('DefaultMCPClient — addServer', () => {
   it('installs into a config that has no posthog entry yet', async () => {
     existsSyncMock.mockReturnValue(false);
 
-    await expect(
-      new TestClient().addServer(undefined, ['flags']),
-    ).resolves.toEqual({ success: true });
+    await expect(new TestClient().addServer(['flags'])).resolves.toEqual({
+      success: true,
+    });
     expect(writeFileMock).toHaveBeenCalled();
   });
 
@@ -49,9 +49,9 @@ describe('DefaultMCPClient — addServer', () => {
       JSON.stringify({ mcpServers: { posthog: serverConfigFor() } }),
     );
 
-    await expect(
-      new TestClient().addServer(undefined, ['flags'], false),
-    ).resolves.toEqual({ success: true, alreadyInstalled: true });
+    await expect(new TestClient().addServer(['flags'], false)).resolves.toEqual(
+      { success: true, alreadyInstalled: true },
+    );
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 
@@ -61,9 +61,9 @@ describe('DefaultMCPClient — addServer', () => {
       JSON.stringify({ mcpServers: { posthog: { command: 'stale' } } }),
     );
 
-    await expect(
-      new TestClient().addServer(undefined, ['flags'], false),
-    ).resolves.toEqual({ success: true });
+    await expect(new TestClient().addServer(['flags'], false)).resolves.toEqual(
+      { success: true },
+    );
     expect(writeFileMock).toHaveBeenCalled();
   });
 
@@ -71,8 +71,9 @@ describe('DefaultMCPClient — addServer', () => {
     existsSyncMock.mockReturnValue(true);
     readFileMock.mockRejectedValue(new Error('EACCES: permission denied'));
 
-    await expect(
-      new TestClient().addServer(undefined, ['flags']),
-    ).resolves.toEqual({ success: false, reason: 'EACCES: permission denied' });
+    await expect(new TestClient().addServer(['flags'])).resolves.toEqual({
+      success: false,
+      reason: 'EACCES: permission denied',
+    });
   });
 });

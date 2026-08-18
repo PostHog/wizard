@@ -12,7 +12,6 @@ export abstract class MCPClient {
   abstract getServerPropertyName(): string;
   abstract isServerInstalled(local?: boolean): Promise<boolean>;
   abstract addServer(
-    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult>;
@@ -32,11 +31,10 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   getServerConfig(
-    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
-    return getDefaultServerConfig(apiKey, selectedFeatures, local);
+    return getDefaultServerConfig(selectedFeatures, local);
   }
 
   async isServerInstalled(local?: boolean): Promise<boolean> {
@@ -61,7 +59,6 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   async addServer(
-    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult> {
@@ -80,11 +77,7 @@ export abstract class DefaultMCPClient extends MCPClient {
         existingConfig = jsonc.parse(configContent) || {};
       }
 
-      const newServerConfig = this.getServerConfig(
-        apiKey,
-        selectedFeatures,
-        local,
-      );
+      const newServerConfig = this.getServerConfig(selectedFeatures, local);
       const typedConfig = existingConfig as Record<string, any>;
       if (!typedConfig[serverPropertyName]) {
         typedConfig[serverPropertyName] = {};

@@ -260,52 +260,26 @@ export const buildMCPUrl = (selectedFeatures?: string[], local?: boolean) => {
   return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl;
 };
 
+/**
+ * The wizard never writes credentials into MCP client configs. The client owns
+ * auth: it runs the OAuth flow against mcp.posthog.com the first time it
+ * connects (e.g. `/mcp` in Claude Code), which is the only place that knows
+ * which scopes each feature needs. A wizard-injected Authorization header
+ * would be sent forever — even after the client obtains fresh OAuth tokens —
+ * so a stale or under-scoped key locks the server into a rejected-reconnect
+ * loop the user can't escape without editing the config by hand.
+ */
 export const getNativeHTTPServerConfig = (
-  apiKey: string | undefined,
   selectedFeatures?: string[],
   local?: boolean,
-) => {
-  const config: Record<string, unknown> = {
-    url: buildMCPUrl(selectedFeatures, local),
-  };
-
-  // Only add auth header if API key is provided (not OAuth mode)
-  if (apiKey) {
-    config.headers = {
-      Authorization: `Bearer ${apiKey}`,
-    };
-  }
-
-  return config;
-};
+) => ({
+  url: buildMCPUrl(selectedFeatures, local),
+});
 
 export const getDefaultServerConfig = (
-  apiKey: string | undefined,
   selectedFeatures?: string[],
   local?: boolean,
-) => {
-  const urlWithFeatures = buildMCPUrl(selectedFeatures, local);
-
-  // OAuth mode: no auth header, let MCP handle OAuth
-  if (!apiKey) {
-    return {
-      command: 'npx',
-      args: ['-y', 'mcp-remote@latest', urlWithFeatures],
-    };
-  }
-
-  // API key mode: include auth header
-  return {
-    command: 'npx',
-    args: [
-      '-y',
-      'mcp-remote@latest',
-      urlWithFeatures,
-      '--header',
-      `Authorization:\${POSTHOG_AUTH_HEADER}`,
-    ],
-    env: {
-      POSTHOG_AUTH_HEADER: `Bearer ${apiKey}`,
-    },
-  };
-};
+) => ({
+  command: 'npx',
+  args: ['-y', 'mcp-remote@latest', buildMCPUrl(selectedFeatures, local)],
+});

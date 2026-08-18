@@ -127,34 +127,9 @@ describe('OpenCodeMCPClient', () => {
   });
 
   describe('addServer (inherited from DefaultMCPClient)', () => {
-    it('writes server config with type:remote to the config file', async () => {
+    it('writes a credential-free type:remote server config', async () => {
       existsSyncMock.mockReturnValue(false);
       readFileMock.mockRejectedValue(new Error('should not be called'));
-      writeFileMock.mockResolvedValue(undefined);
-      mkdirMock.mockResolvedValue(undefined);
-
-      const client = new OpenCodeMCPClient();
-      await expect(client.addServer('phx_test123')).resolves.toEqual({
-        success: true,
-      });
-
-      const writtenContent = writeFileMock.mock.calls[0][1];
-      const parsed = JSON.parse(writtenContent);
-      expect(parsed).toEqual({
-        mcp: {
-          posthog: {
-            type: 'remote',
-            url: 'https://mcp.posthog.com/mcp',
-            headers: {
-              Authorization: 'Bearer phx_test123',
-            },
-          },
-        },
-      });
-    });
-
-    it('writes without headers when no apiKey provided', async () => {
-      existsSyncMock.mockReturnValue(false);
       writeFileMock.mockResolvedValue(undefined);
       mkdirMock.mockResolvedValue(undefined);
 
@@ -163,9 +138,15 @@ describe('OpenCodeMCPClient', () => {
 
       const writtenContent = writeFileMock.mock.calls[0][1];
       const parsed = JSON.parse(writtenContent);
-      expect(parsed.mcp.posthog.type).toBe('remote');
-      expect(parsed.mcp.posthog.url).toBe('https://mcp.posthog.com/mcp');
-      expect(parsed.mcp.posthog.headers).toBeUndefined();
+      // Auth lives in the client (OAuth), never in the config we write.
+      expect(parsed).toEqual({
+        mcp: {
+          posthog: {
+            type: 'remote',
+            url: 'https://mcp.posthog.com/mcp',
+          },
+        },
+      });
     });
 
     it('uses posthog-local for local server', async () => {
@@ -174,9 +155,9 @@ describe('OpenCodeMCPClient', () => {
       mkdirMock.mockResolvedValue(undefined);
 
       const client = new OpenCodeMCPClient();
-      await expect(
-        client.addServer(undefined, undefined, true),
-      ).resolves.toEqual({ success: true });
+      await expect(client.addServer(undefined, true)).resolves.toEqual({
+        success: true,
+      });
 
       const writtenContent = writeFileMock.mock.calls[0][1];
       const parsed = JSON.parse(writtenContent);

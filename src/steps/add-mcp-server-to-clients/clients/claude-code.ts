@@ -114,7 +114,6 @@ export class ClaudeCodeMCPClient
   }
 
   addServer(
-    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult> {
@@ -127,7 +126,8 @@ export class ClaudeCodeMCPClient
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
-    const args = [
+    const addCommand = [
+      binary,
       'mcp',
       'add',
       '--transport',
@@ -136,29 +136,76 @@ export class ClaudeCodeMCPClient
       'user',
       serverName,
       url,
-    ];
-    if (apiKey) {
-      args.push('--header', `Authorization: Bearer ${apiKey}`);
-    }
+    ]
+      .map((a) => JSON.stringify(a))
+      .join(' ');
 
     try {
-      execSync(`${binary} ${args.map((a) => JSON.stringify(a)).join(' ')}`, {
-        stdio: 'pipe',
-      });
+      execSync(addCommand, { stdio: 'pipe' });
       return Promise.resolve({ success: true });
     } catch (error) {
-      // The failing command echoes back the Authorization header we passed, so
-      // redact before this reaches a log, the screen, or an exception report.
+      // Redact before this reaches a log, the screen, or an exception report —
+      // the failing command echoes its arguments back in the error output.
       const msg = redactSecrets(
         error instanceof Error ? error.message : String(error),
       );
       if (msg.includes('already exists')) {
-        return Promise.resolve({ success: true, alreadyInstalled: true });
+        // The URL encodes the feature selection, so an existing entry with a
+        // different URL must be replaced — leaving it "as is" means the user's
+        // new selection silently never takes effect, and their next OAuth in
+        // Claude Code authorizes the wrong toolset. An entry that already
+        // points at this exact URL is left untouched: removing it would throw
+        // away the OAuth credentials Claude Code holds for it and force a
+        // needless re-auth.
+        if (this.installedServerUrl(binary, serverName) === url) {
+          return Promise.resolve({ success: true, alreadyInstalled: true });
+        }
+        return Promise.resolve(
+          this.replaceServer(binary, serverName, addCommand),
+        );
       }
       analytics.captureException(
         new Error(`Claude Code MCP add failed: ${msg}`),
       );
       return Promise.resolve({ success: false, reason: msg });
+    }
+  }
+
+  /** URL the existing entry points at, or null when it can't be determined. */
+  private installedServerUrl(
+    binary: string,
+    serverName: string,
+  ): string | null {
+    try {
+      const output = execSync(`${binary} mcp get ${serverName}`, {
+        stdio: 'pipe',
+      }).toString();
+      const match = output.match(/URL:\s*(\S+)/i);
+      return match ? match[1]! : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private replaceServer(
+    binary: string,
+    serverName: string,
+    addCommand: string,
+  ): InstallResult {
+    try {
+      execSync(`${binary} mcp remove --scope user ${serverName}`, {
+        stdio: 'pipe',
+      });
+      execSync(addCommand, { stdio: 'pipe' });
+      return { success: true };
+    } catch (error) {
+      const msg = redactSecrets(
+        error instanceof Error ? error.message : String(error),
+      );
+      analytics.captureException(
+        new Error(`Claude Code MCP update failed: ${msg}`),
+      );
+      return { success: false, reason: msg };
     }
   }
 

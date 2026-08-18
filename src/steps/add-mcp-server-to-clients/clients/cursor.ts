@@ -32,10 +32,9 @@ export class CursorMCPClient extends DefaultMCPClient {
   }
 
   getServerConfig(
-    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
-    return getNativeHTTPServerConfig(apiKey, selectedFeatures, local);
+    return getNativeHTTPServerConfig(selectedFeatures, local);
   }
 }

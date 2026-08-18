@@ -31,11 +31,9 @@ vi.mock('../../defaults', () => ({
 describe('ClaudeMCPClient', () => {
   let client: ClaudeMCPClient;
   const mockHomeDir = '/mock/home';
-  const mockApiKey = 'test-api-key';
   const mockServerConfig = {
     command: 'npx',
-    args: ['-y', 'mcp-remote@latest'],
-    env: { POSTHOG_AUTH_HEADER: `Bearer ${mockApiKey}` },
+    args: ['-y', 'mcp-remote@latest', 'https://mcp.posthog.com/mcp'],
   };
 
   const mkdirMock = fs.promises.mkdir as Mock;
@@ -222,7 +220,7 @@ describe('ClaudeMCPClient', () => {
     it('should create config directory and add server when config file does not exist', async () => {
       existsSyncMock.mockReturnValue(false);
 
-      await client.addServer(mockApiKey);
+      await client.addServer();
 
       const expectedConfigPath = path.join(
         mockHomeDir,
@@ -265,7 +263,7 @@ describe('ClaudeMCPClient', () => {
       };
       readFileMock.mockResolvedValue(JSON.stringify(existingConfig));
 
-      await client.addServer(mockApiKey);
+      await client.addServer();
 
       expect(writeFileMock).toHaveBeenCalledWith(
         expect.any(String),
@@ -298,7 +296,7 @@ describe('ClaudeMCPClient', () => {
         }),
       );
 
-      await client.addServer(mockApiKey);
+      await client.addServer();
 
       expect(writeFileMock).toHaveBeenCalledWith(
         expect.any(String),
@@ -323,27 +321,14 @@ describe('ClaudeMCPClient', () => {
       );
     });
 
-    it('should call getDefaultServerConfig with the provided API key', async () => {
+    it('should forward the feature selection and local flag to getDefaultServerConfig', async () => {
       existsSyncMock.mockReturnValue(false);
 
-      await client.addServer(mockApiKey);
+      await client.addServer(['workflows'], false);
 
       expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
-        mockApiKey,
-        undefined,
-        undefined,
-      );
-    });
-
-    it('should call getDefaultServerConfig with undefined API key for OAuth mode', async () => {
-      existsSyncMock.mockReturnValue(false);
-
-      await client.addServer(undefined);
-
-      expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
-        undefined,
-        undefined,
-        undefined,
+        ['workflows'],
+        false,
       );
     });
   });
