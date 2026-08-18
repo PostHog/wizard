@@ -20,7 +20,11 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import {
+  OutroKind,
+  type TaskNotice,
+  type WizardSession,
+} from '@lib/wizard-session';
 import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
@@ -190,6 +194,48 @@ function resolveReferenceSkillId(
  * — the executor holds the task's promise — so the only real limit is this one.
  */
 const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+
+/**
+ * How long an optional step's notice waits for an answer.
+ *
+ * Much shorter than the ask timeout above, because it is asking for something
+ * much smaller: one keypress to accept or decline, not "go mint a restricted
+ * Stripe key". The notice is also the only interactive screen sitting in front
+ * of the run's final steps, so an unanswered one holds the report — and with it
+ * the notebook and the outro — behind a modal nobody is looking at.
+ */
+export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Offer an optional step, defaulting to declining it if nobody answers.
+ *
+ * Skip is the right default on a timeout: continuing would send the step on to
+ * ask for credentials that the same absent user cannot supply either, burning
+ * {@link TASK_ASK_TIMEOUT_MS} per question before falling back to the same
+ * links declining gives immediately.
+ */
+export async function offerSeededTask(
+  notice: TaskNotice,
+  timeoutMs: number = TASK_NOTICE_TIMEOUT_MS,
+): Promise<{ keep: boolean; timedOut: boolean }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      // Dismisses the overlay and settles the showTaskNotice promise too, so
+      // the losing side of the race cannot leave a modal on screen.
+      getUI().cancelTaskNotice();
+      resolve(false);
+    }, timeoutMs);
+  });
+  try {
+    const keep = await Promise.race([getUI().showTaskNotice(notice), timeout]);
+    return { keep, timedOut };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /** Whether a task's prompt lets it ask the user, and so needs the ask bridge. */
 function canAsk(prompt: AgentPrompt | undefined): boolean {
@@ -718,18 +764,26 @@ export async function runOrchestrator(
     // dependency as satisfied, so the report still runs.
     const notice = seededNotices.get(task.id);
     if (notice) {
-      const keep = await getUI().showTaskNotice(notice);
+      const { keep, timedOut } = await offerSeededTask(notice);
       analytics.wizardCapture('orchestrator task notice answered', {
         type: task.type,
         kept: keep,
+        timed_out: timedOut,
       });
       if (!keep) {
-        logToFile(`[orchestrator] user declined runner-seeded ${task.type}`);
+        logToFile(
+          `[orchestrator] runner-seeded ${task.type} declined (${
+            timedOut ? 'timed out' : 'by the user'
+          })`,
+        );
         store.skip(task.id, {
           goals: notice.title,
-          did: 'Nothing — the user chose to skip this step when offered it.',
-          forNextAgent:
-            'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.',
+          did: timedOut
+            ? 'Nothing — the step was offered and the offer timed out with no answer.'
+            : 'Nothing — the user chose to skip this step when offered it.',
+          forNextAgent: timedOut
+            ? 'This step was offered and nobody answered, so it did no work. Report it as not set up, and point the user at how to do it later.'
+            : 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.',
         });
         renderQueue();
         return;
