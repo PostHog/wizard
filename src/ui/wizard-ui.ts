@@ -9,6 +9,7 @@
  */
 
 import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { GatewayAuthReason } from '@lib/agent/output-signals';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type { Credentials, TaskNotice } from '@lib/wizard-session';
@@ -75,6 +76,16 @@ export interface AuthErrorDetail {
   usingManagedLogin?: boolean;
   /** Human-readable places a conflicting Anthropic credential may live. */
   credentialPlaces?: string[];
+  /**
+   * Concrete cause of a rejected gateway token (expired, missing scope, wrong
+   * region). Drives the fourth screen branch when there is no settings conflict
+   * or managed login. `unknown` falls back to the common-cause list.
+   */
+  gatewayReason?: GatewayAuthReason;
+  /** Raw message from the gateway 401 body, shown as authoritative detail. */
+  gatewayErrorMessage?: string;
+  /** Region implied by the resolved gateway URL, for the wrong-region step. */
+  region?: 'eu' | 'us' | 'local';
   logFilePath: string;
 }
 

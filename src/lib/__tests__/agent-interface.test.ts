@@ -568,6 +568,25 @@ describe('buildAuthErrorContext', () => {
     );
   });
 
+  it('carries the parsed gateway body and classified reason', () => {
+    const ctx = buildAuthErrorContext(home, GATEWAY, home, undefined, {
+      code: 'authentication_error',
+      message: 'token has expired',
+    });
+
+    expect(ctx.gatewayErrorCode).toBe('authentication_error');
+    expect(ctx.gatewayErrorMessage).toBe('token has expired');
+    expect(ctx.gatewayReason).toBe('expired');
+  });
+
+  it('reports an unknown reason when no gateway body was parsed', () => {
+    const ctx = buildAuthErrorContext(home, GATEWAY, home);
+
+    expect(ctx.gatewayReason).toBe('unknown');
+    expect(ctx.gatewayErrorCode).toBeUndefined();
+    expect(ctx.gatewayErrorMessage).toBeUndefined();
+  });
+
   it('lists the logged-in session when ~/.claude/.credentials.json exists', () => {
     fs.mkdirSync(path.join(home, '.claude'));
     fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{}');

@@ -14,6 +14,7 @@ import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
+import type { GatewayAuthReason } from './agent/output-signals';
 import type { ApiUser, ApiProject } from './api';
 import type { HostResolution } from './host-resolution';
 
@@ -356,6 +357,11 @@ export interface WizardSession {
   authErrorDetail: {
     hasSettingsConflict: boolean;
     conflicts?: SettingsConflict[];
+    usingManagedLogin?: boolean;
+    credentialPlaces?: string[];
+    gatewayReason?: GatewayAuthReason;
+    gatewayErrorMessage?: string;
+    region?: 'eu' | 'us' | 'local';
     logFilePath: string;
   } | null;
   portConflictProcess: {
