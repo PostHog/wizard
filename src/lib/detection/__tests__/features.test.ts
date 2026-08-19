@@ -59,6 +59,13 @@ describe('discoverFeatures', () => {
         writeFile(tmpDir, 'wrangler.toml', 'name = "my-worker"');
       },
     ],
+    [
+      'a root middleware file',
+      () => {
+        writePackageJson(tmpDir);
+        writeFile(tmpDir, 'middleware.ts', 'export function middleware() {}');
+      },
+    ],
   ])('detects the HttpLog feature from %s', (_name, setup) => {
     setup();
     expect(discoverFeatures(tmpDir)).toEqual([DiscoveredFeature.HttpLog]);

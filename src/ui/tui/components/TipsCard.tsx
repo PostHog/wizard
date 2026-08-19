@@ -97,7 +97,7 @@ export const DEFAULT_TIPS: Tip[] = [
       key: 'b',
       feature: AdditionalFeature.HttpLog,
       enabledLabel: 'Server log capture queued next',
-      prompt: 'We detected a Cloudflare Workers project.',
+      prompt: 'Your project can forward server logs with one file.',
       isEnabled: (store) =>
         store.session.additionalFeatureQueue.includes(
           AdditionalFeature.HttpLog,

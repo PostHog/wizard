@@ -28,6 +28,14 @@ const WRANGLER_CONFIG_FILES = [
   'wrangler.json',
 ];
 
+// Root middleware files (Next.js convention) are the one-file place to add $http_log capture.
+const MIDDLEWARE_FILES = [
+  'middleware.ts',
+  'middleware.js',
+  'src/middleware.ts',
+  'src/middleware.js',
+];
+
 const LLM_PACKAGES = new Set([
   'openai',
   '@anthropic-ai/sdk',
@@ -102,7 +110,9 @@ function discoverNodeFeatures(
   }
   if (
     depNames.some((depName) => CLOUDFLARE_PACKAGES.has(depName)) ||
-    WRANGLER_CONFIG_FILES.some((file) => safeRead(installDir, file) !== null)
+    [...WRANGLER_CONFIG_FILES, ...MIDDLEWARE_FILES].some(
+      (file) => safeRead(installDir, file) !== null,
+    )
   ) {
     features.push(DiscoveredFeature.HttpLog);
   }
