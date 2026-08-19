@@ -190,10 +190,10 @@ describe('flat skill commands', () => {
     expect(config.skillId).toBe('mcp-analytics');
   });
 
-  test('replay-vision dispatches with replay-vision skillId', () => {
+  test('replay-vision dispatches with replay-vision-setup skillId', () => {
     replayVisionCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
-    expect(config.skillId).toBe('replay-vision');
+    expect(config.skillId).toBe('replay-vision-setup');
   });
 
   test('warehouse dispatches with data-warehouse-source-setup skillId', () => {

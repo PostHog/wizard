@@ -109,7 +109,12 @@ const DETECT_STEP: ProgramStep = {
 };
 
 const base = createSkillProgram({
-  skillId: 'replay-vision',
+  // The menu ids this skill `<dir>-<variant>`, and context-mill's
+  // `replay-vision/config.yaml` declares a single variant, `setup`. The bare
+  // `replay-vision` id does not exist — the orchestrator never installs this
+  // (it resolves per-task mini-skills instead), but the linear path does, and
+  // aborts `skill-not-found` on a miss.
+  skillId: 'replay-vision-setup',
   command: 'replay-vision',
   id: 'replay-vision',
   description: 'Set up PostHog Replay vision scanners for your product',
