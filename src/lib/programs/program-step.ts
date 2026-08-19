@@ -271,6 +271,15 @@ export interface ProgramConfig {
    */
   eventPlanFile?: string;
   /**
+   * Files this program writes that are documentation, not user code —
+   * basenames (matched exactly) or RegExps (tested against the basename).
+   * The security hooks suppress posthog_pii matches on these paths only;
+   * every other rule still fires. Declarations are pushed into the shared
+   * doc-paths registry (`@lib/doc-paths-registry`) when the program
+   * registry loads, so L2 scanning infra never has to name a program.
+   */
+  docPaths?: ReadonlyArray<string | RegExp>;
+  /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
    * Programs that ship a custom RunScreen variant (audit) or skip the
