@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.64.0](https://github.com/PostHog/wizard/compare/v2.63.0...v2.64.0) (2026-08-19)
+
+
+### Features
+
+* **replay-vision:** replay-vision command on the orchestrator sequence ([#1101](https://github.com/PostHog/wizard/issues/1101)) ([be6c8bf](https://github.com/PostHog/wizard/commit/be6c8bf7529445701bf46ef0a464de6ae065f0f2))
+
+
+### Bug Fixes
+
+* **orchestrator:** surface the app host to task prompts for browser links ([#1097](https://github.com/PostHog/wizard/issues/1097)) ([10c9cb7](https://github.com/PostHog/wizard/commit/10c9cb710357441bbd8a330ca9f25b56e725dee2))
+* **tui:** let users skip a wizard_ask prompt with Esc ([#1110](https://github.com/PostHog/wizard/issues/1110)) ([0aa92fa](https://github.com/PostHog/wizard/commit/0aa92fa2e1eb6d4bd8b0c39dd488cfade9120f07))
+
 ## [2.63.0](https://github.com/PostHog/wizard/compare/v2.62.0...v2.63.0) (2026-08-18)
 
 
