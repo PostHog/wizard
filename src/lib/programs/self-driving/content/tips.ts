@@ -1,3 +1,5 @@
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
+
 /**
  * Sidebar tips for the self-driving run — short footnotes on the
  * vocabulary ladder (signal source → scout → signal → report → measured
@@ -24,6 +26,12 @@ export const SELF_DRIVING_TIPS: Tip[] = [
       'An agent on a schedule, watching your sources for anomalies and patterns. Your project gets up to 100 scout runs a day by default.',
   },
   {
+    id: 'scanner',
+    title: 'Scanner',
+    description:
+      'Where a scout reads your data, a scanner watches session recordings — an LLM spotting what broke on screen. It spends Replay Vision quota, so it stays scoped to your key flows.',
+  },
+  {
     id: 'signal-report',
     title: 'Signal → report',
     description:
@@ -38,8 +46,7 @@ export const SELF_DRIVING_TIPS: Tip[] = [
   {
     id: 'pricing',
     title: 'What it costs',
-    description:
-      'Watching is free. You pay a flat $15 only when a report ships a PR.',
+    description: `${PRICING_LONG} ${NO_DEFAULT_LIMIT}`,
   },
   {
     id: 'work-anywhere',

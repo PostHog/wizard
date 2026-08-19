@@ -20,12 +20,16 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
+import { shouldDisableAsk } from '@lib/agent/runner/shared/bootstrap';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+
+const WAREHOUSE_SOURCES_DOCS_URL =
+  'https://posthog.com/docs/data-warehouse/sources';
 
 function resolveContinueUrl(
   sess: WizardSession,
@@ -37,32 +41,68 @@ function resolveContinueUrl(
   return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
 }
 
+/** Sources listed with their own link before the outro falls back to a summary line. */
+const WAREHOUSE_LINK_LIMIT = 3;
+
+/**
+ * The app's new-source page, pre-selected to one source kind.
+ *
+ * `kind` is matched case-insensitively against the connector list, and a kind
+ * the app cannot resolve lands on the source catalog rather than erroring. So a
+ * source we detect but the app has not shipped a connector for still takes the
+ * user somewhere useful.
+ */
+function warehouseSourceUrl(
+  host: HostResolution,
+  projectId: number | string,
+  kind: string,
+): string {
+  const path = `${
+    host.appHost
+  }/project/${projectId}/data-warehouse/new-source?kind=${encodeURIComponent(
+    kind,
+  )}`;
+  return withUtm(path, 'outro-warehouse');
+}
+
 /**
  * Outro suggestion for data sources found in the project but not connected.
  *
- * A pointer at `wizard warehouse`, not an inline flow. Connecting a source
- * needs interactive credential collection, and chaining that as a second agent
- * run before the outro would let any of its terminal failure paths
- * `process.exit()` — costing the user the success outro and the post-outro
- * MCP / Slack steps on a run where PostHog installed fine.
+ * A pointer at the app, not an inline flow. Connecting a source needs
+ * interactive credential collection, and chaining that as a second agent run
+ * before the outro would let any of its terminal failure paths `process.exit()`
+ * — costing the user the success outro and the post-outro MCP / Slack steps on
+ * a run where PostHog installed fine.
+ *
+ * Each source gets its own pre-filled link, because the alternative we shipped
+ * first — naming the `wizard warehouse` command — asks the user to start a
+ * second CLI run before they can connect anything. A link opens the form for
+ * that one source. The command line stays for anyone who wants every source in
+ * one pass, and it is the only route offered once the list is too long to read.
  *
  * Returns undefined when nothing was detected, so the outro is unchanged for
  * projects with no connectable source.
  */
 function buildWarehouseNextSteps(
   sess: WizardSession,
+  host: HostResolution,
+  projectId: number | string,
 ): { heading: string; items: string[] } | undefined {
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return undefined;
 
-  const labels = sources.map((s) => s.label).join(', ');
-  return {
-    heading: 'Query your other data in PostHog:',
-    items: [
-      `Found in this project: ${labels}`,
-      'Import it into the data warehouse with: npx @posthog/wizard warehouse',
-    ],
-  };
+  const listed = sources.slice(0, WAREHOUSE_LINK_LIMIT);
+  const items = listed.map(
+    (s) => `Connect ${s.label}: ${warehouseSourceUrl(host, projectId, s.kind)}`,
+  );
+
+  const remaining = sources.length - listed.length;
+  if (remaining > 0) {
+    items.push(`And ${remaining} more we found in this project.`);
+  }
+  items.push('Connect them all at once with: npx @posthog/wizard warehouse');
+
+  return { heading: 'Query your other data in PostHog:', items };
 }
 
 /**
@@ -83,6 +123,59 @@ function warehouseReportInstruction(sess: WizardSession): string {
   return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
 }
 
+/**
+ * The orchestrator task that connects the data sources detection found in the
+ * project — the one step of the flow that stops to ask the user for
+ * credentials. Queued here rather than by the planner: whether it belongs in
+ * the run is a fact about the project the wizard already scanned, so a model
+ * can neither invent it nor forget it.
+ *
+ * It runs at the end of the queue, not the start. Where exactly is the agent
+ * prompt's business (`dependsOn` in the warehouse agent's frontmatter, resolved
+ * by `seeded-deps.ts` once the planner has run) — this file only decides whether
+ * the task belongs in the run at all.
+ *
+ * Empty when nothing was detected, and in CI, signup, and any other run where
+ * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
+ * the task's whole timeout and then fail the run.
+ */
+const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
+  if (shouldDisableAsk(sess)) return [];
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return [];
+
+  analytics.wizardCapture('orchestrator warehouse task queued', {
+    warehouse_source_count: sources.length,
+    warehouse_source_kinds: sources.map((s) => s.kind),
+  });
+  return [
+    {
+      type: 'warehouse',
+      inputs: {
+        sources: sources.map((s) => ({
+          kind: s.kind,
+          label: s.label,
+          mode: s.mode,
+          matchedSignal: s.matchedSignal,
+        })),
+      },
+      notice: {
+        title: 'Connect your data sources',
+        body: [
+          'We detected some warehouse sources we can connect to enrich your PostHog data. This runs at the end, once your code changes are done — we’ll prompt you then for the credentials, so you can leave the setup to run until it asks.',
+          "You can select [Skip] if you'd like to do this later in PostHog.",
+        ],
+        items: sources.map((s) => s.label),
+        docsLabel: 'Learn more about warehouse sources',
+        docsUrl: WAREHOUSE_SOURCES_DOCS_URL,
+        prompt: 'Connect these during setup?',
+        confirmLabel: 'Continue [Enter]',
+        cancelLabel: 'Skip [Esc]',
+      },
+    },
+  ];
+};
+
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export { EVENT_PLAN_FILE } from './constants.js';
 
@@ -99,6 +192,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // list to the general-purpose subagent as well, so dispatched subagents
   // can't reach around the parent and ask either.
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+
+  seedTasks: warehouseSeedTasks,
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
@@ -193,6 +288,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
       docsUrl: config.metadata.docsUrl,
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
+      // The seeded warehouse task's fallback, when a user cannot hand over a
+      // credential, is to give them the pre-filled new-source URL. That only
+      // works if the overlay renders it as a link they can open or copy.
+      richLinks: true,
 
       customPrompt: (ctx) => {
         const additionalLines = config.prompts.getAdditionalContextLines
@@ -321,7 +420,11 @@ ${warehouseReportInstruction(session)}
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
-          nextSteps: buildWarehouseNextSteps(sess),
+          nextSteps: buildWarehouseNextSteps(
+            sess,
+            credentials.host,
+            credentials.projectId,
+          ),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
           // No report file — the prompt points at the notebook, when the run captured one.

@@ -59,3 +59,13 @@ jobs:
         
       - name: Publish the package in the npm registry
         run: pnpm publish --access public
+
+      - name: Notify Slack of npm publish
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_RELEASES }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":rocket: wizard *<https://github.com/${{ github.repository }}/releases/tag/v${{ env.COMMITTED_VERSION }}|v${{ env.COMMITTED_VERSION }}>* released to *<https://www.npmjs.com/package/@posthog/wizard/v/${{ env.COMMITTED_VERSION }}|npm>*"
+            }

@@ -217,11 +217,17 @@ export const WIZARD_PROVISIONING_SCOPES = [
  *
  * NOTE: every scope here must be within the wizard OAuth application's
  * server-side scope ceiling (`OAuthApplication.scopes` in posthog, set
- * via Django admin on BOTH prod regions) — requesting anything outside
- * it fails the WHOLE authorize request with `error=invalid_scope`
- * before the consent screen renders. Procedure: the
- * "scope-ceiling-invalid-scope" runbook in PostHog/runbooks. Keep the
- * runbook's worked example in sync when this list changes.
+ * via Django admin on BOTH prod regions). A scope outside the ceiling
+ * does NOT fail the authorize request — the server silently clamps the
+ * request to the ceiling (`clamp_scopes_to_ceiling` in posthog) and the
+ * token comes back without it. Separately, the consent screen lets the
+ * user deselect any scope the app doesn't mark required. Both paths
+ * yield a granted `scope` narrower than requested, with no error, so
+ * never assume the token carries this list — the token response's
+ * `scope` field is the truth, and `missingOAuthScopes` (utils/oauth.ts)
+ * diffs it at login. Ceiling procedure: the "scope-ceiling-invalid-scope"
+ * runbook in PostHog/runbooks. Keep its worked example in sync when this
+ * list changes.
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
@@ -246,11 +252,15 @@ export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
+/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
+export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
+  'wizard-orchestrator-seeded-tasks';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 ] as const;

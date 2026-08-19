@@ -311,9 +311,14 @@ export type AskCapDecision =
 
 /**
  * Pure decision function for the wizard_ask caps. Returns whether the
- * upcoming call should proceed and, if not, the error message to surface
- * to the agent. Extracted so the policy can be unit-tested without
- * spinning up an MCP server.
+ * upcoming call should proceed and, if not, the message to surface to the
+ * agent. Extracted so the policy can be unit-tested without spinning up an
+ * MCP server.
+ *
+ * The two capped reasons are surfaced differently: `max_questions` is a hard
+ * stop, but `adjacency` is a one-time nudge the caller must not present as a
+ * failure — an agent that reads it as a refusal abandons the source instead
+ * of re-asking with batched questions.
  *
  * The adjacency nudge fires exactly once per run (the caller records it
  * via `adjacencyNudged`) — flows that legitimately need several
@@ -338,7 +343,7 @@ export function evaluateAskCap(
     return {
       kind: 'capped',
       reason: 'adjacency',
-      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation. If the remaining questions truly depend on earlier answers, ask again and they will go through.`,
+      message: `Not an error — this ask was not sent (a one-time nudge). You've made ${callCount} wizard_ask calls in a row. Batch the questions you still need into a single call (the schema accepts up to 8 questions per invocation) and call wizard_ask again now; or, if they genuinely depend on earlier answers, just ask again as-is. Either way the next call goes through. Do not abandon the task or fall back to browser setup because of this message.`,
     };
   }
   return { kind: 'ok' };

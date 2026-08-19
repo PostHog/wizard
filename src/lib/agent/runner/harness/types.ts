@@ -89,6 +89,12 @@ export interface TaskRunInputs {
   /** Per-task tool overrides from the agent prompt's frontmatter. */
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
+  /**
+   * Interactive question bridge, passed only for a task whose prompt allows
+   * `wizard_ask`. Absent everywhere else, so a task that was never meant to ask
+   * cannot open an overlay while its neighbours run.
+   */
+  askBridge?: WizardAskBridge;
   /** Queue-tools context threaded into the in-process wizard-tools MCP. */
   orchestrator: OrchestratorToolsContext;
   /** Spinner copy. Empty strings suppress the per-task line (queue panel shows progress). */

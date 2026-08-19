@@ -65,4 +65,28 @@ describe('RunMetrics', () => {
     m.recordStart(2500); // gap 500
     expect(m.summary().max_gap_ms).toBe(2000);
   });
+  it('times the first ask from run start, and only the first', () => {
+    const m = new RunMetrics(0);
+    m.recordStart(0);
+    m.recordAsk(30_000);
+    m.recordAsk(45_000);
+    expect(m.summary().time_to_first_ask_ms).toBe(30_000);
+  });
+
+  it('leaves the first-ask timing unset on a run that asked nothing', () => {
+    const m = new RunMetrics(0);
+    m.recordStart(0);
+    m.recordComplete(1000);
+    expect(m.summary().time_to_first_ask_ms).toBeUndefined();
+  });
+
+  it('does not count waiting on a person as visible progress', () => {
+    const m = new RunMetrics(0);
+    m.recordStart(0);
+    // A long human pause is not a silence the wizard is responsible for, so it
+    // must not land in max_gap_ms.
+    m.recordAsk(60_000);
+    m.recordComplete(2000);
+    expect(m.summary().max_gap_ms).toBe(2000);
+  });
 });

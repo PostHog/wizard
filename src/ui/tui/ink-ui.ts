@@ -21,6 +21,7 @@ import type {
   Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 import { RunPhase, OutroKind } from '@lib/wizard-session';
 
@@ -150,6 +151,16 @@ export class InkUI implements WizardUI {
 
   waitForManualAuthCode(): Promise<string> {
     return this.store.waitForManualAuthCode();
+  }
+
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    return this.store.showTaskNotice(notice);
+  }
+
+  cancelTaskNotice(): void {
+    // Same path as pressing Skip: closes the overlay and resolves the pending
+    // showTaskNotice promise with false.
+    this.store.resolveTaskNotice(false);
   }
 
   showSettingsOverride(

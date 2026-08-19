@@ -682,6 +682,11 @@ export async function runAgent(
      * `ProgramRun.trackStepProgress`; defaults off for every other caller.
      */
     emitStepEvents?: boolean;
+    /**
+     * Maps an agent-authored step label to a stable `step_key`. Threaded from
+     * `ProgramRun.resolveStepKey`; absent for programs that don't define one.
+     */
+    resolveStepKey?: (stepName: string | undefined) => string | undefined;
     /** Request the end-of-run reflection remark. Defaults to true. */
     requestRemark?: boolean;
     /** Scan-triage classifier resolved in bootstrap. Absent → rebuilt from the gateway auth on the env. */
@@ -703,6 +708,7 @@ export async function runAgent(
     errorMessage = 'Integration failed',
     abortCases = [],
     emitStepEvents = false,
+    resolveStepKey,
   } = config ?? {};
 
   logToFile('Starting agent run');
@@ -1092,6 +1098,7 @@ export async function runAgent(
         tasks,
         agentConfig.suppressTaskRender ?? false,
         emitStepEvents,
+        resolveStepKey,
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1339,6 +1346,8 @@ interface TaskStore {
   sync: () => void;
   /** When true, emit a `wizard: step` event on each status transition. */
   emitStepEvents?: boolean;
+  /** Supplies the stable `step_key` for that event, when the program defines one. */
+  resolveStepKey?: (stepName: string | undefined) => string | undefined;
 }
 
 interface ToolUseBlock {
@@ -1391,18 +1400,23 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
       (input.status === 'in_progress' || input.status === 'completed')
     ) {
       const keys = [...store.tasks.keys()];
+      // The task's display label lives on `activeForm` (what the TUI renders,
+      // e.g. "Checking access"); `content`/`subject` are typically empty on a
+      // status-only TaskUpdate. Prefer the stored entry, then the update, so
+      // the name is never null. Named `step_name` (not `step`): a bare
+      // `properties.step` doesn't resolve in HogQL — `step_name` queries
+      // cleanly, like `step_index` / `step_count`.
+      const stepName =
+        existing.activeForm ??
+        input.activeForm ??
+        existing.content ??
+        input.subject;
       analytics.wizardCapture('step', {
-        // The task's display label lives on `activeForm` (what the TUI renders,
-        // e.g. "Checking access"); `content`/`subject` are typically empty on a
-        // status-only TaskUpdate. Prefer the stored entry, then the update, so
-        // the name is never null. Named `step_name` (not `step`): a bare
-        // `properties.step` doesn't resolve in HogQL — `step_name` queries
-        // cleanly, like `step_index` / `step_count`.
-        step_name:
-          existing.activeForm ??
-          input.activeForm ??
-          existing.content ??
-          input.subject,
+        step_name: stepName,
+        // The agent words its own labels, so `step_name` drifts run to run and a funnel keyed on
+        // it quietly loses runs. Programs that care supply a mapping to a stable key; the ones
+        // that don't ship this undefined, exactly as before.
+        step_key: store.resolveStepKey?.(stepName),
         status: input.status,
         step_index: keys.indexOf(input.taskId),
         step_count: keys.length,
@@ -1536,6 +1550,8 @@ function handleSDKMessage(
   // Opt-in per-step analytics, threaded from runAgent's `emitStepEvents`
   // (ProgramRun.trackStepProgress). Off for every program that doesn't opt in.
   emitStepEvents = false,
+  // Program-supplied label -> stable key mapping for the same events.
+  resolveStepKey?: (stepName: string | undefined) => string | undefined,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1629,6 +1645,7 @@ function handleSDKMessage(
               tasks,
               sync: syncTasks,
               emitStepEvents,
+              resolveStepKey,
             });
           }
 

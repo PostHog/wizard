@@ -47,8 +47,8 @@ export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {
   },
   [Sequence.orchestrator]: {
     name: Sequence.orchestrator,
-    run: (session, _config, programConfig, boot, _composed) =>
-      runOrchestrator(session, programConfig, boot),
+    run: (session, config, programConfig, boot, _composed) =>
+      runOrchestrator(session, config, programConfig, boot),
   },
 };
 

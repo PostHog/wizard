@@ -4,6 +4,7 @@ import {
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
 } from '@lib/constants';
 import type { HarnessExperiment, SequenceExperiment } from './schemes';
 
@@ -24,6 +25,17 @@ export const ORCHESTRATOR_STAGE_OVERRIDES = {
   programs: ORCHESTRATOR_SEQUENCE_ROUTE.programs,
   flag: WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
 } as const;
+
+/**
+ * Kill switch for the runner-seeded task mechanism (the optional warehouse
+ * step). Off or unset, the orchestrator queues nothing itself and the run is
+ * identical to a project with no detected sources.
+ */
+export function areSeededTasksEnabled(
+  flags: Record<string, string> = {},
+): boolean {
+  return flags[WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY] === 'true';
+}
 
 /** Raw flag read — for telemetry/log lines only, never for routing. */
 export function isOrchestratorEnabled(

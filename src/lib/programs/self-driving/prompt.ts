@@ -58,7 +58,7 @@ export function buildSelfDrivingPrompt(
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings: ${integrationsSettingsUrl}
@@ -93,6 +93,7 @@ tasks, in this order:
   5. Offer issue-tracker integrations
   6. Configure the scout troop
   6b. Design custom scouts
+  6c. Set up Replay Vision scanners
   7. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g.
@@ -183,6 +184,16 @@ STEP 6 — Configure the scout troop. (skill: "Scouts")
    whole troop, including step 6b's custom scouts, stays at or under
    ten enabled scouts.
 
+   Then tell the user what the troop is, before STEP 6b asks them to add
+   to it. Scouts are PostHog's built-in ones, and the user has not seen
+   the list: without it, STEP 6b asks them to approve additions to a
+   baseline they cannot picture. Send one short message naming each
+   scout you enabled with a plain one-line description of what it
+   watches, and say how many you left disabled and that they can turn
+   those on later from the inbox. No wizard_ask here, it is not a
+   question. Keep each line to one sentence and do not restate the
+   skill's internals.
+
 STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
@@ -200,6 +211,13 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    before creating anything; the user declining everything (or finding
    no gap at all) is a valid outcome, not an abort. Mark the task
    completed either way.
+
+STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
+   Create the scanner skeletons the skill defines, filling the per-product
+   blanks it leaves you from this repo's code. Scanners need Session Replay
+   on (STEP 3b). Every failure here — no recordings yet, a backend-only
+   project, the scanner API missing — is a follow-up, never an abort; mark
+   the task completed regardless.
 
 STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything

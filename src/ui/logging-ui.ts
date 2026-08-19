@@ -24,6 +24,7 @@ import type {
   Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
@@ -161,6 +162,14 @@ export class LoggingUI implements WizardUI {
     return new Promise<string>(() => {
       /* intentionally never resolves */
     });
+  }
+
+  showTaskNotice(_notice: TaskNotice): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  cancelTaskNotice(): void {
+    // Nothing to dismiss — showTaskNotice never opened anything.
   }
 
   showSettingsOverride(
