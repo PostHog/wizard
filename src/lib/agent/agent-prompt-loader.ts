@@ -47,12 +47,17 @@ export interface OrchestratorPromptContext {
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
+  // Both hosts, distinctly labelled: `apiHost` is the ingestion/API origin the
+  // SDK talks to, `appHost` the user-facing web app. A task that hands the user
+  // a link (e.g. the data-warehouse new-source fallback) must build it from the
+  // app host — the ingestion host does not serve those pages.
   return `You have access to the PostHog MCP server and the wizard tools.
 
 Project context:
 - PostHog Project ID: ${ctx.projectId}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host.apiHost}`;
+- PostHog Host: ${ctx.host.apiHost}
+- PostHog app URL (base for any link you show the user in a browser): ${ctx.host.appHost}`;
 }
 
 /** Points the agent at the framework's reference integration to learn patterns from. */
