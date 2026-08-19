@@ -61,6 +61,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'ai-observability') continue; // pinned below
+      if (program === 'replay-vision') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -73,6 +74,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
         sequence: Sequence.linear,
         harness: Harness.anthropic,
         model: SONNET_5_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds replay-vision to the orchestrator sequence',
+      ctx: { program: 'replay-vision', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },

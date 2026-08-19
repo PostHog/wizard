@@ -18,3 +18,28 @@ describe('posthog-integration scopes', () => {
     );
   });
 });
+
+/**
+ * Run 69afc6f8 requested only the base set, so the PostHog MCP served a
+ * catalog without the scanner tools: every scanner task took its "tool
+ * unknown" skip path and the run reported success having created nothing.
+ */
+describe('replay-vision scopes', () => {
+  it('covers scanner create/list', () => {
+    const scopes = getOAuthScopesForProgram('replay-vision');
+    expect(scopes).toContain('replay_scanner:read');
+    expect(scopes).toContain('replay_scanner:write');
+  });
+
+  it('pairs session_recording:read with the scanner scopes', () => {
+    expect(getOAuthScopesForProgram('replay-vision')).toContain(
+      'session_recording:read',
+    );
+  });
+
+  it('can turn on session replay server-side', () => {
+    expect(getOAuthScopesForProgram('replay-vision')).toContain(
+      'product_enablement:write',
+    );
+  });
+});
