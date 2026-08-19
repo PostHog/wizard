@@ -517,6 +517,20 @@ describe('assembleTaskPrompt', () => {
     const assembled = assembleTaskPrompt(ctx, 'do the task', []);
     expect(assembled).not.toContain('Your tools for this task');
   });
+
+  it('surfaces the app host for browser links, distinct from the ingestion host', () => {
+    // A cloud ingestion host resolves an app host on a different origin, so a
+    // task that builds a user-facing link must not reuse the ingestion host.
+    const cloudCtx: OrchestratorPromptContext = {
+      projectId: 1,
+      projectApiKey: 'phc_x',
+      host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+    };
+    const assembled = assembleTaskPrompt(cloudCtx, 'do the task');
+    expect(assembled).toContain('PostHog Host: https://eu.i.posthog.com');
+    expect(assembled).toContain('PostHog app URL');
+    expect(assembled).toContain('https://eu.posthog.com');
+  });
 });
 
 describe('renderToolInventory', () => {
