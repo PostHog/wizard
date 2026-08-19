@@ -1,5 +1,6 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
+import { tagMcpAnalyticsLanguages } from './detect.js';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 
@@ -7,10 +8,17 @@ const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
  * `[ABORT]` reasons the mcp-analytics skill emits when the project can't be
  * instrumented. Kept in sync with the stop conditions in the skill's
  * `description.md` (context-mill `context/skills/mcp-analytics`).
+ *
+ * Matches are prefix-anchored, not exact: the reason is a slice of the model's
+ * own prose, so it arrives with trailing clauses the wizard can't predict
+ * ("no mcp server found` case."). `normalizeAbortReason` strips wrapper
+ * punctuation, prefix anchoring absorbs the rest — an exact `$` anchor sends a
+ * known case to the generic "aborted" screen over a stray word.
  */
 export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
   {
-    match: /^unsupported language for mcp analytics$/i,
+    match: /^unsupported language for mcp analytics/i,
+    code: 'unsupported_language',
     message: 'Unsupported language for MCP analytics',
     body:
       'MCP analytics supports TypeScript/JavaScript (`@posthog/mcp`) and Python ' +
@@ -19,15 +27,25 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'See https://posthog.com/docs/mcp-analytics for the supported setups.',
   },
   {
-    match: /^no mcp server found$/i,
+    match: /^no mcp server found/i,
+    code: 'no_mcp_server',
     message: 'No MCP server found',
     body:
-      'This command instruments an existing MCP server with PostHog analytics, ' +
-      'but no MCP server was found in this project. If you just want PostHog ' +
-      'product analytics, run `npx @posthog/wizard` instead.',
+      'This command instruments an MCP server you own, so that it reports on ' +
+      "its own tool calls — and it couldn't find one here. Three things this " +
+      'usually means:\n\n' +
+      '• The server lives in a subdirectory — re-run with `--install-dir` pointed at the package that constructs it.\n' +
+      '• The server is built in a way the scan missed — the SDK can wrap any ' +
+      'server, and https://posthog.com/docs/mcp-analytics/installation has the ' +
+      'manual snippet for both the wrapper and custom-dispatcher shapes.\n' +
+      '• You wanted the PostHog MCP server in your coding agent instead — that ' +
+      'is `npx @posthog/wizard mcp add`, and plain product analytics is ' +
+      '`npx @posthog/wizard`.',
+    docsUrl: 'https://posthog.com/docs/mcp-analytics/installation',
   },
   {
-    match: /^could not locate the server entry point$/i,
+    match: /^could not locate the server entry point/i,
+    code: 'no_server_entrypoint',
     message: 'Could not locate the MCP server entry point',
     body:
       "This project has MCP signals, but the agent couldn't find where the " +
@@ -71,4 +89,7 @@ export const mcpAnalyticsConfig = createSkillProgram({
   spinnerMessage: 'Setting up MCP analytics...',
   estimatedDurationMinutes: 5,
   abortCases: MCP_ANALYTICS_ABORT_CASES,
+  // Tags the run with the project's language before the agent runs, so an
+  // `unsupported_language` abort says which language was turned away.
+  onReady: ({ session }) => tagMcpAnalyticsLanguages(session.installDir),
 });

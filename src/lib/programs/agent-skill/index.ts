@@ -19,7 +19,7 @@
  *   })
  */
 
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import type { ProgramRun, AbortCase } from '@lib/agent/agent-runner';
 import { AGENT_SKILL_STEPS } from './steps.js';
 import { getContentBlocks } from './content/index.js';
@@ -48,15 +48,30 @@ export interface SkillProgramOptions {
   buildOutroData?: ProgramRun['buildOutroData'];
   /** Known `[ABORT] <reason>` cases the skill can emit. */
   abortCases?: AbortCase[];
+  /**
+   * Session-dependent pre-program work, run once before any gate is awaited —
+   * e.g. probing the install dir so later events carry what was found. Attached
+   * to the first step; omit it and the shared step list is used as-is.
+   */
+  onReady?: ProgramStep['onReady'];
 }
 
 export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
+  // Copy rather than mutate: AGENT_SKILL_STEPS is shared by every skill
+  // program, so an in-place `onReady` would fire for all of them.
+  const steps = opts.onReady
+    ? [
+        { ...AGENT_SKILL_STEPS[0], onReady: opts.onReady },
+        ...AGENT_SKILL_STEPS.slice(1),
+      ]
+    : AGENT_SKILL_STEPS;
+
   return {
     command: opts.command,
     description: opts.description,
     id: opts.id,
     skillId: opts.skillId,
-    steps: AGENT_SKILL_STEPS,
+    steps,
     reportFile: opts.reportFile,
     getContentBlocks,
     run: {

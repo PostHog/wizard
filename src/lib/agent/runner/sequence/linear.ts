@@ -157,9 +157,13 @@ export async function runLinearProgram(
           docsUrl: config.docsUrl,
         };
     analytics.wizardCapture('agent aborted', {
+      abort_kind: 'skill_signal',
       integration: config.integrationLabel,
       reason,
       matched: matched?.message ?? null,
+      // Group funnels on these two, not on `reason` — see AbortCase.code.
+      reason_code: matched?.code ?? 'unmatched',
+      reason_matched: matched !== undefined,
     });
     await wizardAbort({
       outroData,

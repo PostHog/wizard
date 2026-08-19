@@ -23,6 +23,13 @@ export interface AbortCase {
   message: string;
   body: string;
   docsUrl?: string;
+  /**
+   * Stable snake_case key for this case, shipped as `reason_code` on
+   * `wizard: agent aborted`. The raw `reason` is model prose and drifts with
+   * every skill reword, so a funnel that groups by it silently splits; group
+   * by `reason_code` instead. Omit it and only the raw reason ships.
+   */
+  code?: string;
 }
 
 /**

@@ -42,6 +42,7 @@ import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
+import { normalizeAbortReason } from './abort-reason';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -1117,7 +1118,7 @@ export async function runAgent(
             if (block.type === 'text' && typeof block.text === 'string') {
               const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
               if (match) {
-                abortReason = match[1].trim();
+                abortReason = normalizeAbortReason(match[1]);
                 logToFile(`Agent emitted [ABORT]: ${abortReason}`);
                 abortController.abort();
                 signalDone!();
@@ -1288,10 +1289,14 @@ export async function runAgent(
     throw error;
   } finally {
     // Always capture run duration, even on abort/error, so we can alert on
-    // long runs where the user gave up before completion.
+    // long runs where the user gave up before completion. `abort_kind`
+    // separates this from the skill's own `[ABORT]` signal, which the runner
+    // captures with a reason — without it both land on the same event name and
+    // a funnel can't tell "the skill said stop" from "the run never finished".
     if (!receivedSuccessResult) {
       const durationMs = Date.now() - startTime;
       analytics.wizardCapture('agent aborted', {
+        abort_kind: 'run_incomplete',
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
         model: agentConfig.model,
