@@ -27,6 +27,13 @@ interface WizardAbortOptions {
   outroData?: OutroData;
   error?: Error | WizardError;
   exitCode?: number;
+  /**
+   * Terminal status for `setup wizard finished`. Defaults to `error` when an
+   * `error` is supplied and `cancelled` otherwise. Pass `not_applicable` for a
+   * run that worked but found nothing to act on, so it isn't counted as a
+   * failed run.
+   */
+  status?: 'error' | 'cancelled' | 'not_applicable';
 }
 
 const cleanupFns: Array<() => void> = [];
@@ -59,6 +66,7 @@ export async function wizardAbort(
     outroData,
     error,
     exitCode = 1,
+    status,
   } = options ?? {};
 
   logToFile(`[wizard-abort] exitCode=${exitCode}, message: ${message}`);
@@ -77,7 +85,7 @@ export async function wizardAbort(
   }
 
   // 3. Shutdown analytics
-  await analytics.shutdown(error ? 'error' : 'cancelled');
+  await analytics.shutdown(status ?? (error ? 'error' : 'cancelled'));
 
   // 4. Render the error outro. Synthesize OutroData from `message`
   //    when the caller didn't provide structured data.

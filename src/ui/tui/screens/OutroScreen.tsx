@@ -190,6 +190,30 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
         </Box>
       )}
 
+      {outroData.kind === OutroKind.NotApplicable && (
+        <Box flexDirection="column">
+          {/* Neutral, not red: nothing failed, this project just isn't one the
+              program can act on. The body carries the ways forward. */}
+          <Text color="yellow" bold>
+            ◦ {outroData.message || 'Nothing to do here'}
+          </Text>
+
+          {outroData.body && (
+            <Box marginTop={1}>
+              <Text dimColor>{outroData.body}</Text>
+            </Box>
+          )}
+
+          {outroData.docsUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Docs: <Text color="cyan">{outroData.docsUrl}</Text>
+              </Text>
+            </Box>
+          )}
+        </Box>
+      )}
+
       {outroData.kind === OutroKind.Cancel && (
         <Box flexDirection="column">
           <Text color="yellow">■ {outroData.message || 'Cancelled'}</Text>

@@ -32,7 +32,12 @@ import { HostResolution } from '@lib/host-resolution';
 const VIEWS = ['slack-connect', 'outro'] as const;
 type View = (typeof VIEWS)[number];
 
-const OUTRO_KINDS = [OutroKind.Success, OutroKind.Error, OutroKind.Cancel];
+const OUTRO_KINDS = [
+  OutroKind.Success,
+  OutroKind.Error,
+  OutroKind.NotApplicable,
+  OutroKind.Cancel,
+];
 
 const OUTRO_FIXTURES: Record<OutroKind, OutroData> = {
   [OutroKind.Success]: {
@@ -53,6 +58,15 @@ const OUTRO_FIXTURES: Record<OutroKind, OutroData> = {
     message: 'The agent hit an error',
     body: 'The integration step failed before any files were changed.\nRe-run the wizard to try again.',
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
+  },
+  [OutroKind.NotApplicable]: {
+    kind: OutroKind.NotApplicable,
+    message: 'No MCP server found',
+    body:
+      "This command instruments an MCP server you own, and it couldn't find " +
+      'one here.\nRe-run with --install-dir pointed at the package that ' +
+      'constructs it, or see the docs for the manual snippet.',
+    docsUrl: 'https://posthog.com/docs/mcp-analytics/installation',
   },
   [OutroKind.Cancel]: {
     kind: OutroKind.Cancel,

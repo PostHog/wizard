@@ -29,6 +29,44 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
   {
     match: /^no mcp server found/i,
     code: 'no_mcp_server',
+    // By far the most common way this program ends, and it's the scan that
+    // decides it. A project the scan can't see through is not a wizard
+    // failure, and counting it as one buries the runs that genuinely broke.
+    outcome: 'not_applicable',
+    // The only person who knows whether the scan was wrong is the user it just
+    // turned away. The options are the four things this outcome can actually
+    // mean, so the answers rank the fix: a JS/TS or Python pick is a scan miss
+    // to reproduce, another language ranks the SDK backlog, a subdirectory is
+    // a discoverability problem, and "no server" is nothing to fix at all.
+    followUp: [
+      {
+        id: 'mcp_server_kind',
+        kind: 'single',
+        required: false,
+        prompt:
+          "Before you go — what's in this project? This tells us whether the " +
+          'scan missed your server or MCP analytics has nothing to offer you yet.',
+        options: [
+          {
+            label: 'A TypeScript/JavaScript MCP server the scan missed',
+            value: 'typescript_javascript',
+          },
+          { label: 'A Python MCP server the scan missed', value: 'python' },
+          {
+            label: 'An MCP server in another language',
+            value: 'other_language',
+          },
+          {
+            label: 'A server in a subdirectory I should have pointed at',
+            value: 'wrong_directory',
+          },
+          {
+            label: 'No MCP server — I was after something else',
+            value: 'no_server',
+          },
+        ],
+      },
+    ],
     message: 'No MCP server found',
     body:
       'This command instruments an MCP server you own, so that it reports on ' +

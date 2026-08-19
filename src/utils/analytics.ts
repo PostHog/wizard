@@ -343,7 +343,12 @@ export class Analytics {
     return this.activeFlagPayloads;
   }
 
-  async shutdown(status: 'success' | 'error' | 'cancelled') {
+  /**
+   * `not_applicable` is a fourth terminal state, not a flavour of failure: the
+   * run worked and found nothing it could act on. Kept separate so
+   * success-rate metrics can exclude runs that were never eligible.
+   */
+  async shutdown(status: 'success' | 'error' | 'cancelled' | 'not_applicable') {
     if (Object.keys(this.tags).length === 0) {
       return;
     }
