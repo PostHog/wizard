@@ -178,6 +178,13 @@ export interface WizardUI {
    */
   showTaskNotice(notice: TaskNotice): Promise<boolean>;
 
+  /**
+   * Dismiss an in-flight task notice as declined. Called when the offer times
+   * out: the notice sits in front of the run's final steps, so left unanswered
+   * it would hold the report behind a modal nobody is looking at.
+   */
+  cancelTaskNotice(): void;
+
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
 

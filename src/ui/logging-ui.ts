@@ -168,6 +168,10 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve(false);
   }
 
+  cancelTaskNotice(): void {
+    // Nothing to dismiss — showTaskNotice never opened anything.
+  }
+
   showSettingsOverride(
     _conflicts: SettingsConflict[],
     _backupAndFix: () => boolean,
