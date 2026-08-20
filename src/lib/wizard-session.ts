@@ -10,6 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
+import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
 import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
@@ -207,7 +208,9 @@ export interface WizardSession {
   installDir: string;
   ci: boolean;
   signup: boolean;
+  /** `--local-posthog` is absent here — it folds into `baseUrl`. */
   localMcp: boolean;
+  localContextMill: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
   email?: string;
@@ -392,7 +395,10 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  localDev?: boolean;
   localMcp?: boolean;
+  localContextMill?: boolean;
+  localPosthog?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
   email?: string;
@@ -409,17 +415,22 @@ export function buildSession(args: {
   integrate?: boolean;
   captureAio?: boolean;
 }): WizardSession {
+  const local = resolveLocalDev(args);
   return {
     debug: args.debug ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
-    localMcp: args.localMcp ?? false,
+    localMcp: local.localMcp,
+    localContextMill: local.localContextMill,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
-    baseUrl: args.baseUrl,
+    // `--local-posthog` is sugar over `--base-url`, which every downstream URL
+    // helper already honours. An explicit `--base-url` is more specific, so it wins.
+    baseUrl:
+      args.baseUrl ?? (local.localPosthog ? POSTHOG_LOCAL_URL : undefined),
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),

@@ -304,13 +304,13 @@ function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
     installDir: session.installDir,
     ci: session.ci,
     debug: session.debug,
-    default: false,
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,
     signup: session.signup,
     apiKey: session.apiKey,
     projectId: session.projectId,
     localMcp: session.localMcp,
+    localContextMill: session.localContextMill,
   };
 }
 
@@ -363,7 +363,7 @@ export async function detectProjectsWithAgent(
       posthogApiKey: accessToken,
       host,
       detectPackageManager: detectNodePackageManagers,
-      skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
+      skillsBaseUrl: getSkillsBaseUrl(session.localContextMill),
       integrationLabel: 'agentic-detect',
       wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],

@@ -1,6 +1,7 @@
 import type { Arguments } from 'yargs';
 
 import { getSkillsBaseUrl } from '@lib/constants';
+import { localDevFromArgv } from '@lib/local-dev';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { analytics } from '@utils/analytics';
 
@@ -35,9 +36,9 @@ const BROWSABLE_ROLES: ReadonlySet<CliEntry['role']> = new Set([
  */
 async function assertSkillExists(
   skillName: string,
-  localMcp: boolean,
+  localContextMill: boolean,
 ): Promise<void> {
-  const skillsBaseUrl = getSkillsBaseUrl(localMcp);
+  const skillsBaseUrl = getSkillsBaseUrl(localContextMill);
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return; // registry down — let the download step surface it
   const known = Object.values(menu.categories)
@@ -82,7 +83,9 @@ const listCommand: Command = {
   description: 'List every browsable skill in the catalog',
   handler: (argv) => {
     runCommandHandler(async () => {
-      const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+      const skillsBaseUrl = getSkillsBaseUrl(
+        localDevFromArgv(argv).localContextMill,
+      );
       const menu = await fetchSkillMenu(skillsBaseUrl);
       if (!menu) {
         analytics.wizardCapture('cli dispatch error', {
@@ -165,7 +168,10 @@ export const skillCommand: Command = {
   handler: (argv) => {
     runCommandHandler(async () => {
       const skillName = readSkillName(argv);
-      await assertSkillExists(skillName, Boolean(argv['local-mcp']));
+      await assertSkillExists(
+        skillName,
+        localDevFromArgv(argv).localContextMill,
+      );
       // runSkillMode reads `argv.skill`; bridge the positional onto it.
       runSkillMode({ ...argv, skill: skillName });
     });

@@ -9,6 +9,7 @@ import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { checkLocalServices, POSTHOG_LOCAL_URL } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { join } from 'node:path';
 
@@ -88,7 +89,10 @@ export function runWizard(
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
+        localDev: options.localDev as boolean | undefined,
         localMcp: options.localMcp as boolean | undefined,
+        localContextMill: options.localContextMill as boolean | undefined,
+        localPosthog: options.localPosthog as boolean | undefined,
         installDir,
         ci: false,
         signup: options.signup as boolean | undefined,
@@ -113,6 +117,19 @@ export function runWizard(
       }
 
       activeTui.store.session = session;
+
+      // Before the auth screen, for the same reason as the CI runner: a dead
+      // local server otherwise surfaces as a confusing auth or registry error.
+      const localServicesError = await checkLocalServices({
+        localMcp: session.localMcp,
+        localContextMill: session.localContextMill,
+        localPosthog: session.baseUrl === POSTHOG_LOCAL_URL,
+      });
+      if (localServicesError) {
+        const { wizardAbort } = await import('@utils/wizard-abort');
+        await wizardAbort({ message: localServicesError });
+        return;
+      }
 
       const taskStreamEnabled = !session.noTelemetry;
       taskStream = new TaskStreamPush({

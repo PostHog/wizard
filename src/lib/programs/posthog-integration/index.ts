@@ -216,11 +216,9 @@ export const posthogIntegrationConfig: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      // `default` is required by WizardRunOptions but unused by detection; the
-      // --default CLI flag was removed, so this is always false here.
-      default: false,
       signup: session.signup,
       localMcp: session.localMcp,
+      localContextMill: session.localContextMill,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,

@@ -20,7 +20,6 @@ export type WizardRunOptions = {
   cloudRegion?: CloudRegion;
 
   debug: boolean;
-  default: boolean;
   benchmark: boolean;
   yaraReport: boolean;
 
@@ -30,6 +29,7 @@ export type WizardRunOptions = {
   projectId?: number;
 
   localMcp: boolean;
+  localContextMill: boolean;
 
   /** `--harness` override. */
   harness?: Harness;

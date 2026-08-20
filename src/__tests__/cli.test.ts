@@ -115,10 +115,13 @@ describe('CLI argument parsing', () => {
   // being picked up.
   const WIZARD_ENV_KEYS = [
     'POSTHOG_WIZARD_REGION',
-    'POSTHOG_WIZARD_DEFAULT',
     'POSTHOG_WIZARD_CI',
     'POSTHOG_WIZARD_API_KEY',
     'POSTHOG_WIZARD_INSTALL_DIR',
+    'POSTHOG_WIZARD_LOCAL_DEV',
+    'POSTHOG_WIZARD_LOCAL_CONTEXT_MILL',
+    'POSTHOG_WIZARD_LOCAL_MCP',
+    'POSTHOG_WIZARD_LOCAL_POSTHOG',
     'POSTHOG_TASK_RUN_ID',
     'POSTHOG_TASK_ID',
   ];
@@ -250,6 +253,35 @@ describe('CLI argument parsing', () => {
   });
 
   // MCP commands now launch TUI — tested via integration tests
+
+  describe('local dev flags', () => {
+    test('forwards each --local-* target to buildSession', async () => {
+      await runCLI(['--local-context-mill']);
+      const args = getLastBuildSessionArgs();
+      expect(args.localContextMill).toBe(true);
+      // Absent flags must be undefined, not false — see resolveLocalDev.
+      expect(args.localMcp).toBeUndefined();
+      expect(args.localPosthog).toBeUndefined();
+    });
+
+    test('forwards the --local-dev umbrella', async () => {
+      await runCLI(['--local-dev']);
+      expect(getLastBuildSessionArgs().localDev).toBe(true);
+    });
+
+    test('resolves POSTHOG_WIZARD_LOCAL_CONTEXT_MILL from the environment', async () => {
+      process.env.POSTHOG_WIZARD_LOCAL_CONTEXT_MILL = 'true';
+      await runCLI([]);
+      expect(getLastBuildSessionArgs().localContextMill).toBe(true);
+    });
+
+    // A global `local` would silently erase `--local` from
+    // `wizard mcp add --help`; a global's `hidden` beats a command-level one.
+    test('no global option is named `local`', async () => {
+      const { GLOBAL_OPTIONS } = await import('../wizard');
+      expect(Object.keys(GLOBAL_OPTIONS)).not.toContain('local');
+    });
+  });
 
   describe('--ci flag', () => {
     test('defaults to false when not specified', async () => {

@@ -113,13 +113,14 @@ export interface Args {
 // ── Environment ──────────────────────────────────────────────────────
 
 import { IS_DEV } from '@env';
+import { CONTEXT_MILL_LOCAL_URL, POSTHOG_LOCAL_URL } from './local-dev';
 export { IS_DEV };
 export const DEBUG = false;
 
 // ── URLs ─────────────────────────────────────────────────────────────
 
 export const DEFAULT_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://us.posthog.com';
 /**
  * Region-agnostic PostHog app URL. Resolves to us.posthog.com or
@@ -128,10 +129,10 @@ export const DEFAULT_URL = IS_DEV
  * land on the right region without us needing to know it client-side.
  */
 export const POSTHOG_APP_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://app.posthog.com';
 export const DEFAULT_HOST_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
 /** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
@@ -157,15 +158,15 @@ export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
 /** Remote base URL for fetching the skill menu + downloading skills. */
 export const REMOTE_SKILLS_BASE_URL =
   'https://github.com/PostHog/context-mill/releases/latest/download';
-/** Local base URL when `--local-mcp` is set (served by context-mill dev server). */
-export const LOCAL_SKILLS_BASE_URL = 'http://localhost:8765';
+/** Alias of `@lib/local-dev`'s constant, kept for existing importers. */
+export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 
 /**
- * Pick the skills base URL based on the session's localMcp flag.
- * Single source of truth — do not inline this ternary anywhere.
+ * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
+ * both). Single source of truth — do not inline this ternary anywhere.
  */
-export function getSkillsBaseUrl(localMcp: boolean): string {
-  return localMcp ? LOCAL_SKILLS_BASE_URL : REMOTE_SKILLS_BASE_URL;
+export function getSkillsBaseUrl(localContextMill: boolean): string {
+  return localContextMill ? LOCAL_SKILLS_BASE_URL : REMOTE_SKILLS_BASE_URL;
 }
 
 // ── Analytics (internal) ──────────────────────────────────────────────

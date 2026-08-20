@@ -7,6 +7,7 @@ import {
   pickerChildrenToShow,
 } from '@lib/programs/dispatch-family';
 import { getSkillsBaseUrl } from '@lib/constants';
+import { localDevFromArgv } from '@lib/local-dev';
 import { fetchSkillMenu } from '@lib/wizard-tools';
 
 import type { Command } from '../command';
@@ -53,7 +54,9 @@ export function familyCommandFactory({
   // family grows past one shown option, this opens the picker instead — no
   // wiring change needed.
   const openFamilyEntry = async (argv: Arguments): Promise<void> => {
-    const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+    const skillsBaseUrl = getSkillsBaseUrl(
+      localDevFromArgv(argv).localContextMill,
+    );
     const menu = await fetchSkillMenu(skillsBaseUrl);
     const children = buildFamilyPickerChildren(family, menu?.cliEntries ?? []);
     const toShow = pickerChildrenToShow(children);
