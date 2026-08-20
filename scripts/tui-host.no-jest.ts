@@ -256,7 +256,6 @@ async function main() {
       // One dependency-name pattern per ecosystem manifest. A run only needs
       // the names, so a line-level scan beats per-format parsers.
       const MANIFESTS: Array<[string, RegExp]> = [
-        ['package.json', /"([^"]+)"\s*:\s*"[^"]*"/g],
         ['pubspec.yaml', /^ {2}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm],
         ['go.mod', /^\s*([\w.\/-]+)\s+v[\w.-]+/gm],
         ['Cargo.toml', /^([A-Za-z0-9_-]+)\s*=/gm],
@@ -265,6 +264,18 @@ async function main() {
         ['mix.exs', /\{:([a-z_]+)\s*,/g],
       ];
       const deps: string[] = [];
+      try {
+        // package.json needs a real parse: a line scan would also match script
+        // names, and only the dependency blocks carry dependencies.
+        const pkg = JSON.parse(
+          fs.readFileSync(`${appDir}/package.json`, 'utf8'),
+        );
+        deps.push(
+          ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
+        );
+      } catch {
+        /* not a JS project */
+      }
       for (const [file, pattern] of MANIFESTS) {
         try {
           const text = fs.readFileSync(`${appDir}/${file}`, 'utf8');
