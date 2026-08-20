@@ -29,7 +29,7 @@ import {
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { isNonInteractiveEnvironment } from '@utils/environment';
-import { getSkillsBaseUrl } from '@lib/constants';
+import { CallType, getSkillsBaseUrl } from '@lib/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
@@ -282,7 +282,9 @@ export async function bootstrapProgram(
       {
         baseURL: credentials.host.gatewayUrl,
         authToken: credentials.accessToken,
-        wizardMetadata,
+        // `call_type` splits scan spend out of the program's agent cost —
+        // same tag the in-run triage provider carries.
+        wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
         wizardFlags,
       },
       resolveHarness({

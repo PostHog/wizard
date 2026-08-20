@@ -10,6 +10,9 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
 import type { Tip } from '@ui/tui/components/TipsCard';
+// Type-only — erased at compile time, so no runtime cycle with the
+// registry that imports `ProgramConfig` back from this module.
+import type { ProgramId } from './program-registry.js';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -131,6 +134,15 @@ export interface ProgramStep {
    * scanning the installDir for prerequisites. May be sync or async.
    */
   onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+
+  /**
+   * Report this step's analytics under a different program than its host, for
+   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
+   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
+   * sequences still follow the host. Matched by `screenId`, so headless steps
+   * are unaffected.
+   */
+  reportsAsProgramId?: ProgramId;
 }
 
 /**
