@@ -33,6 +33,27 @@ describe('ClaudeCodeMCPClient — addServer', () => {
   const callsMatching = (fragment: string) =>
     execSyncMock.mock.calls.filter((c) => String(c[0]).includes(fragment));
 
+  it('detects the entry with an exact mcp get, not a substring of mcp list', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp get posthog')) throw new Error('No MCP server named');
+      if (c.includes('mcp list'))
+        return Buffer.from(
+          'claude.ai PostHog: ... Connected\nplugin:posthog:posthog\n',
+        );
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.isServerInstalled()).resolves.toBe(false);
+
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (String(cmd).includes('mcp get posthog'))
+        return Buffer.from('posthog:\n  URL: https://mcp.posthog.com/mcp\n');
+      return Buffer.from('');
+    });
+    await expect(client.isServerInstalled()).resolves.toBe(true);
+  });
+
   it('adds the server without any credentials in the command', async () => {
     const client = new ClaudeCodeMCPClient();
     await expect(client.addServer(['workflows'])).resolves.toEqual({

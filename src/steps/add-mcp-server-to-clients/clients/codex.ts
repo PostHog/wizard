@@ -66,11 +66,9 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     const binary = this.findCodexBinary();
     if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
-    const result = spawnSync(binary, ['mcp', 'list'], { encoding: 'utf-8' });
-    if (result.status !== 0) return Promise.resolve(false);
-    return Promise.resolve(
-      (result.stdout ?? '').toLowerCase().includes(serverName),
-    );
+    // Exact `[mcp_servers.<name>]` section in config.toml — a substring scan of
+    // `mcp list` output matches unrelated posthog-ish servers.
+    return Promise.resolve(this.installedServerUrl(serverName) !== null);
   }
 
   addServer(

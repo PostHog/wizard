@@ -99,11 +99,13 @@ export class ClaudeCodeMCPClient
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
+    // `mcp get <name>` exits non-zero when the entry doesn't exist. A substring
+    // scan of `mcp list` reports anyone's posthog-ish server — the claude.ai
+    // "PostHog" connector and the plugin's `plugin:posthog:posthog` both match,
+    // making install/remove look like no-ops forever.
     try {
-      const output = execSync(`${binary} mcp list`, { stdio: 'pipe' })
-        .toString()
-        .toLowerCase();
-      return Promise.resolve(output.includes(serverName));
+      execSync(`${binary} mcp get ${serverName}`, { stdio: 'pipe' });
+      return Promise.resolve(true);
     } catch {
       return Promise.resolve(false);
     }
