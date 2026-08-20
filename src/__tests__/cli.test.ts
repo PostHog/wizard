@@ -255,6 +255,19 @@ describe('CLI argument parsing', () => {
   // MCP commands now launch TUI — tested via integration tests
 
   describe('local dev flags', () => {
+    // The runners preflight every requested local server and abort if one is
+    // down, which would stop the run before buildSession. Stub the probe so
+    // these assert flag plumbing rather than whether a dev stack happens to be
+    // running on this machine. Reachability itself is covered in local-dev.test.
+    beforeEach(() => {
+      vi.stubGlobal('fetch', () =>
+        Promise.resolve(new Response(null, { status: 200 })),
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
     test('forwards each --local-* target to buildSession', async () => {
       await runCLI(['--local-context-mill']);
       const args = getLastBuildSessionArgs();

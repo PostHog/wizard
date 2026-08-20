@@ -9,7 +9,7 @@ import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
-import { checkLocalServices, POSTHOG_LOCAL_URL } from '@lib/local-dev';
+import { checkLocalServices, localDevFromArgv } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { join } from 'node:path';
 
@@ -83,6 +83,22 @@ export function runWizard(
         '@lib/task-stream/destinations/posthog'
       );
 
+      // Before the TUI mounts: once Ink owns the alt screen, anything written
+      // to it is wiped on unmount (see the catch block below), so an abort here
+      // would leave the user on a loading screen with no message.
+      const local = localDevFromArgv(options);
+      const localServicesError = await checkLocalServices({
+        ...local,
+        // An explicit --base-url wins over --local-posthog (see buildSession),
+        // so don't probe :8010 when one was given.
+        localPosthog: local.localPosthog && !options.baseUrl,
+      });
+      if (localServicesError) {
+        const { wizardAbort } = await import('@utils/wizard-abort');
+        await wizardAbort({ message: localServicesError });
+        return;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tui = startTUI(WIZARD_VERSION, config.id as any);
       const activeTui = tui;
@@ -117,19 +133,6 @@ export function runWizard(
       }
 
       activeTui.store.session = session;
-
-      // Before the auth screen, for the same reason as the CI runner: a dead
-      // local server otherwise surfaces as a confusing auth or registry error.
-      const localServicesError = await checkLocalServices({
-        localMcp: session.localMcp,
-        localContextMill: session.localContextMill,
-        localPosthog: session.baseUrl === POSTHOG_LOCAL_URL,
-      });
-      if (localServicesError) {
-        const { wizardAbort } = await import('@utils/wizard-abort');
-        await wizardAbort({ message: localServicesError });
-        return;
-      }
 
       const taskStreamEnabled = !session.noTelemetry;
       taskStream = new TaskStreamPush({

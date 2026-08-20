@@ -1,6 +1,4 @@
-import { createServer, type Server } from 'node:http';
-
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
 import {
   CONTEXT_MILL_LOCAL_URL,
@@ -136,32 +134,29 @@ describe('checkLocalServices', () => {
     localContextMill: true,
     localPosthog: true,
   };
-  const servers: Server[] = [];
 
-  const listen = (port: number, status: number) =>
-    new Promise<Server>((resolve, reject) => {
-      const s = createServer((_req, res) => {
-        res.writeHead(status);
-        res.end();
-      });
-      servers.push(s);
-      s.on('error', reject);
-      s.listen(port, () => resolve(s));
+  // `fetch` is stubbed rather than binding real ports: 8765/8787/8010 are the
+  // ports the actual dev stack uses, so a developer running it would otherwise
+  // fail these tests. Stubbing also lets a single test cover both replies and
+  // refusals without racing the OS to release a port.
+  const stubFetch = (reachable: (url: string) => number | 'refused') => {
+    vi.stubGlobal('fetch', (input: string | URL) => {
+      const url = String(input);
+      const result = reachable(url);
+      return result === 'refused'
+        ? Promise.reject(new TypeError('fetch failed'))
+        : Promise.resolve(new Response(null, { status: result }));
     });
+  };
 
-  // `fetch` leaves sockets keep-alive and close() waits for them to drain, so
-  // drop them explicitly or the port stays held.
-  const close = (s: Server) =>
-    new Promise((resolve) => {
-      s.closeAllConnections();
-      s.close(resolve);
-    });
+  const allRefused = () => stubFetch(() => 'refused');
 
-  afterEach(async () => {
-    await Promise.all(servers.splice(0).map(close));
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('says nothing when no service was requested local', async () => {
+    allRefused();
     await expect(
       checkLocalServices({
         localMcp: false,
@@ -171,15 +166,33 @@ describe('checkLocalServices', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('probes nothing at all when no service was requested', async () => {
+    const seen: string[] = [];
+    stubFetch((url) => {
+      seen.push(url);
+      return 'refused';
+    });
+    await checkLocalServices({
+      localMcp: false,
+      localContextMill: false,
+      localPosthog: false,
+    });
+    expect(seen).toEqual([]);
+  });
+
   it('names every unreachable service, with the flag that asked for it', async () => {
+    allRefused();
     const msg = await checkLocalServices(ALL_LOCAL);
     expect(msg).toContain('context-mill');
     expect(msg).toContain('--local-context-mill');
     expect(msg).toContain('MCP server');
+    expect(msg).toContain('--local-mcp');
     expect(msg).toContain('PostHog');
+    expect(msg).toContain('--local-posthog');
   });
 
   it('only reports services that were actually requested', async () => {
+    allRefused();
     const msg = await checkLocalServices({
       localMcp: false,
       localContextMill: true,
@@ -190,26 +203,33 @@ describe('checkLocalServices', () => {
     expect(msg).not.toContain('PostHog —');
   });
 
-  // One bind cycle covering both halves: a bound port is the whole question
-  // (real MCP rejects a bare GET, and skill-menu.json can 404 on a stale
-  // server — neither means "not running"), and killing one service must report
-  // only that one. Kept as a single test because rebinding the same fixed ports
-  // in a following test races the OS releasing them.
-  it('treats any HTTP reply as reachable, and isolates a service that dies', async () => {
-    const contextMill = await listen(8765, 200);
-    const mcp = await listen(8787, 405);
-    const posthog = await listen(8010, 404);
-
+  // A bound port is the whole question. The real MCP rejects a bare GET, and
+  // skill-menu.json can 404 on a stale server — neither means "not running".
+  it('treats any HTTP reply as reachable, including 404 and 405', async () => {
+    stubFetch((url) =>
+      url.includes('8787') ? 405 : url.includes('8010') ? 404 : 200,
+    );
     await expect(checkLocalServices(ALL_LOCAL)).resolves.toBeUndefined();
+  });
 
-    await close(mcp);
+  it('isolates the one service that is down', async () => {
+    stubFetch((url) => (url.includes('8787') ? 'refused' : 200));
     const msg = await checkLocalServices(ALL_LOCAL);
     expect(msg).toContain('MCP server');
     expect(msg).not.toContain('context-mill');
     expect(msg).not.toContain('PostHog —');
+  });
 
-    await close(contextMill);
-    await close(posthog);
+  it('probes each requested service on its own port', async () => {
+    const seen: string[] = [];
+    stubFetch((url) => {
+      seen.push(url);
+      return 200;
+    });
+    await checkLocalServices(ALL_LOCAL);
+    expect(seen.some((u) => u.startsWith('http://localhost:8765/'))).toBe(true);
+    expect(seen.some((u) => u.startsWith('http://localhost:8787/'))).toBe(true);
+    expect(seen.some((u) => u.startsWith('http://localhost:8010'))).toBe(true);
   });
 });
 
