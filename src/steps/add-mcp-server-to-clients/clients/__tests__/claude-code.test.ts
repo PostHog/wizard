@@ -98,6 +98,46 @@ describe('ClaudeCodeMCPClient — addServer', () => {
     expect(callsMatching('mcp remove')).toHaveLength(1);
   });
 
+  it('treats a same-set, different-order selection as identical (no remove)', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp" "add')) throw new Error('already exists');
+      if (c.includes('mcp get'))
+        return Buffer.from(`  URL: ${BASE_URL}?features=dashboards,insights\n`);
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer(['insights', 'dashboards'])).resolves.toEqual(
+      { success: true, alreadyInstalled: true },
+    );
+    expect(callsMatching('mcp remove')).toHaveLength(0);
+  });
+
+  it('restores the previous entry when the replacement re-add fails', async () => {
+    let adds = 0;
+    execSyncMock.mockImplementation((cmd: string) => {
+      const c = String(cmd);
+      if (c.includes('mcp" "add')) {
+        adds += 1;
+        if (adds === 1) throw new Error('already exists');
+        if (c.includes('features=workflows')) throw new Error('add blew up');
+        return Buffer.from('');
+      }
+      if (c.includes('mcp get'))
+        return Buffer.from(`  URL: ${BASE_URL}?features=flags\n`);
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.addServer(['workflows'])).resolves.toEqual({
+      success: false,
+      reason: 'add blew up',
+    });
+    const restore = callsMatching('mcp" "add').filter((c) =>
+      String(c[0]).includes('features=flags'),
+    );
+    expect(restore).toHaveLength(1);
+  });
+
   it('reports a failed replacement with its reason', async () => {
     execSyncMock.mockImplementation((cmd: string) => {
       const c = String(cmd);

@@ -187,6 +187,32 @@ describe('CodexMCPClient', () => {
       expect(spawnSyncMock).toHaveBeenCalledTimes(3);
     });
 
+    it('restores the previous entry when the replacement re-add fails', async () => {
+      spawnSyncMock
+        .mockReturnValueOnce({
+          status: 1,
+          stderr: "Server 'posthog' already exists",
+        })
+        .mockReturnValueOnce({ status: 0, stderr: '' }) // mcp remove
+        .mockReturnValueOnce({ status: 1, stderr: 'add blew up' }) // mcp add retry
+        .mockReturnValueOnce({ status: 0, stderr: '' }); // restore previous
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp?features=flags"\n',
+      );
+      const client = new CodexMCPClient();
+      await expect(client.addServer(['workflows'])).resolves.toEqual({
+        success: false,
+        reason: 'add blew up',
+      });
+      expect(spawnSyncMock.mock.calls[3]![1]).toEqual([
+        'mcp',
+        'add',
+        'posthog',
+        '--url',
+        'https://mcp.posthog.com/mcp?features=flags',
+      ]);
+    });
+
     it('returns failure when the replacement remove fails', async () => {
       spawnSyncMock
         .mockReturnValueOnce({

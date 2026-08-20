@@ -126,19 +126,7 @@ export class ClaudeCodeMCPClient
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
-    const addCommand = [
-      binary,
-      'mcp',
-      'add',
-      '--transport',
-      'http',
-      '--scope',
-      'user',
-      serverName,
-      url,
-    ]
-      .map((a) => JSON.stringify(a))
-      .join(' ');
+    const addCommand = this.buildAddCommand(binary, serverName, url);
 
     try {
       execSync(addCommand, { stdio: 'pipe' });
@@ -157,11 +145,12 @@ export class ClaudeCodeMCPClient
         // points at this exact URL is left untouched: removing it would throw
         // away the OAuth credentials Claude Code holds for it and force a
         // needless re-auth.
-        if (this.installedServerUrl(binary, serverName) === url) {
+        const previousUrl = this.installedServerUrl(binary, serverName);
+        if (previousUrl === url) {
           return Promise.resolve({ success: true, alreadyInstalled: true });
         }
         return Promise.resolve(
-          this.replaceServer(binary, serverName, addCommand),
+          this.replaceServer(binary, serverName, addCommand, previousUrl),
         );
       }
       analytics.captureException(
@@ -187,21 +176,55 @@ export class ClaudeCodeMCPClient
     }
   }
 
+  private buildAddCommand(
+    binary: string,
+    serverName: string,
+    url: string,
+  ): string {
+    return [
+      binary,
+      'mcp',
+      'add',
+      '--transport',
+      'http',
+      '--scope',
+      'user',
+      serverName,
+      url,
+    ]
+      .map((a) => JSON.stringify(a))
+      .join(' ');
+  }
+
   private replaceServer(
     binary: string,
     serverName: string,
     addCommand: string,
+    previousUrl: string | null,
   ): InstallResult {
+    let removed = false;
     try {
       execSync(`${binary} mcp remove --scope user ${serverName}`, {
         stdio: 'pipe',
       });
+      removed = true;
       execSync(addCommand, { stdio: 'pipe' });
       return { success: true };
     } catch (error) {
       const msg = redactSecrets(
         error instanceof Error ? error.message : String(error),
       );
+      // Re-add fails after a successful remove: put the previous entry back so a
+      // failed update never leaves the user with no server at all.
+      if (removed && previousUrl) {
+        try {
+          execSync(this.buildAddCommand(binary, serverName, previousUrl), {
+            stdio: 'pipe',
+          });
+        } catch {
+          // The failure report below already tells the user to re-run.
+        }
+      }
       analytics.captureException(
         new Error(`Claude Code MCP update failed: ${msg}`),
       );

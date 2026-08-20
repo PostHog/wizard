@@ -96,10 +96,13 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
         // elsewhere must be replaced or the new selection never takes effect.
         // An identical entry is left untouched so codex keeps whatever auth
         // state it holds for the server.
-        if (this.installedServerUrl(serverName) === url) {
+        const previousUrl = this.installedServerUrl(serverName);
+        if (previousUrl === url) {
           return Promise.resolve({ success: true, alreadyInstalled: true });
         }
-        return Promise.resolve(this.replaceServer(binary, serverName, args));
+        return Promise.resolve(
+          this.replaceServer(binary, serverName, args, previousUrl),
+        );
       }
       const reason = redactSecrets(stderr);
       analytics.captureException(new Error(`Codex MCP add failed: ${reason}`));
@@ -134,6 +137,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     binary: string,
     serverName: string,
     addArgs: string[],
+    previousUrl: string | null,
   ): InstallResult {
     const removed = spawnSync(binary, ['mcp', 'remove', serverName], {
       encoding: 'utf-8',
@@ -143,6 +147,13 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
         ? spawnSync(binary, addArgs, { encoding: 'utf-8' })
         : removed;
     if (retried.status !== 0) {
+      // Re-add fails after a successful remove: put the previous entry back so a
+      // failed update never leaves the user with no server at all.
+      if (removed.status === 0 && previousUrl) {
+        spawnSync(binary, ['mcp', 'add', serverName, '--url', previousUrl], {
+          encoding: 'utf-8',
+        });
+      }
       const reason = redactSecrets(retried.stderr ?? 'codex mcp update failed');
       analytics.captureException(
         new Error(`Codex MCP update failed: ${reason}`),
