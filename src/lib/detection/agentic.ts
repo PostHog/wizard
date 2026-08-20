@@ -16,11 +16,13 @@
 import {
   initializeAgent,
   runAgent as executeAgent,
+  buildRunTags,
   AgentSignals,
 } from '@lib/agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -108,6 +110,15 @@ export type AgenticDetectOptions = {
    * through ordering (e.g. a bundler target before a generic framework target).
    */
   targets: readonly DetectTarget[];
+  /**
+   * The program this scan runs on behalf of, for gateway cost attribution.
+   *
+   * Required, not optional: this scan drives a real (if cheap) agent through
+   * the LLM gateway, and a caller that forgets to say who it's for sends spend
+   * to the unattributed bucket with no way to trace it back. `call_type`
+   * separates it from the program's own agent work.
+   */
+  programId: string;
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
   /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
@@ -328,6 +339,7 @@ export async function detectProjectsWithAgent(
   }
   const {
     targets,
+    programId,
     purpose = 'set up a PostHog integration',
     recommend = false,
     rerankIds,
@@ -336,6 +348,20 @@ export async function detectProjectsWithAgent(
   const { accessToken, host } = session.credentials;
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
+
+  // Gateway trace tags. This scan runs before `bootstrapProgram` exists, so
+  // they're built here from the caller's program plus the run's analytics
+  // identity rather than inherited from `boot.wizardMetadata`. Without them
+  // the scan — and the YARA triage it wires up — bill to no program at all.
+  const wizardMetadata = {
+    ...buildRunTags({
+      programId,
+      integration: 'agentic-detect',
+      runId: analytics.runId,
+      build: analytics.build,
+    }),
+    call_type: CallType.detection,
+  };
 
   const agent = await initializeAgent(
     {
@@ -346,6 +372,7 @@ export async function detectProjectsWithAgent(
       detectPackageManager: detectNodePackageManagers,
       skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
       integrationLabel: 'agentic-detect',
+      wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],
       modelOverride: HAIKU_MODEL,
     },

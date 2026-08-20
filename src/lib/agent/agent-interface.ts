@@ -15,6 +15,7 @@ import { runtimeEnv } from '@env';
 import type { AioCapture } from '@lib/agent/aio-capture';
 import {
   Harness,
+  CallType,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
@@ -35,7 +36,7 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
-import { createTriageLLMProvider, TRIAGE_CALL_TYPE } from './triage-provider';
+import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
@@ -345,6 +346,10 @@ export function buildRunTags(args: {
     integration: args.integration,
     run_id: args.runId,
     build: args.build,
+    // Every caller is agent work; the triage provider spreads these tags and
+    // overrides this one. Sent explicitly so a missing value never has to be
+    // read as "agent" — old builds send none at all.
+    call_type: CallType.agent,
     ...(args.skillId ? { skill_id: args.skillId } : {}),
   };
 }
@@ -537,7 +542,7 @@ export async function initializeAgent(
         authToken: config.posthogApiKey,
         wizardMetadata: {
           ...(config.wizardMetadata ?? {}),
-          call_type: TRIAGE_CALL_TYPE,
+          call_type: CallType.yaraTriage,
         },
         wizardFlags: config.wizardFlags ?? {},
       },

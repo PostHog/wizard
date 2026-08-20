@@ -27,7 +27,12 @@ const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
 /** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(
   session: WizardSession,
-  options: { recommend?: boolean; onEvent?: DetectEvent } = {},
+  options: {
+    /** Program the scan bills to. Required so no caller can go unattributed. */
+    programId: string;
+    recommend?: boolean;
+    onEvent?: DetectEvent;
+  },
 ): Promise<AgenticDetectionReport> {
   // Spread first so the targets and purpose this function owns always win.
   return detectProjectsWithAgent(session, {
@@ -85,6 +90,10 @@ export async function scopeInstallDirToProject(
   try {
     report = await Promise.race([
       detectIntegrationProjects(session, {
+        // Same literal the `authenticate` call above uses — importing the
+        // program registry here would cycle back through the programs that
+        // import this module.
+        programId: 'posthog-integration',
         recommend: true,
         onEvent: (line) => logToFile('[agentic detect]', line),
       }),

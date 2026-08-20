@@ -1,9 +1,11 @@
 import { completeSimple } from '@earendil-works/pi-ai';
+import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import {
-  createTriageLLMProvider,
-  TRIAGE_CALL_TYPE,
-} from '@lib/agent/triage-provider';
-import { GPT5_6_LUNA_MODEL, HAIKU_TRIAGE_MODEL, Harness } from '@lib/constants';
+  CallType,
+  GPT5_6_LUNA_MODEL,
+  HAIKU_TRIAGE_MODEL,
+  Harness,
+} from '@lib/constants';
 import { triageModelFor } from '@lib/agent/runner/switchboard/models';
 
 vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));
@@ -99,7 +101,7 @@ describe('createTriageLLMProvider', () => {
         wizardMetadata: {
           program_id: 'posthog-integration',
           run_id: 'r1',
-          call_type: TRIAGE_CALL_TYPE,
+          call_type: CallType.yaraTriage,
         },
       },
       Harness.anthropic,

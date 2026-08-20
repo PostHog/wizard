@@ -14,14 +14,6 @@ import {
 } from '@lib/agent/runner/switchboard/models';
 import type { LLMProvider } from '@posthog/warlock';
 
-/**
- * `call_type` tag stamped on triage generations at the gateway, so scan spend
- * is separable from the agent work inside the same `program_id`. Callers pass
- * it on `wizardMetadata`; without it triage silently merges into the program's
- * agent cost and can't be measured on its own.
- */
-export const TRIAGE_CALL_TYPE = 'yara-triage';
-
 const TRIAGE_MAX_TOKENS = 16_384;
 // Shorter than the hook timeout so a hung triage fails inside the hook's
 // try/catch (→ fail-closed) rather than tripping the SDK hook timeout.
@@ -32,6 +24,12 @@ export interface TriageGatewayAuth {
   baseURL: string;
   /** The run's OAuth access token. */
   authToken: string;
+  /**
+   * The run's gateway trace tags. Pass the run's own `wizardMetadata` with
+   * `call_type` overridden to `CallType.yaraTriage` — that keeps scan spend
+   * attributed to the program that triggered it while staying separable from
+   * the agent work inside it.
+   */
   wizardMetadata?: Record<string, string>;
   wizardFlags?: Record<string, string>;
 }
