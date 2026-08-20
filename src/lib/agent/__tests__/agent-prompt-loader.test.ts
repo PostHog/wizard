@@ -3,10 +3,14 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   agentRunTools,
+  allowsPostHogMcp,
+  assembleSeedPrompt,
   assembleTaskPrompt,
   buildRegistry,
   parseAgentPrompt,
   promptModelFor,
+  queueTools,
+  renderToolInventory,
   resolveTask,
   taskModelSpec,
   type AgentPrompt,
@@ -53,6 +57,26 @@ Add at least one capture call.
     expect(p.allowedTools).toEqual(['Read', 'Edit', 'Grep', 'Glob', 'Bash']);
     expect(p.disallowedTools).toEqual(['enqueue_task']);
     expect(p.dependsOn).toEqual(['init']);
+  });
+
+  it('reads dependsOn past a whole-line comment explaining it', () => {
+    // The shape integration-v2's warehouse agent uses: the ordering is
+    // non-obvious enough to need a note, and the note must not eat the field.
+    const p = parseAgentPrompt(
+      `---
+type: warehouse
+runnerSeeded: true
+# You are the only step that stops for the user, so you go last.
+dependsOn: [review, dashboard]
+---
+
+## Goal
+Connect the sources.
+`,
+      'fallback',
+    );
+    expect(p.runnerSeeded).toBe(true);
+    expect(p.dependsOn).toEqual(['review', 'dashboard']);
   });
 
   it('resolves the per-harness model + effort, not 1:1 across providers', () => {
@@ -117,6 +141,19 @@ Add at least one capture call.
     );
   });
 
+  it('marks the sink and the runner-seeded task from frontmatter', () => {
+    const p = parseAgentPrompt(
+      '---\nsink: true\nrunnerSeeded: true\n---\nx',
+      't',
+    );
+    expect(p.sink).toBe(true);
+    expect(p.runnerSeeded).toBe(true);
+
+    const plain = parseAgentPrompt('---\nmodel: x\n---\nx', 't');
+    expect(plain.sink).toBe(false);
+    expect(plain.runnerSeeded).toBe(false);
+  });
+
   it('defaults missing array fields to empty and models to undefined', () => {
     const p = parseAgentPrompt('no frontmatter at all', 'stub');
     expect(p.modelPi).toBeUndefined();
@@ -144,12 +181,25 @@ describe('agentRunTools', () => {
       'Bash',
     ]);
   });
+
+  it('qualifies wizard_ask against the wizard-tools server', () => {
+    const p = parseAgentPrompt(
+      '---\nallowedTools: [Read, wizard_ask]\n---\nx',
+      't',
+    );
+    expect(agentRunTools(p).allowedTools).toEqual([
+      'Read',
+      'mcp__wizard-tools__wizard_ask',
+    ]);
+  });
 });
 
 describe('buildRegistry', () => {
   const prompt = (over: Partial<AgentPrompt>): AgentPrompt => ({
     type: 'x',
     seed: false,
+    sink: false,
+    runnerSeeded: false,
     skills: [],
     allowedTools: [],
     disallowedTools: [],
@@ -175,6 +225,24 @@ describe('buildRegistry', () => {
     expect(registry.get('example')).toBeUndefined();
   });
 
+  it('keeps a runner-seeded type out of what an agent may enqueue', () => {
+    const registry = buildRegistry(
+      [
+        prompt({ type: 'plan', flow: 'f', seed: true }),
+        prompt({ type: 'install', flow: 'f' }),
+        prompt({ type: 'warehouse', flow: 'f', runnerSeeded: true }),
+        prompt({ type: 'report', flow: 'f', sink: true }),
+      ],
+      'f',
+    );
+
+    // The type still runs — it is only the planner that cannot reach it.
+    expect(registry.types).toEqual(['install', 'warehouse', 'report']);
+    expect(registry.enqueueableTypes).toEqual(['install', 'report']);
+    expect(registry.runnerSeededTypes).toEqual(['warehouse']);
+    expect(registry.sinkTypes).toEqual(['report']);
+  });
+
   it('drops harness-excluded types; unrestricted runs keep them', () => {
     const prompts = [
       prompt({ type: 'plan', flow: 'f', seed: true }),
@@ -185,6 +253,42 @@ describe('buildRegistry', () => {
       buildRegistry(prompts, 'f', { exclude: ['dashboard'] }).types,
     ).toEqual(['build']);
     expect(buildRegistry(prompts, 'f').types).toEqual(['build', 'dashboard']);
+  });
+
+  it('bakes stage overrides into the pi frontmatter at load; unnamed stages and sdk fields untouched', () => {
+    const prompts = [
+      prompt({
+        type: 'plan',
+        flow: 'f',
+        seed: true,
+        modelPi: 'openai/gpt-5.6-terra',
+        effortPi: 'medium',
+      }),
+      prompt({
+        type: 'review',
+        flow: 'f',
+        modelPi: 'openai/gpt-5.6-terra',
+        effortPi: 'medium',
+        modelSdk: 'claude-sonnet-4-6',
+      }),
+      prompt({ type: 'install', flow: 'f', modelPi: 'openai/gpt-5.6-luna' }),
+    ];
+    const registry = buildRegistry(prompts, 'f', {
+      overrides: {
+        review: { model: 'openai/gpt-5.6-sol' },
+        seed: { effort: 'high' },
+      },
+    });
+    expect(registry.get('review')).toMatchObject({
+      modelPi: 'openai/gpt-5.6-sol',
+      effortPi: 'medium',
+      modelSdk: 'claude-sonnet-4-6',
+    });
+    expect(registry.seed).toMatchObject({
+      modelPi: 'openai/gpt-5.6-terra',
+      effortPi: 'high',
+    });
+    expect(registry.get('install')?.modelPi).toBe('openai/gpt-5.6-luna');
   });
 });
 
@@ -204,6 +308,8 @@ describe('resolveTask', () => {
   const prompt: AgentPrompt = {
     type: 'capture',
     seed: false,
+    sink: false,
+    runnerSeeded: false,
     modelPi: 'openai/gpt-5.6-luna',
     effortPi: 'low',
     modelSdk: 'claude-haiku-4-5-20251001',
@@ -335,6 +441,31 @@ describe('resolveTask', () => {
   });
 });
 
+describe('queueTools', () => {
+  it('is every queue tool minus the disallowed ones', () => {
+    expect(queueTools([])).toEqual([
+      'enqueue_task',
+      'complete_task',
+      'read_handoffs',
+    ]);
+    expect(queueTools(['enqueue_task'])).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]); // a task
+    expect(queueTools(['complete_task'])).toEqual([
+      'enqueue_task',
+      'read_handoffs',
+    ]); // the seed
+  });
+
+  it('accepts MCP-qualified disallow names too', () => {
+    expect(queueTools(['mcp__posthog-wizard__enqueue_task'])).toEqual([
+      'complete_task',
+      'read_handoffs',
+    ]);
+  });
+});
+
 describe('taskModelSpec', () => {
   const prompt = parseAgentPrompt(
     '---\nmodel_pi: prompt-model\n---\nx',
@@ -380,5 +511,107 @@ describe('assembleTaskPrompt', () => {
     expect(assembleTaskPrompt(ctx, 'do the task')).not.toContain(
       'task instructions',
     );
+  });
+
+  it('does not embed a tool inventory — the harness renders it from its real set', () => {
+    const assembled = assembleTaskPrompt(ctx, 'do the task', []);
+    expect(assembled).not.toContain('Your tools for this task');
+  });
+
+  it('surfaces the app host for browser links, distinct from the ingestion host', () => {
+    // A cloud ingestion host resolves an app host on a different origin, so a
+    // task that builds a user-facing link must not reuse the ingestion host.
+    const cloudCtx: OrchestratorPromptContext = {
+      projectId: 1,
+      projectApiKey: 'phc_x',
+      host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+    };
+    const assembled = assembleTaskPrompt(cloudCtx, 'do the task');
+    expect(assembled).toContain('PostHog Host: https://eu.i.posthog.com');
+    expect(assembled).toContain('PostHog app URL');
+    expect(assembled).toContain('https://eu.posthog.com');
+  });
+});
+
+describe('renderToolInventory', () => {
+  it('lists the exact names passed and hands unlisted work to later tasks', () => {
+    const out = renderToolInventory(['read', 'find', 'ls', 'complete_task']);
+    expect(out).toContain(
+      'Your tools for this task: read, find, ls, complete_task',
+    );
+    expect(out).toContain('hand that work off');
+  });
+
+  it('is empty when the set is empty', () => {
+    expect(renderToolInventory([])).toBe('');
+  });
+});
+
+describe('assembleSeedPrompt', () => {
+  it('names the tasks the wizard queued before the planner ran', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    const prompt = assembleSeedPrompt(ctx, 'plan it', [
+      { id: 'abc-123', type: 'warehouse' },
+    ]);
+    expect(prompt).toContain('warehouse (id: abc-123)');
+    expect(prompt).toContain('Do not queue them again');
+  });
+
+  it('tells the planner the edge is one-way — sink in, nothing else', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    const prompt = assembleSeedPrompt(ctx, 'plan it', [
+      { id: 'abc-123', type: 'warehouse' },
+    ]);
+
+    // A pre-queued task is deferred to the end of the drain and may block on a
+    // person, so a task hung off it would wait on the user — the interruption
+    // deferring it removed.
+    expect(prompt).toContain('hang nothing else off them');
+    expect(prompt).toContain('reporting task depend on each one');
+  });
+
+  it('says nothing about pre-queued tasks when there are none', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    expect(assembleSeedPrompt(ctx, 'plan it')).not.toContain(
+      'The queue already holds',
+    );
+  });
+});
+
+/**
+ * Every tool a task gets is granted by its own prompt, the PostHog MCP
+ * included. A task that never names it must not have the server wired in.
+ */
+describe('allowsPostHogMcp', () => {
+  it('grants only when the prompt asks for it', () => {
+    expect(allowsPostHogMcp(['Read', 'Glob', 'posthog_exec'])).toBe(true);
+    expect(allowsPostHogMcp(['Read', 'Glob'])).toBe(false);
+    expect(allowsPostHogMcp([])).toBe(false);
+    expect(allowsPostHogMcp(undefined)).toBe(false);
+  });
+
+  it('reads the expanded name the loader hands the harness', () => {
+    const p = parseAgentPrompt(
+      '---\nallowedTools: [Read, posthog_exec]\n---\nx',
+      't',
+    );
+    const { allowedTools } = agentRunTools(p);
+    expect(allowedTools).toEqual(['Read', 'mcp__posthog-wizard__exec']);
+    expect(allowsPostHogMcp(allowedTools)).toBe(true);
   });
 });

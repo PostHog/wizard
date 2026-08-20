@@ -2,6 +2,7 @@ import {
   assertWizardCompletionScope,
   extractOAuthCode,
   isAuthorizationTimeout,
+  missingOAuthScopes,
   OAuthTokenResponseSchema,
   parseOAuthScopes,
 } from '@utils/oauth';
@@ -93,6 +94,21 @@ describe('wizard OAuth scopes', () => {
     );
   });
 
+  it('grants self-driving the scanner scopes STEP 6c needs', () => {
+    const scopes = getOAuthScopesForProgram('self-driving');
+
+    // The scope OBJECT is `replay_scanner` — `vision-scanners-*` are MCP tool
+    // names, not scopes. Requesting the tool name grants nothing and STEP 6c
+    // 403s on every scanner call.
+    expect(scopes).toContain('replay_scanner:read');
+    expect(scopes).toContain('replay_scanner:write');
+    // Creating/updating a scanner requires session_recording:read alongside
+    // replay_scanner:write (the API pairs them), so losing it breaks 6c too.
+    expect(scopes).toContain('session_recording:read');
+    // Base scopes are never dropped by an addition.
+    expect(scopes).toEqual(expect.arrayContaining([...WIZARD_OAUTH_SCOPES]));
+  });
+
   it('accepts a newly issued token with the completion scope', () => {
     expect(() =>
       assertWizardCompletionScope(
@@ -101,10 +117,12 @@ describe('wizard OAuth scopes', () => {
     ).not.toThrow();
   });
 
-  it('asks legacy authorizations to reconnect before completion', () => {
+  it('aborts with the fix-first message when the completion scope is missing', () => {
     expect(() =>
       assertWizardCompletionScope('user:read wizard_session:write'),
-    ).toThrow(/missing.*event_definition:write.*Reconnect.*revoke/is);
+    ).toThrow(
+      /without the event_definition:write.*approving all permissions.*revoke/is,
+    );
   });
 
   it('preserves unrelated granted scopes when parsing the token response', () => {
@@ -117,6 +135,43 @@ describe('wizard OAuth scopes', () => {
       'project:read',
       'wizard_session:write',
       'event_definition:write',
+    ]);
+  });
+});
+
+// A grant can be narrower than the request with no error: the consent screen
+// lets users deselect non-required scopes, and out-of-ceiling scopes are
+// silently clamped server-side. The diff is how the wizard notices at login
+// instead of via a permission failure minutes into the run.
+describe('missingOAuthScopes', () => {
+  it('returns an empty list when the grant matches the request', () => {
+    expect(
+      missingOAuthScopes(
+        ['user:read', 'project:read'],
+        'user:read project:read',
+      ),
+    ).toEqual([]);
+  });
+
+  it('names the scopes a deselecting user unticked at consent', () => {
+    expect(
+      missingOAuthScopes(
+        ['user:read', 'notebook:write', 'external_data_source:read'],
+        'user:read',
+      ),
+    ).toEqual(['notebook:write', 'external_data_source:read']);
+  });
+
+  it('ignores extra granted scopes the wizard never asked for', () => {
+    expect(
+      missingOAuthScopes(['user:read'], 'user:read feature_flag:read'),
+    ).toEqual([]);
+  });
+
+  it('treats an empty grant as everything missing', () => {
+    expect(missingOAuthScopes(['user:read', 'query:read'], '')).toEqual([
+      'user:read',
+      'query:read',
     ]);
   });
 });

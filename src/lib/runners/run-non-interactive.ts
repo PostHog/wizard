@@ -118,6 +118,7 @@ export function runNonInteractive(
       harness: options.harness as Harness | undefined,
       sequence: options.sequence as Sequence | undefined,
       model: options.model as string | undefined,
+      captureAio: options.captureAio as boolean | undefined,
       ...env,
       // After the spread: yargs already resolves flag-over-env for --region,
       // so the parsed value must win over the raw env bag.

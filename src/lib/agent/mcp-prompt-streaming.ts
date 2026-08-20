@@ -303,7 +303,9 @@ export async function* runMcpPromptViaSdk(args: {
             type: 'http',
             url: mcpUrl,
             headers: {
-              Authorization: `Bearer ${credentials.accessToken}`,
+              // Env reference, not the token: the SDK puts this config on the
+              // spawned CLI's argv, where `ps` shows it to any local process.
+              Authorization: 'Bearer ${POSTHOG_MCP_TOKEN}',
               'User-Agent': WIZARD_USER_AGENT,
             },
             // CLI mode's single `exec` tool carries the full command reference
@@ -329,6 +331,9 @@ export async function* runMcpPromptViaSdk(args: {
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+          // The MCP config resolves this in the child; sending the value would
+          // put it on the CLI's argv.
+          POSTHOG_MCP_TOKEN: credentials.accessToken,
           // SDK 0.3.142+ connects MCP servers in the background by
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.

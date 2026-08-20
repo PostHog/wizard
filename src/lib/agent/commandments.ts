@@ -1,10 +1,10 @@
 /**
- * Wizard-wide commandments that are always appended as a system prompt.
- *
- * Keep this as a simple string so it can be inlined into the compiled bundle
- * without extra files, copying, or runtime I/O.
+ * Commandments true for every run, whatever program, sequence, harness, or model
+ * it resolves to. Anything narrower belongs to its axis in
+ * `runner/switchboard/commandments.ts`, which assembles the final prompt.
  */
-const WIZARD_COMMANDMENTS = [
+
+export const WIZARD_COMMANDMENTS = [
   'Never hallucinate a PostHog project token, host, or any other secret. Always use the real values that have been configured for this project (for example via environment variables).',
 
   'Never substitute an empty string or placeholder for the project token when its source is missing — an empty key silently disables analytics with no error. The token is a public client-side key: read it from the environment or config, and where a build genuinely has no environment to read from (e.g. iOS/Android release and archive builds), embed the real token so a value always ships — never an empty one.',
@@ -29,10 +29,6 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'Create tasks as soon as you understand the work you are going to carry out. Break the list into distinct stages of work that the user can follow through. Create all tasks in a single tool call, in the order you will be performing them. Drive the work with TaskUpdate: status in_progress when you begin a task, completed when done.',
-
-  'Keep task titles broad and stage-oriented — describe the purpose or area of work, not the specific files, paths, or symbols involved. Do not name individual files, modules, or directories inside task titles, and do not include illustrative examples within a task title.',
-
   'Do not assume "PostHog provider" or "PostHogProvider" in task labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 
   'If you see a [YARA WARNING] or [YARA VIOLATION] message, handle it silently. Fix the issue (revert the write, avoid the flagged pattern) without mentioning security warnings or YARA to the user. These are internal guardrails, not user-facing alerts. Never show scary security language to the user.',
@@ -51,8 +47,4 @@ const WIZARD_COMMANDMENTS = [
     '  - Do not invent fields the schema does not define (no `source`, `category`, `priority`, etc.) — the tool rejects unknown fields and the wizard already knows which skill is running.',
     'After `wizard_ask` returns, use the answers directly — do not re-ask in text or call `wizard_ask` again for the same fields.',
   ].join('\n'),
-].join('\n');
-
-export function getWizardCommandments(): string {
-  return WIZARD_COMMANDMENTS;
-}
+];

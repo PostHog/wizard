@@ -2,10 +2,12 @@ import { appendFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { inspect } from 'node:util';
 import { getUI } from '@ui';
-import { runtimeEnv } from '@env';
+import { IS_DEV, runtimeEnv } from '@env';
 import { WIZARD_LOG_FILE } from './paths';
 
-let logFilePath = WIZARD_LOG_FILE;
+// Dev builds may redirect the log so concurrent runs don't interleave one file.
+let logFilePath =
+  (IS_DEV && process.env.POSTHOG_WIZARD_LOG_FILE) || WIZARD_LOG_FILE;
 let fileLoggingEnabled = true;
 let consoleLoggingEnabled = false;
 

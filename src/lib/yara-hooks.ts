@@ -33,6 +33,7 @@ import type {
   Category,
 } from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
+import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
@@ -341,6 +342,9 @@ const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
  * (~25K tokens), so triage always sees the chunk its matches came from.
  */
 const SCAN_CHUNK_SIZE = 100_000;
+
+// A skill file is read at most this far; the rest is head-scanned and logged.
+const SKILL_FILE_SCAN_BYTES = 10 * 1024 * 1024;
 /**
  * Overlap between adjacent chunks so a pattern straddling a chunk boundary
  * still lands whole inside at least one chunk. YARA rule strings are at most
@@ -967,26 +971,22 @@ export function createPostToolUseYaraHooks(
             recordScan();
             const matches = await scanSkillFiles(cwd, skillDir, llmProvider);
 
-            if (matches.length === 0) return {};
+            const verdict = scanVerdict(matches);
+            if (!verdict) return {};
 
-            // INTENTIONAL ASYMMETRY: skill-install terminates on ANY
-            // post-triage match, while Read/Grep only terminates on
-            // critical-or-block. Skills are downloaded code from an
-            // external source; any flagged content in them is treated as
-            // poisoned. Read/Grep, by contrast, may scan project files
-            // the user wrote themselves where a medium-severity match
-            // can warrant a warning instead of a terminate.
-            // TODO(wizard#593): document / lock in this contract with a test.
-            const match = highestSeverityMatch(matches);
             recordMatch(
               'PostToolUse',
               'Bash (skill install)',
-              match,
-              'aborted',
+              verdict.match,
+              verdict.action,
             );
+            // Same verdict as every other surface: critical terminates, the
+            // rest warn. These rules fire on first-party skill prose often
+            // enough that terminating costs more than it prevents.
+            if (!verdict.terminal) return {};
 
             const reason =
-              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule}. ` +
+              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${verdict.match.rule}. ` +
               `The downloaded skill contains potential prompt injection. Session terminated for safety.`;
             onTerminate(reason);
             return { stopReason: reason };
@@ -1006,6 +1006,47 @@ export function createPostToolUseYaraHooks(
 }
 
 // ─── Skill File Scanner ──────────────────────────────────────────
+
+/**
+ * Scan a freshly installed skill directory (any root — .claude/skills or the
+ * orchestrator's run cache) and return a terminate reason when it is poisoned,
+ * else null. The choke point for TS-path installs (downloadSkill); agent Bash
+ * installs are covered by the PostToolUse matcher above. Runs the same LLM
+ * triage as the tool-use scans; fail-closed to treating every match as real when
+ * no provider is configured, so a missing key never weakens the check.
+ * `llmProvider` is explicit — pi and the orchestrator never set the env fallback.
+ *
+ * Terminates on the same verdict as every other surface (critical only). A
+ * non-terminal match is recorded and the skill is kept: these rules fire on
+ * first-party skill prose, and deleting the skill leaves the agent working blind
+ * on the very content it needed.
+ */
+export async function scanInstalledSkill(
+  absoluteSkillDir: string,
+  llmProvider: LLMProvider | undefined,
+): Promise<string | null> {
+  recordScan();
+  const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
+  const verdict = scanVerdict(matches);
+  if (!verdict) return null;
+  recordMatch(
+    'skill-install',
+    'installSkillById',
+    verdict.match,
+    verdict.action,
+  );
+  if (!verdict.terminal) {
+    logToFile(
+      `[YARA] ${verdict.match.rule} (${
+        verdict.match.metadata.severity ?? 'unknown'
+      }) in ${absoluteSkillDir} — non-terminal, keeping the skill`,
+    );
+    return null;
+  }
+  return `Poisoned skill detected: ${verdict.match.rule} (${
+    verdict.match.metadata.severity ?? 'unknown'
+  }) in ${absoluteSkillDir}`;
+}
 
 /**
  * Read and scan all text files in a skill directory for prompt injection.
@@ -1030,30 +1071,38 @@ async function scanSkillFiles(
     absolute: true,
   });
 
-  const fileContents: string[] = [];
-  for (const filePath of files) {
-    try {
-      fileContents.push(fs.readFileSync(filePath, 'utf-8'));
-    } catch (err) {
-      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
-    }
-  }
-
-  if (fileContents.length === 0) {
+  if (files.length === 0) {
     logToFile(`[YARA] No text files found in skill directory: ${absoluteDir}`);
     return [];
   }
 
   logToFile(
-    `[YARA] Scanning ${fileContents.length} files in skill directory: ${skillDir}`,
+    `[YARA] Scanning ${files.length} files in skill directory: ${skillDir}`,
   );
 
-  // Pass 1 (sequential): scan each file through the chunk-aware path —
-  // full coverage even for oversized files, and every flagged chunk keeps a
-  // reference to the exact content its matches came from.
+  // Pass 1 (sequential): read and scan ONE file at a time through the
+  // chunk-aware path. Oversized files are scanned up to the cap and logged —
+  // never silently skipped. Flagged chunks keep a reference to the exact
+  // content their matches came from.
   const flagged: FlaggedChunk[] = [];
-  for (const content of fileContents) {
-    flagged.push(...(await scanForContext(content, 'input')));
+  for (const filePath of files) {
+    let content: string | null;
+    try {
+      if (fs.statSync(filePath).size > SKILL_FILE_SCAN_BYTES) {
+        logToFile(
+          `[YARA] Skill file over ${SKILL_FILE_SCAN_BYTES} bytes; scanning its head only: ${filePath}`,
+        );
+        content = readFileHead(filePath, SKILL_FILE_SCAN_BYTES);
+      } else {
+        content = fs.readFileSync(filePath, 'utf-8');
+      }
+    } catch (err) {
+      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
+      continue;
+    }
+    if (content) {
+      flagged.push(...(await scanForContext(content, 'input')));
+    }
   }
 
   // Pass 2 (parallel, inside triageFlagged): triage each flagged chunk

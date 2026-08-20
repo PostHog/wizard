@@ -31,7 +31,14 @@ import {
   resolveEnvSecretRefs,
   vaultSensitiveAnswers,
 } from '@lib/wizard-tools/tools';
+import type { LLMProvider } from '@posthog/warlock';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  publishHandoff,
+} from '@lib/wizard-tools/handoff';
 import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
 import {
@@ -59,11 +66,18 @@ export interface PiToolsContext {
   onAskPendingChange?: (pending: boolean) => void;
   /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
   disallowedTools?: readonly string[];
+  /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
+  triageProvider?: LLMProvider;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
-  const { workingDirectory, skillsBaseUrl, askBridge, onAskPendingChange } =
-    ctx;
+  const {
+    workingDirectory,
+    skillsBaseUrl,
+    askBridge,
+    onAskPendingChange,
+    triageProvider,
+  } = ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
   const askMaxQuestions = ctx.maxQuestions ?? DEFAULT_ASK_MAX_QUESTIONS;
@@ -119,6 +133,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         args.skillId,
         workingDirectory,
         skillsBaseUrl,
+        { triage: triageProvider },
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
@@ -372,12 +387,33 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
+  // Native mirror of the MCP `publish_handoff` tool (shared description, so no drift).
+  const publishHandoffTool = defineTool({
+    name: PUBLISH_HANDOFF_TOOL_NAME,
+    label: 'Publish handoff',
+    description: PUBLISH_HANDOFF_DESCRIPTION,
+    promptSnippet:
+      'publish_handoff(content) — publish the full report markdown to the wizard session',
+    parameters: Type.Object({
+      content: Type.String({
+        description: PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+      }),
+    }),
+    execute(_id, args) {
+      const result = publishHandoff(args.content);
+      logToFile(`[pi] publish_handoff: ${result.message}`);
+      return Promise.resolve(text(result.message));
+    },
+  });
+
   const tools = [
     loadSkillMenu,
     installSkill,
     checkEnvKeys,
     setEnvValues,
     detectPm,
+    // Sequential: it mutates the store's handoff state.
+    withMode(publishHandoffTool, 'sequential'),
   ];
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.

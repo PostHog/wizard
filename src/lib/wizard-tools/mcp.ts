@@ -21,11 +21,18 @@ import {
   type AuditStatus,
 } from '../programs/audit/types';
 import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
+import {
+  PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  publishHandoff,
+} from './handoff';
 import { createSecretVault, type SecretVault } from '../secret-vault';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
 } from '../agent/runner/sequence/orchestrator/queue-tools';
+import type { LLMProvider } from '@posthog/warlock';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
@@ -120,6 +127,9 @@ export interface WizardToolsOptions {
    * linear path.
    */
   orchestrator?: OrchestratorToolsContext;
+
+  /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
+  triageProvider: LLMProvider;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -140,6 +150,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
     orchestrator,
+    triageProvider,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -404,7 +415,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = await downloadSkill(skill, workingDirectory);
+      const result = await downloadSkill(skill, workingDirectory, {
+        triage: triageProvider,
+      });
       if (result.success) {
         return {
           content: [
@@ -664,7 +677,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         });
         return {
           content: [{ type: 'text' as const, text: capDecision.message }],
-          isError: true,
+          // The adjacency nudge is a one-time, retryable hint, not a failure:
+          // flagging it isError makes the model read it as a hard refusal and
+          // abandon the source to browser fallback. The max_questions cap is a
+          // genuine stop, so it stays an error.
+          isError: capDecision.reason !== 'adjacency',
         };
       }
 
@@ -767,6 +784,24 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- publish_handoff ------------------------------------------------------
+
+  const publishHandoffTool = tool(
+    PUBLISH_HANDOFF_TOOL_NAME,
+    PUBLISH_HANDOFF_DESCRIPTION,
+    {
+      content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
+    },
+    (args: { content: string }) => {
+      const result = publishHandoff(args.content);
+      logToFile(`publish_handoff: ${result.message}`);
+      return {
+        content: [{ type: 'text' as const, text: result.message }],
+        ...(result.ok ? {} : { isError: true }),
+      };
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   const orchestratorTools = orchestrator
@@ -786,6 +821,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      publishHandoffTool,
       ...orchestratorTools,
     ],
   });
