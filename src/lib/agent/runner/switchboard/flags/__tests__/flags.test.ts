@@ -277,6 +277,19 @@ describe('isolation — everything on at once', () => {
           ...LINEAR_ANTHROPIC_DEFAULT,
           model: SONNET_5_MODEL,
         });
+      } else if (program === 'replay-vision') {
+        // Orchestrator from its OWN binding, not the flag — the
+        // wizard-orchestrator experiment does not cover this program, so it
+        // lands here whether the flag is on or off. Anthropic, not pi.
+        expect(resolved).toEqual({
+          ...LINEAR_ANTHROPIC_DEFAULT,
+          sequence: Sequence.orchestrator,
+        });
+        expect(ctx.trace).toEqual({
+          harness: 'binding',
+          model: 'binding',
+          sequence: 'binding',
+        });
       } else {
         expect(resolved).toEqual(LINEAR_ANTHROPIC_DEFAULT);
         expect(ctx.trace).toEqual({
