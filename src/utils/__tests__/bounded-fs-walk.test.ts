@@ -36,19 +36,16 @@ describe('reportFsError (via walkProjectFiles / safeReadFile)', () => {
     'EBUSY',
     'EIO',
     'EHOSTDOWN',
-  ])(
-    'does not capture an exception for benign fs error %s',
-    (code) => {
-      vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
-        throw errnoError(code);
-      });
+  ])('does not capture an exception for benign fs error %s', (code) => {
+    vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
+      throw errnoError(code);
+    });
 
-      walkProjectFiles('/some/dir', vi.fn());
+    walkProjectFiles('/some/dir', vi.fn());
 
-      expect(captureException).not.toHaveBeenCalled();
-      expect(mockLogToFile).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(captureException).not.toHaveBeenCalled();
+    expect(mockLogToFile).toHaveBeenCalledTimes(1);
+  });
 
   it('captures an exception for an unexpected fs error code', () => {
     vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
