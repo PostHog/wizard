@@ -670,6 +670,7 @@ export const McpSuggestedPromptsScreen = ({
             integration={session.integration}
             profile={profile}
             engaged={branchHistory.length > 0}
+            loginCommands={session.mcpLoginCommands}
             onClose={closeWizard}
           />
         )}
@@ -1232,6 +1233,8 @@ interface GoodbyePhaseProps {
   profile: ProjectDataProfile | null;
   /** True if the user actually ran at least one prompt this session. */
   engaged: boolean;
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`). */
+  loginCommands: string[];
   onClose: () => void;
 }
 
@@ -1241,6 +1244,7 @@ const GoodbyePhase = ({
   integration,
   profile,
   engaged,
+  loginCommands,
   onClose,
 }: GoodbyePhaseProps) => {
   // Three "next time you open your IDE, try this" reminders. Prefer quests
@@ -1280,6 +1284,22 @@ const GoodbyePhase = ({
       </Box>
 
       <Box marginBottom={1}>{introLine}</Box>
+
+      {loginCommands.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="green" bold>
+            {'\u2714'} Authenticate to finish (opens your browser):
+          </Text>
+          {loginCommands.map((command) => (
+            <Text key={command}>
+              {'  '}
+              <Text bold color="green">
+                {command}
+              </Text>
+            </Text>
+          ))}
+        </Box>
+      )}
 
       <Box marginBottom={1} flexDirection="column">
         {samples.map((p, i) => (

@@ -202,7 +202,12 @@ export const getInstalledClients = async (
   const installedClients: MCPClient[] = [];
 
   for (const client of clients) {
-    if (await client.isServerInstalled(local)) {
+    // The plugin bundles its own posthog MCP server, so for removal purposes a
+    // plugin install counts as installed even with no config entry (`--local`
+    // targets only the local-dev entry and leaves the plugin alone).
+    const pluginInstalled =
+      !local && isPluginCapable(client) && (await client.isPluginInstalled());
+    if ((await client.isServerInstalled(local)) || pluginInstalled) {
       installedClients.push(client);
     }
   }
@@ -271,9 +276,27 @@ export const removeMCPServer = async (
   const results: McpClientResult[] = [];
   for (const client of clients) {
     try {
-      results.push(
-        toClientResult(client.name, await client.removeServer(local)),
-      );
+      let result = await client.removeServer(local);
+      // The plugin bundles its own posthog server — leaving it installed makes
+      // the removal a lie (`--local` never touches the plugin).
+      if (!local && isPluginCapable(client) && client.removePlugin) {
+        const plugin = await client.removePlugin();
+        result =
+          !result.success || !plugin.success
+            ? {
+                success: false,
+                reason: [result.reason, plugin.reason]
+                  .filter(Boolean)
+                  .join('; '),
+              }
+            : {
+                success: true,
+                ...(result.alreadyInstalled && plugin.alreadyInstalled
+                  ? { alreadyInstalled: true }
+                  : {}),
+              };
+      }
+      results.push(toClientResult(client.name, result));
     } catch (err) {
       debug(`[removeMCPServer] removeServer threw for ${client.name}: ${err}`);
       results.push(
