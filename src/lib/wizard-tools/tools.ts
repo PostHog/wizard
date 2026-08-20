@@ -11,6 +11,8 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { scanInstalledSkill } from '@lib/yara-hooks';
+import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
   AUDIT_CHECKS_FILE,
@@ -177,15 +179,22 @@ async function downloadWithRetry(
   return new Uint8Array(await resp.arrayBuffer());
 }
 
+/** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
+export interface SkillInstallOptions {
+  /** Base directory override, e.g. `.posthog/skills`. Default `.claude/skills`. */
+  skillsRoot?: string;
+  /** Scan-triage classifier. `undefined` = no gateway, so a flagged skill fails closed. */
+  triage: LLMProvider | undefined;
+}
+
 /**
  * Download and extract a skill.
  * By default installs to `<installDir>/.claude/skills/<id>/`.
- * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
  */
 export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
-  skillsRoot?: string,
+  { skillsRoot, triage }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
@@ -204,6 +213,22 @@ export async function downloadSkill(
         )
       : extractZipArchive(data, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+
+    // Same scan the Bash-install hook runs — TS-path installs (linear
+    // pre-install, MCP/pi install_skill, orchestrator cache + reference)
+    // must not skip it.
+    const poisonReason = await scanInstalledSkill(skillDir, triage);
+    if (poisonReason) {
+      fs.rmSync(skillDir, { recursive: true, force: true });
+      logToFile(`downloadSkill: ${poisonReason}`);
+      analytics.wizardCapture('skill install failed', {
+        skill_id: skillEntry.id,
+        step: 'scan',
+        platform: process.platform,
+        error: poisonReason.slice(0, 500),
+      });
+      return { success: false, error: poisonReason };
+    }
 
     logToFile(
       `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
@@ -251,7 +276,7 @@ export async function installSkillById(
   skillId: string,
   installDir: string,
   skillsBaseUrl: string,
-  skillsRoot?: string,
+  options: SkillInstallOptions,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };
@@ -261,13 +286,13 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = await downloadSkill(skill, installDir, skillsRoot);
+  const result = await downloadSkill(skill, installDir, options);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
 
-  const relPath = skillsRoot
-    ? `${skillsRoot}/${skillId}`
+  const relPath = options.skillsRoot
+    ? `${options.skillsRoot}/${skillId}`
     : `.claude/skills/${skillId}`;
   return { kind: 'ok', path: relPath };
 }
@@ -286,9 +311,14 @@ export type AskCapDecision =
 
 /**
  * Pure decision function for the wizard_ask caps. Returns whether the
- * upcoming call should proceed and, if not, the error message to surface
- * to the agent. Extracted so the policy can be unit-tested without
- * spinning up an MCP server.
+ * upcoming call should proceed and, if not, the message to surface to the
+ * agent. Extracted so the policy can be unit-tested without spinning up an
+ * MCP server.
+ *
+ * The two capped reasons are surfaced differently: `max_questions` is a hard
+ * stop, but `adjacency` is a one-time nudge the caller must not present as a
+ * failure — an agent that reads it as a refusal abandons the source instead
+ * of re-asking with batched questions.
  *
  * The adjacency nudge fires exactly once per run (the caller records it
  * via `adjacencyNudged`) — flows that legitimately need several
@@ -313,7 +343,7 @@ export function evaluateAskCap(
     return {
       kind: 'capped',
       reason: 'adjacency',
-      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation. If the remaining questions truly depend on earlier answers, ask again and they will go through.`,
+      message: `Not an error — this ask was not sent (a one-time nudge). You've made ${callCount} wizard_ask calls in a row. Batch the questions you still need into a single call (the schema accepts up to 8 questions per invocation) and call wizard_ask again now; or, if they genuinely depend on earlier answers, just ask again as-is. Either way the next call goes through. Do not abandon the task or fall back to browser setup because of this message.`,
     };
   }
   return { kind: 'ok' };
@@ -620,6 +650,7 @@ export const WIZARD_TOOL_NAMES = {
   auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
   auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
   wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+  publishHandoff: `mcp__${SERVER_NAME}__publish_handoff`,
   enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
   completeTask: `mcp__${SERVER_NAME}__complete_task`,
   readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,

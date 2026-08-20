@@ -113,7 +113,25 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       });
     });
 
-    it('returns failure and captures exception on unexpected error', async () => {
+    it('returns already-installed without running the install when plugin list already has posthog', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin list'))
+          return Buffer.from('posthog  1.0.0\n');
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(
+        execSyncMock.mock.calls.some((c) =>
+          String(c[0]).includes('plugin install'),
+        ),
+      ).toBe(false);
+    });
+
+    it('returns failure with the reason and captures exception on unexpected error', async () => {
       execSyncMock.mockImplementation((cmd: string) => {
         if (String(cmd).includes('plugin install')) {
           throw new Error('network timeout');
@@ -121,7 +139,10 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         return Buffer.from('');
       });
       const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: false,
+        reason: 'network timeout',
+      });
       expect(analytics.captureException).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.stringContaining('network timeout'),
@@ -129,12 +150,15 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       );
     });
 
-    it('returns failure when no binary is found', async () => {
+    it('returns failure with a reason when no binary is found', async () => {
       execSyncMock.mockImplementation(() => {
         throw new Error('not found');
       });
       const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: false,
+        reason: expect.stringContaining('PATH'),
+      });
     });
   });
 });

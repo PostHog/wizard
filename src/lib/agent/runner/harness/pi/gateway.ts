@@ -74,9 +74,35 @@ export interface GatewayProviderInputs {
 }
 
 /**
+ * One gateway model spec — the single description of how to reach a model on
+ * the gateway. The provider spec below wraps it for pi's registry; one-shot
+ * callers (scan triage) hand it straight to `completeSimple`.
+ */
+export function buildGatewayModel(inputs: GatewayProviderInputs) {
+  const { gatewayUrl, wizardMetadata, wizardFlags, modelId } = inputs;
+  const api = gatewayApiFor(modelId);
+  return {
+    id: modelId,
+    name: `${modelId} (PostHog Gateway)`,
+    api,
+    provider: GATEWAY_PROVIDER,
+    // openai-completions keeps /v1; the SDK appends the route either way.
+    baseUrl: api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl,
+    // A model trait resolved by the switchboard, not a harness guess:
+    // non-reasoning openai models reject `reasoning_effort` (gpt-4o → gateway
+    // UnsupportedParamsError → the run no-ops).
+    reasoning: modelCapabilities(modelId).reasoning,
+    input: ['text' as const],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1_000_000,
+    maxTokens: 64_000,
+    headers: buildGatewayHeaders(wizardMetadata, wizardFlags),
+  };
+}
+
+/**
  * The provider object for `registry.registerProvider(GATEWAY_PROVIDER, …)`,
- * plus the derived traits the session setup needs (`caps.thinkingLevel`,
- * `gatewayUrl` for triage auth).
+ * plus the derived traits the session setup needs (`caps.thinkingLevel`).
  */
 export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   provider: Record<string, unknown>;
@@ -85,14 +111,7 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   gatewayUrl: string;
   baseUrl: string;
 } {
-  const {
-    gatewayUrl,
-    accessToken,
-    wizardMetadata,
-    wizardFlags,
-    modelId,
-    effort,
-  } = inputs;
+  const { gatewayUrl, accessToken, modelId, effort } = inputs;
   const api = gatewayApiFor(modelId);
   const tableCaps = modelCapabilities(modelId);
   // An explicit effort override wins over the table for a reasoning model.
@@ -100,31 +119,15 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
     effort && tableCaps.reasoning
       ? { ...tableCaps, thinkingLevel: effort }
       : tableCaps;
-  const baseUrl =
-    api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
+  const model = buildGatewayModel(inputs);
   const provider = {
     name: 'PostHog Gateway',
-    baseUrl,
+    baseUrl: model.baseUrl,
     apiKey: accessToken,
     authHeader: true,
     api,
-    headers: buildGatewayHeaders(wizardMetadata, wizardFlags),
-    models: [
-      {
-        id: modelId,
-        name: `${modelId} (PostHog Gateway)`,
-        api,
-        // Whether to request reasoning effort is a model trait resolved by
-        // the switchboard, not a harness guess: non-reasoning openai models
-        // reject `reasoning_effort` (gpt-4o → gateway UnsupportedParamsError
-        // → the run no-ops). The effort level rides on the session.
-        reasoning: caps.reasoning,
-        input: ['text'],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 1_000_000,
-        maxTokens: 64_000,
-      },
-    ],
+    headers: model.headers,
+    models: [model],
   };
-  return { provider, api, caps, gatewayUrl, baseUrl };
+  return { provider, api, caps, gatewayUrl, baseUrl: model.baseUrl };
 }

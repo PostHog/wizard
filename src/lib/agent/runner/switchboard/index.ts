@@ -89,7 +89,7 @@ export interface HarnessPick {
   harness: Harness;
   /** Gateway model id (string). */
   model: string;
-  /** Reasoning-effort override (e.g. from a pi effort flag). Absent → the model's table default. */
+  /** Reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
 }
 
@@ -135,6 +135,11 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  'replay-vision': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.anthropic,
@@ -164,4 +169,8 @@ export {
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export { isOrchestratorEnabled } from './flags';
+export {
+  isOrchestratorEnabled,
+  areSeededTasksEnabled,
+  resolveStageOverrides,
+} from './flags';

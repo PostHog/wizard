@@ -29,6 +29,10 @@ describe('CodexMCPClient', () => {
     vi.clearAllMocks();
     // Default: codex found via command -v
     execSyncMock.mockReturnValue(Buffer.from(CODEX_PATH + '\n'));
+    // Default: no plugin marketplace registered yet. clearAllMocks keeps
+    // implementations, so without this a config.toml fixture set by one test
+    // leaks into the next one's isPluginInstalled() check.
+    readFileSyncMock.mockReturnValue('');
   });
 
   describe('isClientSupported', () => {
@@ -124,7 +128,7 @@ describe('CodexMCPClient', () => {
       expect(call[2].env.POSTHOG_AUTH_HEADER).toBe('Bearer phx_test');
     });
 
-    it('treats "already" stderr as success', async () => {
+    it('reports "already" stderr as an already-installed success', async () => {
       spawnSyncMock.mockReturnValue({
         status: 1,
         stderr: "Server 'posthog' already exists",
@@ -132,14 +136,16 @@ describe('CodexMCPClient', () => {
       const client = new CodexMCPClient();
       await expect(client.addServer('phx_test')).resolves.toEqual({
         success: true,
+        alreadyInstalled: true,
       });
     });
 
-    it('returns failure and captures exception on unexpected error', async () => {
+    it('returns failure with the reason and captures exception on unexpected error', async () => {
       spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
       const client = new CodexMCPClient();
       await expect(client.addServer('phx_test')).resolves.toEqual({
         success: false,
+        reason: 'network timeout',
       });
       expect(analytics.captureException).toHaveBeenCalled();
     });
@@ -153,14 +159,28 @@ describe('CodexMCPClient', () => {
       expect(spawnSyncMock).toHaveBeenCalledWith(
         CODEX_PATH,
         ['mcp', 'remove', 'posthog'],
-        { stdio: 'ignore' },
+        { encoding: 'utf-8' },
       );
     });
 
-    it('returns false and captures exception on failure', async () => {
-      spawnSyncMock.mockReturnValue({ status: 1 });
+    it('targets the local server name when removing the local MCP', async () => {
+      spawnSyncMock.mockReturnValue({ status: 0 });
       const client = new CodexMCPClient();
-      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      await client.removeServer(true);
+      expect(spawnSyncMock).toHaveBeenCalledWith(
+        CODEX_PATH,
+        ['mcp', 'remove', 'posthog-local'],
+        { encoding: 'utf-8' },
+      );
+    });
+
+    it('returns the failure reason and captures exception on failure', async () => {
+      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'codex is locked' });
+      const client = new CodexMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({
+        success: false,
+        reason: 'codex is locked',
+      });
       expect(analytics.captureException).toHaveBeenCalled();
     });
   });
@@ -209,10 +229,50 @@ describe('CodexMCPClient', () => {
       expect(spawnSyncMock).toHaveBeenCalledTimes(2);
     });
 
-    it('returns failure and captures exception on unexpected error', async () => {
+    it('returns already-installed without shelling out when config.toml already has the marketplace', async () => {
+      readFileSyncMock.mockReturnValue('[marketplaces.posthog]\n');
+      const client = new CodexMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(spawnSyncMock).not.toHaveBeenCalled();
+    });
+
+    it('reports "already" stderr as already-installed rather than a failure', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: "marketplace 'posthog' is already installed",
+      });
+      const client = new CodexMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('still reports a failure when the stale-cache retry does not help', async () => {
+      // rmSync can fail (EPERM on Windows while codex is running), so the retry
+      // hits the same error — that means "not installed", not "already there".
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr:
+          "Error: marketplace 'posthog' is already added from a different source",
+      });
+      const client = new CodexMCPClient();
+      const result = await client.installPlugin();
+      expect(result.success).toBe(false);
+      expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    it('returns failure with the reason and captures exception on unexpected error', async () => {
       spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
       const client = new CodexMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: false,
+        reason: 'network timeout',
+      });
       expect(analytics.captureException).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.stringContaining('network timeout'),

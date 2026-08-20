@@ -10,6 +10,7 @@ import type {
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import type { ApiProject } from '@lib/api';
+import type { LLMProvider } from '@posthog/warlock';
 
 export type { PromptContext, Credentials };
 
@@ -85,6 +86,13 @@ export interface ProgramRun {
    * analytics change; opt in per program.
    */
   trackStepProgress?: boolean;
+  /**
+   * Map an agent-authored step label to a stable key, shipped on `wizard: step` as `step_key`.
+   * The runner knows nothing about any program's steps, so a program that wants its funnel to
+   * survive the agent rewording a task supplies the mapping itself. Omit it and only the label
+   * ships, as before.
+   */
+  resolveStepKey?: (stepName: string | undefined) => string | undefined;
 }
 
 /**
@@ -103,4 +111,6 @@ export interface BootstrapResult {
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */
   project: ApiProject | null;
+  /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
+  triageProvider: LLMProvider | undefined;
 }

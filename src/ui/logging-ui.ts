@@ -24,6 +24,7 @@ import type {
   Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
@@ -163,6 +164,14 @@ export class LoggingUI implements WizardUI {
     });
   }
 
+  showTaskNotice(_notice: TaskNotice): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  cancelTaskNotice(): void {
+    // Nothing to dismiss — showTaskNotice never opened anything.
+  }
+
   showSettingsOverride(
     _conflicts: SettingsConflict[],
     _backupAndFix: () => boolean,
@@ -267,6 +276,10 @@ export class LoggingUI implements WizardUI {
 
   setNotebookUrl(_url: string): void {
     // No-op in CI mode
+  }
+
+  setHandoffText(_text: string): void {
+    // No-op without a store — HeadlessUI overrides to feed the session sync
   }
 
   addTokenUsage(_delta: TokenUsageDelta): void {

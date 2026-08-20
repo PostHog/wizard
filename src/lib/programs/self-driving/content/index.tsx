@@ -1,3 +1,4 @@
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
 /**
  * Self-driving learn-deck — the narrative script played while the agent
  * sets up Self-driving. Teaches the vocabulary ladder (signal source →
@@ -175,9 +176,15 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     },
 
     {
-      content:
-        'That PR is the only thing you pay for: a flat $15 per report that ships a PR. Watching is free.',
-      pause: 6000,
+      // No lead-in: PRICING_LONG already names the PR as what's charged, and the
+      // pane only fits ~148 chars per beat.
+      content: PRICING_LONG,
+      pause: 5000,
+    },
+
+    {
+      content: NO_DEFAULT_LIMIT,
+      pause: 5000,
     },
 
     CLEAR,

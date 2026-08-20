@@ -67,6 +67,14 @@ function generateCodeChallenge(verifier: string): string {
 }
 
 // --- Response schemas ---
+//
+// These schemas validate only the fields the wizard actually reads. The rule is load
+// bearing, not stylistic: the wizard ships to npm and old versions keep running against
+// a provisioning API that moves independently, so a field we require but never consume
+// is a crash we cannot fix in the field. `service_id` was exactly that — required here,
+// read nowhere, and every signup broke the day the API stopped echoing it. Zod strips
+// unknown keys, so fields the API adds are tolerated for free; the only way to break is
+// to demand something back.
 
 const AccountRequestResponseSchema = z.object({
   id: z.string(),
@@ -96,20 +104,166 @@ const TokenResponseSchema = z.object({
     .optional(),
 });
 
+const AccessConfigurationSchema = z.object({
+  api_key: z.string(),
+  host: z.string(),
+  personal_api_key: z.string().optional(),
+});
+
 const ResourceResponseSchema = z.object({
   status: z.string(),
   id: z.string(),
-  service_id: z.string(),
   complete: z
     .object({
-      access_configuration: z.object({
-        api_key: z.string(),
-        host: z.string(),
-        personal_api_key: z.string().optional(),
-      }),
+      access_configuration: AccessConfigurationSchema,
     })
     .optional(),
 });
+
+/**
+ * Teams the account can reach, from the token exchange. Parsed separately from
+ * `TokenResponseSchema` and as loosely as possible: it is only used to recover from a
+ * response we already failed to read, so it must never become a new way to fail.
+ */
+const AvailableTeamsSchema = z.array(
+  z.object({ id: z.union([z.number(), z.string()]) }),
+);
+
+/**
+ * Thrown when the provisioning API completed the work but the wizard could not read the
+ * project back out of the response. The account, organization and project exist — callers
+ * must not tell the user their account wasn't created.
+ */
+export class ProvisionedAccountUnreadableError extends Error {
+  readonly accountCreated = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProvisionedAccountUnreadableError';
+  }
+}
+
+/** The field paths Zod rejected — never the values, which carry tokens and API keys. */
+function issuePaths(error: z.ZodError): string[] {
+  return error.issues.map((issue) => issue.path.join('.') || '(root)');
+}
+
+/**
+ * Report a response the wizard couldn't read. Silently degrading on a shape mismatch
+ * turns the next contract change into a week of guesswork, so the rejected paths go to
+ * the debug log and to error tracking before anything else happens.
+ */
+function reportUnreadableResponse(step: string, error: z.ZodError): Error {
+  const paths = issuePaths(error);
+  const reported = new Error(
+    `Unexpected ${step} response from the provisioning API (missing or invalid: ${paths.join(
+      ', ',
+    )})`,
+  );
+
+  logToFile(
+    `[provisioning] unexpected ${step} response shape: ${paths.join(', ')}`,
+  );
+  analytics.captureException(reported, {
+    step: `provisioning_${step}`,
+    issue_paths: paths,
+  });
+
+  return reported;
+}
+
+function parseOrThrow<T extends z.ZodTypeAny>(
+  schema: T,
+  data: unknown,
+  step: string,
+): z.infer<T> {
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) {
+    throw reportUnreadableResponse(step, parsed.error);
+  }
+  return parsed.data;
+}
+
+type ResourceRead =
+  | {
+      ok: true;
+      projectId: string;
+      access: z.infer<typeof AccessConfigurationSchema>;
+    }
+  | { ok: false; reason: 'unreadable' | 'incomplete' };
+
+function readResource(data: unknown, step: string): ResourceRead {
+  const parsed = ResourceResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    reportUnreadableResponse(step, parsed.error);
+    return { ok: false, reason: 'unreadable' };
+  }
+
+  if (parsed.data.status !== 'complete' || !parsed.data.complete) {
+    logToFile(`[provisioning] ${step} returned status=${parsed.data.status}`);
+    return { ok: false, reason: 'incomplete' };
+  }
+
+  return {
+    ok: true,
+    projectId: parsed.data.id,
+    access: parsed.data.complete.access_configuration,
+  };
+}
+
+/**
+ * Recover the project after an unreadable `POST /resources` response.
+ *
+ * By the time that call returns 2xx the account, organization and project exist, so
+ * aborting would abandon a provisioned account and leave the user with an orphaned
+ * project. `GET /resources/:id` returns the same access configuration, so read it back
+ * instead. Best-effort by design: any failure returns null and the caller reports the
+ * original drift. The detail endpoint never mints a personal API key, so a recovered
+ * result has none — `personalApiKey` is optional for every consumer.
+ */
+async function readBackResource(
+  provisioningBaseUrl: string,
+  accessToken: string,
+  tokenPayload: unknown,
+): Promise<ResourceRead | null> {
+  const teams = AvailableTeamsSchema.safeParse(
+    (tokenPayload as { account?: { available_teams?: unknown } } | undefined)
+      ?.account?.available_teams,
+  );
+
+  // A freshly provisioned account owns exactly one team. With any other count we can't
+  // tell which team the create call made, and guessing would capture into the wrong one.
+  if (!teams.success || teams.data.length !== 1) {
+    logToFile(
+      '[provisioning] no unambiguous team to read the resource back from',
+    );
+    return null;
+  }
+
+  const resourceId = String(teams.data[0].id);
+
+  try {
+    const res = await axios.get(
+      `${provisioningBaseUrl}/api/agentic/provisioning/resources/${resourceId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'API-Version': API_VERSION,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 30_000,
+      },
+    );
+
+    logToFile(
+      `[provisioning] read resource ${resourceId} back after unreadable create`,
+    );
+    return readResource(res.data, 'resource_readback');
+  } catch {
+    logToFile(`[provisioning] read-back of resource ${resourceId} failed`);
+    return null;
+  }
+}
 
 export interface ProvisioningResult {
   accessToken: string;
@@ -132,7 +286,13 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
-  opts?: { orgName?: string; projectName?: string; baseUrl?: string },
+  opts?: {
+    orgName?: string;
+    projectName?: string;
+    baseUrl?: string;
+    /** Scope list to request; defaults to `WIZARD_PROVISIONING_SCOPES`. */
+    scopes?: readonly string[];
+  },
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -150,7 +310,7 @@ export async function provisionNewAccount(
       client_id: getProvisioningClientId(region, opts?.baseUrl),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
-      scopes: WIZARD_PROVISIONING_SCOPES,
+      scopes: opts?.scopes ?? WIZARD_PROVISIONING_SCOPES,
       configuration: {
         region,
         ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
@@ -166,7 +326,11 @@ export async function provisionNewAccount(
     },
   );
 
-  const accountData = AccountRequestResponseSchema.parse(accountRes.data);
+  const accountData = parseOrThrow(
+    AccountRequestResponseSchema,
+    accountRes.data,
+    'account_requests',
+  );
 
   if (accountData.type === 'error') {
     const msg = accountData.error?.message ?? 'Account creation failed';
@@ -208,7 +372,11 @@ export async function provisionNewAccount(
     },
   );
 
-  const tokenData = TokenResponseSchema.parse(tokenRes.data);
+  const tokenData = parseOrThrow(
+    TokenResponseSchema,
+    tokenRes.data,
+    'oauth_token',
+  );
 
   logToFile('[provisioning] tokens received, provisioning resources');
 
@@ -216,7 +384,6 @@ export async function provisionNewAccount(
   const resourceRes = await axios.post(
     `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
     {
-      service_id: 'analytics',
       ...(opts?.projectName
         ? { configuration: { project_name: opts.projectName } }
         : {}),
@@ -232,10 +399,28 @@ export async function provisionNewAccount(
     },
   );
 
-  const resourceData = ResourceResponseSchema.parse(resourceRes.data);
+  // `/resources` is synchronous: it answers `status: "complete"` or an error envelope.
+  // So an unreadable body means the contract moved, not that provisioning is still
+  // running — and the project already exists either way, which is why this recovers
+  // instead of aborting.
+  let resource = readResource(resourceRes.data, 'resources');
 
-  if (resourceData.status !== 'complete' || !resourceData.complete) {
-    throw new Error('Resource provisioning did not complete');
+  if (!resource.ok && resource.reason === 'unreadable') {
+    resource =
+      (await readBackResource(
+        provisioningBaseUrl,
+        tokenData.access_token,
+        tokenRes.data,
+      )) ?? resource;
+  }
+
+  if (!resource.ok) {
+    if (resource.reason === 'incomplete') {
+      throw new Error('Resource provisioning did not complete');
+    }
+    throw new ProvisionedAccountUnreadableError(
+      'Your PostHog project was created, but the provisioning API returned a response the wizard could not read',
+    );
   }
 
   logToFile('[provisioning] resources provisioned successfully');
@@ -243,10 +428,10 @@ export async function provisionNewAccount(
   return {
     accessToken: tokenData.access_token,
     refreshToken: tokenData.refresh_token,
-    projectApiKey: resourceData.complete.access_configuration.api_key,
-    host: resourceData.complete.access_configuration.host,
-    personalApiKey: resourceData.complete.access_configuration.personal_api_key,
-    projectId: resourceData.id,
+    projectApiKey: resource.access.api_key,
+    host: resource.access.host,
+    personalApiKey: resource.access.personal_api_key,
+    projectId: resource.projectId,
     accountId: tokenData.account?.id ?? '',
   };
 }

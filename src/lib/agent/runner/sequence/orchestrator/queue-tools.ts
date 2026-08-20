@@ -9,16 +9,38 @@
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import {
+  isValidModel,
+  VALID_MODELS,
+} from '@lib/agent/runner/switchboard/models';
+import {
   TaskStatus,
   type QueueStore,
   type QueuedTask,
   type TaskHandoff,
 } from './queue';
 
+/** The per-task remark ask, shared by both harnesses' complete_task schemas. */
+export const REMARK_ASK =
+  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
+
 export interface OrchestratorToolsContext {
   store: QueueStore;
   /** Task types the registry knows about. enqueue_task rejects anything else. */
   validTypes: readonly string[];
+  /**
+   * Types marked `sink: true` — the ones that run last and must therefore
+   * depend, transitively, on every other task in the queue. Enqueuing one with
+   * an incomplete closure is rejected, so a task the runner seeded before the
+   * planner ran can never be left un-awaited.
+   */
+  sinkTypes?: readonly string[];
+  /**
+   * Types the wizard queues itself, before the planner runs. They are deferred
+   * to the end of the drain and may stop to ask the user for input, so the edge
+   * to them is one-way: the sink depends on them, nothing else may. See
+   * {@link seededDepViolations}.
+   */
+  runnerSeededTypes?: readonly string[];
   /**
    * The id of the task this tool server is bound to. Each task agent gets its
    * own wizard-tools server, so attribution holds when independent tasks run
@@ -63,10 +85,68 @@ function dedupKey(type: string, inputs: Record<string, unknown>): string {
  */
 const MAX_QUEUE_TASKS = 30;
 
+/** Every task id reachable from `roots` through dependsOn edges, roots included. */
+export function dependencyClosure(
+  store: QueueStore,
+  roots: readonly string[],
+): Set<string> {
+  const seen = new Set<string>();
+  const visit = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    for (const dep of store.get(id)?.dependsOn ?? []) visit(dep);
+  };
+  for (const id of roots) visit(id);
+  return seen;
+}
+
+/**
+ * Tasks a sink would fail to wait for. A sink runs last by definition, so any
+ * queued task outside its dependency closure is work whose handoff the sink
+ * would miss — the exact failure mode of a task seeded before the planner ran.
+ * Empty for a non-sink type, and for a sink that covers everything.
+ */
+export function uncoveredBySink(
+  ctx: OrchestratorToolsContext,
+  args: Pick<EnqueueArgs, 'type' | 'dependsOn'>,
+): QueuedTask[] {
+  if (!ctx.sinkTypes?.includes(args.type)) return [];
+  const covered = dependencyClosure(ctx.store, args.dependsOn ?? []);
+  return ctx.store.list().filter((t) => !covered.has(t.id));
+}
+
+/**
+ * Runner-seeded tasks a non-sink task would end up waiting for.
+ *
+ * The edge to a runner-seeded task is one-way. Such a task is deferred to the
+ * end of the drain and may stop to ask the user for input, so anything that
+ * waits on it inherits that wait — a coding step gated on someone typing a
+ * database password. The sink is the sole exception: it runs last by
+ * definition and must depend on every task, this one included.
+ *
+ * The whole closure is checked, not just direct dependencies, so the rule
+ * cannot be reached through an intermediate hop.
+ *
+ * Empty for a sink, and for any task that does not reach a seeded task.
+ */
+export function seededDepViolations(
+  ctx: OrchestratorToolsContext,
+  args: Pick<EnqueueArgs, 'type' | 'dependsOn'>,
+): QueuedTask[] {
+  const seeded = ctx.runnerSeededTypes ?? [];
+  if (seeded.length === 0) return [];
+  if (ctx.sinkTypes?.includes(args.type)) return [];
+  const reached = dependencyClosure(ctx.store, args.dependsOn ?? []);
+  return ctx.store
+    .list()
+    .filter((t) => reached.has(t.id) && seeded.includes(t.type));
+}
+
 /**
  * Validate an enqueue. Structural checks only — a real type, real dependencies,
- * not a literal duplicate, and not past the runaway backstop. How much runs,
- * and in what shape, is the task graph's business, not a knob's.
+ * a sink that waits for everything, no non-sink task waiting on a runner-seeded
+ * one, not a literal duplicate, and not past the runaway backstop. How much
+ * runs, and in what shape, is the task graph's business, not a knob's.
  */
 export function checkEnqueueGuards(
   ctx: OrchestratorToolsContext,
@@ -92,6 +172,19 @@ export function checkEnqueueGuards(
     };
   }
 
+  // Reject an agent pinning a task to a non-allow-listed model.
+  if (args.model !== undefined && !isValidModel(args.model)) {
+    return {
+      ok: false,
+      guard: 'invalid-model',
+      message: `Model "${
+        args.model
+      }" is not allowed. Omit model to use the task default, or pick one of: ${[
+        ...VALID_MODELS,
+      ].join(', ')}.`,
+    };
+  }
+
   for (const dep of args.dependsOn ?? []) {
     if (!ctx.store.get(dep)) {
       return {
@@ -100,6 +193,43 @@ export function checkEnqueueGuards(
         message: `Dependency "${dep}" is not a known task id.`,
       };
     }
+  }
+
+  const seededDeps = seededDepViolations(ctx, args);
+  if (seededDeps.length > 0) {
+    return {
+      ok: false,
+      guard: 'seeded-dep',
+      message: `A "${args.type}" task must not wait for ${seededDeps
+        .map((t) => `${t.type} (${t.id})`)
+        .join(
+          ', ',
+        )} — directly or through its dependencies. The wizard placed those, runs them at the end, and they stop to ask the user for input, so anything waiting on one waits on a person. Remove them from dependsOn and enqueue it again; only the final reporting task may depend on them.`,
+    };
+  }
+
+  const uncovered = uncoveredBySink(ctx, args);
+  if (uncovered.length > 0) {
+    const seededUncovered = uncovered.filter((t) =>
+      (ctx.runnerSeededTypes ?? []).includes(t.type),
+    );
+    // "Or to a task already in dependsOn" is the right advice for an ordinary
+    // task and exactly wrong for a runner-seeded one — routing it through an
+    // intermediate satisfies the closure while breaking the one-way rule above.
+    // So a seeded task is named with the only placement that is legal for it.
+    const how =
+      seededUncovered.length === uncovered.length
+        ? "Add them to this task's own dependsOn — for a task the wizard placed, that is the only legal spot — and enqueue it again."
+        : 'Add them to dependsOn, or to a task already in dependsOn, and enqueue it again.';
+    return {
+      ok: false,
+      guard: 'sink-closure',
+      message: `A "${
+        args.type
+      }" task runs last, so it must depend on every other task — directly or through its dependencies. These are not covered: ${uncovered
+        .map((t) => `${t.type} (${t.id})`)
+        .join(', ')}. ${how}`,
+    };
   }
 
   const key = dedupKey(args.type, args.inputs ?? {});
@@ -145,7 +275,11 @@ export type CompleteResult = { ok: true } | { ok: false; message: string };
 
 export function applyComplete(
   ctx: OrchestratorToolsContext,
-  args: { status: 'done' | 'failed' | 'not needed'; handoff: TaskHandoff },
+  args: {
+    status: 'done' | 'failed' | 'not needed';
+    handoff: TaskHandoff;
+    remark?: string;
+  },
 ): CompleteResult {
   const id = ctx.currentTaskId;
   if (!id) {
@@ -153,6 +287,12 @@ export function applyComplete(
       ok: false,
       message: 'complete_task can only be called by a running task agent.',
     };
+  }
+  if (args.remark) {
+    analytics.wizardCapture('orchestrator remark', {
+      task_type: ctx.store.get(id)?.type,
+      remark: args.remark,
+    });
   }
   if (args.status === TaskStatus.Failed) {
     ctx.store.fail(
@@ -188,35 +328,66 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
+// Caps each LLM-authored free-text field; queue.json rewrites whole per transition.
+const HANDOFF_TEXT_MAX = 8_000;
+
+/**
+ * The one description of every handoff field, shared by both harnesses'
+ * `complete_task` schemas — the zod shape below and the typebox mirror in
+ * `harness/pi/orchestrator-tools.ts`. A field an agent cannot see is a field it
+ * cannot fill, so the two drifting silently drops whatever the missing field
+ * carried; `__tests__/handoff-schema-parity.test.ts` holds them level.
+ */
+export const HANDOFF_FIELDS = {
+  goals: 'What this task was asked to achieve.',
+  did: 'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+  forNextAgent: 'What the next agent should know.',
+  filesTouched: 'Paths of every file you edited.',
+  evidence:
+    'How you know it worked — what you ran or observed, not what you expect.',
+  assumptions: 'What you assumed about the app and could not verify.',
+  conflict:
+    'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
+  reportSection:
+    'A finished markdown section about your work for the run report, written only when your task instructions ask for one. The reporting task includes it as its own section instead of rewriting it.',
+} as const satisfies Record<keyof Required<TaskHandoff>, string>;
+
 const HANDOFF_SHAPE = {
-  goals: z.string().describe('What this task was asked to achieve.'),
-  did: z
+  goals: z.string().max(HANDOFF_TEXT_MAX).describe(HANDOFF_FIELDS.goals),
+  did: z.string().max(HANDOFF_TEXT_MAX).describe(HANDOFF_FIELDS.did),
+  forNextAgent: z
     .string()
-    .describe(
-      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
-    ),
-  forNextAgent: z.string().describe('What the next agent should know.'),
+    .max(HANDOFF_TEXT_MAX)
+    .describe(HANDOFF_FIELDS.forNextAgent),
   filesTouched: z
-    .array(z.string())
+    .array(z.string().max(1_000))
+    .max(200)
     .optional()
-    .describe('Paths of every file you edited.'),
+    .describe(HANDOFF_FIELDS.filesTouched),
   evidence: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe(
-      'How you know it worked — what you ran or observed, not what you expect.',
-    ),
+    .describe(HANDOFF_FIELDS.evidence),
   assumptions: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe('What you assumed about the app and could not verify.'),
+    .describe(HANDOFF_FIELDS.assumptions),
   conflict: z
     .string()
+    .max(HANDOFF_TEXT_MAX)
     .optional()
-    .describe(
-      'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
-    ),
+    .describe(HANDOFF_FIELDS.conflict),
+  reportSection: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(HANDOFF_FIELDS.reportSection),
 };
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const HANDOFF_SHAPE_KEYS: readonly string[] = Object.keys(HANDOFF_SHAPE);
 
 type SdkTool = (
   name: string,
@@ -278,10 +449,12 @@ export function buildOrchestratorTools(
     {
       status: z.enum(['done', 'failed', 'not needed']),
       handoff: z.object(HANDOFF_SHAPE),
+      remark: z.string().optional().describe(REMARK_ASK),
     },
     ((args: {
       status: 'done' | 'failed' | 'not needed';
       handoff: TaskHandoff;
+      remark?: string;
     }) => {
       const res = applyComplete(ctx, args);
       if (!res.ok) return textResult(res.message, true);

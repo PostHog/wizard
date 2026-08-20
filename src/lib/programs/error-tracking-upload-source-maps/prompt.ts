@@ -11,6 +11,8 @@ export type SourceMapsUploadPromptParams = {
   host: string;
   settingsUrl: string;
   uiHost: string;
+  /** Hand-off report the agent writes in STEP 9; the outro points the user at it. */
+  reportFile: string;
 };
 
 export const SOURCE_MAPS_DETECTION_FAILED_PROMPT = `Detection did not pick a source maps skill variant for this project.
@@ -29,6 +31,7 @@ export function buildSourceMapsUploadPrompt(
     host,
     settingsUrl,
     uiHost,
+    reportFile,
   } = params;
   const platformLabel = displayName ?? variant;
   const inSubproject = projectPath != null && projectPath !== '.';
@@ -36,7 +39,11 @@ export function buildSourceMapsUploadPrompt(
     ? `- Project directory (relative to the wizard's working directory): ${projectPath}`
     : "- Project directory: the wizard's working directory (even when it sits inside a larger git repo, this directory is the project root)";
   const envFilePathGuidance = inSubproject
-    ? `Tool filePaths are relative to the wizard's working directory, not the selected project directory. Treat the skill's env path as relative to the selected project and prefix it with \`${projectPath}/\` when calling the tools: for example, pass \`${projectPath}/.env\`, not \`.env\` (which would target the wizard's working directory).`
+    ? `Tool filePaths are relative to the wizard's working directory, not the selected project directory. Treat the skill's env path as relative to the selected project and prefix it with \`${projectPath}/\` when calling the tools: for example, pass \`${projectPath}/.env\`, not \`.env\` (which would target the wizard's working directory).${
+        variant === 'rust'
+          ? ` Cargo workspace exception: when the skill places the env file at the workspace root instead, pass the path of the ROOT manifest's directory relative to the wizard's working directory (e.g. \`rust/.env\` for a workspace root at \`rust/\`, or plain \`.env\` when the workspace root IS the working directory) — not the member path.`
+          : ''
+      }`
     : `Tool filePaths are relative to the wizard's working directory. For an env file at this project root, pass \`.env\`; never prefix it with this directory's path inside an ancestor repository.`;
 
   const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
@@ -75,7 +82,18 @@ All file changes, build/run commands, and config edits target the project direct
     inSubproject
       ? ` — this is a monorepo, so scope your work to \`${projectPath}\` and do not touch other packages`
       : ''
-  }.
+  }.${
+    variant === 'rust' && inSubproject
+      ? `
+Cargo workspace exception: if the selected project is a member of a Cargo
+workspace (resolve the root with \`cargo locate-project --workspace
+--message-format plain\`), the workspace root's Cargo.toml (for \`[profile.*]\`
+edits), the workspace-level \`target/\` directory, and a \`.env\` next to the
+root manifest are IN SCOPE — treat them as part of the selected project, and
+follow the skill's workspace guidance for which paths to use. Every other
+package stays off-limits.`
+      : ''
+  }
 
 The skill you install in STEP 2 is the source of truth for the HOW of every
 step: its "## Steps" section has an overview, tips and per-technology
@@ -205,8 +223,16 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    surface any failure in STEP 9.
 
 STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
-   Follow the skill's "Verify and hand off" step. The Symbol sets page for
-   this project — where the user confirms the upload landed — is:
+   Follow the skill's "Verify and hand off" step. Write the hand-off to
+   \`${reportFile}\` at the WIZARD'S WORKING DIRECTORY — pass exactly
+   \`${reportFile}\` as the file path, never prefixed with the selected
+   project directory; this file is the one exception to the project-scope
+   rule above. Cover: the files you changed (paths only), the exact build
+   and upload commands, every CI secret the user still has to create, and
+   how to verify the upload — then give the same summary in chat. Never
+   write secret values into the report, only variable names. The success
+   screen points the user at this file, so do not skip it. The Symbol sets page for this project — where the user
+   confirms the upload landed — is:
    ${uiHost}/project/${projectId}/error_tracking/configuration
 `;
 }
