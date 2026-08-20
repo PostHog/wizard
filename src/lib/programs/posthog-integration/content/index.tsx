@@ -17,7 +17,12 @@ import { FUNNEL_BLOCK } from './funnel.js';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   {
-    content: 'Welcome.',
+    // Personalised from the profile we fetch at login — same pattern the
+    // MCP suggested-prompts greeting uses. Falls back to the bare
+    // greeting when the name is missing (CI keys, failed /users/@me).
+    content: store?.session.apiUser?.first_name
+      ? `Welcome, ${store.session.apiUser.first_name}.`
+      : 'Welcome.',
     pause: 3000,
     mode: TextRevealMode.Typewriter,
     animationInterval: 160,
