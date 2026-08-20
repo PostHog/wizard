@@ -14,6 +14,7 @@ import { OpenCodeMCPClient } from './clients/opencode';
 import { ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '@utils/debug';
 import { isPluginCapable, PluginCapable } from './plugin-client';
+import { isLoginCapable } from './login-client';
 import {
   McpClientStatus,
   namesWithStatus,
@@ -98,8 +99,13 @@ export const addMCPServerToClientsStep = async ({
   // hid both the no-op re-runs and the outright failures.
   if (installed.length > 0) {
     ui.log.success(`Added the MCP server to:\n${bulletList(installed)}`);
+  }
+  const logins = loginCommands(supportedClients, results, local);
+  if (logins.length > 0) {
     ui.log.info(
-      'Your editor handles authentication — approve the PostHog connection when it prompts (in Claude Code, run /mcp).',
+      `One step left — authenticate in your editor (nothing prompts you automatically):\n${bulletList(
+        logins,
+      )}`,
     );
   }
   if (already.length > 0) {
@@ -280,6 +286,23 @@ const mergeRemovals = (
       ? { alreadyInstalled: true }
       : {}),
   };
+};
+
+/**
+ * The exact editor-owned login command for every login-capable client that
+ * just got a fresh entry. The editor CLI runs its own OAuth and owns the token
+ * and its refresh; its login command requires a real terminal, so the wizard
+ * surfaces it instead of running it.
+ */
+export const loginCommands = (
+  clients: MCPClient[],
+  results: McpClientResult[],
+  local?: boolean,
+): string[] => {
+  const changed = new Set(namesWithStatus(results, McpClientStatus.Changed));
+  return clients
+    .filter((c) => changed.has(c.name) && isLoginCapable(c))
+    .map((c) => c.loginCommand(local));
 };
 
 export const removeMCPServer = async (

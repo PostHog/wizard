@@ -62,8 +62,33 @@ const markDone = (
   outcome: McpOutcome,
   clients: string[] = [],
   featuresSelected?: 'all' | string[],
+  loginCommands: string[] = [],
 ) => {
-  store.setMcpComplete(outcome, clients, featuresSelected);
+  store.setMcpComplete(outcome, clients, featuresSelected, loginCommands);
+};
+
+/**
+ * The editor-owned login commands still to run after this install: fresh
+ * config entries use the client's own server name, plugin-provided servers
+ * their `plugin:` name. One entry per client — a client that just got a direct
+ * entry doesn't also list its plugin command.
+ */
+const pendingLoginCommands = (
+  clients: McpClientInfo[],
+  mcpResult: McpClientResult[],
+  pluginResult: McpClientResult[],
+): Array<{ name: string; command: string }> => {
+  const commands = new Map<string, string>();
+  for (const r of pluginResult) {
+    const command = clients.find((c) => c.name === r.name)?.pluginLoginCommand;
+    if (isOk(r) && command) commands.set(r.name, command);
+  }
+  for (const r of mcpResult) {
+    const command = clients.find((c) => c.name === r.name)?.loginCommand;
+    if (r.status === McpClientStatus.Changed && command)
+      commands.set(r.name, command);
+  }
+  return [...commands.entries()].map(([name, command]) => ({ name, command }));
 };
 
 const reportFeatures = (features: string[]): 'all' | string[] =>
@@ -309,12 +334,14 @@ export const McpScreen = ({
     const ready = [...mcpResult, ...pluginResult].filter(isOk);
     const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
+    const logins = pendingLoginCommands(clients, mcpResult, pluginResult);
     finishFlow.current = () =>
       markDone(
         store,
         outcome,
         ready.map((r) => r.name),
         featuresReport,
+        logins.map((l) => l.command),
       );
     setPhase(Phase.Done);
   };
@@ -368,6 +395,14 @@ export const McpScreen = ({
     mcpResults,
     McpClientStatus.Unchanged,
   ).filter((name) => !isConnectorName(name));
+  // Fresh entries and plugin-provided servers need the editor's own login
+  // command — the one manual step left. Untouched direct entries keep
+  // whatever login they have.
+  const loginCommands = pendingLoginCommands(
+    clients,
+    mcpResults,
+    pluginResults,
+  );
   const pluginInstalled = namesWithStatus(
     pluginResults,
     McpClientStatus.Changed,
@@ -557,7 +592,7 @@ export const McpScreen = ({
                   items={pluginAlreadyInstalled}
                   color="green"
                   icon={'\u2714'}
-                  note="It was already set up, so nothing changed. You are good to go."
+                  note="It was already set up, so nothing changed. The plugin bundles the PostHog MCP server."
                 />
                 <ResultGroup
                   title={`MCP server ${
@@ -591,17 +626,20 @@ export const McpScreen = ({
                   icon={'\u2716'}
                   note="Run with --debug for the full output, or report it at github.com/PostHog/wizard/issues."
                 />
-                {!isRemove &&
-                  installedNow.length + alreadyInstalled.length > 0 && (
-                    <Box marginBottom={1}>
-                      <Text dimColor>
-                        Your editor handles authentication — approve the
-                        PostHog connection when it prompts (in Claude Code, run
-                        /mcp). Changing the enabled areas later means
-                        authenticating once more.
+                {!isRemove && loginCommands.length > 0 && (
+                  <Box flexDirection="column" marginBottom={1}>
+                    <Text dimColor>
+                      One step left — authenticate in your editor (nothing
+                      prompts you automatically):
+                    </Text>
+                    {loginCommands.map((c) => (
+                      <Text key={c.name} dimColor>
+                        {'  '}
+                        {c.name}: <Text bold>{c.command}</Text>
                       </Text>
-                    </Box>
-                  )}
+                    ))}
+                  </Box>
+                )}
                 {finishNotes.map((note) => (
                   <Box key={note.name} flexDirection="column" marginTop={1}>
                     <Text color="green" bold>

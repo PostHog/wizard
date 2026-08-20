@@ -54,6 +54,16 @@ describe('ClaudeCodeMCPClient — addServer', () => {
     await expect(client.isServerInstalled()).resolves.toBe(true);
   });
 
+  it('surfaces the editor-owned login commands without ever running them', () => {
+    const client = new ClaudeCodeMCPClient();
+    expect(client.loginCommand()).toBe('claude mcp login posthog');
+    expect(client.loginCommand(true)).toBe('claude mcp login posthog-local');
+    expect(client.pluginLoginCommand()).toBe(
+      'claude mcp login plugin:posthog:posthog',
+    );
+    expect(callsMatching('mcp login')).toHaveLength(0);
+  });
+
   it('adds the server without any credentials in the command', async () => {
     const client = new ClaudeCodeMCPClient();
     await expect(client.addServer(['workflows'])).resolves.toEqual({

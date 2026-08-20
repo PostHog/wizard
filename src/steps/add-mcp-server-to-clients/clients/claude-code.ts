@@ -7,6 +7,7 @@ import {
   PluginCapable,
   PluginInstallResult,
 } from '@steps/add-mcp-server-to-clients/plugin-client';
+import { LoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
 import {
   redactSecrets,
   type InstallResult,
@@ -25,7 +26,7 @@ export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
 export class ClaudeCodeMCPClient
   extends DefaultMCPClient
-  implements PluginCapable
+  implements PluginCapable, LoginCapable
 {
   name = 'Claude Code';
   private claudeBinaryPath: string | null = null;
@@ -160,6 +161,16 @@ export class ClaudeCodeMCPClient
       );
       return Promise.resolve({ success: false, reason: msg });
     }
+  }
+
+  /** Claude Code's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
+  loginCommand(local?: boolean): string {
+    return `claude mcp login ${local ? 'posthog-local' : 'posthog'}`;
+  }
+
+  /** The plugin bundles its own `posthog` server, addressed as `plugin:<plugin>:<server>`. */
+  pluginLoginCommand(): string {
+    return 'claude mcp login plugin:posthog:posthog';
   }
 
   /** URL the existing entry points at, or null when it can't be determined. */

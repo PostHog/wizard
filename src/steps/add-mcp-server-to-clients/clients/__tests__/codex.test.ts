@@ -79,6 +79,15 @@ describe('CodexMCPClient', () => {
     });
   });
 
+  describe('loginCommand', () => {
+    it('surfaces the editor-owned login command without ever running it', () => {
+      const client = new CodexMCPClient();
+      expect(client.loginCommand()).toBe('codex mcp login posthog');
+      expect(client.loginCommand(true)).toBe('codex mcp login posthog-local');
+      expect(spawnSyncMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('isServerInstalled', () => {
     it('returns true when config.toml has an exact [mcp_servers.posthog] section', async () => {
       readFileSyncMock.mockReturnValue(
