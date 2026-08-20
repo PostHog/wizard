@@ -1462,6 +1462,54 @@ describe('WizardStore', () => {
     });
   });
 
+  // ── Program attribution for shared steps ────────────────────────────
+
+  describe('analyticsProgramId', () => {
+    it('reports the running program for a step that claims no override', () => {
+      const store = createStore(Program.McpAdd);
+
+      expect(store.currentScreen).toBe(ScreenId.McpAdd);
+      expect(store.analyticsProgramId).toBe(Program.McpAdd);
+    });
+
+    it('reports mcp-tutorial for the tutorial step hosted inside mcp-add', () => {
+      const store = createStore(Program.McpAdd);
+      const session = store.session;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+      store.session = session;
+
+      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+    });
+
+    it('reports mcp-tutorial for the same step run standalone', () => {
+      const store = createStore(Program.McpTutorial);
+
+      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+    });
+
+    it('stamps the tutorial program id on the screen transition event', () => {
+      const store = createStore(Program.McpAdd);
+      // Prime the transition detector: the first emit has no previous
+      // screen, so it records the starting one without firing an event.
+      store.emitChange();
+
+      const session = store.session;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+      store.session = session;
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        `screen ${ScreenId.McpSuggestedPrompts}`,
+        expect.objectContaining({ program_id: Program.McpTutorial }),
+      );
+    });
+  });
+
   // ── intro gate ──────────────────────────────────────────────────
 
   describe('intro gate', () => {

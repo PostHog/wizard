@@ -125,6 +125,19 @@ describe('scopeInstallDirToProject', () => {
     expect(scan).not.toHaveBeenCalled();
   });
 
+  it('bills the scan to the program that asked for it', async () => {
+    // Runs before bootstrap, so nothing upstream supplies run tags.
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    scan.mockResolvedValue({ repoType: 'single', projects: [web] });
+
+    await scopeInstallDirToProject(buildSession({ installDir: '/repo' }));
+
+    expect(scan).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ programId: 'posthog-integration' }),
+    );
+  });
+
   it('re-points installDir at the recommended project and fires recommended with scan facts', async () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({ repoType: 'monorepo', projects: [web] });
