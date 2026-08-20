@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.64.1](https://github.com/PostHog/wizard/compare/v2.64.0...v2.64.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* request replay vision scopes during signup provisioning ([#1115](https://github.com/PostHog/wizard/issues/1115)) ([74276e8](https://github.com/PostHog/wizard/commit/74276e8916ca2334cce3708d918539fe7d2a54f6))
+
 ## [2.64.0](https://github.com/PostHog/wizard/compare/v2.63.0...v2.64.0) (2026-08-19)
 
 
