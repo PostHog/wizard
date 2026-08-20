@@ -86,6 +86,10 @@ describe('provisionNewAccount', () => {
       'query:read',
       'notebook:write',
       'event_definition:write',
+      'replay_scanner:read',
+      'replay_scanner:write',
+      'session_recording:read',
+      'product_enablement:write',
     ]);
 
     // Verify token exchange includes code_verifier
