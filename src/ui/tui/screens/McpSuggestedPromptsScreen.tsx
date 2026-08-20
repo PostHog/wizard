@@ -135,16 +135,8 @@ export const McpSuggestedPromptsScreen = ({
 
   const session = store.session;
 
-  // Every event below reports under the tutorial's program id, not the
-  // program that happens to be hosting the screen — `mcp add` runs this
-  // same tutorial as its last step, and splitting the funnel by entry
-  // point means neither half measures the tutorial. The mapping itself is
-  // declared on the step (`programs/mcp/index.ts`), not hardcoded here.
-  //
-  // Sampled once at mount rather than read per call: the screen is only
-  // mounted while it's the active one, and captures that land after
-  // dismissal (the streaming run's terminal chunk) would otherwise resolve
-  // against whatever screen the router moved on to.
+  // Events report under the tutorial, not whichever program hosts the screen.
+  // Sampled at mount so captures landing after dismissal still resolve here.
   const programId = useMemo(() => store.analyticsProgramId, [store]);
   const capture = useMemo(
     () =>

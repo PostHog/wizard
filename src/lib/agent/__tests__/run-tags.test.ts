@@ -22,9 +22,8 @@ describe('buildRunTags', () => {
   });
 
   it('marks every run as agent work rather than leaving call_type unset', () => {
-    // Scan triage overrides this to `yara-triage`. Both sides are stamped so a
-    // missing `call_type` means "an old build sent none", not "agent work" —
-    // the two would otherwise be indistinguishable in cost breakdowns.
+    // Triage and detection override this; stamping both sides means a missing
+    // value is an old build, not agent work.
     expect(
       buildRunTags({
         programId: 'posthog-integration',

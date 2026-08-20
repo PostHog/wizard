@@ -126,9 +126,7 @@ describe('scopeInstallDirToProject', () => {
   });
 
   it('bills the scan to the program that asked for it', async () => {
-    // The detector drives a real (if cheap) agent through the gateway. It runs
-    // before bootstrap, so nothing upstream supplies run tags — an unattributed
-    // scan is exactly how this spend went missing before.
+    // Runs before bootstrap, so nothing upstream supplies run tags.
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({ repoType: 'single', projects: [web] });
 

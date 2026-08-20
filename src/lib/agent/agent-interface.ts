@@ -346,9 +346,7 @@ export function buildRunTags(args: {
     integration: args.integration,
     run_id: args.runId,
     build: args.build,
-    // Every caller is agent work; the triage provider spreads these tags and
-    // overrides this one. Sent explicitly so a missing value never has to be
-    // read as "agent" — old builds send none at all.
+    // Triage and detection spread these tags and override this one.
     call_type: CallType.agent,
     ...(args.skillId ? { skill_id: args.skillId } : {}),
   };
@@ -530,12 +528,9 @@ export async function initializeAgent(
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
 
     // Same values the env vars above carry, handed over explicitly so triage
-    // never has to read them back out of the environment.
-    //
-    // The run tags ride along too: triage fires per tool call, so leaving them
-    // off put every scan's gateway spend in the unattributed bucket. Tagged
-    // here it folds into the program that triggered it, and `call_type` keeps
-    // it separable — security scanning is its own cost line, not agent work.
+    // never has to read them back out of the environment. The run tags ride
+    // along so scan spend bills to this program, with `call_type` keeping it
+    // separable from the agent's own calls.
     const triageProvider = createTriageLLMProvider(
       {
         baseURL: gatewayUrl,

@@ -59,24 +59,15 @@ export enum Sequence {
 
 /**
  * What kind of call produced a gateway generation — the `call_type` trace tag.
- *
- * Splits a program's LLM spend by workload, so security scanning is separable
- * from the work the user asked for. Both members are sent explicitly rather
- * than treating `agent` as the unset default: old wizard builds in the field
- * send no `call_type` at all, so an absent value can't be read as "agent"
- * without conflating the two.
- *
- * Lives here rather than beside the triage provider because `buildRunTags`
- * (agent-interface) sets the default and the triage provider overrides it —
- * agent-interface already imports the provider, so a shared home avoids a
- * module cycle.
+ * Splits a program's LLM spend by workload. Every member is sent explicitly so
+ * an absent value means "old build", not "agent".
  */
 export enum CallType {
   /** The agent doing the work the user asked for. */
   agent = 'agent',
   /** Warlock's classifier deciding whether a YARA match is a true positive. */
   yaraTriage = 'yara-triage',
-  /** The cheap repo scan that classifies which projects a program should act on. */
+  /** The cheap repo scan that classifies which projects a program acts on. */
   detection = 'detection',
 }
 

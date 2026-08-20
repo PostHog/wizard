@@ -91,9 +91,7 @@ describe('createTriageLLMProvider', () => {
   });
 
   it('attributes its spend to the program that triggered the scan', async () => {
-    // Triage fires per tool call. Before it carried run tags, every scan's
-    // gateway spend landed in the unattributed bucket; `call_type` keeps it
-    // separable from the agent work inside the same program.
+    // Triage fires per tool call; untagged it billed to no program at all.
     complete.mockResolvedValue(reply(''));
     const provider = createTriageLLMProvider(
       {

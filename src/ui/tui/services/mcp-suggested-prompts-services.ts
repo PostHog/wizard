@@ -138,12 +138,9 @@ export function createMcpSuggestedPromptsServices(
     runPromptStreaming: (args) =>
       runProductionPromptStreaming({
         ...args,
-        // Gateway cost attribution. `analyticsProgramId` resolves to
-        // `mcp-tutorial` from both entry points (standalone and the `mcp add`
-        // step), so the tutorial's spend reports as one program either way.
-        // Only the id crosses here — the rest of the trace tags are assembled
-        // next to the headers they become, keeping the agent module out of the
-        // TUI's startup graph.
+        // Gateway cost attribution. Only the id crosses here; the rest of the
+        // trace tags are built where the headers are, keeping the agent module
+        // out of the TUI's startup graph.
         programId: store.analyticsProgramId,
         integration: store.session.integration ?? undefined,
       }),

@@ -931,12 +931,9 @@ export class WizardStore {
   }
 
   /**
-   * The program id events fired from `screen` should be attributed to.
-   *
-   * Defaults to the running program; a step may claim a different one via
-   * `ProgramStep.reportsAsProgramId` when the same screen is hosted by more
-   * than one program. Overlays and screens with no owning step (the
-   * appended exit screen) fall back to the running program.
+   * The program `screen` reports under — its step's `reportsAsProgramId` if it
+   * claims one, else the running program (also the fallback for overlays and
+   * screens with no owning step).
    */
   private _programIdForScreen(screen: ScreenName): ProgramId {
     const program = this.router.activeProgram;
@@ -946,11 +943,8 @@ export class WizardStore {
     return step?.reportsAsProgramId ?? program;
   }
 
-  /**
-   * The program id the currently visible screen reports under. Screens
-   * capturing their own events should stamp this rather than assuming the
-   * run-level `program_id` tag — see `_programIdForScreen`.
-   */
+  /** The program the visible screen reports under; screens stamp this on their
+   *  own events rather than relying on the run-level `program_id` tag. */
   get analyticsProgramId(): ProgramId {
     return this._programIdForScreen(this.router.resolve(this.session));
   }

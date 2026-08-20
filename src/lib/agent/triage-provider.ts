@@ -24,12 +24,8 @@ export interface TriageGatewayAuth {
   baseURL: string;
   /** The run's OAuth access token. */
   authToken: string;
-  /**
-   * The run's gateway trace tags. Pass the run's own `wizardMetadata` with
-   * `call_type` overridden to `CallType.yaraTriage` — that keeps scan spend
-   * attributed to the program that triggered it while staying separable from
-   * the agent work inside it.
-   */
+  /** The run's trace tags, with `call_type` overridden to
+   *  `CallType.yaraTriage` so scan spend is separable from agent work. */
   wizardMetadata?: Record<string, string>;
   wizardFlags?: Record<string, string>;
 }

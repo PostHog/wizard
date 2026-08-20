@@ -174,16 +174,9 @@ function buildTerminalFitPrompt(): string {
 }
 
 /**
- * Gateway trace tags for a tutorial prompt run.
- *
- * The gateway attributes each `$ai_generation` it emits from the
- * `X-POSTHOG-PROPERTY-*` headers on the request, so a run with no tags lands
- * in the unattributed bucket — which is where every tutorial generation went
- * before this existed. Exported so that contract is testable without booting
- * the SDK.
- *
- * Returns `{}` when the caller supplies no program, keeping the tagless
- * behavior explicit rather than silently emitting a half-populated bag.
+ * Gateway trace tags for a tutorial prompt run — without them the gateway has
+ * nothing to attribute its `$ai_generation` events to. Returns `{}` when no
+ * program is supplied. Exported so the contract is testable without the SDK.
  */
 export function buildTutorialRunTags(args: {
   programId?: string;
@@ -192,9 +185,8 @@ export function buildTutorialRunTags(args: {
   if (!args.programId) return {};
   return buildRunTags({
     programId: args.programId,
-    // The tutorial runs against a project, not a codebase, so there's usually
-    // no detected framework — fall back to the program so the axis is never
-    // an empty string in the gateway's breakdowns.
+    // The tutorial usually has no detected framework; fall back to the
+    // program so the axis is never an empty string.
     integration: args.integration ?? args.programId,
     runId: analytics.runId,
     build: analytics.build,
@@ -209,10 +201,8 @@ export async function* runMcpPromptViaSdk(args: {
    *  context so the follow-up prompt can reference what the agent
    *  already showed. */
   resumeSessionId?: string;
-  /** Program this run's gateway spend attributes to. Resolved by the caller
-   *  (`store.analyticsProgramId`) so both tutorial entry points report as
-   *  one program. Omitting it makes the spend unattributable — see the
-   *  `ANTHROPIC_CUSTOM_HEADERS` note below. */
+  /** Program this run's gateway spend attributes to; omitting it leaves the
+   *  spend unattributed. */
   programId?: string;
   /** Integration label for the trace tags; the tutorial usually has none. */
   integration?: string;
@@ -378,13 +368,9 @@ export async function* runMcpPromptViaSdk(args: {
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // Same Bedrock-fallback + telemetry-friendly headers as the main
-          // runner, plus this run's trace tags. The gateway reads
-          // `X-POSTHOG-PROPERTY-*` off the request to attribute each
-          // `$ai_generation` it emits, so sending none put every tutorial
-          // generation in the unattributed bucket — `posthog.capture` events
-          // carry a program id but nothing joins them to gateway spend.
-          // Flags stay empty: the tutorial doesn't fork on any.
+          // Bedrock fallback plus this run's trace tags — the gateway reads
+          // these to attribute its `$ai_generation` events. Flags stay empty:
+          // the tutorial doesn't fork on any.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(wizardMetadata ?? {}, {}),
         },
       },

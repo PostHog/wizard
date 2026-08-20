@@ -110,14 +110,9 @@ export type AgenticDetectOptions = {
    * through ordering (e.g. a bundler target before a generic framework target).
    */
   targets: readonly DetectTarget[];
-  /**
-   * The program this scan runs on behalf of, for gateway cost attribution.
-   *
-   * Required, not optional: this scan drives a real (if cheap) agent through
-   * the LLM gateway, and a caller that forgets to say who it's for sends spend
-   * to the unattributed bucket with no way to trace it back. `call_type`
-   * separates it from the program's own agent work.
-   */
+  /** The program this scan bills to. Required, not optional: the scan drives a
+   *  real agent through the gateway, and a caller that forgets leaves that
+   *  spend unattributed. */
   programId: string;
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
@@ -349,10 +344,8 @@ export async function detectProjectsWithAgent(
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
-  // Gateway trace tags. This scan runs before `bootstrapProgram` exists, so
-  // they're built here from the caller's program plus the run's analytics
-  // identity rather than inherited from `boot.wizardMetadata`. Without them
-  // the scan — and the YARA triage it wires up — bill to no program at all.
+  // Built here rather than inherited: this scan runs before
+  // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
   const wizardMetadata = {
     ...buildRunTags({
       programId,

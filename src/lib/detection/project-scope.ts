@@ -90,9 +90,8 @@ export async function scopeInstallDirToProject(
   try {
     report = await Promise.race([
       detectIntegrationProjects(session, {
-        // Same literal the `authenticate` call above uses — importing the
-        // program registry here would cycle back through the programs that
-        // import this module.
+        // Literal, like the `authenticate` call above: importing the program
+        // registry here would cycle.
         programId: 'posthog-integration',
         recommend: true,
         onEvent: (line) => logToFile('[agentic detect]', line),
