@@ -200,10 +200,6 @@ export const WIZARD_PROVISIONING_SCOPES = [
   'query:read',
   'notebook:write',
   'event_definition:write',
-  'replay_scanner:read',
-  'replay_scanner:write',
-  'session_recording:read',
-  'product_enablement:write',
 ] as const;
 
 /**
