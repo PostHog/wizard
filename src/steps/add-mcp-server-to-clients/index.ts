@@ -18,6 +18,7 @@ import {
   McpClientStatus,
   namesWithStatus,
   toClientResult,
+  type InstallResult,
   type McpClientResult,
 } from './results';
 
@@ -198,7 +199,12 @@ export const getInstalledClients = async (
   const installedClients: MCPClient[] = [];
 
   for (const client of clients) {
-    if (await client.isServerInstalled(local)) {
+    // The plugin bundles its own posthog MCP server, so for removal purposes a
+    // plugin install counts as installed even with no config entry (`--local`
+    // targets only the local-dev entry and leaves the plugin alone).
+    const pluginInstalled =
+      !local && isPluginCapable(client) && (await client.isPluginInstalled());
+    if ((await client.isServerInstalled(local)) || pluginInstalled) {
       installedClients.push(client);
     }
   }
@@ -255,6 +261,27 @@ export const installPlugins = async (
   return results;
 };
 
+// One report per client: a failure on either half wins, a change on either
+// half counts as removed, and "nothing to do" only when both halves had
+// nothing to do.
+const mergeRemovals = (
+  entry: InstallResult,
+  plugin: InstallResult,
+): InstallResult => {
+  if (!entry.success || !plugin.success) {
+    return {
+      success: false,
+      reason: [entry.reason, plugin.reason].filter(Boolean).join('; '),
+    };
+  }
+  return {
+    success: true,
+    ...(entry.alreadyInstalled && plugin.alreadyInstalled
+      ? { alreadyInstalled: true }
+      : {}),
+  };
+};
+
 export const removeMCPServer = async (
   clients: MCPClient[],
   local?: boolean,
@@ -262,9 +289,13 @@ export const removeMCPServer = async (
   const results: McpClientResult[] = [];
   for (const client of clients) {
     try {
-      results.push(
-        toClientResult(client.name, await client.removeServer(local)),
-      );
+      let result = await client.removeServer(local);
+      // The plugin bundles its own posthog server — leaving it installed makes
+      // the removal a lie (`--local` never touches the plugin).
+      if (!local && isPluginCapable(client) && client.removePlugin) {
+        result = mergeRemovals(result, await client.removePlugin());
+      }
+      results.push(toClientResult(client.name, result));
     } catch (err) {
       debug(`[removeMCPServer] removeServer threw for ${client.name}: ${err}`);
       results.push(

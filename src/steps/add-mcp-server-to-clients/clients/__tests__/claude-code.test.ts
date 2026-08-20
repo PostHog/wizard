@@ -334,3 +334,41 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
     });
   });
 });
+
+describe('ClaudeCodeMCPClient — removePlugin', () => {
+  const execSyncMock = execSync as Mock;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('uninstalls the plugin when it is installed', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (String(cmd).includes('plugin list'))
+        return Buffer.from('posthog@claude-plugins-official 1.1.58\n');
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.removePlugin()).resolves.toEqual({ success: true });
+    const uninstalls = execSyncMock.mock.calls.filter((c) =>
+      String(c[0]).includes('plugin uninstall posthog'),
+    );
+    expect(uninstalls).toHaveLength(1);
+  });
+
+  it('reports nothing-to-do when the plugin is absent', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (String(cmd).includes('plugin list')) return Buffer.from('other\n');
+      return Buffer.from('');
+    });
+    const client = new ClaudeCodeMCPClient();
+    await expect(client.removePlugin()).resolves.toEqual({
+      success: true,
+      alreadyInstalled: true,
+    });
+    const uninstalls = execSyncMock.mock.calls.filter((c) =>
+      String(c[0]).includes('plugin uninstall'),
+    );
+    expect(uninstalls).toHaveLength(0);
+  });
+});

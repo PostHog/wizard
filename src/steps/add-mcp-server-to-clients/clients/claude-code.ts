@@ -311,4 +311,28 @@ export class ClaudeCodeMCPClient
       return { success: false, reason: msg };
     }
   }
+
+  async removePlugin(): Promise<PluginInstallResult> {
+    const binary = this.findClaudeBinary();
+    if (!binary)
+      return {
+        success: false,
+        reason: 'The claude CLI is no longer on your PATH.',
+      };
+
+    if (!(await this.isPluginInstalled())) {
+      return { success: true, alreadyInstalled: true };
+    }
+
+    try {
+      execSync(`${binary} plugin uninstall posthog`, { stdio: 'pipe' });
+      return { success: true };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      analytics.captureException(
+        new Error(`Claude Code plugin uninstall failed: ${msg}`),
+      );
+      return { success: false, reason: msg };
+    }
+  }
 }
