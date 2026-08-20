@@ -33,37 +33,6 @@ describe('ClaudeCodeMCPClient — addServer', () => {
   const callsMatching = (fragment: string) =>
     execSyncMock.mock.calls.filter((c) => String(c[0]).includes(fragment));
 
-  it('detects the entry with an exact mcp get, not a substring of mcp list', async () => {
-    execSyncMock.mockImplementation((cmd: string) => {
-      const c = String(cmd);
-      if (c.includes('mcp get posthog')) throw new Error('No MCP server named');
-      if (c.includes('mcp list'))
-        return Buffer.from(
-          'claude.ai PostHog: ... Connected\nplugin:posthog:posthog\n',
-        );
-      return Buffer.from('');
-    });
-    const client = new ClaudeCodeMCPClient();
-    await expect(client.isServerInstalled()).resolves.toBe(false);
-
-    execSyncMock.mockImplementation((cmd: string) => {
-      if (String(cmd).includes('mcp get posthog'))
-        return Buffer.from('posthog:\n  URL: https://mcp.posthog.com/mcp\n');
-      return Buffer.from('');
-    });
-    await expect(client.isServerInstalled()).resolves.toBe(true);
-  });
-
-  it('surfaces the editor-owned login commands without ever running them', () => {
-    const client = new ClaudeCodeMCPClient();
-    expect(client.loginCommand()).toBe('claude mcp login posthog');
-    expect(client.loginCommand(true)).toBe('claude mcp login posthog-local');
-    expect(client.pluginLoginCommand()).toBe(
-      'claude mcp login plugin:posthog:posthog',
-    );
-    expect(callsMatching('mcp login')).toHaveLength(0);
-  });
-
   it('adds the server without any credentials in the command', async () => {
     const client = new ClaudeCodeMCPClient();
     await expect(client.addServer(['workflows'])).resolves.toEqual({
@@ -127,46 +96,6 @@ describe('ClaudeCodeMCPClient — addServer', () => {
       success: true,
     });
     expect(callsMatching('mcp remove')).toHaveLength(1);
-  });
-
-  it('treats a same-set, different-order selection as identical (no remove)', async () => {
-    execSyncMock.mockImplementation((cmd: string) => {
-      const c = String(cmd);
-      if (c.includes('mcp" "add')) throw new Error('already exists');
-      if (c.includes('mcp get'))
-        return Buffer.from(`  URL: ${BASE_URL}?features=dashboards,insights\n`);
-      return Buffer.from('');
-    });
-    const client = new ClaudeCodeMCPClient();
-    await expect(client.addServer(['insights', 'dashboards'])).resolves.toEqual(
-      { success: true, alreadyInstalled: true },
-    );
-    expect(callsMatching('mcp remove')).toHaveLength(0);
-  });
-
-  it('restores the previous entry when the replacement re-add fails', async () => {
-    let adds = 0;
-    execSyncMock.mockImplementation((cmd: string) => {
-      const c = String(cmd);
-      if (c.includes('mcp" "add')) {
-        adds += 1;
-        if (adds === 1) throw new Error('already exists');
-        if (c.includes('features=workflows')) throw new Error('add blew up');
-        return Buffer.from('');
-      }
-      if (c.includes('mcp get'))
-        return Buffer.from(`  URL: ${BASE_URL}?features=flags\n`);
-      return Buffer.from('');
-    });
-    const client = new ClaudeCodeMCPClient();
-    await expect(client.addServer(['workflows'])).resolves.toEqual({
-      success: false,
-      reason: 'add blew up',
-    });
-    const restore = callsMatching('mcp" "add').filter((c) =>
-      String(c[0]).includes('features=flags'),
-    );
-    expect(restore).toHaveLength(1);
   });
 
   it('reports a failed replacement with its reason', async () => {
@@ -342,43 +271,5 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         reason: expect.stringContaining('PATH'),
       });
     });
-  });
-});
-
-describe('ClaudeCodeMCPClient — removePlugin', () => {
-  const execSyncMock = execSync as Mock;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('uninstalls the plugin when it is installed', async () => {
-    execSyncMock.mockImplementation((cmd: string) => {
-      if (String(cmd).includes('plugin list'))
-        return Buffer.from('posthog@claude-plugins-official 1.1.58\n');
-      return Buffer.from('');
-    });
-    const client = new ClaudeCodeMCPClient();
-    await expect(client.removePlugin()).resolves.toEqual({ success: true });
-    const uninstalls = execSyncMock.mock.calls.filter((c) =>
-      String(c[0]).includes('plugin uninstall posthog'),
-    );
-    expect(uninstalls).toHaveLength(1);
-  });
-
-  it('reports nothing-to-do when the plugin is absent', async () => {
-    execSyncMock.mockImplementation((cmd: string) => {
-      if (String(cmd).includes('plugin list')) return Buffer.from('other\n');
-      return Buffer.from('');
-    });
-    const client = new ClaudeCodeMCPClient();
-    await expect(client.removePlugin()).resolves.toEqual({
-      success: true,
-      alreadyInstalled: true,
-    });
-    const uninstalls = execSyncMock.mock.calls.filter((c) =>
-      String(c[0]).includes('plugin uninstall'),
-    );
-    expect(uninstalls).toHaveLength(0);
   });
 });

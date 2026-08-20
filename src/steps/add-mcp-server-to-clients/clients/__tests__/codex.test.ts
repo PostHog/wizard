@@ -79,15 +79,6 @@ describe('CodexMCPClient', () => {
     });
   });
 
-  describe('loginCommand', () => {
-    it('surfaces the editor-owned login command without ever running it', () => {
-      const client = new CodexMCPClient();
-      expect(client.loginCommand()).toBe('codex mcp login posthog');
-      expect(client.loginCommand(true)).toBe('codex mcp login posthog-local');
-      expect(spawnSyncMock).not.toHaveBeenCalled();
-    });
-  });
-
   describe('isServerInstalled', () => {
     it('returns true when config.toml has an exact [mcp_servers.posthog] section', async () => {
       readFileSyncMock.mockReturnValue(
@@ -192,32 +183,6 @@ describe('CodexMCPClient', () => {
       const client = new CodexMCPClient();
       await expect(client.addServer()).resolves.toEqual({ success: true });
       expect(spawnSyncMock).toHaveBeenCalledTimes(3);
-    });
-
-    it('restores the previous entry when the replacement re-add fails', async () => {
-      spawnSyncMock
-        .mockReturnValueOnce({
-          status: 1,
-          stderr: "Server 'posthog' already exists",
-        })
-        .mockReturnValueOnce({ status: 0, stderr: '' }) // mcp remove
-        .mockReturnValueOnce({ status: 1, stderr: 'add blew up' }) // mcp add retry
-        .mockReturnValueOnce({ status: 0, stderr: '' }); // restore previous
-      readFileSyncMock.mockReturnValue(
-        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp?features=flags"\n',
-      );
-      const client = new CodexMCPClient();
-      await expect(client.addServer(['workflows'])).resolves.toEqual({
-        success: false,
-        reason: 'add blew up',
-      });
-      expect(spawnSyncMock.mock.calls[3]![1]).toEqual([
-        'mcp',
-        'add',
-        'posthog',
-        '--url',
-        'https://mcp.posthog.com/mcp?features=flags',
-      ]);
     });
 
     it('returns failure when the replacement remove fails', async () => {

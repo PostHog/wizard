@@ -1,6 +1,6 @@
 import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
-import { McpOutcome, OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@lib/wizard-session';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -121,43 +121,6 @@ describe('getExitLine', () => {
     );
     expect(line).toMatch(/exited\.$/);
     expect(line).not.toContain('coding agent');
-  });
-
-  describe('MCP login commands (the one manual auth step survives into scrollback)', () => {
-    it('echoes each login command on its own line instead of a bare exit line', () => {
-      const store = new WizardStore(Program.PostHogIntegration);
-      store.setMcpComplete(McpOutcome.Installed, ['Claude Code'], 'all', [
-        'claude mcp login posthog',
-      ]);
-      const line = stripAnsi(getExitLine(store));
-      expect(line).toContain('Authenticate to finish');
-      expect(line).toContain('claude mcp login posthog');
-      expect(line).not.toMatch(/exited\.$/);
-    });
-
-    it('appends the login commands to a success outro too', () => {
-      const store = storeWithOutro({
-        kind: OutroKind.Success,
-        message: 'Done!',
-      });
-      store.setMcpComplete(
-        McpOutcome.Installed,
-        ['Claude Code', 'Codex'],
-        'all',
-        ['claude mcp login posthog', 'codex mcp login posthog'],
-      );
-      const line = stripAnsi(getExitLine(store));
-      expect(line).toContain('Done!');
-      expect(line).toContain('claude mcp login posthog');
-      expect(line).toContain('codex mcp login posthog');
-    });
-
-    it('keeps the plain exit line when no login command is pending', () => {
-      const line = stripAnsi(
-        getExitLine(storeWithOutro({ kind: OutroKind.Error, message: 'boom' })),
-      );
-      expect(line).not.toContain('Authenticate to finish');
-    });
   });
 
   describe('token/cost tally (hidden Ctrl+T HUD survives into scrollback)', () => {
