@@ -32,7 +32,10 @@
 // program IDs by their string-literal value below — TypeScript still
 // catches renames via the `Partial<Record<ProgramId, ...>>` keying.
 import type { ProgramId } from '@lib/programs/program-registry';
-import { WIZARD_OAUTH_SCOPES } from '@lib/constants';
+import {
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@lib/constants';
 
 /**
  * Extra scopes the MCP tutorial needs on top of `WIZARD_OAUTH_SCOPES`.
@@ -302,6 +305,29 @@ export function getOAuthScopesForProgram(
   const seen = new Set<string>();
   const merged: string[] = [];
   for (const s of [...WIZARD_OAUTH_SCOPES, ...additions]) {
+    if (seen.has(s)) continue;
+    seen.add(s);
+    merged.push(s);
+  }
+  return merged;
+}
+
+/**
+ * Resolve the scope list for the signup provisioning path. Same
+ * base-plus-additions shape as `getOAuthScopesForProgram`, but layered on
+ * `WIZARD_PROVISIONING_SCOPES` so a program's extra scopes only reach
+ * tokens provisioned for that program.
+ */
+export function getProvisioningScopesForProgram(
+  programId: ProgramId | null | undefined,
+): readonly string[] {
+  const additions = (programId && PROGRAM_SCOPE_ADDITIONS[programId]) || [];
+  if (additions.length === 0) {
+    return WIZARD_PROVISIONING_SCOPES;
+  }
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const s of [...WIZARD_PROVISIONING_SCOPES, ...additions]) {
     if (seen.has(s)) continue;
     seen.add(s);
     merged.push(s);
