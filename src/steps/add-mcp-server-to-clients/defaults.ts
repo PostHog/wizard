@@ -254,7 +254,8 @@ export const buildMCPUrl = (selectedFeatures?: string[], local?: boolean) => {
     selectedFeatures.length > 0 &&
     !isAllFeaturesSelected(selectedFeatures)
   ) {
-    params.push(`features=${selectedFeatures.join(',')}`);
+    // Sorted so the same selection always yields the same URL, whatever the input order.
+    params.push(`features=${[...selectedFeatures].sort().join(',')}`);
   }
 
   return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl;

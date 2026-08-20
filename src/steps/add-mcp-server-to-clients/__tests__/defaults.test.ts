@@ -22,6 +22,12 @@ describe('defaults', () => {
         'https://mcp.posthog.com/mcp?features=dashboards,insights',
       );
     });
+
+    it('builds the same URL for the same features in any order', () => {
+      expect(buildMCPUrl(['insights', 'dashboards'])).toBe(
+        buildMCPUrl(['dashboards', 'insights']),
+      );
+    });
   });
 
   describe('getDefaultServerConfig', () => {
