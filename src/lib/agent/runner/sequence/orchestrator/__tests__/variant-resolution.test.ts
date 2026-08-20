@@ -53,7 +53,7 @@ const INTEGRATION_ENTRIES = [
   { id: 'integration-java', framework: 'java' },
   { id: 'integration-swift', framework: 'swift' },
   { id: 'integration-kmp', framework: 'kmp' },
-  { id: 'integration-flutter' },
+  { id: 'integration-flutter', framework: 'flutter' },
   { id: 'integration-react-native', framework: 'react-native', default: true },
   { id: 'integration-expo', framework: 'react-native' },
   { id: 'integration-astro-static', framework: 'astro' },

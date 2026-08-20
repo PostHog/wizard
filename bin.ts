@@ -12,7 +12,19 @@ const NODE_VERSION_RANGE = '>=22.22.0';
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   // eslint-disable-next-line no-console
   console.log(
-    `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
+    [
+      `The PostHog wizard needs a newer version of Node.js to run.`,
+      ``,
+      `  You have:  ${process.version}`,
+      `  You need:  v${NODE_VERSION_RANGE.replace('>=', '')} or later`,
+      ``,
+      `To update Node.js:`,
+      ``,
+      `  Download the latest version from https://nodejs.org/en/download`,
+      `  Or, if you use nvm, run: nvm install 22 && nvm use 22`,
+      ``,
+      `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
+    ].join('\n'),
   );
   process.exit(1);
 }
@@ -37,6 +49,7 @@ import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
 import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
+import { replayVisionCommand } from './src/commands/replay-vision';
 import { aiObservabilityCommand } from './src/commands/ai-observability';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
@@ -68,6 +81,7 @@ function resolveInstallDir(): string {
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
   .use(mcpAnalyticsCommand)
+  .use(replayVisionCommand)
   .use(aiObservabilityCommand)
   .use(cliCommand)
   .use(auditCommand)

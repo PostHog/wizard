@@ -20,8 +20,16 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import {
+  OutroKind,
+  type TaskNotice,
+  type WizardSession,
+} from '@lib/wizard-session';
+import {
+  POSTHOG_DOCS_URL,
+  WIZARD_CONTACT_EMAIL,
+  type Integration,
+} from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
@@ -34,12 +42,15 @@ import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { BootstrapResult } from '../../shared/types';
+import type { BootstrapResult, ProgramRun } from '../../shared/types';
 import {
+  areSeededTasksEnabled,
   getHarness,
   resolveHarness,
+  resolveStageOverrides,
   type HarnessPick,
 } from '../../switchboard';
+import { isValidModel, requireKnownModel } from '../../switchboard/models';
 import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
@@ -49,6 +60,10 @@ import {
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
+import { dependencyClosure, uncoveredBySink } from './queue-tools';
+import { deferSeededTasks } from './seeded-deps';
+import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
+import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -57,6 +72,8 @@ import {
   promptModelFor,
   resolveTask,
   taskModelSpec,
+  ASK_TOOL,
+  type AgentPrompt,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
 
@@ -171,8 +188,125 @@ function resolveReferenceSkillId(
   return resolveSkillVariantId(entries, 'integration', framework);
 }
 
+/**
+ * A task that asks the user waits on a person, not on a model: long enough to
+ * open a database console or mint a restricted API key. The drain waits it out
+ * — the executor holds the task's promise — so the only real limit is this one.
+ */
+const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+
+/**
+ * How long an optional step's notice waits for an answer.
+ *
+ * Much shorter than the ask timeout above, because it is asking for something
+ * much smaller: one keypress to accept or decline, not "go mint a restricted
+ * Stripe key". The notice is also the only interactive screen sitting in front
+ * of the run's final steps, so an unanswered one holds the report — and with it
+ * the notebook and the outro — behind a modal nobody is looking at.
+ */
+export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Offer an optional step, defaulting to declining it if nobody answers.
+ *
+ * Skip is the right default on a timeout: continuing would send the step on to
+ * ask for credentials that the same absent user cannot supply either, burning
+ * {@link TASK_ASK_TIMEOUT_MS} per question before falling back to the same
+ * links declining gives immediately.
+ */
+export async function offerSeededTask(
+  notice: TaskNotice,
+  timeoutMs: number = TASK_NOTICE_TIMEOUT_MS,
+): Promise<{ keep: boolean; timedOut: boolean }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      // Dismisses the overlay and settles the showTaskNotice promise too, so
+      // the losing side of the race cannot leave a modal on screen.
+      getUI().cancelTaskNotice();
+      resolve(false);
+    }, timeoutMs);
+  });
+  try {
+    const keep = await Promise.race([getUI().showTaskNotice(notice), timeout]);
+    return { keep, timedOut };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Whether a task's prompt lets it ask the user, and so needs the ask bridge. */
+function canAsk(prompt: AgentPrompt | undefined): boolean {
+  return (prompt?.allowedTools ?? []).includes(ASK_TOOL);
+}
+
+/** Splits terminal failures into run-failing (required) and reported-only (optional). */
+export function drainVerdict(tasks: readonly QueuedTask[]): {
+  requiredFailedTypes: string[];
+  optionalFailedTypes: string[];
+  blocked: number;
+} {
+  const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
+  return {
+    requiredFailedTypes: failed
+      .filter((t) => t.optional !== true)
+      .map((t) => t.type),
+    optionalFailedTypes: failed
+      .filter((t) => t.optional === true)
+      .map((t) => t.type),
+    blocked: tasks.filter((t) => t.status === TaskStatus.Pending).length,
+  };
+}
+
+/** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
+function graphDepth(
+  task: QueuedTask,
+  byId: ReadonlyMap<string, QueuedTask>,
+  memo: Map<string, number>,
+): number {
+  const cached = memo.get(task.id);
+  if (cached !== undefined) return cached;
+  memo.set(task.id, 0); // breaks a cycle rather than recursing forever
+  const depth = task.dependsOn.reduce((deepest, id) => {
+    const dep = byId.get(id);
+    return dep ? Math.max(deepest, graphDepth(dep, byId, memo) + 1) : deepest;
+  }, 0);
+  memo.set(task.id, depth);
+  return depth;
+}
+
+/**
+ * The queue in the order the user should read it, which is not the order tasks
+ * were queued. Tasks the wizard seeded before the planner ran are queued first
+ * but are optional side quests, so they sit at the end of the tier they run in
+ * — the list reads as the run unfolds, and the first line is work that actually
+ * started. Ordering only; nothing here changes what runs when.
+ */
+export function displayOrder(
+  tasks: readonly QueuedTask[],
+  isOptional: (task: QueuedTask) => boolean,
+): QueuedTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const memo = new Map<string, number>();
+  const rank = tasks.map((task, index) => ({
+    task,
+    depth: graphDepth(task, byId, memo),
+    optional: isOptional(task) ? 1 : 0,
+    index,
+  }));
+  return rank
+    .sort(
+      (a, b) =>
+        a.depth - b.depth || a.optional - b.optional || a.index - b.index,
+    )
+    .map((entry) => entry.task);
+}
+
 export async function runOrchestrator(
   session: WizardSession,
+  config: ProgramRun,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
 ): Promise<void> {
@@ -194,6 +328,12 @@ export async function runOrchestrator(
   const flow = programConfig.agentFlow ?? programConfig.id;
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
     exclude: ciExcludedTaskTypes(),
+    // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
+    overrides: resolveStageOverrides(
+      programConfig.id,
+      boot.wizardFlags,
+      boot.wizardFlagPayloads,
+    ),
   });
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
@@ -201,6 +341,22 @@ export async function runOrchestrator(
       `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
     );
   }
+
+  // The end decision the switchboard event defers to: the model each task will actually run on.
+  const taskModels = Object.fromEntries(
+    ['seed', ...registry.types].map((type) => {
+      const prompt = type === 'seed' ? seedPrompt : registry.get(type);
+      const pick = resolveHarness(switchboardCtx, type);
+      const specModel = prompt && promptModelFor(prompt, pick.harness).model;
+      return [type, isValidModel(specModel) ? specModel : pick.model];
+    }),
+  );
+  logToFile(
+    `[orchestrator] task models: ${Object.entries(taskModels)
+      .map(([t, m]) => `${t}=${m}`)
+      .join(' ')}`,
+  );
+  analytics.wizardCapture('orchestrator task models', taskModels);
 
   // Responsiveness is the headline metric of the dark launch: time to first
   // visible progress, and no single step dominating wall-clock. Track it from
@@ -216,10 +372,14 @@ export async function runOrchestrator(
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
+      // Mirror dispatch's allow-list fallback so attribution names the model that runs.
+      const specModel = taskModelSpec(registry, task, pick.harness).model;
       const base = {
         type: task.type,
-        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
+        model: isValidModel(specModel) ? specModel : pick.model,
         attempts: task.attempts,
+        // A failed optional task aborts nothing (see drainVerdict).
+        optional: task.optional === true,
       };
       switch (event) {
         case 'enqueue':
@@ -271,15 +431,25 @@ export async function runOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  const referenceSkillId = session.skillId
-    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
+  // The framework key for reference + variant resolution. `session.integration`
+  // is the detected framework and always wins; `session.skillId` is the
+  // fallback for the basic-integration path, where bootstrap sets it to the
+  // framework label. Programs whose run config carries their own skill id
+  // (agent-skill commands like replay-vision) would otherwise leak that id in
+  // here as a bogus framework after bootstrap overwrites the detect result.
+  const framework = session.integration ?? session.skillId ?? undefined;
+  const referenceSkillId = framework
+    ? resolveReferenceSkillId(menuSkillEntries, framework)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
       session.installDir,
       boot.skillsBaseUrl,
-      path.join(QUEUE_DIR_NAME, 'reference'),
+      {
+        skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
+        triage: boot.triageProvider,
+      },
     );
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
@@ -296,9 +466,9 @@ export async function runOrchestrator(
         `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
       );
     }
-  } else if (session.skillId) {
+  } else if (framework) {
     logToFile(
-      `[orchestrator] no integration skill for framework "${session.skillId}"`,
+      `[orchestrator] no integration skill for framework "${framework}"`,
     );
   }
 
@@ -306,26 +476,26 @@ export async function runOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
         continue;
       }
       missingVariants.push(`${type}/${skillId}`);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
-          session.skillId ?? 'none'
+          framework ?? 'none'
         }`,
       );
       analytics.wizardCapture('orchestrator skill variant missing', {
         task_type: type,
         skill: skillId,
-        framework: session.skillId,
+        framework,
       });
     }
   }
   if (missingVariants.length > 0) {
     // The framework's own docs page from its config; generic docs when detection found none.
-    const docsUrl = session.skillId
-      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+    const docsUrl = framework
+      ? FRAMEWORK_REGISTRY[framework as Integration]?.docsUrl
       : undefined;
     await wizardAbort({
       message:
@@ -337,7 +507,7 @@ export async function runOrchestrator(
         `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
       error: new WizardError('Orchestrator preflight: skill variant missing', {
         missing: missingVariants.join(', '),
-        framework: session.skillId,
+        framework,
       }),
     });
   }
@@ -366,7 +536,9 @@ export async function runOrchestrator(
     t.label ?? registry.get(t.type)?.label ?? t.type;
   const renderQueue = () =>
     getUI().syncTodos(
-      store.list().map((t) => ({
+      displayOrder(store.list(), (t) =>
+        registry.runnerSeededTypes.includes(t.type),
+      ).map((t) => ({
         content: labelFor(t),
         status: toTodoStatus(t.status),
         activeForm: labelFor(t),
@@ -379,9 +551,93 @@ export async function runOrchestrator(
   // context has no task id.
   const orchestratorCtx = (currentTaskId?: string) => ({
     store,
-    validTypes: registry.types,
+    // The planner is offered only the types an agent may queue. A runner-seeded
+    // type is not among them, so an attempt to queue one trips the unknown-type
+    // guard instead of duplicating work the wizard already placed.
+    validTypes: registry.enqueueableTypes,
+    sinkTypes: registry.sinkTypes,
+    // The edge to a runner-seeded task is one-way: the sink may wait for it,
+    // nothing else may. Enforced at enqueue, because prose alone cannot hold it
+    // — a single planner edge is enough to pull the task back to the front of
+    // the drain and put its prompt in front of the code work again.
+    runnerSeededTypes: registry.runnerSeededTypes,
     currentTaskId,
   });
+
+  // Tasks the wizard queues itself, from what detection found. They exist
+  // before the planner runs, so the sink guard forces the reporting task to
+  // depend on them, and no prompt has to remember they are there.
+  // Kill switch: off (or unset), the wizard queues nothing itself and the run
+  // is byte-identical to a project with no detected sources.
+  const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
+    ? programConfig.seedTasks?.(session) ?? []
+    : [];
+  const seededTypes: string[] = [];
+  // Kept so their dependencies can be resolved once the planner has run — they
+  // are queued before it, so they cannot name what they wait for yet.
+  const seededTasks: QueuedTask[] = [];
+  // A seeded task's notice, held until the moment the task is about to run.
+  // Asked here at seed time it would be the first thing in the run — a modal
+  // before anything has happened, about work that will not start for minutes.
+  // The queue stays product-ignorant, so the copy waits here rather than on the
+  // task.
+  const seededNotices = new Map<
+    string,
+    NonNullable<(typeof seedEntries)[number]['notice']>
+  >();
+  for (const seeded of seedEntries) {
+    if (!registry.runnerSeededTypes.includes(seeded.type)) {
+      logToFile(
+        `[orchestrator] skipping runner-seeded task "${seeded.type}": not a runner-seeded type in this flow`,
+      );
+      continue;
+    }
+    const task = store.enqueue({
+      type: seeded.type,
+      label: seeded.label,
+      inputs: seeded.inputs,
+      enqueuedBy: 'orchestrator',
+      // Terminal failure is reported per-task and never aborts the run.
+      optional: true,
+    });
+    seededTypes.push(seeded.type);
+    seededTasks.push(task);
+    if (seeded.notice) seededNotices.set(task.id, seeded.notice);
+    logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
+  }
+
+  // A run that stops to ask a person is not comparable with one that does not
+  // — its wall-clock is the user's, not the model's. Tag every event of the run
+  // from here on, so those runs filter out cleanly.
+  const askingTypes = seededTypes.filter((type) => canAsk(registry.get(type)));
+  analytics.setTag('orchestrator_awaits_user', askingTypes.length > 0);
+  analytics.setTag(
+    'orchestrator_runner_seeded_types',
+    seededTypes.join(',') || 'none',
+  );
+  if (askingTypes.length > 0) {
+    analytics.wizardCapture('orchestrator awaits user', {
+      task_types: askingTypes,
+      ask_timeout_ms: TASK_ASK_TIMEOUT_MS,
+    });
+  }
+
+  // One bridge for the run, handed only to a task whose prompt allows asking.
+  // Absent in CI and signup, where nobody can answer.
+  const askBridge = shouldDisableAsk(session)
+    ? undefined
+    : createWizardAskBridge({
+        getSource: () => session.skillId ?? programConfig.id,
+        showQuestion: (q) => {
+          // How late the first ask lands is the measure of this run shape: it
+          // should follow the autonomous work, not interrupt it.
+          metrics.recordAsk(Date.now());
+          return getUI().requestQuestion(q);
+        },
+        cancelQuestion: () => getUI().cancelPendingQuestion(),
+        richLinks: config.richLinks ?? false,
+        timeoutMs: TASK_ASK_TIMEOUT_MS,
+      });
 
   const spinner = getUI().spinner();
 
@@ -399,16 +655,15 @@ export async function runOrchestrator(
     session,
     programConfig,
     boot,
-    prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
+    prompt: assembleSeedPrompt(promptContext, seedPrompt.body, store.list()),
     spinner,
-    model: seedModel.model ?? seedPick.model,
+    model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,
     ...agentRunTools(seedPrompt),
     orchestrator: orchestratorCtx(),
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
-    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -424,6 +679,104 @@ export async function runOrchestrator(
   });
   renderQueue();
 
+  // Now that the graph exists, give each runner-seeded task the dependencies it
+  // could not name when it was queued. Without this it sits at depth 0 and runs
+  // in the first tier — which for the warehouse step means its credential
+  // prompts arrive while the coding tasks are still writing files. Deferred, the
+  // one step that waits on a person waits until the autonomous work is done.
+  //
+  // Before the sink check below on purpose: sinks are never added as
+  // dependencies, so a planner that forgot to make its sink wait for a seeded
+  // task is still caught there rather than masked here.
+  const deferred = deferSeededTasks(
+    store,
+    seededTasks,
+    (type) => registry.get(type)?.dependsOn ?? [],
+    registry.sinkTypes,
+  );
+  for (const entry of deferred) {
+    logToFile(
+      `[orchestrator] deferred runner-seeded ${entry.type}: ` +
+        `${entry.added.length} deps (${
+          entry.declared
+            ? `declared: ${entry.declaredTypes.join(', ')}`
+            : 'default'
+        })${
+          entry.refused.length > 0 ? `, ${entry.refused.length} refused` : ''
+        }${
+          entry.unresolvedTypes.length > 0
+            ? `, unresolved: ${entry.unresolvedTypes.join(', ')}`
+            : ''
+        }`,
+    );
+    analytics.wizardCapture('orchestrator seeded task deferred', {
+      type: entry.type,
+      dep_count: entry.added.length,
+      declared: entry.declared,
+      declared_types: entry.declaredTypes,
+      unresolved_types: entry.unresolvedTypes,
+      // Non-empty means a cycle or an unknown id was rejected — the resolver and
+      // the queue disagreeing, never expected in a good run.
+      refused_count: entry.refused.length,
+    });
+  }
+  if (deferred.length > 0) renderQueue();
+
+  // Canary for the one-way rule. The enqueue guard rejects the edge outright, so
+  // this should never fire — but if it ever does, the seeded task has been
+  // pulled back toward the front of the drain and its prompt lands mid-run
+  // again, which is precisely the failure this whole step exists to prevent.
+  // Silent regressions here would look like "the ordering just stopped
+  // working", so make it visible rather than abort a run that is otherwise fine.
+  for (const seeded of seededTasks) {
+    const dependants = store
+      .list()
+      .filter(
+        (t) =>
+          !registry.sinkTypes.includes(t.type) &&
+          t.id !== seeded.id &&
+          dependencyClosure(store, [t.id]).has(seeded.id),
+      );
+    if (dependants.length === 0) continue;
+    logToFile(
+      `[orchestrator] one-way rule broken: ${dependants
+        .map((t) => t.type)
+        .join(', ')} depend on runner-seeded ${seeded.type}`,
+    );
+    analytics.wizardCapture('orchestrator seeded task depended on', {
+      type: seeded.type,
+      dependant_types: dependants.map((t) => t.type),
+    });
+  }
+
+  // The enqueue guard rejects a sink that misses part of the queue, so a
+  // planner that respected its errors cannot get here with a broken graph.
+  // Check it again anyway: a run whose report never sees a task's handoff is
+  // worse than a run that stops and says so.
+  const unwaited = store
+    .list()
+    .filter((t) => registry.sinkTypes.includes(t.type))
+    .flatMap((sink) =>
+      uncoveredBySink(
+        { store, validTypes: registry.types, sinkTypes: registry.sinkTypes },
+        { type: sink.type, dependsOn: sink.dependsOn },
+      ).filter((t) => t.id !== sink.id),
+    );
+  if (unwaited.length > 0) {
+    analytics.wizardCapture('orchestrator sink invariant violated', {
+      uncovered_types: unwaited.map((t) => t.type),
+    });
+    await wizardAbort({
+      message: `The wizard could not plan this setup: the final step would have skipped ${unwaited
+        .map((t) => t.type)
+        .join(', ')}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError('orchestrator sink does not cover the queue', {
+        uncovered: unwaited.map((t) => `${t.type} (${t.id})`).join(', '),
+        queue_state: JSON.stringify(store.list()),
+      }),
+    });
+  }
+
   // 2. Drain the queue, one fresh agent per task; independent tasks run in
   // parallel, the seed's graph being the only schedule. Each task resolves to
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
@@ -436,9 +789,85 @@ export async function runOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
-  let remarkRequested = false;
+  // One notice on screen at a time. The store keeps a single pending-notice
+  // slot, so a second `showTaskNotice` overwrites the first's resolver: the
+  // first promise never settles, its task hangs forever, and the overlay stack
+  // is left one deep. Seeding used to await its notices in a loop, which made
+  // that impossible; offering them from inside the drain does not, because the
+  // executor starts every runnable task at once. Today's graphs still serialize
+  // seeded tasks — the default deferral makes each wait for the one before —
+  // but that is a property of the current graph, not a guarantee, so gate it
+  // here where it cannot be undone by a future prompt declaring its own deps.
+  let noticeGate: Promise<unknown> = Promise.resolve();
   const runTask: RunTask = async (task) => {
     renderQueue();
+
+    // A task that stops for the user is offered, not imposed — and the offer
+    // belongs here, the moment before it runs, not at the top of the run. By now
+    // everything this task waits for is done, so the notice, the questions, and
+    // the work form one block at the end instead of a modal that interrupts
+    // before anything has happened.
+    //
+    // Declining skips the task rather than removing it: the planner has already
+    // wired the sink to depend on it, and `nextRunnable` treats a skipped
+    // dependency as satisfied, so the report still runs.
+    const notice = seededNotices.get(task.id);
+    if (notice) {
+      // Consume the offer so it is shown at most once per run. A requeue keeps
+      // the same task id, so without this delete a first attempt that fails or
+      // ends without reporting would re-offer the notice on retry — re-entering
+      // the very timeout stall this screen exists to prevent, double-firing the
+      // notice analytics, and (on a retry decline) overwriting attempt 1's real
+      // outcome with a skip. Later attempts fall through to the executor's
+      // normal retry flow instead.
+      seededNotices.delete(task.id);
+      // Queue behind any notice already on screen. The catch keeps one
+      // offer's failure from poisoning the gate for the next.
+      const offer = noticeGate.then(() => offerSeededTask(notice));
+      noticeGate = offer.catch(() => undefined);
+      // Fail closed. The offer is consumed above, so letting a thrown error
+      // escape would hand the task to the executor's retry path with no notice
+      // left to show — and the second attempt would run the step, and start
+      // asking for credentials, without anyone ever having agreed to it. No UI
+      // implementation throws here today; this is about which way it breaks if
+      // one ever does.
+      const { keep, timedOut } = await offer.catch((err: unknown) => {
+        logToFile(
+          `[orchestrator] notice failed for ${task.type}, declining: ${String(
+            err,
+          )}`,
+        );
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_task_notice' },
+        );
+        return { keep: false, timedOut: false };
+      });
+      analytics.wizardCapture('orchestrator task notice answered', {
+        type: task.type,
+        kept: keep,
+        timed_out: timedOut,
+      });
+      if (!keep) {
+        logToFile(
+          `[orchestrator] runner-seeded ${task.type} declined (${
+            timedOut ? 'timed out' : 'by the user'
+          })`,
+        );
+        store.skip(task.id, {
+          goals: notice.title,
+          did: timedOut
+            ? 'Nothing — the step was offered and the offer timed out with no answer.'
+            : 'Nothing — the user chose to skip this step when offered it.',
+          forNextAgent: timedOut
+            ? 'This step was offered and nobody answered, so it did no work. Report it as not set up, and point the user at how to do it later.'
+            : 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.',
+        });
+        renderQueue();
+        return;
+      }
+    }
+
     try {
       const resolved = resolveTask(registry, task, store);
       // Task instructions are one-run scaffolding, not durable skills, so they
@@ -453,13 +882,13 @@ export async function runOrchestrator(
         const variantId = resolveSkillVariantId(
           menuSkillEntries,
           skillId,
-          session.skillId,
+          framework,
         );
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
-            } skill=${skillId} framework=${session.skillId ?? 'none'}`,
+            } skill=${skillId} framework=${framework ?? 'none'}`,
           );
           continue;
         }
@@ -467,7 +896,7 @@ export async function runOrchestrator(
           variantId,
           session.installDir,
           boot.skillsBaseUrl,
-          taskSkillsRoot,
+          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
@@ -475,20 +904,17 @@ export async function runOrchestrator(
           logToFile(
             `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
           );
+          // A task without its instructions must fail here, not run blind:
+          // run 91cf40eb's report task started after two EACCES install
+          // failures (unwritable external-volume cache) and died silently.
+          // The executor catches this, captures the exception, and fails the
+          // task through the normal outcome check.
+          throw new Error(
+            `Skill "${variantId}" for task "${task.type}" could not be installed (${result.kind}). ` +
+              'If this is a permissions error, check that the project directory is writable.',
+          );
         }
       }
-      // The run-end reflection fires once, on the task that is last in the
-      // queue when it starts — nothing else pending or running alongside it.
-      const isLastTask = !store
-        .list()
-        .some(
-          (t) =>
-            t.id !== task.id &&
-            (t.status === TaskStatus.Pending ||
-              t.status === TaskStatus.Running),
-        );
-      const requestRemark = isLastTask && !remarkRequested;
-      if (requestRemark) remarkRequested = true;
       // Empty spinner messages suppress the per-task spinner line (the queue
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
@@ -505,15 +931,15 @@ export async function runOrchestrator(
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: taskModel.model ?? taskPick.model,
+        model: requireKnownModel(taskModel.model, taskPick.model),
         effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
+        askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
         orchestrator: orchestratorCtx(task.id),
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
-        requestRemark,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -587,6 +1013,7 @@ export async function runOrchestrator(
   logToFile(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
+
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,
@@ -600,35 +1027,72 @@ export async function runOrchestrator(
     retried_task_count: store.list().filter((t) => t.attempts > 1).length,
   });
 
-  // The build step flags any unresolved conflict in its handoff; surface the
+  // The review step flags any unresolved conflict in its handoff; surface the
   // one-liner here and point the user at the report for the detail.
-  const buildTask = store.list().find((t) => t.type === 'build');
-  const conflict = buildTask
-    ? store.readHandoff(buildTask.id)?.conflict
+  const reviewTask = store.list().find((t) => t.type === 'review');
+  const conflict = reviewTask
+    ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
-
-  // Prefer the report the run wrote; fall back to the raw queue if it is missing.
-  const reportPath = path.join(session.installDir, 'posthog-setup-report.md');
-  const reportFile = existsSync(reportPath)
-    ? 'posthog-setup-report.md'
-    : store.queuePath;
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
+
+  // A drain that ends with failed tasks (retries exhausted) or tasks still
+  // pending (blocked behind a failed dependency) did NOT set PostHog up —
+  // abort like a linear agent failure instead of claiming success.
+  // A failed optional task is exempt: reported per-task, never run-failing.
+  const verdict = drainVerdict(store.list());
+  const blocked = verdict.blocked;
+  if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
+    const failedTypes = verdict.requiredFailedTypes.join(', ');
+    const whatFailed = failedTypes
+      ? `the ${failedTypes} step failed`
+      : `${blocked} steps never ran`;
+    // A grant narrowed at login is the one failure cause the user can fix
+    // alone — lead with the fix, and only fall back to the report-a-bug line
+    // when trying again doesn't work.
+    const missingScopes = boot.credentials.missingScopes ?? [];
+    const message =
+      missingScopes.length > 0
+        ? `The wizard could not finish setup: ${whatFailed}, and this run was authorized without the following permission${
+            missingScopes.length === 1 ? '' : 's'
+          }: ${missingScopes.join(
+            ', ',
+          )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
+        : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
+    await wizardAbort({
+      message,
+      error: new WizardError('orchestrator drain ended with failed tasks', {
+        tasks_failed: summary.failed,
+        tasks_blocked: blocked,
+        failed_types: failedTypes,
+        missing_oauth_scopes: missingScopes.join(' '),
+        queue_state: JSON.stringify(store.list()),
+      }),
+    });
+  }
+
+  // A failed optional step leaves the denominator and is named instead.
+  const optionalFailedCount = verdict.optionalFailedTypes.length;
+  const stepNotes = [
+    notRequired > 0 ? `${notRequired} skipped as not required` : '',
+    optionalFailedCount > 0
+      ? `${optionalFailedCount} optional step failed`
+      : '',
+  ].filter(Boolean);
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
-        summary.total - notRequired
+        summary.total - notRequired - optionalFailedCount
       } steps completed${
-        notRequired > 0 ? ` (${notRequired} skipped as not required)` : ''
+        stepNotes.length > 0 ? ` (${stepNotes.join(', ')})` : ''
       }.`;
   getUI().setOutroData({
     kind: OutroKind.Success,
     message,
     body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the report.`
+      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
       : undefined,
-    reportFile,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
   });
   getUI().outro(message);

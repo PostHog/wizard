@@ -6,7 +6,7 @@
  * pending request and the overlay pops, returning the agent to its run.
  */
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
@@ -23,6 +23,18 @@ import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 
 interface WizardAskScreenProps {
   store: WizardStore;
+}
+
+/**
+ * Key policy for the ask overlay: Esc declines the whole request, everything
+ * else is left to the focused input. Extracted so the wiring is unit-testable
+ * without a live Ink render (the test suite stubs `useInput` to a no-op).
+ */
+export function handleAskKey(
+  key: { escape?: boolean },
+  store: Pick<WizardStore, 'cancelPendingQuestion'>,
+): void {
+  if (key.escape) store.cancelPendingQuestion();
 }
 
 export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
@@ -112,6 +124,13 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
       : [],
   );
 
+  // Esc declines the whole request. Cancellation is a first-class outcome the
+  // ask bridge and the wizard_ask tool already expect (a task treats it as "the
+  // user declined" and falls back — e.g. to a browser setup link), so without
+  // this a user who can't answer has no exit but typing placeholders or waiting
+  // out the multi-minute per-question timeout. Every field comes back cancelled.
+  useInput((_input, key) => handleAskKey(key, store));
+
   if (!pending) return null;
 
   // Reset accumulator state when the agent opens a new request mid-session.
@@ -191,6 +210,11 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
           question={question}
           onSubmit={submit}
         />
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>
+          <Text color={Colors.accent}>ESC</Text> skip
+        </Text>
       </Box>
     </ModalOverlay>
   );

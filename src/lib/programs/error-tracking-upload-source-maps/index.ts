@@ -120,6 +120,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
+          reportFile: REPORT_FILE,
         });
       },
 
@@ -152,6 +153,7 @@ export {
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
+  MANUAL_SDK_VARIANTS,
   type SkillVariant,
   type SourceMapsDetectError,
 } from './detect.js';

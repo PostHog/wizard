@@ -18,16 +18,23 @@
 
 import type { WizardStore, TaskItem } from '@ui/tui/store';
 import { TaskStatus } from '@ui/wizard-ui';
-import { RunPhase, OutroKind, type OutroData } from '@lib/wizard-session';
+import {
+  RunPhase,
+  OutroKind,
+  type OutroData,
+  type PendingQuestion,
+} from '@lib/wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
   type StreamTask,
   type TaskStreamError,
+  type StreamPendingInput,
   StreamTaskStatus,
   StreamEvent,
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
+import { logToFile } from '@utils/debug';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -78,6 +85,25 @@ function buildError(
   return { type: 'wizard_error', message: 'Wizard run failed' };
 }
 
+/**
+ * Sensitive asks (secrets, API keys) publish only the fact that input is
+ * required — never the prompt text. The session row is team-visible and
+ * outlives the prompt.
+ */
+function buildPendingInput(
+  question: PendingQuestion | null | undefined,
+): StreamPendingInput | undefined {
+  if (!question) return undefined;
+  const sensitive = question.questions.some((q) => q.sensitive === true);
+  return {
+    id: question.id,
+    asked_at: question.askedAt ?? new Date().toISOString(),
+    question_count: question.questions.length,
+    sensitive,
+    prompts: sensitive ? undefined : question.questions.map((q) => q.prompt),
+  };
+}
+
 export interface TaskStreamPushOptions {
   store: WizardStore;
   programId: string;
@@ -99,6 +125,7 @@ export class TaskStreamPush {
   private enabled: boolean;
   private created = false;
   private lastPushedPhase: RunPhase | null = null;
+  private lastPushedQuestionId: string | null = null;
 
   private unsubscribe: (() => void) | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -207,9 +234,14 @@ export class TaskStreamPush {
     }
 
     const phaseChanged = phase !== this.lastPushedPhase;
-    if (phaseChanged) {
+    const questionId = this.store.session.pendingQuestion?.id ?? null;
+    const questionChanged = questionId !== this.lastPushedQuestionId;
+    if (phaseChanged || questionChanged) {
       // Phase transitions bypass the debounce: the web app needs to
-      // see Running → Completed as soon as it lands.
+      // see Running → Completed as soon as it lands. A wizard_ask
+      // opening or closing is the same shape — the whole point of
+      // publishing it is that the user is looking at the web app, so
+      // a 250ms-stale "needs your input" defeats the purpose.
       if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);
         this.debounceTimer = null;
@@ -256,7 +288,7 @@ export class TaskStreamPush {
   }
 
   private async sendOnce(): Promise<void> {
-    const { session, tasks, eventPlan } = this.store;
+    const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
 
@@ -269,8 +301,17 @@ export class TaskStreamPush {
       tasks: buildTasks(tasks),
       event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
       error: buildError(phase, session.outroData),
+      pending_input: buildPendingInput(session.pendingQuestion),
+      // Included on every push once captured; the backend keeps it sticky, so
+      // pushes that raced the capture cannot un-set it.
+      handoff_text: handoffText ?? undefined,
       timestamp: new Date().toISOString(),
     };
+    logToFile(
+      `[task-stream-push] push phase=${phase} handoff_text=${
+        handoffText === null ? 'absent' : `${handoffText.length} chars`
+      }`,
+    );
 
     let event: StreamEvent;
     if (!this.created) {
@@ -285,6 +326,7 @@ export class TaskStreamPush {
     }
 
     this.lastPushedPhase = phase;
+    this.lastPushedQuestionId = payload.pending_input?.id ?? null;
 
     await Promise.all(
       this.destinations.map((d) =>

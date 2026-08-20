@@ -32,7 +32,10 @@
 // program IDs by their string-literal value below — TypeScript still
 // catches renames via the `Partial<Record<ProgramId, ...>>` keying.
 import type { ProgramId } from '@lib/programs/program-registry';
-import { WIZARD_OAUTH_SCOPES } from '@lib/constants';
+import {
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@lib/constants';
 
 /**
  * Extra scopes the MCP tutorial needs on top of `WIZARD_OAUTH_SCOPES`.
@@ -155,9 +158,24 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     Session Replay / Error Tracking / Support so their sources have
  *     data to read (`products-enable`). A purpose-built scope: the
  *     server owns each enable recipe, so this can flip the product
- *     toggles without the far broader `project:write`. NOTE: net-new —
- *     must be added to the wizard OAuth app's scope ceiling on the
- *     PostHog side before it can be granted (see README / ARCHITECTURE §9).
+ *     toggles without the far broader `project:write`.
+ *   • replay_scanner:read / replay_scanner:write — the Replay Vision
+ *     scanners step (skill step 6c) lists the team's existing scanners
+ *     and creates the `emits_signals` ones whose findings land in the
+ *     inbox (`vision-scanners-list` / `-create` / `-update`, and the
+ *     advisory `vision-scanners-estimate-create` / `vision-quota-retrieve`).
+ *     The scope OBJECT is `replay_scanner` — the `vision-scanners-*`
+ *     names are MCP tool names, not scopes. Configuring a scanner also
+ *     requires `session_recording:read` (the API pairs the two, since a
+ *     scanner's config indirectly exposes recording contents); that one
+ *     is already in this list for the step-2 usage probes.
+ *
+ * No OAuth-ceiling edit is needed for any scope here: they are all normal
+ * public (unprivileged, non-internal, non-hidden) scope objects, and the
+ * live wizard apps' ceiling is the `@default` sentinel, which resolves to
+ * every such scope (`UNPRIVILEGED_SCOPES`) and auto-tracks new ones. Only a
+ * privileged/internal/hidden object (e.g. `llm_gateway:*`) would need a
+ * manual per-app edit. See README → "OAuth app scope ceiling".
  */
 export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'task:read',
@@ -173,6 +191,8 @@ export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'llm_skill:read',
   'llm_skill:write',
   'product_enablement:write',
+  'replay_scanner:read',
+  'replay_scanner:write',
 ] as const;
 
 /**
@@ -202,6 +222,35 @@ export const WAREHOUSE_SOURCE_SCOPE_ADDITIONS = [
 export const CONNECT_SLACK_SCOPE_ADDITIONS = ['integration:read'] as const;
 
 /**
+ * Extra scopes the replay-vision program needs on top of `WIZARD_OAUTH_SCOPES`.
+ * The same set self-driving's step 6c uses, narrowed to just this flow:
+ *   • replay_scanner:read / replay_scanner:write — the scanner tasks list the
+ *     team's existing scanners and create the ones scoped to the product's key
+ *     flows (`vision-scanners-list` / `-create`, plus the advisory
+ *     `vision-scanners-estimate-create` / `vision-quota-retrieve`). The scope
+ *     OBJECT is `replay_scanner`; `vision-scanners-*` are MCP tool names.
+ *   • session_recording:read — the scanner API pairs it with
+ *     `replay_scanner:*`, since a scanner's config indirectly exposes
+ *     recording contents. Configuring a scanner fails without it.
+ *   • product_enablement:write — the enable-replay task's server half turns on
+ *     Session Replay (`products-enable`) so there are recordings to scan.
+ *
+ * Without these the PostHog MCP omits the tools from the catalog it serves
+ * this token, every scanner task takes its "tool unknown" skip path, and the
+ * run reports success having created nothing (run 69afc6f8).
+ *
+ * No OAuth-ceiling edit needed — all are unprivileged public scope objects
+ * covered by the apps' `@default` sentinel, and self-driving already requests
+ * every one of them.
+ */
+export const REPLAY_VISION_SCOPE_ADDITIONS = [
+  'session_recording:read',
+  'product_enablement:write',
+  'replay_scanner:read',
+  'replay_scanner:write',
+] as const;
+
+/**
  * Per-program scope additions, layered on top of `WIZARD_OAUTH_SCOPES`.
  *
  * Programs not listed here request the unchanged base set. Use this
@@ -221,8 +270,16 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
+  // The integration run carries the Slack outro step, and — when detection
+  // finds data sources — the orchestrator's warehouse task, which creates
+  // sources through `external-data-sources-create`. Without the warehouse pair
+  // that call 403s on a token the user already granted.
+  'posthog-integration': [
+    ...CONNECT_SLACK_SCOPE_ADDITIONS,
+    ...WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
+  ],
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
+  'replay-vision': REPLAY_VISION_SCOPE_ADDITIONS,
 };
 
 /**
@@ -248,6 +305,29 @@ export function getOAuthScopesForProgram(
   const seen = new Set<string>();
   const merged: string[] = [];
   for (const s of [...WIZARD_OAUTH_SCOPES, ...additions]) {
+    if (seen.has(s)) continue;
+    seen.add(s);
+    merged.push(s);
+  }
+  return merged;
+}
+
+/**
+ * Resolve the scope list for the signup provisioning path. Same
+ * base-plus-additions shape as `getOAuthScopesForProgram`, but layered on
+ * `WIZARD_PROVISIONING_SCOPES` so a program's extra scopes only reach
+ * tokens provisioned for that program.
+ */
+export function getProvisioningScopesForProgram(
+  programId: ProgramId | null | undefined,
+): readonly string[] {
+  const additions = (programId && PROGRAM_SCOPE_ADDITIONS[programId]) || [];
+  if (additions.length === 0) {
+    return WIZARD_PROVISIONING_SCOPES;
+  }
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const s of [...WIZARD_PROVISIONING_SCOPES, ...additions]) {
     if (seen.has(s)) continue;
     seen.add(s);
     merged.push(s);

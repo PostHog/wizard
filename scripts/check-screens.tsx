@@ -14,6 +14,7 @@ import { AuthErrorScreen } from '@ui/tui/screens/AuthErrorScreen';
 import { ProgressList } from '@ui/tui/primitives/ProgressList';
 import { ManagedSettingsScreen } from '@ui/tui/screens/ManagedSettingsScreen';
 import { SettingsOverrideScreen } from '@ui/tui/screens/SettingsOverrideScreen';
+import { WizardAskScreen } from '@ui/tui/screens/WizardAskScreen';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
 
 function fakeStore(session: Record<string, unknown>): any {
@@ -165,6 +166,20 @@ check(
   ],
   // The not-needed task is gone and counts against nothing.
   ['Add user identification', 'not needed', '1/3'],
+);
+
+check(
+  'WizardAskScreen — surfaces the Esc-to-skip affordance',
+  <WizardAskScreen
+    store={fakeStore({
+      pendingQuestion: {
+        id: 'req-1',
+        source: 'postgres',
+        questions: [{ id: 'host', prompt: 'Database host?', kind: 'text' }],
+      },
+    })}
+  />,
+  ['Database host?', 'ESC', 'skip'],
 );
 
 if (failures > 0) {

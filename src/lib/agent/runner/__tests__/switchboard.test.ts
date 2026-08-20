@@ -13,10 +13,6 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_MINI_MODEL,
-  GPT5_MODEL,
-  GPT5_4_MODEL,
-  GPT5_5_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
@@ -24,7 +20,6 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
   PROGRAM_BINDINGS,
@@ -32,7 +27,11 @@ import {
   resolveBinding,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
-import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
+import {
+  modelCapabilities,
+  isValidModel,
+  requireKnownModel,
+} from '@lib/agent/runner/switchboard/models';
 import { runBindingCases } from '@lib/agent/runner/switchboard/flags/__tests__/binding-cases';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
@@ -62,6 +61,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'ai-observability') continue; // pinned below
+      if (program === 'replay-vision') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -74,6 +74,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
         sequence: Sequence.linear,
         harness: Harness.anthropic,
         model: SONNET_5_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds replay-vision to the orchestrator sequence',
+      ctx: { program: 'replay-vision', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
@@ -95,29 +106,29 @@ describe('switchboard PROGRAM_BINDINGS', () => {
 describe('switchboard CLI precedence (dev builds)', () => {
   runBindingCases([
     {
-      name: 'cliHarness wins over the wizard-use-pi-harness flag',
+      name: 'cliHarness wins over the orchestrator flag being off',
       ctx: {
         program: 'posthog-integration',
-        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'false' },
         cliHarness: Harness.pi,
       },
       binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
       trace: { harness: 'cli', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'cliModel wins over the flag pairing; the flag still routes the harness',
+      name: 'cliModel wins over the flag pin; the flag still routes harness + sequence',
       ctx: {
         program: 'posthog-integration',
-        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         cliModel: 'openai/o4-mini',
       },
       binding: {
-        sequence: Sequence.linear,
+        sequence: Sequence.orchestrator,
         harness: Harness.pi,
         model: 'openai/o4-mini',
         thinkingLevel: undefined,
       },
-      trace: { harness: 'flag', model: 'cli', sequence: 'binding' },
+      trace: { harness: 'flag', model: 'cli', sequence: 'flag' },
     },
     {
       name: 'cliHarness + cliModel pin both axes',
@@ -157,35 +168,18 @@ describe('switchboard decision trace', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'pi flag decides harness+model; sequence stays binding (pi has runTask, no clamp)',
+      name: 'the one flag → orchestrator on pi; the model stays traced to the binding it fell back to',
       ctx: {
         program: 'posthog-integration',
-        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
-      },
-      binding: {
-        sequence: Sequence.linear,
-        harness: Harness.pi,
-        model: GPT5_4_MODEL,
-        thinkingLevel: undefined,
-      },
-      trace: { harness: 'flag', model: 'flag', sequence: 'binding' },
-    },
-    {
-      name: 'both flags on → orchestrator on pi, every axis traced to its flag',
-      ctx: {
-        program: 'posthog-integration',
-        flags: {
-          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-          [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-        },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
       },
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        model: GPT5_4_MODEL,
+        model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
-      trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
+      trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
     },
   ]);
 });
@@ -199,11 +193,13 @@ describe('switchboard composed clamp', () => {
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         trace: {},
       };
-      // Only the orchestrator flag is on → harness/model stay at the binding
-      // (sonnet 5 for ai-observability, the default elsewhere), and the
-      // composed clamp holds the sequence at linear.
+      // The flag routes posthog-integration's harness to pi; the composed
+      // clamp holds every sequence at linear; other programs keep their
+      // bindings (sonnet 5 for ai-observability, the default elsewhere).
       expect(resolveBinding(ctx)).toEqual(
-        program === 'ai-observability'
+        program === 'posthog-integration'
+          ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
+          : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
           : DEFAULT_RESOLVED,
       );
@@ -228,18 +224,10 @@ describe('switchboard composed clamp', () => {
       ctx: {
         program: 'posthog-integration',
         composed: true,
-        flags: {
-          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-          [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-        },
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
       },
-      binding: {
-        sequence: Sequence.linear,
-        harness: Harness.pi,
-        model: GPT5_4_MODEL,
-        thinkingLevel: undefined,
-      },
-      trace: { harness: 'flag', model: 'flag', sequence: 'composed' },
+      binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
+      trace: { harness: 'flag', model: 'binding', sequence: 'composed' },
     },
   ]);
 });
@@ -250,7 +238,7 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
       'claude-sonnet-4-6',
       'claude-opus-4-8',
       'claude-haiku-4-5-20251001',
-      'openai/gpt-5',
+      'openai/gpt-5.6-terra',
     ]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
@@ -262,23 +250,15 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
     expect(modelCapabilities('openai/gpt-4o').reasoning).toBe(false);
   });
 
-  it('sets reasoning effort per model: gpt-5 low (fast flagship), gpt-5-mini medium', () => {
-    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
-    // The gpt-5.6 line + gpt-5.5 are reasoning models despite the openai/ prefix; they opt in past the default-off.
-    for (const m of [
-      GPT5_6_LUNA_MODEL,
-      GPT5_6_TERRA_MODEL,
-      GPT5_6_SOL_MODEL,
-      GPT5_5_MODEL,
-    ]) {
+  it('sets reasoning effort per model across the gpt-5.6 line', () => {
+    // The gpt-5.6 line are reasoning models despite the openai/ prefix; they opt in past the default-off.
+    for (const m of [GPT5_6_LUNA_MODEL, GPT5_6_TERRA_MODEL, GPT5_6_SOL_MODEL]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
-    // luna/sol/5.5 stay low (fast); terra runs medium as the sonnet-tier parallel.
+    // luna/sol stay low (fast); terra runs medium as the sonnet-tier parallel.
     expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
     expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_5_MODEL).thinkingLevel).toBe('low');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
@@ -291,10 +271,48 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
   });
 
   it('a binding thinkingLevel override rides only a reasoning model', () => {
-    expect(modelCapabilities(GPT5_4_MODEL, 'high').thinkingLevel).toBe('high');
-    expect(modelCapabilities(GPT5_4_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_6_TERRA_MODEL, 'high').thinkingLevel).toBe(
+      'high',
+    );
+    expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
     expect(
       modelCapabilities('openai/gpt-4o', 'high').thinkingLevel,
     ).toBeUndefined();
+  });
+});
+
+describe('switchboard model allow-list', () => {
+  it('allow-lists the sonnets and the gpt-5.6 line, nothing older', () => {
+    for (const m of [
+      DEFAULT_AGENT_MODEL,
+      SONNET_5_MODEL,
+      GPT5_6_LUNA_MODEL,
+      GPT5_6_TERRA_MODEL,
+      GPT5_6_SOL_MODEL,
+    ]) {
+      expect(isValidModel(m)).toBe(true);
+    }
+    // The retired openai ids are gone — no longer valid to dispatch on.
+    for (const m of ['openai/gpt-5', 'openai/gpt-5.4', 'openai/gpt-5.5']) {
+      expect(isValidModel(m)).toBe(false);
+    }
+    expect(isValidModel('')).toBe(false);
+    expect(isValidModel(undefined)).toBe(false);
+  });
+
+  it('requireKnownModel takes the first allow-listed candidate', () => {
+    expect(requireKnownModel(undefined, GPT5_6_TERRA_MODEL)).toBe(
+      GPT5_6_TERRA_MODEL,
+    );
+    expect(requireKnownModel('openai/gpt-5', GPT5_6_TERRA_MODEL)).toBe(
+      GPT5_6_TERRA_MODEL,
+    );
+  });
+
+  it('requireKnownModel throws loud when no candidate is allow-listed', () => {
+    // A dead/empty id must fail here, not reach the gateway.
+    expect(() => requireKnownModel(undefined, '', 'openai/gpt-5')).toThrow(
+      /No valid model/,
+    );
   });
 });

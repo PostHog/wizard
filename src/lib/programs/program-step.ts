@@ -1,4 +1,8 @@
-import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
+import type {
+  WizardSession,
+  DiscoveredFeature,
+  TaskNotice,
+} from '@lib/wizard-session';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { Integration } from '@lib/constants';
@@ -233,6 +237,24 @@ export interface ProgramConfig {
    * detection) that the TUI performs via step onReady callbacks.
    */
   ciPreRun?: (session: WizardSession) => Promise<void>;
+  /**
+   * Tasks the orchestrator queues itself, before the planner runs, from what
+   * the wizard detected. Their types are marked `runnerSeeded: true` in the
+   * agent prompt, so the planner never sees them: whether such a task runs is
+   * decided here, in code, not by a model that could invent it or forget it.
+   * Return an empty list to queue none.
+   */
+  seedTasks?: (session: WizardSession) => Array<{
+    type: string;
+    label?: string;
+    inputs?: Record<string, unknown>;
+    /**
+     * Shown before the run starts, letting the user decline the task. The
+     * program owns the words — the runner and the modal only carry them. A
+     * task without one is queued silently.
+     */
+    notice?: TaskNotice;
+  }>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**

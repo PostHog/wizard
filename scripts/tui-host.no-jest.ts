@@ -262,6 +262,17 @@ async function main() {
       } catch {
         /* some frameworks have no package.json */
       }
+      try {
+        // Dart/Flutter declares dependencies in pubspec.yaml, so a Flutter run
+        // reports no dependency at all when only package.json is read.
+        const pubspec = fs.readFileSync(`${appDir}/pubspec.yaml`, 'utf8');
+        for (const line of pubspec.split('\n')) {
+          const dep = /^\s{2}([A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(line);
+          if (dep) deps.push(dep[1]);
+        }
+      } catch {
+        /* not a Dart project */
+      }
       const posthogDeps = deps.filter((d) => d.includes('posthog'));
       let envFile: string | null = null;
       try {

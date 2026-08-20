@@ -11,7 +11,7 @@
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
-import type { Credentials } from '@lib/wizard-session';
+import type { Credentials, TaskNotice } from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -172,6 +172,19 @@ export interface WizardUI {
     backupAndFix: () => boolean,
   ): Promise<void>;
 
+  /**
+   * Show an optional step's notice and return whether to keep that step. Hosts
+   * that cannot prompt resolve false: a step nobody can answer must not run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean>;
+
+  /**
+   * Dismiss an in-flight task notice as declined. Called when the offer times
+   * out: the notice sits in front of the run's final steps, so left unanswered
+   * it would hold the report behind a modal nobody is looking at.
+   */
+  cancelTaskNotice(): void;
+
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
 
@@ -224,6 +237,9 @@ export interface WizardUI {
 
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
+
+  /** Handoff doc from the `publish_handoff` tool; the task-stream push carries it as `handoff_text`. */
+  setHandoffText(text: string): void;
 
   /** Accumulate one assistant turn's token usage into the hidden Ctrl+T
    *  token/cost HUD's running estimate. No-op outside the TUI. */

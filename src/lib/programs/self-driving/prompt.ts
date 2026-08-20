@@ -1,5 +1,33 @@
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type { PromptContext } from '@lib/agent/agent-runner';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
+
+/**
+ * Render the deterministic codebase-tool scan for the prompt. STEP 4 and
+ * STEP 5 read this instead of the agent doing its own flaky "light scan":
+ * enable the matching signal sources, and surface detected tools first in the
+ * connected-tools ask rather than dumping the full ~500-source catalog. When
+ * nothing is detected we still say so explicitly, so the agent falls back to
+ * the skill's default ordering instead of inventing a scan.
+ */
+function renderDetectedTools(sources: DetectedSource[]): string {
+  if (sources.length === 0) {
+    return `Tools detected in this codebase: none found by the dependency + env scan. Use the skill's default ordering for STEP 5.`;
+  }
+
+  const lines = sources.map(
+    (s) => `- ${s.label} (source_type: ${s.kind}) — ${s.matchedSignal}`,
+  );
+  return [
+    'Tools detected in this codebase (deterministic dependency + env-key scan — this is evidence, not a guess):',
+    ...lines,
+    '',
+    'Use this list in STEP 4 (enable the matching signal sources) and STEP 5 ' +
+      '(surface these detected tools first in the connected-tools ask, ahead ' +
+      'of the SaaS basics and the "others" option), exactly as the skill ' +
+      'describes. Never enable or pre-select a tool the user has not confirmed.',
+  ].join('\n');
+}
 
 /**
  * Build the self-driving run prompt. The installed
@@ -8,11 +36,18 @@ import type { PromptContext } from '@lib/agent/agent-runner';
  * to verify); this prompt carries the order, the wizard-specific
  * mechanics (wizard_ask, abort signals), and the project URLs.
  *
+ * `detectedSources` is the deterministic codebase scan (from the detect step);
+ * it drives STEP 4/STEP 5 tool prioritisation. Empty is fine — the block then
+ * tells the agent to use the skill's default ordering.
+ *
  * Integration (when the project has no PostHog yet) runs as a separate phase
  * before this — the real integration program, with its own screens and task
  * list — so this prompt only covers the Self-driving steps.
  */
-export function buildSelfDrivingPrompt(ctx: PromptContext): string {
+export function buildSelfDrivingPrompt(
+  ctx: PromptContext,
+  detectedSources: DetectedSource[] = [],
+): string {
   const uiHost = ctx.host.appHost.replace(/\/$/, '');
   const projectBase = `${uiHost}/project/${ctx.projectId}`;
   const integrationsSettingsUrl = `${projectBase}/settings/environment-integrations`;
@@ -23,7 +58,7 @@ export function buildSelfDrivingPrompt(ctx: PromptContext): string {
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings: ${integrationsSettingsUrl}
@@ -38,6 +73,8 @@ snippet, so repo evidence may rule a product IN but never OUT):
 - Session replay recording: ${optIn(optIns?.sessionReplay)}
 - Exception autocapture (error tracking): ${optIn(optIns?.exceptionAutocapture)}
 - Surveys: ${optIn(optIns?.surveys)}
+
+${renderDetectedTools(detectedSources)}
 
 The installed skill is the source of truth for the HOW of every step:
 which MCP tools to call, which sources and scouts apply to this product,
@@ -56,6 +93,7 @@ tasks, in this order:
   5. Offer issue-tracker integrations
   6. Configure the scout troop
   6b. Design custom scouts
+  6c. Set up Replay Vision scanners
   7. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g.
@@ -124,7 +162,10 @@ STEP 4 — Enable signal sources. (skill: "Enable sources")
 
 STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    One batched multi-select wizard_ask for the external tools the skill
-   lists. The run auto-connects the ones it can (GitHub Issues, and
+   lists. Order it per the skill: the tools from the "Tools detected in
+   this codebase" list above come first, then the SaaS basics, then an
+   "others" option for the long tail — never dump the whole catalog.
+   The run auto-connects the ones it can (GitHub Issues, and
    Linear via a one-click OAuth link), verifying each with a single
    silent check — never nudge. For GitHub Issues: when the GitHub
    integration has exactly one repository connected, use that repo by
@@ -136,9 +177,22 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    a source only for a tool the user picked.
 
 STEP 6 — Configure the scout troop. (skill: "Scouts")
-   Materialize the troop, then enable only a small set — the "general"
-   scout plus the one or two specialists for the products this project
-   uses most — and disable the rest, per the skill.
+   Materialize the troop, read the project's enforced scout-run budget
+   (100 runs a day by default), then enable a selective set — the
+   "general" scout plus the three to five specialists for the products
+   this project uses most — and disable the rest, per the skill. The
+   whole troop, including step 6b's custom scouts, stays at or under
+   ten enabled scouts.
+
+   Then tell the user what the troop is, before STEP 6b asks them to add
+   to it. Scouts are PostHog's built-in ones, and the user has not seen
+   the list: without it, STEP 6b asks them to approve additions to a
+   baseline they cannot picture. Send one short message naming each
+   scout you enabled with a plain one-line description of what it
+   watches, and say how many you left disabled and that they can turn
+   those on later from the inbox. No wizard_ask here, it is not a
+   question. Keep each line to one sentence and do not restate the
+   skill's internals.
 
 STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
@@ -157,6 +211,13 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    before creating anything; the user declining everything (or finding
    no gap at all) is a valid outcome, not an abort. Mark the task
    completed either way.
+
+STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
+   Create the scanner skeletons the skill defines, filling the per-product
+   blanks it leaves you from this repo's code. Scanners need Session Replay
+   on (STEP 3b). Every failure here — no recordings yet, a backend-only
+   project, the scanner API missing — is a follow-up, never an abort; mark
+   the task completed regardless.
 
 STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
