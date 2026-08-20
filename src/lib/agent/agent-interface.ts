@@ -35,7 +35,7 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
-import { createTriageLLMProvider } from './triage-provider';
+import { createTriageLLMProvider, TRIAGE_CALL_TYPE } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
@@ -526,8 +526,21 @@ export async function initializeAgent(
 
     // Same values the env vars above carry, handed over explicitly so triage
     // never has to read them back out of the environment.
+    //
+    // The run tags ride along too: triage fires per tool call, so leaving them
+    // off put every scan's gateway spend in the unattributed bucket. Tagged
+    // here it folds into the program that triggered it, and `call_type` keeps
+    // it separable — security scanning is its own cost line, not agent work.
     const triageProvider = createTriageLLMProvider(
-      { baseURL: gatewayUrl, authToken: config.posthogApiKey },
+      {
+        baseURL: gatewayUrl,
+        authToken: config.posthogApiKey,
+        wizardMetadata: {
+          ...(config.wizardMetadata ?? {}),
+          call_type: TRIAGE_CALL_TYPE,
+        },
+        wizardFlags: config.wizardFlags ?? {},
+      },
       Harness.anthropic,
     );
 

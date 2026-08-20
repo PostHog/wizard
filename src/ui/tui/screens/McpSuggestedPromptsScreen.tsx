@@ -135,6 +135,28 @@ export const McpSuggestedPromptsScreen = ({
 
   const session = store.session;
 
+  // Every event below reports under the tutorial's program id, not the
+  // program that happens to be hosting the screen — `mcp add` runs this
+  // same tutorial as its last step, and splitting the funnel by entry
+  // point means neither half measures the tutorial. The mapping itself is
+  // declared on the step (`programs/mcp/index.ts`), not hardcoded here.
+  //
+  // Sampled once at mount rather than read per call: the screen is only
+  // mounted while it's the active one, and captures that land after
+  // dismissal (the streaming run's terminal chunk) would otherwise resolve
+  // against whatever screen the router moved on to.
+  const programId = useMemo(() => store.analyticsProgramId, [store]);
+  const capture = useMemo(
+    () =>
+      (event: string, properties?: Record<string, unknown>): void => {
+        analytics.wizardCapture(event, {
+          program_id: programId,
+          ...properties,
+        });
+      },
+    [programId],
+  );
+
   // Phase.Choose is the no-commitment entry. Login fires only when the
   // user picks 'Start tutorial' — explicit consent for the OAuth dance.
   const [phase, setPhase] = useState<Phase>(Phase.Choose);
@@ -268,7 +290,7 @@ export const McpSuggestedPromptsScreen = ({
       // misroute or an unwanted write leaves a permanent trail.
       const offerSeed =
         probed.tier === 'empty' && isKnownCloudHost(credentials.host.apiHost);
-      analytics.wizardCapture('mcp suggested prompts scouted', {
+      capture('mcp suggested prompts scouted', {
         tier: probed.tier,
         totalEvents: probed.totalEvents,
         distinctEvents: probed.distinctEventCount,
@@ -306,14 +328,14 @@ export const McpSuggestedPromptsScreen = ({
         });
         if (cancelled) return;
         setProfile(seeded);
-        analytics.wizardCapture('mcp suggested prompts seeded', {
+        capture('mcp suggested prompts seeded', {
           totalEvents: seeded.totalEvents,
         });
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
         logToFile(`[McpSuggestedPromptsScreen] seeding failed: ${message}`);
-        analytics.wizardCapture('mcp suggested prompts seed failed', {
+        capture('mcp suggested prompts seed failed', {
           error: message,
         });
         // Keep the empty profile; the picker handles the empty case.
@@ -357,12 +379,12 @@ export const McpSuggestedPromptsScreen = ({
       if (controller.signal.aborted) return;
       setRunDurationSecs(Math.round(durationMs / 1000));
       if (kind === 'done') {
-        analytics.wizardCapture('mcp suggested prompts run', {
+        capture('mcp suggested prompts run', {
           prompt: runningPrompt,
           durationMs,
         });
       } else {
-        analytics.wizardCapture('mcp suggested prompts run failed', {
+        capture('mcp suggested prompts run failed', {
           prompt: runningPrompt,
           error: errorText,
         });
@@ -445,7 +467,7 @@ export const McpSuggestedPromptsScreen = ({
     const choice = Array.isArray(value) ? value[0] : value;
     setLoginError(null);
     if (choice === ChoiceValue.Login) {
-      analytics.wizardCapture('mcp suggested prompts choose', {
+      capture('mcp suggested prompts choose', {
         choice: 'login',
       });
       startedTutorialRef.current = true;
@@ -454,7 +476,7 @@ export const McpSuggestedPromptsScreen = ({
       // scout — same landing as post-auth for a started tutorial.
       setPhase(session.credentials ? Phase.Scouting : Phase.Authenticating);
     } else {
-      analytics.wizardCapture('mcp suggested prompts choose', {
+      capture('mcp suggested prompts choose', {
         choice: 'exit',
       });
       enterGoodbye();
@@ -466,12 +488,12 @@ export const McpSuggestedPromptsScreen = ({
   const handleSeedChoice = (value: string | string[]): void => {
     const choice = Array.isArray(value) ? value[0] : value;
     if (choice === SeedChoice.Seed) {
-      analytics.wizardCapture('mcp suggested prompts seed offer', {
+      capture('mcp suggested prompts seed offer', {
         choice: 'seed',
       });
       setPhase(Phase.Seeding);
     } else {
-      analytics.wizardCapture('mcp suggested prompts seed offer', {
+      capture('mcp suggested prompts seed offer', {
         choice: 'skip',
       });
       setPhase(Phase.Greeting);
@@ -495,14 +517,14 @@ export const McpSuggestedPromptsScreen = ({
   const handleFollowUpPick = (value: string | string[]): void => {
     const picked = Array.isArray(value) ? value[0] : value;
     if (picked === FOLLOW_UP_EXIT_SENTINEL) {
-      analytics.wizardCapture('mcp suggested prompts follow-up', {
+      capture('mcp suggested prompts follow-up', {
         choice: 'exit',
         depth: branchHistory.length,
       });
       enterGoodbye();
       return;
     }
-    analytics.wizardCapture('mcp suggested prompts follow-up', {
+    capture('mcp suggested prompts follow-up', {
       choice: 'continue',
       depth: branchHistory.length,
       lastToolName,

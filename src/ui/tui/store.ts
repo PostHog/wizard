@@ -931,6 +931,31 @@ export class WizardStore {
   }
 
   /**
+   * The program id events fired from `screen` should be attributed to.
+   *
+   * Defaults to the running program; a step may claim a different one via
+   * `ProgramStep.reportsAsProgramId` when the same screen is hosted by more
+   * than one program. Overlays and screens with no owning step (the
+   * appended exit screen) fall back to the running program.
+   */
+  private _programIdForScreen(screen: ScreenName): ProgramId {
+    const program = this.router.activeProgram;
+    const step = getProgramConfig(program).steps.find(
+      (s) => s.screenId === screen,
+    );
+    return step?.reportsAsProgramId ?? program;
+  }
+
+  /**
+   * The program id the currently visible screen reports under. Screens
+   * capturing their own events should stamp this rather than assuming the
+   * run-level `program_id` tag — see `_programIdForScreen`.
+   */
+  get analyticsProgramId(): ProgramId {
+    return this._programIdForScreen(this.router.resolve(this.session));
+  }
+
+  /**
    * Detect screen transitions, run enter-screen hooks, and fire analytics.
    * Called at the end of emitChange/pushOverlay/popOverlay.
    */
@@ -949,7 +974,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        program_id: this.router.activeProgram,
+        program_id: this._programIdForScreen(next),
         ...sessionProperties(this.session),
       });
     }

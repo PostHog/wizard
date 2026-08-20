@@ -16,8 +16,9 @@ import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
+import { analytics } from '@utils/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -172,6 +173,34 @@ function buildTerminalFitPrompt(): string {
   ].join('\n');
 }
 
+/**
+ * Gateway trace tags for a tutorial prompt run.
+ *
+ * The gateway attributes each `$ai_generation` it emits from the
+ * `X-POSTHOG-PROPERTY-*` headers on the request, so a run with no tags lands
+ * in the unattributed bucket — which is where every tutorial generation went
+ * before this existed. Exported so that contract is testable without booting
+ * the SDK.
+ *
+ * Returns `{}` when the caller supplies no program, keeping the tagless
+ * behavior explicit rather than silently emitting a half-populated bag.
+ */
+export function buildTutorialRunTags(args: {
+  programId?: string;
+  integration?: string;
+}): Record<string, string> {
+  if (!args.programId) return {};
+  return buildRunTags({
+    programId: args.programId,
+    // The tutorial runs against a project, not a codebase, so there's usually
+    // no detected framework — fall back to the program so the axis is never
+    // an empty string in the gateway's breakdowns.
+    integration: args.integration ?? args.programId,
+    runId: analytics.runId,
+    build: analytics.build,
+  });
+}
+
 export async function* runMcpPromptViaSdk(args: {
   prompt: string;
   credentials: Credentials;
@@ -180,8 +209,19 @@ export async function* runMcpPromptViaSdk(args: {
    *  context so the follow-up prompt can reference what the agent
    *  already showed. */
   resumeSessionId?: string;
+  /** Program this run's gateway spend attributes to. Resolved by the caller
+   *  (`store.analyticsProgramId`) so both tutorial entry points report as
+   *  one program. Omitting it makes the spend unattributable — see the
+   *  `ANTHROPIC_CUSTOM_HEADERS` note below. */
+  programId?: string;
+  /** Integration label for the trace tags; the tutorial usually has none. */
+  integration?: string;
 }): AsyncIterable<AgentChunk> {
   const { prompt, credentials, signal, resumeSessionId } = args;
+
+  // Assembled here rather than passed in so the TUI service layer doesn't
+  // have to import this module's dependencies.
+  const wizardMetadata = buildTutorialRunTags(args);
 
   // Route the SDK's LLM calls through the PostHog LLM gateway, authed
   // with the user's OAuth access token. Set BEFORE loading the SDK in
@@ -338,11 +378,14 @@ export async function* runMcpPromptViaSdk(args: {
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // Same Bedrock-fallback + telemetry-friendly headers as the
-          // main runner. No wizard metadata or flags for the tutorial
-          // — runs are distinguished downstream via posthog.capture
-          // calls (program_id + event names), not SDK headers.
-          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv({}, {}),
+          // Same Bedrock-fallback + telemetry-friendly headers as the main
+          // runner, plus this run's trace tags. The gateway reads
+          // `X-POSTHOG-PROPERTY-*` off the request to attribute each
+          // `$ai_generation` it emits, so sending none put every tutorial
+          // generation in the unattributed bucket — `posthog.capture` events
+          // carry a program id but nothing joins them to gateway spend.
+          // Flags stay empty: the tutorial doesn't fork on any.
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(wizardMetadata ?? {}, {}),
         },
       },
     });

@@ -45,6 +45,13 @@ export const mcpAddConfig: ProgramConfig = {
       // talk to from the tutorial.
       show: (s) => s.mcpOutcome === McpOutcome.Installed,
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+      // This step *is* the tutorial, so its events belong to the tutorial's
+      // funnel rather than to `mcp-add` — otherwise the same screen reports
+      // under two program ids depending on how the user arrived, and neither
+      // one measures the tutorial. String literal (not `Program.McpTutorial`)
+      // to avoid a runtime cycle with `program-registry.ts`; the `ProgramId`
+      // type on the field still catches a rename at compile time.
+      reportsAsProgramId: 'mcp-tutorial',
     },
   ],
 };

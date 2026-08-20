@@ -1,5 +1,8 @@
 import { completeSimple } from '@earendil-works/pi-ai';
-import { createTriageLLMProvider } from '@lib/agent/triage-provider';
+import {
+  createTriageLLMProvider,
+  TRIAGE_CALL_TYPE,
+} from '@lib/agent/triage-provider';
 import { GPT5_6_LUNA_MODEL, HAIKU_TRIAGE_MODEL, Harness } from '@lib/constants';
 import { triageModelFor } from '@lib/agent/runner/switchboard/models';
 
@@ -82,6 +85,31 @@ describe('createTriageLLMProvider', () => {
       'x-posthog-use-bedrock-fallback': 'true',
       'X-POSTHOG-PROPERTY-run_id': 'r1',
       'X-POSTHOG-FLAG-WIZARD-ORCHESTRATOR': 'true',
+    });
+  });
+
+  it('attributes its spend to the program that triggered the scan', async () => {
+    // Triage fires per tool call. Before it carried run tags, every scan's
+    // gateway spend landed in the unattributed bucket; `call_type` keeps it
+    // separable from the agent work inside the same program.
+    complete.mockResolvedValue(reply(''));
+    const provider = createTriageLLMProvider(
+      {
+        ...AUTH,
+        wizardMetadata: {
+          program_id: 'posthog-integration',
+          run_id: 'r1',
+          call_type: TRIAGE_CALL_TYPE,
+        },
+      },
+      Harness.anthropic,
+    );
+
+    await provider('verdict?');
+
+    expect(complete.mock.calls[0][0].headers).toMatchObject({
+      'X-POSTHOG-PROPERTY-program_id': 'posthog-integration',
+      'X-POSTHOG-PROPERTY-call_type': 'yara-triage',
     });
   });
 

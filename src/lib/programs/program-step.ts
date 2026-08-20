@@ -10,6 +10,9 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
 import type { Tip } from '@ui/tui/components/TipsCard';
+// Type-only — erased at compile time, so no runtime cycle with the
+// registry that imports `ProgramConfig` back from this module.
+import type { ProgramId } from './program-registry.js';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -130,6 +133,27 @@ export interface ProgramStep {
    * scanning the installDir for prerequisites. May be sync or async.
    */
   onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+
+  /**
+   * Report this step's analytics under a different program than the one
+   * hosting it. Explicit opt-in — omit for steps that only ever run under
+   * one program, and they report under their host.
+   *
+   * Steps are shared across programs: the MCP tutorial is the whole of
+   * `mcp-tutorial` and also the last step of `mcp-add`. Analytics tag
+   * `program_id` with the program the *run* launched as, so without this
+   * the tutorial's funnel splits across two ids and neither one is the
+   * whole picture. Declaring it here keeps the mapping next to the step
+   * list; the store resolves it (`WizardStore.analyticsProgramId`) and
+   * infrastructure stays ignorant of which surface is which.
+   *
+   * Attribution only — OAuth scopes, switchboard bindings, and screen
+   * sequences all still resolve against the host program.
+   *
+   * Resolved by matching `screenId`, so this has no effect on a headless
+   * step (one with no screen of its own).
+   */
+  reportsAsProgramId?: ProgramId;
 }
 
 /**

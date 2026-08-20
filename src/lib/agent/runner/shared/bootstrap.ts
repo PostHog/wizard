@@ -11,7 +11,10 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate } from './authenticate';
-import { createTriageLLMProvider } from '@lib/agent/triage-provider';
+import {
+  createTriageLLMProvider,
+  TRIAGE_CALL_TYPE,
+} from '@lib/agent/triage-provider';
 import { resolveHarness } from '../switchboard';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
@@ -282,7 +285,9 @@ export async function bootstrapProgram(
       {
         baseURL: credentials.host.gatewayUrl,
         authToken: credentials.accessToken,
-        wizardMetadata,
+        // `call_type` splits scan spend out of the program's agent cost —
+        // same tag the in-run triage provider carries.
+        wizardMetadata: { ...wizardMetadata, call_type: TRIAGE_CALL_TYPE },
         wizardFlags,
       },
       resolveHarness({
