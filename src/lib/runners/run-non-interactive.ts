@@ -218,6 +218,7 @@ export function runNonInteractive(
           // structured event so it does not reach error tracking as a crash.
           analytics.wizardCapture('non-interactive prerequisites not met', {
             integration: config.id,
+            program_id: config.id,
             detect_error_kind: detectError.kind,
           });
           await wizardAbort({
