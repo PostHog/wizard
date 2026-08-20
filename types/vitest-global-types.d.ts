@@ -18,9 +18,8 @@ import type {
 } from 'vitest';
 
 declare global {
-  type Mock<
-    T extends (...args: any[]) => any = (...args: any[]) => any,
-  > = ViMock<T>;
+  type Mock<T extends (...args: any[]) => any = (...args: any[]) => any> =
+    ViMock<T>;
   type Mocked<T> = ViMocked<T>;
   type MockedFunction<T extends (...args: any[]) => any> = ViMockedFunction<T>;
   type MockedClass<T extends abstract new (...args: any[]) => any> =

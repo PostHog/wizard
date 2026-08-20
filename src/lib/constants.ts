@@ -12,7 +12,7 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
-/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+/** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
 
 /**
@@ -21,37 +21,19 @@ export const SONNET_5_MODEL = 'claude-sonnet-5';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
+export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
+
 /**
  * Larger model for planning / hard work. Named the switchboard could route to
  * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
  */
 export const OPUS_MODEL = 'claude-opus-4-8';
 
-/**
- * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
- * completions. Enables cross-provider A/B without a wizard release.
- */
-export const GPT5_MODEL = 'openai/gpt-5';
-
-/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
-export const GPT5_4_MODEL = 'openai/gpt-5.4';
-
-/**
- * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
- * this (a reasoning model follows the integration skill; the mini tier keeps a
- * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
- * is set per-model in the switchboard capability matrix.
- */
-export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
-
-// Latest openai flagship generation. The 5.6 line ships tiered variants —
-// `luna` (fast/cheap: $1/$6 per MTok), `terra` (mid: $2.50/$15), `sol` (top:
-// $5/$30) — plus the `gpt-5.5` flagship. All are `wizard-pi-model` options for
-// cross-provider A/B; gateway ids carry no `/` or `.` in the variant keys.
+// The only openai models the wizard runs.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
 export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
 export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
-export const GPT5_5_MODEL = 'openai/gpt-5.5';
 
 // ── Agent runner routing axes ────────────────────────────────────────
 
@@ -96,6 +78,7 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   sveltekit = 'sveltekit',
+  flutter = 'flutter',
   kmp = 'kmp',
   swift = 'swift',
   android = 'android',
@@ -234,11 +217,17 @@ export const WIZARD_PROVISIONING_SCOPES = [
  *
  * NOTE: every scope here must be within the wizard OAuth application's
  * server-side scope ceiling (`OAuthApplication.scopes` in posthog, set
- * via Django admin on BOTH prod regions) — requesting anything outside
- * it fails the WHOLE authorize request with `error=invalid_scope`
- * before the consent screen renders. Procedure: the
- * "scope-ceiling-invalid-scope" runbook in PostHog/runbooks. Keep the
- * runbook's worked example in sync when this list changes.
+ * via Django admin on BOTH prod regions). A scope outside the ceiling
+ * does NOT fail the authorize request — the server silently clamps the
+ * request to the ceiling (`clamp_scopes_to_ceiling` in posthog) and the
+ * token comes back without it. Separately, the consent screen lets the
+ * user deselect any scope the app doesn't mark required. Both paths
+ * yield a granted `scope` narrower than requested, with no error, so
+ * never assume the token carries this list — the token response's
+ * `scope` field is the truth, and `missingOAuthScopes` (utils/oauth.ts)
+ * diffs it at login. Ceiling procedure: the "scope-ceiling-invalid-scope"
+ * runbook in PostHog/runbooks. Keep its worked example in sync when this
+ * list changes.
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
@@ -254,20 +243,27 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
-/** Boolean flag: on → pi harness + the pi model pairing; off/missing → binding default. */
-export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
-/** Multivariate flag: pi's model. Variant keys map to gateway ids in `PI_MODEL_FLAG_VARIANTS`. */
-export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
-/** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
-export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
-/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = wizard-pi-model variant key); missing/invalid payload keeps the non-flagged default. */
+/** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
+export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
+  'wizard-orchestrator-override';
+/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = a `MODEL_FLAG_VARIANTS` key); missing/invalid payload keeps the non-flagged default. */
 export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
   'wizard-self-driving-use-pi-harness';
-/** Feature flag key that gates the intro-screen "Tools" menu. */
-export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
+/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
+export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
+  'wizard-orchestrator-seeded-tasks';
+// Reading a flag enters this run into that flag's experiment, so a closed set — not a
+// `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
+export const WIZARD_FLAG_KEYS = [
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 
@@ -301,10 +297,10 @@ export const AGENTIC_DETECTION_TIMEOUT_MS = 60_000;
 /**
  * Timeout for the OAuth authorization flow (ms).
  *
- * Mirrors the server-side authorization-code expiry
- * (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes). Once the code expires the
- * callback is dead and the token exchange can no longer succeed, so we stop
- * waiting at the same moment and prompt the user to re-run rather than letting
- * them complete a login that would fail.
+ * How long the user has to complete the browser login. The authorization
+ * code is minted at approval and exchanged immediately on callback, so the
+ * server-side code expiry (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes)
+ * bounds only the approval→exchange gap — manual-paste users have 5 minutes
+ * from approval to submit the code — not how long this window may stay open.
  */
-export const OAUTH_TIMEOUT_MS = 300_000;
+export const OAUTH_TIMEOUT_MS = 1_800_000;

@@ -28,7 +28,7 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
 # builds and tsdown strips it; its env var name appearing in dist/*.js means
 # dead-code elimination regressed and a prod surface leaked. Sourcemaps keep
 # the original source, so only .js output counts.
-OVERRIDE_MARKERS='WIZARD_CI_FLAG_OVERRIDES WIZARD_CI_EXCLUDE_TASKS'
+OVERRIDE_MARKERS='WIZARD_CI_FLAG_OVERRIDES WIZARD_CI_EXCLUDE_TASKS MCP_URL'
 if [ "${WIZARD_BUILD_NODE_ENV:-production}" = "ci" ]; then
   # CI builds must keep the paths — their absence means the overrides silently
   # stopped working and CI is back to testing live behavior.

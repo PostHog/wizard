@@ -4,8 +4,7 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
 import { detectPythonPackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
-import fg from 'fast-glob';
-import * as fs from 'node:fs';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as path from 'node:path';
 import {
   getDjangoVersion,
@@ -15,6 +14,8 @@ import {
   DjangoProjectType,
   findDjangoSettingsFile,
 } from './utils';
+
+const EXTRA_IGNORE = ['**/env/**', '**/.env/**'];
 
 type DjangoContext = {
   projectType?: DjangoProjectType;
@@ -46,57 +47,45 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
     detect: async (options) => {
       const { installDir } = options;
 
-      const managePyMatches = await fg('**/manage.py', {
+      const managePyMatches = await boundedGlob('**/manage.py', {
         cwd: installDir,
-        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        extraIgnore: EXTRA_IGNORE,
       });
 
       if (managePyMatches.length > 0) {
         for (const match of managePyMatches) {
-          try {
-            const content = fs.readFileSync(
-              path.join(installDir, match),
-              'utf-8',
-            );
-            // Check for actual Django imports and usage
-            if (
-              content.includes('from django') ||
-              content.includes('import django') ||
-              content.includes('DJANGO_SETTINGS_MODULE') ||
-              /execute_from_command_line/.test(content)
-            ) {
-              return true;
-            }
-          } catch {
-            continue;
+          const content = readProjectFile(path.join(installDir, match));
+          if (!content) continue;
+          // Check for actual Django imports and usage
+          if (
+            content.includes('from django') ||
+            content.includes('import django') ||
+            content.includes('DJANGO_SETTINGS_MODULE') ||
+            /execute_from_command_line/.test(content)
+          ) {
+            return true;
           }
         }
       }
 
-      const requirementsFiles = await fg(
+      const requirementsFiles = await boundedGlob(
         ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py'],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          extraIgnore: EXTRA_IGNORE,
         },
       );
 
       for (const reqFile of requirementsFiles) {
-        try {
-          const content = fs.readFileSync(
-            path.join(installDir, reqFile),
-            'utf-8',
-          );
-          // Match Django as a package requirement, not in comments or other text
-          // Look for: django, django>=, django==, django~=, Django (capitalized)
-          if (
-            /^django([>=~!<\s]|$)/im.test(content) ||
-            /["']django["']/i.test(content)
-          ) {
-            return true;
-          }
-        } catch {
-          continue;
+        const content = readProjectFile(path.join(installDir, reqFile));
+        if (!content) continue;
+        // Match Django as a package requirement, not in comments or other text
+        // Look for: django, django>=, django==, django~=, Django (capitalized)
+        if (
+          /^django([>=~!<\s]|$)/im.test(content) ||
+          /["']django["']/i.test(content)
+        ) {
+          return true;
         }
       }
 

@@ -1,5 +1,222 @@
 # Changelog
 
+## [2.64.1](https://github.com/PostHog/wizard/compare/v2.64.0...v2.64.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* request replay vision scopes during signup provisioning ([#1115](https://github.com/PostHog/wizard/issues/1115)) ([74276e8](https://github.com/PostHog/wizard/commit/74276e8916ca2334cce3708d918539fe7d2a54f6))
+
+## [2.64.0](https://github.com/PostHog/wizard/compare/v2.63.0...v2.64.0) (2026-08-19)
+
+
+### Features
+
+* **replay-vision:** replay-vision command on the orchestrator sequence ([#1101](https://github.com/PostHog/wizard/issues/1101)) ([be6c8bf](https://github.com/PostHog/wizard/commit/be6c8bf7529445701bf46ef0a464de6ae065f0f2))
+
+
+### Bug Fixes
+
+* **orchestrator:** surface the app host to task prompts for browser links ([#1097](https://github.com/PostHog/wizard/issues/1097)) ([10c9cb7](https://github.com/PostHog/wizard/commit/10c9cb710357441bbd8a330ca9f25b56e725dee2))
+* **tui:** let users skip a wizard_ask prompt with Esc ([#1110](https://github.com/PostHog/wizard/issues/1110)) ([0aa92fa](https://github.com/PostHog/wizard/commit/0aa92fa2e1eb6d4bd8b0c39dd488cfade9120f07))
+
+## [2.63.0](https://github.com/PostHog/wizard/compare/v2.62.0...v2.63.0) (2026-08-18)
+
+
+### Features
+
+* adding deps for runnerSeeded tasks; move dw sources to the end ([#1103](https://github.com/PostHog/wizard/issues/1103)) ([2942041](https://github.com/PostHog/wizard/commit/29420413ceb236a6698c776fae25cea913d79e3c))
+* **self-driving:** key step events by step, not by the agent's wording ([#1083](https://github.com/PostHog/wizard/issues/1083)) ([07758d1](https://github.com/PostHog/wizard/commit/07758d1e9b429e5c7905a9eb3a57427420a2c034))
+* **warehouse:** hand over a pre-filled link per detected source ([#1087](https://github.com/PostHog/wizard/issues/1087)) ([f6f80d3](https://github.com/PostHog/wizard/commit/f6f80d38578548577013aeff11652c3fb8038ddf))
+
+
+### Bug Fixes
+
+* avoid EISDIR crash when .env is a directory ([#721](https://github.com/PostHog/wizard/issues/721)) ([e923a33](https://github.com/PostHog/wizard/commit/e923a33f7136830574733133e98bd2dbc99adf73))
+* **orchestrator:** give pi agents the reportSection handoff field ([#1086](https://github.com/PostHog/wizard/issues/1086)) ([d232375](https://github.com/PostHog/wizard/commit/d232375b22cba7338fa112f60d798a381000c15f))
+* Warn at login when the OAuth grant is narrower than requested ([#1090](https://github.com/PostHog/wizard/issues/1090)) ([30579e6](https://github.com/PostHog/wizard/commit/30579e6c743d2f4fc8aa2212a73b39364e72ba27))
+* **wizard-ask:** frame the adjacency cap as a retryable nudge, not a refusal ([#1096](https://github.com/PostHog/wizard/issues/1096)) ([e223c11](https://github.com/PostHog/wizard/commit/e223c1176a83be4a98c0b56afe903d5c1a8fdcea))
+
+## [2.62.0](https://github.com/PostHog/wizard/compare/v2.61.0...v2.62.0) (2026-08-12)
+
+
+### Features
+
+* **orchestrator:** flag-gate runner-seeded tasks ([#1079](https://github.com/PostHog/wizard/issues/1079)) ([5157b77](https://github.com/PostHog/wizard/commit/5157b779ba4d7894878d93beabd932cf31cdb0d9))
+
+## [2.61.0](https://github.com/PostHog/wizard/compare/v2.60.0...v2.61.0) (2026-08-12)
+
+
+### Features
+
+* **orchestrator:** optional warehouse task, runner-seeded with per-agent tool grants ([#1077](https://github.com/PostHog/wizard/issues/1077)) ([b248857](https://github.com/PostHog/wizard/commit/b24885798d7cffe3bdfb6a5e46fa1d21e51820e0))
+* **self-driving:** fix the onboarding papercuts a customer run surfaced ([#1057](https://github.com/PostHog/wizard/issues/1057)) ([cf768c8](https://github.com/PostHog/wizard/commit/cf768c836340a592ecbbd6263fdc10a46197171c))
+
+
+### Bug Fixes
+
+* **detection:** make agentic project classification reliable ([#1071](https://github.com/PostHog/wizard/issues/1071)) ([05b2c34](https://github.com/PostHog/wizard/commit/05b2c3402b90273fabb30755888745f726305dfb))
+* **mcp:** tell the user when the MCP server or plugin is already installed ([#1075](https://github.com/PostHog/wizard/issues/1075)) ([4b7982a](https://github.com/PostHog/wizard/commit/4b7982a9dbee4c5eaff66517561cffb68aaeca08))
+* **tui:** guard Tumblers pin geometry and re-enable Visualizer tab ([#890](https://github.com/PostHog/wizard/issues/890)) ([74edd5f](https://github.com/PostHog/wizard/commit/74edd5f4ae86b41a97541a61cc058b6a53a34730))
+
+## [2.60.0](https://github.com/PostHog/wizard/compare/v2.59.0...v2.60.0) (2026-08-06)
+
+
+### Features
+
+* **audit:** seed a Live Data sweep into the comprehensive audit ([#1061](https://github.com/PostHog/wizard/issues/1061)) ([00ae80a](https://github.com/PostHog/wizard/commit/00ae80a9898909cdce1ff45964fcaedaa836dd90))
+* **self-driving:** Replay Vision scanners step ([#1055](https://github.com/PostHog/wizard/issues/1055)) ([bb61dda](https://github.com/PostHog/wizard/commit/bb61ddae84ca60d78f29398b51bd2d494349b512))
+
+## [2.59.0](https://github.com/PostHog/wizard/compare/v2.58.0...v2.59.0) (2026-08-04)
+
+
+### Features
+
+* add Flutter framework support ([#942](https://github.com/PostHog/wizard/issues/942)) ([8e5537b](https://github.com/PostHog/wizard/commit/8e5537b8387b5b8ee82cf95b58a9d65eddd706fb))
+
+
+### Bug Fixes
+
+* **cli:** register the `skill <skill-name>` positional so strict parsing accepts it ([#1027](https://github.com/PostHog/wizard/issues/1027)) ([adf8de3](https://github.com/PostHog/wizard/commit/adf8de39840fa5a22853153cdc889bbe75602208))
+* **mcp-analytics:** correct abort copy and match the codemod's actual reason ([#1052](https://github.com/PostHog/wizard/issues/1052)) ([781235f](https://github.com/PostHog/wizard/commit/781235fd82551a1eae636556434c4f0250b97a1c))
+* **wizard:** Whack a mole part 10: project-mismatch error accounts for a bogus --project-id ([#1040](https://github.com/PostHog/wizard/issues/1040)) ([fee3778](https://github.com/PostHog/wizard/commit/fee3778f5008b980dd290a91d9801528d6587a27))
+* **wizard:** Whack a mole part 2: passive telemetry for leaked transport tokens in pi file writes ([#1017](https://github.com/PostHog/wizard/issues/1017)) ([af69880](https://github.com/PostHog/wizard/commit/af6988072b80a33269fd729cc353dab2d627969a))
+* **wizard:** Whack a mole part 9: fail the task when its skill cannot install ([#1039](https://github.com/PostHog/wizard/issues/1039)) ([7985e75](https://github.com/PostHog/wizard/commit/7985e759ac205d37a48fc372e28b2abf8a7bef64))
+
+## [2.58.0](https://github.com/PostHog/wizard/compare/v2.57.0...v2.58.0) (2026-07-31)
+
+
+### Features
+
+* **task-stream:** publish the setup report as the session handoff doc ([#1045](https://github.com/PostHog/wizard/issues/1045)) ([ce8b70d](https://github.com/PostHog/wizard/commit/ce8b70d30490bf30f45c46389df589a232a3d21d))
+* **wizard-tools:** capture a handoff published event ([#1051](https://github.com/PostHog/wizard/issues/1051)) ([8949247](https://github.com/PostHog/wizard/commit/8949247132575c65d14063cbd83b44104d52a550))
+
+## [2.57.0](https://github.com/PostHog/wizard/compare/v2.56.0...v2.57.0) (2026-07-31)
+
+
+### Features
+
+* **switchboard:** let the harness axis route on the cloud surface ([#1048](https://github.com/PostHog/wizard/issues/1048)) ([492b4ce](https://github.com/PostHog/wizard/commit/492b4ce9a15358049fee6038e317fc8aa989ecda))
+
+
+### Bug Fixes
+
+* **wizard:** Whack a mole part 5: report per-task instead of the unused binding model on orchestrator runs ([#1019](https://github.com/PostHog/wizard/issues/1019)) ([20e94fb](https://github.com/PostHog/wizard/commit/20e94fb5642e3680f3f42b213cbab85afe28fc10))
+
+## [2.56.0](https://github.com/PostHog/wizard/compare/v2.55.0...v2.56.0) (2026-07-31)
+
+
+### Features
+
+* automate Rust debug-symbol upload in upload-source-maps ([#938](https://github.com/PostHog/wizard/issues/938)) ([a62ab3c](https://github.com/PostHog/wizard/commit/a62ab3cb2444aaa0f9b899710eae821e0b732e69))
+* **source-maps:** automate Go debug-symbol upload ([#1030](https://github.com/PostHog/wizard/issues/1030)) ([e15eb65](https://github.com/PostHog/wizard/commit/e15eb6518a70e17f38fa1df9bcb42f7164654b0e))
+
+
+### Bug Fixes
+
+* **analytics:** tag session facts so post-auth events carry them ([#1042](https://github.com/PostHog/wizard/issues/1042)) ([7dc977a](https://github.com/PostHog/wizard/commit/7dc977af5dd9a6381efe13402cf7bc7541f3566e))
+* **tui:** never page picker lists of 4 or fewer options ([#1041](https://github.com/PostHog/wizard/issues/1041)) ([a3d2008](https://github.com/PostHog/wizard/commit/a3d2008c758977531001c4347bd00b1781275477))
+
+## [2.55.0](https://github.com/PostHog/wizard/compare/v2.54.0...v2.55.0) (2026-07-29)
+
+
+### Features
+
+* automate React Native source-map upload ([#941](https://github.com/PostHog/wizard/issues/941)) ([2357937](https://github.com/PostHog/wizard/commit/23579379e4279dd614d1730dbeb6fef8976462a6))
+* **self-driving:** prioritise codebase-detected tools in the connected-tools ask ([#1022](https://github.com/PostHog/wizard/issues/1022)) ([dd4572a](https://github.com/PostHog/wizard/commit/dd4572a379b555a29e94167ee92ffa5ad503a1a4))
+* **self-driving:** reflect the 100 runs/day budget and ten-scout troop ([#1029](https://github.com/PostHog/wizard/issues/1029)) ([b41d80f](https://github.com/PostHog/wizard/commit/b41d80f11f14b292dad9feb7ab7f860232413f2a))
+
+
+### Bug Fixes
+
+* **cli:** explain how to fix an out-of-date Node.js version ([#1018](https://github.com/PostHog/wizard/issues/1018)) ([5e536a7](https://github.com/PostHog/wizard/commit/5e536a7a0806cdf15eaad079e6b779e87ac87157))
+* **provisioning:** stop requiring a /resources field the API no longer sends ([#994](https://github.com/PostHog/wizard/issues/994)) ([05ec027](https://github.com/PostHog/wizard/commit/05ec027a4b2ad83b8d41b32d5d31e79c3421b1dd))
+* **source-maps:** write the hand-off report the success screen names ([#1006](https://github.com/PostHog/wizard/issues/1006)) ([ca8fdb2](https://github.com/PostHog/wizard/commit/ca8fdb2e4ef8233eea4f36bac8fbdd9375aaf523))
+
+## [2.54.0](https://github.com/PostHog/wizard/compare/v2.53.0...v2.54.0) (2026-07-28)
+
+
+### Features
+
+* **auth:** give the browser login 30 minutes instead of 5 ([#1012](https://github.com/PostHog/wizard/issues/1012)) ([9b8a747](https://github.com/PostHog/wizard/commit/9b8a747338b944dbf4ecde70d2d335747f002df5))
+* **bash-fence:** allow xcodegen generate ([#1011](https://github.com/PostHog/wizard/issues/1011)) ([e7d4eff](https://github.com/PostHog/wizard/commit/e7d4efffa06c2e6df27d38c2c1d8a92a91d93471))
+* **task-stream:** publish pending wizard_ask prompts as pending_input ([#1008](https://github.com/PostHog/wizard/issues/1008)) ([5b51df5](https://github.com/PostHog/wizard/commit/5b51df5c6f8df34b1e69a7382f67214eacb04df6))
+
+
+### Bug Fixes
+
+* **switchboard:** trace the model to the binding when a flag route is harness-only ([#1009](https://github.com/PostHog/wizard/issues/1009)) ([93ca4d1](https://github.com/PostHog/wizard/commit/93ca4d1a4193a3922bf9c409bd8a25cbdc7be66b))
+
+## [2.53.0](https://github.com/PostHog/wizard/compare/v2.52.1...v2.53.0) (2026-07-28)
+
+
+### Features
+
+* data-aware MCP tutorial (scout, real-schema quests, demo seeding) ([#600](https://github.com/PostHog/wizard/issues/600)) ([006575b](https://github.com/PostHog/wizard/commit/006575b70edb667b3944bb1f58496daf7ffce615))
+* **telemetry:** tag analytics with the task run id and package version ([#991](https://github.com/PostHog/wizard/issues/991)) ([a1bcf57](https://github.com/PostHog/wizard/commit/a1bcf5741a147baf831370dd1184aeba9812d338))
+
+
+### Bug Fixes
+
+* **commandments:** drop task-list rules where the tools aren't mounted ([#995](https://github.com/PostHog/wizard/issues/995)) ([01b34b6](https://github.com/PostHog/wizard/commit/01b34b6e216d0dbc04c59b939def7e9559a299e5))
+* **security:** reference the MCP bearer by env var, not its value ([#1004](https://github.com/PostHog/wizard/issues/1004)) ([10bfb88](https://github.com/PostHog/wizard/commit/10bfb88b89bf226b8a0a705602c13547c1b03328))
+* **tui:** scroll long picker lists so they don't overflow the viewport ([#978](https://github.com/PostHog/wizard/issues/978)) ([08a92ac](https://github.com/PostHog/wizard/commit/08a92ac1060fd0afc7a63b50c570212fbad47195))
+* **yara:** triage skill installs on every harness ([#997](https://github.com/PostHog/wizard/issues/997)) ([9566310](https://github.com/PostHog/wizard/commit/9566310a9786f9fe99892c9197d4dd2aea245e5d))
+
+## [2.52.1](https://github.com/PostHog/wizard/compare/v2.52.0...v2.52.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* **pi:** declare @earendil-works/pi-tui so the MCP adapter loads ([#992](https://github.com/PostHog/wizard/issues/992)) ([da39512](https://github.com/PostHog/wizard/commit/da39512bccfb5310d334ca10472b56fa63e66023))
+
+## [2.52.0](https://github.com/PostHog/wizard/compare/v2.51.0...v2.52.0) (2026-07-27)
+
+
+### Features
+
+* **source-maps:** automate Flutter source-map upload ([#985](https://github.com/PostHog/wizard/issues/985)) ([1a6c19a](https://github.com/PostHog/wizard/commit/1a6c19ade01fec53a79ebaa108d0a20939c6f312))
+
+
+### Bug Fixes
+
+* **pi:** rebuild the MCP wiring on createMcpAdapter (adapter ~2.15) ([#981](https://github.com/PostHog/wizard/issues/981)) ([070d9da](https://github.com/PostHog/wizard/commit/070d9daf92d97b1cb41b6f87f4c5402e67b3961b))
+
+## [2.51.0](https://github.com/PostHog/wizard/compare/v2.50.0...v2.51.0) (2026-07-24)
+
+
+### Features
+
+* **Orchestrator:** per-task tool lists, linear-only task-status notes ([#962](https://github.com/PostHog/wizard/issues/962)) ([420298e](https://github.com/PostHog/wizard/commit/420298e1781b2317b6610e330310d2863088ef6f))
+* **switchboard:** wizard-orchestrator-override — per-stage model/effort via variant payload ([#971](https://github.com/PostHog/wizard/issues/971)) ([594f642](https://github.com/PostHog/wizard/commit/594f642235986364a81a60465aede3c7c0e2f2dc))
+
+
+### Bug Fixes
+
+* **detection:** bound every project-tree glob, walk, and read ([#972](https://github.com/PostHog/wizard/issues/972)) ([820e2e5](https://github.com/PostHog/wizard/commit/820e2e5934b85cd858cff003dbfd4b2d50dbf6bc))
+* **host:** MCP_URL override wins even under --local-mcp ([#975](https://github.com/PostHog/wizard/issues/975)) ([5038335](https://github.com/PostHog/wizard/commit/5038335ba7d99ebc14729100e46a46099b6836ed))
+* **yara:** triage skill-install scans instead of hard-blocking ([#977](https://github.com/PostHog/wizard/issues/977)) ([618d954](https://github.com/PostHog/wizard/commit/618d95426f7ffc9996befd98f8a31e5cfbc20c06))
+
+## [2.50.0](https://github.com/PostHog/wizard/compare/v2.49.0...v2.50.0) (2026-07-23)
+
+
+### Features
+
+* **self-driving:** reflect the 24 scout runs/day default budget ([#955](https://github.com/PostHog/wizard/issues/955)) ([d2df434](https://github.com/PostHog/wizard/commit/d2df4342d238853175a732f3a4ff982d698637bf))
+
+
+### Bug Fixes
+
+* **data-warehouse:** stop reporting benign fs errors during source detection ([#957](https://github.com/PostHog/wizard/issues/957)) ([a36ead3](https://github.com/PostHog/wizard/commit/a36ead333c832002769841dd4f702be3add845c4))
+* **switchboard:** sequence experiments are local-surface only ([#961](https://github.com/PostHog/wizard/issues/961)) ([b4621a1](https://github.com/PostHog/wizard/commit/b4621a1ace37436989d9faadd1e31381572daf69))
+
+## [2.49.0](https://github.com/PostHog/wizard/compare/v2.48.0...v2.49.0) (2026-07-22)
+
+
+### Features
+
+* **orchestrator:** every task remarks, the run reports them together ([#952](https://github.com/PostHog/wizard/issues/952)) ([7672609](https://github.com/PostHog/wizard/commit/76726090f59a83d0e621c7e55240bd7b60fe88b3))
+
 ## [2.48.0](https://github.com/PostHog/wizard/compare/v2.47.0...v2.48.0) (2026-07-22)
 
 

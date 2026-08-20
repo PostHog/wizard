@@ -2,8 +2,7 @@
 import type { FrameworkConfig } from '../../lib/framework-config';
 import { Integration } from '../../lib/constants';
 import { gradlePackageManager } from '../../lib/detection/package-manager';
-import fg from 'fast-glob';
-import * as fs from 'node:fs';
+import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as path from 'node:path';
 
 export const KMP_AGENT_CONFIG: FrameworkConfig = {
@@ -30,13 +29,14 @@ export const KMP_AGENT_CONFIG: FrameworkConfig = {
       const { installDir } = options;
 
       // Strategy 1: a Gradle build file that applies the Kotlin Multiplatform plugin.
-      const buildFiles = await fg(['**/build.gradle', '**/build.gradle.kts'], {
-        cwd: installDir,
-        ignore: ['**/build/**', '**/node_modules/**', '**/.gradle/**'],
-      });
+      const buildFiles = await boundedGlob(
+        ['**/build.gradle', '**/build.gradle.kts'],
+        { cwd: installDir },
+      );
 
       for (const file of buildFiles) {
-        const content = fs.readFileSync(path.join(installDir, file), 'utf-8');
+        const content = readProjectFile(path.join(installDir, file));
+        if (!content) continue;
         if (
           content.includes('kotlin("multiplatform")') ||
           content.includes('org.jetbrains.kotlin.multiplatform') ||
@@ -47,10 +47,9 @@ export const KMP_AGENT_CONFIG: FrameworkConfig = {
       }
 
       // Strategy 2: a KMP `commonMain` source set exists.
-      const commonMain = await fg('**/src/commonMain', {
+      const commonMain = await boundedGlob('**/src/commonMain/**', {
         cwd: installDir,
-        onlyDirectories: true,
-        ignore: ['**/build/**', '**/node_modules/**', '**/.gradle/**'],
+        limit: 1,
       });
 
       return commonMain.length > 0;

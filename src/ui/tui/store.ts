@@ -32,6 +32,7 @@ import {
   McpOutcome,
   RunPhase,
   buildSession,
+  type TaskNotice,
 } from '@lib/wizard-session';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import {
@@ -186,6 +187,7 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
@@ -218,6 +220,8 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Blocks the run until an optional step's notice is answered. */
+  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
@@ -387,6 +391,10 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get handoffText(): string | null {
+    return this.$handoffText.get();
+  }
+
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
   }
@@ -429,6 +437,7 @@ export class WizardStore {
 
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -565,6 +574,26 @@ export class WizardStore {
   }
 
   /**
+   * Show an optional step's notice and return whether to keep that step.
+   * Asked before the step runs, so nobody is surprised by a prompt mid-run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    this.$session.setKey('taskNotice', notice);
+    this.pushOverlay(Overlay.TaskNotice);
+    return new Promise((resolve) => {
+      this._resolveTaskNotice = resolve;
+    });
+  }
+
+  /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
+  resolveTaskNotice(keep: boolean): void {
+    this.$session.setKey('taskNotice', null);
+    this.popOverlay();
+    this._resolveTaskNotice?.(keep);
+    this._resolveTaskNotice = null;
+  }
+
+  /**
    * Return a promise that resolves when the user submits a manually-entered
    * OAuth code via the paste modal. The OAuth flow races this against the
    * local callback server — see `performOAuthFlow`.
@@ -687,6 +716,12 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
+      analytics.setTag(
+        'additional_feature_kinds',
+        this.session.additionalFeatureQueue.join(','),
+      );
     }
     // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
@@ -803,8 +838,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {
@@ -1006,6 +1040,14 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  /** No-op on identical text: an emit here means a network push downstream. */
+  setHandoffText(text: string): void {
+    if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
+    this.$handoffText.set(text);
     this.emitChange();
   }
 

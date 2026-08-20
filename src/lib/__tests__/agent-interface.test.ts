@@ -8,6 +8,7 @@ import {
   buildAuthErrorContext,
 } from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { Sequence } from '@lib/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
 import {
@@ -83,6 +84,9 @@ describe('runAgent', () => {
     workingDirectory: '/test/dir',
     mcpServers: {},
     model: 'claude-opus-4-5-20251101',
+    posthogApiKey: 'phx_test_token',
+    sequence: Sequence.linear,
+    triageProvider: () => Promise.resolve('false_positive'),
   };
 
   beforeEach(() => {

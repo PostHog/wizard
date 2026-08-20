@@ -1,5 +1,5 @@
-import fg from 'fast-glob';
 import type { WizardRunOptions } from '@utils/types';
+import { boundedGlob } from '@utils/bounded-fs';
 import { createVersionBucket } from '@utils/semver';
 
 export const getNextJsVersionBucket = createVersionBucket();
@@ -9,13 +9,7 @@ export enum NextJsRouter {
   PAGES_ROUTER = 'pages-router',
 }
 
-export const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/public/**',
-  '**/.next/**',
-];
+export const IGNORE_PATTERNS = ['**/public/**'];
 
 /**
  * Detect Next.js router type. Pure — returns null if ambiguous.
@@ -23,18 +17,18 @@ export const IGNORE_PATTERNS = [
 export async function getNextJsRouter({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<NextJsRouter | null> {
-  const pagesMatches = await fg('**/pages/_app.@(ts|tsx|js|jsx)', {
-    dot: true,
+  const pagesMatches = await boundedGlob('**/pages/_app.@(ts|tsx|js|jsx)', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: IGNORE_PATTERNS,
+    limit: 1,
   });
 
   const hasPagesDir = pagesMatches.length > 0;
 
-  const appMatches = await fg('**/app/**/layout.@(ts|tsx|js|jsx)', {
-    dot: true,
+  const appMatches = await boundedGlob('**/app/**/layout.@(ts|tsx|js|jsx)', {
     cwd: installDir,
-    ignore: IGNORE_PATTERNS,
+    extraIgnore: IGNORE_PATTERNS,
+    limit: 1,
   });
 
   const hasAppDir = appMatches.length > 0;

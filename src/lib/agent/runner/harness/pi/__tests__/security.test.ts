@@ -6,10 +6,16 @@ import {
   evaluateToolCall,
   createSecurityExtension,
   isScopedFileRemoval,
+  observeTransportLeak,
   overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn() },
+}));
 
 // @posthog/warlock resolves to __mocks__/@posthog/warlock.ts (ESM + WASM can't
 // load under the CJS test runner). Default: scan matches nothing; tests
@@ -299,9 +305,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     ).toEqual({});
   });
 
-  test('with triageAuth, a triage false_positive verdict unblocks the write', async () => {
+  test('with a triage provider, a false_positive verdict unblocks the write', async () => {
     const { factory, state } = createSecurityExtension({
-      triageAuth: { baseURL: 'https://gw.example', authToken: 'tok' },
+      triageProvider: () => Promise.resolve('false_positive'),
     });
     const { pi, handlers } = fakePi();
     factory(pi);
@@ -685,5 +691,47 @@ describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)',
       content: 'x',
     });
     expect(decision.block).toBe(false);
+  });
+});
+
+describe('observeTransportLeak (passive telemetry)', () => {
+  // The exact garbage run 9704a73e wrote into a customer's global-error.tsx.
+  const LEAKED_LINE =
+    "' }#+#+#+#+.functions.complete_task  (commentary  json.functions.complete_taskjson>tagger历山大发 { ";
+
+  it('reports which pattern fired and where — never any matched text', () => {
+    observeTransportLeak('Write', LEAKED_LINE);
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({
+      tool: 'Write',
+      leak: 'leaked tool-call tokens',
+      leak_offset: LEAKED_LINE.indexOf('functions.'),
+      content_length: LEAKED_LINE.length,
+    });
+    expect(JSON.stringify(call?.[1])).not.toContain('complete_task');
+  });
+
+  it('flags control characters by pattern only', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak('Edit', 'trailing\x7f');
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({ leak: 'control characters' });
+  });
+
+  it('stays silent on real source, including Firebase functions.* code', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak(
+      'Write',
+      'const f = functions.https.onRequest(app);\nline\n\ttabbed\r\n',
+    );
+    expect(
+      vi
+        .mocked(analytics.wizardCapture)
+        .mock.calls.some(([e]) => e === 'file content leak observed'),
+    ).toBe(false);
   });
 });
