@@ -628,14 +628,16 @@ export const McpScreen = ({
                 />
                 {!isRemove && loginCommands.length > 0 && (
                   <Box flexDirection="column" marginBottom={1}>
-                    <Text dimColor>
-                      One step left — authenticate in your editor (nothing
-                      prompts you automatically):
+                    <Text color="green" bold>
+                      {'\u2714'} Authenticate to finish (opens your browser):
                     </Text>
                     {loginCommands.map((c) => (
-                      <Text key={c.name} dimColor>
+                      <Text key={c.name}>
                         {'  '}
-                        {c.name}: <Text bold>{c.command}</Text>
+                        {c.name}:{' '}
+                        <Text bold color="green">
+                          {c.command}
+                        </Text>
                       </Text>
                     ))}
                   </Box>

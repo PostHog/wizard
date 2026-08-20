@@ -58,7 +58,7 @@ function mcpLoginBlock(store: WizardStore): string | null {
   const commands = store.session.mcpLoginCommands;
   if (!commands || commands.length === 0) return null;
   return (
-    `${DIM}Authenticate to finish (opens your browser):${RESET_ATTRS}\n` +
+    `${GREEN}${BOLD}\u2714 Authenticate to finish (opens your browser):${RESET_ATTRS}\n` +
     commands.join('\n')
   );
 }
