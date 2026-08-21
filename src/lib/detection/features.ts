@@ -12,6 +12,30 @@ import { DiscoveredFeature } from '@lib/wizard-session';
 
 const STRIPE_PACKAGES = new Set(['stripe', '@stripe/stripe-js']);
 
+// Cloudflare Workers projects can forward $http_log events for bot analytics.
+const CLOUDFLARE_PACKAGES = new Set([
+  'wrangler',
+  '@cloudflare/workers-types',
+  '@react-router/cloudflare',
+  '@astrojs/cloudflare',
+  '@sveltejs/adapter-cloudflare',
+  '@sveltejs/adapter-cloudflare-workers',
+]);
+
+const WRANGLER_CONFIG_FILES = [
+  'wrangler.toml',
+  'wrangler.jsonc',
+  'wrangler.json',
+];
+
+// Root middleware files (Next.js convention) are the one-file place to add $http_log capture.
+const MIDDLEWARE_FILES = [
+  'middleware.ts',
+  'middleware.js',
+  'src/middleware.ts',
+  'src/middleware.js',
+];
+
 const LLM_PACKAGES = new Set([
   'openai',
   '@anthropic-ai/sdk',
@@ -83,6 +107,14 @@ function discoverNodeFeatures(
   }
   if (depNames.some((depName) => LLM_PACKAGES.has(depName))) {
     features.push(DiscoveredFeature.LLM);
+  }
+  if (
+    depNames.some((depName) => CLOUDFLARE_PACKAGES.has(depName)) ||
+    [...WRANGLER_CONFIG_FILES, ...MIDDLEWARE_FILES].some(
+      (file) => safeRead(installDir, file) !== null,
+    )
+  ) {
+    features.push(DiscoveredFeature.HttpLog);
   }
 }
 
