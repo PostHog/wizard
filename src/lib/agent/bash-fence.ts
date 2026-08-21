@@ -88,6 +88,21 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
+  // cargo build/check also execute code (build.rs build scripts + proc-macros),
+  // accepted under the "builds are equivalent risk" model in the file header.
+  // run/test are denied so the finished binary/tests aren't run; install/publish
+  // are outward-facing.
+  cargo: [
+    'add',
+    'remove',
+    'build',
+    'check',
+    'fmt',
+    'clippy',
+    'metadata',
+    'tree',
+    'fetch',
+  ],
   // mix runs arbitrary project-defined tasks, so only the dependency + build
   // tasks are listed. compile also executes code (compile-time macros), accepted
   // under the "builds are equivalent risk" model in the file header; run/test/
@@ -138,6 +153,7 @@ const ALLOWED_TOOLS_SUMMARY =
   'xcodegen (generate), xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
   'mvn (install|compile|package|verify|dependency:tree), ' +
   'flutter/dart (pub add/remove/get/upgrade/outdated/deps, analyze, build, clean, doctor), ' +
+  'cargo (add|remove|build|check|fmt|clippy|metadata|tree|fetch), ' +
   'mix (deps.get|deps.update|deps.tree|compile|format|hex.info), ' +
   'go (get|build|vet|fmt|version|list, mod tidy/download/verify/graph/why).';
 
