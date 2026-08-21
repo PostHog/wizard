@@ -97,23 +97,31 @@ const LOCAL_SERVICES: readonly LocalService[] = [
   },
 ] as const;
 
-/** localhost binds instantly or not at all, so no retries and a short budget. */
+// Retries because this gate gates `fetchWithRetry` (see fetch-retry.ts) — a
+// blip it would ride out must not abort the run instead. A missing server
+// refuses instantly, so the retries only cost time when one is slow to answer,
+// which is exactly when they're worth paying for.
 const PROBE_TIMEOUT_MS = 2_000;
+const PROBE_ATTEMPTS = 3;
+const PROBE_BACKOFF_MS = 250;
 
 async function isReachable(url: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  try {
-    // Any reply — including 404 or 405 — proves something is listening, which
-    // is the only question here. Whether it serves what we want is the caller's
-    // problem to report later, with its own better-shaped error.
-    await fetch(url, { signal: controller.signal });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
+  for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt++) {
+    try {
+      // Any reply — including 404 or 405 — proves something is listening, which
+      // is the only question here. Deliberately not `fetchWithRetry`: that
+      // treats a non-ok status as failure, and here it is a pass.
+      await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+      return true;
+    } catch {
+      if (attempt < PROBE_ATTEMPTS) {
+        await new Promise((r) =>
+          setTimeout(r, PROBE_BACKOFF_MS * 2 ** (attempt - 1)),
+        );
+      }
+    }
   }
+  return false;
 }
 
 /**

@@ -220,6 +220,21 @@ describe('checkLocalServices', () => {
     expect(msg).not.toContain('PostHog —');
   });
 
+  // The gate sits in front of fetchWithRetry, so it must be at least as
+  // forgiving — otherwise a blip the real fetch would survive aborts the run.
+  it('retries a failing probe before declaring a service down', async () => {
+    let attempts = 0;
+    stubFetch(() => (++attempts < 3 ? 'refused' : 200));
+    await expect(
+      checkLocalServices({
+        localMcp: false,
+        localContextMill: true,
+        localPosthog: false,
+      }),
+    ).resolves.toBeUndefined();
+    expect(attempts).toBe(3);
+  });
+
   it('probes each requested service on its own port', async () => {
     const seen: string[] = [];
     stubFetch((url) => {
