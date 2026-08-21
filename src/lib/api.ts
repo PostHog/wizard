@@ -261,6 +261,20 @@ export async function fetchSlackConnected(
   return parsed.data.results.some((i) => i.kind === 'slack');
 }
 
+/**
+ * True for the auth/scope failures that mean "the token can't read this",
+ * not "something is broken": 401 (unauthenticated) and 403 (authenticated
+ * but missing the required scope). Callers that already degrade gracefully
+ * on these — e.g. the Slack connect poll, which 403s without the
+ * `integration:read` scope (see CONNECT_SLACK_SCOPE_ADDITIONS) — use this to
+ * skip error-tracking reports for an expected, handled outcome.
+ */
+export function isAuthOrScopeError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  return status === 401 || status === 403;
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
