@@ -142,6 +142,11 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     harness: Harness.anthropic,
     model: DEFAULT_AGENT_MODEL,
   },
+  'replay-vision': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.anthropic,

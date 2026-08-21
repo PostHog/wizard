@@ -1,0 +1,44 @@
+{
+  "program": "replay-vision",
+  "summary": "Happy path: detect framework (platform gate), confirm intro, run the replay-vision orchestrator flow (enable replay + three scanners + report), delete installed skills. On an unsupported platform (pure backend, KMP) the run aborts at detect with the friendly platform explanation before any work.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first"
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "orchestrator / anthropic / sonnet — the program's pinned binding"
+    },
+    {
+      "name": "linear-fallback",
+      "summary": "linear arm: the command skill drives the same step-skills single-agent",
+      "sequence": "linear"
+    }
+  ],
+  "path": [
+    {
+      "screen": "(headless detect)",
+      "auto": "framework detection; unsupported platforms abort here with the Replay-vision platform message — that abort screen is the snapshot for the negative case"
+    },
+    { "screen": "agent-skill-intro", "auto": "confirm & continue" },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage — proceed even if the readiness probe flags an issue"
+    },
+    { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "run",
+      "auto": "(external) — orchestrator: seed plans the graph (install/init only when PostHog is missing), enable-replay, three scanner tasks in parallel, report sink"
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    {
+      "screen": "keep-skills",
+      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
+    }
+  ]
+}

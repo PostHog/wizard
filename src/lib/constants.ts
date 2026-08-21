@@ -57,6 +57,20 @@ export enum Sequence {
   orchestrator = 'orchestrator',
 }
 
+/**
+ * What kind of call produced a gateway generation — the `call_type` trace tag.
+ * Splits a program's LLM spend by workload. Every member is sent explicitly so
+ * an absent value means "old build", not "agent".
+ */
+export enum CallType {
+  /** The agent doing the work the user asked for. */
+  agent = 'agent',
+  /** Warlock's classifier deciding whether a YARA match is a true positive. */
+  yaraTriage = 'yara-triage',
+  /** The cheap repo scan that classifies which projects a program acts on. */
+  detection = 'detection',
+}
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
@@ -83,6 +97,11 @@ export enum Integration {
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  elixir = 'elixir',
+  go = 'go',
+  rust = 'rust',
+  // Must stay after kmp/swift/android: those claim gradle projects first.
+  java = 'java',
 
   // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',

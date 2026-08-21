@@ -100,6 +100,12 @@ describe('warehouse task notice', () => {
     expect(n?.cancelLabel).toContain('Skip');
   });
 
+  it('promises the questions come at the end, not mid-run', () => {
+    // The task is deferred behind the code work (seeded-deps.ts), so consenting
+    // up front must not read as "expect a prompt any moment now".
+    expect(notice()?.body[0]).toContain('at the end');
+  });
+
   it('names what was detected', () => {
     expect(notice()?.items).toEqual(['Postgres']);
   });

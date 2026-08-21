@@ -4,6 +4,7 @@ import { mcpCommand } from '../commands/mcp';
 import { auditCommand } from '../commands/audit';
 import { doctorCommand } from '../commands/doctor';
 import { migrateCommand } from '../commands/migrate';
+import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { skillCommand } from '../commands/skill';
@@ -85,6 +86,7 @@ describe('production command tree', () => {
       auditCommand,
       doctorCommand,
       migrateCommand,
+      replayVisionCommand,
       revenueCommand,
       uploadSourcemapsCommand,
       skillCommand,
