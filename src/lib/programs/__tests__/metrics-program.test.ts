@@ -34,12 +34,23 @@ describe('metrics program', () => {
     expect(metricsConfig.agentFlow).toBe('metrics');
   });
 
-  it('runs the one collapsed metrics skill', () => {
+  it('has no fixed skillId — the agent picks the variant from the menu', () => {
     const run = staticRun(metricsConfig);
-    expect(run.skillId).toBe('metrics');
+    expect(run.skillId).toBeUndefined();
+
     const prompt = run.customPrompt?.({} as WizardSession);
-    expect(prompt).toContain('metrics');
-    expect(prompt).toContain('installation reference');
+    expect(prompt).toContain('load_skill_menu');
+    expect(prompt).toContain('"metrics"');
+    // Every published variant the prompt teaches the agent to choose from.
+    for (const variant of [
+      'metrics-python',
+      'metrics-nodejs',
+      'metrics-javascript',
+      'metrics-kubernetes',
+      'metrics-other',
+    ]) {
+      expect(prompt).toContain(variant);
+    }
   });
 
   it('points the outro at the metrics docs and report file', () => {

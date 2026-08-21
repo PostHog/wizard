@@ -12,35 +12,59 @@ const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
  * `wizard metrics` — instrument the project with PostHog application metrics
  * (`posthog.metrics` counters, gauges, and histograms).
  *
- * One `metrics` skill for every platform: its reference files carry the
- * per-platform installation docs and the agent reads the one matching the
- * project. Tasks declare `skills: [metrics]` and resolve by exact menu id —
- * no framework detection, no variant machinery. Stays flat while a single
- * "add metrics to a project" flow is the only action.
+ * No `run.skillId`: the context-mill `metrics` group ships one variant per
+ * platform (python, nodejs, javascript, kubernetes, other/OTLP) and the agent
+ * pulls the matching one itself — the flow's tasks and the linear
+ * `customPrompt` both pick from the menu and install it. Stays flat while a
+ * single "add metrics to a project" flow is the only action.
  */
 export const metricsConfig: ProgramConfig = {
   command: 'metrics',
   description: 'Add PostHog application metrics to your project',
   id: 'metrics',
   // Orchestrator flow (context-mill `context/agents/metrics`): the seed queues
-  // verify-sdk → instrument-metrics → report. Explicit so renaming the
-  // program can't silently detach the flow.
+  // verify-sdk → instrument-metrics → report; the tasks install the matching
+  // platform variant themselves. Explicit so renaming the program can't
+  // silently detach the flow.
   agentFlow: 'metrics',
   steps: METRICS_STEPS,
   reportFile: METRICS_REPORT_FILE,
   getContentBlocks,
   run: {
     integrationLabel: 'metrics',
-    skillId: 'metrics',
+    // No `skillId`: the agent must load the menu and install the right
+    // variant itself. The prompt below tells it how.
     customPrompt:
-      () => `Instrument this project with PostHog application metrics by
-running the \`metrics\` skill end-to-end. Identify the platform from the
-project's manifest and read exactly the matching installation reference — the
-skill's SKILL.md explains how to choose. Make only additive changes — reuse an
-existing PostHog client by adding the \`metrics\` config to it rather than
-constructing a second client, and do not touch existing identify calls, event
-capture, or dashboards. The final report is written to
-./${METRICS_REPORT_FILE}.`,
+      () => `Instrument this project with PostHog application metrics.
+
+This flow has no pre-installed skill — you install the right one yourself:
+
+1. Call \`load_skill_menu\` with \`category: "metrics"\`. The menu is the
+   source of truth: one variant per platform.
+
+2. Pick the variant that matches the project:
+   - Python tooling (\`pyproject.toml\`, \`requirements.txt\`, \`Pipfile\`) →
+     \`metrics-python\` (needs \`posthog\` >= 7.23.0)
+   - \`package.json\` with server-side Node code → \`metrics-nodejs\`
+     (needs \`posthog-node\` >= 5.43.0)
+   - \`package.json\` that is browser-only → \`metrics-javascript\`
+     (needs \`posthog-js\` >= 1.399.0)
+   - Kubernetes manifests / Helm charts and the user wants cluster-level
+     scraping → \`metrics-kubernetes\`
+   - Any other language → \`metrics-other\` (plain OTLP exporter)
+   A full-stack app (e.g. Next.js) usually wants the server variant — metrics
+   measure service work, not user actions. Genuinely ambiguous →
+   \`wizard_ask\` with a multi-choice picker.
+
+3. Call \`install_skill\` with the picked variant id. Then follow that skill's
+   \`SKILL.md\` and references end-to-end — it covers where to place metrics
+   (middleware, background jobs, external calls, business commit sites) and
+   the low-cardinality attribute rules.
+
+Make only additive changes — reuse an existing PostHog client by adding the
+\`metrics\` config to it rather than constructing a second client, and do not
+touch existing identify calls, event capture, or dashboards. The final report
+is written to ./${METRICS_REPORT_FILE}.`,
     successMessage: `Application metrics configured! View the report at ./${METRICS_REPORT_FILE}`,
     reportFile: METRICS_REPORT_FILE,
     docsUrl: 'https://posthog.com/docs/metrics',

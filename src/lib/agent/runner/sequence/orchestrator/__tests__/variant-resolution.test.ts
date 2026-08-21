@@ -102,25 +102,6 @@ const MENU: SkillEntry[] = [
   ...expandBundleEntry(CAPTURE_BUNDLE_ENTRY),
 ];
 
-// Pinned from the built metrics menu: one collapsed skill, exact-id resolution.
-const METRICS_ENTRY: SkillEntry = {
-  id: 'metrics',
-  group: 'metrics',
-  name: 'metrics',
-  downloadUrl: 'https://example.test/metrics.zip',
-};
-
-describe('resolveSkillVariantId — collapsed single-skill group (metrics)', () => {
-  it('resolves by exact menu id, whatever the framework', () => {
-    expect(resolveSkillVariantId([METRICS_ENTRY], 'metrics', 'flask')).toBe(
-      'metrics',
-    );
-    expect(resolveSkillVariantId([METRICS_ENTRY], 'metrics', undefined)).toBe(
-      'metrics',
-    );
-  });
-});
-
 describe('resolveSkillVariantId — menu-declared framework resolution', () => {
   it('resolves a bare single-variant skill id to itself', () => {
     expect(resolveSkillVariantId(MENU, 'integration-v2-build', 'django')).toBe(
