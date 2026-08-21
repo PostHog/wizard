@@ -19,6 +19,7 @@ import { SWIFT_AGENT_CONFIG } from '@frameworks/swift/swift-wizard-agent';
 import { KMP_AGENT_CONFIG } from '@frameworks/kmp/kmp-wizard-agent';
 import { ANDROID_AGENT_CONFIG } from '@frameworks/android/android-wizard-agent';
 import { RAILS_AGENT_CONFIG } from '@frameworks/rails/rails-wizard-agent';
+import { ELIXIR_AGENT_CONFIG } from '@frameworks/elixir/elixir-wizard-agent';
 import { GO_AGENT_CONFIG } from '@frameworks/go/go-wizard-agent';
 import { RUST_AGENT_CONFIG } from '@frameworks/rust/rust-wizard-agent';
 import { PYTHON_AGENT_CONFIG } from '@frameworks/python/python-wizard-agent';
@@ -46,6 +47,7 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.swift]: SWIFT_AGENT_CONFIG,
   [Integration.android]: ANDROID_AGENT_CONFIG,
   [Integration.rails]: RAILS_AGENT_CONFIG,
+  [Integration.elixir]: ELIXIR_AGENT_CONFIG,
   [Integration.go]: GO_AGENT_CONFIG,
   [Integration.rust]: RUST_AGENT_CONFIG,
   [Integration.python]: PYTHON_AGENT_CONFIG,

@@ -103,6 +103,18 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
     'tree',
     'fetch',
   ],
+  // mix runs arbitrary project-defined tasks, so only the dependency + build
+  // tasks are listed. compile also executes code (compile-time macros), accepted
+  // under the "builds are equivalent risk" model in the file header; run/test/
+  // phx.server are denied so app code, tests, and servers aren't run.
+  mix: [
+    'deps.get',
+    'deps.update',
+    'deps.tree',
+    'compile',
+    'format',
+    'hex.info',
+  ],
   // Materializes the Xcode project from project.yml so xcodebuild can verify —
   // build-equivalent risk (runs on the project's own spec).
   xcodegen: ['generate'],
@@ -142,6 +154,7 @@ const ALLOWED_TOOLS_SUMMARY =
   'mvn (install|compile|package|verify|dependency:tree), ' +
   'flutter/dart (pub add/remove/get/upgrade/outdated/deps, analyze, build, clean, doctor), ' +
   'cargo (add|remove|build|check|fmt|clippy|metadata|tree|fetch), ' +
+  'mix (deps.get|deps.update|deps.tree|compile|format|hex.info), ' +
   'go (get|build|vet|fmt|version|list, mod tidy/download/verify/graph/why).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
