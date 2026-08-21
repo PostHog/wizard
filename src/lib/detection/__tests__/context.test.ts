@@ -9,8 +9,6 @@ const baseOptions: WizardRunOptions = {
   installDir: '/test/dir',
   debug: false,
   signup: false,
-  localMcp: false,
-  localContextMill: false,
   ci: false,
   benchmark: false,
   yaraReport: false,

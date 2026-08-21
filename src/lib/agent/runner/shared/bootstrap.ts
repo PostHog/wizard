@@ -56,8 +56,6 @@ export function sessionToOptions(session: WizardSession): WizardRunOptions {
     installDir: session.installDir,
     debug: session.debug,
     signup: session.signup,
-    localMcp: session.localMcp,
-    localContextMill: session.localContextMill,
     ci: session.ci,
     benchmark: session.benchmark,
     projectId: session.projectId,

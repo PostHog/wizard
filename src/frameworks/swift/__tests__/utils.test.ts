@@ -16,8 +16,6 @@ function options(installDir: string): WizardRunOptions {
     benchmark: false,
     yaraReport: false,
     signup: false,
-    localMcp: false,
-    localContextMill: false,
   };
 }
 

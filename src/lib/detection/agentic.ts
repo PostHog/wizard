@@ -309,8 +309,6 @@ function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
     signup: session.signup,
     apiKey: session.apiKey,
     projectId: session.projectId,
-    localMcp: session.localMcp,
-    localContextMill: session.localContextMill,
   };
 }
 

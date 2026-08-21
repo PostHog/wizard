@@ -185,8 +185,6 @@ export const replayVisionConfig: ProgramConfig = {
       installDir: session.installDir,
       debug: session.debug,
       signup: session.signup,
-      localMcp: session.localMcp,
-      localContextMill: session.localContextMill,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,

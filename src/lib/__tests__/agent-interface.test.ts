@@ -73,8 +73,6 @@ describe('runAgent', () => {
     debug: false,
     installDir: '/test/dir',
     signup: false,
-    localMcp: false,
-    localContextMill: false,
     ci: false,
     benchmark: false,
     yaraReport: false,

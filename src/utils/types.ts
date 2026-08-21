@@ -28,9 +28,6 @@ export type WizardRunOptions = {
   apiKey?: string;
   projectId?: number;
 
-  localMcp: boolean;
-  localContextMill: boolean;
-
   /** `--harness` override. */
   harness?: Harness;
   /** `--sequence` override. */

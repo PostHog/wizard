@@ -36,8 +36,6 @@ export async function detectPostHogIntegration(
       installDir,
       debug: session.debug,
       signup: session.signup,
-      localMcp: session.localMcp,
-      localContextMill: session.localContextMill,
       ci: session.ci,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
