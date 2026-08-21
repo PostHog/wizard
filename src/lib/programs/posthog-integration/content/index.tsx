@@ -17,7 +17,10 @@ import { FUNNEL_BLOCK } from './funnel.js';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   {
-    content: 'Welcome.',
+    // Name comes from the login profile; falls back when absent (CI keys).
+    content: store?.session.apiUser?.first_name
+      ? `Welcome, ${store.session.apiUser.first_name}.`
+      : 'Welcome.',
     pause: 3000,
     mode: TextRevealMode.Typewriter,
     animationInterval: 160,

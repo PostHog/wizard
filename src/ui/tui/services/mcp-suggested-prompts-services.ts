@@ -135,7 +135,15 @@ export function createMcpSuggestedPromptsServices(
       };
     },
 
-    runPromptStreaming: (args) => runProductionPromptStreaming(args),
+    runPromptStreaming: (args) =>
+      runProductionPromptStreaming({
+        ...args,
+        // Gateway cost attribution. Only the id crosses here; the rest of the
+        // trace tags are built where the headers are, keeping the agent module
+        // out of the TUI's startup graph.
+        programId: store.analyticsProgramId,
+        integration: store.session.integration ?? undefined,
+      }),
 
     probeProjectData: (credentials) =>
       runProbe({
@@ -159,6 +167,8 @@ async function* runProductionPromptStreaming(args: {
   credentials: Credentials;
   signal: AbortSignal;
   resumeSessionId?: string;
+  programId?: string;
+  integration?: string;
 }): AsyncIterable<AgentChunk> {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo

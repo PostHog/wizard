@@ -91,7 +91,10 @@ export async function detectSelfDrivingIntegrationProjects(
   session: WizardSession,
   onEvent?: DetectEvent,
 ): Promise<IntegrationDetectionReport> {
-  const report = await detectIntegrationProjects(session, { onEvent });
+  const report = await detectIntegrationProjects(session, {
+    programId: 'self-driving',
+    onEvent,
+  });
   return toIntegrationReport(report);
 }
 
