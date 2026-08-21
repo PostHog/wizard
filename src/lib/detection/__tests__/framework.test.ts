@@ -5,6 +5,7 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { GO_AGENT_CONFIG } from '../../../frameworks/go/go-wizard-agent';
 import { JAVA_AGENT_CONFIG } from '../../../frameworks/java/java-wizard-agent';
 import { FLUTTER_AGENT_CONFIG } from '../../../frameworks/flutter/flutter-wizard-agent';
 
@@ -162,6 +163,27 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Go module project resolves to go', async () => {
+    const opts = project({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'main.go': 'package main',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.go,
+    );
+  });
+
+  test('a Go project with an embedded frontend package.json still resolves to go', async () => {
+    const opts = project({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'package.json': JSON.stringify({ devDependencies: { esbuild: '^0.20' } }),
+      'package-lock.json': '{}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.go,
+    );
+  });
+
   test('a Maven project resolves to java', async () => {
     const opts = project({
       'pom.xml':
@@ -180,6 +202,18 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     });
     await expect(detectFramework(opts.installDir)).resolves.toBe(
       Integration.java,
+    );
+  });
+
+  test('a Flutter project resolves to flutter, not its android/ subtree', async () => {
+    const opts = project({
+      'pubspec.yaml': FLUTTER_PUBSPEC,
+      'android/build.gradle': `plugins { id 'com.android.application' }`,
+      'android/app/src/main/AndroidManifest.xml': '<manifest/>',
+      'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.flutter,
     );
   });
 });
@@ -298,6 +332,25 @@ describe('java detect', () => {
 
   test('does not claim a project with no build files', async () => {
     const opts = project({ 'src/main/java/App.java': 'class App {}' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('go detect', () => {
+  const detect = GO_AGENT_CONFIG.detection.detect;
+
+  test('claims a Go module project', async () => {
+    const opts = project({ 'go.mod': 'module example.com/app\n\ngo 1.22\n' });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a go.mod without a module directive', async () => {
+    const opts = project({ 'go.mod': '// not a real module file\n' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a go.mod', async () => {
+    const opts = project({ 'main.go': 'package main' });
     await expect(detect(opts)).resolves.toBe(false);
   });
 });
