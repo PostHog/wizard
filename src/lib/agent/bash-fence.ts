@@ -19,6 +19,12 @@ export type BashFenceDecision =
   | { allowed: true }
   | { allowed: false; message: string; analyticsReason: string };
 
+export const BASH_FENCE_AGENT_GUIDANCE: readonly string[] = [
+  '- `bash` is for project package-manager installs and project-defined build/typecheck/lint/format commands.',
+  '- Plain `rm [-f] <relative-file-inside-project>` is allowed only for cleanup of generated project files.',
+  '- `test` and `start` scripts are intentionally not allowed; use build/typecheck/lint when available, otherwise verify by reading the changed files.',
+];
+
 const NODE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const GRADLE_MANAGERS = new Set(['gradle', 'gradlew', './gradlew']);
 const MAVEN_MANAGERS = new Set(['mvn', 'mvnw', './mvnw']);
@@ -141,8 +147,6 @@ const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint'];
 // positive action list is unparseable; only the test actions are out of contract.
 const XCODEBUILD_DENIED_ACTIONS = new Set(['test', 'test-without-building']);
 
-const DANGEROUS_OPERATORS = /[;`$()]/;
-
 const ALLOWED_TOOLS_SUMMARY =
   'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
   'npx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
@@ -167,6 +171,30 @@ function denyCommand(command: string, feedback: string): BashFenceDecision {
     'not in allowlist',
     `Bash command not allowed: \`${shown}\`. ${feedback}`,
   );
+}
+
+function hasDangerousOperators(command: string): boolean {
+  let quote: "'" | '"' | undefined;
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+
+    if (ch === '`' || ch === '$') return true;
+
+    if (quote) {
+      if (ch === quote) quote = undefined;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+
+    if (ch === ';' || ch === '(' || ch === ')') return true;
+  }
+
+  return quote !== undefined;
 }
 
 function isNodeScriptName(token: string): boolean {
@@ -471,7 +499,7 @@ export function evaluateBashCommand(rawCommand: string): BashFenceDecision {
       'Bash command not allowed. Multi-line commands are not permitted — run one command at a time.',
     );
   }
-  if (DANGEROUS_OPERATORS.test(command)) {
+  if (hasDangerousOperators(command)) {
     return deny(
       'dangerous operators',
       'Bash command not allowed. Shell operators like ; ` $ ( ) are not permitted.',

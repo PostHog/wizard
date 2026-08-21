@@ -100,6 +100,11 @@ describe('commandments by axis', () => {
     });
   });
 
+  it('explains schema lag for newly instrumented events', () => {
+    expect(global).toMatch(/read-data-schema/);
+    expect(global).toMatch(/until they are ingested/);
+  });
+
   // Targeted assertions for the wizard_ask Path A translation rules.
   // These are the rules a skill author depends on when leaving their prose
   // unchanged — they need to keep working as the commandment list evolves.
