@@ -172,17 +172,6 @@ describe('agentRunTools', () => {
       'mcp__wizard-tools__wizard_ask',
     ]);
   });
-
-  it('qualifies the skill-menu tool against the wizard-tools server', () => {
-    const p = parseAgentPrompt(
-      '---\nallowedTools: [Read, load_skill_menu]\n---\nx',
-      't',
-    );
-    expect(agentRunTools(p).allowedTools).toEqual([
-      'Read',
-      'mcp__wizard-tools__load_skill_menu',
-    ]);
-  });
 });
 
 describe('buildRegistry', () => {

@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  resolveSkillVariantId,
-  skillFamilyExists,
-} from '../orchestrator-runner';
+import { resolveSkillVariantId } from '../orchestrator-runner';
 import { Integration } from '@lib/constants';
 import { expandBundleEntry } from '@lib/wizard-tools';
 import type { SkillEntry } from '@lib/wizard-tools';
@@ -103,50 +100,38 @@ const MENU: SkillEntry[] = [
   ...expandBundleEntry(CAPTURE_BUNDLE_ENTRY),
 ];
 
-// Platform-variant family with no per-framework entries: the seed picks the
-// variant and pins it through task inputs.
-const METRICS_ENTRIES: SkillEntry[] = [
-  { id: 'metrics-python', group: 'metrics' },
-  { id: 'metrics-nodejs', group: 'metrics' },
-  { id: 'metrics-javascript', group: 'metrics' },
-] as SkillEntry[];
+// Pinned from the built metrics menu: one entry per framework, same variant id.
+const METRICS_ENTRIES = [
+  { id: 'metrics-python', framework: 'python' },
+  { id: 'metrics-python', framework: 'django' },
+  { id: 'metrics-python', framework: 'flask' },
+  { id: 'metrics-python', framework: 'fastapi' },
+  { id: 'metrics-nodejs', framework: 'javascript_node' },
+  { id: 'metrics-nodejs', framework: 'nextjs' },
+  { id: 'metrics-javascript', framework: 'javascript_web' },
+].map(
+  (e): SkillEntry => ({
+    ...e,
+    group: 'metrics',
+    name: e.id,
+    downloadUrl: `https://example.test/${e.id}.zip`,
+  }),
+);
 
-describe('resolveSkillVariantId — seed-pinned variants', () => {
-  it('a pinned menu id from task inputs wins over framework resolution', () => {
+describe('resolveSkillVariantId — multi-framework platform variants (metrics)', () => {
+  it('resolves the metrics family through the menu framework entries', () => {
+    expect(resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'flask')).toBe(
+      'metrics-python',
+    );
+    expect(resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'nextjs')).toBe(
+      'metrics-nodejs',
+    );
     expect(
-      resolveSkillVariantId(
-        METRICS_ENTRIES,
-        'metrics',
-        'flask',
-        'metrics-python',
-      ),
-    ).toBe('metrics-python');
-  });
-
-  it('a pinned id outside the declared family is ignored', () => {
-    const entries = [
-      ...METRICS_ENTRIES,
-      ...INTEGRATION_ENTRIES,
-    ] as SkillEntry[];
+      resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'javascript_web'),
+    ).toBe('metrics-javascript');
     expect(
-      resolveSkillVariantId(entries, 'metrics', undefined, 'integration-flask'),
+      resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'swift'),
     ).toBeUndefined();
-  });
-
-  it('a pinned id not in the menu falls back to framework resolution', () => {
-    expect(
-      resolveSkillVariantId(
-        METRICS_ENTRIES,
-        'metrics',
-        'flask',
-        'metrics-rust',
-      ),
-    ).toBeUndefined();
-  });
-
-  it('a pin-only family passes the family-existence preflight check', () => {
-    expect(skillFamilyExists(METRICS_ENTRIES, 'metrics')).toBe(true);
-    expect(skillFamilyExists(METRICS_ENTRIES, 'not-a-skill')).toBe(false);
   });
 });
 

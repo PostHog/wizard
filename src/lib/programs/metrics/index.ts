@@ -1,10 +1,31 @@
-import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import type {
+  ProgramConfig,
+  ProgramReadyContext,
+  ProgramStep,
+} from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { detectPostHogIntegration } from '@lib/programs/posthog-integration/detect';
 
-const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
-  step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
-);
+/**
+ * Framework detection ahead of the run, as on replay-vision: the orchestrator
+ * resolves each task's `metrics` skill variant against the detected framework
+ * in preflight, so the session must carry it before the run arm starts.
+ */
+const DETECT_STEP: ProgramStep = {
+  id: 'detect',
+  label: 'Detecting framework',
+  onReady: async (ctx: ProgramReadyContext) => {
+    await detectPostHogIntegration(ctx);
+  },
+};
+
+const METRICS_STEPS: ProgramStep[] = [
+  DETECT_STEP,
+  ...AGENT_SKILL_STEPS.map((step) =>
+    step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
+  ),
+];
 
 const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
 
@@ -13,19 +34,19 @@ const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
  * (`posthog.metrics` counters, gauges, and histograms).
  *
  * No `run.skillId`: the context-mill `metrics` group ships one variant per
- * platform (python, nodejs, javascript, kubernetes, other/OTLP) and the wizard
- * does no platform detection — the agent loads the menu, matches the project's
- * manifest, and installs the right variant itself (see `customPrompt`), the
- * same shape as `ai-observability`. Stays flat while a single "add metrics to
- * a project" flow is the only action.
+ * platform (python, nodejs, javascript, kubernetes, other/OTLP), and the menu
+ * maps each detected framework to its platform variant. On the orchestrator
+ * the runner resolves it from the detect step's framework; on a linear
+ * (composed) run the agent picks from the menu via `customPrompt`. Stays flat
+ * while a single "add metrics to a project" flow is the only action.
  */
 export const metricsConfig: ProgramConfig = {
   command: 'metrics',
   description: 'Add PostHog application metrics to your project',
   id: 'metrics',
-  // Orchestrator flow (context-mill `context/agents/metrics`): the seed detects
-  // the platform, picks the skill variant, and queues verify-sdk →
-  // instrument-metrics → report, handing the variant to each task as input.
+  // Orchestrator flow (context-mill `context/agents/metrics`): the seed queues
+  // verify-sdk → instrument-metrics → report; each task's `metrics` skill
+  // resolves to the platform variant through the menu's framework entries.
   // Explicit so renaming the program can't silently detach the flow.
   agentFlow: 'metrics',
   steps: METRICS_STEPS,
