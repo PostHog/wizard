@@ -94,6 +94,37 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a React Router v6 app resolves to react-router, not a JS fallback', async () => {
+    // v6 declares only `react-router-dom`; v7 consolidated onto `react-router`.
+    // Matching just the v7 name sent every v6 project to javascript_web.
+    const opts = project({
+      'package.json': JSON.stringify({
+        dependencies: {
+          react: '^18',
+          'react-dom': '^18',
+          'react-router-dom': '^6.30.2',
+        },
+      }),
+      'package-lock.json': '{}',
+      'index.html': '<html></html>',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.reactRouter,
+    );
+  });
+
+  test('a React Router v7 app resolves to react-router', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({
+        dependencies: { react: '^19', 'react-router': '7.10.1' },
+      }),
+      'package-lock.json': '{}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.reactRouter,
+    );
+  });
+
   test('a Vite React app resolves to javascript_web, not javascript_node', async () => {
     const opts = project({
       'package.json': JSON.stringify({
