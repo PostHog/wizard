@@ -16,11 +16,13 @@
 import {
   initializeAgent,
   runAgent as executeAgent,
+  buildRunTags,
   AgentSignals,
 } from '@lib/agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -109,6 +111,10 @@ export type AgenticDetectOptions = {
    * through ordering (e.g. a bundler target before a generic framework target).
    */
   targets: readonly DetectTarget[];
+  /** The program this scan bills to. Required, not optional: the scan drives a
+   *  real agent through the gateway, and a caller that forgets leaves that
+   *  spend unattributed. */
+  programId: string;
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
   /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
@@ -329,6 +335,7 @@ export async function detectProjectsWithAgent(
   }
   const {
     targets,
+    programId,
     purpose = 'set up a PostHog integration',
     recommend = false,
     rerankIds,
@@ -337,6 +344,18 @@ export async function detectProjectsWithAgent(
   const { accessToken, host } = session.credentials;
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
+
+  // Built here rather than inherited: this scan runs before
+  // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
+  const wizardMetadata = {
+    ...buildRunTags({
+      programId,
+      integration: 'agentic-detect',
+      runId: analytics.runId,
+      build: analytics.build,
+    }),
+    call_type: CallType.detection,
+  };
 
   const agent = await initializeAgent(
     {
@@ -347,6 +366,7 @@ export async function detectProjectsWithAgent(
       detectPackageManager: detectNodePackageManagers,
       skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
       integrationLabel: 'agentic-detect',
+      wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],
       modelOverride: HAIKU_MODEL,
     },

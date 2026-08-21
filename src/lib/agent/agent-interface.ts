@@ -15,6 +15,7 @@ import { runtimeEnv } from '@env';
 import type { AioCapture } from '@lib/agent/aio-capture';
 import {
   Harness,
+  CallType,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
@@ -345,6 +346,8 @@ export function buildRunTags(args: {
     integration: args.integration,
     run_id: args.runId,
     build: args.build,
+    // Triage and detection spread these tags and override this one.
+    call_type: CallType.agent,
     ...(args.skillId ? { skill_id: args.skillId } : {}),
   };
 }
@@ -525,9 +528,19 @@ export async function initializeAgent(
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
 
     // Same values the env vars above carry, handed over explicitly so triage
-    // never has to read them back out of the environment.
+    // never has to read them back out of the environment. The run tags ride
+    // along so scan spend bills to this program, with `call_type` keeping it
+    // separable from the agent's own calls.
     const triageProvider = createTriageLLMProvider(
-      { baseURL: gatewayUrl, authToken: config.posthogApiKey },
+      {
+        baseURL: gatewayUrl,
+        authToken: config.posthogApiKey,
+        wizardMetadata: {
+          ...(config.wizardMetadata ?? {}),
+          call_type: CallType.yaraTriage,
+        },
+        wizardFlags: config.wizardFlags ?? {},
+      },
       Harness.anthropic,
     );
 
