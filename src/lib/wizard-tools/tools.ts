@@ -199,12 +199,13 @@ export async function downloadSkill(
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  let step: 'download' | 'extract' = 'download';
+  // Reported as `install_step`; a project-wide numeric `step` collides and nulls this one out.
+  let installStep: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
     const data = await downloadWithRetry(skillEntry.downloadUrl);
-    step = 'extract';
+    installStep = 'extract';
     const fileCount = skillEntry.bundle
       ? extractBundle(
           JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
@@ -223,7 +224,7 @@ export async function downloadSkill(
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
         skill_id: skillEntry.id,
-        step: 'scan',
+        install_step: 'scan',
         platform: process.platform,
         error: poisonReason.slice(0, 500),
       });
@@ -244,7 +245,7 @@ export async function downloadSkill(
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
       skill_id: skillEntry.id,
-      step,
+      install_step: installStep,
       platform: process.platform,
       error: String(err.message).slice(0, 500),
     });
@@ -267,10 +268,26 @@ export type InstallSkillResult =
   | { kind: 'skill-not-found'; skillId: string }
   | { kind: 'download-failed'; message: string };
 
+/** One vocabulary for every caller, so a network failure isn't reported as a permissions problem. */
+export function describeInstallFailure(
+  result: Exclude<InstallSkillResult, { kind: 'ok' }>,
+): string {
+  switch (result.kind) {
+    case 'menu-fetch-failed':
+      return 'Could not fetch the skill menu from context-mill.\nCheck your network connection and try again.';
+    case 'skill-not-found':
+      return `Could not find the "${result.skillId}" skill in the context-mill menu.\nPlease try again later.`;
+    case 'download-failed':
+      return `Failed to install skill: ${result.message}\nPlease try again.`;
+  }
+}
+
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,
  * finds the skill, downloads and extracts it. Programs should use this
  * instead of composing fetchSkillMenu + downloadSkill themselves.
+ *
+ * Reports the two failures that resolve before `downloadSkill` can capture them.
  */
 export async function installSkillById(
   skillId: string,
@@ -279,12 +296,28 @@ export async function installSkillById(
   options: SkillInstallOptions,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return { kind: 'menu-fetch-failed' };
+  if (!menu) {
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillId,
+      install_step: 'menu',
+      platform: process.platform,
+      error: 'menu-fetch-failed',
+    });
+    return { kind: 'menu-fetch-failed' };
+  }
 
   const skill = Object.values(menu.categories)
     .flat()
     .find((s) => s.id === skillId);
-  if (!skill) return { kind: 'skill-not-found', skillId };
+  if (!skill) {
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillId,
+      install_step: 'resolve',
+      platform: process.platform,
+      error: 'skill-not-found',
+    });
+    return { kind: 'skill-not-found', skillId };
+  }
 
   const result = await downloadSkill(skill, installDir, options);
   if (!result.success) {

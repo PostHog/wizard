@@ -569,12 +569,17 @@ async function triageFilter(
   matches: ScanMatch[],
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
+  triage: TriageExpectation,
 ): Promise<ScanMatch[]> {
   if (matches.length === 0) return [];
   if (!llmProvider) {
     logToFile(
       `[YARA] triage skipped (no provider) — treating ${matches.length} match(es) as real`,
     );
+    // PreToolUse Bash passes no provider on purpose, so it isn't a signal.
+    if (triage === 'expected') {
+      reportTriageUnavailable(matches.map(ruleIdentity), ctx, 'no-provider');
+    }
     return matches;
   }
   try {
@@ -603,9 +608,52 @@ async function triageFilter(
     return kept;
   } catch (err) {
     logToFile('[YARA] triage failed — treating all matches as real:', err);
+    reportTriageUnavailable(
+      matches.map(ruleIdentity),
+      ctx,
+      'error',
+      err instanceof Error ? err.name : 'unknown',
+    );
     return matches;
   }
 }
+
+/** Rule identity with the scanned content stripped off, so telemetry never sees `matchedStrings`. */
+interface RuleIdentity {
+  rule: string;
+  severity: ScanMatch['metadata']['severity'];
+  category: Category | undefined;
+}
+
+function ruleIdentity(match: ScanMatch): RuleIdentity {
+  return {
+    rule: match.rule,
+    severity: match.metadata.severity,
+    category: match.metadata.category,
+  };
+}
+
+/** Report a match enforced without triage, so blind enforcement is measurable. */
+function reportTriageUnavailable(
+  rules: readonly RuleIdentity[],
+  ctx: ScanContext,
+  reason: 'no-provider' | 'error',
+  errorKind?: string,
+): void {
+  for (const r of rules) {
+    analytics.wizardCapture('yara triage unavailable', {
+      rule: r.rule,
+      severity: r.severity,
+      category: r.category,
+      scan_context: ctx,
+      reason,
+      ...(errorKind ? { error_kind: errorKind } : {}),
+    });
+  }
+}
+
+/** Whether the caller expected triage to run, so a deliberate skip isn't reported as an outage. */
+type TriageExpectation = 'expected' | 'skipped-by-design';
 
 /** A chunk of scanned content together with the matches found inside it. */
 interface FlaggedChunk {
@@ -683,10 +731,11 @@ async function triageFlagged(
   flagged: FlaggedChunk[],
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
+  triage: TriageExpectation = 'expected',
 ): Promise<ScanMatch[]> {
   const triaged = await Promise.all(
     flagged.map(({ chunk, matches }) =>
-      triageFilter(chunk, matches, ctx, llmProvider),
+      triageFilter(chunk, matches, ctx, llmProvider, triage),
     ),
   );
   return dedupeByRule(triaged.flat());
@@ -701,9 +750,10 @@ export async function scanAndTriage(
   content: string,
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
+  triage: TriageExpectation = 'expected',
 ): Promise<ScanMatch[]> {
   const flagged = await scanForContext(content, ctx);
-  return triageFlagged(flagged, ctx, llmProvider);
+  return triageFlagged(flagged, ctx, llmProvider, triage);
 }
 
 // ─── PreToolUse Hooks ────────────────────────────────────────────
@@ -738,7 +788,12 @@ export function createPreToolUseYaraHooks(
             recordScan();
             // Skip triage on PreToolUse Bash: any flagged command is blocked
             // regardless of triage verdict, so the LLM call would be wasted.
-            const matches = await scanAndTriage(command, 'command', undefined);
+            const matches = await scanAndTriage(
+              command,
+              'command',
+              undefined,
+              'skipped-by-design',
+            );
             if (matches.length === 0) return {};
 
             const match = highestSeverityMatch(matches);
@@ -1043,9 +1098,14 @@ export async function scanInstalledSkill(
     );
     return null;
   }
-  return `Poisoned skill detected: ${verdict.match.rule} (${
-    verdict.match.metadata.severity ?? 'unknown'
-  }) in ${absoluteSkillDir}`;
+  // Only a triaged match carries a verdict; without one we failed closed on the rule alone.
+  const triaged = 'triage' in verdict.match;
+  return (
+    `Poisoned skill detected: ${verdict.match.rule} (${
+      verdict.match.metadata.severity ?? 'unknown'
+    }) in ${absoluteSkillDir}` +
+    (triaged ? '' : ' — triage unavailable, failing closed on the rule alone')
+  );
 }
 
 /**

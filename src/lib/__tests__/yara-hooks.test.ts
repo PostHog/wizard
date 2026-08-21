@@ -669,6 +669,162 @@ describe('yara-hooks', () => {
         expect(output.additionalContext).toContain('YARA VIOLATION');
       });
 
+      it('reports a match enforced without triage when the gateway errors', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              category: 'posthog_pii',
+              severity: 'high',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        mockTriage.mockRejectedValueOnce(new TypeError('gateway unreachable'));
+
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        await hook(
+          input({ tool_name: 'Write', tool_input: { content: 'x' } }),
+          't3b',
+          { signal: dummySignal },
+        );
+
+        const call = mockAnalytics.analytics.wizardCapture.mock.calls.find(
+          (c: unknown[]) => c[0] === 'yara triage unavailable',
+        );
+        expect(call).toBeDefined();
+        expect(call?.[1]).toEqual(
+          expect.objectContaining({
+            rule: 'posthog_pii_in_capture_call',
+            severity: 'high',
+            reason: 'error',
+            error_kind: 'TypeError',
+          }),
+        );
+        // Only the error's class travels — its message can quote scanned content.
+        expect(JSON.stringify(call?.[1])).not.toContain('gateway unreachable');
+      });
+
+      it('reports a match enforced without triage when no provider exists', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              category: 'posthog_pii',
+              severity: 'high',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const hook = createPostToolUseYaraHooks(undefined, noopTerminate)[0]
+          .hooks[0];
+        await hook(
+          input({ tool_name: 'Write', tool_input: { content: 'x' } }),
+          't4b',
+          { signal: dummySignal },
+        );
+
+        const call = mockAnalytics.analytics.wizardCapture.mock.calls.find(
+          (c: unknown[]) => c[0] === 'yara triage unavailable',
+        );
+        expect(call?.[1]).toEqual(
+          expect.objectContaining({ reason: 'no-provider' }),
+        );
+      });
+
+      it('never carries the scanned content that tripped the rule', async () => {
+        const m = match('posthog_pii_in_capture_call', {
+          category: 'posthog_pii',
+          severity: 'high',
+          scan_context: 'output',
+        });
+        // The literal text warlock lifts out of the user's file.
+        m.matchedStrings = ["capture('login', { email: user.email })"];
+        mockScan.mockResolvedValueOnce(matched(m));
+        mockTriage.mockRejectedValueOnce(new Error('gateway down'));
+
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        await hook(
+          input({
+            tool_name: 'Write',
+            tool_input: { content: "capture('login', { email: user.email })" },
+          }),
+          't3c',
+          { signal: dummySignal },
+        );
+
+        const call = mockAnalytics.analytics.wizardCapture.mock.calls.find(
+          (c: unknown[]) => c[0] === 'yara triage unavailable',
+        );
+        const payload = JSON.stringify(call?.[1]);
+        expect(payload).not.toContain('user.email');
+        expect(payload).not.toContain('capture(');
+        expect(payload).not.toContain('matchedStrings');
+        // Rule identity only.
+        expect(Object.keys(call?.[1] as object).sort()).toEqual([
+          'category',
+          'error_kind',
+          'reason',
+          'rule',
+          'scan_context',
+          'severity',
+        ]);
+      });
+
+      it('does not report the PreToolUse Bash skip, which is by design', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('destructive_rm_rf', {
+              category: 'destructive_operations',
+              severity: 'critical',
+              scan_context: 'command',
+            }),
+          ),
+        );
+
+        const hook = createPreToolUseYaraHooks(dummyProvider)[0].hooks[0];
+        const result = await hook(
+          input({ tool_name: 'Bash', tool_input: { command: 'rm -rf /' } }),
+          't4d',
+          { signal: dummySignal },
+        );
+
+        // The match really did fire — this isn't passing because nothing matched.
+        expect(result.decision).toBe('block');
+        // Bash blocks on any flagged command and passes no provider on purpose.
+        // Counting that as an outage would bury the real gateway failures.
+        expect(
+          mockAnalytics.analytics.wizardCapture.mock.calls.find(
+            (c: unknown[]) => c[0] === 'yara triage unavailable',
+          ),
+        ).toBeUndefined();
+      });
+
+      it('stays silent when triage actually ran', async () => {
+        const m = match('posthog_pii_in_capture_call', {
+          category: 'posthog_pii',
+          severity: 'high',
+          scan_context: 'output',
+        });
+        mockScan.mockResolvedValueOnce(matched(m));
+        mockTriage.mockResolvedValueOnce([
+          { ...m, triage: { verdict: 'true_positive', reason: 'real' } },
+        ]);
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        await hook(
+          input({ tool_name: 'Write', tool_input: { content: 'x' } }),
+          't4c',
+          { signal: dummySignal },
+        );
+
+        expect(
+          mockAnalytics.analytics.wizardCapture.mock.calls.find(
+            (c: unknown[]) => c[0] === 'yara triage unavailable',
+          ),
+        ).toBeUndefined();
+      });
+
       it('skips triage on PreToolUse Bash even when a provider is supplied', async () => {
         // PreToolUse Bash always blocks on any flagged command, so triage
         // would be wasted LLM work. Verify the hook never calls triage.
