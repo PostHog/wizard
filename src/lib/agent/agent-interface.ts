@@ -13,6 +13,7 @@ import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { runtimeEnv } from '@env';
 import type { AioCapture } from '@lib/agent/aio-capture';
+import { formatSdkMessageForLog } from '@lib/agent/sdk-message-log';
 import {
   Harness,
   CallType,
@@ -1582,7 +1583,7 @@ function handleSDKMessage(
     );
     getUI().syncTodos(sorted);
   };
-  logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
+  logToFile(`SDK Message: ${message.type}`, formatSdkMessageForLog(message));
 
   if (options.debug) {
     debug(`SDK Message type: ${message.type}`);
