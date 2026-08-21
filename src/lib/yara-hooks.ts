@@ -41,22 +41,9 @@ import { isSkillInstallCommand } from './skill-install';
 import { highestSeverityMatch, scanVerdict } from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
-// TODO(wizard#594): invert this dependency.
-// L2 infra (yara-hooks) imports product-specific filename constants from
-// individual programs. The leaf `constants.ts` modules break the *import*
-// cycle but don't fix the *layering* concern: this file knowing about
-// `events-audit`, `posthog-integration`, and `audit` violates "product
-// knowledge never enters infrastructure code." Proper fix is inverted —
-// programs declare their own doc paths, the hooks read from a generic
-// registry. For now: every new program emitting a PII-shaped report has
-// to be added here. Land that cleanup before adding a fourth entry.
-import {
-  SETUP_REPORT_FILE as EVENTS_AUDIT_REPORT_FILE,
-  EVENT_INVENTORY_FILE,
-  EVENT_INVENTORY_PART_PATTERN,
-} from '@lib/programs/events-audit/constants';
-import { AUDIT_REPORT_FILE } from '@lib/programs/audit/types';
-import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
+import { isWizardDocumentationPath } from './doc-paths-registry';
+
+export { isWizardDocumentationPath } from './doc-paths-registry';
 
 // ─── Warlock module accessor ─────────────────────────────────────
 // Warlock is ESM-only and lazily inits its WASM engine + compiles rules on the
@@ -441,35 +428,11 @@ export function flushScanReport(
 
 // ─── Wizard-documentation allowlist ───────────────────────────────
 //
-// Files the wizard's own programs write to describe events the user's
-// codebase already captures, or events the integration program is
-// proposing to add. When the agent copies a literal
-// `posthog.capture('event', { email: ... })` snippet (or a property
-// list including PII-shaped keys) into one of these files, the
-// `pii_in_capture_call` rule (category: posthog_pii) fires even though
-// the wizard is documenting / planning, not introducing, the pattern.
-// Suppress posthog_pii matches on these paths only; every other rule
-// (secrets, prompt injection, supply chain, destructive ops) still
-// fires normally so the file cannot be used as a smuggling vector for
-// actual violations.
-
-const WIZARD_DOC_BASENAMES = new Set([
-  EVENT_INVENTORY_FILE,
-  EVENTS_AUDIT_REPORT_FILE,
-  AUDIT_REPORT_FILE,
-  EVENT_PLAN_FILE,
-]);
-
-const WIZARD_DOC_PATTERNS: RegExp[] = [EVENT_INVENTORY_PART_PATTERN];
-
-export function isWizardDocumentationPath(
-  filePath: string | undefined,
-): boolean {
-  if (!filePath) return false;
-  const basename = path.basename(filePath);
-  if (WIZARD_DOC_BASENAMES.has(basename)) return true;
-  return WIZARD_DOC_PATTERNS.some((re) => re.test(basename));
-}
+// Which files count as wizard documentation is product knowledge, so it
+// lives with the programs: each declares its files via
+// `ProgramConfig.docPaths`, and the shared registry in
+// `doc-paths-registry.ts` (re-exported above) answers the question here
+// without this file naming any program (wizard#594).
 
 // ─── Repeat-block tracker ─────────────────────────────────────────
 //
@@ -827,8 +790,8 @@ export function createPostToolUseYaraHooks(
             // discard anyway.
             // TODO(warlock#33): once warlock PR #33 lands with its
             // more-precise PII rules, the wizard-side suppression below
-            // should become unnecessary — remove `WIZARD_DOC_BASENAMES`,
-            // `WIZARD_DOC_PATTERNS`, and `isWizardDocumentationPath` and
+            // should become unnecessary — remove the doc-paths registry
+            // (`doc-paths-registry.ts`, `ProgramConfig.docPaths`) and
             // verify the noisy-PII issue stays fixed.
             const filePath = toolInput?.file_path as string | undefined;
             const activeFlagged = isWizardDocumentationPath(filePath)

@@ -12,6 +12,7 @@
 
 import type { ProgramConfig } from './program-step.js';
 import { POSTHOG_DOCS_URL } from '../constants.js';
+import { registerWizardDocPaths } from '../doc-paths-registry.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { warehouseSourceConfig } from './warehouse-source/index.js';
@@ -84,6 +85,14 @@ export const PROGRAM_REGISTRY = [
   aiObservabilityConfig,
   slackConnectConfig,
 ] as const satisfies readonly ProgramConfig[];
+
+// Push every program's documentation-path declarations into the shared
+// registry so L2 scanning infra (yara-hooks, the pi security extension) can
+// answer "is this a wizard doc file?" without naming any program
+// (wizard#594). Module side effect: runs once, whenever the registry loads.
+for (const config of PROGRAM_REGISTRY) {
+  registerWizardDocPaths(config.docPaths);
+}
 
 /**
  * Typed program names. Values come from each config's `id`, so there's
