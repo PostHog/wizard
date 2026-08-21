@@ -13,6 +13,7 @@ import { DJANGO_AGENT_CONFIG } from '@frameworks/django/django-wizard-agent';
 import { FLASK_AGENT_CONFIG } from '@frameworks/flask/flask-wizard-agent';
 import { FASTAPI_AGENT_CONFIG } from '@frameworks/fastapi/fastapi-wizard-agent';
 import { LARAVEL_AGENT_CONFIG } from '@frameworks/laravel/laravel-wizard-agent';
+import { WORDPRESS_AGENT_CONFIG } from '@frameworks/wordpress/wordpress-wizard-agent';
 import { SVELTEKIT_AGENT_CONFIG } from '@frameworks/svelte/svelte-wizard-agent';
 import { FLUTTER_AGENT_CONFIG } from '@frameworks/flutter/flutter-wizard-agent';
 import { SWIFT_AGENT_CONFIG } from '@frameworks/swift/swift-wizard-agent';
@@ -41,6 +42,7 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.flask]: FLASK_AGENT_CONFIG,
   [Integration.fastapi]: FASTAPI_AGENT_CONFIG,
   [Integration.laravel]: LARAVEL_AGENT_CONFIG,
+  [Integration.wordpress]: WORDPRESS_AGENT_CONFIG,
   [Integration.sveltekit]: SVELTEKIT_AGENT_CONFIG,
   [Integration.flutter]: FLUTTER_AGENT_CONFIG,
   [Integration.kmp]: KMP_AGENT_CONFIG,
