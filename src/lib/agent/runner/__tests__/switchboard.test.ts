@@ -80,13 +80,13 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'binds metrics to the orchestrator on pi, sol at medium effort',
+      name: 'binds metrics to the orchestrator on pi; stage models come from the flow frontmatter',
       ctx: { program: 'metrics', flags: {} },
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
-        thinkingLevel: 'medium',
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -214,12 +214,7 @@ describe('switchboard composed clamp', () => {
           : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
           : program === 'metrics'
-          ? {
-              ...DEFAULT_RESOLVED,
-              harness: Harness.pi,
-              model: GPT5_6_SOL_MODEL,
-              thinkingLevel: 'medium',
-            }
+          ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : DEFAULT_RESOLVED,
       );
       expect(ctx.trace?.sequence).toBe('composed');

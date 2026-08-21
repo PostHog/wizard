@@ -7,7 +7,6 @@ import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import * as constants from '@lib/constants';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
@@ -279,12 +278,10 @@ describe('isolation — everything on at once', () => {
           model: SONNET_5_MODEL,
         });
       } else if (program === 'metrics') {
-        // Orchestrator + pi + sol from its OWN binding, not the flag.
+        // Orchestrator + pi from its OWN binding, not the flag; stage models
+        // are pinned context-mill side in the flow frontmatter.
         expect(resolved).toEqual({
-          sequence: Sequence.orchestrator,
-          harness: Harness.pi,
-          model: GPT5_6_SOL_MODEL,
-          thinkingLevel: 'medium',
+          ...ORCHESTRATOR_PI_DEFAULT,
         });
       } else if (program === 'replay-vision') {
         // Orchestrator from its OWN binding, not the flag — the

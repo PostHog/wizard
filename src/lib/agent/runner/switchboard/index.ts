@@ -9,7 +9,6 @@
 
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
   SONNET_5_MODEL,
   Harness,
   Sequence,
@@ -136,13 +135,13 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
-  // Orchestrator on pi: sol-medium is the fallback; each task's `model_pi`
-  // frontmatter (terra seed, sol tasks, luna report) decides per stage.
+  // Orchestrator on pi. The binding routes only; every stage's model and
+  // effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
   metrics: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
+    model: DEFAULT_AGENT_MODEL,
   },
   'replay-vision': {
     sequence: Sequence.orchestrator,
