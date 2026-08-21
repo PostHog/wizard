@@ -99,6 +99,7 @@ export enum Integration {
   rails = 'rails',
   elixir = 'elixir',
   go = 'go',
+  rust = 'rust',
 
   // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
