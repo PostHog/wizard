@@ -23,9 +23,8 @@ describe('metrics program', () => {
     expect(Program.Metrics).toBe('metrics');
   });
 
-  it('detects the framework, then runs the agent-skill steps with a metrics-specific intro', () => {
-    const [detect, intro, ...rest] = metricsConfig.steps;
-    expect(detect.id).toBe('detect');
+  it('uses the agent-skill steps with a metrics-specific intro', () => {
+    const [intro, ...rest] = metricsConfig.steps;
     expect(intro.id).toBe('intro');
     expect(intro.screenId).toBe('metrics-intro');
     expect(rest).toEqual(AGENT_SKILL_STEPS.slice(1));
