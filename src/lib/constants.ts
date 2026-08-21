@@ -97,6 +97,11 @@ export enum Integration {
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  elixir = 'elixir',
+  go = 'go',
+  rust = 'rust',
+  // Must stay after kmp/swift/android: those claim gradle projects first.
+  java = 'java',
 
   // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
