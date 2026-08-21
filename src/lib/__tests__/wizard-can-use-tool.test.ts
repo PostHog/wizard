@@ -142,6 +142,21 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('xcodegen dump')).toBe('deny');
   });
 
+  it('elixir ecosystem', () => {
+    expect(allow('mix deps.get')).toBe('allow');
+    expect(allow('mix deps.update posthog')).toBe('allow');
+    expect(allow('mix deps.tree')).toBe('allow');
+    expect(allow('mix compile')).toBe('allow');
+    expect(allow('mix format')).toBe('allow');
+    expect(allow('mix hex.info posthog')).toBe('allow');
+    // mix runs arbitrary project-defined tasks — everything else stays denied.
+    expect(allow('mix run priv/repo/seeds.exs')).toBe('deny');
+    expect(allow('mix test')).toBe('deny');
+    expect(allow('mix phx.server')).toBe('deny');
+    expect(allow('mix ecto.migrate')).toBe('deny');
+    expect(allow('mix do deps.get, run evil.exs')).toBe('deny');
+  });
+
   it('go ecosystem', () => {
     expect(allow('go get github.com/posthog/posthog-go')).toBe('allow');
     expect(allow('go mod tidy')).toBe('allow');
