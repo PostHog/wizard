@@ -135,11 +135,14 @@ const FREEMAIL_DOMAINS = new Set([
   'fastmail.com',
 ]);
 
-function parseGitRemote(): { org: string; repo: string } | null {
+export function parseGitRemote(
+  cwd: string = process.cwd(),
+): { org: string; repo: string } | null {
   try {
     const url = childProcess
       .execSync('git remote get-url origin', {
         stdio: ['ignore', 'pipe', 'ignore'],
+        cwd,
       })
       .toString()
       .trim();
