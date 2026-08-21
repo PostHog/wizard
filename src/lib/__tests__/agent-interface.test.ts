@@ -6,6 +6,7 @@ import {
   createStopHook,
   isWarlockDisabled,
   buildAuthErrorContext,
+  buildAgentEnv,
 } from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { Sequence } from '@lib/constants';
@@ -587,5 +588,37 @@ describe('buildAuthErrorContext', () => {
     expect(
       ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
     ).toBe(true);
+  });
+});
+
+describe('buildAgentEnv header shape', () => {
+  const metadata = { run_id: 'r1', integration: 'nextjs' };
+  const flags = { 'wizard-orchestrator': 'test' };
+
+  it('sends per-key headers and the bedrock opt-in on the legacy gateway', () => {
+    const encoded = buildAgentEnv(metadata, flags, {
+      gatewayUrl: 'https://gateway.us.posthog.com/wizard',
+      token: 'pha_oauth',
+      edition: 'legacy',
+    });
+    expect(encoded).toContain('x-posthog-use-bedrock-fallback');
+    expect(encoded).toContain('X-POSTHOG-PROPERTY-run_id');
+    expect(encoded).not.toContain('X-PostHog-Properties');
+  });
+
+  it('sends one properties blob and no bedrock opt-in on the new gateway', () => {
+    const encoded = buildAgentEnv(metadata, flags, {
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      token: 'phe_minted',
+      edition: 'v2',
+      teamId: 42,
+    });
+    expect(encoded).toContain('X-PostHog-Properties');
+    expect(encoded).not.toContain('x-posthog-use-bedrock-fallback');
+    expect(encoded).not.toContain('X-POSTHOG-PROPERTY-run_id');
+    // Fallback is native in the new gateway's routing chain, and the run tags
+    // ride the blob rather than per-key headers.
+    expect(encoded).toContain('run_id');
+    expect(encoded).toContain('team_id');
   });
 });

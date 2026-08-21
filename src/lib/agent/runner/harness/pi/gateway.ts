@@ -133,12 +133,13 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
 } {
   const { gatewayUrl, accessToken, modelId, effort } = inputs;
   const api = gatewayApiFor(modelId);
-  const tableCaps = modelCapabilities(modelId);
-  // An explicit effort override wins over the table for a reasoning model.
-  const caps =
-    effort && tableCaps.reasoning
-      ? { ...tableCaps, thinkingLevel: effort }
-      : tableCaps;
+  // Resolve the override through modelCapabilities rather than splicing
+  // thinkingLevel in here, so the per-transport effort clamps apply to the
+  // flag- and frontmatter-supplied efforts too.
+  const caps = modelCapabilities(
+    modelId,
+    effort === 'off' ? undefined : effort,
+  );
   const model = buildGatewayModel(inputs);
   const provider = {
     name: 'PostHog Gateway',

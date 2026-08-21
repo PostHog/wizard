@@ -1,6 +1,8 @@
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
+  isTrustedGatewayUrl,
+  refreshSlackMs,
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
@@ -56,6 +58,92 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache — no second mint.
     await gatewayAuth(host, 'pha_oauth');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves a short-TTL token from cache instead of re-minting every call', async () => {
+    // A fixed five-minute margin subtracted from a five-minute token lands in
+    // the past, which made the cache a permanent miss.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_short',
+          expires_at: new Date(Date.now() + 300_000).toISOString(),
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+
+    const first = await gatewayAuth(host, 'pha_oauth');
+    const second = await gatewayAuth(host, 'pha_oauth');
+    expect(first.token).toBe('phe_short');
+    expect(second.token).toBe('phe_short');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('mints once for concurrent callers', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_shared',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+
+    const results = await Promise.all([
+      gatewayAuth(host, 'pha_oauth'),
+      gatewayAuth(host, 'pha_oauth'),
+      gatewayAuth(host, 'pha_oauth'),
+    ]);
+    expect(results.map((r) => r.token)).toEqual([
+      'phe_shared',
+      'phe_shared',
+      'phe_shared',
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches the legacy fallback instead of re-minting per caller', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 404 });
+
+    await gatewayAuth(host, 'pha_oauth');
+    await gatewayAuth(host, 'pha_oauth');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['gateway_url', { token: 't', expires_at: 'z' }],
+    [
+      'token',
+      { gateway_url: 'https://ai-gateway.us.posthog.com', expires_at: 'z' },
+    ],
+    [
+      'expires_at',
+      { token: 't', gateway_url: 'https://ai-gateway.us.posthog.com' },
+    ],
+  ])('falls back when the mint response omits %s', async (_field, body) => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(body),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth');
+    expect(auth.edition).toBe('legacy');
+  });
+
+  it('refuses a gateway url outside the trusted origins', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_x',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://evil.example.com',
+        }),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth');
+    expect(auth.edition).toBe('legacy');
+    expect(auth.gatewayUrl).toBe(host.gatewayUrl);
   });
 
   it('falls back to the legacy posture when the backend does not mint', async () => {
@@ -132,5 +220,40 @@ describe('anthropic effort clamp', () => {
     expect(modelCapabilities('claude-sonnet-4-6', 'medium').thinkingLevel).toBe(
       'medium',
     );
+  });
+});
+
+describe('refreshSlackMs', () => {
+  it('never spends more than a fifth of a short token life', () => {
+    expect(refreshSlackMs(300_000)).toBe(60_000);
+  });
+
+  it('caps at the fixed margin for a long token life', () => {
+    expect(refreshSlackMs(24 * 3600_000)).toBe(5 * 60 * 1000);
+  });
+
+  it('is zero for an already-expired token', () => {
+    expect(refreshSlackMs(-1)).toBe(0);
+  });
+});
+
+describe('isTrustedGatewayUrl', () => {
+  const api = 'https://us.posthog.com';
+
+  it.each([
+    'https://ai-gateway.us.posthog.com',
+    'https://ai-gateway.eu.posthog.com',
+    'http://localhost:3308',
+  ])('accepts %s', (value) => {
+    expect(isTrustedGatewayUrl(value, api)).toBe(true);
+  });
+
+  it.each([
+    'https://evil.example.com',
+    'http://ai-gateway.us.posthog.com',
+    'not-a-url',
+    'https://posthog.com.evil.example',
+  ])('refuses %s', (value) => {
+    expect(isTrustedGatewayUrl(value, api)).toBe(false);
   });
 });

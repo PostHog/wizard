@@ -16,6 +16,7 @@ import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import { gatewayAuth } from '@lib/gateway-session';
 import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
 import { analytics } from '@utils/analytics';
@@ -223,7 +224,8 @@ export async function* runMcpPromptViaSdk(args: {
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  const gatewayUrl = credentials.host.gatewayUrl;
+  const auth = await gatewayAuth(credentials.host, credentials.accessToken);
+  const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
@@ -371,7 +373,11 @@ export async function* runMcpPromptViaSdk(args: {
           // Bedrock fallback plus this run's trace tags — the gateway reads
           // these to attribute its `$ai_generation` events. Flags stay empty:
           // the tutorial doesn't fork on any.
-          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(wizardMetadata ?? {}, {}),
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            wizardMetadata ?? {},
+            {},
+            auth,
+          ),
         },
       },
     });

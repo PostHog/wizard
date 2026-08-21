@@ -1015,9 +1015,12 @@ export async function runAgent(
           // Gateway routing — injected explicitly (initializeAgent set these on
           // process.env for in-process readers; the strip above removed them
           // from the inherited copy, so re-add the wizard's own values here).
-          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // From this run's resolved auth, not process.env: concurrent task
+          // runs each write those globals, so re-reading them here would hand
+          // a subprocess whichever run initialized last.
+          ANTHROPIC_BASE_URL: agentConfig.gatewayAuth.gatewayUrl,
+          ANTHROPIC_AUTH_TOKEN: agentConfig.gatewayAuth.token,
+          CLAUDE_CODE_OAUTH_TOKEN: agentConfig.gatewayAuth.token,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.
