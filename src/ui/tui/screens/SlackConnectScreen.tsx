@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { fetchSlackConnected, httpStatusOf } from '@lib/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
@@ -161,6 +161,23 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           // connected so the screen doesn't sit on the loading state.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
+          }
+          // A 401 (expired/invalid token) or 403 (missing `integration:read`
+          // scope) is expected here, not a real fault — the graceful
+          // degradation above is the whole handling. Downgrade those to a
+          // breadcrumb-style analytics event + debug log so stale-token
+          // polls stop showing up as exceptions in error tracking. Anything
+          // else is a genuine failure worth capturing.
+          const status = httpStatusOf(err);
+          if (status === 401 || status === 403) {
+            logToFile(
+              `[slack-connect] poll skipped: expected ${status} from integrations check`,
+            );
+            analytics.wizardCapture('slack connect check skipped', {
+              role,
+              status,
+            });
+            return;
           }
           analytics.captureException(
             err instanceof Error ? err : new Error(String(err)),

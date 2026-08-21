@@ -261,6 +261,17 @@ export async function fetchSlackConnected(
   return parsed.data.results.some((i) => i.kind === 'slack');
 }
 
+/**
+ * Extract the HTTP status code from an unknown error, or `undefined` if it
+ * isn't an axios error with a response. Lets callers of the throwing fetchers
+ * (e.g. the SlackConnectScreen poll) distinguish expected auth failures — a
+ * 401 (expired/invalid token) or 403 (missing scope) — from real exceptions
+ * without importing axios themselves.
+ */
+export function httpStatusOf(error: unknown): number | undefined {
+  return axios.isAxiosError(error) ? error.response?.status : undefined;
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
