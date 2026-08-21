@@ -78,10 +78,11 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   'composer.json',
   // Elixir
   'mix.exs',
-  // Rust / Go / JVM / .NET: no framework targets yet, but found so
+  // Go
+  'go.mod',
+  // Rust / JVM / .NET: no framework targets yet, but found so
   // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   'Cargo.toml',
-  'go.mod',
   'pom.xml',
   '*.csproj',
   // Mobile / native
