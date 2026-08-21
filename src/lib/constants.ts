@@ -97,6 +97,7 @@ export enum Integration {
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  elixir = 'elixir',
   go = 'go',
   // Must stay after kmp/swift/android: those claim gradle projects first.
   java = 'java',
