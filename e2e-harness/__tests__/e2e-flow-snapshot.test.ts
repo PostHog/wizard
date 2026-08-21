@@ -106,3 +106,26 @@ describe('e2e flow snapshot — ai-observability', () => {
     }).toMatchSnapshot();
   });
 });
+
+describe('e2e flow snapshot — metrics', () => {
+  it('walks intro → health → auth → run → outro → skills', () => {
+    expect({
+      program: 'metrics',
+      profile: profileFor(Program.Metrics),
+      trace: traceFlow(Integration.javascriptNode, Program.Metrics),
+    }).toMatchSnapshot();
+  });
+
+  it('reaches a terminal decision instead of stalling on the intro', () => {
+    const trace = traceFlow(Integration.javascriptNode, Program.Metrics);
+    // A screen with no `decideE2eAction` case yields `(external)` forever, so
+    // the guard loop runs its full 40 iterations on one screen. The metrics
+    // intro must be drivable.
+    expect(trace[0]).toEqual({
+      screen: 'metrics-intro',
+      action: 'confirm_setup',
+    });
+    expect(trace.at(-1)?.action).toBe('keep_skills');
+    expect(trace.length).toBeLessThan(40);
+  });
+});

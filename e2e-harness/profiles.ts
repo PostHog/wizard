@@ -17,12 +17,14 @@ import {
 } from './e2e-profile.js';
 import posthogIntegrationE2e from '@lib/programs/posthog-integration/test/e2e.json';
 import aiObservabilityE2e from '@lib/programs/ai-observability/test/e2e.json';
+import metricsE2e from '@lib/programs/metrics/test/e2e.json';
 import replayVisionE2e from '@lib/programs/replay-vision/test/e2e.json';
 
 const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
   [Program.PostHogIntegration]:
     posthogIntegrationE2e.profile as WizardE2eProfile,
   [Program.AiObservability]: aiObservabilityE2e.profile as WizardE2eProfile,
+  [Program.Metrics]: metricsE2e.profile as WizardE2eProfile,
   [Program.ReplayVision]: replayVisionE2e.profile as WizardE2eProfile,
 };
 
@@ -31,6 +33,7 @@ const VARIATIONS: Partial<Record<ProgramId, WizardE2eVariation[]>> = {
     posthogIntegrationE2e.variations as WizardE2eVariation[],
   [Program.AiObservability]:
     aiObservabilityE2e.variations as WizardE2eVariation[],
+  [Program.Metrics]: metricsE2e.variations as WizardE2eVariation[],
   [Program.ReplayVision]: replayVisionE2e.variations as WizardE2eVariation[],
 };
 

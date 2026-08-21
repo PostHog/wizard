@@ -11,6 +11,7 @@
 /src/lib/programs/ai-observability/                     @PostHog/team-ai-observability
 /src/lib/programs/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
 /src/lib/programs/mcp-analytics/                        @PostHog/team-mcp-analytics
+/src/lib/programs/metrics/                              @PostHog/apm
 /src/lib/programs/posthog-integration/                  @PostHog/team-wizard-docs
 /src/lib/programs/replay-vision/                        @PostHog/team-replay
 /src/lib/programs/revenue-analytics/                    @PostHog/team-web-analytics
