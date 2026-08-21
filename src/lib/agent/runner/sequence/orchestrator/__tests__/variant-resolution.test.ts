@@ -50,6 +50,7 @@ const INTEGRATION_ENTRIES = [
   { id: 'integration-ruby', framework: 'ruby' },
   { id: 'integration-elixir', framework: 'elixir' },
   { id: 'integration-go', framework: 'go' },
+  { id: 'integration-rust', framework: 'rust' },
   { id: 'integration-java', framework: 'java' },
   { id: 'integration-swift', framework: 'swift' },
   { id: 'integration-kmp', framework: 'kmp' },
