@@ -80,13 +80,13 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'binds metrics to the orchestrator sequence',
+      name: 'binds metrics to the orchestrator on pi, sol at medium effort',
       ctx: { program: 'metrics', flags: {} },
       binding: {
         sequence: Sequence.orchestrator,
-        harness: Harness.anthropic,
-        model: DEFAULT_AGENT_MODEL,
-        thinkingLevel: undefined,
+        harness: Harness.pi,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -206,14 +206,20 @@ describe('switchboard composed clamp', () => {
         trace: {},
       };
       // The flag routes posthog-integration's harness to pi; the composed
-      // clamp holds every sequence at linear — metrics' orchestrator binding
-      // included; other programs keep their bindings (sonnet 5 for
-      // ai-observability, the default elsewhere).
+      // clamp holds every sequence at linear — the orchestrator bindings
+      // (metrics, replay-vision) included; other axes keep their bindings.
       expect(resolveBinding(ctx)).toEqual(
         program === 'posthog-integration'
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
+          : program === 'metrics'
+          ? {
+              ...DEFAULT_RESOLVED,
+              harness: Harness.pi,
+              model: GPT5_6_SOL_MODEL,
+              thinkingLevel: 'medium',
+            }
           : DEFAULT_RESOLVED,
       );
       expect(ctx.trace?.sequence).toBe('composed');

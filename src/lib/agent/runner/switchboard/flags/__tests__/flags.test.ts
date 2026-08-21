@@ -7,6 +7,7 @@ import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import * as constants from '@lib/constants';
 import {
   DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
@@ -277,10 +278,18 @@ describe('isolation — everything on at once', () => {
           ...LINEAR_ANTHROPIC_DEFAULT,
           model: SONNET_5_MODEL,
         });
-      } else if (program === 'metrics' || program === 'replay-vision') {
-        // Orchestrator from their OWN bindings, not the flag — the
-        // wizard-orchestrator experiment does not cover these programs, so
-        // they land here whether the flag is on or off. Anthropic, not pi.
+      } else if (program === 'metrics') {
+        // Orchestrator + pi + sol from its OWN binding, not the flag.
+        expect(resolved).toEqual({
+          sequence: Sequence.orchestrator,
+          harness: Harness.pi,
+          model: GPT5_6_SOL_MODEL,
+          thinkingLevel: 'medium',
+        });
+      } else if (program === 'replay-vision') {
+        // Orchestrator from its OWN binding, not the flag — the
+        // wizard-orchestrator experiment does not cover this program, so it
+        // lands here whether the flag is on or off. Anthropic, not pi.
         expect(resolved).toEqual({
           ...LINEAR_ANTHROPIC_DEFAULT,
           sequence: Sequence.orchestrator,
