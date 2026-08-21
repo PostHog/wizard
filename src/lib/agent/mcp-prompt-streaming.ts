@@ -16,8 +16,9 @@ import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
+import { analytics } from '@utils/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -172,6 +173,26 @@ function buildTerminalFitPrompt(): string {
   ].join('\n');
 }
 
+/**
+ * Gateway trace tags for a tutorial prompt run — without them the gateway has
+ * nothing to attribute its `$ai_generation` events to. Returns `{}` when no
+ * program is supplied. Exported so the contract is testable without the SDK.
+ */
+export function buildTutorialRunTags(args: {
+  programId?: string;
+  integration?: string;
+}): Record<string, string> {
+  if (!args.programId) return {};
+  return buildRunTags({
+    programId: args.programId,
+    // The tutorial usually has no detected framework; fall back to the
+    // program so the axis is never an empty string.
+    integration: args.integration ?? args.programId,
+    runId: analytics.runId,
+    build: analytics.build,
+  });
+}
+
 export async function* runMcpPromptViaSdk(args: {
   prompt: string;
   credentials: Credentials;
@@ -180,8 +201,17 @@ export async function* runMcpPromptViaSdk(args: {
    *  context so the follow-up prompt can reference what the agent
    *  already showed. */
   resumeSessionId?: string;
+  /** Program this run's gateway spend attributes to; omitting it leaves the
+   *  spend unattributed. */
+  programId?: string;
+  /** Integration label for the trace tags; the tutorial usually has none. */
+  integration?: string;
 }): AsyncIterable<AgentChunk> {
   const { prompt, credentials, signal, resumeSessionId } = args;
+
+  // Assembled here rather than passed in so the TUI service layer doesn't
+  // have to import this module's dependencies.
+  const wizardMetadata = buildTutorialRunTags(args);
 
   // Route the SDK's LLM calls through the PostHog LLM gateway, authed
   // with the user's OAuth access token. Set BEFORE loading the SDK in
@@ -338,11 +368,10 @@ export async function* runMcpPromptViaSdk(args: {
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // Same Bedrock-fallback + telemetry-friendly headers as the
-          // main runner. No wizard metadata or flags for the tutorial
-          // — runs are distinguished downstream via posthog.capture
-          // calls (program_id + event names), not SDK headers.
-          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv({}, {}),
+          // Bedrock fallback plus this run's trace tags — the gateway reads
+          // these to attribute its `$ai_generation` events. Flags stay empty:
+          // the tutorial doesn't fork on any.
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(wizardMetadata ?? {}, {}),
         },
       },
     });
