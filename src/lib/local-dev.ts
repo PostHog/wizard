@@ -44,10 +44,7 @@ export function resolveLocalDev(flags: LocalDevFlags): ResolvedLocalDev {
   };
 }
 
-/**
- * For handlers that never build a `WizardSession` (the skill and family
- * dispatchers). yargs populates both spellings, so read either.
- */
+/** yargs populates both spellings, so read either. */
 export function localDevFromArgv(
   argv: Record<string, unknown>,
 ): ResolvedLocalDev {
@@ -61,6 +58,40 @@ export function localDevFromArgv(
     localContextMill: read('local-context-mill', 'localContextMill'),
     localPosthog: read('local-posthog', 'localPosthog'),
   });
+}
+
+const PRODUCTION_TARGETS: ResolvedLocalDev = {
+  localMcp: false,
+  localContextMill: false,
+  localPosthog: false,
+};
+
+let resolved: ResolvedLocalDev | null = null;
+
+/**
+ * Resolve this process's targets. Called once from the yargs middleware, which
+ * covers every command and the env-var spellings alike.
+ */
+export function initLocalDev(argv: Record<string, unknown>): ResolvedLocalDev {
+  resolved = localDevFromArgv(argv);
+  return resolved;
+}
+
+/**
+ * Where this run points. Resolved once because the flags are parsed at startup
+ * and never change; threading them through state let call sites read whichever
+ * field they happened to have, which is how the intro screens ended up asking
+ * the MCP flag where to fetch skills.
+ *
+ * Uninitialized means no CLI parse ran (a direct-call test) — production.
+ */
+export function getLocalDev(): ResolvedLocalDev {
+  return resolved ?? PRODUCTION_TARGETS;
+}
+
+/** Tests only. */
+export function resetLocalDev(): void {
+  resolved = null;
 }
 
 type LocalService = {

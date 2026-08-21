@@ -89,7 +89,7 @@ export async function bootstrapProgram(
     enableDebugLogs();
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(session.localContextMill);
+  const skillsBaseUrl = getSkillsBaseUrl();
 
   // Where this run actually points. The three services switch independently,
   // so otherwise "why did it use prod skills?" means reading three call sites.

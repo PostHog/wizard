@@ -5,8 +5,11 @@ import {
   MCP_LOCAL_URL,
   POSTHOG_LOCAL_URL,
   checkLocalServices,
+  getLocalDev,
+  initLocalDev,
   localDevFromArgv,
   localMcpSkillsNotice,
+  resetLocalDev,
   resolveLocalDev,
 } from '@lib/local-dev';
 import {
@@ -110,21 +113,51 @@ describe('localDevFromArgv', () => {
 });
 
 describe('getSkillsBaseUrl', () => {
-  // The regression this split exists to prevent.
-  it('follows the context-mill flag, not the MCP flag', () => {
-    const mcpOnly = resolveLocalDev({ localMcp: true });
-    expect(getSkillsBaseUrl(mcpOnly.localContextMill)).toBe(
-      REMOTE_SKILLS_BASE_URL,
-    );
+  afterEach(() => resetLocalDev());
 
-    const millOnly = resolveLocalDev({ localContextMill: true });
-    expect(getSkillsBaseUrl(millOnly.localContextMill)).toBe(
-      LOCAL_SKILLS_BASE_URL,
-    );
+  // The regression this split exists to prevent. `getSkillsBaseUrl` takes no
+  // argument precisely so no caller can hand it the MCP flag.
+  it('follows the context-mill flag, not the MCP flag', () => {
+    initLocalDev({ localMcp: true });
+    expect(getSkillsBaseUrl()).toBe(REMOTE_SKILLS_BASE_URL);
+
+    initLocalDev({ localContextMill: true });
+    expect(getSkillsBaseUrl()).toBe(LOCAL_SKILLS_BASE_URL);
+  });
+
+  it('follows the umbrella flag', () => {
+    initLocalDev({ localDev: true });
+    expect(getSkillsBaseUrl()).toBe(LOCAL_SKILLS_BASE_URL);
+  });
+
+  it('honours --local-dev --no-local-context-mill', () => {
+    initLocalDev({ localDev: true, localContextMill: false });
+    expect(getSkillsBaseUrl()).toBe(REMOTE_SKILLS_BASE_URL);
+  });
+
+  it('defaults to production when no CLI parse ran', () => {
+    expect(getSkillsBaseUrl()).toBe(REMOTE_SKILLS_BASE_URL);
   });
 
   it('serves local skills from the context-mill dev server', () => {
     expect(LOCAL_SKILLS_BASE_URL).toBe(CONTEXT_MILL_LOCAL_URL);
+  });
+});
+
+describe('getLocalDev', () => {
+  afterEach(() => resetLocalDev());
+
+  it('reads kebab-case argv keys too', () => {
+    initLocalDev({ 'local-context-mill': true });
+    expect(getLocalDev().localContextMill).toBe(true);
+  });
+
+  it('reports production targets before init', () => {
+    expect(getLocalDev()).toEqual({
+      localMcp: false,
+      localContextMill: false,
+      localPosthog: false,
+    });
   });
 });
 

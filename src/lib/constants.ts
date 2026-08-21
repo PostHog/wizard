@@ -113,7 +113,11 @@ export interface Args {
 // ── Environment ──────────────────────────────────────────────────────
 
 import { IS_DEV } from '@env';
-import { CONTEXT_MILL_LOCAL_URL, POSTHOG_LOCAL_URL } from './local-dev';
+import {
+  CONTEXT_MILL_LOCAL_URL,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from './local-dev';
 export { IS_DEV };
 export const DEBUG = false;
 
@@ -163,10 +167,12 @@ export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 
 /**
  * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
- * both). Single source of truth — do not inline this ternary anywhere.
+ * both). Takes no argument on purpose: callers can't pass the wrong flag.
  */
-export function getSkillsBaseUrl(localContextMill: boolean): string {
-  return localContextMill ? LOCAL_SKILLS_BASE_URL : REMOTE_SKILLS_BASE_URL;
+export function getSkillsBaseUrl(): string {
+  return getLocalDev().localContextMill
+    ? LOCAL_SKILLS_BASE_URL
+    : REMOTE_SKILLS_BASE_URL;
 }
 
 // ── Analytics (internal) ──────────────────────────────────────────────

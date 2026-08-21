@@ -361,7 +361,7 @@ export async function detectProjectsWithAgent(
       posthogApiKey: accessToken,
       host,
       detectPackageManager: detectNodePackageManagers,
-      skillsBaseUrl: getSkillsBaseUrl(session.localContextMill),
+      skillsBaseUrl: getSkillsBaseUrl(),
       integrationLabel: 'agentic-detect',
       wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],

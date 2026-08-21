@@ -5,7 +5,6 @@ import { agentSkillConfig } from '@lib/programs/program-registry';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { getSkillsBaseUrl } from '@lib/constants';
-import { localDevFromArgv } from '@lib/local-dev';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { analytics } from '@utils/analytics';
 
@@ -98,9 +97,7 @@ export async function dispatchFamily(
     return;
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(
-    localDevFromArgv(argv).localContextMill,
-  );
+  const skillsBaseUrl = getSkillsBaseUrl();
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) {
     return exitDispatchError(

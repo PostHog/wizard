@@ -268,11 +268,21 @@ describe('CLI argument parsing', () => {
       vi.unstubAllGlobals();
     });
 
-    test('forwards each --local-* target to buildSession', async () => {
+    // Skills resolve from the process-wide target the middleware sets, not
+    // from a buildSession arg — so assert the URL the run would actually fetch.
+    async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
+      const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
+        '../lib/constants'
+      );
+      return { actual: getSkillsBaseUrl(), local: LOCAL_SKILLS_BASE_URL };
+    }
+
+    test('forwards each --local-* target', async () => {
       await runCLI(['--local-context-mill']);
-      const args = getLastBuildSessionArgs();
-      expect(args.localContextMill).toBe(true);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
       // Absent flags must be undefined, not false — see resolveLocalDev.
+      const args = getLastBuildSessionArgs();
       expect(args.localMcp).toBeUndefined();
       expect(args.localPosthog).toBeUndefined();
     });
@@ -280,12 +290,23 @@ describe('CLI argument parsing', () => {
     test('forwards the --local-dev umbrella', async () => {
       await runCLI(['--local-dev']);
       expect(getLastBuildSessionArgs().localDev).toBe(true);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+    });
+
+    // The reviewer's bug, end to end: the intro screens used to read the MCP
+    // flag to pick a skills registry.
+    test('--local-mcp alone leaves skills on production', async () => {
+      await runCLI(['--local-mcp']);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).not.toBe(local);
     });
 
     test('resolves POSTHOG_WIZARD_LOCAL_CONTEXT_MILL from the environment', async () => {
       process.env.POSTHOG_WIZARD_LOCAL_CONTEXT_MILL = 'true';
       await runCLI([]);
-      expect(getLastBuildSessionArgs().localContextMill).toBe(true);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
     });
 
     // A global `local` would silently erase `--local` from

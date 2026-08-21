@@ -9,7 +9,7 @@ import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
-import { checkLocalServices, localDevFromArgv } from '@lib/local-dev';
+import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { join } from 'node:path';
 
@@ -86,7 +86,7 @@ export function runWizard(
       // Before the TUI mounts: once Ink owns the alt screen, anything written
       // to it is wiped on unmount (see the catch block below), so an abort here
       // would leave the user on a loading screen with no message.
-      const local = localDevFromArgv(options);
+      const local = getLocalDev();
       const localServicesError = await checkLocalServices({
         ...local,
         // An explicit --base-url wins over --local-posthog (see buildSession),
@@ -107,7 +107,6 @@ export function runWizard(
         debug: options.debug as boolean | undefined,
         localDev: options.localDev as boolean | undefined,
         localMcp: options.localMcp as boolean | undefined,
-        localContextMill: options.localContextMill as boolean | undefined,
         localPosthog: options.localPosthog as boolean | undefined,
         installDir,
         ci: false,

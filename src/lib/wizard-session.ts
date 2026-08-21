@@ -208,9 +208,12 @@ export interface WizardSession {
   installDir: string;
   ci: boolean;
   signup: boolean;
-  /** `--local-posthog` is absent here — it folds into `baseUrl`. */
+  /**
+   * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
+   * from `getLocalDev()` — neither belongs here. This one stays because
+   * `mcp add|remove|tutorial --local` populate it from their own flag.
+   */
   localMcp: boolean;
-  localContextMill: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
   email?: string;
@@ -397,7 +400,6 @@ export function buildSession(args: {
   signup?: boolean;
   localDev?: boolean;
   localMcp?: boolean;
-  localContextMill?: boolean;
   localPosthog?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
@@ -422,7 +424,6 @@ export function buildSession(args: {
     ci: args.ci ?? false,
     signup: args.signup ?? false,
     localMcp: local.localMcp,
-    localContextMill: local.localContextMill,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     email: args.email,

@@ -3,7 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@lib/constants';
-import { localMcpSkillsNotice } from '@lib/local-dev';
+import { initLocalDev, localMcpSkillsNotice } from '@lib/local-dev';
 import { toCommandModule, type Command } from './commands/command';
 
 /**
@@ -162,8 +162,13 @@ export class Wizard {
 
     this.cli = cli
       // Middleware rather than an argv scan so the env path is covered too,
-      // and it runs before any TUI takes the terminal. Temporary.
+      // and it runs before any TUI takes the terminal.
       .middleware((argv) => {
+        // The one place local targets are resolved; everything downstream reads
+        // getLocalDev().
+        initLocalDev(argv);
+
+        // Temporary.
         const notice = localMcpSkillsNotice({
           localDev: argv.localDev as boolean | undefined,
           localMcp: argv.localMcp as boolean | undefined,

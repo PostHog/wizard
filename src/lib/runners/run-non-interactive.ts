@@ -1,5 +1,9 @@
 import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
-import { checkLocalServices, POSTHOG_LOCAL_URL } from '@lib/local-dev';
+import {
+  checkLocalServices,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from '@lib/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
@@ -110,7 +114,6 @@ export function runNonInteractive(
       signup: options.signup as boolean | undefined,
       localDev: options.localDev as boolean | undefined,
       localMcp: options.localMcp as boolean | undefined,
-      localContextMill: options.localContextMill as boolean | undefined,
       localPosthog: options.localPosthog as boolean | undefined,
       apiKey,
       email: options.email as string | undefined,
@@ -141,8 +144,8 @@ export function runNonInteractive(
     // user data". Aborts even non-interactively — a CI run pointed at a local
     // server that isn't there is testing nothing.
     const localServicesError = await checkLocalServices({
+      ...getLocalDev(),
       localMcp: session.localMcp,
-      localContextMill: session.localContextMill,
       localPosthog: session.baseUrl === POSTHOG_LOCAL_URL,
     });
     if (localServicesError) {
