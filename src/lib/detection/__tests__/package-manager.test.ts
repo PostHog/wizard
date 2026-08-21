@@ -7,6 +7,7 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
+  goModulesPackageManager,
   pubPackageManager,
 } from '@lib/detection/package-manager';
 
@@ -189,6 +190,7 @@ describe('static package manager helpers', () => {
     { fn: composerPackageManager, name: 'composer' },
     { fn: swiftPackageManager, name: 'spm' },
     { fn: gradlePackageManager, name: 'gradle' },
+    { fn: goModulesPackageManager, name: 'go' },
     { fn: pubPackageManager, name: 'pub' },
   ])('$name returns valid PackageManagerInfo', async ({ fn }) => {
     const result = await fn();
