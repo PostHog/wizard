@@ -42,7 +42,8 @@ import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
-import { AgentOutputSignals } from './output-signals';
+import { AgentOutputSignals, classifyGatewayAuthError } from './output-signals';
+import type { GatewayAuthReason, GatewayError } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -124,6 +125,12 @@ export interface AuthErrorContext {
   usingManagedLogin: boolean;
   /** Human-readable places a conflicting Anthropic credential may live. */
   credentialPlaces: string[];
+  /** Machine code from the gateway 401 body (e.g. `authentication_error`). */
+  gatewayErrorCode?: string;
+  /** Human message from the gateway 401 body, when the gateway sent one. */
+  gatewayErrorMessage?: string;
+  /** Concrete cause of the rejected gateway token, for the screen and buckets. */
+  gatewayReason: GatewayAuthReason;
 }
 
 /** Places the agent could have picked up a non-PostHog credential. */
@@ -159,6 +166,7 @@ export function buildAuthErrorContext(
   gatewayUrl: string,
   homeDir: string = os.homedir(),
   apiKeySource?: string,
+  gatewayError?: GatewayError,
 ): AuthErrorContext {
   const conflicts = checkAllSettingsConflicts(workingDirectory, homeDir);
   // The SDK reports a stored Claude login as a "/login managed key".
@@ -173,6 +181,9 @@ export function buildAuthErrorContext(
     apiKeySource,
     usingManagedLogin,
     credentialPlaces: findCredentialPlaces(conflicts, homeDir),
+    gatewayErrorCode: gatewayError?.code,
+    gatewayErrorMessage: gatewayError?.message,
+    gatewayReason: classifyGatewayAuthError(gatewayError),
   };
 }
 
@@ -1154,6 +1165,7 @@ export async function runAgent(
           process.env.ANTHROPIC_BASE_URL ?? '',
           os.homedir(),
           signals.apiKeySource,
+          signals.gatewayError(),
         );
         logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
@@ -1161,10 +1173,17 @@ export async function runAgent(
           conflicts: authError.conflicts,
           usingManagedLogin: authError.usingManagedLogin,
           credentialPlaces: authError.credentialPlaces,
+          gatewayReason: authError.gatewayReason,
+          gatewayErrorMessage: authError.gatewayErrorMessage,
+          region: authError.region,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
           message: 'Authentication failed (401)',
+          // `apiKeySource` is deliberately absent: its normal value is 'none'
+          // (the SDK auths with ANTHROPIC_AUTH_TOKEN, never ANTHROPIC_API_KEY),
+          // so as a lone triage signal it reads as a fault when it isn't. The
+          // gateway fields below split the 401 into real buckets instead.
           error: new WizardError('Authentication failed', {
             hasSettingsConflict: authError.hasSettingsConflict,
             conflictSources: authError.conflictSources,
@@ -1172,7 +1191,9 @@ export async function runAgent(
             gatewayUrl: authError.gatewayUrl,
             region: authError.region,
             usingManagedLogin: authError.usingManagedLogin,
-            apiKeySource: authError.apiKeySource,
+            gatewayReason: authError.gatewayReason,
+            gatewayErrorCode: authError.gatewayErrorCode,
+            gatewayErrorMessage: authError.gatewayErrorMessage,
           }),
         });
       }

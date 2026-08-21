@@ -1,4 +1,7 @@
-import { AgentOutputSignals } from '@lib/agent/output-signals';
+import {
+  AgentOutputSignals,
+  classifyGatewayAuthError,
+} from '@lib/agent/output-signals';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 
 describe('REMARK_INSTRUCTION', () => {
@@ -127,6 +130,66 @@ describe('AgentOutputSignals', () => {
 
       signals.recordApiKeySource('/login managed key');
       expect(signals.usedManagedLogin()).toBe(true);
+    });
+  });
+
+  describe('gatewayError', () => {
+    it('parses the code and message from a JSON 401 body', () => {
+      const signals = new AgentOutputSignals();
+      signals.push(
+        'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"token expired"}}',
+      );
+
+      expect(signals.gatewayError()).toEqual({
+        code: 'authentication_error',
+        message: 'token expired',
+      });
+    });
+
+    it('falls back to the raw trailing text when the body is not JSON', () => {
+      const signals = new AgentOutputSignals();
+      signals.push('API Error: 401 Unauthorized');
+
+      expect(signals.gatewayError()).toEqual({ message: 'Unauthorized' });
+    });
+
+    it('is undefined when no 401 line was retained', () => {
+      const signals = new AgentOutputSignals();
+      signals.push('API Error: 429 rate limited');
+
+      expect(signals.gatewayError()).toBeUndefined();
+    });
+  });
+
+  describe('classifyGatewayAuthError', () => {
+    it('classifies an expired or revoked token', () => {
+      expect(classifyGatewayAuthError({ message: 'token has expired' })).toBe(
+        'expired',
+      );
+      expect(classifyGatewayAuthError({ message: 'key was revoked' })).toBe(
+        'expired',
+      );
+    });
+
+    it('classifies a missing scope', () => {
+      expect(
+        classifyGatewayAuthError({ message: 'missing scope llm_gateway:read' }),
+      ).toBe('missing_scope');
+    });
+
+    it('classifies a wrong region', () => {
+      expect(
+        classifyGatewayAuthError({
+          message: 'key issued for a different region',
+        }),
+      ).toBe('wrong_region');
+    });
+
+    it('stays unknown for an unrecognized body or none at all', () => {
+      expect(classifyGatewayAuthError({ message: 'Unauthorized' })).toBe(
+        'unknown',
+      );
+      expect(classifyGatewayAuthError(undefined)).toBe('unknown');
     });
   });
 
