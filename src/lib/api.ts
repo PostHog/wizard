@@ -1,7 +1,86 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import { WIZARD_USER_AGENT } from './constants';
+
+/**
+ * Per-request timeout for the auth/bootstrap GETs below. Without it a hung
+ * connection to `/api/users/@me/` would block a CI pre-run forever instead
+ * of failing fast into the transient-retry path.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Backoff schedule for transient failures. Length = number of retries after
+ * the first attempt (so 4 attempts total). Sized to ride out a short upstream
+ * blip — a brief `/api/users/@me/` 5xx or network hiccup — without stalling
+ * the run for long. Worst case ~6.5s of waiting before we give up.
+ */
+const RETRY_BACKOFFS_MS = [500, 2000, 4000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * A transient failure is one worth riding out with a retry: a 5xx from
+ * PostHog's API, or a network-level error (no HTTP response at all — DNS
+ * failure, connection reset, or a client-side timeout). Everything with a
+ * 4xx status is the caller's problem (auth, scope, not-found) and is never
+ * retried, and non-axios errors (e.g. a Zod parse failure) aren't either.
+ */
+export function isTransientApiError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  if (status != null) return status >= 500;
+  // No response object → the request never completed: network error, DNS
+  // failure, connection reset, or a timeout (ECONNABORTED). All transient.
+  return true;
+}
+
+export interface ApiRetryOptions {
+  /** Backoff schedule; overrides the default. Length = number of retries. */
+  backoffsMs?: number[];
+  /** Injectable sleep so tests don't wait on real timers. */
+  sleepImpl?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Run an idempotent API GET, retrying transient (5xx / network / timeout)
+ * failures with exponential-ish backoff. Non-transient failures throw
+ * immediately; the caller maps the raw error via `handleApiError`.
+ */
+async function withApiRetry<T>(
+  operation: string,
+  fn: () => Promise<T>,
+  opts: ApiRetryOptions = {},
+): Promise<T> {
+  const backoffsMs = opts.backoffsMs ?? RETRY_BACKOFFS_MS;
+  const sleepImpl = opts.sleepImpl ?? sleep;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= backoffsMs.length; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= backoffsMs.length || !isTransientApiError(error)) {
+        throw error;
+      }
+      const wait = backoffsMs[attempt];
+      logToFile(
+        `[api] transient failure while trying to ${operation} (attempt ${
+          attempt + 1
+        }/${backoffsMs.length + 1}); retrying in ${wait}ms`,
+      );
+      await sleepImpl(wait);
+    }
+  }
+
+  // Unreachable — the loop either returns or throws — but keeps TS happy.
+  throw lastError;
+}
 
 /**
  * User payload from `/api/users/@me/`. Schema typed for the fields the
@@ -141,16 +220,24 @@ export class ApiError extends Error {
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
+  retry: ApiRetryOptions = {},
 ): Promise<ApiUser> {
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    return await withApiRetry(
+      'fetch user data',
+      async () => {
+        const response = await axios.get(`${baseUrl}/api/users/@me/`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'User-Agent': WIZARD_USER_AGENT,
+          },
+          timeout: REQUEST_TIMEOUT_MS,
+        });
 
-    return ApiUserSchema.parse(response.data);
+        return ApiUserSchema.parse(response.data);
+      },
+      retry,
+    );
   } catch (error) {
     const apiError = handleApiError(error, 'fetch user data');
     analytics.captureException(apiError, {
@@ -208,16 +295,27 @@ export async function fetchProjectData(
   accessToken: string,
   projectId: number,
   baseUrl: string,
+  retry: ApiRetryOptions = {},
 ): Promise<ApiProject> {
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    return await withApiRetry(
+      'fetch project data',
+      async () => {
+        const response = await axios.get(
+          `${baseUrl}/api/projects/${projectId}/`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'User-Agent': WIZARD_USER_AGENT,
+            },
+            timeout: REQUEST_TIMEOUT_MS,
+          },
+        );
 
-    return ApiProjectSchema.parse(response.data);
+        return ApiProjectSchema.parse(response.data);
+      },
+      retry,
+    );
   } catch (error) {
     const apiError = handleApiError(error, 'fetch project data');
     analytics.captureException(apiError, {
@@ -287,6 +385,27 @@ export function handleApiError(error: unknown, operation: string): ApiError {
     if (status === 404) {
       return new ApiError(
         `Resource not found while trying to ${operation}`,
+        status,
+        endpoint,
+      );
+    }
+
+    // Transient failures that survived the retries in `withApiRetry`. Give a
+    // clearer, actionable terminal message than the generic fallback so the
+    // user knows this is a temporary upstream blip they can retry, not a
+    // misconfiguration on their end.
+    if (status != null && status >= 500) {
+      return new ApiError(
+        `PostHog's API is temporarily unavailable (HTTP ${status}) while trying to ${operation}, and retries were exhausted. This is usually a brief blip — please wait a moment and run the wizard again.`,
+        status,
+        endpoint,
+      );
+    }
+
+    if (status == null) {
+      // No HTTP response at all: network error, DNS failure, or timeout.
+      return new ApiError(
+        `Could not reach PostHog's API while trying to ${operation} (network error or timeout), and retries were exhausted. Check your connection and run the wizard again in a moment.`,
         status,
         endpoint,
       );
