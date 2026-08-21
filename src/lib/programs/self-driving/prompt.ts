@@ -87,7 +87,7 @@ call so the user can follow your progress in the TUI. Use exactly these
 tasks, in this order:
   1. Check Self-driving access
   2. Read project and current Self-driving state
-  3. Connect GitHub (required)
+  3. Connect GitHub (recommended)
   3b. Enable products (replay, error tracking, support)
   4. Enable signal sources
   5. Offer issue-tracker integrations
@@ -133,14 +133,23 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
    what neither covers. List the currently enabled signal sources so every
    later write is idempotent.
 
-STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
-   Signals cannot research or fix issues without code access. Check for
-   an existing GitHub integration first; if absent, send the user
-   through the GitHub App connection via wizard_ask exactly as the skill
-   describes (it builds the one-click authorize link), and verify the
-   connection after they confirm. If the user cannot connect now, emit
-   ${AgentSignals.ABORT} github connection declined
-   and halt — never finish setup without GitHub.
+STEP 3 — Connect GitHub. STRONGLY RECOMMENDED, not required. (skill: "Connect GitHub")
+   GitHub is how findings become code fixes: Signals reads the repo to
+   research an issue and opens the fix as a pull request. Check for an
+   existing GitHub integration first; if absent, send the user through the
+   GitHub App connection via wizard_ask exactly as the skill describes (it
+   builds the one-click authorize link), and verify the connection after
+   they confirm.
+
+   If the user declines or cannot connect now, do NOT abort — a declined
+   GitHub connection is a valid outcome, not a failure. This supersedes any
+   "abort on decline" wording in the skill reference. Instead: tell the user
+   Self-driving will still enable sources, tune scouts, and fill their inbox,
+   but that turning a finding into a pull request needs GitHub, which they can
+   connect later from the integrations settings. Record GitHub as a pending
+   follow-up for STEP 7, mark this task completed, and continue with STEP 3b.
+   Every later step works without GitHub — STEP 5 simply cannot auto-connect
+   GitHub Issues, which becomes another follow-up.
 
 STEP 3b — Enable products. (skill: "Enable products")
    Turn ON the PostHog products Signals reads from — Session Replay,
@@ -221,6 +230,9 @@ STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
 
 STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
-   deferred. Tell the user findings will start appearing in their inbox
-   at ${inboxUrl} within about 30 minutes.`;
+   deferred. If GitHub is still pending from STEP 3, name it first among
+   the follow-ups with the one step to finish it (connect the PostHog
+   GitHub App from the integrations settings), so the user can turn
+   findings into fixes later. Tell the user findings will start appearing
+   in their inbox at ${inboxUrl} within about 30 minutes.`;
 }

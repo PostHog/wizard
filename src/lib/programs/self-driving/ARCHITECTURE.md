@@ -79,9 +79,11 @@ the number.
 - **2 — Read context** — build an evidence picture of which products are in use
   (setup report + `signals-scout-project-profile-get` + cheap usage probes + a
   light repo scan); read-only.
-- **3 — Connect GitHub** — required; if no `github` integration, send the user
-  through the GitHub App install (one-click authorize deep-link) and re-verify;
-  abort if declined.
+- **3 — Connect GitHub** — RECOMMENDED, not required; if no `github`
+  integration, send the user through the GitHub App install (one-click authorize
+  deep-link) and re-verify. Declined → **not an abort**: record GitHub as a
+  pending follow-up and continue (findings still flow to the inbox; a finding
+  becomes a PR once GitHub is connected).
 - **3b — Enable products** — turn ON Session Replay + Error Tracking + Support
   via `products-enable` (server-owned recipes) so the next step's sources have
   data. Idempotent; web also gets a posthog-js init check, backend/mobile are
@@ -130,7 +132,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | --- | -------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Check access                     | `1-check-access.md`                   | **No probe — instant** (open beta: available to every team). Marks the task in_progress→completed immediately, calls no MCP tool. The `[ABORT] self-driving is not available for this project` string remains a safety net for a genuine Signals-API outage during the run, not a beta gate.                                                                                                                                                                                                                                                                                                                                            |
 | 2   | Read project & Signals state     | `2-read-context.md`                   | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT").                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| 3   | Connect GitHub (REQUIRED)        | `3-github.md`                         | `integrations-list` for `kind:"github"`; else `wizard_ask` with the one-click `integrations/authorize?kind=github` deep-link (the single link covers fresh install / link-existing / re-auth — no separate settings "re-link" path), re-verify after a manual "done". Can't → `[ABORT] github connection declined`.                                                                                                                                                                                                                                                                                                                     |
+| 3   | Connect GitHub (RECOMMENDED)     | `3-github.md`                         | `integrations-list` for `kind:"github"`; else `wizard_ask` with the one-click `integrations/authorize?kind=github` deep-link (the single link covers fresh install / link-existing / re-auth — no separate settings "re-link" path), re-verify after a manual "done". Declined → **not an abort**: record GitHub as a pending follow-up and continue (findings still flow to the inbox; a finding becomes a PR once GitHub is connected). `[ABORT] github connection declined` stays a safety net only.                                                                                                                                                                                                                                                                                                                     |
 | 3b  | Enable products                  | `3b-enable-products.md`               | `products-enable {products:[session_replay,error_tracking,conversations]}` flips the product toggles (server-owned recipes, conservative defaults). Idempotent. Web also gets a posthog-js init check; backend/mobile are inert → recorded for the report. See §9.                                                                                                                                                                                                                                                                                                                                                                      |
 | 4   | Enable signal sources            | `4-sources.md`                        | Create/enable `SignalSourceConfig` rows (`inbox-source-configs-*`). The native sources for the step-3b products (error tracking, replay, support) go on by default; others follow step-2 evidence. Always enables the scout gate `signals_scout`/`cross_source_issue`. Always enable the health check gate `health_checks`/`health_issue`. Never enables an unconfirmed connected tool.                                                                                                                                                                                                                                                 |
 | 5   | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (GitHub Issues: one connected repo → use it by default, no repo research; Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick.                                                                                                                                                                                                    |
@@ -241,7 +243,8 @@ Source: `context-mill/context/skills/self-driving/`. `config.yaml`
 cross-cutting rules: trust the setup report, list-before-create idempotency,
 only switch sources on, ask-then-connect, **canonical scout bodies never edited
 — new scouts only in step 6b**, decline-option-first on every `wizard_ask`
-except the required step-3 GitHub gate), and the `references/` chain
+except step 3's GitHub ask, which keeps the affirmative option first since
+GitHub is strongly recommended), and the `references/` chain
 `1-check-access → 2-read-context → 3-github → 4-sources → 5-connected-tools` (+
 `5a-github`, `5b-linear`) `→ 6-scouts → 6b-tailor-scouts →
 6c-replay-vision-scanners → 7-report` (chained by
@@ -377,8 +380,10 @@ source is enabled.
    run can't reach the agent unapproved. That's why neither the prompt nor the
    skill has an AI-approval step anymore — the gate fully owns consent before
    the agent starts.
-4. **GitHub integration** (kind `"github"`, team or user level) — required, or
-   repo selection degrades to `no_repo`. UI:
+4. **GitHub integration** (kind `"github"`, team or user level) — needed for
+   repo selection; without it, repo selection degrades to `no_repo` (the run
+   still proceeds and findings reach the inbox — a finding becomes a PR once
+   GitHub is connected). UI:
    `/settings/environment-integrations#integration-github`.
 
 Plus the **Temporal coordinator schedule**
@@ -551,9 +556,10 @@ must be running, or no scout ever dispatches.
 >     first on every self-driving `wizard_ask`** so it is the default highlight
 >     and an accidental `enter` declines: step 7 ("None — keep the built-in
 >     troop"), step 5 ("None of these"), 5a ("Skip GitHub Issues" + fallback
->     "Skip for now"), 5b ("Skip Linear"). **Exception: step 3's GitHub gate**
->     keeps the affirmative first and the decline ("I can't connect…", which
->     aborts) last, since the run can't proceed without GitHub. Enforced as a
+>     "Skip for now"), 5b ("Skip Linear"). **Exception: step 3's GitHub ask**
+>     keeps the affirmative first and the decline ("I can't connect…") last,
+>     since GitHub is strongly recommended. A decline is no longer an abort; it
+>     records a pending GitHub follow-up and the run continues. Enforced as a
 >     cross-cutting rule in `description.md` (the agent builds every ask), so
 >     **no wizard code and no blast radius to other programs**. The shared
 >     `PickerMenu` empty-submit behavior (an empty `enter` selects the focused

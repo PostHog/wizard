@@ -1,4 +1,5 @@
 import { buildSelfDrivingPrompt } from '@lib/programs/self-driving/prompt';
+import { AgentSignals } from '@lib/agent/agent-interface';
 import type { PromptContext } from '@lib/agent/agent-runner';
 import { HostResolution } from '@lib/host-resolution';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
@@ -98,6 +99,25 @@ describe('STEP 6c — Replay Vision scanners', () => {
     expect(body).not.toContain('scanner_type');
     expect(body).not.toContain('emits_signals');
     expect(body).not.toContain('quota');
+  });
+});
+
+describe('STEP 3 — Connect GitHub', () => {
+  const step3 = (): string => {
+    const prompt = buildSelfDrivingPrompt(ctx);
+    return prompt
+      .slice(prompt.indexOf('STEP 3 —'), prompt.indexOf('STEP 3b —'))
+      .replace(/\s+/g, ' ');
+  };
+
+  it('degrades on a declined connection instead of aborting the run', () => {
+    // A declined GitHub connection was the wizard's biggest named abort. The
+    // wizard owns the abort mechanics, so STEP 3 must tell the agent not to
+    // abort and to continue with a pending follow-up.
+    const body = step3();
+    expect(body).toContain('not required');
+    expect(body).toContain('do NOT abort');
+    expect(body).not.toContain(`${AgentSignals.ABORT} github connection`);
   });
 });
 
