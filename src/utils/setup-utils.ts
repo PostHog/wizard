@@ -13,7 +13,7 @@ import {
   NPM as npm,
 } from './package-manager';
 import type { CloudRegion, WizardRunOptions } from './types';
-import { getDeclaredVersion } from './package-json';
+import { getDeclaredVersion, hasDependencyOverrides } from './package-json';
 import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@lib/constants';
 import {
   getOAuthScopesForProgram,
@@ -221,6 +221,16 @@ export async function isReact19Installed({
 }
 
 /**
+ * Reads the npm error code out of a failed install's combined output — the
+ * `EOVERRIDE` in `npm error code EOVERRIDE` (npm 10+) or `npm ERR! code
+ * EOVERRIDE` (older npm). Returns undefined when no code is present. Used to
+ * classify the failure for telemetry and to decide whether to retry.
+ */
+export function extractNpmErrorCode(output: string): string | undefined {
+  return /npm (?:error|ERR!) code (E[A-Z]+)/.exec(output)?.[1];
+}
+
+/**
  * Installs or updates a package with the user's package manager.
  *
  * IMPORTANT: This function modifies the `package.json`! Be sure to re-read
@@ -261,25 +271,79 @@ export async function installPackage({
     const installCommand =
       `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${legacyPeerDepsFlag}`.trim();
 
-    try {
-      await execAsync(installCommand, { cwd: installDir });
-    } catch (e) {
-      const { stdout = '', stderr = '' } = (e ?? {}) as {
-        stdout?: string;
-        stderr?: string;
-      };
+    const runInstall = async (
+      command: string,
+    ): Promise<
+      { ok: true } | { ok: false; error: unknown; output: string }
+    > => {
+      try {
+        await execAsync(command, { cwd: installDir });
+        return { ok: true };
+      } catch (error) {
+        const { stdout = '', stderr = '' } = (error ?? {}) as {
+          stdout?: string;
+          stderr?: string;
+        };
+        return {
+          ok: false,
+          error: error as unknown,
+          output: `${stdout}\n${stderr}`,
+        };
+      }
+    };
+
+    let result = await runInstall(installCommand);
+
+    // An `overrides` block that pins a package the install also pulls in makes
+    // npm refuse the whole install with `EOVERRIDE`. That is a recoverable,
+    // user-side inconsistency, so retry once forcing past the override rather
+    // than aborting the run. Aborting here ends onboarding before the agent
+    // stage that opens the pull request.
+    if (!result.ok) {
+      const errorCode = extractNpmErrorCode(result.output);
+      analytics.wizardCapture('package install failed', {
+        package_name: packageName,
+        package_manager: pkgManager.name,
+        integration,
+        error_code: errorCode,
+      });
+
+      const packageJson = await tryGetPackageJson({ installDir });
+      const canRetryPastOverride =
+        pkgManager.name === 'npm' &&
+        errorCode === 'EOVERRIDE' &&
+        !!packageJson &&
+        hasDependencyOverrides(packageJson);
+
+      if (canRetryPastOverride) {
+        sdkInstallSpinner.message(
+          'Dependency override conflict — retrying the install.',
+        );
+        result = await runInstall(`${installCommand} --force`);
+        analytics.wizardCapture('package install retried', {
+          package_name: packageName,
+          package_manager: pkgManager.name,
+          integration,
+          error_code: errorCode,
+          recovered: result.ok,
+        });
+      }
+    }
+
+    if (!result.ok) {
+      const { error, output } = result;
       fs.writeFileSync(
         join(
           process.cwd(),
           `posthog-wizard-installation-error-${Date.now()}.log`,
         ),
-        JSON.stringify({ stdout, stderr }),
+        JSON.stringify({ output }),
         { encoding: 'utf8' },
       );
       sdkInstallSpinner.stop('Installation failed.');
       getUI().log.error(
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        `Encountered the following error during installation:\n\n${e}\n\nThe wizard has created a \`posthog-wizard-installation-error-*.log\` file. If you think this issue is caused by the PostHog wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
+        `Encountered the following error during installation:\n\n${error}\n\nThe wizard has created a \`posthog-wizard-installation-error-*.log\` file. If you think this issue is caused by the PostHog wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
       );
       await abort();
     }
