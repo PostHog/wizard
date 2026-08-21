@@ -7,7 +7,6 @@ import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import * as constants from '@lib/constants';
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
@@ -280,10 +279,8 @@ describe('isolation — everything on at once', () => {
         });
       } else if (program === 'metrics') {
         expect(resolved).toEqual({
-          sequence: Sequence.linear,
-          harness: Harness.pi,
-          model: GPT5_6_SOL_MODEL,
-          thinkingLevel: 'medium',
+          ...LINEAR_ANTHROPIC_DEFAULT,
+          sequence: Sequence.orchestrator,
         });
       } else {
         expect(resolved).toEqual(LINEAR_ANTHROPIC_DEFAULT);

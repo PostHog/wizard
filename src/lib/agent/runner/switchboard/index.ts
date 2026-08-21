@@ -9,7 +9,6 @@
 
 import {
   DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
   SONNET_5_MODEL,
   Harness,
   Sequence,
@@ -136,11 +135,12 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  // Orchestrator, anthropic-harness: pi has no runTask yet. The flow's agent
+  // prompts pin sol per task (`model_pi`) for when it does.
   metrics: {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
   },
   'ai-observability': {
     sequence: Sequence.linear,

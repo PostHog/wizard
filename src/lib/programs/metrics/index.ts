@@ -1,10 +1,32 @@
-import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import type {
+  ProgramConfig,
+  ProgramReadyContext,
+  ProgramStep,
+} from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { detectPostHogIntegration } from '@lib/programs/posthog-integration/detect';
 
-const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
-  step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
-);
+/**
+ * Framework detection ahead of the run. The orchestrator requires it: the
+ * runner resolves each task's step-skill variants against the detected
+ * framework in preflight, so the session must carry it before the run arm
+ * starts.
+ */
+const DETECT_STEP: ProgramStep = {
+  id: 'detect',
+  label: 'Detecting framework',
+  onReady: async (ctx: ProgramReadyContext) => {
+    await detectPostHogIntegration(ctx);
+  },
+};
+
+const METRICS_STEPS: ProgramStep[] = [
+  DETECT_STEP,
+  ...AGENT_SKILL_STEPS.map((step) =>
+    step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
+  ),
+];
 
 const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
 
@@ -23,6 +45,11 @@ export const metricsConfig: ProgramConfig = {
   command: 'metrics',
   description: 'Add PostHog application metrics to your project',
   id: 'metrics',
+  // Orchestrator flow (context-mill `context/agents/metrics`): the seed queues
+  // verify-sdk → instrument-metrics → report, so the SDK is verified (installed,
+  // new enough, initialized for metrics) before any instrumentation. Explicit so
+  // renaming the program can't silently detach the flow.
+  agentFlow: 'metrics',
   steps: METRICS_STEPS,
   reportFile: METRICS_REPORT_FILE,
   getContentBlocks,

@@ -23,11 +23,16 @@ describe('metrics program', () => {
     expect(Program.Metrics).toBe('metrics');
   });
 
-  it('uses the agent-skill steps with a metrics-specific intro', () => {
-    const [intro, ...rest] = metricsConfig.steps;
+  it('detects the framework, then runs the agent-skill steps with a metrics-specific intro', () => {
+    const [detect, intro, ...rest] = metricsConfig.steps;
+    expect(detect.id).toBe('detect');
     expect(intro.id).toBe('intro');
     expect(intro.screenId).toBe('metrics-intro');
     expect(rest).toEqual(AGENT_SKILL_STEPS.slice(1));
+  });
+
+  it('runs the metrics agent flow on the orchestrator', () => {
+    expect(metricsConfig.agentFlow).toBe('metrics');
   });
 
   it('has no fixed skillId — the agent picks the variant from the menu', () => {
