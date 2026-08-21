@@ -73,7 +73,11 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-PROJECT_ID="${POSTHOG_PROJECT_ID:-}"
+# Prefer the wizard's own env var names; keep the old spellings working.
+PROJECT_ID="${POSTHOG_WIZARD_PROJECT_ID:-${POSTHOG_PROJECT_ID:-}}"
+
+# Without --region the wizard races /api/users/@me/ across both clouds (f9215b37).
+REGION="${POSTHOG_WIZARD_REGION:-${POSTHOG_REGION:-}}"
 
 # ── Build & Pack ────────────────────────────────────────────────────────────
 # Build the CI variant (NODE_ENV=ci): identical to the published build except
@@ -131,6 +135,9 @@ echo "    Dir:        $WORK_DIR"
 if [ -n "$PROJECT_ID" ]; then
   echo "    Project ID: $PROJECT_ID"
 fi
+if [ -n "$REGION" ]; then
+  echo "    Region:     $REGION"
+fi
 echo ""
 
 CMD=(
@@ -143,6 +150,10 @@ CMD=(
 
 if [ -n "$PROJECT_ID" ]; then
   CMD+=(--project-id "$PROJECT_ID")
+fi
+
+if [ -n "$REGION" ]; then
+  CMD+=(--region "$REGION")
 fi
 
 "${CMD[@]}"

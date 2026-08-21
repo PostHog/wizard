@@ -1,5 +1,8 @@
 name: Smoke Test
 
+# Runs the packed wizard end-to-end against the real PostHog API. Failed 100
+# runs straight (2026-06-30 to 2026-08-20) with a 403: no project id was passed,
+# so the wizard fell back to the key's default team and was denied.
 on:
   push:
     branches: [main]
@@ -47,9 +50,23 @@ jobs:
       - name: Install sandbox dependencies
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
 
+      # An unset secret is indistinguishable from the old bug: the wizard just
+      # falls back to the default team and 403s. Fail with the reason instead.
+      - name: Check required secrets
+        env:
+          PROJECT_ID: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID }}
+          API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
+        run: |
+          [ -n "$API_KEY" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY is not set"; exit 1; }
+          [ -n "$PROJECT_ID" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID is not set"; exit 1; }
+
       - name: Run smoke test
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
+          # Required — without it the wizard falls back to the key's default
+          # team and 403s. Same secret name wizard-workbench's wizard-ci.yml uses.
+          POSTHOG_WIZARD_PROJECT_ID: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID }}
+          POSTHOG_WIZARD_REGION: us
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
           SMOKE_TEST_APP: ${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }}
         run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
