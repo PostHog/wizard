@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSkillVariantId } from '../orchestrator-runner';
+import {
+  resolveSkillVariantId,
+  skillFamilyExists,
+} from '../orchestrator-runner';
 import { Integration } from '@lib/constants';
 import { expandBundleEntry } from '@lib/wizard-tools';
 import type { SkillEntry } from '@lib/wizard-tools';
@@ -139,6 +142,11 @@ describe('resolveSkillVariantId — seed-pinned variants', () => {
         'metrics-rust',
       ),
     ).toBeUndefined();
+  });
+
+  it('a pin-only family passes the family-existence preflight check', () => {
+    expect(skillFamilyExists(METRICS_ENTRIES, 'metrics')).toBe(true);
+    expect(skillFamilyExists(METRICS_ENTRIES, 'not-a-skill')).toBe(false);
   });
 });
 

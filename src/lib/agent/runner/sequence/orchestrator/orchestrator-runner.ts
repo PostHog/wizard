@@ -157,6 +157,14 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
+/** Whether the menu carries any entry of the skill's family — a variant the seed could pin. */
+export function skillFamilyExists(
+  entries: readonly SkillEntry[],
+  skillId: string,
+): boolean {
+  return entries.some((e) => e.group === skillId || e.id === skillId);
+}
+
 /**
  * Menu id for a bare skill id + framework via the menu's declared
  * group/framework/default fields; undefined when nothing matches. A `pinned`
@@ -430,11 +438,17 @@ export async function runOrchestrator(
     );
   }
 
-  // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
+  // Preflight every task's mini-skills: a miss would run tasks skill-less, so
+  // fail properly instead. A family with no per-framework entries passes here —
+  // the seed pins its variant through task inputs, and dispatch fails the task
+  // if that pin never arrives.
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+      if (
+        resolveSkillVariantId(menuSkillEntries, skillId, session.skillId) ||
+        skillFamilyExists(menuSkillEntries, skillId)
+      ) {
         continue;
       }
       missingVariants.push(`${type}/${skillId}`);
@@ -690,6 +704,14 @@ export async function runOrchestrator(
           pinnedSkill,
         );
         if (!variantId) {
+          // Preflight admitted this skill on its family alone — a miss here
+          // means the seed never pinned a variant. Fail the task rather than
+          // run it skill-less.
+          if (skillFamilyExists(menuSkillEntries, skillId)) {
+            throw new Error(
+              `Skill "${skillId}" for task "${task.type}" needs a seed-pinned variant (task input \`skill\`) and none resolved.`,
+            );
+          }
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
