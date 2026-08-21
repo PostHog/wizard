@@ -89,9 +89,10 @@ export function allowedOrchestratorTools(
 
 /**
  * The wizard tools a task gets. Four are always on — their handlers are fenced
- * and the coding tasks depend on them. `wizard_ask` is opt-in per task: it
- * stops the run until a person answers, so only a task whose prompt asks for it
- * may open that overlay.
+ * and the coding tasks depend on them. The rest are opt-in per task through
+ * its frontmatter: `wizard_ask` stops the run until a person answers, and the
+ * skill-menu pair (`load_skill_menu`, `install_skill`) lets a task pull its
+ * own skill variant.
  */
 const ALWAYS_ON_WIZARD_TOOLS = [
   'check_env_keys',
@@ -100,15 +101,16 @@ const ALWAYS_ON_WIZARD_TOOLS = [
   'publish_handoff',
 ];
 
+const OPT_IN_WIZARD_TOOLS = ['wizard_ask', 'load_skill_menu', 'install_skill'];
+
 export function allowedPiWizardTools(
   allowedTools: readonly string[] | undefined,
 ): Set<string> {
   const allowed = (allowedTools ?? []).map(shortToolName);
-  return new Set(
-    allowed.includes('wizard_ask')
-      ? [...ALWAYS_ON_WIZARD_TOOLS, 'wizard_ask']
-      : ALWAYS_ON_WIZARD_TOOLS,
-  );
+  return new Set([
+    ...ALWAYS_ON_WIZARD_TOOLS,
+    ...OPT_IN_WIZARD_TOOLS.filter((tool) => allowed.includes(tool)),
+  ]);
 }
 
 /**
