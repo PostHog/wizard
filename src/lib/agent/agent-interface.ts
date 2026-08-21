@@ -19,6 +19,7 @@ import {
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
+  POSTHOG_PROPERTIES_HEADER,
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
@@ -27,7 +28,10 @@ import {
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
-import { createCustomHeaders } from '@utils/custom-headers';
+import {
+  createCustomHeaders,
+  posthogPropertiesBlob,
+} from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
@@ -368,6 +372,9 @@ export function isWarlockDisabled(): boolean {
  * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS, which always
  * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
  * Anthropic 5xx, plus any wizard metadata/flags.
+ *
+ * Metadata goes out in both shapes — per-property headers for the Python gateway and one JSON
+ * blob for the Go one, which ignores the per-property form. See `posthogPropertiesBlob`.
  */
 export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
@@ -383,6 +390,8 @@ export function buildAgentEnv(
       value,
     );
   }
+  const propertiesBlob = posthogPropertiesBlob(wizardMetadata);
+  if (propertiesBlob) headers.add(POSTHOG_PROPERTIES_HEADER, propertiesBlob);
   for (const [flagKey, variant] of Object.entries(wizardFlags)) {
     if (!flagKey.toLowerCase().startsWith('wizard')) continue;
     headers.addFlag(flagKey, variant);

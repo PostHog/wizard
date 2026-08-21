@@ -9,7 +9,9 @@
 import {
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
+  POSTHOG_PROPERTIES_HEADER,
 } from '@lib/constants';
+import { posthogPropertiesBlob } from '@utils/custom-headers';
 import {
   modelCapabilities,
   type ThinkingLevel,
@@ -35,8 +37,10 @@ export function gatewayApiFor(
 
 /**
  * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path: always
- * the Bedrock-fallback header, plus wizard metadata (`X-POSTHOG-PROPERTY-*`) and
- * wizard feature flags (`X-POSTHOG-FLAG-*`).
+ * the Bedrock-fallback header, plus wizard metadata in both shapes the two
+ * gateway generations read (`X-POSTHOG-PROPERTY-*` for Python, one
+ * `X-PostHog-Properties` blob for Go) and wizard feature flags
+ * (`X-POSTHOG-FLAG-*`).
  */
 export function buildGatewayHeaders(
   wizardMetadata: Record<string, string>,
@@ -54,6 +58,8 @@ export function buildGatewayHeaders(
       : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`;
     headers[name] = value;
   }
+  const propertiesBlob = posthogPropertiesBlob(wizardMetadata);
+  if (propertiesBlob) headers[POSTHOG_PROPERTIES_HEADER] = propertiesBlob;
   for (const [flagKey, variant] of Object.entries(wizardFlags)) {
     if (!flagKey.toLowerCase().startsWith('wizard')) continue;
     headers[POSTHOG_FLAG_HEADER_PREFIX + flagKey.toUpperCase()] = variant;

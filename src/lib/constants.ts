@@ -308,6 +308,12 @@ export function wizardUserAgentForProgram(programId?: string): string {
 
 /** Header prefix for PostHog properties (e.g. X-POSTHOG-PROPERTY-VARIANT). */
 export const POSTHOG_PROPERTY_HEADER_PREFIX = 'X-POSTHOG-PROPERTY-';
+/**
+ * All PostHog properties as one JSON blob. The slugless (Go) gateway reads only
+ * this header and ignores the per-property prefix above; the Python gateway is
+ * the other way round. See `posthogPropertiesBlob`.
+ */
+export const POSTHOG_PROPERTIES_HEADER = 'X-PostHog-Properties';
 /** Header prefix for PostHog feature flags. */
 export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 
