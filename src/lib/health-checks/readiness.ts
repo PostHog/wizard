@@ -58,14 +58,7 @@ export interface WizardReadinessConfig {
  * Adjust these arrays to change what blocks a wizard run.
  */
 export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
-  downBlocksRun: [
-    'anthropic',
-    'npmOverall',
-    'llmGateway',
-    'mcp',
-    'githubReleases',
-  ],
-  degradedBlocksRun: ['anthropic'],
+  downBlocksRun: ['npmOverall', 'llmGateway', 'mcp', 'githubReleases'],
 };
 
 /**

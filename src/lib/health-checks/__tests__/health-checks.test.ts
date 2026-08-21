@@ -1117,7 +1117,7 @@ describe('health-checks', () => {
       expect(result.decision).toBe(WizardReadiness.Yes);
     });
 
-    it('returns No when Anthropic is degraded (degradedBlocksRun)', async () => {
+    it('warns without blocking when Anthropic overall is degraded', async () => {
       const body = makeStatuspageStatus({
         pageId: 'tymt9n04zgry',
         pageName: 'Claude',
@@ -1136,7 +1136,7 @@ describe('health-checks', () => {
       const result = await evaluateWizardReadiness(
         DEFAULT_WIZARD_READINESS_CONFIG,
       );
-      expect(result.decision).toBe(WizardReadiness.No);
+      expect(result.decision).toBe(WizardReadiness.YesWithWarnings);
       expect(result.health.anthropic.status).toBe(ServiceHealthStatus.Degraded);
     });
 

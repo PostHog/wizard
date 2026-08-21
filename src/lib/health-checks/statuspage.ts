@@ -116,12 +116,54 @@ async function fetchStatuspageSummary(
   }
 }
 
+async function fetchStatuspageComponent(
+  url: string,
+  componentName: string,
+  timeoutMs = 5000,
+): Promise<BaseHealthResult> {
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(tid);
+
+    if (!res.ok) return errResult(`HTTP ${res.status}`);
+
+    const data = (await res.json()) as StatuspageSummaryResponse;
+    const component = data.components?.find((c) => c.name === componentName);
+    if (!component) {
+      return errResult(`Component not found: ${componentName}`);
+    }
+
+    return {
+      status: mapComponentRaw(component.status),
+      rawIndicator: component.status,
+    };
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError')
+      return errResult('Request timed out');
+    return errResult(e instanceof Error ? e.message : 'Unknown error');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Individual statuspage-backed checks
 // ---------------------------------------------------------------------------
 
 export const checkAnthropicHealth = (): Promise<BaseHealthResult> =>
   fetchStatuspageIndicator('https://status.claude.com/api/v2/status.json');
+
+export const checkAnthropicApiHealth = (): Promise<BaseHealthResult> =>
+  fetchStatuspageComponent(
+    'https://status.claude.com/api/v2/summary.json',
+    'Claude API (api.anthropic.com)',
+  );
+
+export const checkOpenAiResponsesHealth = (): Promise<BaseHealthResult> =>
+  fetchStatuspageComponent(
+    'https://status.openai.com/api/v2/summary.json',
+    'Responses',
+  );
 
 export const checkGithubHealth = (): Promise<BaseHealthResult> =>
   fetchStatuspageIndicator('https://www.githubstatus.com/api/v2/status.json');
