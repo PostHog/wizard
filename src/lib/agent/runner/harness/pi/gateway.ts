@@ -11,6 +11,10 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
 } from '@lib/constants';
 import {
+  buildWizardPropertiesBlob,
+  type GatewayEdition,
+} from '@lib/gateway-session';
+import {
   modelCapabilities,
   type ThinkingLevel,
 } from '../../switchboard/models';
@@ -34,20 +38,31 @@ export function gatewayApiFor(
 }
 
 /**
- * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path: always
- * the Bedrock-fallback header, plus wizard metadata (`X-POSTHOG-PROPERTY-*`) and
- * wizard feature flags (`X-POSTHOG-FLAG-*`).
+ * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path. The
+ * shape follows the gateway edition: legacy sends per-key metadata/flag
+ * headers plus the explicit Bedrock-fallback opt-in; v2 (the Go ai-gateway)
+ * takes one `X-PostHog-Properties` JSON blob and falls back natively. The 1M
+ * context beta rides both — pi otherwise runs at 200k and overflows on larger
+ * projects (the post-run compaction failures).
  */
 export function buildGatewayHeaders(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
+  edition: GatewayEdition = 'legacy',
+  teamId?: number,
 ): Record<string, string> {
   const headers: Record<string, string> = {
-    'x-posthog-use-bedrock-fallback': 'true',
-    // 1M context window, same as the anthropic edition — pi otherwise runs at
-    // 200k and overflows on larger projects (the post-run compaction failures).
     'anthropic-beta': 'context-1m-2025-08-07',
   };
+  if (edition === 'v2') {
+    headers['X-PostHog-Properties'] = buildWizardPropertiesBlob(
+      wizardMetadata,
+      wizardFlags,
+      teamId,
+    );
+    return headers;
+  }
+  headers['x-posthog-use-bedrock-fallback'] = 'true';
   for (const [key, value] of Object.entries(wizardMetadata)) {
     const name = key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
       ? key
@@ -64,6 +79,10 @@ export function buildGatewayHeaders(
 export interface GatewayProviderInputs {
   gatewayUrl: string;
   accessToken: string;
+  /** Gateway contract in play; selects the header shape. Default legacy. */
+  edition?: GatewayEdition;
+  /** Customer team for the v2 properties blob (from the mint response). */
+  teamId?: number;
   wizardMetadata: Record<string, string>;
   wizardFlags: Record<string, string>;
   modelId: string;
@@ -79,7 +98,8 @@ export interface GatewayProviderInputs {
  * callers (scan triage) hand it straight to `completeSimple`.
  */
 export function buildGatewayModel(inputs: GatewayProviderInputs) {
-  const { gatewayUrl, wizardMetadata, wizardFlags, modelId } = inputs;
+  const { gatewayUrl, wizardMetadata, wizardFlags, modelId, edition, teamId } =
+    inputs;
   const api = gatewayApiFor(modelId);
   return {
     id: modelId,
@@ -96,7 +116,7 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
     maxTokens: 64_000,
-    headers: buildGatewayHeaders(wizardMetadata, wizardFlags),
+    headers: buildGatewayHeaders(wizardMetadata, wizardFlags, edition, teamId),
   };
 }
 

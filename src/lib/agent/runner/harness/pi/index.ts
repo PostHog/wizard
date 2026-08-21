@@ -27,6 +27,7 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
+import { gatewayAuth } from '@lib/gateway-session';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { createAioCapture } from '@lib/agent/aio-capture';
 import type {
@@ -238,10 +239,18 @@ export const piBackend: AgentHarness = {
       } = await import('@earendil-works/pi-coding-agent');
 
       // the claude-agent-sdk path. The provider spec is shared with the
-      // orchestrator's per-task sessions (gateway.ts).
+      // orchestrator's per-task sessions (gateway.ts). gatewayAuth resolves
+      // the v2 scoped-token posture, or the legacy OAuth posture when the
+      // backend doesn't mint.
+      const auth = await gatewayAuth(
+        boot.credentials.host,
+        boot.credentials.accessToken,
+      );
       const { provider, caps } = buildGatewayProvider({
-        gatewayUrl: boot.credentials.host.gatewayUrl,
-        accessToken: boot.credentials.accessToken,
+        gatewayUrl: auth.gatewayUrl,
+        accessToken: auth.token,
+        edition: auth.edition,
+        teamId: auth.teamId,
         wizardMetadata: boot.wizardMetadata,
         wizardFlags: boot.wizardFlags,
         modelId,

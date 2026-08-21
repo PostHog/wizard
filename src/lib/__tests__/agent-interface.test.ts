@@ -87,6 +87,11 @@ describe('runAgent', () => {
     posthogApiKey: 'phx_test_token',
     sequence: Sequence.linear,
     triageProvider: () => Promise.resolve('false_positive'),
+    gatewayAuth: {
+      gatewayUrl: 'https://gateway.test',
+      token: 'phx_test_token',
+      edition: 'legacy' as const,
+    },
   };
 
   beforeEach(() => {

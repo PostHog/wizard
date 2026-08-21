@@ -36,6 +36,7 @@ import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
+import { gatewayAuth } from '@lib/gateway-session';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
@@ -212,9 +213,15 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
+    const auth = await gatewayAuth(
+      boot.credentials.host,
+      boot.credentials.accessToken,
+    );
     const { provider, caps } = buildGatewayProvider({
-      gatewayUrl: boot.credentials.host.gatewayUrl,
-      accessToken: boot.credentials.accessToken,
+      gatewayUrl: auth.gatewayUrl,
+      accessToken: auth.token,
+      edition: auth.edition,
+      teamId: auth.teamId,
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
       modelId,
