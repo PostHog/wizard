@@ -34,15 +34,14 @@ function ensurePostHogCli(variant: SkillVariant): void {
 
   const result = installOrUpdatePostHogCli();
   if (!result.success) {
+    // This is a handled, environmental failure — a user-writable fallback
+    // prefix has already been tried inside installOrUpdatePostHogCli. Record it
+    // as a wizardCapture event, not a captureException, so it does not land in
+    // error tracking as an exception.
     analytics.wizardCapture('source maps posthog-cli preinstall failed', {
       variant,
       error: String(result.error).slice(0, 500),
     });
-    analytics.captureException(
-      result.errorObject ??
-        new Error(`posthog-cli pre-install failed: ${result.error}`),
-      { source: 'source_maps_cli_preinstall', variant },
-    );
     getUI().log.warn(
       `Could not pre-install posthog-cli (${result.error}). Your release build ` +
         `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
