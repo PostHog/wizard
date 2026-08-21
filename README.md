@@ -411,13 +411,16 @@ so the PostHog web app can render real-time progress. Updates are debounced
 the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
 set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
 
-## Leave rules behind
+## Leave skills behind
 
 Supporting agent sessions after we leave is important. There are plenty of ways
 to break or misconfigure PostHog, so guarding against this is key.
 
-`src/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
-rules files and store them in the project's `.cursor/rules` directory.
+The wizard installs its integration knowledge as markdown skills under the
+project's `.claude/skills/` directory (each marked with a `.posthog-wizard`
+file so the wizard only ever cleans up its own). At the end of a run, the
+keep-skills screen asks whether to keep them — kept skills give future agent
+sessions the same PostHog guidance the wizard itself ran on.
 
 ## Prompts and LLM interactions
 
