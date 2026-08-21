@@ -21,6 +21,39 @@ import { analytics } from '@utils/analytics';
 
 type View = 'default' | 'more-info' | 'privacy';
 
+/**
+ * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
+ * shared default's second line (".env* file contents will not leave your
+ * machine") reads as a flat contradiction next to this screen's disclosure
+ * paragraph, which says variable names are read and shared. Spelling out
+ * values-vs-names here resolves that without touching the default other
+ * screens rely on.
+ */
+const SUBTITLE = (
+  <>
+    <Text dimColor>
+      We'll use AI to analyze your project and complete work.
+    </Text>
+    <Text dimColor>
+      .env* values stay local; matched variable names may be shared.
+    </Text>
+  </>
+);
+
+/**
+ * Exported so a test can measure every label without rendering the screen.
+ * A row spends 2 columns on the focus marker and its gap.
+ */
+export const CONTINUE_MENU_WIDTH = 30;
+
+export const CONTINUE_MENU_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Continue', value: 'continue' },
+  { label: "Continue, don't share tools", value: 'continue-no-scan' },
+  { label: 'Change framework', value: 'framework' },
+  { label: 'More info', value: 'more-info' },
+  { label: 'Cancel', value: 'cancel' },
+];
+
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
   store,
@@ -169,6 +202,13 @@ export const PostHogIntegrationIntroScreen = ({
         <Box>
           <Text>Let's do two hours of work in eight minutes.</Text>
         </Box>
+        <Box flexDirection="column" width={64} flexShrink={0} marginTop={1}>
+          <Text dimColor>
+            We check dependency files and .env variable names for tools you use,
+            and share what we find with PostHog to suggest features and
+            understand what customers build.
+          </Text>
+        </Box>
       </>
     );
   }
@@ -242,12 +282,7 @@ export const PostHogIntegrationIntroScreen = ({
   } else if (view === 'privacy') {
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
-    menuOptions = [
-      { label: 'Continue', value: 'continue' },
-      { label: 'Change framework', value: 'framework' },
-      { label: 'More info', value: 'more-info' },
-      { label: 'Cancel', value: 'cancel' },
-    ];
+    menuOptions = CONTINUE_MENU_OPTIONS;
   }
 
   const handleSelect = (value: string) => {
@@ -263,7 +298,11 @@ export const PostHogIntegrationIntroScreen = ({
       setView('privacy');
     } else if (value === 'back') {
       setView(view === 'privacy' ? 'more-info' : 'default');
+    } else if (value === 'continue-no-scan') {
+      store.declineSharing();
+      store.completeSetup();
     } else {
+      store.grantSharing();
       store.completeSetup();
     }
   };
@@ -275,11 +314,13 @@ export const PostHogIntegrationIntroScreen = ({
       installDir={session.installDir}
       title={title}
       showSubtitle={view === 'default'}
+      subtitle={SUBTITLE}
       body={body}
       showDetection={showContinue}
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       menuAlign="center"
+      menuWidth={CONTINUE_MENU_WIDTH}
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}

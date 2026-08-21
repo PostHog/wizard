@@ -8,7 +8,7 @@ import {
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
-import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
@@ -175,6 +175,38 @@ describe('WizardStore', () => {
       expect(store.session.setupConfirmed).toBe(true);
       await store.getGate('intro');
       expect(cb).toHaveBeenCalled();
+    });
+
+    it('grantSharing sets scanConsent to granted and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.grantSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('declineSharing sets scanConsent to declined and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.declineSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('completeSetup marks the warehouse-scan report done after consent resolves', () => {
+      const store = createStore();
+
+      store.grantSharing();
+      expect(store.session.warehouseSourcesReported).toBe(false);
+
+      store.completeSetup();
+      expect(store.session.warehouseSourcesReported).toBe(true);
     });
 
     it('setRunPhase updates session.runPhase', () => {
