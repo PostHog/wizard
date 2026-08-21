@@ -36,9 +36,7 @@ export async function detectPostHogIntegration(
     const sessionOptions = {
       installDir,
       debug: session.debug,
-      default: false,
       signup: session.signup,
-      localMcp: session.localMcp,
       ci: session.ci,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,

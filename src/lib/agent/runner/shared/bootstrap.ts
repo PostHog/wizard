@@ -29,7 +29,9 @@ import {
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { isNonInteractiveEnvironment } from '@utils/environment';
-import { CallType, getSkillsBaseUrl } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, IS_DEV } from '@lib/constants';
+import { VERSION } from '@lib/version';
+import { mcpUrlFor } from '@lib/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
@@ -53,9 +55,7 @@ export function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    default: false,
     signup: session.signup,
-    localMcp: session.localMcp,
     ci: session.ci,
     benchmark: session.benchmark,
     projectId: session.projectId,
@@ -89,7 +89,16 @@ export async function bootstrapProgram(
     enableDebugLogs();
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
+  const skillsBaseUrl = getSkillsBaseUrl();
+
+  // Where this run actually points. The three services switch independently,
+  // so otherwise "why did it use prod skills?" means reading three call sites.
+  logToFile(
+    `[agent-runner] targets build=${VERSION}${IS_DEV ? '/dev' : ''} ` +
+      `skills=${skillsBaseUrl} ` +
+      `mcp=${mcpUrlFor(session.localMcp)} ` +
+      `posthog=${session.baseUrl ?? 'region-resolved'}`,
+  );
 
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs that declare a health-check screen get pre-flight checks;

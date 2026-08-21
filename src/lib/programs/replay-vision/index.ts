@@ -184,9 +184,7 @@ export const replayVisionConfig: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      default: false,
       signup: session.signup,
-      localMcp: session.localMcp,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
