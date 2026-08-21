@@ -33,11 +33,8 @@ const BROWSABLE_ROLES: ReadonlySet<CliEntry['role']> = new Set([
  * step's own `menu-fetch-failed` handling, rather than adding a second network
  * dependency that could block an otherwise-valid run.
  */
-async function assertSkillExists(
-  skillName: string,
-  localMcp: boolean,
-): Promise<void> {
-  const skillsBaseUrl = getSkillsBaseUrl(localMcp);
+async function assertSkillExists(skillName: string): Promise<void> {
+  const skillsBaseUrl = getSkillsBaseUrl();
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return; // registry down — let the download step surface it
   const known = Object.values(menu.categories)
@@ -80,9 +77,9 @@ function formatEntry(entry: CliEntry): string {
 const listCommand: Command = {
   name: 'list',
   description: 'List every browsable skill in the catalog',
-  handler: (argv) => {
+  handler: () => {
     runCommandHandler(async () => {
-      const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+      const skillsBaseUrl = getSkillsBaseUrl();
       const menu = await fetchSkillMenu(skillsBaseUrl);
       if (!menu) {
         analytics.wizardCapture('cli dispatch error', {
@@ -165,7 +162,7 @@ export const skillCommand: Command = {
   handler: (argv) => {
     runCommandHandler(async () => {
       const skillName = readSkillName(argv);
-      await assertSkillExists(skillName, Boolean(argv['local-mcp']));
+      await assertSkillExists(skillName);
       // runSkillMode reads `argv.skill`; bridge the positional onto it.
       runSkillMode({ ...argv, skill: skillName });
     });

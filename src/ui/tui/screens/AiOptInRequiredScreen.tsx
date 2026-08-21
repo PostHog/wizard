@@ -61,7 +61,7 @@ export const AiOptInRequiredScreen = ({
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
 
-  const { skillEntry } = useSkillEntry(session.skillId, session.localMcp);
+  const { skillEntry } = useSkillEntry(session.skillId);
 
   // Fire the "shown" event once per variant transition.
   useEffect(() => {
