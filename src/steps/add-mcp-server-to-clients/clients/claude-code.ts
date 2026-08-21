@@ -11,6 +11,7 @@ import {
   redactSecrets,
   type InstallResult,
 } from '@steps/add-mcp-server-to-clients/results';
+import { LoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '@utils/analytics';
@@ -25,7 +26,7 @@ export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
 export class ClaudeCodeMCPClient
   extends DefaultMCPClient
-  implements PluginCapable
+  implements PluginCapable, LoginCapable
 {
   name = 'Claude Code';
   private claudeBinaryPath: string | null = null;
@@ -99,11 +100,12 @@ export class ClaudeCodeMCPClient
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
+    // `mcp get <name>` exits non-zero when the entry doesn't exist. A substring
+    // scan of `mcp list` also matches the claude.ai "PostHog" connector and the
+    // plugin's `plugin:posthog:posthog`, reporting installed forever.
     try {
-      const output = execSync(`${binary} mcp list`, { stdio: 'pipe' })
-        .toString()
-        .toLowerCase();
-      return Promise.resolve(output.includes(serverName));
+      execSync(`${binary} mcp get ${serverName}`, { stdio: 'pipe' });
+      return Promise.resolve(true);
     } catch {
       return Promise.resolve(false);
     }
@@ -159,6 +161,40 @@ export class ClaudeCodeMCPClient
         new Error(`Claude Code MCP add failed: ${msg}`),
       );
       return Promise.resolve({ success: false, reason: msg });
+    }
+  }
+
+  /** Claude Code's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
+  loginCommand(local?: boolean): string {
+    return `claude mcp login ${local ? 'posthog-local' : 'posthog'}`;
+  }
+
+  /** The plugin bundles its own `posthog` server, addressed as `plugin:<plugin>:<server>`. */
+  pluginLoginCommand(): string {
+    return 'claude mcp login plugin:posthog:posthog';
+  }
+
+  async removePlugin(): Promise<PluginInstallResult> {
+    const binary = this.findClaudeBinary();
+    if (!binary)
+      return {
+        success: false,
+        reason: 'The claude CLI is no longer on your PATH.',
+      };
+
+    if (!(await this.isPluginInstalled())) {
+      return { success: true, alreadyInstalled: true };
+    }
+
+    try {
+      execSync(`${binary} plugin uninstall posthog`, { stdio: 'pipe' });
+      return { success: true };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      analytics.captureException(
+        new Error(`Claude Code plugin uninstall failed: ${msg}`),
+      );
+      return { success: false, reason: msg };
     }
   }
 

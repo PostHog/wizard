@@ -15,11 +15,7 @@ import { Box, Text, useInput } from 'ink';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '@ui/tui/store';
-import {
-  ConfirmationInput,
-  PickerMenu,
-  GroupedPickerMenu,
-} from '@ui/tui/primitives/index';
+import { ConfirmationInput, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import type {
   McpInstaller,
@@ -33,7 +29,6 @@ import {
   summarizeFailure,
 } from '@steps/add-mcp-server-to-clients/results';
 import {
-  AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
   isAllFeaturesSelected,
 } from '@steps/add-mcp-server-to-clients/defaults';
@@ -50,7 +45,6 @@ enum Phase {
   Detecting = 'detecting',
   Ask = 'ask',
   Pick = 'pick',
-  FeatureSelect = 'feature-select',
   Connector = 'connector',
   Working = 'working',
   Done = 'done',
@@ -62,8 +56,32 @@ const markDone = (
   outcome: McpOutcome,
   clients: string[] = [],
   featuresSelected?: 'all' | string[],
+  loginCommands: string[] = [],
 ) => {
-  store.setMcpComplete(outcome, clients, featuresSelected);
+  store.setMcpComplete(outcome, clients, featuresSelected, loginCommands);
+};
+
+/**
+ * The editor-owned login commands still to run after this install: fresh
+ * config entries use the client's own server name, plugin-provided servers
+ * their `plugin:` name. One entry per client.
+ */
+const pendingLoginCommands = (
+  clients: McpClientInfo[],
+  mcpResult: McpClientResult[],
+  pluginResult: McpClientResult[],
+): string[] => {
+  const commands = new Map<string, string>();
+  for (const r of pluginResult) {
+    const command = clients.find((c) => c.name === r.name)?.pluginLoginCommand;
+    if (isOk(r) && command) commands.set(r.name, command);
+  }
+  for (const r of mcpResult) {
+    const command = clients.find((c) => c.name === r.name)?.loginCommand;
+    if (r.status === McpClientStatus.Changed && command)
+      commands.set(r.name, command);
+  }
+  return [...commands.values()];
 };
 
 const reportFeatures = (features: string[]): 'all' | string[] =>
@@ -166,7 +184,6 @@ export const McpScreen = ({
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [mcpResults, setMcpResults] = useState<McpClientResult[]>([]);
   const [pluginResults, setPluginResults] = useState<McpClientResult[]>([]);
-  const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
   // Detection and the install/remove call can both blow up. Keep the reason so
   // a crash reads as a crash instead of as "you have nothing installed" or
   // "you selected nothing".
@@ -198,28 +215,12 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
-  const proceedAfterClientPick = (
-    clientNames: string[],
-    chosenMode: 'all' | 'custom',
-  ) => {
+  const proceedAfterClientPick = (clientNames: string[]) => {
     setSelectedClientNames(clientNames);
 
-    // Recommended flow: install everything straight away. Browser connectors
-    // (e.g. Claude Desktop/Web) just open their connector page here, same as
-    // before — no extra screen.
-    if (chosenMode === 'all') {
-      void doInstall(clientNames, [...ALL_FEATURE_VALUES], chosenMode);
-      return;
-    }
-    if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures, chosenMode);
-      return;
-    }
-
-    // Customize flow: a browser connector configures its tools and features in
-    // Claude's UI, not through the wizard's feature picker. The picker keeps it
-    // mutually exclusive from local editors, so a connector selection is
-    // connector-only — show its own screen instead of the feature picker.
+    // Browser connectors just open their connector page — no extra screen.
+    // Which PostHog areas the agent can reach is decided on the OAuth consent
+    // screen, not in the wizard, so there is nothing else to ask here.
     const isConnector = clientNames.some(
       (name) => clients.find((c) => c.name === name)?.finish,
     );
@@ -227,27 +228,14 @@ export const McpScreen = ({
       setPhase(Phase.Connector);
       return;
     }
-    setPhase(Phase.FeatureSelect);
+    void doInstall(clientNames);
   };
 
   const handleConfirm = () => {
     if (isRemove) {
       void doRemove();
     } else if (clients.length === 1) {
-      proceedAfterClientPick([clients[0]!.name], 'custom');
-    } else {
-      setPhase(Phase.Pick);
-    }
-  };
-
-  const handleTriStateChoice = (choice: 'all' | 'custom' | 'skip') => {
-    if (choice === 'skip') {
-      handleSkip();
-      return;
-    }
-    setInstallMode(choice);
-    if (clients.length === 1) {
-      proceedAfterClientPick([clients[0]!.name], choice);
+      proceedAfterClientPick([clients[0]!.name]);
     } else {
       setPhase(Phase.Pick);
     }
@@ -257,17 +245,7 @@ export const McpScreen = ({
     markDone(store, McpOutcome.Skipped);
   };
 
-  /**
-   * `chosenMode` is passed in rather than read from `installMode`: the tri-state
-   * picker sets that state and installs in the same tick when a single client
-   * is detected, so the closure would still hold the previous value and a
-   * one-editor machine would silently get the MCP-only path.
-   */
-  const doInstall = async (
-    names: string[],
-    features?: string[],
-    chosenMode: 'all' | 'custom' = installMode,
-  ) => {
+  const doInstall = async (names: string[], features?: string[]) => {
     setPhase(Phase.Working);
     let mcpResult: McpClientResult[] = [];
     let pluginResult: McpClientResult[] = [];
@@ -278,36 +256,22 @@ export const McpScreen = ({
     const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
     const directNames = names.filter((n) => !pluginCapableSet.has(n));
 
-    if (chosenMode === 'all') {
-      // Plugin-capable clients get the plugin (which bundles MCP).
-      // Non-plugin-capable clients get a direct MCP config write.
-      try {
-        mcpResult = await installer.install(
-          directNames,
-          features,
-          store.session.apiKey,
-        );
-      } catch (err) {
-        setFlowError(errorText(err));
-      }
-      try {
-        pluginResult = await installer.installPlugins(pluginCapableNames);
-      } catch (err) {
-        // Best-effort, but still say so rather than showing an empty screen.
-        setFlowError(errorText(err));
-      }
-    } else {
-      // 'custom' — MCP-only for every selected client. Plugin install is
-      // skipped so the user's feature selection is actually respected.
-      try {
-        mcpResult = await installer.install(
-          names,
-          features,
-          store.session.apiKey,
-        );
-      } catch (err) {
-        setFlowError(errorText(err));
-      }
+    // Plugin-capable clients get the plugin (which bundles MCP).
+    // Non-plugin-capable clients get a direct MCP config write.
+    try {
+      mcpResult = await installer.install(
+        directNames,
+        features,
+        store.session.apiKey,
+      );
+    } catch (err) {
+      setFlowError(errorText(err));
+    }
+    try {
+      pluginResult = await installer.installPlugins(pluginCapableNames);
+    } catch (err) {
+      // Best-effort, but still say so rather than showing an empty screen.
+      setFlowError(errorText(err));
     }
 
     setMcpResults(mcpResult);
@@ -317,12 +281,14 @@ export const McpScreen = ({
     const ready = [...mcpResult, ...pluginResult].filter(isOk);
     const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
+    const logins = pendingLoginCommands(clients, mcpResult, pluginResult);
     finishFlow.current = () =>
       markDone(
         store,
         outcome,
         ready.map((r) => r.name),
         featuresReport,
+        logins,
       );
     setPhase(Phase.Done);
   };
@@ -448,84 +414,40 @@ export const McpScreen = ({
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>
             <Box marginTop={1}>
-              {!isRemove && !store.session.mcpFeatures ? (
-                <PickerMenu
-                  message={`Install the PostHog MCP server${
-                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                  }?`}
-                  options={[
-                    {
-                      label: 'Install with all features',
-                      value: 'all',
-                      hint: 'recommended',
-                    },
-                    {
-                      label: 'Customize features',
-                      value: 'custom',
-                    },
-                    { label: 'No thanks', value: 'skip' },
-                  ]}
-                  mode="single"
-                  onSelect={(choice) =>
-                    handleTriStateChoice(choice as 'all' | 'custom' | 'skip')
-                  }
-                />
-              ) : (
-                <ConfirmationInput
-                  message={`${
-                    isRemove ? 'Remove' : 'Install'
-                  } the PostHog MCP server${
-                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                  }?`}
-                  confirmLabel={isRemove ? 'Remove' : 'Install'}
-                  cancelLabel="No thanks"
-                  onConfirm={handleConfirm}
-                  onCancel={handleSkip}
-                />
-              )}
+              <ConfirmationInput
+                message={`${
+                  isRemove ? 'Remove' : 'Install'
+                } the PostHog MCP server${
+                  clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                }?`}
+                confirmLabel={isRemove ? 'Remove' : 'Install'}
+                cancelLabel="No thanks"
+                onConfirm={handleConfirm}
+                onCancel={handleSkip}
+              />
             </Box>
           </>
         )}
 
         {phase === Phase.Pick && (
           <PickerMenu
-            message={
-              installMode === 'all'
-                ? 'Select editor to install'
-                : 'Select editor to install MCP server'
-            }
+            message="Select editor to install"
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
               // Browser connectors can't be installed alongside local editors
-              // and are configured on their own screen, not the feature picker.
+              // and are configured on their own screen.
               exclusive: Boolean(c.finish),
-              // Hints only show in the recommended flow; the customize flow
-              // keeps the list clean.
-              hint:
-                installMode === 'all'
-                  ? c.finish
-                    ? 'connector'
-                    : c.supportsPlugin
-                    ? 'plugin'
-                    : 'MCP'
-                  : undefined,
+              hint: c.finish
+                ? 'connector'
+                : c.supportsPlugin
+                ? 'plugin'
+                : 'MCP',
             }))}
             mode="multi"
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
-              proceedAfterClientPick(names, installMode);
-            }}
-          />
-        )}
-
-        {phase === Phase.FeatureSelect && (
-          <GroupedPickerMenu
-            message="Select the PostHog areas your agent can reach"
-            groups={AVAILABLE_FEATURES}
-            initialSelected={[]}
-            onSelect={(features) => {
-              void doInstall(selectedClientNames, features);
+              proceedAfterClientPick(names);
             }}
           />
         )}

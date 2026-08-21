@@ -21,6 +21,7 @@ import {
   type McpClientResult,
 } from '@steps/add-mcp-server-to-clients/results';
 import { isPluginCapable } from '@steps/add-mcp-server-to-clients/plugin-client';
+import { isLoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
 import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
@@ -33,6 +34,10 @@ export interface McpClientInfo {
    * Done screen renders this so the user knows to finish setup in the browser.
    */
   finish?: { url: string; instruction: string };
+  /** The editor's own login command (e.g. `claude mcp login posthog`), the one manual step left. */
+  loginCommand?: string;
+  /** Same, for the plugin-provided server (e.g. `claude mcp login plugin:posthog:posthog`). */
+  pluginLoginCommand?: string;
 }
 
 export { McpClientStatus };
@@ -79,6 +84,10 @@ export function createMcpInstaller(): McpInstaller {
         supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
         finish: isBrowserFinishable(c)
           ? { url: c.connectorUrl, instruction: c.finishInstruction }
+          : undefined,
+        loginCommand: isLoginCapable(c) ? c.loginCommand(false) : undefined,
+        pluginLoginCommand: isLoginCapable(c)
+          ? c.pluginLoginCommand?.()
           : undefined,
       }));
     },

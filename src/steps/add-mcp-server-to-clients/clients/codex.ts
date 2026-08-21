@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { LoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
 import { DefaultMCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
 import {
   DefaultMCPClientConfig,
@@ -30,7 +31,10 @@ export const CodexMCPConfig = DefaultMCPClientConfig;
 
 export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
-export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
+export class CodexMCPClient
+  extends DefaultMCPClient
+  implements PluginCapable, LoginCapable
+{
   name = 'Codex';
   private codexBinaryPath: string | null = null;
 
@@ -106,6 +110,11 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
       return Promise.resolve({ success: false, reason });
     }
     return Promise.resolve({ success: true });
+  }
+
+  /** Codex's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
+  loginCommand(local?: boolean): string {
+    return `codex mcp login ${local ? 'posthog-local' : 'posthog'}`;
   }
 
   removeServer(local?: boolean): Promise<InstallResult> {
