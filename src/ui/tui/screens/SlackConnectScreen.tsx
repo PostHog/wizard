@@ -36,6 +36,7 @@ import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { isBenignNetworkError } from '@utils/network-errors';
 import { openTrackedLink, withUtm } from '@utils/links';
 
 interface SlackConnectScreenProps {
@@ -161,6 +162,13 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           // connected so the screen doesn't sit on the loading state.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
+          }
+          // A dead network or an intercepting TLS proxy is the user's
+          // environment, not a wizard bug, and the nudge fallback above
+          // already handles it — log it and leave error tracking alone.
+          if (isBenignNetworkError(err)) {
+            logToFile(`[slack-connect] connected check skipped: ${String(err)}`);
+            return;
           }
           analytics.captureException(
             err instanceof Error ? err : new Error(String(err)),
