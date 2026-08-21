@@ -59,6 +59,26 @@ Add at least one capture call.
     expect(p.dependsOn).toEqual(['init']);
   });
 
+  it('reads dependsOn past a whole-line comment explaining it', () => {
+    // The shape integration-v2's warehouse agent uses: the ordering is
+    // non-obvious enough to need a note, and the note must not eat the field.
+    const p = parseAgentPrompt(
+      `---
+type: warehouse
+runnerSeeded: true
+# You are the only step that stops for the user, so you go last.
+dependsOn: [review, dashboard]
+---
+
+## Goal
+Connect the sources.
+`,
+      'fallback',
+    );
+    expect(p.runnerSeeded).toBe(true);
+    expect(p.dependsOn).toEqual(['review', 'dashboard']);
+  });
+
   it('resolves the per-harness model + effort, not 1:1 across providers', () => {
     const p = parseAgentPrompt(sample, 'fallback');
     expect(promptModelFor(p, 'pi')).toEqual({
@@ -497,6 +517,20 @@ describe('assembleTaskPrompt', () => {
     const assembled = assembleTaskPrompt(ctx, 'do the task', []);
     expect(assembled).not.toContain('Your tools for this task');
   });
+
+  it('surfaces the app host for browser links, distinct from the ingestion host', () => {
+    // A cloud ingestion host resolves an app host on a different origin, so a
+    // task that builds a user-facing link must not reuse the ingestion host.
+    const cloudCtx: OrchestratorPromptContext = {
+      projectId: 1,
+      projectApiKey: 'phc_x',
+      host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+    };
+    const assembled = assembleTaskPrompt(cloudCtx, 'do the task');
+    expect(assembled).toContain('PostHog Host: https://eu.i.posthog.com');
+    expect(assembled).toContain('PostHog app URL');
+    expect(assembled).toContain('https://eu.posthog.com');
+  });
 });
 
 describe('renderToolInventory', () => {
@@ -526,6 +560,24 @@ describe('assembleSeedPrompt', () => {
     ]);
     expect(prompt).toContain('warehouse (id: abc-123)');
     expect(prompt).toContain('Do not queue them again');
+  });
+
+  it('tells the planner the edge is one-way — sink in, nothing else', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    const prompt = assembleSeedPrompt(ctx, 'plan it', [
+      { id: 'abc-123', type: 'warehouse' },
+    ]);
+
+    // A pre-queued task is deferred to the end of the drain and may block on a
+    // person, so a task hung off it would wait on the user — the interruption
+    // deferring it removed.
+    expect(prompt).toContain('hang nothing else off them');
+    expect(prompt).toContain('reporting task depend on each one');
   });
 
   it('says nothing about pre-queued tasks when there are none', () => {

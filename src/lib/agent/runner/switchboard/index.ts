@@ -136,6 +136,11 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
   metrics: DEFAULT_BINDING,
+  'replay-vision': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.anthropic,

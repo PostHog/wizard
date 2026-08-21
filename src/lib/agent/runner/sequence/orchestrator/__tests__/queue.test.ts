@@ -243,3 +243,148 @@ describe('optional task failure', () => {
     expect(store.isDrained()).toBe(true);
   });
 });
+
+/**
+ * The one sanctioned mutation of `dependsOn`: closing the gap for a task queued
+ * before the planner ran. Additive, pending-only, cycle-checked — the three
+ * rules that keep the queue a DAG.
+ */
+describe('addDependencies', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-deps-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('adds edges to a pending task and blocks it behind them', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+    const install = store.enqueue({ type: 'install' });
+    expect(store.nextRunnable().map((t) => t.id)).toContain(warehouse.id);
+
+    const result = store.addDependencies(warehouse.id, [install.id]);
+
+    expect(result).toEqual({ added: [install.id], refused: [] });
+    expect(store.get(warehouse.id)?.dependsOn).toEqual([install.id]);
+    // The point of the whole change: it is no longer in the first tier.
+    expect(store.nextRunnable().map((t) => t.id)).not.toContain(warehouse.id);
+  });
+
+  it('is additive — it never drops an edge the task already had', () => {
+    const first = store.enqueue({ type: 'install' });
+    const warehouse = store.enqueue({
+      type: 'warehouse',
+      dependsOn: [first.id],
+    });
+    const second = store.enqueue({ type: 'init' });
+
+    store.addDependencies(warehouse.id, [second.id]);
+
+    expect(store.get(warehouse.id)?.dependsOn).toEqual([first.id, second.id]);
+  });
+
+  it('ignores an edge that is already there, without reporting a refusal', () => {
+    const install = store.enqueue({ type: 'install' });
+    const warehouse = store.enqueue({
+      type: 'warehouse',
+      dependsOn: [install.id],
+    });
+
+    expect(store.addDependencies(warehouse.id, [install.id])).toEqual({
+      added: [],
+      refused: [],
+    });
+    expect(store.get(warehouse.id)?.dependsOn).toEqual([install.id]);
+  });
+
+  it('refuses a dependency that would close a cycle', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+    const report = store.enqueue({
+      type: 'report',
+      dependsOn: [warehouse.id],
+    });
+
+    const result = store.addDependencies(warehouse.id, [report.id]);
+
+    expect(result).toEqual({ added: [], refused: [report.id] });
+    expect(store.get(warehouse.id)?.dependsOn).toEqual([]);
+  });
+
+  it('refuses a cycle through a longer chain', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+    const mid = store.enqueue({ type: 'capture', dependsOn: [warehouse.id] });
+    const far = store.enqueue({ type: 'review', dependsOn: [mid.id] });
+
+    expect(store.addDependencies(warehouse.id, [far.id]).refused).toEqual([
+      far.id,
+    ]);
+  });
+
+  it('refuses an unknown id', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+
+    expect(store.addDependencies(warehouse.id, ['nope'])).toEqual({
+      added: [],
+      refused: ['nope'],
+    });
+  });
+
+  it('ignores a self-loop', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+
+    expect(store.addDependencies(warehouse.id, [warehouse.id])).toEqual({
+      added: [],
+      refused: [],
+    });
+    expect(store.get(warehouse.id)?.dependsOn).toEqual([]);
+  });
+
+  it('adds the good edges and refuses only the bad ones', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+    const install = store.enqueue({ type: 'install' });
+    const report = store.enqueue({
+      type: 'report',
+      dependsOn: [warehouse.id],
+    });
+
+    const result = store.addDependencies(warehouse.id, [
+      install.id,
+      report.id,
+      'nope',
+    ]);
+
+    expect(result.added).toEqual([install.id]);
+    expect(result.refused).toEqual([report.id, 'nope']);
+  });
+
+  it('leaves a task that already started alone', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+    const install = store.enqueue({ type: 'install' });
+    store.start(warehouse.id);
+
+    const result = store.addDependencies(warehouse.id, [install.id]);
+
+    expect(result).toEqual({ added: [], refused: [install.id] });
+    expect(store.get(warehouse.id)?.dependsOn).toEqual([]);
+  });
+
+  it('reflects the new edges to queue.json', () => {
+    const warehouse = store.enqueue({ type: 'warehouse' });
+    const install = store.enqueue({ type: 'install' });
+    store.addDependencies(warehouse.id, [install.id]);
+
+    const file = JSON.parse(
+      fs.readFileSync(store.queuePath, 'utf8'),
+    ) as QueueFile;
+    expect(file.tasks.find((t) => t.id === warehouse.id)?.dependsOn).toEqual([
+      install.id,
+    ]);
+  });
+
+  it('throws for a task that is not in the queue at all', () => {
+    expect(() => store.addDependencies('nope', [])).toThrow('No task nope');
+  });
+});

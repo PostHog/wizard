@@ -130,6 +130,11 @@ function warehouseReportInstruction(sess: WizardSession): string {
  * the run is a fact about the project the wizard already scanned, so a model
  * can neither invent it nor forget it.
  *
+ * It runs at the end of the queue, not the start. Where exactly is the agent
+ * prompt's business (`dependsOn` in the warehouse agent's frontmatter, resolved
+ * by `seeded-deps.ts` once the planner has run) — this file only decides whether
+ * the task belongs in the run at all.
+ *
  * Empty when nothing was detected, and in CI, signup, and any other run where
  * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
  * the task's whole timeout and then fail the run.
@@ -157,7 +162,7 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
       notice: {
         title: 'Connect your data sources',
         body: [
-          "We detected some warehouse sources we can connect to enrich your PostHog data. To connect them, stick around, we'll prompt you to provide some credentials to setup warehouse sources.",
+          'We detected some warehouse sources we can connect to enrich your PostHog data. This runs at the end, once your code changes are done — we’ll prompt you then for the credentials, so you can leave the setup to run until it asks.',
           "You can select [Skip] if you'd like to do this later in PostHog.",
         ],
         items: sources.map((s) => s.label),

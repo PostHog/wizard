@@ -286,7 +286,13 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
-  opts?: { orgName?: string; projectName?: string; baseUrl?: string },
+  opts?: {
+    orgName?: string;
+    projectName?: string;
+    baseUrl?: string;
+    /** Scope list to request; defaults to `WIZARD_PROVISIONING_SCOPES`. */
+    scopes?: readonly string[];
+  },
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -304,7 +310,7 @@ export async function provisionNewAccount(
       client_id: getProvisioningClientId(region, opts?.baseUrl),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
-      scopes: WIZARD_PROVISIONING_SCOPES,
+      scopes: opts?.scopes ?? WIZARD_PROVISIONING_SCOPES,
       configuration: {
         region,
         ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
