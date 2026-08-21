@@ -102,38 +102,22 @@ const MENU: SkillEntry[] = [
   ...expandBundleEntry(CAPTURE_BUNDLE_ENTRY),
 ];
 
-// Pinned from the built metrics menu: one entry per framework, same variant id.
-const METRICS_ENTRIES = [
-  { id: 'metrics-python', framework: 'python' },
-  { id: 'metrics-python', framework: 'django' },
-  { id: 'metrics-python', framework: 'flask' },
-  { id: 'metrics-python', framework: 'fastapi' },
-  { id: 'metrics-nodejs', framework: 'javascript_node' },
-  { id: 'metrics-nodejs', framework: 'nextjs' },
-  { id: 'metrics-javascript', framework: 'javascript_web' },
-].map(
-  (e): SkillEntry => ({
-    ...e,
-    group: 'metrics',
-    name: e.id,
-    downloadUrl: `https://example.test/${e.id}.zip`,
-  }),
-);
+// Pinned from the built metrics menu: one collapsed skill, exact-id resolution.
+const METRICS_ENTRY: SkillEntry = {
+  id: 'metrics',
+  group: 'metrics',
+  name: 'metrics',
+  downloadUrl: 'https://example.test/metrics.zip',
+};
 
-describe('resolveSkillVariantId — multi-framework platform variants (metrics)', () => {
-  it('resolves the metrics family through the menu framework entries', () => {
-    expect(resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'flask')).toBe(
-      'metrics-python',
+describe('resolveSkillVariantId — collapsed single-skill group (metrics)', () => {
+  it('resolves by exact menu id, whatever the framework', () => {
+    expect(resolveSkillVariantId([METRICS_ENTRY], 'metrics', 'flask')).toBe(
+      'metrics',
     );
-    expect(resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'nextjs')).toBe(
-      'metrics-nodejs',
+    expect(resolveSkillVariantId([METRICS_ENTRY], 'metrics', undefined)).toBe(
+      'metrics',
     );
-    expect(
-      resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'javascript_web'),
-    ).toBe('metrics-javascript');
-    expect(
-      resolveSkillVariantId(METRICS_ENTRIES, 'metrics', 'swift'),
-    ).toBeUndefined();
   });
 });
 

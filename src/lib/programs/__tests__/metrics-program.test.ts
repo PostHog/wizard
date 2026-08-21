@@ -23,9 +23,8 @@ describe('metrics program', () => {
     expect(Program.Metrics).toBe('metrics');
   });
 
-  it('detects the framework, then runs the agent-skill steps with a metrics-specific intro', () => {
-    const [detect, intro, ...rest] = metricsConfig.steps;
-    expect(detect.id).toBe('detect');
+  it('uses the agent-skill steps with a metrics-specific intro', () => {
+    const [intro, ...rest] = metricsConfig.steps;
     expect(intro.id).toBe('intro');
     expect(intro.screenId).toBe('metrics-intro');
     expect(rest).toEqual(AGENT_SKILL_STEPS.slice(1));
@@ -35,23 +34,12 @@ describe('metrics program', () => {
     expect(metricsConfig.agentFlow).toBe('metrics');
   });
 
-  it('has no fixed skillId — the agent picks the variant from the menu', () => {
+  it('runs the one collapsed metrics skill', () => {
     const run = staticRun(metricsConfig);
-    expect(run.skillId).toBeUndefined();
-
+    expect(run.skillId).toBe('metrics');
     const prompt = run.customPrompt?.({} as WizardSession);
-    expect(prompt).toContain('load_skill_menu');
-    expect(prompt).toContain('"metrics"');
-    // Every published variant the prompt teaches the agent to choose from.
-    for (const variant of [
-      'metrics-python',
-      'metrics-nodejs',
-      'metrics-javascript',
-      'metrics-kubernetes',
-      'metrics-other',
-    ]) {
-      expect(prompt).toContain(variant);
-    }
+    expect(prompt).toContain('metrics');
+    expect(prompt).toContain('installation reference');
   });
 
   it('points the outro at the metrics docs and report file', () => {
