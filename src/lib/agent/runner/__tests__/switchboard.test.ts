@@ -61,6 +61,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'ai-observability') continue; // pinned below
+      if (program === 'metrics') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -74,6 +75,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
         harness: Harness.anthropic,
         model: SONNET_5_MODEL,
         thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds metrics to pi + sol at medium effort',
+      ctx: { program: 'metrics', flags: {} },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -183,12 +195,20 @@ describe('switchboard composed clamp', () => {
       };
       // The flag routes posthog-integration's harness to pi; the composed
       // clamp holds every sequence at linear; other programs keep their
-      // bindings (sonnet 5 for ai-observability, the default elsewhere).
+      // bindings (sonnet 5 for ai-observability, sol on pi for metrics,
+      // the default elsewhere).
       expect(resolveBinding(ctx)).toEqual(
         program === 'posthog-integration'
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
+          : program === 'metrics'
+          ? {
+              ...DEFAULT_RESOLVED,
+              harness: Harness.pi,
+              model: GPT5_6_SOL_MODEL,
+              thinkingLevel: 'medium',
+            }
           : DEFAULT_RESOLVED,
       );
       expect(ctx.trace?.sequence).toBe('composed');

@@ -9,6 +9,7 @@
 
 import {
   DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
   SONNET_5_MODEL,
   Harness,
   Sequence,
@@ -135,7 +136,12 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
-  metrics: DEFAULT_BINDING,
+  metrics: {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.anthropic,
