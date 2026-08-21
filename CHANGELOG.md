@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.65.0](https://github.com/PostHog/wizard/compare/v2.64.1...v2.65.0) (2026-08-21)
+
+
+### Features
+
+* add Elixir framework support ([#946](https://github.com/PostHog/wizard/issues/946)) ([b8b8aa6](https://github.com/PostHog/wizard/commit/b8b8aa6212b98af1d710c6edc46d882caf649ff3))
+* add Go framework support ([#945](https://github.com/PostHog/wizard/issues/945)) ([50965d7](https://github.com/PostHog/wizard/commit/50965d7ae98eaf5f18b4f02f91097566cc9734b7))
+* add Java framework support ([#948](https://github.com/PostHog/wizard/issues/948)) ([c56a894](https://github.com/PostHog/wizard/commit/c56a894ca7753f4d25da837de208b3d504267f6f))
+* add Rust framework support ([#947](https://github.com/PostHog/wizard/issues/947)) ([9b768a0](https://github.com/PostHog/wizard/commit/9b768a01a84e4efcba5e899692b6668b7a123411))
+* **metrics:** add `wizard metrics` program (runs the context-mill metrics skill) ([#1102](https://github.com/PostHog/wizard/issues/1102)) ([9f45ef5](https://github.com/PostHog/wizard/commit/9f45ef520f8fab4fcc24c08c0f9ae754888c0121))
+* new local flags ([#1125](https://github.com/PostHog/wizard/issues/1125)) ([b91dbe8](https://github.com/PostHog/wizard/commit/b91dbe88f8b537d847eefb857b6c8bac17b4c37b))
+
+
+### Bug Fixes
+
+* adding analytics tags to blindspots and other stuff ([#1119](https://github.com/PostHog/wizard/issues/1119)) ([1b4fd5c](https://github.com/PostHog/wizard/commit/1b4fd5c777acd633a22c1c517a99c9dbd10e9a74))
+* **e2e:** read pubspec dependencies in the result JSON ([#1113](https://github.com/PostHog/wizard/issues/1113)) ([56b1aa5](https://github.com/PostHog/wizard/commit/56b1aa59344e15fb39d6738ee9fefb671b5290c9))
+* fix smoke test ([#1126](https://github.com/PostHog/wizard/issues/1126)) ([f0f123f](https://github.com/PostHog/wizard/commit/f0f123f9660d446ba5b62a9baf5a55b1d204c3d4))
+
 ## [2.64.1](https://github.com/PostHog/wizard/compare/v2.64.0...v2.64.1) (2026-08-20)
 
 
