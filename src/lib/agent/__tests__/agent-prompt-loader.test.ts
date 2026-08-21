@@ -173,15 +173,14 @@ describe('agentRunTools', () => {
     ]);
   });
 
-  it('qualifies the skill-menu tools against the wizard-tools server', () => {
+  it('qualifies the skill-menu tool against the wizard-tools server', () => {
     const p = parseAgentPrompt(
-      '---\nallowedTools: [Read, load_skill_menu, install_skill]\n---\nx',
+      '---\nallowedTools: [Read, load_skill_menu]\n---\nx',
       't',
     );
     expect(agentRunTools(p).allowedTools).toEqual([
       'Read',
       'mcp__wizard-tools__load_skill_menu',
-      'mcp__wizard-tools__install_skill',
     ]);
   });
 });

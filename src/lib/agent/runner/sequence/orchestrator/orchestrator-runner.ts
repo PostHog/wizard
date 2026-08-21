@@ -157,12 +157,24 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
+/**
+ * Menu id for a bare skill id + framework via the menu's declared
+ * group/framework/default fields; undefined when nothing matches. A `pinned`
+ * id (a seed-chosen variant riding the task's inputs) wins when it names a
+ * menu entry inside the skill's own family.
+ */
 export function resolveSkillVariantId(
   entries: readonly SkillEntry[],
   skillId: string,
   framework: string | undefined,
+  pinned?: string,
 ): string | undefined {
+  if (pinned) {
+    const hit = entries.find(
+      (e) => e.id === pinned && (e.group === skillId || e.id === skillId),
+    );
+    if (hit) return hit.id;
+  }
   if (entries.some((e) => e.id === skillId)) return skillId;
   if (!framework) return undefined;
   const family = entries.filter(
@@ -664,6 +676,9 @@ export async function runOrchestrator(
       // auto-load them and they must never land in the project (or a CI PR).
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
+      // A seed-chosen variant rides the task's inputs and pins resolution.
+      const pinnedSkill =
+        typeof task.inputs?.skill === 'string' ? task.inputs.skill : undefined;
       for (const skillId of resolved.skills) {
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
@@ -672,6 +687,7 @@ export async function runOrchestrator(
           menuSkillEntries,
           skillId,
           session.skillId,
+          pinnedSkill,
         );
         if (!variantId) {
           logToFile(

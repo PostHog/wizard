@@ -100,6 +100,48 @@ const MENU: SkillEntry[] = [
   ...expandBundleEntry(CAPTURE_BUNDLE_ENTRY),
 ];
 
+// Platform-variant family with no per-framework entries: the seed picks the
+// variant and pins it through task inputs.
+const METRICS_ENTRIES: SkillEntry[] = [
+  { id: 'metrics-python', group: 'metrics' },
+  { id: 'metrics-nodejs', group: 'metrics' },
+  { id: 'metrics-javascript', group: 'metrics' },
+] as SkillEntry[];
+
+describe('resolveSkillVariantId — seed-pinned variants', () => {
+  it('a pinned menu id from task inputs wins over framework resolution', () => {
+    expect(
+      resolveSkillVariantId(
+        METRICS_ENTRIES,
+        'metrics',
+        'flask',
+        'metrics-python',
+      ),
+    ).toBe('metrics-python');
+  });
+
+  it('a pinned id outside the declared family is ignored', () => {
+    const entries = [
+      ...METRICS_ENTRIES,
+      ...INTEGRATION_ENTRIES,
+    ] as SkillEntry[];
+    expect(
+      resolveSkillVariantId(entries, 'metrics', undefined, 'integration-flask'),
+    ).toBeUndefined();
+  });
+
+  it('a pinned id not in the menu falls back to framework resolution', () => {
+    expect(
+      resolveSkillVariantId(
+        METRICS_ENTRIES,
+        'metrics',
+        'flask',
+        'metrics-rust',
+      ),
+    ).toBeUndefined();
+  });
+});
+
 describe('resolveSkillVariantId — menu-declared framework resolution', () => {
   it('resolves a bare single-variant skill id to itself', () => {
     expect(resolveSkillVariantId(MENU, 'integration-v2-build', 'django')).toBe(

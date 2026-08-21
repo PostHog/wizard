@@ -153,9 +153,8 @@ const ORCHESTRATOR_TOOLS = new Set([
 /** The one tool that stops a task until a person answers. Named short in frontmatter. */
 export const ASK_TOOL = 'wizard_ask';
 
-/** The skill-menu tools, as agents ask for them in frontmatter. */
+/** The skill-menu tool, as agents ask for it in frontmatter. */
 const SKILL_MENU_TOOL = 'load_skill_menu';
-const INSTALL_SKILL_TOOL = 'install_skill';
 
 /**
  * The PostHog MCP, as an agent asks for it in frontmatter. Every tool a task
@@ -291,7 +290,6 @@ interface AgentMenu {
 function expandToolName(name: string): string {
   if (name === ASK_TOOL) return WIZARD_TOOL_NAMES.wizardAsk;
   if (name === SKILL_MENU_TOOL) return WIZARD_TOOL_NAMES.loadSkillMenu;
-  if (name === INSTALL_SKILL_TOOL) return WIZARD_TOOL_NAMES.installSkill;
   if (name === POSTHOG_MCP_TOOL) return POSTHOG_MCP_SDK_TOOL;
   return ORCHESTRATOR_TOOLS.has(name)
     ? `${ORCHESTRATOR_TOOL_PREFIX}${name}`
