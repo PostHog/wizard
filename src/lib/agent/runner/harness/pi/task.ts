@@ -189,6 +189,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   };
   const captureAborted = () =>
     analytics.wizardCapture('agent aborted', {
+      abort_kind: 'run_incomplete',
       ...runDurations(),
       model: modelId,
       ...analyticsProperties,

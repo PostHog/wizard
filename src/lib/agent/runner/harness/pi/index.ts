@@ -216,6 +216,7 @@ export const piBackend: AgentHarness = {
     };
     const captureAborted = () =>
       analytics.wizardCapture('agent aborted', {
+        abort_kind: 'run_incomplete',
         ...runDurations(),
         model: modelId,
       });

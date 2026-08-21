@@ -28,6 +28,7 @@ import { createWizardAskBridge } from '../../../wizard-ask-bridge';
 import type { ProgramConfig } from '../../../programs/program-step';
 import { assemblePrompt } from '../../agent-prompt';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
+import { collectAbortFollowUp } from '../shared/abort-follow-up';
 import { abortOnInstallFailure } from '../shared/errors';
 import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
 import { resolveHarness, getHarness } from '../switchboard';
@@ -143,9 +144,10 @@ export async function runLinearProgram(
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
     const matched = config.abortCases?.find((c) => c.match.test(reason));
+    const notApplicable = matched?.outcome === 'not_applicable';
     const outroData: WizardSession['outroData'] = matched
       ? {
-          kind: OutroKind.Error,
+          kind: notApplicable ? OutroKind.NotApplicable : OutroKind.Error,
           message: matched.message,
           body: matched.body,
           docsUrl: matched.docsUrl,
@@ -156,18 +158,36 @@ export async function runLinearProgram(
           body: reason || 'The agent aborted the program.',
           docsUrl: config.docsUrl,
         };
+
+    // Ask before exiting, not after: this is the last moment the user is still
+    // at the terminal. Never let the exit hinge on an answer — no bridge (CI,
+    // signup), a cancelled prompt, or a timeout all fall through unchanged.
+    const followUp = await collectAbortFollowUp(matched, askBridge);
+
     analytics.wizardCapture('agent aborted', {
+      abort_kind: 'skill_signal',
       integration: config.integrationLabel,
       reason,
       matched: matched?.message ?? null,
+      // Group funnels on these, not on `reason` — see AbortCase.code.
+      reason_code: matched?.code ?? 'unmatched',
+      reason_matched: matched !== undefined,
+      outcome: notApplicable ? 'not_applicable' : 'failure',
+      ...followUp,
     });
     await wizardAbort({
       outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
+      // A project this program doesn't serve isn't an exception to capture or
+      // a failed run to report. The exit code stays non-zero either way: a
+      // scripted caller asked for instrumentation and didn't get it.
+      status: notApplicable ? 'not_applicable' : undefined,
+      error: notApplicable
+        ? undefined
+        : new WizardError(`Agent aborted: ${reason}`, {
+            integration: config.integrationLabel,
+            error_type: AgentErrorType.ABORT,
+            reason,
+          }),
     });
   }
 
