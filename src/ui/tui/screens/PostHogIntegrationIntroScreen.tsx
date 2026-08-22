@@ -15,6 +15,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
 import { getSubcommandPrograms } from '@lib/programs/program-registry';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
+import { introHeadline } from '@ui/tui/posthog-integration-intro';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
@@ -184,11 +185,9 @@ export const PostHogIntegrationIntroScreen = ({
     body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
-      <>
-        <Box>
-          <Text>Let's do two hours of work in eight minutes.</Text>
-        </Box>
-      </>
+      <Box>
+        <Text>{introHeadline(session.posthogSdkDetected)}</Text>
+      </Box>
     );
   }
 
