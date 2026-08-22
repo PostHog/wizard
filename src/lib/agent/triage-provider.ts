@@ -7,6 +7,7 @@
 
 import { Harness } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import type { GatewayEdition } from '@lib/gateway-session';
 import { buildGatewayModel } from '@lib/agent/runner/harness/pi/gateway';
 import {
   modelCapabilities,
@@ -20,10 +21,14 @@ const TRIAGE_MAX_TOKENS = 16_384;
 const TRIAGE_TIMEOUT_MS = 20_000;
 
 export interface TriageGatewayAuth {
-  /** Gateway base url — `credentials.host.gatewayUrl`. */
+  /** Gateway base url — from the run's resolved gateway auth. */
   baseURL: string;
-  /** The run's OAuth access token. */
+  /** The run's gateway bearer (minted phe_ on v2, OAuth token on legacy). */
   authToken: string;
+  /** Gateway contract in play; selects the header shape. Default legacy. */
+  edition?: GatewayEdition;
+  /** Customer team for the v2 properties blob. */
+  teamId?: number;
   /** The run's trace tags, with `call_type` overridden to
    *  `CallType.yaraTriage` so scan spend is separable from agent work. */
   wizardMetadata?: Record<string, string>;
@@ -45,6 +50,8 @@ export function createTriageLLMProvider(
   const model = buildGatewayModel({
     gatewayUrl: baseURL,
     accessToken: authToken,
+    edition: auth.edition,
+    teamId: auth.teamId,
     wizardMetadata: auth?.wizardMetadata ?? {},
     wizardFlags: auth?.wizardFlags ?? {},
     modelId,
