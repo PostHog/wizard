@@ -15,13 +15,15 @@ import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
 import { getSubcommandPrograms } from '@lib/programs/program-registry';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
-import { introHeadline } from '@ui/tui/posthog-integration-intro';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { analytics } from '@utils/analytics';
-
-type View = 'default' | 'more-info' | 'privacy' | 'commands';
+import type { IntroMenuView } from '@ui/tui/posthog-integration-intro';
+import {
+  introHeadline,
+  introMenuOptions,
+} from '@ui/tui/posthog-integration-intro';
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -69,7 +71,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
-  const [view, setView] = useState<View>('default');
+  const [view, setView] = useState<IntroMenuView>('default');
 
   const { session } = store;
   const config = session.frameworkConfig;
@@ -257,29 +259,11 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Menu ───────────────────────────────────────────────────────────
 
-  let menuOptions: { label: string; value: string }[] | null = null;
-
-  if (view === 'more-info') {
-    menuOptions = [
-      { label: 'Back', value: 'back' },
-      { label: 'Privacy & data usage', value: 'privacy' },
-    ];
-  } else if (view === 'privacy' || view === 'commands') {
-    menuOptions = [{ label: 'Back', value: 'back' }];
-  } else if (showContinue) {
-    const continueLabel = session.posthogSdkDetected
-      ? 'Continue anyway'
-      : 'Continue';
-    menuOptions = [
-      { label: continueLabel, value: 'continue' },
-      { label: 'Change framework', value: 'framework' },
-      { label: 'More info', value: 'more-info' },
-      ...(session.posthogSdkDetected
-        ? [{ label: 'Other wizard tricks', value: 'commands' }]
-        : []),
-      { label: 'Cancel', value: 'cancel' },
-    ];
-  }
+  const menuOptions = introMenuOptions({
+    view,
+    showContinue,
+    posthogSdkDetected: session.posthogSdkDetected,
+  });
 
   const handleSelect = (value: string) => {
     analytics.wizardCapture('intro menu selected', { value, view });
