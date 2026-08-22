@@ -46,22 +46,7 @@ if (process.env.NODE_ENV === 'test') {
 }
 
 import { Wizard } from './src/wizard';
-import { basicIntegrationCommand } from './src/commands/basic-integration';
-import { mcpCommand } from './src/commands/mcp';
-import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
-import { replayVisionCommand } from './src/commands/replay-vision';
-import { aiObservabilityCommand } from './src/commands/ai-observability';
-import { metricsCommand } from './src/commands/metrics';
-import { auditCommand } from './src/commands/audit';
-import { doctorCommand } from './src/commands/doctor';
-import { migrateCommand } from './src/commands/migrate';
-import { revenueCommand } from './src/commands/revenue';
-import { warehouseCommand } from './src/commands/warehouse';
-import { selfDrivingCommand } from './src/commands/self-driving';
-import { slackCommand } from './src/commands/slack';
-import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
-import { skillCommand } from './src/commands/skill';
-import { cliCommand } from './src/commands/cli';
+import { ALL_COMMANDS } from './src/commands';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
@@ -79,20 +64,4 @@ function resolveInstallDir(): string {
   return process.env.POSTHOG_WIZARD_INSTALL_DIR ?? process.cwd();
 }
 
-Wizard.use(basicIntegrationCommand)
-  .use(mcpCommand)
-  .use(mcpAnalyticsCommand)
-  .use(replayVisionCommand)
-  .use(aiObservabilityCommand)
-  .use(metricsCommand)
-  .use(cliCommand)
-  .use(auditCommand)
-  .use(doctorCommand)
-  .use(migrateCommand)
-  .use(revenueCommand)
-  .use(warehouseCommand)
-  .use(selfDrivingCommand)
-  .use(slackCommand)
-  .use(uploadSourcemapsCommand)
-  .use(skillCommand)
-  .init();
+Wizard.use(...ALL_COMMANDS).init();
