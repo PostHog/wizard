@@ -57,6 +57,12 @@ const REFRESH_SLACK_MS = 5 * 60 * 1000;
  * turns the cache into a permanent miss and mints on every call.
  */
 const MAX_SLACK_FRACTION = 0.2;
+/**
+ * The margin never drops below this: a token handed out with less life than a
+ * single request needs 401s mid-run, and the subprocess holds it for the whole
+ * session with no way to re-read a refreshed one.
+ */
+const MIN_SLACK_MS = 30 * 1000;
 /** How long a legacy fallback sticks before the mint endpoint is retried. */
 const LEGACY_RETRY_MS = 10 * 60 * 1000;
 const MINT_TIMEOUT_MS = 10_000;
@@ -91,17 +97,24 @@ async function resolveGatewayAuth(
 ): Promise<GatewayAuth> {
   const minted = await mintGatewayToken(host, accessToken);
   if (!minted) {
-    const auth: GatewayAuth = {
-      gatewayUrl: host.gatewayUrl,
-      token: accessToken,
-      edition: 'legacy',
-    };
+    const auth = legacyAuth(host, accessToken);
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
     return auth;
   }
   const expiresAtMs = Date.parse(minted.expiresAt);
+  const ttlMs = expiresAtMs - Date.now();
+  if (Number.isFinite(expiresAtMs) && ttlMs <= MIN_SLACK_MS) {
+    // Already expired, or too short to serve a single request. Falling back
+    // beats handing the run a credential that 401s mid-session.
+    logToFile(
+      `[gateway] mint returned a token with ${ttlMs}ms of life; staying on the existing gateway`,
+    );
+    const auth = legacyAuth(host, accessToken);
+    cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
+    return auth;
+  }
   const staleAtMs = Number.isFinite(expiresAtMs)
-    ? expiresAtMs - refreshSlackMs(expiresAtMs - Date.now())
+    ? expiresAtMs - refreshSlackMs(ttlMs)
     : Date.now() + LEGACY_RETRY_MS;
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
@@ -113,16 +126,26 @@ async function resolveGatewayAuth(
   return auth;
 }
 
+/** Today's posture: the user's OAuth token against the existing gateway. */
+function legacyAuth(host: HostResolution, accessToken: string): GatewayAuth {
+  return { gatewayUrl: host.gatewayUrl, token: accessToken, edition: 'legacy' };
+}
+
 /** Test hook: drop the cached auth so the next call re-resolves. */
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
 }
 
-/** The refresh margin, never more than a fifth of the token's remaining life. */
+/**
+ * The refresh margin: a fifth of the token's remaining life, capped at the
+ * fixed margin and floored so a short token is never served with less than one
+ * request's worth of life left.
+ */
 export function refreshSlackMs(ttlMs: number): number {
   if (!Number.isFinite(ttlMs) || ttlMs <= 0) return 0;
-  return Math.min(REFRESH_SLACK_MS, Math.floor(ttlMs * MAX_SLACK_FRACTION));
+  const share = Math.floor(ttlMs * MAX_SLACK_FRACTION);
+  return Math.min(REFRESH_SLACK_MS, Math.max(share, MIN_SLACK_MS));
 }
 
 /**
@@ -137,8 +160,23 @@ export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
   } catch {
     return false;
   }
+  // Consumers append routes to this value, so anything beyond an origin
+  // (path, query, fragment, userinfo) would build a malformed endpoint.
+  if (
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash ||
+    url.username ||
+    url.password
+  ) {
+    return false;
+  }
   const localhost =
-    url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.hostname === '[::1]' ||
+    url.hostname === '::1' ||
+    url.hostname === 'host.docker.internal';
   // Loopback is the dev gateway, and is the one case allowed over http.
   if (localhost) return true;
   if (url.protocol !== 'https:') return false;
@@ -188,9 +226,26 @@ async function mintGatewayToken(
       gateway_url?: string;
       team_id?: number;
     };
-    if (!body.token) return null;
-    if (!body.expires_at) return null;
-    if (!body.gateway_url) return null;
+    // Checked one at a time, not in a loop, so each clause narrows the optional
+    // field for the return below and each names itself in the log.
+    if (!body.token) {
+      logToFile(
+        '[gateway] mint response omitted token; staying on the existing gateway',
+      );
+      return null;
+    }
+    if (!body.expires_at) {
+      logToFile(
+        '[gateway] mint response omitted expires_at; staying on the existing gateway',
+      );
+      return null;
+    }
+    if (!body.gateway_url) {
+      logToFile(
+        '[gateway] mint response omitted gateway_url; staying on the existing gateway',
+      );
+      return null;
+    }
     if (!isTrustedGatewayUrl(body.gateway_url, host.apiHost)) {
       logToFile(
         `[gateway] mint returned an untrusted gateway url; staying on the existing gateway`,

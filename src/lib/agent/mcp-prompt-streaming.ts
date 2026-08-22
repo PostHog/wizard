@@ -223,19 +223,19 @@ export async function* runMcpPromptViaSdk(args: {
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-  // Route through the PostHog LLM gateway, authed with the user's OAuth token.
+  // Route through the PostHog LLM gateway on this run's resolved posture: the
+  // url, the bearer, and the header edition are one unit, so taking the url
+  // without the token would send a legacy credential to the new gateway.
   const auth = await gatewayAuth(credentials.host, credentials.accessToken);
   const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
-  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  process.env.ANTHROPIC_AUTH_TOKEN = auth.token;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
 
   logToFile(
-    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
-      credentials.accessToken
-        ? credentials.accessToken.slice(0, 4) + '***'
-        : '(missing)'
-    }`,
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} edition=${
+      auth.edition
+    } tokenPrefix=${auth.token ? auth.token.slice(0, 4) + '***' : '(missing)'}`,
   );
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -357,11 +357,12 @@ export async function* runMcpPromptViaSdk(args: {
           // wizard's own gateway routing is injected fresh below. See
           // agent-env-isolation.ts.
           ...sanitizeAgentSubprocessEnv(process.env),
-          // Gateway routing — injected explicitly (set on process.env above;
-          // the strip removed them from the inherited copy, so re-add here).
-          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // Gateway routing from this run's own auth, not process.env: a
+          // concurrent run writes those globals too, and there is an await
+          // between the write above and this read.
+          ANTHROPIC_BASE_URL: auth.gatewayUrl,
+          ANTHROPIC_AUTH_TOKEN: auth.token,
+          CLAUDE_CODE_OAUTH_TOKEN: auth.token,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.

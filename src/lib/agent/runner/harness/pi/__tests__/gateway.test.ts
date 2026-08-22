@@ -19,6 +19,16 @@ describe('buildGatewayProvider effort', () => {
     expect(caps.thinkingLevel).toBe('high');
   });
 
+  it('keeps an explicit off rather than the model table default', () => {
+    const { caps } = buildGatewayProvider({
+      ...base,
+      modelId: 'openai/gpt-5.6-terra',
+      effort: 'off',
+    });
+    // terra's table effort is medium; asking for off must not spend that.
+    expect(caps.thinkingLevel).toBe('off');
+  });
+
   it('passes an xhigh override through on an openai model', () => {
     const { caps } = buildGatewayProvider({
       ...base,

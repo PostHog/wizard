@@ -1183,7 +1183,7 @@ export async function runAgent(
         // Claude Code.
         const authError = buildAuthErrorContext(
           options.installDir,
-          process.env.ANTHROPIC_BASE_URL ?? '',
+          agentConfig.gatewayAuth.gatewayUrl,
           os.homedir(),
           signals.apiKeySource,
         );

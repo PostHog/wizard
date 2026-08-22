@@ -131,6 +131,36 @@ describe('gatewayAuth', () => {
     expect(auth.edition).toBe('legacy');
   });
 
+  it('falls back when the mint returns a token too short to use', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_dying',
+          expires_at: new Date(Date.now() + 5_000).toISOString(),
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth');
+    // A token with seconds of life would 401 mid-run, and the subprocess holds
+    // it for the whole session.
+    expect(auth.edition).toBe('legacy');
+  });
+
+  it('falls back when the mint returns an already-expired token', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_expired',
+          expires_at: new Date(Date.now() - 1_000).toISOString(),
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth');
+    expect(auth.edition).toBe('legacy');
+  });
+
   it('refuses a gateway url outside the trusted origins', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
@@ -235,6 +265,11 @@ describe('refreshSlackMs', () => {
   it('is zero for an already-expired token', () => {
     expect(refreshSlackMs(-1)).toBe(0);
   });
+
+  it("floors at one request's worth of life for a very short token", () => {
+    // A fifth of 60s is 12s, which is less than a single request needs.
+    expect(refreshSlackMs(60_000)).toBe(30_000);
+  });
 });
 
 describe('isTrustedGatewayUrl', () => {
@@ -253,7 +288,28 @@ describe('isTrustedGatewayUrl', () => {
     'http://ai-gateway.us.posthog.com',
     'not-a-url',
     'https://posthog.com.evil.example',
+    'https://x.posthog.com.evil.io',
+    // Userinfo: the real host is evil.com.
+    'https://ai-gateway.us.posthog.com@evil.com',
+    // Consumers append routes, so anything past the origin is refused.
+    'https://ai-gateway.us.posthog.com/wizard',
+    'https://ai-gateway.us.posthog.com/?x=1',
   ])('refuses %s', (value) => {
     expect(isTrustedGatewayUrl(value, api)).toBe(false);
+  });
+
+  it('accepts the docker dev gateway host', () => {
+    expect(isTrustedGatewayUrl('http://host.docker.internal:3308', api)).toBe(
+      true,
+    );
+  });
+
+  it('accepts a self-hosted install on its own api host', () => {
+    expect(
+      isTrustedGatewayUrl(
+        'https://ph.internal.example',
+        'https://ph.internal.example',
+      ),
+    ).toBe(true);
   });
 });
