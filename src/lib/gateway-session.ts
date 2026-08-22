@@ -37,7 +37,7 @@ export interface GatewayAuth {
 interface CachedAuth {
   key: string;
   auth: GatewayAuth;
-  /** Re-resolve after this instant (token expiry minus slack, or retry backoff). */
+  /** Re-resolve once past this instant. */
   staleAtMs: number;
 }
 

@@ -223,9 +223,8 @@ export async function* runMcpPromptViaSdk(args: {
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-  // Route through the PostHog LLM gateway on this run's resolved posture: the
-  // url, the bearer, and the header edition are one unit, so taking the url
-  // without the token would send a legacy credential to the new gateway.
+  // The url, the bearer and the header edition are one unit: a run must take
+  // all three from the same resolved posture.
   const auth = await gatewayAuth(credentials.host, credentials.accessToken);
   const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
