@@ -697,16 +697,16 @@ describe('subprocess gateway credentials', () => {
 });
 
 describe('auth error context', () => {
-  it('reports the run own gateway url, not the process global', () => {
-    // A concurrent run writes ANTHROPIC_BASE_URL too, so the 401 screen has to
-    // read the run's resolved auth or it can name the wrong region.
-    process.env.ANTHROPIC_BASE_URL = 'https://gateway.eu.posthog.com/wizard';
-    const ctx = buildAuthErrorContext(
-      '/test/dir',
-      'https://ai-gateway.us.posthog.com',
-    );
-    expect(ctx.gatewayUrl).toBe('https://ai-gateway.us.posthog.com');
-    expect(ctx.region).toBe('us');
-    delete process.env.ANTHROPIC_BASE_URL;
+  // The 401 screen's region comes from whichever url it is handed, which is why
+  // runAgent passes the run's resolved auth rather than the process global a
+  // concurrent run also writes.
+  it.each([
+    ['https://ai-gateway.us.posthog.com', 'us'],
+    ['https://gateway.eu.posthog.com/wizard', 'eu'],
+    ['http://localhost:3308', 'local'],
+  ])('derives the region from the url it is given (%s)', (url, region) => {
+    const ctx = buildAuthErrorContext('/test/dir', url);
+    expect(ctx.gatewayUrl).toBe(url);
+    expect(ctx.region).toBe(region);
   });
 });

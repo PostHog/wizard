@@ -14,7 +14,9 @@ describe('buildGatewayProvider effort', () => {
       modelId: 'openai/gpt-5.6-terra',
       effort: 'off',
     });
-    // terra's table effort is medium; asking for off must not spend that.
+    // The caps must carry off rather than terra's table medium. On the wire
+    // pi omits reasoning_effort for a spec with no thinkingLevelMap, so the
+    // provider default applies; this pins the harness's request, not the wire.
     expect(caps.thinkingLevel).toBe('off');
   });
 
