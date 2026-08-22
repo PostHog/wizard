@@ -1,6 +1,5 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
-import { analytics } from '@utils/analytics';
 import { WIZARD_USER_AGENT } from './constants';
 
 /**
@@ -152,12 +151,10 @@ export async function fetchUserData(
 
     return ApiUserSchema.parse(response.data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch user data');
-    analytics.captureException(apiError, {
-      endpoint: '/api/users/@me/',
-      baseUrl,
-    });
-    throw apiError;
+    // Throw without capturing — the caller decides whether the failure is
+    // worth reporting. CI paths that swallow an expected 403 must not file
+    // an error, and paths that retry must report exactly once.
+    throw handleApiError(error, 'fetch user data');
   }
 }
 
@@ -219,13 +216,8 @@ export async function fetchProjectData(
 
     return ApiProjectSchema.parse(response.data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch project data');
-    analytics.captureException(apiError, {
-      endpoint: `/api/projects/${projectId}/`,
-      baseUrl,
-      projectId,
-    });
-    throw apiError;
+    // Throw without capturing — the caller owns reporting (see fetchUserData).
+    throw handleApiError(error, 'fetch project data');
   }
 }
 
@@ -265,7 +257,6 @@ export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;
-    const detail = axiosError.response?.data?.detail;
     const endpoint = axiosError.config?.url;
 
     if (status === 401) {
@@ -292,8 +283,25 @@ export function handleApiError(error: unknown, operation: string): ApiError {
       );
     }
 
-    const message = detail || `Failed to ${operation}`;
-    return new ApiError(message, status, endpoint);
+    // A response came back but is not one of the codes handled above (5xx,
+    // 429, and the like). Put the HTTP status in the message so each status
+    // groups as a separate error tracking issue instead of collapsing into
+    // one undiagnosable "Failed to ..." group.
+    if (status !== undefined) {
+      return new ApiError(
+        `Failed to ${operation} (HTTP ${status})`,
+        status,
+        endpoint,
+      );
+    }
+
+    // No response — a transport failure (DNS, connection reset, timeout).
+    // Put the error code in the message so each cause groups separately.
+    return new ApiError(
+      `Failed to ${operation} (${axiosError.code ?? 'network error'})`,
+      undefined,
+      endpoint,
+    );
   }
 
   if (error instanceof z.ZodError) {

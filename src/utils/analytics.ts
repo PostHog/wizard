@@ -247,6 +247,14 @@ export class Analytics {
     });
   }
 
+  /** Normalize an unknown throw to an Error, then capture it. */
+  captureUnknown(error: unknown, properties: Record<string, unknown> = {}) {
+    this.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      properties,
+    );
+  }
+
   capture(eventName: string, properties?: Record<string, unknown>) {
     this.client.capture({
       distinctId: this.distinctId ?? this.anonymousId,
