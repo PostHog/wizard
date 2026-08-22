@@ -20,6 +20,7 @@ import {
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
+import { findPackageJsons } from '@lib/programs/shared/package-scanning';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -73,6 +74,7 @@ export async function detectPostHogIntegration(
   }
 
   detectWarehouseSourcesForSuggestion(ctx, installDir);
+  detectExistingPostHog(ctx, installDir);
 
   ctx.setDetectionComplete();
 }
@@ -125,5 +127,26 @@ function detectWarehouseSourcesForSuggestion(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'detectWarehouseSourcesForSuggestion' },
     );
+  }
+}
+
+/**
+ * Scan for existing PostHog SDKs in the project. Dependency-level signal only,
+ * not a verified (or complete) install. Best-effort: scan failure reports
+ * false rather than breaking the detection step.
+ */
+export function detectExistingPostHog(
+  ctx: Pick<ProgramReadyContext, 'setPosthogSdkDetected'>,
+  installDir: string,
+): void {
+  try {
+    const pkgJsons = findPackageJsons(installDir);
+    ctx.setPosthogSdkDetected(pkgJsons.some((p) => p.posthogSdks.length > 0));
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectExistingPosthog' },
+    );
+    ctx.setPosthogSdkDetected(false);
   }
 }

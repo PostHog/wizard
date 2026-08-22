@@ -13,13 +13,17 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
+import { getSubcommandPrograms } from '@lib/programs/program-registry';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { analytics } from '@utils/analytics';
-
-type View = 'default' | 'more-info' | 'privacy';
+import type { IntroMenuView } from '@ui/tui/posthog-integration-intro';
+import {
+  introHeadline,
+  introMenuOptions,
+} from '@ui/tui/posthog-integration-intro';
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -67,7 +71,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
-  const [view, setView] = useState<View>('default');
+  const [view, setView] = useState<IntroMenuView>('default');
 
   const { session } = store;
   const config = session.frameworkConfig;
@@ -158,15 +162,34 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
+  } else if (view === 'commands') {
+    body = (
+      <Box flexDirection="column" width={64} flexShrink={0}>
+        <Text>The wizard can do more than integrate with your project:</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {getSubcommandPrograms().map((program) => (
+            <Box key={program.command}>
+              <Box width={22} flexShrink={0}>
+                <Text color="cyan">{program.command}</Text>
+              </Box>
+              <Text dimColor>{program.description}</Text>
+            </Box>
+          ))}
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Run any of these later: npx @posthog/wizard {'<command>'}
+          </Text>
+        </Box>
+      </Box>
+    );
   } else if (view === 'privacy') {
     body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
-      <>
-        <Box>
-          <Text>Let's do two hours of work in eight minutes.</Text>
-        </Box>
-      </>
+      <Box>
+        <Text>{introHeadline(session.posthogSdkDetected)}</Text>
+      </Box>
     );
   }
 
@@ -184,6 +207,13 @@ export const PostHogIntegrationIntroScreen = ({
       label: 'Framework',
       value: frameworkLabel,
       suffix: suffixParts.join(' ') || undefined,
+    });
+  }
+
+  if (session.posthogSdkDetected) {
+    detectionRows.push({
+      label: 'PostHog',
+      value: 'detected in package.json',
     });
   }
 
@@ -229,23 +259,11 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Menu ───────────────────────────────────────────────────────────
 
-  let menuOptions: { label: string; value: string }[] | null = null;
-
-  if (view === 'more-info') {
-    menuOptions = [
-      { label: 'Back', value: 'back' },
-      { label: 'Privacy & data usage', value: 'privacy' },
-    ];
-  } else if (view === 'privacy') {
-    menuOptions = [{ label: 'Back', value: 'back' }];
-  } else if (showContinue) {
-    menuOptions = [
-      { label: 'Continue', value: 'continue' },
-      { label: 'Change framework', value: 'framework' },
-      { label: 'More info', value: 'more-info' },
-      { label: 'Cancel', value: 'cancel' },
-    ];
-  }
+  const menuOptions = introMenuOptions({
+    view,
+    showContinue,
+    posthogSdkDetected: session.posthogSdkDetected,
+  });
 
   const handleSelect = (value: string) => {
     analytics.wizardCapture('intro menu selected', { value, view });
@@ -256,6 +274,8 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
+    } else if (value === 'commands') {
+      setView('commands');
     } else if (value === 'privacy') {
       setView('privacy');
     } else if (value === 'back') {
