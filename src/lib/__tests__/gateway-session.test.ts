@@ -2,7 +2,6 @@ import {
   buildWizardPropertiesBlob,
   gatewayAuth,
   isTrustedGatewayUrl,
-  refreshSlackMs,
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
@@ -59,26 +58,9 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('prefers the server-reported lifetime over the local clock', async () => {
-    // A skewed client clock must not make a valid token look expired.
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          token: 'phe_skew',
-          expires_at: new Date(Date.now() - 3600_000).toISOString(),
-          expires_in: 3600,
-          gateway_url: 'https://ai-gateway.us.posthog.com',
-        }),
-    });
-    const auth = await gatewayAuth(host, 'pha_oauth');
-    expect(auth.edition).toBe('v2');
-    expect(auth.token).toBe('phe_skew');
-  });
-
-  it('serves a short-TTL token from cache instead of re-minting every call', async () => {
-    // A fixed five-minute margin subtracted from a five-minute token lands in
-    // the past, which made the cache a permanent miss.
+  it('serves a short-lived token from cache instead of re-minting every call', async () => {
+    // The refresh point is a fraction of the lifetime, so even a short token
+    // has a usable cache window rather than being re-minted per call.
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
@@ -153,8 +135,7 @@ describe('gatewayAuth', () => {
       json: () =>
         Promise.resolve({
           token: 'phe_dying',
-          // Under the usable threshold: the refresh margin would eat almost
-          // the whole lifetime and every caller would re-mint.
+          // Under the adoption floor: too little life to serve a session.
           expires_at: new Date(Date.now() + 45_000).toISOString(),
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
@@ -248,25 +229,6 @@ describe('buildWizardPropertiesBlob', () => {
     for (const key of Object.keys(blob)) {
       expect(key.startsWith('$')).toBe(false);
     }
-  });
-});
-
-describe('refreshSlackMs', () => {
-  it('never spends more than a fifth of a short token life', () => {
-    expect(refreshSlackMs(300_000)).toBe(60_000);
-  });
-
-  it('caps at the fixed margin for a long token life', () => {
-    expect(refreshSlackMs(24 * 3600_000)).toBe(5 * 60 * 1000);
-  });
-
-  it('is zero for an already-expired token', () => {
-    expect(refreshSlackMs(-1)).toBe(0);
-  });
-
-  it("floors at one request's worth of life for a very short token", () => {
-    // A fifth of 60s is 12s, which is less than a single request needs.
-    expect(refreshSlackMs(60_000)).toBe(30_000);
   });
 });
 

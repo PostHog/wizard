@@ -49,26 +49,17 @@ let cached: CachedAuth | null = null;
  */
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
 
-/** Re-mint this long before token expiry so a long tool call can't straddle it. */
-const REFRESH_SLACK_MS = 5 * 60 * 1000;
 /**
- * Never spend more than this share of a token's life on the refresh margin. A
- * fixed margin subtracted from a short server TTL lands in the past, which
- * turns the cache into a permanent miss and mints on every call.
+ * A token is adopted only with at least this much life left. Below it the
+ * anthropic subprocess, which holds its credential for the whole session, would
+ * 401 mid-run; falling back beats that.
  */
-const MAX_SLACK_FRACTION = 0.2;
+const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 /**
- * The margin never drops below this: a token handed out with less life than a
- * single request needs 401s mid-run, and the anthropic subprocess holds its
- * credential for the whole session with no way to re-read a refreshed one.
+ * Re-resolve once this much of the token's life is gone, so a caller near the
+ * end of the window still has a usable remainder.
  */
-const MIN_SLACK_MS = 30 * 1000;
-/**
- * A token is only worth adopting when the margin still leaves a useful cache
- * window; below this the floor would eat the whole lifetime and every caller
- * would re-mint. Falling back is better than minting per request.
- */
-const MIN_USABLE_TTL_MS = 4 * MIN_SLACK_MS;
+const REFRESH_AT_FRACTION = 0.8;
 /** How long a legacy fallback sticks before the mint endpoint is retried. */
 const LEGACY_RETRY_MS = 10 * 60 * 1000;
 const MINT_TIMEOUT_MS = 10_000;
@@ -107,20 +98,11 @@ async function resolveGatewayAuth(
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
     return auth;
   }
-  const parsedExpiry = Date.parse(minted.expiresAt);
-  const ttlMs =
-    minted.expiresInSeconds !== undefined
-      ? minted.expiresInSeconds * 1000
-      : parsedExpiry - Date.now();
-  // Deadlines are always local: a server expiry read against a skewed clock
-  // would either expire early or never.
-  const expiresAtMs = Number.isFinite(ttlMs)
-    ? Date.now() + ttlMs
-    : parsedExpiry;
+  const expiresAtMs = Date.parse(minted.expiresAt);
+  const ttlMs = expiresAtMs - Date.now();
   if (Number.isFinite(expiresAtMs) && ttlMs < MIN_USABLE_TTL_MS) {
-    // Expired, or too short to leave a usable cache window after the margin.
-    // Falling back beats a credential that 401s mid-session or one that every
-    // caller re-mints.
+    // Expired, or too short to serve a session. Falling back beats a
+    // credential that 401s mid-run.
     logToFile(
       `[gateway] mint returned a token with ${ttlMs}ms of life; staying on the existing gateway`,
     );
@@ -129,7 +111,7 @@ async function resolveGatewayAuth(
     return auth;
   }
   const staleAtMs = Number.isFinite(expiresAtMs)
-    ? expiresAtMs - refreshSlackMs(ttlMs)
+    ? Date.now() + ttlMs * REFRESH_AT_FRACTION
     : Date.now() + LEGACY_RETRY_MS;
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
@@ -150,17 +132,6 @@ function legacyAuth(host: HostResolution, accessToken: string): GatewayAuth {
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
-}
-
-/**
- * The refresh margin: a fifth of the token's remaining life, capped at the
- * fixed margin and floored so a short token is never served with less than one
- * request's worth of life left.
- */
-export function refreshSlackMs(ttlMs: number): number {
-  if (!Number.isFinite(ttlMs) || ttlMs <= 0) return 0;
-  const share = Math.floor(ttlMs * MAX_SLACK_FRACTION);
-  return Math.min(REFRESH_SLACK_MS, Math.max(share, MIN_SLACK_MS));
 }
 
 /**
@@ -189,7 +160,6 @@ export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
   const localhost =
     url.hostname === 'localhost' ||
     url.hostname === '127.0.0.1' ||
-    url.hostname === '[::1]' ||
     url.hostname === 'host.docker.internal';
   // Loopback is the dev gateway, and is the one case allowed over http.
   if (localhost) return true;
@@ -205,12 +175,6 @@ export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
 interface MintedToken {
   token: string;
   expiresAt: string;
-  /**
-   * Lifetime in seconds as the server measured it. Preferred over the absolute
-   * expiry: comparing a server timestamp to this machine's clock makes a skewed
-   * laptop throw away every valid token.
-   */
-  expiresInSeconds?: number;
   gatewayUrl: string;
   teamId?: number;
 }
@@ -243,7 +207,6 @@ async function mintGatewayToken(
     const body = (await resp.json()) as {
       token?: string;
       expires_at?: string;
-      expires_in?: number;
       gateway_url?: string;
       team_id?: number;
     };
@@ -276,10 +239,6 @@ async function mintGatewayToken(
     return {
       token: body.token,
       expiresAt: body.expires_at,
-      expiresInSeconds:
-        typeof body.expires_in === 'number' && body.expires_in > 0
-          ? body.expires_in
-          : undefined,
       gatewayUrl: body.gateway_url.replace(/\/+$/, ''),
       teamId: body.team_id,
     };
