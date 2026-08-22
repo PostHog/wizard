@@ -695,3 +695,18 @@ describe('subprocess gateway credentials', () => {
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
   });
 });
+
+describe('auth error context', () => {
+  it('reports the run own gateway url, not the process global', () => {
+    // A concurrent run writes ANTHROPIC_BASE_URL too, so the 401 screen has to
+    // read the run's resolved auth or it can name the wrong region.
+    process.env.ANTHROPIC_BASE_URL = 'https://gateway.eu.posthog.com/wizard';
+    const ctx = buildAuthErrorContext(
+      '/test/dir',
+      'https://ai-gateway.us.posthog.com',
+    );
+    expect(ctx.gatewayUrl).toBe('https://ai-gateway.us.posthog.com');
+    expect(ctx.region).toBe('us');
+    delete process.env.ANTHROPIC_BASE_URL;
+  });
+});

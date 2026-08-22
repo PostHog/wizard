@@ -8,17 +8,6 @@ describe('buildGatewayProvider effort', () => {
     wizardFlags: {},
   };
 
-  it('clamps an xhigh override on an anthropic model', () => {
-    const { caps } = buildGatewayProvider({
-      ...base,
-      modelId: 'claude-sonnet-4-6',
-      effort: 'xhigh',
-    });
-    // Anthropic rejects xhigh while extended thinking is off, and this is the
-    // path the pi session actually builds from.
-    expect(caps.thinkingLevel).toBe('high');
-  });
-
   it('keeps an explicit off rather than the model table default', () => {
     const { caps } = buildGatewayProvider({
       ...base,
@@ -29,13 +18,15 @@ describe('buildGatewayProvider effort', () => {
     expect(caps.thinkingLevel).toBe('off');
   });
 
-  it('passes an xhigh override through on an openai model', () => {
+  it('carries a positive override through to the session caps', () => {
     const { caps } = buildGatewayProvider({
       ...base,
       modelId: 'openai/gpt-5.6-terra',
-      effort: 'xhigh',
+      effort: 'high',
     });
-    expect(caps.thinkingLevel).toBe('xhigh');
+    // pi clamps whatever comes out of here against the levels this model spec
+    // declares, so caps is the harness's request, not the final wire value.
+    expect(caps.thinkingLevel).toBe('high');
   });
 });
 

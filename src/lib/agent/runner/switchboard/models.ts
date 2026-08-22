@@ -124,28 +124,7 @@ export function modelCapabilities(
 ): ModelCapabilities {
   const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
   if (caps.reasoning && effortOverride) {
-    return clampAnthropicEffort(modelId, {
-      ...caps,
-      thinkingLevel: effortOverride,
-    });
+    return { ...caps, thinkingLevel: effortOverride };
   }
-  return clampAnthropicEffort(modelId, caps);
-}
-
-/**
- * Anthropic models reject `xhigh` effort unless extended thinking is enabled
- * ("effort 'xhigh' is not supported when thinking is disabled" — a provider
- * 400 the legacy gateway papered over incompletely). The harnesses run
- * anthropic-messages without extended thinking, so `xhigh` is never valid
- * there; clamp it to `high` instead of shipping a request that can only fail.
- * OpenAI reasoning models accept `xhigh` and pass through untouched.
- */
-function clampAnthropicEffort(
-  modelId: string,
-  caps: ModelCapabilities,
-): ModelCapabilities {
-  if (modelId.startsWith('openai/') || caps.thinkingLevel !== 'xhigh') {
-    return caps;
-  }
-  return { ...caps, thinkingLevel: 'high' };
+  return caps;
 }

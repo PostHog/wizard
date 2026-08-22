@@ -133,18 +133,17 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
 } {
   const { gatewayUrl, accessToken, modelId, effort } = inputs;
   const api = gatewayApiFor(modelId);
-  // Resolve the override through modelCapabilities rather than splicing
-  // thinkingLevel in here, so the per-transport effort clamps apply to the
-  // flag- and frontmatter-supplied efforts too. 'off' is a real frontmatter
-  // value meaning "do not reason", so it is applied rather than dropped:
-  // dropping it would fall through to the model's table default instead.
+  // One resolution point for the model's traits and the run's effort override.
+  // pi clamps whatever comes out of here against the levels this spec declares,
+  // so a level the spec doesn't carry is silently reduced by the session.
   const tableCaps = modelCapabilities(modelId);
   const caps =
-    effort === 'off'
-      ? tableCaps.reasoning
-        ? { ...tableCaps, thinkingLevel: 'off' as const }
-        : tableCaps
-      : modelCapabilities(modelId, effort);
+    effort && effort !== 'off' && tableCaps.reasoning
+      ? modelCapabilities(modelId, effort)
+      : effort === 'off' && tableCaps.reasoning
+      ? { ...tableCaps, thinkingLevel: 'off' as const }
+      : tableCaps;
+
   const model = buildGatewayModel(inputs);
   const provider = {
     name: 'PostHog Gateway',

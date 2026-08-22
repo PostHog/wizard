@@ -6,7 +6,6 @@ import {
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
-import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
 
 const host = {
   apiHost: 'https://us.posthog.com',
@@ -58,6 +57,23 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache — no second mint.
     await gatewayAuth(host, 'pha_oauth');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefers the server-reported lifetime over the local clock', async () => {
+    // A skewed client clock must not make a valid token look expired.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_skew',
+          expires_at: new Date(Date.now() - 3600_000).toISOString(),
+          expires_in: 3600,
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth');
+    expect(auth.edition).toBe('v2');
+    expect(auth.token).toBe('phe_skew');
   });
 
   it('serves a short-TTL token from cache instead of re-minting every call', async () => {
@@ -131,13 +147,15 @@ describe('gatewayAuth', () => {
     expect(auth.edition).toBe('legacy');
   });
 
-  it('falls back when the mint returns a token too short to use', async () => {
+  it('falls back when the mint returns a token too short to be worth caching', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
           token: 'phe_dying',
-          expires_at: new Date(Date.now() + 5_000).toISOString(),
+          // Under the usable threshold: the refresh margin would eat almost
+          // the whole lifetime and every caller would re-mint.
+          expires_at: new Date(Date.now() + 45_000).toISOString(),
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
@@ -230,26 +248,6 @@ describe('buildWizardPropertiesBlob', () => {
     for (const key of Object.keys(blob)) {
       expect(key.startsWith('$')).toBe(false);
     }
-  });
-});
-
-describe('anthropic effort clamp', () => {
-  it('clamps xhigh to high for anthropic-transport models', () => {
-    expect(modelCapabilities('claude-sonnet-4-6', 'xhigh').thinkingLevel).toBe(
-      'high',
-    );
-  });
-
-  it('passes xhigh through for openai reasoning models', () => {
-    expect(
-      modelCapabilities('openai/gpt-5.6-terra', 'xhigh').thinkingLevel,
-    ).toBe('xhigh');
-  });
-
-  it('leaves sub-xhigh efforts untouched', () => {
-    expect(modelCapabilities('claude-sonnet-4-6', 'medium').thinkingLevel).toBe(
-      'medium',
-    );
   });
 });
 
