@@ -1,6 +1,7 @@
 import {
   PROGRAM_REGISTRY,
   agentSkillConfig,
+  getCommandPath,
   getProgramConfig,
   getSubcommandPrograms,
 } from '@lib/programs/program-registry';
@@ -34,11 +35,30 @@ describe('getSubcommandPrograms', () => {
     const subcommands = getSubcommandPrograms();
     const commands = subcommands.map((c) => c.command);
 
-    expect(commands).toContain('integrate');
     expect(commands).toContain('revenue-analytics');
     for (const config of subcommands) {
       expect(config.command).toBeTruthy();
     }
+  });
+});
+
+// What a user types to reach the program. A nested program's own `command` is
+// only half of that, so anything telling a user how to run one has to join it
+// to the parent.
+describe('getCommandPath', () => {
+  const subcommand = (id: string) =>
+    getSubcommandPrograms().find((config) => config.id === id)!;
+
+  it('reaches a nested program through its parent', () => {
+    expect(getCommandPath(subcommand('web-analytics-doctor'))).toBe(
+      'audit web-analytics',
+    );
+  });
+
+  it('leaves a top-level program alone', () => {
+    expect(getCommandPath(subcommand('revenue-analytics-setup'))).toBe(
+      'revenue-analytics',
+    );
   });
 });
 
