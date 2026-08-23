@@ -100,6 +100,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.MigrationIntro]: [confirmSetupAction],
   [ScreenId.AgentSkillIntro]: [confirmSetupAction],
   [ScreenId.AiObservabilityIntro]: [confirmSetupAction],
+  [ScreenId.MetricsIntro]: [confirmSetupAction],
   [ScreenId.AuditIntro]: [confirmSetupAction],
   [ScreenId.DoctorIntro]: [confirmSetupAction],
   [ScreenId.WarehouseIntro]: [confirmSetupAction],

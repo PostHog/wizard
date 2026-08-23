@@ -61,6 +61,8 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'ai-observability') continue; // pinned below
+      if (program === 'metrics') continue; // pinned below
+      if (program === 'replay-vision') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -73,6 +75,28 @@ describe('switchboard PROGRAM_BINDINGS', () => {
         sequence: Sequence.linear,
         harness: Harness.anthropic,
         model: SONNET_5_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds metrics to the orchestrator on pi; stage models come from the flow frontmatter',
+      ctx: { program: 'metrics', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds replay-vision to the orchestrator sequence',
+      ctx: { program: 'replay-vision', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
@@ -182,13 +206,15 @@ describe('switchboard composed clamp', () => {
         trace: {},
       };
       // The flag routes posthog-integration's harness to pi; the composed
-      // clamp holds every sequence at linear; other programs keep their
-      // bindings (sonnet 5 for ai-observability, the default elsewhere).
+      // clamp holds every sequence at linear — the orchestrator bindings
+      // (metrics, replay-vision) included; other axes keep their bindings.
       expect(resolveBinding(ctx)).toEqual(
         program === 'posthog-integration'
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
+          : program === 'metrics'
+          ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : DEFAULT_RESOLVED,
       );
       expect(ctx.trace?.sequence).toBe('composed');

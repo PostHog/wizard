@@ -431,8 +431,15 @@ export async function runOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  const referenceSkillId = session.skillId
-    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
+  // The framework key for reference + variant resolution. `session.integration`
+  // is the detected framework and always wins; `session.skillId` is the
+  // fallback for the basic-integration path, where bootstrap sets it to the
+  // framework label. Programs whose run config carries their own skill id
+  // (agent-skill commands like replay-vision) would otherwise leak that id in
+  // here as a bogus framework after bootstrap overwrites the detect result.
+  const framework = session.integration ?? session.skillId ?? undefined;
+  const referenceSkillId = framework
+    ? resolveReferenceSkillId(menuSkillEntries, framework)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -459,9 +466,9 @@ export async function runOrchestrator(
         `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
       );
     }
-  } else if (session.skillId) {
+  } else if (framework) {
     logToFile(
-      `[orchestrator] no integration skill for framework "${session.skillId}"`,
+      `[orchestrator] no integration skill for framework "${framework}"`,
     );
   }
 
@@ -469,26 +476,26 @@ export async function runOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
         continue;
       }
       missingVariants.push(`${type}/${skillId}`);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
-          session.skillId ?? 'none'
+          framework ?? 'none'
         }`,
       );
       analytics.wizardCapture('orchestrator skill variant missing', {
         task_type: type,
         skill: skillId,
-        framework: session.skillId,
+        framework,
       });
     }
   }
   if (missingVariants.length > 0) {
     // The framework's own docs page from its config; generic docs when detection found none.
-    const docsUrl = session.skillId
-      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+    const docsUrl = framework
+      ? FRAMEWORK_REGISTRY[framework as Integration]?.docsUrl
       : undefined;
     await wizardAbort({
       message:
@@ -500,7 +507,7 @@ export async function runOrchestrator(
         `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
       error: new WizardError('Orchestrator preflight: skill variant missing', {
         missing: missingVariants.join(', '),
-        framework: session.skillId,
+        framework,
       }),
     });
   }
@@ -875,13 +882,13 @@ export async function runOrchestrator(
         const variantId = resolveSkillVariantId(
           menuSkillEntries,
           skillId,
-          session.skillId,
+          framework,
         );
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
-            } skill=${skillId} framework=${session.skillId ?? 'none'}`,
+            } skill=${skillId} framework=${framework ?? 'none'}`,
           );
           continue;
         }

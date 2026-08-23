@@ -7,6 +7,8 @@
  * current framework supplies.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   detectAllPackageManagers,
   type PackageManager,
@@ -216,6 +218,62 @@ export function bundlerPackageManager(): Promise<PackageManagerInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Rust (Cargo) helper
+// ---------------------------------------------------------------------------
+
+const CARGO: DetectedPackageManager = {
+  name: 'cargo',
+  label: 'Cargo',
+  installCommand: 'cargo add',
+};
+
+export function cargoPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [CARGO],
+    primary: CARGO,
+    recommendation: 'Use Cargo (cargo add).',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Elixir (Mix) helper
+// ---------------------------------------------------------------------------
+
+const MIX: DetectedPackageManager = {
+  name: 'mix',
+  label: 'Mix',
+  installCommand: 'mix deps.get',
+};
+
+export function mixPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [MIX],
+    primary: MIX,
+    recommendation:
+      'Use Mix. Add the dependency to the deps list in mix.exs, then run mix deps.get.',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Go (modules) helper
+// ---------------------------------------------------------------------------
+
+const GO_MODULES: DetectedPackageManager = {
+  name: 'go',
+  label: 'Go modules',
+  installCommand: 'go get',
+};
+
+export function goModulesPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [GO_MODULES],
+    primary: GO_MODULES,
+    recommendation:
+      'Use Go modules (go get). Run go mod tidy after imports change.',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Flutter (pub) helper
 // ---------------------------------------------------------------------------
 
@@ -252,4 +310,32 @@ export function gradlePackageManager(): Promise<PackageManagerInfo> {
     recommendation:
       'Add dependencies to build.gradle(.kts) using implementation().',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Java (Maven or Gradle) helper
+// ---------------------------------------------------------------------------
+
+const MAVEN: DetectedPackageManager = {
+  name: 'maven',
+  label: 'Maven',
+  installCommand: 'mvn install',
+};
+
+/**
+ * Java backends split between Maven and Gradle; pom.xml decides.
+ * Defaults to Gradle when neither manifest is present.
+ */
+export function detectJavaPackageManagers(
+  installDir: string,
+): Promise<PackageManagerInfo> {
+  if (fs.existsSync(path.join(installDir, 'pom.xml'))) {
+    return Promise.resolve({
+      detected: [MAVEN],
+      primary: MAVEN,
+      recommendation:
+        'Use Maven. Add the dependency to pom.xml, then run mvn install to resolve it.',
+    });
+  }
+  return gradlePackageManager();
 }
