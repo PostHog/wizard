@@ -13,6 +13,7 @@ import {
   type WizardAskBridge,
 } from '@lib/wizard-ask-bridge';
 import { createWizardPiTools } from '../tools';
+import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 
 const SECRET = 'phx_live_zendesk_token_123';
@@ -176,6 +177,56 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
       values: { ZENDESK_TOKEN: answers.token },
     });
     expect(textOf(result)).toMatch(/not known to the vault/);
+  });
+});
+
+describe('pi task wiring — wizard_ask pauses Write/Edit', () => {
+  it('blocks write/edit while an ask is in flight, then reallows once answered', async () => {
+    // Mirrors runPiTask: one askState shared between the ask tool
+    // (onAskPendingChange) and the security fence (getWizardAskPending). The
+    // regression this pins is the task path forgetting to connect them, which
+    // let a task mutate files while its credential prompt sat open.
+    const askState = { pending: false };
+    let release!: (answers: Record<string, string>) => void;
+    const request = vi.fn(
+      () =>
+        new Promise<Record<string, string>>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const [wizardAsk] = createWizardPiTools({
+      workingDirectory: mkdtempSync(join(tmpdir(), 'pi-ask-pause-')),
+      skillsBaseUrl: 'http://localhost:0',
+      askBridge: { request } as unknown as WizardAskBridge,
+      triageProvider: undefined,
+      onAskPendingChange: (pending) => {
+        askState.pending = pending;
+      },
+    }).filter((t) => t.name === 'wizard_ask');
+
+    const gate = { getWizardAskPending: () => askState.pending };
+    const write = { path: 'src/app.ts', content: 'x' };
+    const edit = { path: 'src/app.ts', edits: [] };
+
+    // Before asking, writes flow.
+    expect((await evaluateToolCall('write', write, gate)).block).toBe(false);
+
+    // Open the overlay but do not answer — the credential prompt is on screen.
+    const inFlight = call(wizardAsk, {
+      questions: [
+        { id: 'pw', prompt: 'DB password', kind: 'text', sensitive: true },
+      ],
+    });
+    await Promise.resolve();
+    expect(askState.pending).toBe(true);
+    expect((await evaluateToolCall('write', write, gate)).block).toBe(true);
+    expect((await evaluateToolCall('edit', edit, gate)).block).toBe(true);
+
+    // Answer — the overlay closes and writes flow again.
+    release({ pw: CANCELLED_SENTINEL });
+    await inFlight;
+    expect(askState.pending).toBe(false);
+    expect((await evaluateToolCall('write', write, gate)).block).toBe(false);
   });
 });
 

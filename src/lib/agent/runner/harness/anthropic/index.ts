@@ -148,6 +148,10 @@ export const anthropicBackend: AgentHarness = {
         // Only a task allowed to ask carries a bridge, so the Write/Edit pause
         // that rides on a pending question stays inside that task's agent.
         askBridge,
+        // Enforce that pause: without this, canUseTool never sees the open
+        // question and the task could write files while a credential prompt
+        // waits (up to TASK_ASK_TIMEOUT_MS). Same wiring as the linear run.
+        getPendingQuestion: () => session.pendingQuestion,
         orchestrator,
         capture,
       },

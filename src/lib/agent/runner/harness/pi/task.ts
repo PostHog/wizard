@@ -234,12 +234,20 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       };
     }
 
+    // Shared flag: true while a wizard_ask overlay is open. The ask tool sets
+    // it (onAskPendingChange, below); the security fence reads it to pause
+    // Write/Edit until the answer comes back. Wired the same way as the linear
+    // pi run — without it the warehouse task could mutate files while its
+    // credential prompt sits open (up to TASK_ASK_TIMEOUT_MS).
+    const askState = { pending: false };
+
     // The same fail-closed fence as the linear run, with the task's disallow
     // list layered in (both the wizard-vocabulary and pi-short names).
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
       triageProvider: boot.triageProvider,
+      getWizardAskPending: () => askState.pending,
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
@@ -330,6 +338,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,
+      // Pause Write/Edit while the ask overlay is open (see askState above).
+      onAskPendingChange: (pending) => {
+        askState.pending = pending;
+      },
     }).filter((t) => wizardToolNames.has(t.name));
 
     const { createPiOrchestratorTools } = await import('./orchestrator-tools');
