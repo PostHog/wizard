@@ -22,6 +22,7 @@ import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { shouldDisableAsk } from '@lib/agent/runner/shared/bootstrap';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+import { reportWarehouseSourcesDetected } from './detect.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
@@ -193,6 +194,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   seedTasks: warehouseSeedTasks,
+  reportScanResults: reportWarehouseSourcesDetected,
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.

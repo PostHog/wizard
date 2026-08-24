@@ -11,6 +11,7 @@ import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import { resolveScanReporting } from '@lib/warehouse-sources/reporting';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 /** Structured detection errors rendered by the intro screen. */
@@ -65,8 +66,31 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
 ];
 
 /**
+ * Tag every subsequent event (agent started/completed, setup wizard
+ * finished, …) with what was detected — without this the analytics can't
+ * say which source types a run attempted, only that a run happened.
+ */
+function emitWarehouseSourceTags(sources: DetectedSource[]): void {
+  analytics.setTag(
+    'warehouse_source_kinds',
+    sources.map((s) => s.kind).join(','),
+  );
+  analytics.setTag(
+    'warehouse_source_modes',
+    sources.map((s) => `${s.kind}:${s.mode}`).join(','),
+  );
+  analytics.setTag('warehouse_source_count', sources.length);
+}
+
+/**
  * Scan `session.installDir` for warehouse-source signals. Writes the detected
- * sources (or a `detectError`) into frameworkContext for the intro screen.
+ * sources (or a `detectError`) into frameworkContext for the intro screen —
+ * unconditionally, so a declined scan still powers the in-CLI suggestion.
+ * Reporting is gated separately: a `ci: true` session already has consent
+ * resolved, so it reports here immediately; an interactive session is still
+ * `undecided` at this point and reports later, once the intro screen
+ * resolves consent (see `reportDetectedWarehouseSources`, called by
+ * `WizardStore`).
  */
 export function detectWarehousePrerequisites(
   session: WizardSession,
@@ -102,18 +126,24 @@ export function detectWarehousePrerequisites(
     return;
   }
 
-  // Tag every subsequent event (agent started/completed, setup wizard
-  // finished, …) with what was detected — without this the analytics can't
-  // say which source types a run attempted, only that a run happened.
-  analytics.setTag(
-    'warehouse_source_kinds',
-    sources.map((s) => s.kind).join(','),
-  );
-  analytics.setTag(
-    'warehouse_source_modes',
-    sources.map((s) => `${s.kind}:${s.mode}`).join(','),
-  );
-  analytics.setTag('warehouse_source_count', sources.length);
-
   setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  resolveScanReporting(session, sources, emitWarehouseSourceTags);
+}
+
+/**
+ * The single place this program's scan results become telemetry once an
+ * interactive session's consent resolves after `detectWarehousePrerequisites`
+ * already ran undecided. Called from the two points `WizardStore` resolves
+ * consent, so it must stay idempotent — mirrors `reportWarehouseSourcesDetected`
+ * in the posthog-integration program, sharing its consent gate via
+ * `resolveScanReporting`.
+ */
+export function reportDetectedWarehouseSources(
+  session: WizardSession,
+): boolean {
+  return resolveScanReporting(
+    session,
+    getDetectedWarehouseSources(session),
+    emitWarehouseSourceTags,
+  );
 }

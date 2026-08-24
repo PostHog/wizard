@@ -15,10 +15,29 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
+import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
 } from '@lib/programs/warehouse-source/index';
+
+type View = 'default' | 'more-info' | 'privacy';
+
+/**
+ * Exported so a test can measure every label without rendering the screen.
+ * A row spends 2 columns on the focus marker and its gap.
+ */
+export const WAREHOUSE_MENU_WIDTH = 30;
+
+export const WAREHOUSE_CONTINUE_MENU_OPTIONS: {
+  label: string;
+  value: string;
+}[] = [
+  { label: 'Continue', value: 'continue' },
+  { label: "Continue, don't share tools", value: 'continue-no-scan' },
+  { label: 'More info', value: 'more-info' },
+  { label: 'Cancel', value: 'cancel' },
+];
 
 interface WarehouseIntroScreenProps {
   store: WizardStore;
@@ -30,7 +49,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const [showingMoreInfo, setShowingMoreInfo] = useState(false);
+  const [view, setView] = useState<View>('default');
 
   const { session } = store;
   const detectError = session.frameworkContext.detectError as
@@ -38,43 +57,58 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
     | undefined;
   const detected = getDetectedWarehouseSources(session);
 
+  // ── Title ──────────────────────────────────────────────────────────
+
+  const title = view === 'privacy' ? 'Wizard privacy & usage' : undefined;
+
   // ── Body ────────────────────────────────────────────────────────────
 
-  const body = showingMoreInfo ? (
-    <Box flexDirection="column" width={56} flexShrink={0}>
-      <Text>
-        The wizard is an agent that executes PostHog tasks. Its code is open
-        source: <Text color="cyan">https://github.com/PostHog/wizard</Text>.
-      </Text>
-      <Box flexDirection="column" marginTop={1}>
+  const body =
+    view === 'more-info' ? (
+      <Box flexDirection="column" width={56} flexShrink={0}>
         <Text>
-          The{' '}
-          <Text italic color="cyan">
-            {session.programLabel}
-          </Text>{' '}
-          program connects your existing data sources to PostHog's data
-          warehouse, so you can query them alongside product data.
+          The wizard is an agent that executes PostHog tasks. Its code is open
+          source: <Text color="cyan">https://github.com/PostHog/wizard</Text>.
         </Text>
-      </Box>
-    </Box>
-  ) : (
-    <>
-      <Box flexDirection="column" alignItems="center">
-        <Text>Let's connect your data to PostHog's data warehouse.</Text>
-      </Box>
-
-      {detected.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
-          <Text dimColor>Detected warehouse sources:</Text>
-          {detected.map((s) => (
-            <Text key={s.kind} dimColor>
-              {'  •'} {s.label}
-            </Text>
-          ))}
+          <Text>
+            The{' '}
+            <Text italic color="cyan">
+              {session.programLabel}
+            </Text>{' '}
+            program connects your existing data sources to PostHog's data
+            warehouse, so you can query them alongside product data.
+          </Text>
         </Box>
-      )}
-    </>
-  );
+      </Box>
+    ) : view === 'privacy' ? (
+      <PrivacyPanel />
+    ) : (
+      <>
+        <Box flexDirection="column" alignItems="center">
+          <Text>Let's connect your data to PostHog's data warehouse.</Text>
+        </Box>
+
+        <Box flexDirection="column" width={64} flexShrink={0} marginTop={1}>
+          <Text dimColor>
+            The wizard reads your dependency files and .env variable names to
+            find the sources below. That runs locally either way. Declining only
+            stops the detected source types being sent to PostHog.
+          </Text>
+        </Box>
+
+        {detected.length > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text dimColor>Detected warehouse sources:</Text>
+            {detected.map((s) => (
+              <Text key={s.kind} dimColor>
+                {'  •'} {s.label}
+              </Text>
+            ))}
+          </Box>
+        )}
+      </>
+    );
 
   // ── Error view ─────────────────────────────────────────────────────
 
@@ -100,34 +134,44 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
   ) : undefined;
 
   // ── Menu ───────────────────────────────────────────────────────────
-  const menuOptions = showingMoreInfo
-    ? [{ label: 'Back', value: 'back' }]
-    : [
-        { label: 'Continue', value: 'continue' },
-        { label: 'More info', value: 'more-info' },
-        { label: 'Cancel', value: 'cancel' },
-      ];
+  const menuOptions =
+    view === 'more-info'
+      ? [
+          { label: 'Back', value: 'back' },
+          { label: 'Privacy & data usage', value: 'privacy' },
+        ]
+      : view === 'privacy'
+      ? [{ label: 'Back', value: 'back' }]
+      : WAREHOUSE_CONTINUE_MENU_OPTIONS;
 
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <IntroScreenLayout
       installDir={session.installDir}
-      showSubtitle={!showingMoreInfo}
+      title={title}
+      showSubtitle={view === 'default'}
       body={body}
-      showDetection={!showingMoreInfo}
+      showDetection={view === 'default'}
       programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
+      menuWidth={WAREHOUSE_MENU_WIDTH}
       errorView={errorView}
       onSelect={(value) => {
         if (value === 'cancel') {
           process.exit(0);
         } else if (value === 'more-info') {
-          setShowingMoreInfo(true);
+          setView('more-info');
+        } else if (value === 'privacy') {
+          setView('privacy');
         } else if (value === 'back') {
-          setShowingMoreInfo(false);
+          setView(view === 'privacy' ? 'more-info' : 'default');
+        } else if (value === 'continue-no-scan') {
+          store.declineSharing();
+          store.completeSetup();
         } else {
+          store.grantSharing();
           store.completeSetup();
         }
       }}
