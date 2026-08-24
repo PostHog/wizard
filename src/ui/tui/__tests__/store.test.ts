@@ -325,6 +325,55 @@ describe('WizardStore', () => {
       });
     });
 
+    it('setCredentials does not fire auth complete for null credentials', () => {
+      const store = createStore();
+      store.setCredentials(null);
+      expect(wizardCaptureMock).not.toHaveBeenCalledWith(
+        'auth complete',
+        expect.anything(),
+      );
+    });
+
+    it('setCredentials fires auth complete only once for repeated same credentials', () => {
+      const store = createStore();
+      const creds = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://us.i.posthog.com'),
+        projectId: 42,
+      };
+      store.setCredentials(creds);
+      store.setCredentials({
+        ...creds,
+        host: HostResolution.fromApiHost('https://us.i.posthog.com'),
+      });
+      const authCalls = wizardCaptureMock.mock.calls.filter(
+        (call) => call[0] === 'auth complete',
+      );
+      expect(authCalls).toHaveLength(1);
+    });
+
+    it('setCredentials fires auth complete again when the project changes', () => {
+      const store = createStore();
+      const host = HostResolution.fromApiHost('https://us.i.posthog.com');
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host,
+        projectId: 42,
+      });
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host,
+        projectId: 99,
+      });
+      const authCalls = wizardCaptureMock.mock.calls.filter(
+        (call) => call[0] === 'auth complete',
+      );
+      expect(authCalls).toHaveLength(2);
+    });
+
     it('enableFeature fires feature enabled event', () => {
       const store = createStore();
       store.enableFeature(AdditionalFeature.LLM);
