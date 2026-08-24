@@ -15,7 +15,11 @@ import { Box, Text, useInput } from 'ink';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '@ui/tui/store';
-import { ConfirmationInput, PickerMenu } from '@ui/tui/primitives/index';
+import {
+  ConfirmationInput,
+  GroupedPickerMenu,
+  PickerMenu,
+} from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import type {
   McpInstaller,
@@ -29,6 +33,7 @@ import {
   summarizeFailure,
 } from '@steps/add-mcp-server-to-clients/results';
 import {
+  AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
   isAllFeaturesSelected,
 } from '@steps/add-mcp-server-to-clients/defaults';
@@ -44,6 +49,7 @@ interface McpScreenProps {
 enum Phase {
   Detecting = 'detecting',
   Ask = 'ask',
+  FeatureSelect = 'feature-select',
   Pick = 'pick',
   Connector = 'connector',
   Working = 'working',
@@ -215,12 +221,15 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
+  // An api-key install bakes the key into the client config — no OAuth ever
+  // runs, so those flows keep the feature menus and never get a login command.
+  // OAuth flows ask nothing: access is chosen on the OAuth consent screen.
+  const oauthFlow = !store.session.apiKey;
+
   const proceedAfterClientPick = (clientNames: string[]) => {
     setSelectedClientNames(clientNames);
 
     // Browser connectors just open their connector page — no extra screen.
-    // Which PostHog areas the agent can reach is decided on the OAuth consent
-    // screen, not in the wizard, so there is nothing else to ask here.
     const isConnector = clientNames.some(
       (name) => clients.find((c) => c.name === name)?.finish,
     );
@@ -228,7 +237,15 @@ export const McpScreen = ({
       setPhase(Phase.Connector);
       return;
     }
-    void doInstall(clientNames);
+    if (oauthFlow) {
+      void doInstall(clientNames);
+      return;
+    }
+    if (store.session.mcpFeatures) {
+      void doInstall(clientNames, store.session.mcpFeatures);
+      return;
+    }
+    setPhase(Phase.FeatureSelect);
   };
 
   const handleConfirm = () => {
@@ -256,22 +273,25 @@ export const McpScreen = ({
     const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
     const directNames = names.filter((n) => !pluginCapableSet.has(n));
 
-    // Plugin-capable clients get the plugin (which bundles MCP).
-    // Non-plugin-capable clients get a direct MCP config write.
+    // OAuth: plugin-capable clients get the plugin (which bundles MCP), the
+    // rest get a direct MCP config write. Api-key installs write key-authed
+    // direct entries only — the plugin's server never carries the key.
     try {
       mcpResult = await installer.install(
-        directNames,
+        oauthFlow ? directNames : names,
         features,
         store.session.apiKey,
       );
     } catch (err) {
       setFlowError(errorText(err));
     }
-    try {
-      pluginResult = await installer.installPlugins(pluginCapableNames);
-    } catch (err) {
-      // Best-effort, but still say so rather than showing an empty screen.
-      setFlowError(errorText(err));
+    if (oauthFlow) {
+      try {
+        pluginResult = await installer.installPlugins(pluginCapableNames);
+      } catch (err) {
+        // Best-effort, but still say so rather than showing an empty screen.
+        setFlowError(errorText(err));
+      }
     }
 
     setMcpResults(mcpResult);
@@ -281,7 +301,9 @@ export const McpScreen = ({
     const ready = [...mcpResult, ...pluginResult].filter(isOk);
     const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
-    const logins = pendingLoginCommands(clients, mcpResult, pluginResult);
+    const logins = oauthFlow
+      ? pendingLoginCommands(clients, mcpResult, pluginResult)
+      : [];
     finishFlow.current = () =>
       markDone(
         store,
@@ -448,6 +470,17 @@ export const McpScreen = ({
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
               proceedAfterClientPick(names);
+            }}
+          />
+        )}
+
+        {phase === Phase.FeatureSelect && (
+          <GroupedPickerMenu
+            message="Select the PostHog areas your agent can reach"
+            groups={AVAILABLE_FEATURES}
+            initialSelected={[]}
+            onSelect={(features) => {
+              void doInstall(selectedClientNames, features);
             }}
           />
         )}
