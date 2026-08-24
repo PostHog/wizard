@@ -53,7 +53,7 @@ export function familyCommandFactory({
   // family grows past one shown option, this opens the picker instead — no
   // wiring change needed.
   const openFamilyEntry = async (argv: Arguments): Promise<void> => {
-    const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+    const skillsBaseUrl = getSkillsBaseUrl();
     const menu = await fetchSkillMenu(skillsBaseUrl);
     const children = buildFamilyPickerChildren(family, menu?.cliEntries ?? []);
     const toShow = pickerChildrenToShow(children);

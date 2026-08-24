@@ -7,13 +7,11 @@ import {
   useSkillEntry,
 } from '@ui/tui/screens/SkillSourceInfo';
 
-interface AiObservabilityIntroScreenProps {
+interface MetricsIntroScreenProps {
   store: WizardStore;
 }
 
-export const AiObservabilityIntroScreen = ({
-  store,
-}: AiObservabilityIntroScreenProps) => {
+export const MetricsIntroScreen = ({ store }: MetricsIntroScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -21,11 +19,11 @@ export const AiObservabilityIntroScreen = ({
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
   const { session } = store;
-  // ai-observability picks its skill variant at run time (openai-python,
-  // anthropic-node, langchain-python, …), so there's no pre-seeded skillId
-  // here. Fall back to the group id for the "more info" lookup.
-  const skillId = session.skillId ?? 'ai-observability';
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId);
+  // metrics picks its skill variant at run time (python, nodejs, javascript,
+  // kubernetes, other), so there's no pre-seeded skillId here. Fall back to
+  // the group id for the "more info" lookup.
+  const skillId = session.skillId ?? 'metrics';
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>
@@ -39,12 +37,14 @@ export const AiObservabilityIntroScreen = ({
       <Text>
         The{' '}
         <Text color="cyan" italic>
-          ai-observability
+          metrics
         </Text>{' '}
-        program wraps your LLM SDK calls with PostHog's OpenTelemetry-based
-        tracing so every prompt, completion, tool call, token count, and cost
-        lands in AI Observability. Supports OpenAI, Anthropic, Google,
-        LangChain, Vercel AI, and other SDKs.
+        program instruments your service with PostHog application metrics —
+        counters, gauges, and histograms via{' '}
+        <Text color="cyan">posthog.metrics</Text> — at operational choke
+        points: request middleware, background jobs, external calls, and
+        business commit sites. Supports Python, Node.js, web JavaScript,
+        Kubernetes, and any other language via OTLP.
       </Text>
       <Box marginTop={1}>
         <SkillSourceInfo
@@ -57,7 +57,7 @@ export const AiObservabilityIntroScreen = ({
   ) : (
     <Box flexDirection="column" alignItems="center">
       <Text>
-        Let's instrument your LLM calls with PostHog AI Observability.
+        Let's instrument your service with PostHog application metrics.
       </Text>
     </Box>
   );
