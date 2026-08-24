@@ -14,6 +14,7 @@ import {
 } from '@lib/wizard-ask-bridge';
 import { createWizardPiTools } from '../tools';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
+import { WIZARD_ASK_SENSITIVE_DESCRIPTION } from '@lib/wizard-tools/tools';
 
 const SECRET = 'phx_live_zendesk_token_123';
 
@@ -95,6 +96,31 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     });
     expect(textOf(result)).toMatch(/Only kind="text" answers can be sensitive/);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('carries the shared secretRef guidance (parity with the MCP server)', () => {
+    // The pi harness runs the orchestrator's warehouse credential task, so its
+    // `sensitive` guidance must warn — like the MCP server's — that a vaulted
+    // { secretRef } is rejected by the PostHog data-warehouse tools. Without it
+    // the agent vaults a credential it must hand to source creation, the create
+    // tool rejects the ref, and the task dead-ends into the browser fallback.
+    const { wizardAsk } = makeTools({});
+    const desc = (
+      wizardAsk as unknown as {
+        parameters: {
+          properties: {
+            questions: {
+              items: {
+                properties: { sensitive: { description?: string } };
+              };
+            };
+          };
+        };
+      }
+    ).parameters.properties.questions.items.properties.sensitive.description;
+    expect(desc).toBe(WIZARD_ASK_SENSITIVE_DESCRIPTION);
+    expect(desc).toMatch(/data-warehouse tools/);
+    expect(desc).toMatch(/reject it/);
   });
 });
 

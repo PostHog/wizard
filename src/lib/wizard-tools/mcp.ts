@@ -52,6 +52,7 @@ import {
   writeLedgerAtomic,
   type SkillEntry,
   AUDIT_STATUSES,
+  WIZARD_ASK_SENSITIVE_DESCRIPTION,
 } from './tools';
 
 const auditCheckSchema = z.object({
@@ -622,9 +623,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     sensitive: z
       .boolean()
       .optional()
-      .describe(
-        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in. The secretRef is only resolved by wizard-tools that accept it (e.g. set_env_values) — it is NOT resolved when passed to other MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a secret that must reach another tool, write it to the env with set_env_values first, or use that tool's own credential-reference flow.",
-      ),
+      .describe(WIZARD_ASK_SENSITIVE_DESCRIPTION),
   });
 
   const wizardAsk = tool(
