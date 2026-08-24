@@ -62,6 +62,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),
     setDetectionComplete: vi.fn(),
+    markScanReported: vi.fn(),
   };
 }
 

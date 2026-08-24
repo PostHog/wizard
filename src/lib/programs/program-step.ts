@@ -56,6 +56,8 @@ export interface ProgramReadyContext {
   }) => void;
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
+  /** Latches `warehouseSourcesReported` once a scan has been reported or declined. */
+  readonly markScanReported: () => void;
 }
 
 export interface ProgramStep {

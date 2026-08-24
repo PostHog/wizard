@@ -18,7 +18,11 @@ export const WAREHOUSE_SOURCE_PROGRAM: ProgramStep[] = [
     // detected sources (or a detectError) to frameworkContext for the
     // intro screen to render.
     onReady: (ctx) =>
-      detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext),
+      detectWarehousePrerequisites(
+        ctx.session,
+        ctx.setFrameworkContext,
+        ctx.markScanReported,
+      ),
   },
   {
     id: 'intro',

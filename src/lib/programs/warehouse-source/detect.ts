@@ -11,7 +11,7 @@ import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
-import { resolveScanReporting } from '@lib/warehouse-sources/reporting';
+import { resolveScanReporting } from '@lib/programs/warehouse-scan-reporting';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 /** Structured detection errors rendered by the intro screen. */
@@ -95,6 +95,7 @@ function emitWarehouseSourceTags(sources: DetectedSource[]): void {
 export function detectWarehousePrerequisites(
   session: WizardSession,
   setFrameworkContext: (key: string, value: unknown) => void,
+  markScanReported: () => void,
 ): void {
   const fail = (error: WarehouseDetectError) =>
     setFrameworkContext('detectError', error);
@@ -127,7 +128,9 @@ export function detectWarehousePrerequisites(
   }
 
   setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
-  resolveScanReporting(session, sources, emitWarehouseSourceTags);
+  if (resolveScanReporting(session, sources, emitWarehouseSourceTags)) {
+    markScanReported();
+  }
 }
 
 /**

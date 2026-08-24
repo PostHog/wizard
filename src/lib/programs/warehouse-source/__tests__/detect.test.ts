@@ -47,6 +47,12 @@ function setFrameworkContext(session: WizardSession) {
   };
 }
 
+function markScanReported(session: WizardSession) {
+  return () => {
+    session.warehouseSourcesReported = true;
+  };
+}
+
 describe('detectWarehousePrerequisites', () => {
   let tmpDir: string;
 
@@ -62,7 +68,11 @@ describe('detectWarehousePrerequisites', () => {
     const session = buildSession({ installDir: tmpDir });
     expect(session.scanConsent).toBe(ScanConsent.Undecided);
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     const sources = getDetectedWarehouseSources(session);
     expect(sources.map((s) => s.kind)).toContain('Stripe');
@@ -71,16 +81,25 @@ describe('detectWarehousePrerequisites', () => {
   it("an interactive session reports nothing at detect time — consent is still 'undecided'", () => {
     const session = buildSession({ installDir: tmpDir });
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     expect(analytics.setTag).not.toHaveBeenCalled();
+    expect(session.warehouseSourcesReported).toBe(false);
   });
 
   it("reports immediately for a 'ci: true' session, since consent is already resolved there", () => {
     const session = buildSession({ installDir: tmpDir, ci: true });
     expect(session.scanConsent).toBe(ScanConsent.Granted);
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     expect(analytics.setTag).toHaveBeenCalledWith(
       'warehouse_source_kinds',
@@ -91,6 +110,7 @@ describe('detectWarehousePrerequisites', () => {
       'Stripe:in-cli',
     );
     expect(analytics.setTag).toHaveBeenCalledWith('warehouse_source_count', 1);
+    expect(session.warehouseSourcesReported).toBe(true);
   });
 });
 
@@ -108,7 +128,11 @@ describe('reportDetectedWarehouseSources', () => {
   /** Mirrors the real flow: detect while undecided, resolve consent later. */
   function scannedSession(consent: ScanConsent): WizardSession {
     const session = buildSession({ installDir: tmpDir });
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
     session.scanConsent = consent;
     return session;
   }
@@ -186,7 +210,11 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
     const session = buildSession({ installDir: tmpDir, ci: true });
     withOrgUser(session);
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -199,7 +227,11 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
     withDeps(tmpDir, { openai: '^4.0.0' });
     const session = buildSession({ installDir: tmpDir });
     withOrgUser(session);
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
     session.scanConsent = ScanConsent.Declined;
 
     reportDetectedWarehouseSources(session);
@@ -212,7 +244,11 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
     const session = buildSession({ installDir: tmpDir });
     withOrgUser(session);
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -222,7 +258,11 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
     const session = buildSession({ installDir: tmpDir, ci: true });
     withOrgUser(session);
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -231,7 +271,11 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
     withDeps(tmpDir, { openai: '^4.0.0' });
     const session = buildSession({ installDir: tmpDir, ci: true });
 
-    detectWarehousePrerequisites(session, setFrameworkContext(session));
+    detectWarehousePrerequisites(
+      session,
+      setFrameworkContext(session),
+      markScanReported(session),
+    );
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });

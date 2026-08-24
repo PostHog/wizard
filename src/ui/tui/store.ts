@@ -306,6 +306,8 @@ export class WizardStore {
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
+      markScanReported: () =>
+        this.$session.setKey('warehouseSourcesReported', true),
     };
     for (const step of steps) {
       if (step.onReady) {
