@@ -20,7 +20,7 @@ import {
 } from '@lib/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
-import { resolveScanReporting } from '@lib/warehouse-sources/reporting';
+import { resolveScanReporting } from '@lib/programs/warehouse-scan-reporting';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,

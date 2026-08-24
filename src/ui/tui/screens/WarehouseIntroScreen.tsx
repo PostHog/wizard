@@ -20,6 +20,7 @@ import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
 } from '@lib/programs/warehouse-source/index';
+import { analytics } from '@utils/analytics';
 
 type View = 'default' | 'more-info' | 'privacy';
 
@@ -159,6 +160,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
       menuWidth={WAREHOUSE_MENU_WIDTH}
       errorView={errorView}
       onSelect={(value) => {
+        analytics.wizardCapture('intro menu selected', { value, view });
         if (value === 'cancel') {
           process.exit(0);
         } else if (value === 'more-info') {

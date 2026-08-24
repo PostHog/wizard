@@ -15,8 +15,8 @@ import {
   ScanConsent,
   type WizardSession,
 } from '@lib/wizard-session';
-import { AI_SOURCE_KINDS } from './registry';
-import type { DetectedSource } from './types';
+import { AI_SOURCE_KINDS } from '@lib/warehouse-sources/registry';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 function hasAiSdkEvidence(
   session: WizardSession,
