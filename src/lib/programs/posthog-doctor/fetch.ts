@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { analytics } from '@utils/analytics';
-import { handleApiError } from '@lib/api';
+import { handleApiError, posthogApiHttpsAgent } from '@lib/api';
 import { WIZARD_USER_AGENT } from '@lib/constants';
 import { HealthIssueListResponseSchema, type HealthIssue } from './types';
 
@@ -17,6 +17,7 @@ export async function fetchHealthIssues(
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      httpsAgent: posthogApiHttpsAgent,
     });
     return HealthIssueListResponseSchema.parse(response.data).results;
   } catch (error) {
