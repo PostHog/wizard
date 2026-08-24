@@ -356,14 +356,23 @@ describe('the full decline contract, end to end', () => {
   });
 });
 
-describe('non-interactive sessions start with consent already granted', () => {
+describe('only a scripted CI run starts with consent already granted', () => {
   it('ci: true builds scanConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', ci: true });
     expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 
-  it('signup: true builds scanConsent as granted', () => {
+  it('signup: true alone starts undecided: the new account never saw the disclosure', () => {
     const session = buildSession({ installDir: '/tmp/app', signup: true });
+    expect(session.scanConsent).toBe(ScanConsent.Undecided);
+  });
+
+  it('ci: true with signup: true still builds scanConsent as granted', () => {
+    const session = buildSession({
+      installDir: '/tmp/app',
+      ci: true,
+      signup: true,
+    });
     expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 

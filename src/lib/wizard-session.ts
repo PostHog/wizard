@@ -445,10 +445,11 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
-    // No screen can ask in a scripted run, and it is the user's own
-    // automation, so granting keeps their telemetry as it was.
-    scanConsent:
-      args.ci || args.signup ? ScanConsent.Granted : ScanConsent.Undecided,
+    // No screen can ask in a scripted CI run, so granting keeps CI's
+    // telemetry as it was. --signup alone still provisions a brand-new
+    // account headlessly, and that user has never seen the disclosure — a
+    // headless `--ci --signup` run stays covered by the ci branch above.
+    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
