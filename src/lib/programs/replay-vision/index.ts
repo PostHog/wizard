@@ -54,6 +54,13 @@ async function abortUnsupportedPlatform(
   integration: Integration,
 ): Promise<void> {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
+  // This is a clean, intentional exit, not a crash. Count it with a normal
+  // event keyed on the platform so aborts roll up into one series. Do not hand
+  // `wizardAbort` an `error` — that forwards to captureException and mints a
+  // new error-tracking issue per install location and per platform.
+  analytics.wizardCapture('replay-vision unsupported platform', {
+    integration,
+  });
   await wizardAbort({
     message:
       `Session replay isn't available for ${name} projects, and Replay ` +
@@ -62,7 +69,6 @@ async function abortUnsupportedPlatform(
       'If this repo also contains a web or mobile app, run the command from ' +
       'that project directory instead. See what replay supports at:\n' +
       '  https://posthog.com/docs/session-replay',
-    error: new Error(`Replay vision unsupported platform: ${integration}`),
   });
 }
 
