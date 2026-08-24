@@ -270,8 +270,13 @@ export const McpScreen = ({
     const pluginCapableSet = new Set(
       clients.filter((c) => c.supportsPlugin).map((c) => c.name),
     );
+    // A direct entry for everyone whose plugin doesn't already ship the MCP
+    // server (codex plugins are skills-only; claude's bundles the server).
+    const bundledSet = new Set(
+      clients.filter((c) => c.pluginBundlesMcp).map((c) => c.name),
+    );
     const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
-    const directNames = names.filter((n) => !pluginCapableSet.has(n));
+    const directNames = names.filter((n) => !bundledSet.has(n));
 
     // OAuth: plugin-capable clients get the plugin (which bundles MCP), the
     // rest get a direct MCP config write. Api-key installs write key-authed

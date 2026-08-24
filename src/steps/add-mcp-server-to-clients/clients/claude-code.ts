@@ -230,6 +230,11 @@ export class ClaudeCodeMCPClient
     return Promise.resolve({ success: true });
   }
 
+  /** The plugin ships mcp.json with the posthog server — no direct entry needed. */
+  pluginBundlesMcpServer(): boolean {
+    return true;
+  }
+
   supportsPlugin(): boolean {
     return this.findClaudeBinary() !== null;
   }

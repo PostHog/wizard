@@ -8,6 +8,8 @@ export interface PluginCapable {
   installPlugin(): Promise<PluginInstallResult>;
   /** Uninstall the plugin. Absent when the client CLI has no uninstall surface. */
   removePlugin?(): Promise<PluginInstallResult>;
+  /** True when the plugin ships its own posthog MCP server, making a direct entry redundant. */
+  pluginBundlesMcpServer(): boolean;
 }
 
 export function isPluginCapable<T>(client: T): client is T & PluginCapable {

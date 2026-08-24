@@ -29,6 +29,8 @@ import { analytics } from '@utils/analytics';
 export interface McpClientInfo {
   name: string;
   supportsPlugin: boolean;
+  /** True when the plugin already ships the posthog MCP server (no direct entry needed). */
+  pluginBundlesMcp: boolean;
   /**
    * Set for clients connected by opening a hosted page in the browser. The
    * Done screen renders this so the user knows to finish setup in the browser.
@@ -82,6 +84,7 @@ export function createMcpInstaller(): McpInstaller {
       return supported.map((c) => ({
         name: c.name,
         supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
+        pluginBundlesMcp: isPluginCapable(c) && c.pluginBundlesMcpServer(),
         finish: isBrowserFinishable(c)
           ? { url: c.connectorUrl, instruction: c.finishInstruction }
           : undefined,
