@@ -62,12 +62,8 @@ export class CodexMCPClient
     return path.join(os.homedir(), '.codex', 'config.toml');
   }
 
-  /** The desktop app ships without the CLI but reads the same config.toml. */
   isClientSupported(): Promise<boolean> {
-    return Promise.resolve(
-      this.findCodexBinary() !== null ||
-        Boolean(fs.existsSync(this.configPath())),
-    );
+    return Promise.resolve(this.findCodexBinary() !== null);
   }
 
   getConfigPath(): Promise<string> {
@@ -128,10 +124,21 @@ export class CodexMCPClient
       return Promise.resolve({ success: true });
     }
 
-    // OAuth installs write config.toml directly: `codex mcp add` launches its
-    // own OAuth flow and blocks waiting for the browser, which hangs the
-    // wizard. The login stays a separate, user-run step (`codex mcp login`).
+    // OAuth installs write config.toml directly: running `codex mcp add` here
+    // would hang the wizard on its built-in OAuth browser wait. Codex nags
+    // about the unauthenticated server until the surfaced `codex mcp login`
+    // runs — the same interim state as Claude Code's "needs authentication".
     return Promise.resolve(this.writeServerSection(serverName, url));
+  }
+
+  private hasServerSection(serverName: string): boolean {
+    try {
+      return fs
+        .readFileSync(this.configPath(), 'utf-8')
+        .includes(`[mcp_servers.${serverName}]`);
+    } catch {
+      return false;
+    }
   }
 
   /** Append or update the `[mcp_servers.<name>]` section in config.toml. */
@@ -153,9 +160,12 @@ export class CodexMCPClient
         return { success: true };
       }
       const suffix = contents.endsWith('\n') ? '' : '\n';
+      // 30s startup budget: codex gives servers 10s to finish the MCP
+      // initialize handshake, and the remote OAuth handshake can exceed that
+      // on cold start — the "servers were not initialized" warning.
       fs.appendFileSync(
         this.configPath(),
-        `${suffix}\n${header}\nurl = "${url}"\n`,
+        `${suffix}\n${header}\nurl = "${url}"\nstartup_timeout_sec = 30\n`,
       );
       return { success: true };
     } catch (error) {
@@ -167,7 +177,7 @@ export class CodexMCPClient
     }
   }
 
-  /** Codex's login command needs the CLI; the desktop app authenticates in its own UI instead. */
+  /** Codex's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
   loginCommand(local?: boolean): string | null {
     if (!this.findCodexBinary()) return null;
     return `codex mcp login ${local ? 'posthog-local' : 'posthog'}`;
@@ -175,24 +185,11 @@ export class CodexMCPClient
 
   removeServer(local?: boolean): Promise<InstallResult> {
     const binary = this.findCodexBinary();
-    if (!binary) {
-      const serverName = local ? 'posthog-local' : 'posthog';
-      try {
-        const contents = fs.readFileSync(this.configPath(), 'utf-8');
-        if (!contents.includes(`[mcp_servers.${serverName}]`)) {
-          return Promise.resolve({ success: true, alreadyInstalled: true });
-        }
-        // Strip the section: its header up to the next section header or EOF.
-        const section = new RegExp(
-          `\\n?\\[mcp_servers\\.${serverName}\\]\\n(?:(?!\\[)[^\\n]*\\n?)*`,
-        );
-        fs.writeFileSync(this.configPath(), contents.replace(section, ''));
-        return Promise.resolve({ success: true });
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        return Promise.resolve({ success: false, reason });
-      }
-    }
+    if (!binary)
+      return Promise.resolve({
+        success: false,
+        reason: 'The codex CLI is no longer on your PATH.',
+      });
 
     // `local` was ignored here, so `mcp remove --local` reported success while
     // leaving the posthog-local server in place.
@@ -214,6 +211,11 @@ export class CodexMCPClient
     return Promise.resolve({ success: true });
   }
 
+  /** The codex marketplace plugin ships skills only — the MCP server needs its own entry. */
+  pluginBundlesMcpServer(): boolean {
+    return false;
+  }
+
   supportsPlugin(): boolean {
     return this.findCodexBinary() !== null;
   }
@@ -229,6 +231,35 @@ export class CodexMCPClient
     } catch {
       return Promise.resolve(false);
     }
+  }
+
+  async removePlugin(): Promise<PluginInstallResult> {
+    const binary = this.findCodexBinary();
+    if (!binary)
+      return {
+        success: false,
+        reason: 'The codex CLI is no longer on your PATH.',
+      };
+
+    if (!(await this.isPluginInstalled())) {
+      return { success: true, alreadyInstalled: true };
+    }
+
+    const result = spawnSync(
+      binary,
+      ['plugin', 'marketplace', 'remove', 'posthog'],
+      { encoding: 'utf-8' },
+    );
+    if (result.status !== 0) {
+      const reason = redactSecrets(
+        result.stderr ?? 'codex plugin marketplace remove failed',
+      );
+      analytics.captureException(
+        new Error(`Codex plugin uninstall failed: ${reason}`),
+      );
+      return { success: false, reason };
+    }
+    return { success: true };
   }
 
   async installPlugin(): Promise<PluginInstallResult> {

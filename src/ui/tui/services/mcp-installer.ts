@@ -89,9 +89,8 @@ export function createMcpInstaller(): McpInstaller {
           ? { url: c.connectorUrl, instruction: c.finishInstruction }
           : undefined,
         loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
-        pluginLoginCommand: isLoginCapable(c)
-          ? c.pluginLoginCommand?.()
-          : undefined,
+        pluginLoginCommand:
+          (isLoginCapable(c) && c.pluginLoginCommand?.()) || undefined,
       }));
     },
 

@@ -271,7 +271,7 @@ export const McpScreen = ({
       clients.filter((c) => c.supportsPlugin).map((c) => c.name),
     );
     // A direct entry for everyone whose plugin doesn't already ship the MCP
-    // server (codex plugins are skills-only; claude's bundles the server).
+    // server (codex's plugin is skills-only; claude's bundles the server).
     const bundledSet = new Set(
       clients.filter((c) => c.pluginBundlesMcp).map((c) => c.name),
     );

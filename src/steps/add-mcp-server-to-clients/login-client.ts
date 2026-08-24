@@ -7,8 +7,8 @@
 export interface LoginCapable {
   /** The editor's login command (e.g. `claude mcp login posthog`), or null when unusable right now (CLI absent). */
   loginCommand(local?: boolean): string | null;
-  /** The login command when the server comes from the editor's plugin (e.g. `plugin:posthog:posthog`). */
-  pluginLoginCommand?(): string;
+  /** The login command when the server comes from the editor's plugin (e.g. `plugin:posthog:posthog`), or null when unusable. */
+  pluginLoginCommand?(): string | null;
 }
 
 export function isLoginCapable<T>(client: T): client is T & LoginCapable {
