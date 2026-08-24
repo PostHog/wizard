@@ -58,8 +58,16 @@ export class CodexMCPClient
     return null;
   }
 
+  private configPath(): string {
+    return path.join(os.homedir(), '.codex', 'config.toml');
+  }
+
+  /** The desktop app ships without the CLI but reads the same config.toml. */
   isClientSupported(): Promise<boolean> {
-    return Promise.resolve(this.findCodexBinary() !== null);
+    return Promise.resolve(
+      this.findCodexBinary() !== null ||
+        Boolean(fs.existsSync(this.configPath())),
+    );
   }
 
   getConfigPath(): Promise<string> {
@@ -67,14 +75,16 @@ export class CodexMCPClient
   }
 
   isServerInstalled(local?: boolean): Promise<boolean> {
-    const binary = this.findCodexBinary();
-    if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
-    const result = spawnSync(binary, ['mcp', 'list'], { encoding: 'utf-8' });
-    if (result.status !== 0) return Promise.resolve(false);
-    return Promise.resolve(
-      (result.stdout ?? '').toLowerCase().includes(serverName),
-    );
+    // Exact `[mcp_servers.<name>]` section in config.toml — both the CLI and
+    // the desktop app read (and `codex mcp add` writes) this file, and a
+    // substring scan of `mcp list` matches unrelated posthog-ish servers.
+    try {
+      const contents = fs.readFileSync(this.configPath(), 'utf-8');
+      return Promise.resolve(contents.includes(`[mcp_servers.${serverName}]`));
+    } catch {
+      return Promise.resolve(false);
+    }
   }
 
   addServer(
@@ -82,48 +92,107 @@ export class CodexMCPClient
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult> {
-    const binary = this.findCodexBinary();
-    if (!binary)
-      return Promise.resolve({
-        success: false,
-        reason: 'The codex CLI is no longer on your PATH.',
-      });
-
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
-    const args = ['mcp', 'add', serverName, '--url', url];
-    const env = { ...process.env };
+
+    // Api-key installs go through the CLI for its bearer-token env wiring.
     if (apiKey) {
-      const tokenVar = 'POSTHOG_AUTH_HEADER';
-      env[tokenVar] = `Bearer ${apiKey}`;
-      args.push('--bearer-token-env-var', tokenVar);
+      const binary = this.findCodexBinary();
+      if (!binary)
+        return Promise.resolve({
+          success: false,
+          reason: 'An API-key install into Codex needs the codex CLI.',
+        });
+      const args = [
+        'mcp',
+        'add',
+        serverName,
+        '--url',
+        url,
+        '--bearer-token-env-var',
+        'POSTHOG_AUTH_HEADER',
+      ];
+      const env = { ...process.env, POSTHOG_AUTH_HEADER: `Bearer ${apiKey}` };
+      const result = spawnSync(binary, args, { encoding: 'utf-8', env });
+      if (result.status !== 0) {
+        const stderr = result.stderr ?? '';
+        if (ALREADY_INSTALLED_PATTERN.test(stderr)) {
+          return Promise.resolve({ success: true, alreadyInstalled: true });
+        }
+        const reason = redactSecrets(stderr);
+        analytics.captureException(
+          new Error(`Codex MCP add failed: ${reason}`),
+        );
+        return Promise.resolve({ success: false, reason });
+      }
+      return Promise.resolve({ success: true });
     }
 
-    const result = spawnSync(binary, args, { encoding: 'utf-8', env });
-    if (result.status !== 0) {
-      const stderr = result.stderr ?? '';
-      if (ALREADY_INSTALLED_PATTERN.test(stderr)) {
-        return Promise.resolve({ success: true, alreadyInstalled: true });
-      }
-      const reason = redactSecrets(stderr);
-      analytics.captureException(new Error(`Codex MCP add failed: ${reason}`));
-      return Promise.resolve({ success: false, reason });
-    }
-    return Promise.resolve({ success: true });
+    // OAuth installs write config.toml directly: `codex mcp add` launches its
+    // own OAuth flow and blocks waiting for the browser, which hangs the
+    // wizard. The login stays a separate, user-run step (`codex mcp login`).
+    return Promise.resolve(this.writeServerSection(serverName, url));
   }
 
-  /** Codex's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
-  loginCommand(local?: boolean): string {
+  /** Append or update the `[mcp_servers.<name>]` section in config.toml. */
+  private writeServerSection(serverName: string, url: string): InstallResult {
+    const header = `[mcp_servers.${serverName}]`;
+    try {
+      const contents = fs.readFileSync(this.configPath(), 'utf-8');
+      if (contents.includes(header)) {
+        if (contents.includes(`${header}\nurl = "${url}"`)) {
+          return { success: true, alreadyInstalled: true };
+        }
+        const section = new RegExp(
+          `(\\[mcp_servers\\.${serverName}\\]\\n)url = "[^"]*"`,
+        );
+        fs.writeFileSync(
+          this.configPath(),
+          contents.replace(section, `$1url = "${url}"`),
+        );
+        return { success: true };
+      }
+      const suffix = contents.endsWith('\n') ? '' : '\n';
+      fs.appendFileSync(
+        this.configPath(),
+        `${suffix}\n${header}\nurl = "${url}"\n`,
+      );
+      return { success: true };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      analytics.captureException(
+        new Error(`Codex config.toml write failed: ${reason}`),
+      );
+      return { success: false, reason };
+    }
+  }
+
+  /** Codex's login command needs the CLI; the desktop app authenticates in its own UI instead. */
+  loginCommand(local?: boolean): string | null {
+    if (!this.findCodexBinary()) return null;
     return `codex mcp login ${local ? 'posthog-local' : 'posthog'}`;
   }
 
   removeServer(local?: boolean): Promise<InstallResult> {
     const binary = this.findCodexBinary();
-    if (!binary)
-      return Promise.resolve({
-        success: false,
-        reason: 'The codex CLI is no longer on your PATH.',
-      });
+    if (!binary) {
+      const serverName = local ? 'posthog-local' : 'posthog';
+      try {
+        const contents = fs.readFileSync(this.configPath(), 'utf-8');
+        if (!contents.includes(`[mcp_servers.${serverName}]`)) {
+          return Promise.resolve({ success: true, alreadyInstalled: true });
+        }
+        // Strip the section: its header up to the next section header or EOF.
+        const section = new RegExp(
+          `\\n?\\[mcp_servers\\.${serverName}\\]\\n(?:(?!\\[)[^\\n]*\\n?)*`,
+        );
+        fs.writeFileSync(this.configPath(), contents.replace(section, ''));
+        return Promise.resolve({ success: true });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return Promise.resolve({ success: false, reason });
+      }
+    }
 
     // `local` was ignored here, so `mcp remove --local` reported success while
     // leaving the posthog-local server in place.

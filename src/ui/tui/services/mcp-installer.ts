@@ -85,7 +85,7 @@ export function createMcpInstaller(): McpInstaller {
         finish: isBrowserFinishable(c)
           ? { url: c.connectorUrl, instruction: c.finishInstruction }
           : undefined,
-        loginCommand: isLoginCapable(c) ? c.loginCommand(false) : undefined,
+        loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
         pluginLoginCommand: isLoginCapable(c)
           ? c.pluginLoginCommand?.()
           : undefined,

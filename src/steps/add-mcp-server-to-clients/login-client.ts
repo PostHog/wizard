@@ -5,8 +5,8 @@
  * never runs it, it surfaces the exact command for the user to run.
  */
 export interface LoginCapable {
-  /** The editor's own login command for the installed server, e.g. `claude mcp login posthog`. */
-  loginCommand(local?: boolean): string;
+  /** The editor's login command (e.g. `claude mcp login posthog`), or null when unusable right now (CLI absent). */
+  loginCommand(local?: boolean): string | null;
   /** The login command when the server comes from the editor's plugin (e.g. `plugin:posthog:posthog`). */
   pluginLoginCommand?(): string;
 }
