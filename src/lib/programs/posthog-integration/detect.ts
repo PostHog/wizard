@@ -11,6 +11,7 @@
 
 import type { ProgramReadyContext } from '@lib/programs/program-step';
 import {
+  DiscoveredFeature,
   mayReportScanResults,
   ScanConsent,
   type WizardSession,
@@ -24,6 +25,8 @@ import {
 } from '@lib/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import { AI_SOURCE_KINDS } from '@lib/warehouse-sources/registry';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -126,6 +129,33 @@ function detectWarehouseSourcesForSuggestion(
   }
 }
 
+function hasAiSdkEvidence(
+  session: WizardSession,
+  sources: DetectedSource[],
+): boolean {
+  return (
+    sources.some((s) => AI_SOURCE_KINDS.has(s.kind)) ||
+    session.discoveredFeatures.includes(DiscoveredFeature.LLM)
+  );
+}
+
+/**
+ * Boolean only, on the org, never the list of kinds or any non-AI tool: a
+ * decline must not leak even the shape of what local detection saw.
+ */
+function stampAiSdkDetected(
+  session: WizardSession,
+  sources: DetectedSource[],
+): void {
+  const organizationId = session.apiUser?.organization?.id;
+  if (!organizationId) return;
+  if (!hasAiSdkEvidence(session, sources)) return;
+
+  analytics.groupIdentify('organization', organizationId, {
+    wizard_ai_sdk_detected: true,
+  });
+}
+
 /**
  * The single place scan results become telemetry. Called from the two points
  * `WizardStore` resolves consent, so it must stay idempotent.
@@ -138,11 +168,12 @@ export function reportWarehouseSourcesDetected(
   if (session.scanConsent === ScanConsent.Undecided) return false;
 
   if (mayReportScanResults(session)) {
+    const sources = getDetectedWarehouseSources(session);
+    stampAiSdkDetected(session, sources);
+
     // A crash must not read as "scanned, found nothing", which is what a
     // zero-count row means. captureException already fired at the failure.
     if (session.frameworkContext[WAREHOUSE_SCAN_FAILED_KEY]) return true;
-
-    const sources = getDetectedWarehouseSources(session);
 
     // Captured on every run, including the empty case. The denominator is
     // the whole point: without the zero rows, "20% of runs have a Postgres"
