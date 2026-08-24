@@ -30,6 +30,7 @@ import {
   resolveEnvPath,
   resolveEnvSecretRefs,
   vaultSensitiveAnswers,
+  WIZARD_ASK_SENSITIVE_DESCRIPTION,
 } from '@lib/wizard-tools/tools';
 import type { LLMProvider } from '@posthog/warlock';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
@@ -300,8 +301,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           ),
           sensitive: Type.Optional(
             Type.Boolean({
-              description:
-                "Only valid for kind='text'. The answer is stored in the wizard's secret vault and returned as { secretRef: 'secret:...' } instead of the raw string. Use for API keys and tokens; the ref is resolved only by tools that accept it (e.g. set_env_values).",
+              description: WIZARD_ASK_SENSITIVE_DESCRIPTION,
             }),
           ),
         }),
