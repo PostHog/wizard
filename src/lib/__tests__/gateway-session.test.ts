@@ -146,6 +146,22 @@ describe('gatewayAuth', () => {
     expect(auth.edition).toBe('legacy');
   });
 
+  it('falls back when the mint returns an unparseable expiry', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_unknown_life',
+          // Present and a string, so the response-shape check passes. Only
+          // Date.parse rejects it, and an unknown lifetime cannot be adopted.
+          expires_at: 'soon',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth');
+    expect(auth.edition).toBe('legacy');
+  });
+
   it('falls back when the mint returns an already-expired token', async () => {
     fetchMock.mockResolvedValue({
       ok: true,

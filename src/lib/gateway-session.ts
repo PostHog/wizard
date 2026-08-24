@@ -100,9 +100,10 @@ async function resolveGatewayAuth(
   }
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
-  if (Number.isFinite(expiresAtMs) && ttlMs < MIN_USABLE_TTL_MS) {
-    // Expired, or too short to serve a session. Falling back beats a
-    // credential that 401s mid-run.
+  if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {
+    // Expired, unreadable, or too short to serve a session. An unreadable expiry
+    // is no basis for adopting a credential that may 401 mid-run, so it takes the
+    // same fallback as a short one.
     logToFile(
       `[gateway] mint returned a token with ${ttlMs}ms of life; staying on the existing gateway`,
     );
@@ -110,9 +111,7 @@ async function resolveGatewayAuth(
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
     return auth;
   }
-  const staleAtMs = Number.isFinite(expiresAtMs)
-    ? Date.now() + ttlMs * REFRESH_AT_FRACTION
-    : Date.now() + LEGACY_RETRY_MS;
+  const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
