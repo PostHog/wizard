@@ -1,4 +1,9 @@
 import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
+import {
+  checkLocalServices,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from '@lib/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
@@ -107,7 +112,9 @@ export function runNonInteractive(
       installDir,
       ci: true,
       signup: options.signup as boolean | undefined,
+      localDev: options.localDev as boolean | undefined,
       localMcp: options.localMcp as boolean | undefined,
+      localPosthog: options.localPosthog as boolean | undefined,
       apiKey,
       email: options.email as string | undefined,
       projectId: options.projectId as string | undefined,
@@ -132,6 +139,19 @@ export function runNonInteractive(
 
     getUI().intro('Welcome to the PostHog setup wizard');
     getUI().log.info(`Running ${config.id} in ${modeLabel(mode)} mode`);
+
+    // Before auth: a dead local PostHog otherwise surfaces as "Failed to fetch
+    // user data". Aborts even non-interactively — a CI run pointed at a local
+    // server that isn't there is testing nothing.
+    const localServicesError = await checkLocalServices({
+      ...getLocalDev(),
+      localMcp: session.localMcp,
+      localPosthog: session.baseUrl === POSTHOG_LOCAL_URL,
+    });
+    if (localServicesError) {
+      await wizardAbort({ message: localServicesError });
+      return;
+    }
 
     // Headless streams run state to the PostHog backend so the web app can show
     // live progress. Reuses the interactive TaskStreamPush + WizardStore (no Ink

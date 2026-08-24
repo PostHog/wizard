@@ -13,7 +13,9 @@ import {
   type WizardAskBridge,
 } from '@lib/wizard-ask-bridge';
 import { createWizardPiTools } from '../tools';
+import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
+import { WIZARD_ASK_SENSITIVE_DESCRIPTION } from '@lib/wizard-tools/tools';
 
 const SECRET = 'phx_live_zendesk_token_123';
 
@@ -96,6 +98,31 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     expect(textOf(result)).toMatch(/Only kind="text" answers can be sensitive/);
     expect(request).not.toHaveBeenCalled();
   });
+
+  it('carries the shared secretRef guidance (parity with the MCP server)', () => {
+    // The pi harness runs the orchestrator's warehouse credential task, so its
+    // `sensitive` guidance must warn — like the MCP server's — that a vaulted
+    // { secretRef } is rejected by the PostHog data-warehouse tools. Without it
+    // the agent vaults a credential it must hand to source creation, the create
+    // tool rejects the ref, and the task dead-ends into the browser fallback.
+    const { wizardAsk } = makeTools({});
+    const desc = (
+      wizardAsk as unknown as {
+        parameters: {
+          properties: {
+            questions: {
+              items: {
+                properties: { sensitive: { description?: string } };
+              };
+            };
+          };
+        };
+      }
+    ).parameters.properties.questions.items.properties.sensitive.description;
+    expect(desc).toBe(WIZARD_ASK_SENSITIVE_DESCRIPTION);
+    expect(desc).toMatch(/data-warehouse tools/);
+    expect(desc).toMatch(/reject it/);
+  });
 });
 
 describe('pi set_env_values — resolves vault refs host-side', () => {
@@ -176,6 +203,56 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
       values: { ZENDESK_TOKEN: answers.token },
     });
     expect(textOf(result)).toMatch(/not known to the vault/);
+  });
+});
+
+describe('pi task wiring — wizard_ask pauses Write/Edit', () => {
+  it('blocks write/edit while an ask is in flight, then reallows once answered', async () => {
+    // Mirrors runPiTask: one askState shared between the ask tool
+    // (onAskPendingChange) and the security fence (getWizardAskPending). The
+    // regression this pins is the task path forgetting to connect them, which
+    // let a task mutate files while its credential prompt sat open.
+    const askState = { pending: false };
+    let release!: (answers: Record<string, string>) => void;
+    const request = vi.fn(
+      () =>
+        new Promise<Record<string, string>>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const [wizardAsk] = createWizardPiTools({
+      workingDirectory: mkdtempSync(join(tmpdir(), 'pi-ask-pause-')),
+      skillsBaseUrl: 'http://localhost:0',
+      askBridge: { request } as unknown as WizardAskBridge,
+      triageProvider: undefined,
+      onAskPendingChange: (pending) => {
+        askState.pending = pending;
+      },
+    }).filter((t) => t.name === 'wizard_ask');
+
+    const gate = { getWizardAskPending: () => askState.pending };
+    const write = { path: 'src/app.ts', content: 'x' };
+    const edit = { path: 'src/app.ts', edits: [] };
+
+    // Before asking, writes flow.
+    expect((await evaluateToolCall('write', write, gate)).block).toBe(false);
+
+    // Open the overlay but do not answer — the credential prompt is on screen.
+    const inFlight = call(wizardAsk, {
+      questions: [
+        { id: 'pw', prompt: 'DB password', kind: 'text', sensitive: true },
+      ],
+    });
+    await Promise.resolve();
+    expect(askState.pending).toBe(true);
+    expect((await evaluateToolCall('write', write, gate)).block).toBe(true);
+    expect((await evaluateToolCall('edit', edit, gate)).block).toBe(true);
+
+    // Answer — the overlay closes and writes flow again.
+    release({ pw: CANCELLED_SENTINEL });
+    await inFlight;
+    expect(askState.pending).toBe(false);
+    expect((await evaluateToolCall('write', write, gate)).block).toBe(false);
   });
 });
 

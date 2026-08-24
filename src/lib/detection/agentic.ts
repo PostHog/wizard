@@ -16,11 +16,13 @@
 import {
   initializeAgent,
   runAgent as executeAgent,
+  buildRunTags,
   AgentSignals,
 } from '@lib/agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -74,12 +76,16 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
-  // Rust / Go / Elixir / JVM / .NET: no framework targets yet, but found so
-  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
-  'Cargo.toml',
-  'go.mod',
-  'mix.exs',
+  // Java
   'pom.xml',
+  // Rust
+  'Cargo.toml',
+  // Elixir
+  'mix.exs',
+  // Go
+  'go.mod',
+  // .NET: no framework targets yet, but found so
+  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   '*.csproj',
   // Mobile / native
   'Package.swift',
@@ -108,6 +114,10 @@ export type AgenticDetectOptions = {
    * through ordering (e.g. a bundler target before a generic framework target).
    */
   targets: readonly DetectTarget[];
+  /** The program this scan bills to. Required, not optional: the scan drives a
+   *  real agent through the gateway, and a caller that forgets leaves that
+   *  spend unattributed. */
+  programId: string;
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
   /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
@@ -298,13 +308,11 @@ function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
     installDir: session.installDir,
     ci: session.ci,
     debug: session.debug,
-    default: false,
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,
     signup: session.signup,
     apiKey: session.apiKey,
     projectId: session.projectId,
-    localMcp: session.localMcp,
   };
 }
 
@@ -328,6 +336,7 @@ export async function detectProjectsWithAgent(
   }
   const {
     targets,
+    programId,
     purpose = 'set up a PostHog integration',
     recommend = false,
     rerankIds,
@@ -337,6 +346,18 @@ export async function detectProjectsWithAgent(
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
+  // Built here rather than inherited: this scan runs before
+  // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
+  const wizardMetadata = {
+    ...buildRunTags({
+      programId,
+      integration: 'agentic-detect',
+      runId: analytics.runId,
+      build: analytics.build,
+    }),
+    call_type: CallType.detection,
+  };
+
   const agent = await initializeAgent(
     {
       workingDirectory: cwd,
@@ -344,8 +365,9 @@ export async function detectProjectsWithAgent(
       posthogApiKey: accessToken,
       host,
       detectPackageManager: detectNodePackageManagers,
-      skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
+      skillsBaseUrl: getSkillsBaseUrl(),
       integrationLabel: 'agentic-detect',
+      wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],
       modelOverride: HAIKU_MODEL,
     },

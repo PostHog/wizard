@@ -97,7 +97,7 @@ export async function dispatchFamily(
     return;
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+  const skillsBaseUrl = getSkillsBaseUrl();
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) {
     return exitDispatchError(

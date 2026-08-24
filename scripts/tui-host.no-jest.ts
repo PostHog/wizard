@@ -37,6 +37,13 @@ import { profileFor } from '@e2e-harness/profiles';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
 
+/** Tri-state: absent ⇒ `undefined`, so `resolveLocalDev` can apply the umbrella. */
+function envFlag(name: string): boolean | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return undefined;
+  return raw === 'true';
+}
+
 async function main() {
   const apiKey = (
     process.env.POSTHOG_PERSONAL_API_KEY ??
@@ -59,9 +66,12 @@ async function main() {
     apiKey,
     projectId,
     region: 'us',
-    // Local skills + MCP (context-mill dev server on :8765, MCP on :8787) —
-    // same env-backed flag the bin's --local-mcp reads.
-    localMcp: process.env.POSTHOG_WIZARD_LOCAL_MCP === 'true',
+    // Same env-backed flags the bin declares. The harness usually wants local
+    // skills (:8765) against the production MCP.
+    localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
+    localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
+    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
+    localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
     // Switchboard variation overrides (see e2e.json `variations`), threaded by
     // the snapshot driver as one run per variation. Empty ⇒ resolved default.
     harness: (process.env.SNAP_HARNESS || undefined) as Harness | undefined,
@@ -253,34 +263,47 @@ async function main() {
     // env file, and the screens walked.
     if (process.env.E2E_RESULT_JSON) {
       const appDir = process.env.APP_DIR!;
-      let deps: string[] = [];
+      // One dependency-name pattern per ecosystem manifest. A run only needs
+      // the names, so a line-level scan beats per-format parsers.
+      const MANIFESTS: Array<[string, RegExp]> = [
+        ['pubspec.yaml', /^ {2}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm],
+        ['go.mod', /^\s*([\w.\/-]+)\s+v[\w.-]+/gm],
+        ['Cargo.toml', /^([A-Za-z0-9_-]+)\s*=/gm],
+        ['pom.xml', /<artifactId>([^<]+)<\/artifactId>/g],
+        ['build.gradle', /['"]([\w.-]+:[\w.-]+)[:'"]/g],
+        ['mix.exs', /\{:([a-z_]+)\s*,/g],
+      ];
+      const deps: string[] = [];
       try {
+        // package.json needs a real parse: a line scan would also match script
+        // names, and only the dependency blocks carry dependencies.
         const pkg = JSON.parse(
           fs.readFileSync(`${appDir}/package.json`, 'utf8'),
         );
-        deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+        deps.push(
+          ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
+        );
       } catch {
-        /* some frameworks have no package.json */
+        /* not a JS project */
       }
-      try {
-        // Dart/Flutter declares dependencies in pubspec.yaml, so a Flutter run
-        // reports no dependency at all when only package.json is read.
-        const pubspec = fs.readFileSync(`${appDir}/pubspec.yaml`, 'utf8');
-        for (const line of pubspec.split('\n')) {
-          const dep = /^\s{2}([A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(line);
-          if (dep) deps.push(dep[1]);
+      for (const [file, pattern] of MANIFESTS) {
+        try {
+          const text = fs.readFileSync(`${appDir}/${file}`, 'utf8');
+          for (const match of text.matchAll(pattern)) deps.push(match[1]);
+        } catch {
+          /* app doesn't use this ecosystem */
         }
-      } catch {
-        /* not a Dart project */
       }
-      const posthogDeps = deps.filter((d) => d.includes('posthog'));
+      const posthogDeps = [
+        ...new Set(deps.filter((d) => d.toLowerCase().includes('posthog'))),
+      ];
       let envFile: string | null = null;
       try {
         const hit = fs
           .readdirSync(appDir)
           .find(
             (f) =>
-              f.startsWith('.env') &&
+              (f.startsWith('.env') || f.endsWith('.env')) &&
               /posthog/i.test(fs.readFileSync(`${appDir}/${f}`, 'utf8')),
           );
         envFile = hit ? `${appDir}/${hit}` : null;

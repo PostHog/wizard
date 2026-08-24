@@ -301,6 +301,29 @@ export const DEFAULT_ASK_MAX_QUESTIONS = 10;
 /** The call after this many returns a one-time batch-your-questions nudge. */
 export const ASK_BATCH_THRESHOLD = 3;
 
+/**
+ * The `wizard_ask` `sensitive` field description, shared by both harness facades
+ * (the zod schema in `./mcp` and the typebox mirror in `harness/pi/tools.ts`) so
+ * the secret-handling guidance cannot drift between them — the same discipline
+ * `HANDOFF_FIELDS` applies to the handoff schema.
+ *
+ * The load-bearing part is the last two sentences: a vaulted `{secretRef}` is
+ * resolved only by wizard-tools that accept it, and the PostHog data-warehouse
+ * tools reject it. Without that, a pi agent collecting a credential it must hand
+ * to `external-data-sources-create` vaults it, gets a ref the create tool
+ * rejects, and dead-ends into the browser fallback — the exact loss the wizard's
+ * in-cli source setup is meant to avoid.
+ */
+export const WIZARD_ASK_SENSITIVE_DESCRIPTION =
+  "Only valid for kind='text'. When true, the user's answer is stored in the " +
+  "wizard's secret vault and returned to you as { secretRef: 'secret:...' } " +
+  'instead of the raw string. Use for API keys, tokens, and any other secret ' +
+  'the user types in. The secretRef is only resolved by wizard-tools that ' +
+  'accept it (e.g. set_env_values) — it is NOT resolved when passed to other ' +
+  'MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a ' +
+  'secret that must reach another tool, write it to the env with set_env_values ' +
+  "first, or use that tool's own credential-reference flow.";
+
 export type AskCapDecision =
   | { kind: 'ok' }
   | {
