@@ -1,4 +1,5 @@
 import {
+  GatewayMintRefused,
   buildWizardPropertiesBlob,
   gatewayAuth,
   isTrustedGatewayUrl,
@@ -144,6 +145,41 @@ describe('gatewayAuth', () => {
     // A token with seconds of life would 401 mid-run, and the subprocess holds
     // it for the whole session.
     expect(auth.edition).toBe('legacy');
+  });
+
+  it.each([
+    [429, 'daily run limit'],
+    [400, 'did not recognise'],
+    [403, 'access to this project'],
+    [401, 'could not authenticate'],
+  ])(
+    'refuses rather than falling back on HTTP %i',
+    async (status, fragment) => {
+      fetchMock.mockResolvedValue({ ok: false, status });
+      // Falling back would put the run on the legacy gateway, which enforces none
+      // of the limits these statuses represent.
+      await expect(gatewayAuth(host, 'pha_oauth')).rejects.toThrow(
+        new RegExp(String(fragment), 'i'),
+      );
+    },
+  );
+
+  it.each([404, 500, 503])(
+    'falls back when the mint is unavailable (HTTP %i)',
+    async (status) => {
+      fetchMock.mockResolvedValue({ ok: false, status });
+      const auth = await gatewayAuth(host, 'pha_oauth');
+      expect(auth.edition).toBe('legacy');
+    },
+  );
+
+  it('surfaces a refusal through the transport catch', async () => {
+    // The refusal is thrown from inside the try that wraps fetch, so a catch that
+    // treats every throw as a transport failure would silently restore fallback.
+    fetchMock.mockResolvedValue({ ok: false, status: 429 });
+    await expect(gatewayAuth(host, 'pha_oauth')).rejects.toBeInstanceOf(
+      GatewayMintRefused,
+    );
   });
 
   it('falls back when the mint returns an unparseable expiry', async () => {

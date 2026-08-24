@@ -183,6 +183,47 @@ interface MintedToken {
  * reason: 404 from an older server, 403 with the rollout flag off, a malformed
  * response, or a network failure. The caller falls back to legacy.
  */
+/**
+ * A deliberate refusal from the mint endpoint, as opposed to the mint being
+ * unavailable. Thrown rather than folded into the legacy fallback, so the run
+ * stops instead of proceeding without the controls the refusal was enforcing.
+ */
+export class GatewayMintRefused extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'GatewayMintRefused';
+    this.status = status;
+  }
+}
+
+/**
+ * Whether a mint status means "refused this run" rather than "not available".
+ *
+ * The legacy gateway enforces none of the wizard's controls, so falling back on
+ * a refusal makes every one of them optional: 429 is the per-program daily run
+ * limit, 400 an unlisted program, 403 project access that was revoked after the
+ * token was issued, 401 a credential that may not mint. A 404 (feature off, not
+ * rolled out) and any 5xx are genuine unavailability and still fall back.
+ */
+function isMintRefusal(status: number): boolean {
+  return status === 400 || status === 401 || status === 403 || status === 429;
+}
+
+function mintRefusalMessage(status: number): string {
+  switch (status) {
+    case 429:
+      return 'This wizard program has used its daily run limit. Try again tomorrow.';
+    case 403:
+      return 'Your access to this project has changed. Re-authenticate and try again.';
+    case 400:
+      return 'The PostHog gateway did not recognise this wizard program.';
+    default:
+      return 'The wizard could not authenticate to the PostHog gateway.';
+  }
+}
+
 async function mintGatewayToken(
   host: HostResolution,
   accessToken: string,
@@ -198,8 +239,17 @@ async function mintGatewayToken(
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {
+      if (isMintRefusal(resp.status)) {
+        logToFile(
+          `[gateway] mint refused with HTTP ${resp.status}; failing the run`,
+        );
+        throw new GatewayMintRefused(
+          resp.status,
+          mintRefusalMessage(resp.status),
+        );
+      }
       logToFile(
-        `[gateway] mint refused with HTTP ${resp.status}; staying on the existing gateway`,
+        `[gateway] mint unavailable with HTTP ${resp.status}; staying on the existing gateway`,
       );
       return null;
     }
@@ -242,6 +292,9 @@ async function mintGatewayToken(
       teamId: body.team_id,
     };
   } catch (e) {
+    // A refusal is a decision, not a transport failure: it must pass through this
+    // catch rather than be folded into the fallback it exists to prevent.
+    if (e instanceof GatewayMintRefused) throw e;
     logToFile(
       `[gateway] mint call failed (${String(
         e,

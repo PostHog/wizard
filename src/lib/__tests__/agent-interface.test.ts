@@ -647,9 +647,7 @@ describe('subprocess gateway credentials', () => {
   const options: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    default: false,
     signup: false,
-    localMcp: false,
     ci: false,
     benchmark: false,
     yaraReport: false,
