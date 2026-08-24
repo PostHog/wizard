@@ -4,7 +4,7 @@
  * per-run spend cap, expiry) instead of the user's OAuth token. This module
  * asks the wizard backend for one and falls back to the legacy posture (OAuth
  * token against the Python gateway's `/wizard` slug) when the backend doesn't
- * mint — an older server, the rollout flag off, or a network failure. The
+ * mint: an older server, the rollout flag off, or a network failure. The
  * backend response carries the gateway URL, so rollout percentage is
  * server-controlled with no CLI release.
  */
@@ -181,8 +181,8 @@ interface MintedToken {
 
 /**
  * POST the wizard backend's mint endpoint. Null means "no v2 token" for any
- * reason — 404 from an older server, 403 with the rollout flag off, malformed
- * response, or a network failure — and the caller falls back to legacy.
+ * reason: 404 from an older server, 403 with the rollout flag off, a malformed
+ * response, or a network failure. The caller falls back to legacy.
  */
 async function mintGatewayToken(
   host: HostResolution,
@@ -254,7 +254,7 @@ async function mintGatewayToken(
 
 /**
  * The v2 run-metadata carrier: one JSON blob for the `X-PostHog-Properties`
- * header. Plain keys only — the gateway strips `$`-prefixed keys as reserved,
+ * header. Plain keys only, since the gateway strips `$`-prefixed keys as reserved,
  * so feature-flag variants land as `wizard_flag_<key>` instead of the legacy
  * `$feature/<key>` (dashboards keying on `$feature/wizard-*` read the new key
  * post-cutover).

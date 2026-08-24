@@ -42,7 +42,7 @@ export function gatewayApiFor(
  * shape follows the gateway edition: legacy sends per-key metadata/flag
  * headers plus the explicit Bedrock-fallback opt-in; v2 (the Go ai-gateway)
  * takes one `X-PostHog-Properties` JSON blob and falls back natively. The 1M
- * context beta rides both — pi otherwise runs at 200k and overflows on larger
+ * context beta rides both, since pi otherwise runs at 200k and overflows on larger
  * projects (the post-run compaction failures).
  */
 export function buildGatewayHeaders(

@@ -53,7 +53,7 @@ describe('gatewayAuth', () => {
       }),
     );
 
-    // Second resolve inside the TTL reuses the cache — no second mint.
+    // Second resolve inside the TTL reuses the cache, so no second mint.
     await gatewayAuth(host, 'pha_oauth');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

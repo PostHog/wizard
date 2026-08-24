@@ -379,7 +379,7 @@ export function isWarlockDisabled(): boolean {
  * The header shape follows the gateway edition. Legacy (Python gateway):
  * per-key `X-POSTHOG-PROPERTY-*`/`X-POSTHOG-FLAG-*` plus the explicit
  * `x-posthog-use-bedrock-fallback` opt-in. v2 (Go ai-gateway): one
- * `X-PostHog-Properties` JSON blob — Bedrock fallback is native there, and
+ * `X-PostHog-Properties` JSON blob. Bedrock fallback is native there, and
  * per-key metadata headers are not read.
  */
 export function buildAgentEnv(

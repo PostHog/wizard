@@ -21,7 +21,7 @@ const TRIAGE_MAX_TOKENS = 16_384;
 const TRIAGE_TIMEOUT_MS = 20_000;
 
 export interface TriageGatewayAuth {
-  /** Gateway base url — from the run's resolved gateway auth. */
+  /** Gateway base url, from the run's resolved gateway auth. */
   baseURL: string;
   /** The run's gateway bearer (minted phe_ on v2, OAuth token on legacy). */
   authToken: string;
