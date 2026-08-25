@@ -193,6 +193,12 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /**
+   * Program this run is. Required and typed rather than read out of
+   * `wizardMetadata`: its absence fails the run at mint, and a wrong value bills
+   * another program's budget, so neither should depend on an optional string bag.
+   */
+  programId: string;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -546,7 +552,7 @@ export async function initializeAgent(
     const auth = await gatewayAuth(
       config.host,
       config.posthogApiKey,
-      config.wizardMetadata?.program_id,
+      config.programId,
     );
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;

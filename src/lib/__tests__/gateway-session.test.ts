@@ -281,6 +281,77 @@ describe('gatewayAuth', () => {
     ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
+  it('re-mints once the cached token passes its refresh point', async () => {
+    // Without moving the clock nothing ever crosses staleAtMs, so the refresh
+    // fraction and the staleness check are both mutation survivors: widening
+    // either stops the token refreshing and every other test stays green.
+    vi.useFakeTimers();
+    try {
+      const ttlMs = 60 * 60 * 1000;
+      fetchMock.mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              token: 'phe_minted',
+              expires_at: new Date(Date.now() + ttlMs).toISOString(),
+              gateway_url: 'https://gateway.us.posthog.com',
+            }),
+        }),
+      );
+
+      await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      // Just short of the refresh point: still served from cache.
+      vi.setSystemTime(Date.now() + ttlMs * 0.79);
+      await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      // Past it: re-resolved.
+      vi.setSystemTime(Date.now() + ttlMs * 0.05);
+      await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries cleanly after a failed mint rather than wedging the session', async () => {
+    // A rejected resolve must leave neither a cached posture nor a claimed
+    // in-flight slot behind, or one transient 503 wedges the run for the
+    // process lifetime.
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_after_retry',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://gateway.us.posthog.com',
+        }),
+    });
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+    expect(auth.token).toBe('phe_after_retry');
+  });
+
+  it('rejects every concurrent joiner when the shared mint fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    // All three join one in-flight promise; a joiner that resolved instead would
+    // be running on a posture nobody validated.
+    const results = await Promise.allSettled([
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ]);
+    expect(results.every((r) => r.status === 'rejected')).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a gateway url outside the trusted origins', async () => {
     fetchMock.mockResolvedValue({
       ok: true,

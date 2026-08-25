@@ -366,6 +366,7 @@ export async function detectProjectsWithAgent(
       host,
       detectPackageManager: detectNodePackageManagers,
       skillsBaseUrl: getSkillsBaseUrl(),
+      programId,
       integrationLabel: 'agentic-detect',
       wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],
