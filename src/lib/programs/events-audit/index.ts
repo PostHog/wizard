@@ -20,7 +20,6 @@ export { SETUP_REPORT_FILE };
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
 export const eventsAuditConfig: ProgramConfig = {
-  command: 'events-audit',
   description: 'Audit PostHog event tracking in this project',
   id: 'events-audit',
   skillId: 'events-audit',

@@ -13,7 +13,10 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
-import { getSubcommandPrograms } from '@lib/programs/program-registry';
+import {
+  getSubcommandPrograms,
+  getCommandPath,
+} from '@lib/programs/program-registry';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
@@ -168,9 +171,9 @@ export const PostHogIntegrationIntroScreen = ({
         <Text>The wizard can do more than integrate with your project:</Text>
         <Box flexDirection="column" marginTop={1}>
           {getSubcommandPrograms().map((program) => (
-            <Box key={program.command}>
+            <Box key={getCommandPath(program)}>
               <Box width={22} flexShrink={0}>
-                <Text color="cyan">{program.command}</Text>
+                <Text color="cyan">{getCommandPath(program)}</Text>
               </Box>
               <Text dimColor>{program.description}</Text>
             </Box>
