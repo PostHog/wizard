@@ -312,6 +312,8 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
+  mcpLoginCommands: string[];
   mcpSuggestedPromptsDismissed: boolean;
   /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
   slackStepDismissed: boolean;
@@ -455,6 +457,7 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpLoginCommands: [],
     mcpSuggestedPromptsDismissed: false,
     slackStepDismissed: false,
     slackConnected: null,
