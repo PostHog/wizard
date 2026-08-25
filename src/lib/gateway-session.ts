@@ -2,11 +2,13 @@
  * Gateway auth for a wizard run. The new Go ai-gateway authenticates scoped
  * `phe_` tokens that PostHog mints server-side (pinned product/obo attribution,
  * per-run spend cap, expiry) instead of the user's OAuth token. This module
- * asks the wizard backend for one and falls back to the legacy posture (OAuth
- * token against the Python gateway's `/wizard` slug) when the backend doesn't
- * mint: an older server, the rollout flag off, or a network failure. The
- * backend response carries the gateway URL, so rollout percentage is
- * server-controlled with no CLI release.
+ * asks the wizard backend for one. A 404 (an older server, or the rollout flag
+ * off for this org) falls back to the legacy posture: OAuth token against the
+ * Python gateway's `/wizard` slug. Every other failure fails the run, because
+ * the legacy path enforces none of the caps, budgets or attribution, so a silent
+ * downgrade spends unattributed money to hide an outage. The backend response
+ * carries the gateway URL, so rollout percentage is server-controlled with no
+ * CLI release.
  */
 
 import { logToFile } from '@utils/debug';
@@ -66,8 +68,8 @@ const MINT_TIMEOUT_MS = 10_000;
 
 /**
  * Resolve the gateway auth for this run, minting (and re-minting near expiry)
- * through the wizard backend. Never throws: any mint failure resolves to the
- * legacy posture so a run degrades to today's behavior instead of dying.
+ * through the wizard backend. Throws on every failure except a 404, which is the
+ * rollout switch and resolves to the legacy posture.
  */
 export async function gatewayAuth(
   host: HostResolution,
@@ -100,6 +102,7 @@ async function resolveGatewayAuth(
   if (!program) {
     // Every run has one; an absent id means a caller was not wired rather than a
     // run that legitimately has none, and its spend would be unattributable.
+    logToFile('[gateway] run has no program id; failing the run');
     throw new GatewayMintFailed(
       'this run has no program to attribute its spend to',
     );
@@ -116,6 +119,9 @@ async function resolveGatewayAuth(
   if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {
     // Expired, unreadable, or too short to serve a session. Adopting it would
     // 401 mid-run, and downgrading would spend the rest of the run uncapped.
+    logToFile(
+      `[gateway] mint returned a token with ${ttlMs}ms of life; failing the run`,
+    );
     throw new GatewayMintFailed(
       `the PostHog gateway issued a token with ${ttlMs}ms of life`,
     );
@@ -188,11 +194,6 @@ interface MintedToken {
 }
 
 /**
- * POST the wizard backend's mint endpoint. Null means "no v2 token" for any
- * reason: 404 from an older server, 403 with the rollout flag off, a malformed
- * response, or a network failure. The caller falls back to legacy.
- */
-/**
  * A deliberate refusal from the mint endpoint, as opposed to the mint being
  * unavailable. Thrown rather than folded into the legacy fallback, so the run
  * stops instead of proceeding without the controls the refusal was enforcing.
@@ -225,9 +226,10 @@ export class GatewayMintFailed extends Error {
  *
  * The legacy gateway enforces none of the wizard's controls, so falling back on
  * a refusal makes every one of them optional: 429 is the per-program daily run
- * limit, 400 an unlisted program, 403 project access that was revoked after the
- * token was issued, 401 a credential that may not mint. A 404 (feature off, not
- * rolled out) and any 5xx are genuine unavailability and still fall back.
+ * limit, 403 project access that was revoked after the token was issued, 401 a
+ * credential that may not mint. Only a 404 falls back, and it is the rollout
+ * switch; a 5xx fails the run, because downgrading on an outage spends
+ * unattributed money to hide it.
  */
 function isMintRefusal(status: number): boolean {
   return status === 400 || status === 401 || status === 403 || status === 429;
@@ -280,6 +282,9 @@ async function mintGatewayToken(
         );
         return null;
       }
+      logToFile(
+        `[gateway] mint failed with HTTP ${resp.status}; failing the run`,
+      );
       throw new GatewayMintFailed(
         `the PostHog gateway could not issue a token (HTTP ${resp.status})`,
       );
@@ -295,15 +300,21 @@ async function mintGatewayToken(
     // Checked one at a time so each clause narrows the optional field for the
     // return below and each names itself in the failure.
     if (!body.token) {
+      logToFile('[gateway] mint response omitted token; failing the run');
       throw new GatewayMintFailed('mint response omitted token');
     }
     if (!body.expires_at) {
+      logToFile('[gateway] mint response omitted expires_at; failing the run');
       throw new GatewayMintFailed('mint response omitted expires_at');
     }
     if (!body.gateway_url) {
+      logToFile('[gateway] mint response omitted gateway_url; failing the run');
       throw new GatewayMintFailed('mint response omitted gateway_url');
     }
     if (!isTrustedGatewayUrl(body.gateway_url, host.apiHost)) {
+      logToFile(
+        '[gateway] mint returned an untrusted gateway url; failing the run',
+      );
       throw new GatewayMintFailed('mint returned an untrusted gateway url');
     }
     return {
@@ -317,6 +328,9 @@ async function mintGatewayToken(
     // errors, and folding the others into it would restore the downgrade.
     if (e instanceof GatewayMintRefused || e instanceof GatewayMintFailed)
       throw e;
+    logToFile(
+      `[gateway] mint transport failure (${String(e)}); failing the run`,
+    );
     throw new GatewayMintFailed(
       `could not reach the PostHog gateway (${String(e)})`,
     );

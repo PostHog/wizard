@@ -112,24 +112,28 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  // Every field except the one under test is valid, so the named guard is the
+  // sole reason the call fails. Filling the others with junk (an unparseable
+  // expiry, say) makes the TTL guard throw first and every case pass for the
+  // wrong reason, leaving each per-field check deletable with the suite green.
   it.each([
-    ['gateway_url', { token: 't', expires_at: 'z' }],
-    [
-      'token',
-      { gateway_url: 'https://ai-gateway.us.posthog.com', expires_at: 'z' },
-    ],
-    [
-      'expires_at',
-      { token: 't', gateway_url: 'https://ai-gateway.us.posthog.com' },
-    ],
-  ])('fails the run when the mint response omits %s', async (_field, body) => {
+    ['gateway_url', 'omitted gateway_url'],
+    ['token', 'omitted token'],
+    ['expires_at', 'omitted expires_at'],
+  ])('fails the run when the mint response omits %s', async (field, want) => {
+    const body: Record<string, unknown> = {
+      token: 'phe_ok',
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      gateway_url: 'https://ai-gateway.us.posthog.com',
+    };
+    delete body[field];
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(body),
     });
-    await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ).rejects.toBeInstanceOf(GatewayMintFailed);
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      want,
+    );
   });
 
   it('fails the run when the mint returns a token too short to be worth caching', async () => {
