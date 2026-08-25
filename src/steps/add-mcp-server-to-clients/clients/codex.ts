@@ -27,6 +27,37 @@ const ALREADY_INSTALLED_PATTERN =
 /** Wording that means the opposite: a cache entry exists but the plugin doesn't. */
 const STALE_MARKETPLACE_CACHE = /already added from a different source/i;
 
+/**
+ * Codex allows servers 10s to finish the MCP initialize handshake, and a remote
+ * OAuth handshake can exceed that on a cold start — the "servers were not
+ * initialized" warning.
+ */
+const STARTUP_TIMEOUT_SEC = 30;
+
+/**
+ * The server's table header. TOML accepts a bare or quoted key for the same
+ * table, and matching only the bare form means we append a second definition of
+ * a table that already exists — a duplicate-key error that takes the user's
+ * whole config down, not just PostHog's entry.
+ */
+const sectionHeader = (serverName: string): RegExp =>
+  new RegExp(
+    `^\\[mcp_servers\\.(?:${serverName}|"${serverName}")\\][ \\t]*$`,
+    'm',
+  );
+
+/**
+ * Set `key = value` inside a section body, inserting it when absent. Scans the
+ * whole body rather than the line after the header: TOML does not care about
+ * key order, and assuming it does means silently matching nothing.
+ */
+const setKey = (body: string, key: string, value: string): string => {
+  const existing = new RegExp(`^[ \\t]*${key}[ \\t]*=.*$`, 'm');
+  return existing.test(body)
+    ? body.replace(existing, `${key} = ${value}`)
+    : `\n${key} = ${value}${body}`;
+};
+
 export const CodexMCPConfig = DefaultMCPClientConfig;
 
 export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
@@ -72,12 +103,12 @@ export class CodexMCPClient
 
   isServerInstalled(local?: boolean): Promise<boolean> {
     const serverName = local ? 'posthog-local' : 'posthog';
-    // Exact `[mcp_servers.<name>]` section in config.toml — both the CLI and
-    // the desktop app read (and `codex mcp add` writes) this file, and a
-    // substring scan of `mcp list` matches unrelated posthog-ish servers.
+    // The `[mcp_servers.<name>]` section in config.toml — both the CLI and the
+    // desktop app read (and `codex mcp add` writes) this file, and a substring
+    // scan of `mcp list` matches unrelated posthog-ish servers.
     try {
       const contents = fs.readFileSync(this.configPath(), 'utf-8');
-      return Promise.resolve(contents.includes(`[mcp_servers.${serverName}]`));
+      return Promise.resolve(sectionHeader(serverName).test(contents));
     } catch {
       return Promise.resolve(false);
     }
@@ -131,41 +162,49 @@ export class CodexMCPClient
     return Promise.resolve(this.writeServerSection(serverName, url));
   }
 
-  private hasServerSection(serverName: string): boolean {
-    try {
-      return fs
-        .readFileSync(this.configPath(), 'utf-8')
-        .includes(`[mcp_servers.${serverName}]`);
-    } catch {
-      return false;
-    }
-  }
-
-  /** Append or update the `[mcp_servers.<name>]` section in config.toml. */
+  /**
+   * Create or update the `[mcp_servers.<name>]` section in config.toml, editing
+   * in place so the user's other servers, key order, and comments survive.
+   */
   private writeServerSection(serverName: string, url: string): InstallResult {
-    const header = `[mcp_servers.${serverName}]`;
+    const configPath = this.configPath();
     try {
-      const contents = fs.readFileSync(this.configPath(), 'utf-8');
-      if (contents.includes(header)) {
-        if (contents.includes(`${header}\nurl = "${url}"`)) {
-          return { success: true, alreadyInstalled: true };
-        }
-        const section = new RegExp(
-          `(\\[mcp_servers\\.${serverName}\\]\\n)url = "[^"]*"`,
-        );
-        fs.writeFileSync(
-          this.configPath(),
-          contents.replace(section, `$1url = "${url}"`),
+      // A machine that has codex installed but has never run it has no
+      // ~/.codex at all — `codex mcp add` used to create it for us.
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+      const contents = fs.existsSync(configPath)
+        ? fs.readFileSync(configPath, 'utf-8')
+        : '';
+
+      const header = sectionHeader(serverName).exec(contents);
+      if (!header) {
+        const gap = contents === '' || contents.endsWith('\n\n') ? '' : '\n';
+        const pad = contents === '' || contents.endsWith('\n') ? '' : '\n';
+        this.write(
+          configPath,
+          `${contents}${pad}${gap}[mcp_servers.${serverName}]\n` +
+            `url = "${url}"\nstartup_timeout_sec = ${STARTUP_TIMEOUT_SEC}\n`,
         );
         return { success: true };
       }
-      const suffix = contents.endsWith('\n') ? '' : '\n';
-      // 30s startup budget: codex gives servers 10s to finish the MCP
-      // initialize handshake, and the remote OAuth handshake can exceed that
-      // on cold start — the "servers were not initialized" warning.
-      fs.appendFileSync(
-        this.configPath(),
-        `${suffix}\n${header}\nurl = "${url}"\nstartup_timeout_sec = 30\n`,
+
+      // Everything up to the next table header belongs to this server.
+      const start = header.index + header[0].length;
+      const rest = contents.slice(start);
+      const next = /^\[/m.exec(rest);
+      const end = next ? start + next.index : contents.length;
+
+      const body = contents.slice(start, end);
+      const updated = setKey(
+        setKey(body, 'url', `"${url}"`),
+        'startup_timeout_sec',
+        String(STARTUP_TIMEOUT_SEC),
+      );
+      if (updated === body) return { success: true, alreadyInstalled: true };
+
+      this.write(
+        configPath,
+        contents.slice(0, start) + updated + contents.slice(end),
       );
       return { success: true };
     } catch (error) {
@@ -175,6 +214,13 @@ export class CodexMCPClient
       );
       return { success: false, reason };
     }
+  }
+
+  /** Write via a sibling temp file: a crash mid-write must not truncate the config. */
+  private write(configPath: string, contents: string): void {
+    const tmp = `${configPath}.wizard-tmp`;
+    fs.writeFileSync(tmp, contents);
+    fs.renameSync(tmp, configPath);
   }
 
   /** Codex's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
