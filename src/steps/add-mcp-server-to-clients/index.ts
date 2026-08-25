@@ -50,6 +50,13 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
   return supportedClients;
 };
 
+/** Per-client outcome, so a scripted caller can turn a failure into an exit code. */
+export interface McpStepOutcome {
+  /** Clients that ended up with the server, whether we wrote it or it was already there. */
+  installed: string[];
+  failed: string[];
+}
+
 /**
  * Add MCP server to clients. No prompts — pure orchestration.
  * Prompts are handled by McpScreen (TUI) or auto-accepted (CI).
@@ -68,13 +75,13 @@ export const addMCPServerToClientsStep = async ({
   cloudRegion?: CloudRegion;
   features?: string[];
   apiKey?: string;
-}): Promise<string[]> => {
+}): Promise<McpStepOutcome> => {
   const ui = getUI();
 
   // CI mode: skip MCP installation entirely
   if (ci) {
     ui.log.info('Skipping MCP installation (CI mode)');
-    return [];
+    return { installed: [], failed: [] };
   }
 
   const supportedClients = await getSupportedClients();
@@ -83,7 +90,7 @@ export const addMCPServerToClientsStep = async ({
     ui.log.info(
       'No supported MCP clients detected. Skipping MCP installation.',
     );
-    return [];
+    return { installed: [], failed: [] };
   }
 
   // Auto-install to all supported clients
@@ -132,7 +139,7 @@ export const addMCPServerToClientsStep = async ({
     integration,
   });
 
-  return withServer;
+  return { installed: withServer, failed: failed.map((r) => r.name) };
 };
 
 const bulletList = (items: string[]): string =>
