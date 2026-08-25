@@ -219,16 +219,39 @@ describe('pi-security: warlock scan wiring', () => {
     expect(await block('bash', { command: 'npm install' })).toBe(false);
   });
 
-  test('a flagged publish_handoff report is blocked like a write', async () => {
-    // The handoff is agent-authored content persisted to a host-designated
-    // file; it must clear the same output-context bar as write/edit.
+  test('a high-severity publish_handoff match does NOT block the report', async () => {
+    // The same piiMatch that blocks a write lets a handoff through.
     mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
     const decision = await evaluateToolCall('publish_handoff', {
-      content: "posthog.capture('login', { email: user.email })",
+      content: "Found posthog.capture('login', { email: user.email })",
+    });
+    expect(decision.block).toBe(false);
+  });
+
+  test('a critical publish_handoff match blocks — a live key must not reach a PR body', async () => {
+    mockedScan.mockResolvedValueOnce({
+      matched: true,
+      matches: [
+        {
+          rule: 'posthog_hardcoded_personal_api_key',
+          metadata: {
+            description: 'PostHog personal API key hardcoded in source',
+            severity: 'critical',
+            category: 'posthog_hardcoded_key',
+            action: 'remediate',
+            remediation: 'Rotate the key and use an environment variable',
+            scan_context: 'output',
+          },
+          matchedStrings: ['phx_'],
+        } as ScanMatch,
+      ],
+    });
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: '# Report\n\nphx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     });
     expect(decision.block).toBe(true);
-    expect(decision.reason).toContain('posthog_pii_in_capture_call');
-    expect(decision.reason).toContain('Fix: Use posthog.identify()');
+    expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
+    expect(decision.reason).toContain('Fix: Rotate the key');
   });
 
   test('a clean publish_handoff report is allowed through', async () => {

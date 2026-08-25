@@ -38,7 +38,11 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
-import { highestSeverityMatch, scanVerdict } from './yara-policy';
+import {
+  highestSeverityMatch,
+  publishBlockingMatch,
+  scanVerdict,
+} from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 // TODO(wizard#594): invert this dependency.
@@ -716,7 +720,8 @@ export async function scanAndTriage(
  *    rules + triage as the PostToolUse Write/Edit hook, but BEFORE the MCP
  *    tool runs: the report is agent-authored and is persisted to a
  *    host-designated file (POSTHOG_HANDOFF_OUTPUT_PATH) as well as pushed to
- *    the task stream, so a flagged report must never execute at all.
+ *    the task stream. Only a CRITICAL match refuses the publish; below that
+ *    the report goes out with the match recorded.
  */
 export function createPreToolUseYaraHooks(
   // Used only by the publish_handoff matcher below (output-context triage,
@@ -806,7 +811,19 @@ export function createPreToolUseYaraHooks(
             const matches = await scanAndTriage(content, 'output', llmProvider);
             if (matches.length === 0) return {};
 
-            const match = highestSeverityMatch(matches);
+            // Below critical: record it, don't cost the run its only report.
+            const match = publishBlockingMatch(matches);
+            if (!match) {
+              const worst = highestSeverityMatch(matches);
+              recordMatch('PreToolUse', 'publish_handoff', worst, 'warned');
+              logToFile(
+                `[YARA] publish_handoff allowed with a ${
+                  worst.metadata.severity ?? 'unknown'
+                } match (${worst.rule}) — below the critical publish bar`,
+              );
+              return {};
+            }
+
             recordMatch('PreToolUse', 'publish_handoff', match, 'blocked');
 
             const attempt = repeatTracker.attempt('publish_handoff', content);

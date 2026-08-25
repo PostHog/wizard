@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import type { ScanMatch } from '@posthog/warlock';
-import { isTerminalMatch, scanVerdict } from '../yara-policy';
+import {
+  isTerminalMatch,
+  publishBlockingMatch,
+  scanVerdict,
+} from '../yara-policy';
 
 function match(
   severity: string,
@@ -81,5 +85,28 @@ describe('yara-policy: scanVerdict', () => {
       match('unknown', 'remediate'),
     ]);
     expect(verdict?.match.metadata.severity).toBe('medium');
+  });
+});
+
+describe('yara-policy: publish gate', () => {
+  test('nothing blocks a clean publish', () => {
+    expect(publishBlockingMatch([])).toBeNull();
+  });
+
+  test('a high-severity remediate match does not refuse the publish', () => {
+    expect(publishBlockingMatch([match('high', 'remediate')])).toBeNull();
+    expect(publishBlockingMatch([match('medium', 'warn')])).toBeNull();
+  });
+
+  test('a rule asking to block still does not refuse below critical', () => {
+    // Same disposition as isTerminalMatch: severity decides, not `action`.
+    expect(publishBlockingMatch([match('high', 'block')])).toBeNull();
+  });
+
+  test('a critical match refuses the publish and is the one reported', () => {
+    const critical = match('critical', 'remediate', 'hardcoded_github_pat');
+    expect(publishBlockingMatch([match('high', 'remediate'), critical])).toBe(
+      critical,
+    );
   });
 });

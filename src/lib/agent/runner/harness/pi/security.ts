@@ -29,7 +29,11 @@ import {
   scanAndTriage,
   type RepeatBlockTracker,
 } from '@lib/yara-hooks';
-import { scanVerdict, type ScanContext } from '@lib/yara-policy';
+import {
+  publishBlockingMatch,
+  scanVerdict,
+  type ScanContext,
+} from '@lib/yara-policy';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 
@@ -265,9 +269,8 @@ function blockMessage(m: ScanMatch): string {
  *   hardcoded keys, PII), WITH triage, and with the same wizard-doc
  *   `posthog_pii` suppression the anthropic path uses so the agent's own
  *   event-plan files aren't blocked.
- * - publish_handoff → scan the report content ('output'-context rules) with
- *   triage, exactly like write: the report is agent-authored and is persisted
- *   to a host-designated file when POSTHOG_HANDOFF_OUTPUT_PATH is set.
+ * - publish_handoff → scan the report ('output'-context rules) with triage,
+ *   but only a CRITICAL match refuses the publish — it's the only channel.
  * Returns a block reason, or undefined to allow. Read/grep are post-scanned on
  * their output (in the tool_result hook), not here.
  */
@@ -315,17 +318,13 @@ async function preExecutionYaraBlock(
       tool = 'Edit';
       break;
     case 'publish_handoff':
-      // The handoff report is agent-authored content that lands BOTH in the
-      // task-stream push AND (when POSTHOG_HANDOFF_OUTPUT_PATH is set) on the
-      // host's disk at a host-designated path. Hold it to the same bar as
-      // write/edit: scan the report with the output-context rules (hardcoded
-      // keys, PII) + triage before it is persisted anywhere. Without this,
-      // publish_handoff was the one agent-driven write no scanner saw.
+      // Agent-authored content persisted to the task stream and the host file.
+      // Own labels, not Write's — the block bar differs (critical only).
       content = str(input.content);
       ctx = 'output';
       triage = llmProvider;
-      phase = 'PostToolUse';
-      tool = 'Write';
+      phase = 'PreToolUse';
+      tool = 'publish_handoff';
       break;
     default:
       return undefined;
@@ -337,11 +336,22 @@ async function preExecutionYaraBlock(
   if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
     matches = matches.filter((m) => m.metadata.category !== 'posthog_pii');
   }
-  recordExternalScan(phase, tool, matches.map(toReportViolation), 'blocked');
-  if (matches.length === 0) return undefined;
+  // Any match blocks — except publish_handoff, critical only.
+  const blocking =
+    toolName === 'publish_handoff'
+      ? publishBlockingMatch(matches)
+      : matches[0] ?? null;
+
+  recordExternalScan(
+    phase,
+    tool,
+    matches.map(toReportViolation),
+    blocking ? 'blocked' : 'warned',
+  );
+  if (!blocking) return undefined;
 
   const attempt = repeatTracker?.attempt(toolName, content) ?? 1;
-  return repeatBlockReason(attempt, toolName, blockMessage(matches[0]));
+  return repeatBlockReason(attempt, toolName, blockMessage(blocking));
 }
 
 /**

@@ -260,9 +260,7 @@ describe('yara-hooks', () => {
             match('posthog_pii_in_capture_call', { scan_context: 'output' }),
           ),
         );
-        const result = await createPreToolUseYaraHooks(
-          dummyProvider,
-        )[1].hooks[0](
+        await createPreToolUseYaraHooks(dummyProvider)[1].hooks[0](
           input({
             tool_name: 'mcp__wizard-tools__publish_handoff',
             tool_input: {
@@ -272,8 +270,92 @@ describe('yara-hooks', () => {
           'test-h3',
           { signal: dummySignal },
         );
-        expect(result.decision).toBe('block');
+        expect(mockScan).toHaveBeenCalledWith(
+          "posthog.capture('login', { email: user.email })",
+        );
         expect(mockTriage).toHaveBeenCalled();
+      });
+
+      it("publishes anyway on a high-severity match — the report is the run's only channel", async () => {
+        // posthog_pii fires on prose *describing* the user's capture call.
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              severity: 'high',
+              category: 'posthog_pii',
+              action: 'remediate',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: {
+              content:
+                "# Report\n\nFound `posthog.capture('login', { email: user.email })` in src/auth.ts.",
+            },
+          }),
+          'test-h3b',
+          { signal: dummySignal },
+        );
+        expect(result).toEqual({});
+        // Allowed, not ignored — so this can't pass on an empty scan.
+        const report = formatScanReport();
+        expect(report).toContain(
+          '[WARNED] posthog_pii_in_capture_call (HIGH) — PreToolUse:publish_handoff',
+        );
+      });
+
+      it('still blocks a critical match — a live key must not reach a PR body', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_hardcoded_personal_api_key', {
+              severity: 'critical',
+              category: 'posthog_hardcoded_key',
+              action: 'remediate',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report\n\nKey: phx_' + 'a'.repeat(40) },
+          }),
+          'test-h3c',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('posthog_hardcoded_personal_api_key');
+      });
+
+      it('blocks on the critical match even when a lesser one outranks it in order', async () => {
+        // Names the critical rule, not whichever match came back first.
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              severity: 'high',
+              category: 'posthog_pii',
+              scan_context: 'output',
+            }),
+            match('hardcoded_github_pat', {
+              severity: 'critical',
+              category: 'hardcoded_secret',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report' },
+          }),
+          'test-h3d',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('hardcoded_github_pat');
       });
 
       it("ignores matches for another surface's scan_context", async () => {
