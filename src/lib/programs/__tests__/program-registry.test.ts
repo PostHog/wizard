@@ -2,6 +2,7 @@ import {
   PROGRAM_REGISTRY,
   agentSkillConfig,
   getCommandPath,
+  getLaunchablePrograms,
   getProgramConfig,
   getSubcommandPrograms,
 } from '@lib/programs/program-registry';
@@ -59,6 +60,40 @@ describe('getCommandPath', () => {
     expect(getCommandPath(subcommand('revenue-analytics-setup'))).toBe(
       'revenue-analytics',
     );
+  });
+});
+
+// The programs the intro can hand off to in-session. A family parent isn't one
+// of them — typing `wizard audit` opens a picker rather than running anything,
+// so there's nothing to hand off to. Its leaves are still fair game.
+describe('getLaunchablePrograms', () => {
+  const ids = () => getLaunchablePrograms().map((config) => config.id);
+
+  it('skips a family parent', () => {
+    expect(ids()).not.toContain('audit');
+  });
+
+  it('keeps the leaves under that family', () => {
+    expect(ids()).toContain('web-analytics-doctor');
+  });
+
+  it('keeps the flat programs', () => {
+    expect(ids()).toContain('revenue-analytics-setup');
+    expect(ids()).toContain('metrics');
+  });
+
+  // Derived from who claims whom as a parent, so the next family drops out on
+  // its own instead of waiting for someone to remember this list.
+  it('drops nothing but parents', () => {
+    const parents = new Set(
+      getSubcommandPrograms().map((config) => config.parentCommand),
+    );
+    const dropped = getSubcommandPrograms()
+      .filter((config) => !ids().includes(config.id))
+      .map((config) => config.command);
+
+    expect(dropped).not.toEqual([]);
+    expect(dropped.every((command) => parents.has(command))).toBe(true);
   });
 });
 
