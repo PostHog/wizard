@@ -1,0 +1,80 @@
+name: MCP Install
+
+# Installs the PostHog MCP server into a real editor CLI on a fresh runner and
+# asserts the config that comes out. The unit suite mocks `child_process` and
+# `fs`, so every assertion there is about the call we meant to make, not the
+# file the editor ends up reading.
+#
+# The fresh runner is the point: "no ~/.codex, no ~/.claude.json, never logged
+# in" is the state a first-time user is in and a dev machine never is.
+#
+# Needs no secrets — the OAuth path writes a tokenless entry and defers auth to
+# the editor, so this all happens pre-auth and works on fork PRs.
+
+on:
+  pull_request:
+    paths:
+      - 'src/steps/add-mcp-server-to-clients/**'
+      - 'scripts/mcp-install-smoke-test.ts'
+      - '.github/workflows/mcp-install.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/steps/add-mcp-server-to-clients/**'
+      - 'scripts/mcp-install-smoke-test.ts'
+      - '.github/workflows/mcp-install.yml'
+  # A renamed editor subcommand breaks the wizard with no wizard change to
+  # trigger a run, so poll for it.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-install:
+    name: ${{ matrix.provider }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      # One provider failing must not hide the other's result.
+      fail-fast: false
+      matrix:
+        include:
+          - provider: claude-code
+            cli_package: '@anthropic-ai/claude-code'
+          - provider: codex
+            cli_package: '@openai/codex'
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.23.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The test drives dist/bin.js, the same entry point users run.
+      - name: Build
+        run: pnpm build
+
+      # Unpinned on purpose: pinning would hide new editor releases changing the
+      # surface we shell out to. The version is logged, so breaks stay attributable.
+      - name: Install ${{ matrix.cli_package }}
+        run: |
+          npm install -g ${{ matrix.cli_package }}
+          echo "::notice::$(npm view ${{ matrix.cli_package }} version) installed for ${{ matrix.provider }}"
+
+      - name: Run the MCP install smoke test
+        run: pnpm test:mcp-install --provider=${{ matrix.provider }}

@@ -123,6 +123,7 @@
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && rm -f dist/*.no-jest.* && pnpm test:smoke && pnpm test:warlock",
     "test:smoke": "bash ./scripts/smoke-test.sh",
     "test:warlock": "tsx scripts/warlock-smoke-test.ts",
+    "test:mcp-install": "tsx scripts/mcp-install-smoke-test.ts",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
     "lint:eslint": "eslint . --cache --format stylish",
