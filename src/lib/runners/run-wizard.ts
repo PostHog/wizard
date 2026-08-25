@@ -2,6 +2,7 @@ import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { getProgramConfig } from '@lib/programs/program-registry';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
@@ -182,10 +183,16 @@ export function runWizard(
       process.on('SIGINT', onSignal);
       process.on('SIGTERM', onSignal);
 
-      await activeTui.store.runReadyHooks();
-      // Settle the pre-run screens. `integration-check` is a no-op gate for
-      // programs without it.
-      await activeTui.store.getGate('intro');
+      for (;;) {
+        await activeTui.store.runReadyHooks();
+        // Settle the pre-run screens. `integration-check` is a no-op gate for
+        // programs without it.
+        await activeTui.store.getGate('intro');
+
+        const active = activeTui.store.router.activeProgram;
+        if (active === config.id) break;
+        config = getProgramConfig(active);
+      }
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
 

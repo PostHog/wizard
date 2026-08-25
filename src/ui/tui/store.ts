@@ -875,6 +875,23 @@ export class WizardStore {
     this.emitChange();
   }
 
+  switchProgram(program: ProgramId): void {
+    if (program === this.router.activeProgram) return;
+
+    // Flush unresolved promises so the wizard can advance
+    for (const gate of this._gates.values()) gate.resolve();
+    this._gates.clear();
+
+    this.router.setProgram(program);
+    this._initFromProgram(program);
+
+    const config = getProgramConfig(program);
+    this.$session.setKey('setupConfirmed', false);
+    this.$session.setKey('programLabel', config.id);
+    this.$session.setKey('skillId', config.skillId ?? null);
+    this.emitChange();
+  }
+
   // ── Derived state ───────────────────────────────────────────────
 
   /**
