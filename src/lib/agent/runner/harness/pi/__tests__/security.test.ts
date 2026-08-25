@@ -218,6 +218,25 @@ describe('pi-security: warlock scan wiring', () => {
     });
     expect(await block('bash', { command: 'npm install' })).toBe(false);
   });
+
+  test('a flagged publish_handoff report is blocked like a write', async () => {
+    // The handoff is agent-authored content persisted to a host-designated
+    // file; it must clear the same output-context bar as write/edit.
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: "posthog.capture('login', { email: user.email })",
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('posthog_pii_in_capture_call');
+    expect(decision.reason).toContain('Fix: Use posthog.identify()');
+  });
+
+  test('a clean publish_handoff report is allowed through', async () => {
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: '# Setup report\n\nAll done.',
+    });
+    expect(decision.block).toBe(false);
+  });
 });
 
 describe('pi-security: extension state machine (fail-closed + runaway + latch)', () => {

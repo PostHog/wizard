@@ -265,6 +265,9 @@ function blockMessage(m: ScanMatch): string {
  *   hardcoded keys, PII), WITH triage, and with the same wizard-doc
  *   `posthog_pii` suppression the anthropic path uses so the agent's own
  *   event-plan files aren't blocked.
+ * - publish_handoff → scan the report content ('output'-context rules) with
+ *   triage, exactly like write: the report is agent-authored and is persisted
+ *   to a host-designated file when POSTHOG_HANDOFF_OUTPUT_PATH is set.
  * Returns a block reason, or undefined to allow. Read/grep are post-scanned on
  * their output (in the tool_result hook), not here.
  */
@@ -310,6 +313,19 @@ async function preExecutionYaraBlock(
       triage = llmProvider;
       phase = 'PostToolUse';
       tool = 'Edit';
+      break;
+    case 'publish_handoff':
+      // The handoff report is agent-authored content that lands BOTH in the
+      // task-stream push AND (when POSTHOG_HANDOFF_OUTPUT_PATH is set) on the
+      // host's disk at a host-designated path. Hold it to the same bar as
+      // write/edit: scan the report with the output-context rules (hardcoded
+      // keys, PII) + triage before it is persisted anywhere. Without this,
+      // publish_handoff was the one agent-driven write no scanner saw.
+      content = str(input.content);
+      ctx = 'output';
+      triage = llmProvider;
+      phase = 'PostToolUse';
+      tool = 'Write';
       break;
     default:
       return undefined;
