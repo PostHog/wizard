@@ -182,9 +182,11 @@ async function scenarioFreshInstall(spec: ProviderSpec): Promise<void> {
     if (spec.configPath) {
       const contents = readIfPresent(path.join(home, spec.configPath));
       if (!check(contents !== null, `wrote ${spec.configPath}`)) return;
+      // Match the whole configured value, not a URL substring — `includes`
+      // on a bare URL also accepts hosts that merely embed it.
       check(
-        contents!.includes(MCP_URL),
-        'the written config carries the MCP url',
+        contents!.includes(`"${MCP_URL}"`),
+        'the written config carries exactly the MCP url',
       );
       check(
         /startup_timeout_sec\s*=/.test(contents!),
