@@ -18,6 +18,7 @@ import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
+import { getProgramConfig } from '@lib/programs/program-registry';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -92,6 +93,93 @@ describe('WizardStore', () => {
       const store = createStore();
       expect(store.getVersion()).toBe(0);
       expect(store.getSnapshot()).toBe(0);
+    });
+
+    // Picking one of the wizard's other commands from the intro runs it in
+    // this session instead of making the user quit and type it. Nothing has
+    // happened yet at that point — no auth, no agent, no files touched — so
+    // the switch only has to repoint the router and start the new program's
+    // journey from its own first screen.
+    describe('switchProgram', () => {
+      it('makes the chosen program the active one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.activeProgram).toBe(Program.Metrics);
+      });
+
+      it('routes to the new program instead of finishing the old one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+      });
+
+      // The old intro is behind us, but every program gates its intro on the
+      // same `setupConfirmed` flag — leaving it set marks the new program's
+      // intro complete before the user has seen it.
+      it('does not carry the old confirmation into the new intro', () => {
+        const store = createStore();
+        store.completeSetup();
+        expect(store.session.setupConfirmed).toBe(true);
+
+        store.switchProgram(Program.Metrics);
+
+        expect(store.session.setupConfirmed).toBe(false);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+      });
+
+      // bin.ts parks on these gates. They resolved for the program we left, so
+      // reusing them would run the new program past its own screens.
+      it('reopens the gates for the new program', async () => {
+        const store = createStore();
+        const before = store.getGate('intro');
+        store.completeSetup();
+        await expect(before).resolves.toBeUndefined();
+
+        store.switchProgram(Program.Metrics);
+
+        const after = store.getGate('intro');
+        expect(after).not.toBe(before);
+        await expect(
+          Promise.race([after, Promise.resolve('pending')]),
+        ).resolves.toBe('pending');
+      });
+
+      // The runner is parked on the old program's intro gate at the moment of
+      // the switch. Dropping that promise without resolving it strands the
+      // runner — no error, no new program, just a wizard that stops.
+      it('releases callers parked on the old gates', async () => {
+        const store = createStore();
+        const parked = store.getGate('intro');
+
+        store.switchProgram(Program.Metrics);
+
+        await expect(parked).resolves.toBeUndefined();
+      });
+
+      it('reports screens under the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.analyticsProgramId).toBe(Program.Metrics);
+      });
+
+      it('follows the new program for label and skill', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.session.programLabel).toBe(Program.Metrics);
+        expect(store.session.skillId).toBe(
+          getProgramConfig(Program.Metrics).skillId ?? null,
+        );
+      });
+
+      // Selecting the program already running should cost the user nothing —
+      // in particular it must not throw away a confirmation they just gave.
+      it('leaves the session alone when the program is unchanged', () => {
+        const store = createStore();
+        store.completeSetup();
+        store.switchProgram(Program.PostHogIntegration);
+        expect(store.session.setupConfirmed).toBe(true);
+        expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+      });
     });
   });
 
