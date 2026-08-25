@@ -180,9 +180,12 @@ describe('yara-hooks', () => {
       expect(mockScan).not.toHaveBeenCalled();
     });
 
-    it('fails closed (blocks) when the scanner throws', async () => {
+    it('fails closed (blocks) when the scanner throws, without ending the run', async () => {
+      // Unlike a handoff, a blocked command leaves the agent somewhere to go.
+      const onTerminate = vi.fn();
       mockScan.mockRejectedValueOnce(new Error('wasm boom'));
-      const hook = createPreToolUseYaraHooks()[0].hooks[0];
+      const hook = createPreToolUseYaraHooks(undefined, onTerminate)[0]
+        .hooks[0];
       const result = await hook(
         input({ tool_name: 'Bash', tool_input: { command: 'echo hi' } }),
         'test-4',
@@ -190,6 +193,7 @@ describe('yara-hooks', () => {
       );
       expect(result.decision).toBe('block');
       expect(result.reason).toContain('Scanner error');
+      expect(onTerminate).not.toHaveBeenCalled();
     });
 
     it('returns empty when command is missing', async () => {
@@ -394,9 +398,15 @@ describe('yara-hooks', () => {
         }
       });
 
-      it('fails closed (blocks) when the scanner throws', async () => {
+      it('terminates the run when the scanner throws', async () => {
+        // Blocking alone would leave the agent rewording a report that can
+        // never publish — the run has to end visibly instead.
+        const onTerminate = vi.fn();
         mockScan.mockRejectedValueOnce(new Error('wasm boom'));
-        const result = await handoffHook()(
+        const result = await createPreToolUseYaraHooks(
+          undefined,
+          onTerminate,
+        )[1].hooks[0](
           input({
             tool_name: 'mcp__wizard-tools__publish_handoff',
             tool_input: { content: '# Report' },
@@ -406,6 +416,35 @@ describe('yara-hooks', () => {
         );
         expect(result.decision).toBe('block');
         expect(result.reason).toContain('Scanner error');
+        expect(onTerminate).toHaveBeenCalledWith(
+          expect.stringContaining('session terminated'),
+        );
+      });
+
+      it('does not terminate the run on an ordinary block', async () => {
+        const onTerminate = vi.fn();
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('hardcoded_github_pat', {
+              severity: 'critical',
+              category: 'hardcoded_secret',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await createPreToolUseYaraHooks(
+          undefined,
+          onTerminate,
+        )[1].hooks[0](
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report\n\nghp_' + 'a'.repeat(36) },
+          }),
+          'test-h6b',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(onTerminate).not.toHaveBeenCalled();
       });
 
       it('returns empty when content is missing', async () => {

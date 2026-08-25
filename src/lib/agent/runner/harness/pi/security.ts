@@ -115,6 +115,8 @@ export interface ToolGateContext {
 export interface GateDecision {
   block: boolean;
   reason?: string;
+  /** End the run, don't just refuse the call. Set when a blocked publish_handoff would otherwise leave no report. */
+  terminate?: boolean;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -401,9 +403,12 @@ export async function evaluateToolCall(
     return { block: false };
   } catch (err) {
     logToFile('[pi-security] gate error — failing closed:', err);
+    // A publish_handoff the gate can't clear leaves the run with no report at
+    // all, so end it visibly instead of letting the agent reword and retry.
     return {
       block: true,
       reason: 'Security check failed; tool blocked (fail-closed).',
+      terminate: toolName === 'publish_handoff',
     };
   }
 }
@@ -470,6 +475,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       );
       if (decision.block) {
         state.blockedCount += 1;
+        if (decision.terminate) state.criticalViolation = true;
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
         return { block: true, reason: decision.reason };
       }

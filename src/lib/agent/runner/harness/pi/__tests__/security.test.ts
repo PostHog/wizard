@@ -296,6 +296,35 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     ).toEqual({});
   });
 
+  test('a scanner error on publish_handoff latches and ends the run', async () => {
+    // Blocking alone would leave the agent rewording a report forever.
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
+    expect(
+      await handlers.tool_call({
+        toolName: 'publish_handoff',
+        input: { content: '# Report' },
+      }),
+    ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(true);
+  });
+
+  test('a scanner error on a write blocks without ending the run', async () => {
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
+    expect(
+      await handlers.tool_call({
+        toolName: 'write',
+        input: { path: 'src/a.ts', content: 'x' },
+      }),
+    ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(false);
+  });
+
   test('a post-scan violation latches and terminates all further calls', async () => {
     const { factory, state } = createSecurityExtension();
     const { pi, handlers } = fakePi();

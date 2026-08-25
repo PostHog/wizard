@@ -729,6 +729,9 @@ export function createPreToolUseYaraHooks(
   // undefined — any flagged command blocks regardless of triage verdict, so
   // the LLM call would be wasted.
   llmProvider?: LLMProvider,
+  // Ends the run when a handoff scan errors — without it that path just blocks,
+  // which is the old behavior, so it stays optional.
+  onTerminate?: (reason: string) => void,
 ): HookCallbackMatcher[] {
   const repeatTracker = createRepeatBlockTracker();
   return [
@@ -839,11 +842,12 @@ export function createPreToolUseYaraHooks(
             };
           } catch (error) {
             logToFile('[YARA] PreToolUse publish_handoff hook error:', error);
-            // Fail closed: block the handoff if scanning fails
-            return {
-              decision: 'block',
-              reason: '[YARA] Scanner error — handoff blocked as a precaution.',
-            };
+            // Fail closed, but end the run: a silent block would just leave
+            // the agent rewording a report that can never publish.
+            const reason =
+              '[YARA] Scanner error while scanning the handoff report — session terminated as a precaution.';
+            onTerminate?.(reason);
+            return { decision: 'block', reason };
           }
         },
       ],
