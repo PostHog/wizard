@@ -156,7 +156,7 @@ describe('gatewayAuth', () => {
 
   it.each([
     [429, 'daily run limit'],
-    [400, 'did not recognise'],
+    [400, 'exactly one project'],
     [403, 'access to this project'],
     [401, 'could not authenticate'],
   ])(

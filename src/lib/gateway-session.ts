@@ -64,7 +64,10 @@ const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 const REFRESH_AT_FRACTION = 0.8;
 /** How long a legacy fallback sticks before the mint endpoint is retried. */
 const LEGACY_RETRY_MS = 10 * 60 * 1000;
-const MINT_TIMEOUT_MS = 10_000;
+// Must exceed the backend's own gateway timeout (10s) plus its round trip, or a
+// slow-but-successful mint completes after the CLI has hung up: the run dies, a
+// daily mint is spent, and a live capped token is left with no holder.
+const MINT_TIMEOUT_MS = 20_000;
 
 /**
  * Resolve the gateway auth for this run, minting (and re-minting near expiry)
@@ -242,7 +245,9 @@ function mintRefusalMessage(status: number): string {
     case 403:
       return 'Your access to this project has changed. Re-authenticate and try again.';
     case 400:
-      return 'The PostHog gateway did not recognise this wizard program.';
+      // The only 400 the mint answers is the exactly-one-project check; an
+      // unrecognised program is a 404 and falls back instead.
+      return 'Your PostHog login must cover exactly one project. Re-authenticate and try again.';
     default:
       return 'The wizard could not authenticate to the PostHog gateway.';
   }
@@ -296,9 +301,7 @@ async function mintGatewayToken(
       team_id?: number;
     };
     // Checked one at a time, not in a loop, so each clause narrows the optional
-    // field for the return below and each names itself in the log.
-    // Checked one at a time so each clause narrows the optional field for the
-    // return below and each names itself in the failure.
+    // field for the return below and each names itself in the failure.
     if (!body.token) {
       logToFile('[gateway] mint response omitted token; failing the run');
       throw new GatewayMintFailed('mint response omitted token');
