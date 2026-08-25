@@ -218,6 +218,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const auth = await gatewayAuth(
       boot.credentials.host,
       boot.credentials.accessToken,
+      boot.programId,
     );
     const { provider, caps } = buildGatewayProvider({
       gatewayUrl: auth.gatewayUrl,

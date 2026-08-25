@@ -543,7 +543,11 @@ export async function initializeAgent(
     // gateway) when the backend doesn't mint.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const auth = await gatewayAuth(config.host, config.posthogApiKey);
+    const auth = await gatewayAuth(
+      config.host,
+      config.posthogApiKey,
+      config.wizardMetadata?.program_id,
+    );
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = auth.token;

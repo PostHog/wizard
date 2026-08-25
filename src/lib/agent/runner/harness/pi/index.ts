@@ -245,6 +245,7 @@ export const piBackend: AgentHarness = {
       const auth = await gatewayAuth(
         boot.credentials.host,
         boot.credentials.accessToken,
+        boot.programId,
       );
       const { provider, caps } = buildGatewayProvider({
         gatewayUrl: auth.gatewayUrl,

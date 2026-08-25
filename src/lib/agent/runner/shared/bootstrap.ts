@@ -281,11 +281,18 @@ export async function bootstrapProgram(
 
   // Resolve the gateway posture once for the boot: v2 scoped token when the
   // backend mints, legacy OAuth otherwise.
-  const auth = await gatewayAuth(credentials.host, credentials.accessToken);
+  const auth = await gatewayAuth(
+    credentials.host,
+    credentials.accessToken,
+    programConfig.id,
+  );
 
   return {
     skillsBaseUrl,
     credentials,
+    // Carried so per-task sessions re-resolve against the same program the boot
+    // minted for, rather than digging it back out of the metadata bag.
+    programId: programConfig.id,
     wizardFlags,
     wizardFlagPayloads,
     wizardMetadata,

@@ -37,7 +37,7 @@ describe('gatewayAuth', () => {
         }),
     });
 
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth).toEqual({
       gatewayUrl: 'https://gateway.us.posthog.com',
       token: 'phe_minted',
@@ -55,7 +55,7 @@ describe('gatewayAuth', () => {
     );
 
     // Second resolve inside the TTL reuses the cache, so no second mint.
-    await gatewayAuth(host, 'pha_oauth');
+    await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -72,8 +72,8 @@ describe('gatewayAuth', () => {
         }),
     });
 
-    const first = await gatewayAuth(host, 'pha_oauth');
-    const second = await gatewayAuth(host, 'pha_oauth');
+    const first = await gatewayAuth(host, 'pha_oauth', 'integration');
+    const second = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(first.token).toBe('phe_short');
     expect(second.token).toBe('phe_short');
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -91,9 +91,9 @@ describe('gatewayAuth', () => {
     });
 
     const results = await Promise.all([
-      gatewayAuth(host, 'pha_oauth'),
-      gatewayAuth(host, 'pha_oauth'),
-      gatewayAuth(host, 'pha_oauth'),
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'integration'),
     ]);
     expect(results.map((r) => r.token)).toEqual([
       'phe_shared',
@@ -106,8 +106,8 @@ describe('gatewayAuth', () => {
   it('caches the legacy fallback instead of re-minting per caller', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 404 });
 
-    await gatewayAuth(host, 'pha_oauth');
-    await gatewayAuth(host, 'pha_oauth');
+    await gatewayAuth(host, 'pha_oauth', 'integration');
+    await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -126,7 +126,7 @@ describe('gatewayAuth', () => {
       ok: true,
       json: () => Promise.resolve(body),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
   });
 
@@ -141,7 +141,7 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     // A token with seconds of life would 401 mid-run, and the subprocess holds
     // it for the whole session.
     expect(auth.edition).toBe('legacy');
@@ -158,9 +158,9 @@ describe('gatewayAuth', () => {
       fetchMock.mockResolvedValue({ ok: false, status });
       // Falling back would put the run on the legacy gateway, which enforces none
       // of the limits these statuses represent.
-      await expect(gatewayAuth(host, 'pha_oauth')).rejects.toThrow(
-        new RegExp(String(fragment), 'i'),
-      );
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toThrow(new RegExp(String(fragment), 'i'));
     },
   );
 
@@ -168,7 +168,7 @@ describe('gatewayAuth', () => {
     'falls back when the mint is unavailable (HTTP %i)',
     async (status) => {
       fetchMock.mockResolvedValue({ ok: false, status });
-      const auth = await gatewayAuth(host, 'pha_oauth');
+      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
       expect(auth.edition).toBe('legacy');
     },
   );
@@ -177,9 +177,57 @@ describe('gatewayAuth', () => {
     // The refusal is thrown from inside the try that wraps fetch, so a catch that
     // treats every throw as a transport failure would silently restore fallback.
     fetchMock.mockResolvedValue({ ok: false, status: 429 });
-    await expect(gatewayAuth(host, 'pha_oauth')).rejects.toBeInstanceOf(
-      GatewayMintRefused,
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintRefused);
+  });
+
+  it("names the run's program in the mint request", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_minted',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://gateway.us.posthog.com',
+        }),
+    });
+
+    await gatewayAuth(host, 'pha_oauth', 'audit');
+
+    // The backend pins `wizard:<program>` from this field; without it the mint
+    // has nothing to attribute the run to and refuses.
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ body: JSON.stringify({ program: 'audit' }) }),
     );
+  });
+
+  it('skips the mint entirely when the run has no program', async () => {
+    const auth = await gatewayAuth(host, 'pha_oauth', undefined);
+    // Not a refusal to recover from: an unattributable run stays on the legacy
+    // posture rather than spending a mint that would 400.
+    expect(auth.edition).toBe('legacy');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('caches per program rather than per session', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_minted',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://gateway.us.posthog.com',
+        }),
+    });
+
+    await gatewayAuth(host, 'pha_oauth', 'audit');
+    await gatewayAuth(host, 'pha_oauth', 'integration');
+
+    // A token is pinned to one program's node at mint, so reusing it across
+    // programs would bill the wrong budget.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('falls back when the mint returns an unparseable expiry', async () => {
@@ -194,7 +242,7 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
   });
 
@@ -208,7 +256,7 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
   });
 
@@ -222,7 +270,7 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://evil.example.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
     expect(auth.gatewayUrl).toBe(host.gatewayUrl);
   });
@@ -230,7 +278,7 @@ describe('gatewayAuth', () => {
   it('falls back to the legacy posture when the backend does not mint', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 404 });
 
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth).toEqual({
       gatewayUrl: host.gatewayUrl,
       token: 'pha_oauth',
@@ -241,7 +289,7 @@ describe('gatewayAuth', () => {
   it('falls back to legacy on a transport failure', async () => {
     fetchMock.mockRejectedValue(new Error('network down'));
 
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
     expect(auth.token).toBe('pha_oauth');
   });
@@ -252,7 +300,7 @@ describe('gatewayAuth', () => {
       json: () => Promise.resolve({ token: 'phe_minted' }), // missing gateway_url/expires_at
     });
 
-    const auth = await gatewayAuth(host, 'pha_oauth');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
   });
 });

@@ -225,7 +225,11 @@ export async function* runMcpPromptViaSdk(args: {
 
   // The url, the bearer and the header edition are one unit: a run must take
   // all three from the same resolved posture.
-  const auth = await gatewayAuth(credentials.host, credentials.accessToken);
+  const auth = await gatewayAuth(
+    credentials.host,
+    credentials.accessToken,
+    args.programId,
+  );
   const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = auth.token;

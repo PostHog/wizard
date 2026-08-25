@@ -105,6 +105,8 @@ export interface BootstrapResult {
   skillsBaseUrl: string;
   /** Auth outputs (incl. the resolved host family and its MCP url), narrowed at the boundary. */
   credentials: Credentials;
+  /** Program this run is, and the node its gateway spend pins to. */
+  programId: string;
   wizardFlags: Record<string, string>;
   /** Flag payloads from the same snapshot (e.g. the self-driving pi `{model, effort?, harness?, sequence?}`). */
   wizardFlagPayloads: Record<string, unknown>;

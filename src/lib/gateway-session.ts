@@ -72,13 +72,17 @@ const MINT_TIMEOUT_MS = 10_000;
 export async function gatewayAuth(
   host: HostResolution,
   accessToken: string,
+  program: string | undefined,
 ): Promise<GatewayAuth> {
-  const key = `${host.apiHost}\n${accessToken}`;
+  // The program is part of the key: a token is pinned to `wizard:<program>` at
+  // mint, so one resolved for another program carries the wrong attribution and
+  // spends against the wrong budget.
+  const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
   if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
     return cached.auth;
   }
   if (inFlight && inFlight.key === key) return inFlight.promise;
-  const promise = resolveGatewayAuth(host, accessToken, key);
+  const promise = resolveGatewayAuth(host, accessToken, key, program);
   inFlight = { key, promise };
   try {
     return await promise;
@@ -91,8 +95,18 @@ async function resolveGatewayAuth(
   host: HostResolution,
   accessToken: string,
   key: string,
+  program: string | undefined,
 ): Promise<GatewayAuth> {
-  const minted = await mintGatewayToken(host, accessToken);
+  if (!program) {
+    // Nothing to attribute the spend to, and the mint refuses a run it cannot
+    // pin to a program. Staying on the legacy posture keeps the run working
+    // rather than trading it for a refusal.
+    logToFile('[gateway] run has no program; staying on the existing gateway');
+    const auth = legacyAuth(host, accessToken);
+    cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
+    return auth;
+  }
+  const minted = await mintGatewayToken(host, accessToken, program);
   if (!minted) {
     const auth = legacyAuth(host, accessToken);
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
@@ -227,6 +241,7 @@ function mintRefusalMessage(status: number): string {
 async function mintGatewayToken(
   host: HostResolution,
   accessToken: string,
+  program: string,
 ): Promise<MintedToken | null> {
   try {
     const resp = await fetch(`${host.apiHost}/api/wizard/gateway_token/`, {
@@ -235,7 +250,7 @@ async function mintGatewayToken(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: '{}',
+      body: JSON.stringify({ program }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {
