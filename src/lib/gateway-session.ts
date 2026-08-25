@@ -1,14 +1,10 @@
 /**
- * Gateway auth for a wizard run. The new Go ai-gateway authenticates scoped
- * `phe_` tokens that PostHog mints server-side (pinned product/obo attribution,
- * per-run spend cap, expiry) instead of the user's OAuth token. This module
- * asks the wizard backend for one. A 404 (an older server, or the rollout flag
- * off for this org) falls back to the legacy posture: OAuth token against the
- * Python gateway's `/wizard` slug. Every other failure fails the run, because
- * the legacy path enforces none of the caps, budgets or attribution, so a silent
- * downgrade spends unattributed money to hide an outage. The backend response
- * carries the gateway URL, so rollout percentage is server-controlled with no
- * CLI release.
+ * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
+ * pinned attribution, a spend cap and an expiry.
+ *
+ * A 404 resolves to the legacy posture (OAuth token, Python gateway); every
+ * other failure throws, because the legacy path enforces none of those, so a
+ * silent downgrade spends unattributed money to hide an outage.
  */
 
 import { logToFile } from '@utils/debug';
@@ -21,18 +17,9 @@ export interface GatewayAuth {
   gatewayUrl: string;
   /** Bearer for the gateway: a minted `phe_` (v2) or the OAuth token (legacy). */
   token: string;
-  /**
-   * Which gateway contract the run speaks. v2 (the Go ai-gateway) takes run
-   * metadata as one `X-PostHog-Properties` JSON blob and has native Bedrock
-   * fallback; legacy takes per-key `X-POSTHOG-PROPERTY-*` headers and the
-   * explicit fallback opt-in header.
-   */
+  /** Selects the header shape: one properties blob (v2) or per-key headers. */
   edition: GatewayEdition;
-  /**
-   * The customer team the mint verified (v2 only). Rides the properties blob
-   * as `team_id` so dashboards keep a team breakdown next to the org-level
-   * obo attribution the token pins.
-   */
+  /** The team the mint verified; rides the blob so dashboards keep a breakdown. */
   teamId?: number;
 }
 
@@ -45,28 +32,22 @@ interface CachedAuth {
 
 let cached: CachedAuth | null = null;
 /**
- * In-flight resolution, so concurrent callers share one mint. The orchestrator
- * starts every runnable task at once; without this each would mint its own
- * token, each with its own spend cap, and only the last would be remembered.
+ * Shared so concurrent callers mint once. The orchestrator starts every runnable
+ * task at once, and each would otherwise take its own token and its own cap.
  */
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
 
 /**
- * A token is adopted only with at least this much life left. Below it the
- * anthropic subprocess, which holds its credential for the whole session, would
- * 401 mid-run; falling back beats that.
+ * Adoption floor. The anthropic subprocess holds its credential for the whole
+ * session, so a token below this 401s mid-run.
  */
 const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
-/**
- * Re-resolve once this much of the token's life is gone, so a caller near the
- * end of the window still has a usable remainder.
- */
+/** Re-resolve at this fraction of the token's life, leaving a usable remainder. */
 const REFRESH_AT_FRACTION = 0.8;
 /** How long a legacy fallback sticks before the mint endpoint is retried. */
 const LEGACY_RETRY_MS = 10 * 60 * 1000;
-// Must exceed the backend's own gateway timeout (10s) plus its round trip, or a
-// slow-but-successful mint completes after the CLI has hung up: the run dies, a
-// daily mint is spent, and a live capped token is left with no holder.
+// Exceeds the backend's own 10s gateway timeout: a slow mint that lands after the
+// CLI hangs up spends a daily mint and orphans a live token.
 const MINT_TIMEOUT_MS = 20_000;
 
 /**
@@ -79,9 +60,8 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
-  // The program is part of the key: a token is pinned to `wizard:<program>` at
-  // mint, so one resolved for another program carries the wrong attribution and
-  // spends against the wrong budget.
+  // Keyed by program: a token pins `wizard:<program>`, so reusing one across
+  // programs bills the wrong budget.
   const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
   if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
     return cached.auth;
@@ -103,8 +83,8 @@ async function resolveGatewayAuth(
   program: string | undefined,
 ): Promise<GatewayAuth> {
   if (!program) {
-    // Every run has one; an absent id means a caller was not wired rather than a
-    // run that legitimately has none, and its spend would be unattributable.
+    // Every run has one; absent means a caller was not wired, and the spend would
+    // be unattributable.
     logToFile('[gateway] run has no program id; failing the run');
     throw new GatewayMintFailed(
       'this run has no program to attribute its spend to',
@@ -140,7 +120,7 @@ async function resolveGatewayAuth(
   return auth;
 }
 
-/** Today's posture: the user's OAuth token against the existing gateway. */
+/** The legacy posture: the user's OAuth token against the Python gateway. */
 function legacyAuth(host: HostResolution, accessToken: string): GatewayAuth {
   return { gatewayUrl: host.gatewayUrl, token: accessToken, edition: 'legacy' };
 }
@@ -152,9 +132,8 @@ export function resetGatewaySession(): void {
 }
 
 /**
- * Whether a server-supplied gateway origin is one we will send a bearer and
- * prompt content to: https, and either a posthog.com host or the same host the
- * run already authenticated against (which covers dev and self-hosted).
+ * Whether a server-supplied origin may receive a bearer and prompt content:
+ * https, and either a posthog.com host or the one the run authenticated against.
  */
 export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
   let url: URL;
