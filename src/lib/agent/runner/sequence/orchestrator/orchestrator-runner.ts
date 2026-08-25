@@ -32,6 +32,7 @@ import {
 } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
+  describeInstallFailure,
   installSkillById,
   fetchSkillMenu,
   type SkillEntry,
@@ -911,7 +912,7 @@ export async function runOrchestrator(
           // task through the normal outcome check.
           throw new Error(
             `Skill "${variantId}" for task "${task.type}" could not be installed (${result.kind}). ` +
-              'If this is a permissions error, check that the project directory is writable.',
+              describeInstallFailure(result),
           );
         }
       }

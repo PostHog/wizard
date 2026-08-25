@@ -7,14 +7,17 @@ import {
   DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_TOOL_NAMES,
   __test,
+  describeInstallFailure,
   ensureGitignoreCoverage,
   evaluateAskCap,
   fetchSkillMenu,
+  installSkillById,
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
 } from '@lib/wizard-tools';
 import type { AuditCheck } from '@lib/programs/audit/types';
+import * as analyticsModule from '../../utils/analytics';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));
@@ -582,6 +585,99 @@ describe('downloadWithRetry', () => {
         maxAttempts: 3,
       }),
     ).rejects.toThrow(/attempt 1.*attempt 2.*attempt 3/s);
+  });
+});
+
+describe('installSkillById analytics', () => {
+  const noNetwork = () => Promise.reject(new Error('offline'));
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('reports a menu fetch failure, which resolves before downloadSkill can see it', async () => {
+    const capture = vi
+      .spyOn(analyticsModule.analytics, 'wizardCapture')
+      .mockImplementation(() => undefined);
+    const originalFetch = global.fetch;
+    global.fetch = noNetwork as any;
+
+    try {
+      const result = await installSkillById('any-skill', '/tmp', 'https://x', {
+        triage: undefined,
+      });
+
+      expect(result).toEqual({ kind: 'menu-fetch-failed' });
+      expect(capture).toHaveBeenCalledWith(
+        'skill install failed',
+        expect.objectContaining({
+          skill_id: 'any-skill',
+          install_step: 'menu',
+          error: 'menu-fetch-failed',
+        }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  }, 20000);
+
+  it('reports a skill missing from the menu', async () => {
+    const capture = vi
+      .spyOn(analyticsModule.analytics, 'wizardCapture')
+      .mockImplementation(() => undefined);
+    const originalFetch = global.fetch;
+    global.fetch = (() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({ categories: { integration: [] } }),
+      })) as any;
+
+    try {
+      const result = await installSkillById('missing', '/tmp', 'https://x', {
+        triage: undefined,
+      });
+
+      expect(result).toEqual({ kind: 'skill-not-found', skillId: 'missing' });
+      expect(capture).toHaveBeenCalledWith(
+        'skill install failed',
+        expect.objectContaining({
+          install_step: 'resolve',
+          error: 'skill-not-found',
+        }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+describe('describeInstallFailure', () => {
+  it('names the network as the cause of a menu fetch failure', () => {
+    const message = describeInstallFailure({ kind: 'menu-fetch-failed' });
+
+    expect(message).toMatch(/network/i);
+    // A menu fetch never touches the project directory — blaming permissions
+    // sent users to check `chmod` for what was a GitHub blip.
+    expect(message).not.toMatch(/permission|writable/i);
+  });
+
+  it('surfaces the underlying error of a failed download', () => {
+    const message = describeInstallFailure({
+      kind: 'download-failed',
+      message: 'HTTP 503 Service Unavailable',
+    });
+
+    expect(message).toContain('HTTP 503 Service Unavailable');
+    expect(message).not.toMatch(/permission|writable/i);
+  });
+
+  it('names the missing skill when the menu lacks it', () => {
+    const message = describeInstallFailure({
+      kind: 'skill-not-found',
+      skillId: 'integration-v2-init-django',
+    });
+
+    expect(message).toContain('integration-v2-init-django');
   });
 });
 
