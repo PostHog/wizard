@@ -142,3 +142,10 @@ export function getCommandPath(config: SubcommandProgram): string {
     ? `${config.parentCommand} ${config.command}`
     : config.command;
 }
+
+/** Programs the intro can launch, Family parents open a picker instead. */
+export function getLaunchablePrograms(): SubcommandProgram[] {
+  const all = getSubcommandPrograms();
+  const parents = new Set(all.map((config) => config.parentCommand));
+  return all.filter((config) => !parents.has(config.command));
+}

@@ -14,8 +14,8 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
 import {
-  getSubcommandPrograms,
   getCommandPath,
+  getLaunchablePrograms,
 } from '@lib/programs/program-registry';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
@@ -167,24 +167,17 @@ export const PostHogIntegrationIntroScreen = ({
     );
   } else if (view === 'commands') {
     body = (
-      <Box flexDirection="column" width={64} flexShrink={0}>
-        <Text>The wizard can do more than integrate with your project:</Text>
-        <Box flexDirection="column" marginTop={1}>
-          {getSubcommandPrograms().map((program) => (
-            <Box key={getCommandPath(program)}>
-              <Box width={22} flexShrink={0}>
-                <Text color="cyan">{getCommandPath(program)}</Text>
-              </Box>
-              <Text dimColor>{program.description}</Text>
-            </Box>
-          ))}
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Run any of these later: npx @posthog/wizard {'<command>'}
-          </Text>
-        </Box>
-      </Box>
+      <PickerMenu
+        message="The wizard can do more than integrate with your project:"
+        options={getLaunchablePrograms().map((program) => ({
+          label: `${getCommandPath(program).padEnd(21)}${program.description}`,
+          value: program.id,
+        }))}
+        onSelect={(value) => {
+          const id = Array.isArray(value) ? value[0] : value;
+          store.switchProgram(id);
+        }}
+      />
     );
   } else if (view === 'privacy') {
     body = <PrivacyPanel />;
