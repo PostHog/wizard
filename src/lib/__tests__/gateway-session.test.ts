@@ -1,4 +1,5 @@
 import {
+  GatewayMintFailed,
   GatewayMintRefused,
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -121,16 +122,17 @@ describe('gatewayAuth', () => {
       'expires_at',
       { token: 't', gateway_url: 'https://ai-gateway.us.posthog.com' },
     ],
-  ])('falls back when the mint response omits %s', async (_field, body) => {
+  ])('fails the run when the mint response omits %s', async (_field, body) => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(body),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
-  it('falls back when the mint returns a token too short to be worth caching', async () => {
+  it('fails the run when the mint returns a token too short to be worth caching', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
@@ -141,10 +143,11 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     // A token with seconds of life would 401 mid-run, and the subprocess holds
     // it for the whole session.
-    expect(auth.edition).toBe('legacy');
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
   it.each([
@@ -164,12 +167,23 @@ describe('gatewayAuth', () => {
     },
   );
 
-  it.each([404, 500, 503])(
-    'falls back when the mint is unavailable (HTTP %i)',
+  it('stays on the existing gateway when the org is not rolled out (404)', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 404 });
+    // The one surviving downgrade: 404 is the staged-rollout switch, so removing
+    // it would make the flip all-or-nothing.
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+    expect(auth.edition).toBe('legacy');
+  });
+
+  it.each([500, 502, 503])(
+    'fails the run when the mint errors (HTTP %i)',
     async (status) => {
       fetchMock.mockResolvedValue({ ok: false, status });
-      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-      expect(auth.edition).toBe('legacy');
+      // Downgrading here would spend the whole run uncapped and unattributed to
+      // hide an outage.
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintFailed);
     },
   );
 
@@ -203,11 +217,12 @@ describe('gatewayAuth', () => {
     );
   });
 
-  it('skips the mint entirely when the run has no program', async () => {
-    const auth = await gatewayAuth(host, 'pha_oauth', undefined);
-    // Not a refusal to recover from: an unattributable run stays on the legacy
-    // posture rather than spending a mint that would 400.
-    expect(auth.edition).toBe('legacy');
+  it('fails the run when it has no program', async () => {
+    // An absent id means a caller was not wired, and its spend would be
+    // unattributable. Never mints, so it cannot be a refusal either.
+    await expect(
+      gatewayAuth(host, 'pha_oauth', undefined),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -230,7 +245,7 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back when the mint returns an unparseable expiry', async () => {
+  it('fails the run when the mint returns an unparseable expiry', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
@@ -242,11 +257,12 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
-  it('falls back when the mint returns an already-expired token', async () => {
+  it('fails the run when the mint returns an already-expired token', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
@@ -256,8 +272,9 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
   it('refuses a gateway url outside the trusted origins', async () => {
@@ -270,9 +287,9 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://evil.example.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
-    expect(auth.gatewayUrl).toBe(host.gatewayUrl);
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
   it('falls back to the legacy posture when the backend does not mint', async () => {
@@ -286,22 +303,23 @@ describe('gatewayAuth', () => {
     });
   });
 
-  it('falls back to legacy on a transport failure', async () => {
+  it('fails the run on a transport failure', async () => {
     fetchMock.mockRejectedValue(new Error('network down'));
 
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
-    expect(auth.token).toBe('pha_oauth');
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
-  it('falls back to legacy on a malformed mint response', async () => {
+  it('fails the run on a malformed mint response', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ token: 'phe_minted' }), // missing gateway_url/expires_at
     });
 
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 });
 

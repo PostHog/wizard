@@ -98,16 +98,15 @@ async function resolveGatewayAuth(
   program: string | undefined,
 ): Promise<GatewayAuth> {
   if (!program) {
-    // Nothing to attribute the spend to, and the mint refuses a run it cannot
-    // pin to a program. Staying on the legacy posture keeps the run working
-    // rather than trading it for a refusal.
-    logToFile('[gateway] run has no program; staying on the existing gateway');
-    const auth = legacyAuth(host, accessToken);
-    cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
-    return auth;
+    // Every run has one; an absent id means a caller was not wired rather than a
+    // run that legitimately has none, and its spend would be unattributable.
+    throw new GatewayMintFailed(
+      'this run has no program to attribute its spend to',
+    );
   }
   const minted = await mintGatewayToken(host, accessToken, program);
   if (!minted) {
+    // 404 only: this org is not on the new gateway yet.
     const auth = legacyAuth(host, accessToken);
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
     return auth;
@@ -115,15 +114,11 @@ async function resolveGatewayAuth(
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
   if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {
-    // Expired, unreadable, or too short to serve a session. An unreadable expiry
-    // is no basis for adopting a credential that may 401 mid-run, so it takes the
-    // same fallback as a short one.
-    logToFile(
-      `[gateway] mint returned a token with ${ttlMs}ms of life; staying on the existing gateway`,
+    // Expired, unreadable, or too short to serve a session. Adopting it would
+    // 401 mid-run, and downgrading would spend the rest of the run uncapped.
+    throw new GatewayMintFailed(
+      `the PostHog gateway issued a token with ${ttlMs}ms of life`,
     );
-    const auth = legacyAuth(host, accessToken);
-    cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
-    return auth;
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
   const auth: GatewayAuth = {
@@ -213,6 +208,19 @@ export class GatewayMintRefused extends Error {
 }
 
 /**
+ * The mint could not produce a usable credential: unreachable, a 5xx, or a
+ * response the client cannot use. Thrown rather than downgraded, because the
+ * legacy posture enforces none of the wizard's caps, budgets or attribution, so
+ * a silent downgrade spends unattributed money to hide an outage.
+ */
+export class GatewayMintFailed extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GatewayMintFailed';
+  }
+}
+
+/**
  * Whether a mint status means "refused this run" rather than "not available".
  *
  * The legacy gateway enforces none of the wizard's controls, so falling back on
@@ -263,10 +271,18 @@ async function mintGatewayToken(
           mintRefusalMessage(resp.status),
         );
       }
-      logToFile(
-        `[gateway] mint unavailable with HTTP ${resp.status}; staying on the existing gateway`,
+      if (resp.status === 404) {
+        // The only downgrade left. 404 is the rollout switch: the endpoint is
+        // unconfigured, or this org is not flagged on yet, and both mean the run
+        // belongs on the posture it used before this feature existed.
+        logToFile(
+          '[gateway] mint not enabled for this org; staying on the existing gateway',
+        );
+        return null;
+      }
+      throw new GatewayMintFailed(
+        `the PostHog gateway could not issue a token (HTTP ${resp.status})`,
       );
-      return null;
     }
     const body = (await resp.json()) as {
       token?: string;
@@ -276,29 +292,19 @@ async function mintGatewayToken(
     };
     // Checked one at a time, not in a loop, so each clause narrows the optional
     // field for the return below and each names itself in the log.
+    // Checked one at a time so each clause narrows the optional field for the
+    // return below and each names itself in the failure.
     if (!body.token) {
-      logToFile(
-        '[gateway] mint response omitted token; staying on the existing gateway',
-      );
-      return null;
+      throw new GatewayMintFailed('mint response omitted token');
     }
     if (!body.expires_at) {
-      logToFile(
-        '[gateway] mint response omitted expires_at; staying on the existing gateway',
-      );
-      return null;
+      throw new GatewayMintFailed('mint response omitted expires_at');
     }
     if (!body.gateway_url) {
-      logToFile(
-        '[gateway] mint response omitted gateway_url; staying on the existing gateway',
-      );
-      return null;
+      throw new GatewayMintFailed('mint response omitted gateway_url');
     }
     if (!isTrustedGatewayUrl(body.gateway_url, host.apiHost)) {
-      logToFile(
-        `[gateway] mint returned an untrusted gateway url; staying on the existing gateway`,
-      );
-      return null;
+      throw new GatewayMintFailed('mint returned an untrusted gateway url');
     }
     return {
       token: body.token,
@@ -307,15 +313,13 @@ async function mintGatewayToken(
       teamId: body.team_id,
     };
   } catch (e) {
-    // A refusal is a decision, not a transport failure: it must pass through this
-    // catch rather than be folded into the fallback it exists to prevent.
-    if (e instanceof GatewayMintRefused) throw e;
-    logToFile(
-      `[gateway] mint call failed (${String(
-        e,
-      )}); staying on the existing gateway`,
+    // Decisions and failures both pass through: this catch exists for transport
+    // errors, and folding the others into it would restore the downgrade.
+    if (e instanceof GatewayMintRefused || e instanceof GatewayMintFailed)
+      throw e;
+    throw new GatewayMintFailed(
+      `could not reach the PostHog gateway (${String(e)})`,
     );
-    return null;
   }
 }
 
