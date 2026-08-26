@@ -127,6 +127,29 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description: 'No data warehouse sources were found.',
   },
+  [ErrorCodes.DetectNoPackageJson]: {
+    group: 'detect',
+    retry: 'no',
+    description: 'The project has no package.json for the program to scan.',
+  },
+  [ErrorCodes.DetectNoSdks]: {
+    group: 'detect',
+    retry: 'no',
+    description: 'None of the SDKs the program needs are installed.',
+  },
+  [ErrorCodes.DetectMissingStripe]: {
+    group: 'detect',
+    retry: 'no',
+    description: 'Revenue analytics requires a Stripe SDK and none was found.',
+  },
+  [ErrorCodes.DetectUnclassified]: {
+    group: 'detect',
+    // A detect step reported a precondition failure we have no code for yet.
+    // Every known cause is a property of the user's project, so retrying can
+    // only burn budget — fail closed rather than inheriting `internal`'s 'yes'.
+    retry: 'no',
+    description: 'A detect step failed with a kind absent from the catalog.',
+  },
   [ErrorCodes.SkillMenuFetchFailed]: {
     group: 'skill',
     retry: 'yes',

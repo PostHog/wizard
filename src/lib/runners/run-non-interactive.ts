@@ -270,15 +270,19 @@ export function runNonInteractive(
         }
         if (detectError) {
           const code = detectErrorCode(detectError.kind);
-          const { kind: detectKind, ...rest } = detectError;
+          const detectKind = detectError.kind;
+          // `kind` stays in the detail: several kinds share one code, so it is
+          // the only thing telling a host which precondition actually failed.
+          const detail = { ...detectError };
           await settleStream(RunPhase.Error, {
             kind: OutroKind.Error,
             message: `Prerequisites not met: ${detectKind}`,
             errorCode: code,
-            errorDetail: rest,
+            errorDetail: detail,
           });
           await wizardAbort({
             code,
+            detail,
             message: `Prerequisites not met: ${detectKind}\n\nSee ${
               runDef?.docsUrl ?? POSTHOG_DOCS_URL
             }`,

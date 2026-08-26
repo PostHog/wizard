@@ -82,6 +82,10 @@ via `emitPhwError()`.
 | `PHW_DETECT_NO_POSTHOG_SDK`                    | detect   | program requires an installed PostHog SDK; none found                                                                                                                                                        | no           |
 | `PHW_DETECT_NO_PROJECT_FILES`                  | detect   | no project files for the program to work on                                                                                                                                                                  | no           |
 | `PHW_DETECT_NO_SOURCES`                        | detect   | no data warehouse sources detected                                                                                                                                                                           | no           |
+| `PHW_DETECT_NO_PACKAGE_JSON`                   | detect   | no `package.json` anywhere in the project to scan                                                                                                                                                            | no           |
+| `PHW_DETECT_NO_SDKS`                           | detect   | none of the SDKs the program needs are installed                                                                                                                                                             | no           |
+| `PHW_DETECT_MISSING_STRIPE`                    | detect   | revenue analytics found PostHog but no Stripe SDK                                                                                                                                                            | no           |
+| `PHW_DETECT_UNCLASSIFIED`                      | detect   | detect step failed with a `kind` this catalog has no code for                                                                                                                                                | no           |
 | `PHW_SKILL_MENU_FETCH_FAILED`                  | skill    | context-mill menu fetch failed                                                                                                                                                                               | yes          |
 | `PHW_SKILL_NOT_FOUND`                          | skill    | skill id absent from the context-mill menu                                                                                                                                                                   | no           |
 | `PHW_SKILL_DOWNLOAD_FAILED`                    | skill    | skill download/extraction failed                                                                                                                                                                             | yes          |
@@ -107,8 +111,23 @@ guarantee.
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
 ([`src/lib/errors/detect-map.ts`](../src/lib/errors/detect-map.ts)) maps `kind`
-→ code; unknown kinds fall back to `PHW_INTERNAL_UNHANDLED`. The remaining
-fields ride along as `OutroData.errorDetail`.
+→ code, and the whole object — `kind` included — rides along as
+`OutroData.errorDetail`.
+
+`DETECT_CODES` is keyed on `DetectErrorKind`, a union assembled from the
+programs' own `DetectError` types via type-only imports. Adding a kind to any
+program's union breaks the build until it gets a code, so the map cannot fall
+behind (same guarantee `AGENT_ERROR_CODE` gets from keying on `AgentErrorType`).
+
+Two rules make the detect group safe for automated retry policy:
+
+- **Codes may be shared, `kind` is not lost.** `no-posthog-sdk`, `no-posthog`,
+  and `missing-posthog` all resolve to `PHW_DETECT_NO_POSTHOG_SDK` — one failure
+  class, one code. Hosts that need to tell the programs apart read `detail.kind`.
+- **The fallback stays inside the group.** An unrecognized `kind` resolves to
+  `PHW_DETECT_UNCLASSIFIED` (`retry: 'no'`), never to `PHW_INTERNAL_UNHANDLED`
+  (`retry: 'yes'`). A detect failure is a property of the user's project;
+  advising a sandbox to retry one costs it the whole budget for nothing.
 
 ## Auth classification
 
