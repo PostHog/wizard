@@ -31,6 +31,8 @@ function buildPrompt(session: WizardSession): string {
     'Set these up in PostHog following the skill instructions: create `in-cli` ' +
       'sources directly via the PostHog MCP after collecting credentials; for ' +
       '`deep-link` sources, provide the user the pre-filled new-source URL.',
+    'Use the `kind` string exactly as printed above for `source_type` — ' +
+      'PostHog rejects the display label.',
   ].join('\n');
 }
 

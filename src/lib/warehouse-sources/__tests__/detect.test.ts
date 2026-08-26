@@ -223,6 +223,88 @@ describe('detectWarehouseSources', () => {
     }
   });
 
+  it('detects newly added sources by their npm package', () => {
+    writePackageJson(tmpDir, {
+      '@neondatabase/serverless': '^0.10.0',
+      algoliasearch: '^5.0.0',
+      inngest: '^3.0.0',
+      'google-spreadsheet': '^4.0.0',
+    });
+    const byKind = Object.fromEntries(
+      detectWarehouseSources(tmpDir).map((s) => [s.kind, s.mode]),
+    );
+    expect(byKind.Neon).toBe('in-cli');
+    expect(byKind.Algolia).toBe('in-cli');
+    expect(byKind.Inngest).toBe('in-cli');
+    expect(byKind.GoogleSheets).toBe('in-cli');
+  });
+
+  it('detects newly added sources from Python and env signals', () => {
+    fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'wandb==0.18.0\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.env'),
+      'DATABRICKS_HOST=x\nLOOPS_API_KEY=y\n',
+    );
+    expect(kinds(tmpDir)).toEqual(
+      ['Databricks', 'Loops', 'WeightsAndBiases'].sort(),
+    );
+  });
+
+  it('detects newly added sources from a Gemfile and pyproject.toml', () => {
+    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'algolia'\n");
+    fs.writeFileSync(
+      path.join(tmpDir, 'pyproject.toml'),
+      '[project]\ndependencies = ["dbt-core", "temporalio"]\n',
+    );
+    expect(kinds(tmpDir)).toEqual(['Algolia', 'Dbt', 'TemporalIO'].sort());
+  });
+
+  it.each([
+    ['MOTHERDUCK_TOKEN', 'Motherduck'],
+    ['SINGLESTORE_PASSWORD', 'Singlestore'],
+    ['RAZORPAY_KEY_ID', 'Razorpay'],
+    ['FLW_SECRET_KEY', 'Flutterwave'],
+    ['AWS_SES_ACCESS_KEY', 'AwsSes'],
+    ['COURIER_AUTH_TOKEN', 'Courier'],
+    ['TRIGGER_SECRET_KEY', 'TriggerDev'],
+    ['RENDER_API_KEY', 'Render'],
+    ['FLY_API_TOKEN', 'FlyIo'],
+    ['SRC_ACCESS_TOKEN', 'Sourcegraph'],
+    ['TALLY_API_KEY', 'Tally'],
+    ['DUB_API_KEY', 'Dub'],
+    ['GONG_ACCESS_KEY', 'Gong'],
+    ['LOGTAIL_SOURCE_TOKEN', 'BetterStack'],
+  ])('detects %s as %s', (envKey, kind) => {
+    fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
+    expect(kinds(tmpDir)).toEqual([kind]);
+  });
+
+  it('detects both Neon and Postgres for a Neon project', () => {
+    // Intended double detection: the driver names Neon, DATABASE_URL still
+    // reads as Postgres. Both are offered; the user picks.
+    writePackageJson(tmpDir, { '@neondatabase/serverless': '^0.10.0' });
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'DATABASE_URL=x\n');
+    expect(kinds(tmpDir)).toEqual(['Neon', 'Postgres']);
+  });
+
+  it.each([
+    ['framer-motion npm package', { 'framer-motion': '^11.0.0' }],
+    ['a Motion animation dependency', { motion: '^11.0.0' }],
+  ])('detects nothing from %s', (_name, deps) => {
+    writePackageJson(tmpDir, deps);
+    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+  });
+
+  it.each([
+    ['TRIGGER_WORKFLOW'],
+    ['COURIER_TRACKING_URL'],
+    ['RENDER_MODE'],
+    ['TALLY_LEDGER_ID'],
+  ])('detects nothing from a lone %s key', (envKey) => {
+    fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
+    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+  });
+
   it.each([
     ['Intercom', { 'intercom-client': '^5.0.0' }, 'INTERCOM_ACCESS_TOKEN'],
     ['Plain', { '@team-plain/typescript-sdk': '^5.0.0' }, 'PLAIN_API_KEY'],
@@ -245,6 +327,32 @@ describe('detectWarehouseSources', () => {
 });
 
 describe('SOURCE_DETECTORS', () => {
+  it('has a unique kind for every entry', () => {
+    const seen = new Map<string, number>();
+    for (const detector of SOURCE_DETECTORS) {
+      seen.set(detector.kind, (seen.get(detector.kind) ?? 0) + 1);
+    }
+    const duplicates = [...seen.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([kind]) => kind);
+    expect(duplicates).toEqual([]);
+  });
+
+  it('gives every entry a non-empty label and at least one signal', () => {
+    for (const detector of SOURCE_DETECTORS) {
+      const { npm, python, ruby, envKeys } = detector.signals;
+      const signalCount =
+        (npm?.length ?? 0) +
+        (python?.length ?? 0) +
+        (ruby?.length ?? 0) +
+        (envKeys?.length ?? 0);
+      expect(detector.label.length, `${detector.kind} label`).toBeGreaterThan(
+        0,
+      );
+      expect(signalCount, `${detector.kind} signals`).toBeGreaterThan(0);
+    }
+  });
+
   it('omits the flag-gated kinds the wizard cannot complete', () => {
     const kindSet = new Set(SOURCE_DETECTORS.map((d) => d.kind));
     for (const gated of ['Intercom', 'Plain', 'Polar']) {
