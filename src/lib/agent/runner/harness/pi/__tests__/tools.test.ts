@@ -38,6 +38,7 @@ const makeTools = (answers: Record<string, string | string[]>) => {
     workingDirectory,
     wizardAsk: byName('wizard_ask'),
     setEnvValues: byName('set_env_values'),
+    checkEnvKeys: byName('check_env_keys'),
   };
 };
 
@@ -122,6 +123,34 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     expect(desc).toBe(WIZARD_ASK_SENSITIVE_DESCRIPTION);
     expect(desc).toMatch(/data-warehouse tools/);
     expect(desc).toMatch(/reject it/);
+  });
+});
+
+describe('pi check_env_keys — failures arrive as rejections', () => {
+  it('rejects rather than throwing synchronously on a traversal path', () => {
+    // The tool has to be its own async boundary: checkEnvKeys throws on a
+    // filePath that escapes the working directory, and pi wraps `execute` in a
+    // plain non-async arrow, so a synchronous throw would leave the tool
+    // instead of arriving as a failed tool call. Dropping `async` here — the
+    // scan removed the last `await` — is what made that reachable.
+    const { checkEnvKeys } = makeTools({});
+    const run = () =>
+      call(checkEnvKeys, { keys: ['ANY'], filePath: '../../etc/passwd' });
+
+    expect(run).not.toThrow();
+    return expect(run()).rejects.toThrow('Path traversal rejected');
+  });
+
+  it('answers normally for a path inside the working directory', async () => {
+    const { checkEnvKeys } = makeTools({});
+    const result = await call(checkEnvKeys, {
+      keys: ['ANY'],
+      filePath: '.env',
+    });
+
+    expect(JSON.parse(textOf(result))).toEqual({
+      ANY: { status: 'missing', foundIn: [] },
+    });
   });
 });
 

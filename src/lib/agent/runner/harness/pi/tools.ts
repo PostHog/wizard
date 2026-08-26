@@ -168,7 +168,14 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         description: 'Environment variable key names to check',
       }),
     }),
-    execute(_id, args) {
+    // `async` with nothing to await, on purpose: it is what turns a thrown
+    // error into a rejection. `checkEnvKeys` throws on a filePath that escapes
+    // the working directory, and pi wraps `execute` in a plain (non-async)
+    // arrow, so without this the throw leaves the tool synchronously instead
+    // of arriving as a failed tool call. The scan replaced an awaited read,
+    // which is the only reason there is nothing left to await.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async execute(_id, args) {
       const results = checkEnvKeysCore(
         workingDirectory,
         args.keys,
