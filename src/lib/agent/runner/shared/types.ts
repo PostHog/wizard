@@ -3,6 +3,7 @@
  */
 
 import type {
+  AskQuestion,
   Credentials,
   AdditionalFeature,
   WizardSession,
@@ -23,6 +24,32 @@ export interface AbortCase {
   message: string;
   body: string;
   docsUrl?: string;
+  /**
+   * Stable snake_case key for this case, shipped as `reason_code` on
+   * `wizard: agent aborted`. The raw `reason` is model prose and drifts with
+   * every skill reword, so a funnel that groups by it silently splits; group
+   * by `reason_code` instead. Omit it and only the raw reason ships.
+   */
+  code?: string;
+  /**
+   * `not_applicable` means the program found nothing it could act on — the
+   * user brought a project this program doesn't serve. It renders a neutral
+   * outro instead of a red error, skips exception capture, and reports
+   * `not_applicable` as the run's terminal status, so these runs stop
+   * depressing the program's success rate. Defaults to `failure`.
+   */
+  outcome?: 'failure' | 'not_applicable';
+  /**
+   * Questions to ask before exiting on this case, through the same overlay the
+   * agent's `wizard_ask` uses. A turned-away user is the only person who can
+   * say what they actually had, and this is the last moment they're still
+   * here. Answers ship on `wizard: agent aborted` as `follow_up_*`.
+   *
+   * Skipped when the ask bridge is unavailable (CI, signup), and a cancelled
+   * or timed-out prompt exits exactly as if none were configured — never make
+   * the exit depend on an answer.
+   */
+  followUp?: AskQuestion[];
 }
 
 /**

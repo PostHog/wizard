@@ -89,6 +89,13 @@ export enum OutroKind {
   Success = 'success',
   Error = 'error',
   Cancel = 'cancel',
+  /**
+   * The program doesn't apply to this project — nothing broke, there was just
+   * nothing to do. Distinct from `Error` so a program that turns a user away
+   * (no MCP server to instrument, no Stripe integration to read) doesn't read
+   * as a broken wizard, on the outro or in the run's terminal event.
+   */
+  NotApplicable = 'not_applicable',
 }
 
 export interface OutroData {
