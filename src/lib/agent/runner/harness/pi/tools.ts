@@ -22,7 +22,7 @@ import {
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
   WIZARD_TOOL_NAMES,
-  evaluateAskCap,
+  createAskAccounting,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
@@ -31,6 +31,8 @@ import {
   resolveEnvSecretRefs,
   vaultSensitiveAnswers,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
+  WIZARD_ASK_SUBJECT_DESCRIPTION,
+  WIZARD_ASK_TOOL_DESCRIPTION,
 } from '@lib/wizard-tools/tools';
 import type { LLMProvider } from '@posthog/warlock';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
@@ -82,10 +84,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
   const askMaxQuestions = ctx.maxQuestions ?? DEFAULT_ASK_MAX_QUESTIONS;
-  // Per-run wizard_ask accounting (total cap + one-time adjacency nudge),
-  // mirroring the MCP server's counters.
-  let askCallCount = 0;
-  let askAdjacencyNudged = false;
+  // Per-run wizard_ask accounting (total cap + one-time per-subject adjacency
+  // nudge). Same shared implementation the MCP server drives, so the two
+  // facades cannot diverge on the cap, the nudge or the refund.
+  const askAccounting = createAskAccounting(askMaxQuestions);
   // Session-scoped secret vault, same contract as the MCP server: wizard_ask
   // mints `{secretRef}` for sensitive answers, set_env_values resolves them.
   const secretVault = createSecretVault();
@@ -254,15 +256,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   const wizardAsk = defineTool({
     name: 'wizard_ask',
     label: 'Ask the user',
-    description:
-      'Ask the user one or more structured questions and wait for their answers. ' +
-      'Use this whenever you would otherwise inline a question in your text output. ' +
-      'Batch related questions into a single call (up to 8) rather than asking one at ' +
-      'a time; sequential calls are fine when later questions genuinely depend on ' +
-      'earlier answers. A fully cancelled or timed-out response does NOT count against ' +
-      'the per-run cap — treat it as "the user declined" and fall back gracefully.',
+    description: WIZARD_ASK_TOOL_DESCRIPTION,
     promptSnippet:
-      'wizard_ask(questions) — ask the user structured questions and wait for answers',
+      'wizard_ask(questions, subject) — ask the user structured questions and wait for answers; tag each call with the subject it collects for',
     parameters: Type.Object({
       questions: Type.Array(
         Type.Object({
@@ -307,6 +303,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         }),
         { minItems: 1, maxItems: 8 },
       ),
+      subject: Type.Optional(
+        Type.String({ description: WIZARD_ASK_SUBJECT_DESCRIPTION }),
+      ),
     }),
     async execute(_id, args) {
       if (!askBridge) {
@@ -315,20 +314,18 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         );
       }
 
-      const cap = evaluateAskCap(
-        askCallCount,
-        askMaxQuestions,
-        askAdjacencyNudged,
-      );
+      const cap = askAccounting.evaluate(args.subject);
       if (cap.kind === 'capped') {
-        if (cap.reason === 'adjacency') askAdjacencyNudged = true;
+        const { callCount } = askAccounting.snapshot();
         logToFile(
-          `[pi] wizard_ask capped: reason=${cap.reason} count=${askCallCount}`,
+          `[pi] wizard_ask capped: reason=${cap.reason} count=${callCount} subject=${cap.subject} run=${cap.subjectRunLength}`,
         );
         analytics.wizardCapture('wizard_ask capped', {
           reason: cap.reason,
-          call_count: askCallCount,
+          call_count: callCount,
           max_questions: askMaxQuestions,
+          subject: cap.subject,
+          subject_run_length: cap.subjectRunLength,
         });
         return text(cap.message);
       }
@@ -356,13 +353,13 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
 
       // Optimistically take the slot; refund it on a cancellation or a bridge
       // error so a declined/failed ask doesn't burn the budget for later ones.
-      askCallCount += 1;
+      askAccounting.record(args.subject);
       // Block Write/Edit for as long as the overlay is open, so the agent can't
       // mutate files while it's waiting on the user's answer.
       onAskPendingChange?.(true);
       try {
         const answers = await askBridge.request({ questions: args.questions });
-        if (isFullyCancelled(answers)) askCallCount -= 1;
+        if (isFullyCancelled(answers)) askAccounting.refund(args.subject);
         // Sensitive answers go to the vault; the agent sees an opaque ref
         // (same contract as the MCP wizard_ask).
         const sanitised = vaultSensitiveAnswers(
@@ -377,7 +374,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         );
         return text(JSON.stringify({ answers: sanitised }, null, 2));
       } catch (err) {
-        askCallCount -= 1;
+        askAccounting.refund(args.subject);
         const message = err instanceof Error ? err.message : String(err);
         logToFile(`[pi] wizard_ask: error: ${message}`);
         return text(`Error: wizard_ask failed: ${message}`);

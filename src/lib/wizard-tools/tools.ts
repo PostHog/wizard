@@ -298,8 +298,33 @@ export async function installSkillById(
 }
 
 export const DEFAULT_ASK_MAX_QUESTIONS = 10;
-/** The call after this many returns a one-time batch-your-questions nudge. */
+/**
+ * Consecutive calls about the *same subject* before the one-time
+ * batch-your-questions nudge fires. Adjacency is per subject, not per run:
+ * the guard exists to stop an agent firing many small prompts about one
+ * thing, not to stop a flow that legitimately walks a list — the warehouse
+ * task asks one call per detected source, and 5–8 sources need 15–25 fields,
+ * far more than the 8-question schema limit allows in a single call.
+ */
 export const ASK_BATCH_THRESHOLD = 3;
+
+/** Subject recorded for a `wizard_ask` call that declares none. */
+export const ASK_SUBJECT_UNSPECIFIED = '(unspecified)';
+
+/** Longest subject we keep; anything longer is truncated, never rejected. */
+const ASK_SUBJECT_MAX_LENGTH = 60;
+
+/**
+ * Fold a caller-supplied subject into the key adjacency is counted by.
+ * Case- and whitespace-insensitive so `Postgres`, `postgres ` and ` POSTGRES`
+ * are one subject. An absent or blank subject collapses to a single shared
+ * key, so an agent that declares nothing keeps the original run-wide guard.
+ */
+export function normaliseAskSubject(subject?: string): string {
+  const trimmed = (subject ?? '').trim().toLowerCase();
+  if (trimmed.length === 0) return ASK_SUBJECT_UNSPECIFIED;
+  return trimmed.slice(0, ASK_SUBJECT_MAX_LENGTH);
+}
 
 /**
  * The `wizard_ask` `sensitive` field description, shared by both harness facades
@@ -324,13 +349,65 @@ export const WIZARD_ASK_SENSITIVE_DESCRIPTION =
   'secret that must reach another tool, write it to the env with set_env_values ' +
   "first, or use that tool's own credential-reference flow.";
 
+/**
+ * The `wizard_ask` `subject` field description, shared by both harness facades
+ * so the batching contract cannot drift between them.
+ *
+ * `subject` is what lets the runtime tell "three rapid prompts about one thing"
+ * (which the guard should stop) from "one prompt per item in a list" (which it
+ * must not). Without it the runtime saw only a call count, so a warehouse run
+ * with five detected sources tripped the nudge on its third source.
+ */
+export const WIZARD_ASK_SUBJECT_DESCRIPTION =
+  'Short, stable tag naming what this call collects — the data-warehouse ' +
+  'source kind (e.g. "Postgres", "Stripe"), the integration step, or the ' +
+  'decision at hand. The batching guard counts consecutive calls per subject, ' +
+  'so walking a list one call per item is never interrupted as long as each ' +
+  'call carries its own subject. Reuse the same subject only when you are ' +
+  'still collecting for the same thing (e.g. re-asking after a validation ' +
+  'failure). Omit it and every call counts as one shared subject.';
+
+/**
+ * The `wizard_ask` tool description, shared by both harness facades (the MCP
+ * server in `./mcp` and the pi-native mirror in `harness/pi/tools.ts`) so the
+ * batching and cancellation contract reads identically in both harnesses.
+ */
+export const WIZARD_ASK_TOOL_DESCRIPTION =
+  'Ask the user one or more structured questions and wait for their answers. ' +
+  'Use this whenever you would otherwise inline a question in your text output. ' +
+  'Batch every question about one subject into a single call (up to 8) rather ' +
+  'than asking one at a time, and tag the call with `subject`. Walking a list — ' +
+  'one call per data-warehouse source, one call per integration step — is ' +
+  'expected and is never blocked, because the batching guard counts consecutive ' +
+  'calls per subject. A fully cancelled or timed-out response does NOT count ' +
+  'against the per-run cap — treat it as "the user declined" and fall back ' +
+  'gracefully (e.g. hand over a deep link) without worrying about a wasted call.';
+
 export type AskCapDecision =
   | { kind: 'ok' }
   | {
       kind: 'capped';
       reason: 'max_questions' | 'adjacency';
       message: string;
+      /** Normalised subject of the call that was capped — analytics dimension. */
+      subject: string;
+      /** Consecutive calls already sent for that subject. */
+      subjectRunLength: number;
     };
+
+/** Everything the cap policy needs about the upcoming `wizard_ask` call. */
+export type AskCapInput = {
+  /** Calls already sent to the user in this run (cancelled ones are refunded). */
+  callCount: number;
+  /** Hard per-run ceiling on sent calls. */
+  maxQuestions: number;
+  /** Normalised subject of the upcoming call. */
+  subject: string;
+  /** Consecutive calls already sent for that same subject. */
+  subjectRunLength: number;
+  /** Whether the one-time adjacency nudge already fired in this run. */
+  adjacencyNudged?: boolean;
+};
 
 /**
  * Pure decision function for the wizard_ask caps. Returns whether the
@@ -343,33 +420,133 @@ export type AskCapDecision =
  * failure — an agent that reads it as a refusal abandons the source instead
  * of re-asking with batched questions.
  *
+ * Adjacency counts consecutive calls that share a `subject`, not calls in the
+ * run. A flow that walks a list — the warehouse task's one call per detected
+ * source — changes subject on every call, so its run length never grows and
+ * the nudge never fires. Only repeated prompting about the same thing trips
+ * it, which is what the guard was always for. An agent that declares no
+ * subject falls back to one shared key, so the original run-wide guard still
+ * applies to it.
+ *
  * The adjacency nudge fires exactly once per run (the caller records it
  * via `adjacencyNudged`) — flows that legitimately need several
- * sequential, answer-dependent asks then proceed up to `maxQuestions`.
- * Without the flag the rejected call would never advance the counter and
- * every later call would be rejected, making caps above the threshold
- * unreachable.
+ * sequential, answer-dependent asks about one subject then proceed up to
+ * `maxQuestions`. Without the flag the rejected call would never advance the
+ * counter and every later call would be rejected, making caps above the
+ * threshold unreachable.
+ *
+ * `maxQuestions` is checked first and is never per-subject, so subjects can
+ * never widen the per-run budget.
  */
-export function evaluateAskCap(
-  callCount: number,
-  maxQuestions: number,
+export function evaluateAskCap({
+  callCount,
+  maxQuestions,
+  subject,
+  subjectRunLength,
   adjacencyNudged = false,
-): AskCapDecision {
+}: AskCapInput): AskCapDecision {
   if (callCount >= maxQuestions) {
     return {
       kind: 'capped',
       reason: 'max_questions',
+      subject,
+      subjectRunLength,
       message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
     };
   }
-  if (!adjacencyNudged && callCount >= ASK_BATCH_THRESHOLD) {
+  if (!adjacencyNudged && subjectRunLength >= ASK_BATCH_THRESHOLD) {
+    const subjectNote =
+      subject === ASK_SUBJECT_UNSPECIFIED
+        ? 'they all declared no `subject`, so they count as one subject'
+        : `they all used subject "${subject}"`;
     return {
       kind: 'capped',
       reason: 'adjacency',
-      message: `Not an error — this ask was not sent (a one-time nudge). You've made ${callCount} wizard_ask calls in a row. Batch the questions you still need into a single call (the schema accepts up to 8 questions per invocation) and call wizard_ask again now; or, if they genuinely depend on earlier answers, just ask again as-is. Either way the next call goes through. Do not abandon the task or fall back to browser setup because of this message.`,
+      subject,
+      subjectRunLength,
+      message:
+        `Not an error — this ask was not sent (a one-time nudge). ` +
+        `You have sent ${subjectRunLength} wizard_ask calls in a row about the same subject (${subjectNote}). ` +
+        `Batch every question you still need for that subject into one call (up to 8 questions) and send wizard_ask again now. ` +
+        `If your next questions are about something else — another data-warehouse source, another integration step — ` +
+        `set a different \`subject\` on the call. Adjacency is counted per subject, so one call per source is never blocked, ` +
+        `and you must not try to squeeze several sources into one 8-question call. ` +
+        `Either way the next call is sent. Do not abandon the task, and do not fall back to browser setup because of this message.`,
     };
   }
   return { kind: 'ok' };
+}
+
+/**
+ * Per-run `wizard_ask` call accounting: the total cap plus the per-subject
+ * adjacency run. Both harness facades drive one of these instead of holding
+ * their own counters, so the cap, the nudge and the cancellation refund
+ * cannot drift between the MCP server and the pi-native tools.
+ */
+export type AskAccounting = {
+  /**
+   * Decide whether the upcoming call may go through. Records the one-time
+   * adjacency nudge as a side effect, so a nudged call is never nudged twice.
+   */
+  evaluate(subject?: string): AskCapDecision;
+  /** Record a call that was sent to the user. */
+  record(subject?: string): void;
+  /**
+   * Refund a call that never produced an answer — cancelled, timed out, or
+   * failed in the bridge. Rolls back the total *and* the subject run, so a
+   * declined ask costs the agent nothing on either cap.
+   */
+  refund(subject?: string): void;
+  /** Current state, for analytics and tests. */
+  snapshot(): {
+    callCount: number;
+    subject: string;
+    subjectRunLength: number;
+    adjacencyNudged: boolean;
+  };
+};
+
+export function createAskAccounting(maxQuestions: number): AskAccounting {
+  let callCount = 0;
+  let currentSubject = ASK_SUBJECT_UNSPECIFIED;
+  let subjectRunLength = 0;
+  let adjacencyNudged = false;
+
+  return {
+    evaluate(subject) {
+      const key = normaliseAskSubject(subject);
+      const decision = evaluateAskCap({
+        callCount,
+        maxQuestions,
+        subject: key,
+        subjectRunLength: key === currentSubject ? subjectRunLength : 0,
+        adjacencyNudged,
+      });
+      if (decision.kind === 'capped' && decision.reason === 'adjacency') {
+        adjacencyNudged = true;
+      }
+      return decision;
+    },
+    record(subject) {
+      const key = normaliseAskSubject(subject);
+      callCount += 1;
+      subjectRunLength = key === currentSubject ? subjectRunLength + 1 : 1;
+      currentSubject = key;
+    },
+    refund(subject) {
+      const key = normaliseAskSubject(subject);
+      callCount = Math.max(0, callCount - 1);
+      if (key === currentSubject) {
+        subjectRunLength = Math.max(0, subjectRunLength - 1);
+      }
+    },
+    snapshot: () => ({
+      callCount,
+      subject: currentSubject,
+      subjectRunLength,
+      adjacencyNudged,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
