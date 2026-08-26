@@ -11,7 +11,10 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
 
-import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
+import {
+  QueueStore,
+  SkipReason,
+} from '@lib/agent/runner/sequence/orchestrator/queue';
 import { displayOrder } from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
 import {
   applyEnqueue,
@@ -276,9 +279,13 @@ describe('sink closure with a deferred seeded task', () => {
 });
 
 /**
- * Declining the notice at run time. The offer moved from the top of the run to
- * the moment the step would start, so by then the task is already queued and the
- * sink already depends on it — declining has to skip it, not remove it.
+ * Applying a decline that was given at the top of the run.
+ *
+ * The offer is made at seed time, but the answer cannot be acted on there: the
+ * task must still enter the queue as an ordinary pending task so the planner
+ * plans around it and the sink is made to depend on it. By the time the drain
+ * reaches the task the sink already waits for it, so declining has to skip it,
+ * not remove it — and the skip has to carry why.
  */
 describe('a declined seeded task', () => {
   let dir: string;
@@ -304,10 +311,10 @@ describe('a declined seeded task', () => {
     store.start(install.id);
     store.complete(install.id);
 
-    // The step comes up, the notice is shown, the user declines.
+    // The step comes up, and the answer taken at seed time is applied.
     expect(store.nextRunnable().map((t) => t.type)).toEqual(['warehouse']);
     store.start(warehouse.id);
-    store.skip(warehouse.id, {
+    store.skip(warehouse.id, SkipReason.UserDeclined, {
       goals: 'Connect your data sources',
       did: 'Nothing — the user chose to skip this step when offered it.',
       forNextAgent: 'This step was offered and declined, so it did no work.',
@@ -316,12 +323,13 @@ describe('a declined seeded task', () => {
     // The sink is not dammed by the decline, and can say what happened.
     expect(store.nextRunnable().map((t) => t.id)).toEqual([report.id]);
     expect(store.readHandoff(warehouse.id)?.did).toContain('chose to skip');
+    expect(store.get(warehouse.id)?.skipReason).toBe('user-declined');
   });
 
   it('is not retried — a decline is an answer, not a failure', () => {
     const warehouse = store.enqueue({ type: 'warehouse', optional: true });
     store.start(warehouse.id);
-    store.skip(warehouse.id);
+    store.skip(warehouse.id, SkipReason.UserDeclined);
 
     expect(store.get(warehouse.id)?.status).toBe('not needed');
     expect(store.nextRunnable()).toEqual([]);

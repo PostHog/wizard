@@ -43,7 +43,7 @@ import {
   applyAuditUpdates,
   downloadSkill,
   ensureGitignoreCoverage,
-  evaluateAskCap,
+  createAskAccounting,
   fetchSkillMenu,
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
@@ -56,6 +56,8 @@ import {
   type SkillEntry,
   AUDIT_STATUSES,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
+  WIZARD_ASK_SUBJECT_DESCRIPTION,
+  WIZARD_ASK_TOOL_DESCRIPTION,
 } from './tools';
 
 const auditCheckSchema = z.object({
@@ -110,8 +112,9 @@ export interface WizardToolsOptions {
 
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}.
-   * The 4th call always returns a "batch your questions" error regardless
-   * of this cap — see {@link ASK_BATCH_THRESHOLD}.
+   * A separate one-time "batch your questions" nudge fires when several calls
+   * in a row share a `subject` — see {@link ASK_BATCH_THRESHOLD}. That nudge is
+   * per subject, so a flow that asks once per detected source never trips it.
    */
   askMaxQuestions?: number;
 
@@ -159,10 +162,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
-  // Per-server counter for wizard_ask call accounting (adjacency + total cap).
-  let askCallCount = 0;
-  // The adjacency nudge fires once per run; after that only the total cap applies.
-  let askAdjacencyNudged = false;
+  // Per-server wizard_ask accounting: the total cap plus the per-subject
+  // adjacency run. Shared with the pi facade so neither can drift.
+  const askAccounting = createAskAccounting(askMaxQuestions);
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -639,15 +641,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const wizardAsk = tool(
     'wizard_ask',
-    'Ask the user one or more structured questions and wait for their answers. ' +
-      'Use this whenever you would otherwise inline a question in your text output. ' +
-      'Batch related questions into a single call (up to 8) rather than asking one at a ' +
-      'time; sequential calls are fine when later questions genuinely depend on earlier ' +
-      'answers. A fully cancelled or timed-out response does NOT count against the per-run ' +
-      'cap — treat it as "the user declined" and fall back gracefully (e.g. hand over a ' +
-      'deep link) without worrying about a wasted call.',
+    WIZARD_ASK_TOOL_DESCRIPTION,
     {
       questions: z.array(askQuestionSchema).min(1).max(8),
+      subject: z.string().optional().describe(WIZARD_ASK_SUBJECT_DESCRIPTION),
     },
     async (args: {
       questions: Array<{
@@ -658,6 +655,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         required?: boolean;
         sensitive?: boolean;
       }>;
+      subject?: string;
     }) => {
       if (!askBridge) {
         return {
@@ -671,19 +669,14 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const capDecision = evaluateAskCap(
-        askCallCount,
-        askMaxQuestions,
-        askAdjacencyNudged,
-      );
+      const capDecision = askAccounting.evaluate(args.subject);
       if (capDecision.kind === 'capped') {
-        if (capDecision.reason === 'adjacency') {
-          askAdjacencyNudged = true;
-        }
         analytics.wizardCapture('wizard_ask capped', {
           reason: capDecision.reason,
-          call_count: askCallCount,
+          call_count: askAccounting.snapshot().callCount,
           max_questions: askMaxQuestions,
+          subject: capDecision.subject,
+          subject_run_length: capDecision.subjectRunLength,
         });
         return {
           content: [{ type: 'text' as const, text: capDecision.message }],
@@ -741,7 +734,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         ids.add(q.id);
       }
 
-      askCallCount += 1;
+      askAccounting.record(args.subject);
 
       try {
         const answers = await askBridge.request({ questions: args.questions });
@@ -752,7 +745,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         // fallback even when the user was willing to answer. Refund the slot we
         // optimistically took so cancellation is free.
         if (isFullyCancelled(answers)) {
-          askCallCount -= 1;
+          askAccounting.refund(args.subject);
         }
 
         // Sensitive answers go to the vault; the agent sees an opaque ref.
@@ -779,7 +772,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         // A failed ask never reached the user, so it shouldn't burn the
         // per-run cap either — otherwise a transient bridge error eats the
         // budget for every remaining source.
-        askCallCount -= 1;
+        askAccounting.refund(args.subject);
         logToFile(`wizard_ask: error: ${err?.message ?? err}`);
         return {
           content: [

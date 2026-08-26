@@ -40,6 +40,7 @@ import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
+import { ringTerminalBell } from '@utils/terminal-bell';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult, ProgramRun } from '../../shared/types';
@@ -55,6 +56,7 @@ import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
+  SkipReason,
   TaskStatus,
   type QueuedTask,
 } from './queue';
@@ -200,9 +202,15 @@ const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
  *
  * Much shorter than the ask timeout above, because it is asking for something
  * much smaller: one keypress to accept or decline, not "go mint a restricted
- * Stripe key". The notice is also the only interactive screen sitting in front
- * of the run's final steps, so an unanswered one holds the report — and with it
- * the notebook and the outro — behind a modal nobody is looking at.
+ * Stripe key". It cannot be unbounded either — the notice is a modal, and a run
+ * that stops forever behind one nobody is looking at is worse than one that
+ * takes the safe answer and carries on.
+ *
+ * The offer is made at seed time, seconds into the run, so five minutes is a
+ * generous allowance for a person who is by then still watching the wizard
+ * start. It was not: from 2.63.0 to 2.65.0 the offer was made at the moment the
+ * step became runnable — a median seven minutes in, after every coding task —
+ * and this timeout became the answer for about a quarter of all runs.
  */
 export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -235,6 +243,60 @@ export async function offerSeededTask(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+/** One seeded task's answer to its notice, taken once, at seed time. */
+export interface SeededConsent {
+  keep: boolean;
+  timedOut: boolean;
+  /** The notice could not be shown at all. Read as a decline, never as a yes. */
+  errored: boolean;
+}
+
+/** Which skip reason a negative {@link SeededConsent} carries onto the event. */
+export function consentSkipReason(consent: SeededConsent): SkipReason {
+  if (consent.errored) return SkipReason.NoticeError;
+  return consent.timedOut ? SkipReason.NoticeTimeout : SkipReason.UserDeclined;
+}
+
+/**
+ * Ask for one seeded task's consent, and record how the answer came about.
+ *
+ * Consent and execution are separate concerns, and this is the consent half.
+ * It runs at seed time — seconds into the run, with the user still watching —
+ * while `seeded-deps.ts` keeps the work itself at the end of the queue. Asking
+ * at the moment of execution instead, as 2.63.0 did, put the question in front
+ * of a user who had long since tabbed away.
+ *
+ * Fails closed. The step this gates goes on to ask for live database and API
+ * credentials, so a question that could not be put to the user is never read as
+ * a yes.
+ */
+export async function askSeededConsent(
+  type: string,
+  notice: TaskNotice,
+  timeoutMs?: number,
+): Promise<SeededConsent> {
+  const consent = await offerSeededTask(notice, timeoutMs).then(
+    (answer): SeededConsent => ({ ...answer, errored: false }),
+    (err: unknown): SeededConsent => {
+      logToFile(
+        `[orchestrator] notice failed for ${type}, declining: ${String(err)}`,
+      );
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_task_notice' },
+      );
+      return { keep: false, timedOut: false, errored: true };
+    },
+  );
+  analytics.wizardCapture('orchestrator task notice answered', {
+    type,
+    kept: consent.keep,
+    timed_out: consent.timedOut,
+    errored: consent.errored,
+  });
+  return consent;
 }
 
 /** Whether a task's prompt lets it ask the user, and so needs the ask bridge. */
@@ -407,6 +469,12 @@ export async function runOrchestrator(
           analytics.wizardCapture('orchestrator task skipped', {
             ...base,
             duration_ms: durationMs(task),
+            // Additive: the event's name and every other property are unchanged,
+            // so existing dashboards keep reading. Without this a step the user
+            // declined, a step nobody answered for, and a step the agent found
+            // did not apply were one number — which is how a regression that
+            // halved the warehouse completion rate stayed invisible for a week.
+            reason: task.skipReason,
           });
           break;
         case 'fail':
@@ -576,15 +644,23 @@ export async function runOrchestrator(
   // Kept so their dependencies can be resolved once the planner has run — they
   // are queued before it, so they cannot name what they wait for yet.
   const seededTasks: QueuedTask[] = [];
-  // A seeded task's notice, held until the moment the task is about to run.
-  // Asked here at seed time it would be the first thing in the run — a modal
-  // before anything has happened, about work that will not start for minutes.
-  // The queue stays product-ignorant, so the copy waits here rather than on the
-  // task.
-  const seededNotices = new Map<
-    string,
-    NonNullable<(typeof seedEntries)[number]['notice']>
-  >();
+  // Each seeded task's answer to its notice, taken here and applied later.
+  //
+  // Consent belongs at seed time: the user is at the keyboard, watching the run
+  // start, and one keypress is all the question needs. The work does not — the
+  // warehouse step asks for credentials, and those questions belong after the
+  // autonomous coding, which is what `seeded-deps.ts` arranges. 2.63.0 collapsed
+  // the two onto one modal at the moment of execution, a median seven minutes
+  // in, by which time the user had gone; the five-minute timeout then answered
+  // for them, and it answers "skip".
+  //
+  // The answer is recorded rather than acted on, so a declined task still enters
+  // the queue as an ordinary pending task. The planner plans around it,
+  // `deferSeededTasks` can still add its edges, and the sink invariant still
+  // covers it — none of which is true of a task that was enqueued and skipped
+  // before the planner ever ran. `runTask` applies the answer when the drain
+  // reaches the task.
+  const seededConsent = new Map<string, SeededConsent>();
   for (const seeded of seedEntries) {
     if (!registry.runnerSeededTypes.includes(seeded.type)) {
       logToFile(
@@ -602,14 +678,33 @@ export async function runOrchestrator(
     });
     seededTypes.push(seeded.type);
     seededTasks.push(task);
-    if (seeded.notice) seededNotices.set(task.id, seeded.notice);
+    if (seeded.notice) {
+      // Awaited inside the loop, so at most one notice is ever on screen. The
+      // store holds a single pending-notice slot: a second `showTaskNotice`
+      // overwrites the first's resolver, the first promise never settles, and
+      // its task hangs for the rest of the run. A serial loop makes that
+      // unreachable; the drain, which starts every runnable task at once, does
+      // not, which is why the offer lives here and not there.
+      seededConsent.set(
+        task.id,
+        await askSeededConsent(seeded.type, seeded.notice),
+      );
+    }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
 
   // A run that stops to ask a person is not comparable with one that does not
   // — its wall-clock is the user's, not the model's. Tag every event of the run
   // from here on, so those runs filter out cleanly.
-  const askingTypes = seededTypes.filter((type) => canAsk(registry.get(type)));
+  //
+  // A declined step asks nothing, and the answer is known by now, so it leaves
+  // the tag alone. While the offer was made mid-drain this was unknowable here,
+  // and roughly a quarter of runs were tagged as waiting on a user who had in
+  // fact already been auto-declined out of the only step that asks.
+  const askingTypes = seededTasks
+    .filter((task) => seededConsent.get(task.id)?.keep !== false)
+    .map((task) => task.type)
+    .filter((type) => canAsk(registry.get(type)));
   analytics.setTag('orchestrator_awaits_user', askingTypes.length > 0);
   analytics.setTag(
     'orchestrator_runner_seeded_types',
@@ -632,6 +727,12 @@ export async function runOrchestrator(
           // How late the first ask lands is the measure of this run shape: it
           // should follow the autonomous work, not interrupt it.
           metrics.recordAsk(Date.now());
+          // Consent is taken in the first seconds of the run and these questions
+          // arrive at the end of it, so the user who agreed may well be looking
+          // at another window by now. Nothing here waits on the bell — an
+          // unanswered ask still times out into the deep-link fallback — it just
+          // gives a person who stepped away a chance to come back first.
+          ringTerminalBell();
           return getUI().requestQuestion(q);
         },
         cancelQuestion: () => getUI().cancelPendingQuestion(),
@@ -789,83 +890,38 @@ export async function runOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
-  // One notice on screen at a time. The store keeps a single pending-notice
-  // slot, so a second `showTaskNotice` overwrites the first's resolver: the
-  // first promise never settles, its task hangs forever, and the overlay stack
-  // is left one deep. Seeding used to await its notices in a loop, which made
-  // that impossible; offering them from inside the drain does not, because the
-  // executor starts every runnable task at once. Today's graphs still serialize
-  // seeded tasks — the default deferral makes each wait for the one before —
-  // but that is a property of the current graph, not a guarantee, so gate it
-  // here where it cannot be undone by a future prompt declaring its own deps.
-  let noticeGate: Promise<unknown> = Promise.resolve();
   const runTask: RunTask = async (task) => {
     renderQueue();
 
-    // A task that stops for the user is offered, not imposed — and the offer
-    // belongs here, the moment before it runs, not at the top of the run. By now
-    // everything this task waits for is done, so the notice, the questions, and
-    // the work form one block at the end instead of a modal that interrupts
-    // before anything has happened.
+    // A task that stops for the user is offered, not imposed. The offer was
+    // made at seed time; this applies the answer, now that the drain has
+    // reached the task.
     //
-    // Declining skips the task rather than removing it: the planner has already
-    // wired the sink to depend on it, and `nextRunnable` treats a skipped
-    // dependency as satisfied, so the report still runs.
-    const notice = seededNotices.get(task.id);
-    if (notice) {
-      // Consume the offer so it is shown at most once per run. A requeue keeps
-      // the same task id, so without this delete a first attempt that fails or
-      // ends without reporting would re-offer the notice on retry — re-entering
-      // the very timeout stall this screen exists to prevent, double-firing the
-      // notice analytics, and (on a retry decline) overwriting attempt 1's real
-      // outcome with a skip. Later attempts fall through to the executor's
-      // normal retry flow instead.
-      seededNotices.delete(task.id);
-      // Queue behind any notice already on screen. The catch keeps one
-      // offer's failure from poisoning the gate for the next.
-      const offer = noticeGate.then(() => offerSeededTask(notice));
-      noticeGate = offer.catch(() => undefined);
-      // Fail closed. The offer is consumed above, so letting a thrown error
-      // escape would hand the task to the executor's retry path with no notice
-      // left to show — and the second attempt would run the step, and start
-      // asking for credentials, without anyone ever having agreed to it. No UI
-      // implementation throws here today; this is about which way it breaks if
-      // one ever does.
-      const { keep, timedOut } = await offer.catch((err: unknown) => {
-        logToFile(
-          `[orchestrator] notice failed for ${task.type}, declining: ${String(
-            err,
-          )}`,
-        );
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'orchestrator_task_notice' },
-        );
-        return { keep: false, timedOut: false };
+    // A declined task is skipped here rather than dropped at seed time, for two
+    // reasons. The graph the planner saw is then the graph that ran — the sink
+    // already depends on this task, and `nextRunnable` treats a skipped
+    // dependency as satisfied, so the report still runs and can say the step was
+    // declined. And the decline stays in the funnel: it arrives as a `skipped`
+    // event carrying the reason that caused it, rather than as a task that
+    // silently never existed. `orchestrator task skipped` is only readable that
+    // way because it now carries `reason`; without it, declines and timeouts and
+    // agent no-ops were one indistinguishable number.
+    const consent = seededConsent.get(task.id);
+    if (consent && !consent.keep) {
+      const reason = consentSkipReason(consent);
+      logToFile(`[orchestrator] runner-seeded ${task.type} skipped: ${reason}`);
+      const declinedByUser = reason === SkipReason.UserDeclined;
+      store.skip(task.id, reason, {
+        goals: labelFor(task),
+        did: declinedByUser
+          ? 'Nothing — the user chose to skip this step when offered it.'
+          : 'Nothing — the step was offered at the start of the run and never accepted.',
+        forNextAgent: declinedByUser
+          ? 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.'
+          : 'This step was offered and never accepted, so it did no work. Report it as not set up, and point the user at how to do it later.',
       });
-      analytics.wizardCapture('orchestrator task notice answered', {
-        type: task.type,
-        kept: keep,
-        timed_out: timedOut,
-      });
-      if (!keep) {
-        logToFile(
-          `[orchestrator] runner-seeded ${task.type} declined (${
-            timedOut ? 'timed out' : 'by the user'
-          })`,
-        );
-        store.skip(task.id, {
-          goals: notice.title,
-          did: timedOut
-            ? 'Nothing — the step was offered and the offer timed out with no answer.'
-            : 'Nothing — the user chose to skip this step when offered it.',
-          forNextAgent: timedOut
-            ? 'This step was offered and nobody answered, so it did no work. Report it as not set up, and point the user at how to do it later.'
-            : 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.',
-        });
-        renderQueue();
-        return;
-      }
+      renderQueue();
+      return;
     }
 
     try {

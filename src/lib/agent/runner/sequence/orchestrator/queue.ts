@@ -27,6 +27,31 @@ export const TaskStatus = {
 
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
+/**
+ * Why a task ended as skipped.
+ *
+ * A skip has several causes that look identical from outside: an agent finding
+ * the step does not apply, a user declining it, and an offer nobody answered.
+ * They mean opposite things — the first is a no-op, the last two are the user
+ * telling us something — and telling them apart needs the reason recorded at
+ * the moment of the skip, not inferred later from timings.
+ *
+ * Recorded on the task like `error` is on a failed one, so it reaches the
+ * skipped-task event and the run's queue.json alike.
+ */
+export const SkipReason = {
+  /** The user answered the step's notice with Skip. */
+  UserDeclined: 'user-declined',
+  /** The notice went unanswered until it timed out. */
+  NoticeTimeout: 'notice-timeout',
+  /** The notice could not be shown at all, so consent failed closed. */
+  NoticeError: 'notice-error',
+  /** The task agent reported `not needed`: the step did not apply here. */
+  AgentNotNeeded: 'agent-not-needed',
+} as const;
+
+export type SkipReason = (typeof SkipReason)[keyof typeof SkipReason];
+
 export interface QueuedTask {
   id: string;
   type: string;
@@ -60,6 +85,8 @@ export interface QueuedTask {
   startedAt?: string;
   finishedAt?: string;
   error?: { type: string; message: string };
+  /** Set when `status` is `not needed`: why. The failed-task `error` of a skip. */
+  skipReason?: SkipReason;
 }
 
 export interface QueueFile {
@@ -294,8 +321,16 @@ export class QueueStore {
     return this.finish(id, TaskStatus.Done, handoff);
   }
 
-  /** Terminal: the agent could not do the task. Not done, not failed. */
-  skip(id: string, handoff?: TaskHandoff): QueuedTask {
+  /**
+   * Terminal: the task was not done, and that is not a failure.
+   *
+   * The reason is required, and sits before the optional handoff for that
+   * reason. A skip carrying no reason is what let a five-minute auto-decline
+   * hide inside the same event as an agent deciding a step did not apply.
+   */
+  skip(id: string, reason: SkipReason, handoff?: TaskHandoff): QueuedTask {
+    const t = this.require(id);
+    t.skipReason = reason;
     return this.finish(id, TaskStatus.Skipped, handoff);
   }
 
