@@ -161,8 +161,12 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
       },
       notice: {
         title: 'Connect your data sources',
+        // Two moments, and the copy has to name both. The answer is given here,
+        // at the start of the run. The credential questions arrive at the end of
+        // it, minutes later. So this must not read as "expect a prompt any
+        // moment now", and equally must not read as "walk away for the run".
         body: [
-          'We detected some warehouse sources we can connect to enrich your PostHog data. This runs at the end, once your code changes are done — we’ll prompt you then for the credentials, so you can leave the setup to run until it asks.',
+          'We detected some warehouse sources we can connect to enrich your PostHog data. Answer now, and we connect them at the end of the run, after your code changes. We will ask you for the credentials at that point, and beep when we do.',
           "You can select [Skip] if you'd like to do this later in PostHog.",
         ],
         items: sources.map((s) => s.label),

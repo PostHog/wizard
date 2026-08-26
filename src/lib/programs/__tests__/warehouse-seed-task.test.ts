@@ -106,6 +106,22 @@ describe('warehouse task notice', () => {
     expect(notice()?.body[0]).toContain('at the end');
   });
 
+  it('asks for the answer now, and says the credentials come later', () => {
+    // Two moments, minutes apart. The copy is shown at the first and has to
+    // name the second, or a user who says yes has no idea they will be needed
+    // again — which is how an accepted step still ends in an unanswered prompt.
+    const body = notice()?.body[0] ?? '';
+    expect(body).toContain('Answer now');
+    expect(body).toContain('credentials');
+  });
+
+  it('does not invite the user to leave for the whole run', () => {
+    // The copy written for the old start-of-run modal said "you can leave the
+    // setup to run until it asks". The run does stop and ask, at the end, for
+    // credentials only that person has.
+    expect(notice()?.body.join(' ')).not.toContain('leave the setup to run');
+  });
+
   it('names what was detected', () => {
     expect(notice()?.items).toEqual(['Postgres']);
   });

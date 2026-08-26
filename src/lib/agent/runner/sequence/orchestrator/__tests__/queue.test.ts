@@ -4,8 +4,11 @@ import * as path from 'path';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
+  SkipReason,
   type QueueFile,
+  type QueuedTask,
   type TaskHandoff,
+  type TransitionEvent,
 } from '@lib/agent/runner/sequence/orchestrator/queue';
 
 vi.mock('@utils/analytics', () => ({
@@ -82,7 +85,7 @@ describe('QueueStore', () => {
     const b = q.enqueue({ type: 'init', dependsOn: [a.id] });
 
     q.start(a.id);
-    q.skip(a.id);
+    q.skip(a.id, SkipReason.AgentNotNeeded);
     expect(q.nextRunnable().map((t) => t.id)).toEqual([b.id]);
   });
 
@@ -386,5 +389,86 @@ describe('addDependencies', () => {
 
   it('throws for a task that is not in the queue at all', () => {
     expect(() => store.addDependencies('nope', [])).toThrow('No task nope');
+  });
+});
+
+/**
+ * Why a skip happened, recorded where the skip happens.
+ *
+ * A skip has causes that mean opposite things: an agent finding a step does not
+ * apply is a no-op, a user declining it is a decision, and an unanswered offer
+ * is neither. For a week they were one indistinguishable number on
+ * `orchestrator task skipped`, which is how a regression that halved the
+ * warehouse completion rate stayed invisible. The reason has to be on the task
+ * itself, so the transition listener can read it and the run's queue.json keeps
+ * it.
+ */
+describe('skip reasons', () => {
+  let dir: string;
+  let q: QueueStore;
+
+  beforeEach(() => {
+    dir = tmpDir();
+    q = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it.each([
+    ['user-declined', SkipReason.UserDeclined],
+    ['notice-timeout', SkipReason.NoticeTimeout],
+    ['notice-error', SkipReason.NoticeError],
+    ['agent-not-needed', SkipReason.AgentNotNeeded],
+  ] as const)('records %s on the task', (expected, reason) => {
+    const t = q.enqueue({ type: 'warehouse' });
+    q.start(t.id);
+    q.skip(t.id, reason);
+
+    expect(q.get(t.id)?.status).toBe('not needed');
+    expect(q.get(t.id)?.skipReason).toBe(expected);
+  });
+
+  it('hands the reason to the transition listener', () => {
+    const seen: { event: TransitionEvent; reason?: string }[] = [];
+    const listened = new QueueStore(dir, 'run-1', {
+      onTransition: (event: TransitionEvent, task: QueuedTask) =>
+        seen.push({ event, reason: task.skipReason }),
+    });
+
+    const t = listened.enqueue({ type: 'warehouse' });
+    listened.start(t.id);
+    listened.skip(t.id, SkipReason.NoticeTimeout);
+
+    expect(seen.at(-1)).toEqual({
+      event: 'skip',
+      reason: 'notice-timeout',
+    });
+  });
+
+  it('leaves the reason unset on every other terminal transition', () => {
+    const done = q.enqueue({ type: 'install' });
+    q.start(done.id);
+    q.complete(done.id);
+    const failed = q.enqueue({ type: 'capture', maxAttempts: 1 });
+    q.start(failed.id);
+    q.fail(failed.id, { type: 'API_ERROR', message: 'boom' });
+
+    expect(q.get(done.id)?.skipReason).toBeUndefined();
+    expect(q.get(failed.id)?.skipReason).toBeUndefined();
+  });
+
+  it('reflects the reason to queue.json, so a finished run still explains itself', () => {
+    const t = q.enqueue({ type: 'warehouse' });
+    q.start(t.id);
+    q.skip(t.id, SkipReason.UserDeclined, {
+      goals: 'Connect your data sources',
+      did: 'Nothing — the user chose to skip this step when offered it.',
+      forNextAgent: 'Report it as skipped at the user’s request.',
+    });
+
+    const file = JSON.parse(fs.readFileSync(q.queuePath, 'utf8')) as QueueFile;
+    expect(file.tasks.find((t2) => t2.id === t.id)?.skipReason).toBe(
+      'user-declined',
+    );
   });
 });
