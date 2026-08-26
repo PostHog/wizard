@@ -11,6 +11,7 @@ import type { TokenUsageDelta } from '@ui/wizard-ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
+import { isTemplateEnvFileName } from '@utils/env-scan';
 import { runtimeEnv } from '@env';
 import type { AioCapture } from '@lib/agent/aio-capture';
 import {
@@ -447,10 +448,7 @@ export function wizardCanUseTool(
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
-      basename,
-    );
-    if (basename.startsWith('.env') && !isEnvExample) {
+    if (basename.startsWith('.env') && !isTemplateEnvFileName(basename)) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',

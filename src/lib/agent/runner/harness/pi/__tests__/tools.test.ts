@@ -47,6 +47,7 @@ const makeTools = (
     workingDirectory,
     wizardAsk: byName('wizard_ask'),
     setEnvValues: byName('set_env_values'),
+    checkEnvKeys: byName('check_env_keys'),
   };
 };
 
@@ -131,6 +132,34 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     expect(desc).toBe(WIZARD_ASK_SENSITIVE_DESCRIPTION);
     expect(desc).toMatch(/data-warehouse tools/);
     expect(desc).toMatch(/reject it/);
+  });
+});
+
+describe('pi check_env_keys — failures arrive as rejections', () => {
+  it('rejects rather than throwing synchronously on a traversal path', () => {
+    // The tool has to be its own async boundary: checkEnvKeys throws on a
+    // filePath that escapes the working directory, and pi wraps `execute` in a
+    // plain non-async arrow, so a synchronous throw would leave the tool
+    // instead of arriving as a failed tool call. Dropping `async` here — the
+    // scan removed the last `await` — is what made that reachable.
+    const { checkEnvKeys } = makeTools({});
+    const run = () =>
+      call(checkEnvKeys, { keys: ['ANY'], filePath: '../../etc/passwd' });
+
+    expect(run).not.toThrow();
+    return expect(run()).rejects.toThrow('Path traversal rejected');
+  });
+
+  it('answers normally for a path inside the working directory', async () => {
+    const { checkEnvKeys } = makeTools({});
+    const result = await call(checkEnvKeys, {
+      keys: ['ANY'],
+      filePath: '.env',
+    });
+
+    expect(JSON.parse(textOf(result))).toEqual({
+      ANY: { status: 'missing', foundIn: [] },
+    });
   });
 });
 
@@ -282,6 +311,51 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     const env = await readFile(join(workingDirectory, '.env'), 'utf8');
     expect(env).toContain('POSTHOG_HOST=https://us.posthog.com');
     expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
+  });
+
+  it.each(['.env.example', '.env.sample', '.env.template', '.env.dist'])(
+    'refuses to write a credential into %s, and writes nothing',
+    async (template) => {
+      // check_env_keys now hands the agent file paths, and a template is one
+      // of them. Writing there publishes the credential with the repository —
+      // and the gitignore pass that follows does not help, because adding an
+      // already-tracked file to .gitignore changes nothing.
+      const { wizardAsk, setEnvValues, workingDirectory } = makeTools({
+        token: SECRET,
+      });
+      const asked = await call(wizardAsk, {
+        questions: [
+          { id: 'token', prompt: 'Token', kind: 'text', sensitive: true },
+        ],
+      });
+      const { answers } = JSON.parse(textOf(asked)) as {
+        answers: { token: { secretRef: string } };
+      };
+
+      const result = await call(setEnvValues, {
+        filePath: template,
+        values: { ZENDESK_TOKEN: answers.token },
+      });
+
+      expect(textOf(result)).toMatch(/would be published/);
+      await expect(
+        readFile(join(workingDirectory, template), 'utf8'),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('still writes a real env file whose name merely starts like a template', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+
+    const result = await call(setEnvValues, {
+      filePath: '.env.example.local',
+      values: { POSTHOG_HOST: 'https://us.posthog.com' },
+    });
+
+    expect(textOf(result)).not.toMatch(/would be published/);
+    expect(
+      await readFile(join(workingDirectory, '.env.example.local'), 'utf8'),
+    ).toContain('POSTHOG_HOST=https://us.posthog.com');
   });
 
   it('an unknown ref fails with a clear error and writes nothing', async () => {

@@ -11,6 +11,15 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { readProjectFile } from '@utils/bounded-fs';
+import {
+  collectProjectEnvKeys,
+  isTemplateEnvFileName,
+  parseEnvKeyNames,
+  toPromptSafeRelativePath,
+  type EnvKeyDefinition,
+  type EnvKeyLocations,
+} from '@utils/env-scan';
 import { scanInstalledSkill } from '@lib/yara-hooks';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
@@ -556,6 +565,17 @@ export function createAskAccounting(maxQuestions: number): AskAccounting {
 export const ENV_FILE_PATH_DESCRIPTION =
   'Path to the .env file, relative to the wizard working directory. Pass ".env" for a file in that directory, or include the selected subproject path (for example, "packages/app/.env") for a nested project. Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
 
+/** Shared `check_env_keys` tool description — both facades declare the same contract. */
+export const CHECK_ENV_KEYS_DESCRIPTION =
+  'Check which environment variable keys the project already sets, and in which file. By default it scans the .env files in the project (including .env.local and nested ones such as apps/api/.env, but not ones inside dependency or hidden directories), so it agrees with the source detection the wizard reports. Returns, per key, { "status": "present" | "missing", "foundIn": [file paths] }. "present" means a real env file sets the key; a key found only in a committed template (.env.example, .env.sample, .env.template, .env.dist) is "missing", because a template documents a key rather than setting it — so "missing" with a non-empty "foundIn" means the project expects this key and you still need to collect it. A template listed in "foundIn" is NEVER a write target: it is committed to the repository, so writing a real credential there would publish it. Write to .env or .env.local instead. Key NAMES and file paths only — it never reads or reveals a value.';
+
+/**
+ * `filePath` on `check_env_keys` is optional — omitting it scans the whole
+ * project, which is what makes the tool agree with the wizard's own detector.
+ */
+export const CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION =
+  'Optional. Omit it to scan the project\'s .env files (the default, and what you want in a monorepo or when the keys may live in .env.local). Pass a single path, relative to the wizard working directory, only to restrict the check to that one file — for example ".env" or "packages/app/.env". Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
  */
@@ -601,17 +621,154 @@ export function ensureGitignoreCoverage(
 }
 
 /**
- * Parse a .env file's content and return the set of defined key names.
+ * Parse a .env file's content and return the set of defined key NAMES.
+ * Delegates to the shared parser the warehouse detector uses, so the two
+ * cannot disagree about what counts as a key (the `export KEY=` form used to
+ * be a key to the detector and not to this tool).
  */
 export function parseEnvKeys(content: string): Set<string> {
-  const keys = new Set<string>();
-  for (const line of content.split('\n')) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-    if (match) {
-      keys.add(match[1]);
-    }
+  return new Set(parseEnvKeyNames(content));
+}
+
+// ---------------------------------------------------------------------------
+// check_env_keys
+// ---------------------------------------------------------------------------
+
+/** Whether a requested key is set, and which env files mention it. */
+export interface EnvKeyPresence {
+  /**
+   * `present` only when a real env file sets the key. A key declared solely in
+   * a committed template is `missing` — documented, not set.
+   */
+  status: 'present' | 'missing';
+  /**
+   * Project-relative paths of every `.env*` file that declares the key,
+   * templates included. `missing` with a non-empty `foundIn` is the useful
+   * case: the project expects this key and has not set it.
+   *
+   * A path here is evidence, not a write target. A template is committed, so
+   * writing a credential into one publishes it — `set_env_values` should be
+   * pointed at `.env`/`.env.local`.
+   */
+  foundIn: string[];
+}
+
+/**
+ * Answer "which of these env keys does the project already define, and where".
+ *
+ * Shared by both tool facades (MCP and pi) so the answer cannot drift between
+ * harnesses. Two modes:
+ *  - `filePath` omitted (preferred): scan every `.env*` file in the project,
+ *    within the same depth and size bounds the warehouse detector uses. This
+ *    is what stops the tool reporting "missing" for a key the detector found
+ *    in `apps/api/.env.local`.
+ *  - `filePath` given: check that one file only — the original behaviour,
+ *    kept for callers that already pass a path.
+ *
+ * In both modes `status` answers "is this key set?", which is not the same as
+ * "does some file mention it": a committed template declares keys without
+ * setting them, so it never makes a key `present`. `foundIn` still lists it.
+ *
+ * SECURITY: returns key NAMES and file paths only. A `.env` value is never
+ * read into the result and never logged.
+ */
+export function checkEnvKeys(
+  workingDirectory: string,
+  keys: string[],
+  filePath?: string,
+): Record<string, EnvKeyPresence> {
+  const locations =
+    filePath === undefined
+      ? collectProjectEnvKeys(workingDirectory)
+      : readSingleEnvFile(workingDirectory, filePath);
+
+  // Key names only — never the values, and never the file contents.
+  logToFile(
+    `check_env_keys: ${
+      filePath === undefined
+        ? `project scan of ${workingDirectory}`
+        : resolveEnvPath(workingDirectory, filePath)
+    }, keys: ${keys.join(', ')}`,
+  );
+
+  const results: Record<string, EnvKeyPresence> = {};
+  for (const key of keys) {
+    const definitions = locations.get(key) ?? [];
+    results[key] = {
+      // A template declares a key; it does not set one. Counting
+      // `.env.example` as "present" would tell the agent the credential is
+      // already configured and stop it collecting one — the same failure as
+      // the "missing" answer this tool was fixed to stop giving, inverted.
+      // Nearly every project has a template, so this is the common case.
+      status: definitions.some((d) => !d.template) ? 'present' : 'missing',
+      foundIn: definitions.map((d) => d.file),
+    };
   }
-  return keys;
+  return results;
+}
+
+/**
+ * The single-file arm of `checkEnvKeys`, shaped like the project scan so the
+ * caller handles one type. Reads through `readProjectFile`, which returns null
+ * for a missing file, an oversized file, or a `.env` that is a DIRECTORY —
+ * the last of which used to crash the tool with EISDIR.
+ */
+function readSingleEnvFile(
+  workingDirectory: string,
+  filePath: string,
+): EnvKeyLocations {
+  const resolved = resolveEnvPath(workingDirectory, filePath);
+  const content = readProjectFile(resolved);
+  const locations: EnvKeyLocations = new Map();
+  if (content === null) return locations;
+
+  const definition: EnvKeyDefinition = {
+    file: toPromptSafeRelativePath(workingDirectory, resolved),
+    // The template rule holds however the file was reached, so `status` means
+    // one thing in both modes. `foundIn` still names the file, so an explicit
+    // check of a template is answered rather than silently empty.
+    template: isTemplateEnvFileName(path.basename(resolved)),
+  };
+  for (const key of parseEnvKeyNames(content)) {
+    if (!locations.has(key)) locations.set(key, [definition]);
+  }
+  return locations;
+}
+
+/**
+ * `set_env_values`' refusal for a committed template file, or null when the
+ * path is an ordinary env file. Shared by both facades so the two cannot
+ * disagree about what is a legal destination.
+ *
+ * `check_env_keys` hands the agent file paths now, and a template is one of
+ * them — so the tool that resolves secret refs must not accept one as a
+ * target. A template is committed, so a credential written there is published,
+ * and the `ensureGitignoreCoverage` that follows the write does not save it:
+ * adding an already-tracked file to `.gitignore` changes nothing.
+ *
+ * Nothing legitimate is lost. No wizard code path writes a template, and the
+ * agent's Read/Write gate deliberately lets it edit one directly — so
+ * documenting a key name keeps its route, and this one stays for credentials.
+ */
+export function templateEnvWriteRefusal(resolvedPath: string): string | null {
+  const name = path.basename(resolvedPath);
+  if (!isTemplateEnvFileName(name)) return null;
+  return (
+    `Error: "${name}" is a committed template that documents key names, so it is not a valid target for set_env_values — ` +
+    `a credential written there would be published with the repository. ` +
+    `Write to .env or .env.local instead (it is created if missing). ` +
+    `If you only mean to document the key name, edit the template directly.`
+  );
+}
+
+/**
+ * Escape a key before it is interpolated into the match regex below. The key
+ * comes from the agent, and a stray metacharacter would otherwise build a
+ * pattern that matches an unrelated line — `A|B` turns `^(\s*A|B\s*=)` into
+ * "any line starting with A", whose value the merge would then overwrite.
+ */
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -627,7 +784,17 @@ export function mergeEnvValues(
 
   for (const [key, value] of Object.entries(values)) {
     // Preserve the existing `KEY=` prefix exactly; only swap the value.
-    const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
+    //
+    // The `export ` form counts as the same declaration. `check_env_keys`
+    // reads it, so without this the reader reports a key present while the
+    // writer fails to find the line and appends a second definition below it
+    // — two declarations of one key, with the winner left to whichever dotenv
+    // loader the app happens to use. Capturing the prefix in $1 keeps the
+    // file's existing style on the way out.
+    const regex = new RegExp(
+      `^(\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=).*$`,
+      'm',
+    );
     if (regex.test(result)) {
       result = result.replace(regex, `$1${value}`);
       updatedKeys.add(key);

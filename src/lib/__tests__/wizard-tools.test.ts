@@ -10,6 +10,8 @@ import {
   WIZARD_ASK_TOOL_DESCRIPTION,
   WIZARD_TOOL_NAMES,
   __test,
+  CHECK_ENV_KEYS_DESCRIPTION,
+  checkEnvKeys,
   createAskAccounting,
   ensureGitignoreCoverage,
   evaluateAskCap,
@@ -18,6 +20,7 @@ import {
   normaliseAskSubject,
   parseEnvKeys,
   resolveEnvPath,
+  templateEnvWriteRefusal,
 } from '@lib/wizard-tools';
 import type { AuditCheck } from '@lib/programs/audit/types';
 
@@ -99,6 +102,251 @@ DB_URL=postgres://host:5432/db?opt=1
   });
 });
 
+describe('checkEnvKeys', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  function writeEnv(relativePath: string, content: string): void {
+    const full = path.join(tmpDir, relativePath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content);
+  }
+
+  describe('project scan (no filePath)', () => {
+    it.each([
+      ['.env'],
+      ['.env.local'],
+      ['.env.production'],
+      ['apps/api/.env'],
+      ['apps/web/.env.local'],
+    ])('reports a key in %s as present and names the file', (relativePath) => {
+      writeEnv(relativePath, 'OPENAI_API_KEY=sk-live-secret\n');
+
+      expect(checkEnvKeys(tmpDir, ['OPENAI_API_KEY'])).toEqual({
+        OPENAI_API_KEY: { status: 'present', foundIn: [relativePath] },
+      });
+    });
+
+    it('agrees with the detector: a key only in a nested .env.local is present', () => {
+      // The mismatch this tool used to produce — the detector saw the key in
+      // apps/api/.env.local while the tool looked only at .env.
+      writeEnv('apps/api/.env.local', 'ANTHROPIC_API_KEY=sk-ant-secret\n');
+      writeEnv('.env', 'UNRELATED=1\n');
+
+      const result = checkEnvKeys(tmpDir, ['ANTHROPIC_API_KEY']);
+      expect(result.ANTHROPIC_API_KEY.status).toBe('present');
+      expect(result.ANTHROPIC_API_KEY.foundIn).toEqual(['apps/api/.env.local']);
+    });
+
+    it('reports a key defined nowhere as missing with no files', () => {
+      writeEnv('.env', 'OTHER=1\n');
+      expect(checkEnvKeys(tmpDir, ['NOPE'])).toEqual({
+        NOPE: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it.each(['.env.example', '.env.sample', '.env.template', '.env.dist'])(
+      'does not call a key present when only %s declares it',
+      (template) => {
+        // Nearly every project commits one of these, and they hold empty
+        // placeholders. Counting them as "present" tells the agent the
+        // credential is already configured, so it never collects one — the
+        // mirror image of the "missing" answer this tool was fixed to stop
+        // giving.
+        writeEnv(template, 'OPENAI_API_KEY=\nDATABASE_URL=\n');
+
+        const result = checkEnvKeys(tmpDir, ['OPENAI_API_KEY']);
+        expect(result.OPENAI_API_KEY.status).toBe('missing');
+        // Still named, as evidence that the project expects the key — NOT as a
+        // write target. A template is committed, so a credential written there
+        // would be published; the description says so explicitly.
+        expect(result.OPENAI_API_KEY.foundIn).toEqual([template]);
+      },
+    );
+
+    it('warns that a template is never a write target', () => {
+      // `foundIn` hands the agent a path, and `set_env_values` will happily
+      // write to a template and then "protect" it by gitignoring a file git is
+      // already tracking. The only thing standing between that and a published
+      // credential is this sentence, so pin it.
+      expect(CHECK_ENV_KEYS_DESCRIPTION).toMatch(/NEVER a write target/);
+      expect(CHECK_ENV_KEYS_DESCRIPTION).toMatch(/would publish it/);
+    });
+
+    it('is present when a real file sets a key the template also declares', () => {
+      writeEnv('.env.example', 'DATABASE_URL=\n');
+      writeEnv('.env', 'DATABASE_URL=postgres://u:pw@h/db\n');
+
+      const result = checkEnvKeys(tmpDir, ['DATABASE_URL']);
+      expect(result.DATABASE_URL.status).toBe('present');
+      expect(result.DATABASE_URL.foundIn).toEqual(
+        expect.arrayContaining(['.env', '.env.example']),
+      );
+    });
+
+    it('treats .env.example.local as a real file, not a template', () => {
+      // Only the four conventional template names are discounted; anything
+      // else that starts with `.env` is somebody's real environment.
+      writeEnv('.env.example.local', 'STRIPE_SECRET_KEY=sk_live_x\n');
+
+      expect(checkEnvKeys(tmpDir, ['STRIPE_SECRET_KEY'])).toEqual({
+        STRIPE_SECRET_KEY: {
+          status: 'present',
+          foundIn: ['.env.example.local'],
+        },
+      });
+    });
+
+    it('reports every file that defines the same key', () => {
+      writeEnv('.env', 'SHARED=a\n');
+      writeEnv('apps/api/.env', 'SHARED=b\n');
+
+      const result = checkEnvKeys(tmpDir, ['SHARED']);
+      expect(result.SHARED.status).toBe('present');
+      expect(result.SHARED.foundIn).toHaveLength(2);
+      expect(result.SHARED.foundIn).toEqual(
+        expect.arrayContaining(['.env', 'apps/api/.env']),
+      );
+    });
+
+    it('reads the `export KEY=` form', () => {
+      writeEnv('.env.local', 'export STRIPE_SECRET_KEY=sk_live_x\n');
+      expect(
+        checkEnvKeys(tmpDir, ['STRIPE_SECRET_KEY']).STRIPE_SECRET_KEY,
+      ).toEqual({ status: 'present', foundIn: ['.env.local'] });
+    });
+
+    it('does not crash when .env is a directory', () => {
+      fs.mkdirSync(path.join(tmpDir, '.env'));
+      fs.writeFileSync(
+        path.join(tmpDir, '.env', 'pyvenv.cfg'),
+        'home = /usr\n',
+      );
+      writeEnv('.env.local', 'STRIPE_SECRET_KEY=sk_live_x\n');
+
+      expect(
+        checkEnvKeys(tmpDir, ['STRIPE_SECRET_KEY']).STRIPE_SECRET_KEY,
+      ).toEqual({ status: 'present', foundIn: ['.env.local'] });
+    });
+
+    it('ignores env files below the depth limit and inside node_modules', () => {
+      writeEnv('a/b/c/d/.env', 'TOO_DEEP=x\n');
+      writeEnv('node_modules/pkg/.env', 'VENDORED=x\n');
+      writeEnv('a/b/c/.env', 'IN_RANGE=x\n');
+
+      expect(
+        checkEnvKeys(tmpDir, ['TOO_DEEP', 'VENDORED', 'IN_RANGE']),
+      ).toEqual({
+        TOO_DEEP: { status: 'missing', foundIn: [] },
+        VENDORED: { status: 'missing', foundIn: [] },
+        IN_RANGE: { status: 'present', foundIn: ['a/b/c/.env'] },
+      });
+    });
+
+    it('returns an empty answer for a project with no env files', () => {
+      expect(checkEnvKeys(tmpDir, ['ANY'])).toEqual({
+        ANY: { status: 'missing', foundIn: [] },
+      });
+    });
+  });
+
+  describe('single-file mode (filePath given)', () => {
+    it('checks only the named file', () => {
+      writeEnv('.env', 'IN_ROOT=x\n');
+      writeEnv('apps/api/.env', 'IN_NESTED=x\n');
+
+      expect(checkEnvKeys(tmpDir, ['IN_ROOT', 'IN_NESTED'], '.env')).toEqual({
+        IN_ROOT: { status: 'present', foundIn: ['.env'] },
+        IN_NESTED: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('resolves a nested path relative to the working directory', () => {
+      writeEnv('apps/api/.env.local', 'NESTED_KEY=x\n');
+
+      expect(
+        checkEnvKeys(tmpDir, ['NESTED_KEY'], 'apps/api/.env.local'),
+      ).toEqual({
+        NESTED_KEY: { status: 'present', foundIn: ['apps/api/.env.local'] },
+      });
+    });
+
+    it('reports every key as missing when the file does not exist', () => {
+      expect(checkEnvKeys(tmpDir, ['A', 'B'], '.env.local')).toEqual({
+        A: { status: 'missing', foundIn: [] },
+        B: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('reports missing instead of crashing when the path is a directory', () => {
+      // Regression guard: `.env` as a Python virtualenv threw EISDIR.
+      fs.mkdirSync(path.join(tmpDir, '.env'));
+
+      expect(() => checkEnvKeys(tmpDir, ['ANY'], '.env')).not.toThrow();
+      expect(checkEnvKeys(tmpDir, ['ANY'], '.env')).toEqual({
+        ANY: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('still rejects a path that escapes the working directory', () => {
+      expect(() => checkEnvKeys(tmpDir, ['ANY'], '../../etc/passwd')).toThrow(
+        'Path traversal rejected',
+      );
+    });
+
+    it('discounts a template even when the caller names it explicitly', () => {
+      // `status` has to mean the same thing in both modes, or an agent that
+      // passes a path gets a different answer from one that does not. The
+      // file is still named in `foundIn`, so the answer is not opaque.
+      writeEnv('.env.example', 'OPENAI_API_KEY=\n');
+
+      expect(checkEnvKeys(tmpDir, ['OPENAI_API_KEY'], '.env.example')).toEqual({
+        OPENAI_API_KEY: { status: 'missing', foundIn: ['.env.example'] },
+      });
+    });
+  });
+
+  describe('the values-never-returned guarantee', () => {
+    const secrets = [
+      'sk-live-supersecret',
+      'postgres://user:hunter2@db.internal:5432/app',
+      'AKIAIOSFODNN7EXAMPLE',
+    ];
+
+    it.each([[undefined], ['.env.local']])(
+      'returns key names and paths only (filePath=%s)',
+      (filePath) => {
+        writeEnv(
+          '.env.local',
+          [
+            `OPENAI_API_KEY=${secrets[0]}`,
+            `DATABASE_URL=${secrets[1]}`,
+            `AWS_ACCESS_KEY_ID=${secrets[2]}`,
+          ].join('\n'),
+        );
+
+        const serialized = JSON.stringify(
+          checkEnvKeys(
+            tmpDir,
+            ['OPENAI_API_KEY', 'DATABASE_URL', 'AWS_ACCESS_KEY_ID'],
+            filePath,
+          ),
+        );
+
+        expect(serialized).toContain('OPENAI_API_KEY');
+        expect(serialized).toContain('.env.local');
+        for (const secret of secrets) {
+          expect(serialized).not.toContain(secret);
+        }
+      },
+    );
+  });
+});
+
 describe('mergeEnvValues', () => {
   it('updates existing keys in place, appends new keys, and preserves values containing equals signs', () => {
     const result = mergeEnvValues('FOO=old\nDB_URL=old://host', {
@@ -110,6 +358,65 @@ describe('mergeEnvValues', () => {
     expect(result).toBe(
       'FOO=new\nDB_URL=postgres://new:5432/db?opt=1\nBAR=added\n',
     );
+  });
+
+  it('updates an `export KEY=` line in place, keeping the prefix', () => {
+    // check_env_keys reads this form and reports the key present. A writer
+    // that could not see it appended a second definition below, leaving two
+    // declarations of one key and the winner up to the app's dotenv loader.
+    expect(
+      mergeEnvValues('export STRIPE_SECRET_KEY=sk_live_old\n', {
+        STRIPE_SECRET_KEY: 'sk_live_new',
+      }),
+    ).toBe('export STRIPE_SECRET_KEY=sk_live_new\n');
+  });
+
+  it('handles an indented `export` and leaves neighbouring lines alone', () => {
+    expect(
+      mergeEnvValues('KEEP=me\n  export FOO=old\nALSO=kept\n', { FOO: 'new' }),
+    ).toBe('KEEP=me\n  export FOO=new\nALSO=kept\n');
+  });
+
+  it('does not treat a commented-out export as the live declaration', () => {
+    expect(mergeEnvValues('# export FOO=old\n', { FOO: 'new' })).toBe(
+      '# export FOO=old\nFOO=new\n',
+    );
+  });
+
+  it('does not let a key with regex metacharacters overwrite another line', () => {
+    // The key is interpolated into the match pattern. Unescaped, `A|B` builds
+    // "any line starting with A" and the merge rewrites that line's value.
+    const result = mergeEnvValues('ALPHA=keep-me\n', { 'A|B': 'x' });
+
+    expect(result).toContain('ALPHA=keep-me');
+    expect(result).not.toContain('ALPHA=x');
+  });
+});
+
+describe('templateEnvWriteRefusal', () => {
+  it.each(['.env.example', '.env.sample', '.env.template', '.env.dist'])(
+    'refuses %s as a set_env_values target',
+    (name) => {
+      const refusal = templateEnvWriteRefusal(`/project/${name}`);
+      expect(refusal).toContain(name);
+      expect(refusal).toMatch(/would be published/);
+      // The agent needs somewhere to go, or it will just retry the same path.
+      expect(refusal).toMatch(/\.env\.local/);
+    },
+  );
+
+  it.each(['.env', '.env.local', '.env.production', '.env.example.local'])(
+    'allows %s',
+    (name) => {
+      expect(templateEnvWriteRefusal(`/project/${name}`)).toBeNull();
+    },
+  );
+
+  it('judges the basename, not the directory it sits in', () => {
+    expect(templateEnvWriteRefusal('/project/.env.example/.env')).toBeNull();
+    expect(
+      templateEnvWriteRefusal('/project/apps/api/.env.example'),
+    ).not.toBeNull();
   });
 });
 
