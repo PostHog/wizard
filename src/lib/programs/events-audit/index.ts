@@ -8,6 +8,7 @@ import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
 import { seedAuditLedger } from '@lib/programs/audit/seed';
+import { notebookUploadSkipInstruction } from '@lib/programs/audit/notebook-scope';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
 // SETUP_REPORT_FILE is also re-exported for backward compat with existing
@@ -56,7 +57,8 @@ export const eventsAuditConfig: ProgramConfig = {
       additionalFeatureQueue: session.additionalFeatureQueue,
 
       customPrompt: (ctx) =>
-        `Audit PostHog event capture in this project. Do not modify any project files — produce a read-only report only.
+        [
+          `Audit PostHog event capture in this project. Do not modify any project files — produce a read-only report only.
 
 Project context:
 - PostHog Project ID: ${ctx.projectId}
@@ -64,6 +66,12 @@ Project context:
 - PostHog public token: ${ctx.projectApiKey}
 - PostHog Host: ${ctx.host.apiHost}
 `,
+          // Skip the notebook upload when the login grant omitted
+          // `notebook:write`, rather than failing on the final step.
+          notebookUploadSkipInstruction(ctx.missingScopes),
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
 
       buildOutroData: (sess, credentials) => {
         const cloudUrl = credentials.host.appHost;

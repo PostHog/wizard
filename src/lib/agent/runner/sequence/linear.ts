@@ -102,6 +102,7 @@ export async function runLinearProgram(
     projectApiKey,
     host,
     skillPath,
+    missingScopes: credentials.missingScopes ?? [],
     orgAiDataProcessingApproved:
       session.apiUser?.organization?.is_ai_data_processing_approved ?? null,
     teamProductOptIns: project
