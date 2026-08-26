@@ -9,15 +9,22 @@
 import { analytics } from './analytics';
 import { logToFile } from './debug';
 import { getUI } from '@ui';
+import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
+import type { ErrorCode } from '@lib/errors';
+import { emitPhwError } from '@lib/errors';
 
 export class WizardError extends Error {
+  readonly code?: ErrorCode;
+
   constructor(
     message: string,
     public readonly context?: Record<string, unknown>,
+    code?: ErrorCode,
   ) {
     super(message);
     this.name = 'WizardError';
+    this.code = code;
   }
 }
 
@@ -27,6 +34,8 @@ interface WizardAbortOptions {
   outroData?: OutroData;
   error?: Error | WizardError;
   exitCode?: number;
+  code?: ErrorCode;
+  detail?: Record<string, unknown>;
 }
 
 const cleanupFns: Array<() => void> = [];
@@ -51,6 +60,15 @@ export function runCleanups(): void {
   }
 }
 
+function resolveErrorCode(
+  options: WizardAbortOptions,
+  error: Error | WizardError | undefined,
+): ErrorCode | undefined {
+  if (options.code) return options.code;
+  if (error instanceof WizardError) return error.code;
+  return undefined;
+}
+
 export async function wizardAbort(
   options?: WizardAbortOptions,
 ): Promise<never> {
@@ -61,7 +79,14 @@ export async function wizardAbort(
     exitCode = 1,
   } = options ?? {};
 
-  logToFile(`[wizard-abort] exitCode=${exitCode}, message: ${message}`);
+  const code = resolveErrorCode(options ?? {}, error);
+  const detail = options?.detail;
+
+  logToFile(
+    `[wizard-abort] exitCode=${exitCode}, code=${
+      code ?? 'none'
+    }, message: ${message}`,
+  );
   if (error) {
     logToFile('[wizard-abort] error:', error);
   }
@@ -73,6 +98,7 @@ export async function wizardAbort(
   if (error) {
     analytics.captureException(error, {
       ...((error instanceof WizardError && error.context) || {}),
+      ...(code ? { error_code: code } : {}),
     });
   }
 
@@ -82,13 +108,31 @@ export async function wizardAbort(
   // 4. Render the error outro. Synthesize OutroData from `message`
   //    when the caller didn't provide structured data.
   const ui = getUI();
-  ui.outroError(outroData ?? { kind: OutroKind.Error, message });
+  const resolvedOutroData: OutroData = outroData ?? {
+    kind: OutroKind.Error,
+    message,
+  };
+  if (code && resolvedOutroData.kind === OutroKind.Error) {
+    resolvedOutroData.errorCode ??= code;
+    if (detail) resolvedOutroData.errorDetail ??= detail;
+  }
+  ui.outroError(resolvedOutroData);
 
   // 5. Wait for the user to dismiss the outro screen. In a TUI this gives
   //    them time to read the error; in non-TUI environments it resolves
   //    immediately.
   await ui.waitForOutroDismissed();
 
-  // 6. Exit (fires 'exit' event so TUI cleanup runs)
+  // 6. Emit the machine-readable error line for non-interactive hosts
+  //    (LoggingUI and its HeadlessUI subclass); the TUI never sees it.
+  if (code && ui instanceof LoggingUI) {
+    emitPhwError({
+      code,
+      message: resolvedOutroData.message ?? message,
+      detail: resolvedOutroData.errorDetail ?? detail,
+    });
+  }
+
+  // 7. Exit (fires 'exit' event so TUI cleanup runs)
   return process.exit(exitCode);
 }

@@ -80,7 +80,10 @@ function buildError(
   if (phase !== RunPhase.Error) return undefined;
   if (outroData?.kind === OutroKind.Error) {
     const message = outroData.message ?? outroData.body ?? 'Wizard run failed';
-    return { type: 'wizard_error', message };
+    const error: TaskStreamError = { type: 'wizard_error', message };
+    if (outroData.errorCode) error.code = outroData.errorCode;
+    if (outroData.errorDetail) error.detail = outroData.errorDetail;
+    return error;
   }
   return { type: 'wizard_error', message: 'Wizard run failed' };
 }

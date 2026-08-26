@@ -116,6 +116,10 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** Stable machine-readable error code from the error catalog (@lib/errors). */
+  errorCode?: import('@lib/errors').ErrorCode;
+  /** Structured context for the error code; safe for telemetry payloads. */
+  errorDetail?: Record<string, unknown>;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
