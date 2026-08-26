@@ -15,7 +15,7 @@ import { readProjectFile } from '@utils/bounded-fs';
 import {
   collectProjectEnvKeys,
   parseEnvKeyNames,
-  toRelativePosixPath,
+  toPromptSafeRelativePath,
 } from '@utils/env-scan';
 import { scanInstalledSkill } from '@lib/yara-hooks';
 import type { LLMProvider } from '@posthog/warlock';
@@ -520,7 +520,7 @@ function readSingleEnvFile(
   const locations = new Map<string, string[]>();
   if (content === null) return locations;
 
-  const relative = toRelativePosixPath(workingDirectory, resolved);
+  const relative = toPromptSafeRelativePath(workingDirectory, resolved);
   for (const key of parseEnvKeyNames(content)) {
     if (!locations.has(key)) locations.set(key, [relative]);
   }

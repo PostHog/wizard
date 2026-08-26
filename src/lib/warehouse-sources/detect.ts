@@ -16,7 +16,7 @@ import {
   MAX_ENV_KEY_SET,
   isEnvFileName,
   parseEnvKeyNames,
-  toRelativePosixPath,
+  toPromptSafeRelativePath,
 } from '@utils/env-scan';
 import type { PackageJson } from '@utils/package-json';
 import {
@@ -31,7 +31,10 @@ interface ProjectSignals {
   npm: Set<string>;
   python: Set<string>;
   ruby: Set<string>;
-  /** Key NAME → the project-relative `.env*` file that first defined it. */
+  /**
+   * Key NAME → the project-relative `.env*` file that first defined it. The
+   * path is sanitised on the way in, so nothing here can reach a prompt raw.
+   */
   envKeys: Map<string, string>;
 }
 
@@ -92,9 +95,15 @@ function matchDetector(
     // Name the file that actually matched. The agent acts on this string, so
     // pointing it at `.env` when the key lives in `apps/api/.env.local` sends
     // it to look in the wrong place and conclude the credential is absent.
+    //
+    // Both interpolated parts are repository-derived, so both are quoted as
+    // code and both are constrained. `parseEnvKeyNames` limits the key to
+    // `[A-Za-z_][A-Za-z0-9_]*`. The path is the unconstrained part: the
+    // repository names its own directories, so it arrives already sanitised
+    // from `toPromptSafeRelativePath` and cannot break out of the code span.
     for (const [key, file] of signals.envKeys) {
       if (envKeys.some((re) => re.test(key))) {
-        return `found \`${key}\` in ${file}`;
+        return `found \`${key}\` in \`${file}\``;
       }
     }
   }
@@ -137,7 +146,7 @@ function ingestFile(
   const content = safeReadFile(fullPath);
   if (content === null) return;
 
-  ingest(content, signals, toRelativePosixPath(installDir, fullPath));
+  ingest(content, signals, toPromptSafeRelativePath(installDir, fullPath));
 }
 
 type Ingestor = (
