@@ -144,13 +144,14 @@ export async function runLinearProgram(
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
     const matched = config.abortCases?.find((c) => c.match.test(reason));
+    const abortCode = matched?.errorCode ?? ErrorCodes.AgentAbort;
     const outroData: WizardSession['outroData'] = matched
       ? {
           kind: OutroKind.Error,
           message: matched.message,
           body: matched.body,
           docsUrl: matched.docsUrl,
-          errorCode: ErrorCodes.AgentAbort,
+          errorCode: abortCode,
           errorDetail: { reason },
         }
       : {
@@ -158,7 +159,7 @@ export async function runLinearProgram(
           message: `${config.integrationLabel} aborted`,
           body: reason || 'The agent aborted the program.',
           docsUrl: config.docsUrl,
-          errorCode: ErrorCodes.AgentAbort,
+          errorCode: abortCode,
           errorDetail: { reason },
         };
     analytics.wizardCapture('agent aborted', {
@@ -168,7 +169,7 @@ export async function runLinearProgram(
     });
     await wizardAbort({
       outroData,
-      code: ErrorCodes.AgentAbort,
+      code: abortCode,
       error: new WizardError(
         `Agent aborted: ${reason}`,
         {
@@ -176,7 +177,7 @@ export async function runLinearProgram(
           error_type: AgentErrorType.ABORT,
           reason,
         },
-        ErrorCodes.AgentAbort,
+        abortCode,
       ),
     });
   }

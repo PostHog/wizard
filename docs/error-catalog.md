@@ -56,48 +56,48 @@ via `emitPhwError()`.
 
 ## Catalog
 
-| Code                                           | Group    | Fires when                                                                       | Retry        |
-| ---------------------------------------------- | -------- | -------------------------------------------------------------------------------- | ------------ |
-| `PHW_CLI_NODE_VERSION`                         | cli      | Node runtime below the supported range (preflight in `bin.ts`)                   | no           |
-| `PHW_CLI_BAD_ARGS`                             | cli      | yargs strict-mode rejection (unknown command/option)                             | no           |
-| `PHW_CLI_FLAG_UNAVAILABLE`                     | cli      | dev-only flag (`--ci`, `--harness`, `--local-*`, …) in a published build         | no           |
-| `PHW_CLI_INTERACTIVE_REQUIRED`                 | cli      | command needs an interactive terminal and has no non-interactive fallback        | no           |
-| `PHW_ARGS_MISSING_API_KEY`                     | args     | non-interactive run without `--api-key`                                          | no           |
-| `PHW_ARGS_MISSING_INSTALL_DIR`                 | args     | non-interactive run without `--install-dir`                                      | no           |
-| `PHW_ARGS_MISSING_EMAIL`                       | args     | `--signup` without `--email`                                                     | no           |
-| `PHW_ARGS_SIGNUP_PROVISION_FAILED`             | args     | account provisioning failed during signup install                                | yes          |
-| `PHW_AUTH_KEY_TYPE`                            | auth     | key with the wrong type/prefix for the mode (`phc_` project key, unknown prefix) | no           |
-| `PHW_AUTH_MISSING_SCOPE`                       | auth     | key or OAuth grant lacks a required scope                                        | no           |
-| `PHW_AUTH_REGION_MISMATCH`                     | auth     | resolved gateway region disagrees with the session region                        | no           |
-| `PHW_AUTH_INVALID_OR_EXPIRED`                  | auth     | gateway rejected an otherwise well-formed credential                             | no           |
-| `PHW_AUTH_SETTINGS_CONFLICT`                   | auth     | Claude settings file overrides the gateway credential                            | no           |
-| `PHW_AUTH_STORED_LOGIN_CONFLICT`               | auth     | SDK authenticated from a stored Claude login instead of the gateway token        | no           |
-| `PHW_AUTH_PROJECT_FETCH_FAILED`                | auth     | user/project data fetch from the PostHog API failed                              | yes          |
-| `PHW_ENV_LOCAL_SERVICES_DOWN`                  | env      | a local dev target (`--local-*`) is not running                                  | yes          |
-| `PHW_ENV_SERVICE_OUTAGE`                       | env      | blocking external services down (interactive abort; non-interactive continues)   | yes          |
-| `PHW_DETECT_BAD_DIRECTORY`                     | detect   | install dir missing, not a directory, or unreadable                              | no           |
-| `PHW_DETECT_NO_FRAMEWORK`                      | detect   | framework auto-detection found nothing (`ciPreRun` headless abort)               | no           |
-| `PHW_DETECT_UNSUPPORTED_VERSION`               | detect   | detected framework version below the supported minimum                           | no           |
-| `PHW_DETECT_UNSUPPORTED_PLATFORM`              | detect   | platform has no matching skill variant (e.g. replay vision on backend-only)      | no           |
-| `PHW_DETECT_NO_POSTHOG_SDK`                    | detect   | program requires an installed PostHog SDK; none found                            | no           |
-| `PHW_DETECT_NO_PROJECT_FILES`                  | detect   | no project files for the program to work on                                      | no           |
-| `PHW_DETECT_NO_SOURCES`                        | detect   | no data warehouse sources detected                                               | no           |
-| `PHW_SKILL_MENU_FETCH_FAILED`                  | skill    | context-mill menu fetch failed                                                   | yes          |
-| `PHW_SKILL_NOT_FOUND`                          | skill    | skill id absent from the context-mill menu                                       | no           |
-| `PHW_SKILL_DOWNLOAD_FAILED`                    | skill    | skill download/extraction failed                                                 | yes          |
-| `PHW_AGENT_ABORT`                              | agent    | agent emitted `[ABORT] <reason>`; `detail.reason` carries the raw signal         | case-by-case |
-| `PHW_AGENT_MCP_MISSING`                        | agent    | `[ERROR-MCP-MISSING]` — PostHog MCP server unreachable                           | yes          |
-| `PHW_AGENT_RESOURCE_MISSING`                   | agent    | `[ERROR-RESOURCE-MISSING]` — setup resource unavailable                          | yes          |
-| `PHW_AGENT_RATE_LIMIT`                         | agent    | LLM gateway rate limit                                                           | yes          |
-| `PHW_AGENT_API_ERROR`                          | agent    | other API failure during the agent run                                           | yes          |
-| `PHW_AGENT_YARA_VIOLATION`                     | agent    | security scanner terminated the run                                              | no           |
-| `PHW_AGENT_NO_PROGRESS`                        | agent    | agent ended with zero tool calls                                                 | case-by-case |
-| `PHW_AGENT_INCOMPLETE_TASKS`                   | agent    | agent stopped with planned tasks open                                            | case-by-case |
-| `PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING` | agent    | orchestrator preflight could not download a task skill variant                   | yes          |
-| `PHW_AGENT_ORCHESTRATOR_TASKS_FAILED`          | agent    | orchestrator queue drained with failed/blocked required tasks                    | case-by-case |
-| `PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT`        | agent    | orchestrator plan violates sink coverage invariant                               | no           |
-| `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)    | no           |
-| `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                              | yes          |
+| Code                                           | Group    | Fires when                                                                                                                                                                                                   | Retry        |
+| ---------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `PHW_CLI_NODE_VERSION`                         | cli      | Node runtime below the supported range (preflight in `bin.ts`)                                                                                                                                               | no           |
+| `PHW_CLI_BAD_ARGS`                             | cli      | yargs strict-mode rejection (unknown command/option)                                                                                                                                                         | no           |
+| `PHW_CLI_FLAG_UNAVAILABLE`                     | cli      | dev-only flag (`--ci`, `--harness`, `--local-*`, …) in a published build                                                                                                                                     | no           |
+| `PHW_CLI_INTERACTIVE_REQUIRED`                 | cli      | command needs an interactive terminal and has no non-interactive fallback                                                                                                                                    | no           |
+| `PHW_ARGS_MISSING_API_KEY`                     | args     | non-interactive run without `--api-key`                                                                                                                                                                      | no           |
+| `PHW_ARGS_MISSING_INSTALL_DIR`                 | args     | non-interactive run without `--install-dir`                                                                                                                                                                  | no           |
+| `PHW_ARGS_MISSING_EMAIL`                       | args     | `--signup` without `--email`                                                                                                                                                                                 | no           |
+| `PHW_ARGS_SIGNUP_PROVISION_FAILED`             | args     | account provisioning failed during signup install                                                                                                                                                            | yes          |
+| `PHW_AUTH_KEY_TYPE`                            | auth     | key with the wrong type/prefix for the mode (`phc_` project key, unknown prefix)                                                                                                                             | no           |
+| `PHW_AUTH_MISSING_SCOPE`                       | auth     | key or OAuth grant lacks a required scope                                                                                                                                                                    | no           |
+| `PHW_AUTH_REGION_MISMATCH`                     | auth     | resolved gateway region disagrees with the session region                                                                                                                                                    | no           |
+| `PHW_AUTH_INVALID_OR_EXPIRED`                  | auth     | gateway rejected an otherwise well-formed credential                                                                                                                                                         | no           |
+| `PHW_AUTH_SETTINGS_CONFLICT`                   | auth     | Claude settings file overrides the gateway credential                                                                                                                                                        | no           |
+| `PHW_AUTH_STORED_LOGIN_CONFLICT`               | auth     | SDK authenticated from a stored Claude login instead of the gateway token                                                                                                                                    | no           |
+| `PHW_AUTH_PROJECT_FETCH_FAILED`                | auth     | user/project data fetch from the PostHog API failed                                                                                                                                                          | yes          |
+| `PHW_ENV_LOCAL_SERVICES_DOWN`                  | env      | a local dev target (`--local-*`) is not running                                                                                                                                                              | yes          |
+| `PHW_ENV_SERVICE_OUTAGE`                       | env      | blocking external services down (interactive abort; non-interactive continues)                                                                                                                               | yes          |
+| `PHW_DETECT_BAD_DIRECTORY`                     | detect   | install dir missing, not a directory, or unreadable                                                                                                                                                          | no           |
+| `PHW_DETECT_NO_FRAMEWORK`                      | detect   | framework auto-detection found nothing (`ciPreRun` headless abort)                                                                                                                                           | no           |
+| `PHW_DETECT_UNSUPPORTED_VERSION`               | detect   | detected framework version below the supported minimum                                                                                                                                                       | no           |
+| `PHW_DETECT_UNSUPPORTED_PLATFORM`              | detect   | platform has no matching skill variant (e.g. replay vision on backend-only)                                                                                                                                  | no           |
+| `PHW_DETECT_NO_POSTHOG_SDK`                    | detect   | program requires an installed PostHog SDK; none found                                                                                                                                                        | no           |
+| `PHW_DETECT_NO_PROJECT_FILES`                  | detect   | no project files for the program to work on                                                                                                                                                                  | no           |
+| `PHW_DETECT_NO_SOURCES`                        | detect   | no data warehouse sources detected                                                                                                                                                                           | no           |
+| `PHW_SKILL_MENU_FETCH_FAILED`                  | skill    | context-mill menu fetch failed                                                                                                                                                                               | yes          |
+| `PHW_SKILL_NOT_FOUND`                          | skill    | skill id absent from the context-mill menu                                                                                                                                                                   | no           |
+| `PHW_SKILL_DOWNLOAD_FAILED`                    | skill    | skill download/extraction failed                                                                                                                                                                             | yes          |
+| `PHW_AGENT_ABORT`                              | agent    | agent emitted `[ABORT] <reason>`; `detail.reason` carries the raw signal. A matched `abortCases` entry may override with a specific code (e.g. audit's "no posthog sdk found" → `PHW_DETECT_NO_POSTHOG_SDK`) | case-by-case |
+| `PHW_AGENT_MCP_MISSING`                        | agent    | `[ERROR-MCP-MISSING]` — PostHog MCP server unreachable                                                                                                                                                       | yes          |
+| `PHW_AGENT_RESOURCE_MISSING`                   | agent    | `[ERROR-RESOURCE-MISSING]` — setup resource unavailable                                                                                                                                                      | yes          |
+| `PHW_AGENT_RATE_LIMIT`                         | agent    | LLM gateway rate limit                                                                                                                                                                                       | yes          |
+| `PHW_AGENT_API_ERROR`                          | agent    | other API failure during the agent run                                                                                                                                                                       | yes          |
+| `PHW_AGENT_YARA_VIOLATION`                     | agent    | security scanner terminated the run                                                                                                                                                                          | no           |
+| `PHW_AGENT_NO_PROGRESS`                        | agent    | agent ended with zero tool calls                                                                                                                                                                             | case-by-case |
+| `PHW_AGENT_INCOMPLETE_TASKS`                   | agent    | agent stopped with planned tasks open                                                                                                                                                                        | case-by-case |
+| `PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING` | agent    | orchestrator preflight could not download a task skill variant                                                                                                                                               | yes          |
+| `PHW_AGENT_ORCHESTRATOR_TASKS_FAILED`          | agent    | orchestrator queue drained with failed/blocked required tasks                                                                                                                                                | case-by-case |
+| `PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT`        | agent    | orchestrator plan violates sink coverage invariant                                                                                                                                                           | no           |
+| `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)                                                                                                                                | no           |
+| `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                                                                                                                                                          | yes          |
 
 Retry advice is guidance for automated hosts (sandbox re-run policies), not a
 guarantee.
@@ -135,5 +135,7 @@ signal is available.
    (`catalog.ts`) — the unit test enforces catalog completeness.
 2. Pass it to `wizardAbort({ code })` or `new WizardError(msg, ctx, code)` at
    the failure site. Prefer explicit `code` over inference so call sites stay
-   greppable.
+   greppable. For agent-emitted `[ABORT] <reason>` preconditions, declare
+   `errorCode` on the program's `abortCases` entry so the generic
+   `PHW_AGENT_ABORT` is overridden with the specific class.
 3. Add the row here.
