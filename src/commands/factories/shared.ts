@@ -5,6 +5,8 @@ import { isHeadless } from '@lib/headless-mode';
 import type { ProgramConfig } from '@lib/programs/program-step';
 
 import { skillProgramOptions } from '../skill-program-options';
+import { ErrorCodes } from '@lib/errors';
+import { emitPhwError } from '@lib/errors';
 
 /**
  * Dispatch a parsed yargs invocation to the wizard runner. Applies the
@@ -27,13 +29,14 @@ export function runCommandHandler(work: () => void | Promise<void>): void {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`\n\x1b[1;91m✖ ${msg}\x1b[0m\n\n`);
+      emitPhwError({ code: ErrorCodes.InternalUnhandled, message: msg });
       process.exit(1);
     }
   })();
 }
 
 export function dispatchProgram(config: ProgramConfig, argv: Arguments): void {
-  const argvRecord = argv as unknown as Record<string, unknown>;
+  const argvRecord: Record<string, unknown> = { ...argv };
   const extras = config.mapCliOptions?.(argvRecord) ?? {};
   const options = { ...argvRecord, ...extras };
   if (isHeadless(options)) {

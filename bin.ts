@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
+import { emitPhwError } from './src/lib/errors/emit.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -26,6 +27,10 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
       `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
     ].join('\n'),
   );
+  emitPhwError({
+    code: 'PHW_CLI_NODE_VERSION',
+    message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
+  });
   process.exit(1);
 }
 

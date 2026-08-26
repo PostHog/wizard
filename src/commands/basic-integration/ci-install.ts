@@ -5,6 +5,8 @@ import { runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
+import { ErrorCodes } from '@lib/errors';
+import { emitPhwError } from '@lib/errors';
 
 type Options = Arguments & {
   region?: string;
@@ -59,11 +61,13 @@ function runNonInteractiveInstall(
     return failCI(
       `${label} mode requires --api-key (${keyHint}). ` +
         'To create a new account instead, use --signup --email you@example.com.',
+      ErrorCodes.ArgsMissingApiKey,
     );
   }
   if (!options.apiKey && options.signup && !options.email) {
     return failCI(
       `${label} --signup requires --email to create a new account.`,
+      ErrorCodes.ArgsMissingEmail,
     );
   }
   warnOnUnexpectedKeyPrefix(options.apiKey, headless);
@@ -74,6 +78,7 @@ function runNonInteractiveInstall(
       if (!options.installDir) {
         return failCI(
           `${label} mode requires --install-dir (directory to install in)`,
+          ErrorCodes.ArgsMissingInstallDir,
         );
       }
       const provisioned = await provisionForSignup(options);
@@ -81,15 +86,20 @@ function runNonInteractiveInstall(
       if (options.projectId == null) options.projectId = provisioned.projectId;
     }
     runWizard(posthogIntegrationConfig, options);
-  })().catch(() => {
+  })().catch((error: unknown) => {
+    emitPhwError({
+      code: ErrorCodes.ArgsSignupProvisionFailed,
+      message: error instanceof Error ? error.message : String(error),
+    });
     process.exit(1);
   });
 }
 
-function failCI(message: string): void {
+function failCI(message: string, code?: string): void {
   setUI(new LoggingUI());
   getUI().intro('PostHog Wizard');
   getUI().log.error(message);
+  if (code) emitPhwError({ code, message });
   process.exit(1);
 }
 
