@@ -15,11 +15,19 @@ import {
 import { createWizardPiTools } from '../tools';
 import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
-import { WIZARD_ASK_SENSITIVE_DESCRIPTION } from '@lib/wizard-tools/tools';
+import {
+  ASK_BATCH_THRESHOLD,
+  WIZARD_ASK_SENSITIVE_DESCRIPTION,
+  WIZARD_ASK_SUBJECT_DESCRIPTION,
+  WIZARD_ASK_TOOL_DESCRIPTION,
+} from '@lib/wizard-tools/tools';
 
 const SECRET = 'phx_live_zendesk_token_123';
 
-const makeTools = (answers: Record<string, string | string[]>) => {
+const makeTools = (
+  answers: Record<string, string | string[]>,
+  maxQuestions?: number,
+) => {
   const request = vi.fn().mockResolvedValue(answers);
   const workingDirectory = mkdtempSync(join(tmpdir(), 'pi-tools-vault-'));
   const tools = createWizardPiTools({
@@ -27,6 +35,7 @@ const makeTools = (answers: Record<string, string | string[]>) => {
     skillsBaseUrl: 'http://localhost:0',
     askBridge: { request } as unknown as WizardAskBridge,
     triageProvider: undefined,
+    maxQuestions,
   });
   const byName = (name: string) => {
     const tool = tools.find((t) => t.name === name);
@@ -122,6 +131,107 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     expect(desc).toBe(WIZARD_ASK_SENSITIVE_DESCRIPTION);
     expect(desc).toMatch(/data-warehouse tools/);
     expect(desc).toMatch(/reject it/);
+  });
+});
+
+describe('pi wizard_ask — the batching guard counts per subject', () => {
+  /** One credential-style question, so each call is a realistic source ask. */
+  const ask = (wizardAsk: { execute: unknown }, subject?: string) =>
+    call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Database host?', kind: 'text' }],
+      ...(subject === undefined ? {} : { subject }),
+    });
+
+  it('lets a five-source run ask once per source, all reaching the user', async () => {
+    // The failure this fixes: with a run-wide count the third source tripped
+    // the nudge, and agents read the nudge as a stop and fell back to links.
+    const { wizardAsk, request } = makeTools({ host: 'db.example.com' });
+    for (const kind of [
+      'Postgres',
+      'Stripe',
+      'MySQL',
+      'Hubspot',
+      'Snowflake',
+    ]) {
+      const result = await ask(wizardAsk, kind);
+      expect(textOf(result)).not.toMatch(/not sent/);
+    }
+    expect(request).toHaveBeenCalledTimes(5);
+  });
+
+  it('nudges the fourth rapid call about one source and does not send it', async () => {
+    const { wizardAsk, request } = makeTools({ host: 'db.example.com' });
+    for (let i = 0; i < ASK_BATCH_THRESHOLD; i++) {
+      await ask(wizardAsk, 'Postgres');
+    }
+    const nudged = await ask(wizardAsk, 'Postgres');
+    expect(textOf(nudged)).toMatch(/Not an error/);
+    expect(request).toHaveBeenCalledTimes(ASK_BATCH_THRESHOLD);
+
+    // The nudge fires once; the retry goes straight through.
+    const retried = await ask(wizardAsk, 'Postgres');
+    expect(textOf(retried)).not.toMatch(/Not an error/);
+    expect(request).toHaveBeenCalledTimes(ASK_BATCH_THRESHOLD + 1);
+  });
+
+  it('keeps the run-wide guard for an agent that declares no subject', async () => {
+    const { wizardAsk, request } = makeTools({ host: 'db.example.com' });
+    for (let i = 0; i < ASK_BATCH_THRESHOLD; i++) {
+      await ask(wizardAsk);
+    }
+    expect(textOf(await ask(wizardAsk))).toMatch(/Not an error/);
+    expect(request).toHaveBeenCalledTimes(ASK_BATCH_THRESHOLD);
+  });
+
+  it('still stops at the per-run cap however many subjects were used', async () => {
+    const { wizardAsk, request } = makeTools({ host: 'db.example.com' }, 3);
+    for (const kind of ['Postgres', 'Stripe', 'MySQL']) {
+      await ask(wizardAsk, kind);
+    }
+    const capped = await ask(wizardAsk, 'Snowflake');
+    expect(textOf(capped)).toMatch(/cap reached/i);
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not charge a cancelled ask against the per-run cap', async () => {
+    // The skill promises a declined ask is free. With maxQuestions=1, a run of
+    // cancellations must never exhaust the budget.
+    const { wizardAsk, request } = makeTools({ host: CANCELLED_SENTINEL }, 1);
+    for (let i = 0; i < 5; i++) {
+      const result = await ask(wizardAsk, `Source${i}`);
+      expect(textOf(result)).not.toMatch(/cap reached/i);
+    }
+    expect(request).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not charge a bridge failure against the per-run cap', async () => {
+    const { wizardAsk, request } = makeTools({}, 1);
+    (
+      request as unknown as { mockRejectedValue: (e: Error) => void }
+    ).mockRejectedValue(new Error('overlay closed'));
+    for (let i = 0; i < 3; i++) {
+      expect(textOf(await ask(wizardAsk, `Source${i}`))).toMatch(
+        /wizard_ask failed/,
+      );
+    }
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it('exposes subject on the schema with the shared guidance', () => {
+    const { wizardAsk } = makeTools({});
+    const params = (
+      wizardAsk as unknown as {
+        parameters: { properties: { subject?: { description?: string } } };
+      }
+    ).parameters.properties;
+    expect(params.subject?.description).toBe(WIZARD_ASK_SUBJECT_DESCRIPTION);
+  });
+
+  it('shares one tool description with the MCP server', () => {
+    const { wizardAsk } = makeTools({});
+    expect((wizardAsk as unknown as { description: string }).description).toBe(
+      WIZARD_ASK_TOOL_DESCRIPTION,
+    );
   });
 });
 
