@@ -305,16 +305,19 @@ describe('detectWarehouseSources', () => {
     expect(detectWarehouseSources(tmpDir)).toEqual([]);
   });
 
+  // These three declare a PostHog feature flag, so they look gated. Each flag
+  // is active at 100% with no targeting, which means every user can complete
+  // them. Detect them like any other source.
   it.each([
     ['Intercom', { 'intercom-client': '^5.0.0' }, 'INTERCOM_ACCESS_TOKEN'],
     ['Plain', { '@team-plain/typescript-sdk': '^5.0.0' }, 'PLAIN_API_KEY'],
     ['Polar', { '@polar-sh/sdk': '^0.30.0' }, 'POLAR_ACCESS_TOKEN'],
   ])(
-    'no longer detects %s — it is gated behind a PostHog feature flag',
+    'detects %s, whose gating flag is fully rolled out',
     (kind, deps, envKey) => {
       writePackageJson(tmpDir, deps);
       fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
-      expect(kinds(tmpDir)).not.toContain(kind);
+      expect(kinds(tmpDir)).toContain(kind);
     },
   );
 
@@ -350,13 +353,6 @@ describe('SOURCE_DETECTORS', () => {
         0,
       );
       expect(signalCount, `${detector.kind} signals`).toBeGreaterThan(0);
-    }
-  });
-
-  it('omits the flag-gated kinds the wizard cannot complete', () => {
-    const kindSet = new Set(SOURCE_DETECTORS.map((d) => d.kind));
-    for (const gated of ['Intercom', 'Plain', 'Polar']) {
-      expect(kindSet.has(gated)).toBe(false);
     }
   });
 });

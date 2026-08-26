@@ -8,14 +8,6 @@
  * `in-cli` sources are created from the terminal (databases + API-key SaaS).
  * `deep-link` sources have no safe terminal credential path (OAuth) but a
  * codebase footprint worth nudging the user about — we open the app instead.
- *
- * NOTE: `Intercom` (`dwh_intercom`), `Plain` (`dwh_plain`) and `Polar`
- * (`dwh_polar`) are deliberately absent. Each is gated behind a PostHog
- * feature flag, so most users cannot finish the setup we offer them. The
- * wizard cannot read those flags — its own flag snapshot comes from the
- * wizard's telemetry project, not the user's PostHog project — so a
- * per-entry gate would have nothing to evaluate. Restore the three entries
- * when the flags open to everyone.
  */
 
 import type { SourceDetector } from './types.js';
@@ -276,6 +268,15 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     signals: {
       npm: ['@paddle/paddle-node-sdk', '@paddle/paddle-js'],
       envKeys: [/^PADDLE_/],
+    },
+  },
+  {
+    kind: 'Polar',
+    label: 'Polar',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@polar-sh/sdk', '@polar-sh/nextjs'],
+      envKeys: [/^POLAR_/],
     },
   },
   {
@@ -635,6 +636,16 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       npm: ['node-zendesk'],
       python: ['zenpy'],
       envKeys: [/^ZENDESK_/],
+    },
+  },
+  {
+    kind: 'Intercom',
+    label: 'Intercom',
+    mode: 'deep-link',
+    signals: {
+      npm: ['intercom-client', '@intercom/messenger-js-sdk'],
+      python: ['python-intercom'],
+      envKeys: [/^INTERCOM_/],
     },
   },
   {
@@ -1602,6 +1613,15 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     mode: 'in-cli',
     signals: {
       envKeys: [/^KUSTOMER_/],
+    },
+  },
+  {
+    kind: 'Plain',
+    label: 'Plain',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@team-plain/typescript-sdk'],
+      envKeys: [/^PLAIN_/],
     },
   },
   {
