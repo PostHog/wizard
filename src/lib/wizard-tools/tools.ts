@@ -11,6 +11,12 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { readProjectFile } from '@utils/bounded-fs';
+import {
+  collectProjectEnvKeys,
+  parseEnvKeyNames,
+  toRelativePosixPath,
+} from '@utils/env-scan';
 import { scanInstalledSkill } from '@lib/yara-hooks';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
@@ -379,6 +385,17 @@ export function evaluateAskCap(
 export const ENV_FILE_PATH_DESCRIPTION =
   'Path to the .env file, relative to the wizard working directory. Pass ".env" for a file in that directory, or include the selected subproject path (for example, "packages/app/.env") for a nested project. Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
 
+/** Shared `check_env_keys` tool description — both facades declare the same contract. */
+export const CHECK_ENV_KEYS_DESCRIPTION =
+  'Check which environment variable keys the project already defines, and in which file. By default it scans every .env file in the project (including .env.local and nested ones such as apps/api/.env), so it agrees with the source detection the wizard reports. Returns, per key, { "status": "present" | "missing", "foundIn": [file paths] }. Key NAMES and file paths only — it never reads or reveals a value.';
+
+/**
+ * `filePath` on `check_env_keys` is optional — omitting it scans the whole
+ * project, which is what makes the tool agree with the wizard's own detector.
+ */
+export const CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION =
+  'Optional. Omit it to scan every .env file in the project (the default, and what you want in a monorepo or when the keys may live in .env.local). Pass a single path, relative to the wizard working directory, only to restrict the check to that one file — for example ".env" or "packages/app/.env". Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
  */
@@ -424,17 +441,90 @@ export function ensureGitignoreCoverage(
 }
 
 /**
- * Parse a .env file's content and return the set of defined key names.
+ * Parse a .env file's content and return the set of defined key NAMES.
+ * Delegates to the shared parser the warehouse detector uses, so the two
+ * cannot disagree about what counts as a key (the `export KEY=` form used to
+ * be a key to the detector and not to this tool).
  */
 export function parseEnvKeys(content: string): Set<string> {
-  const keys = new Set<string>();
-  for (const line of content.split('\n')) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-    if (match) {
-      keys.add(match[1]);
-    }
+  return new Set(parseEnvKeyNames(content));
+}
+
+// ---------------------------------------------------------------------------
+// check_env_keys
+// ---------------------------------------------------------------------------
+
+/** Where a requested key was found. `foundIn` is empty when the key is missing. */
+export interface EnvKeyPresence {
+  status: 'present' | 'missing';
+  /** Project-relative paths of the .env files that define the key. */
+  foundIn: string[];
+}
+
+/**
+ * Answer "which of these env keys does the project already define, and where".
+ *
+ * Shared by both tool facades (MCP and pi) so the answer cannot drift between
+ * harnesses. Two modes:
+ *  - `filePath` omitted (preferred): scan every `.env*` file in the project,
+ *    within the same depth and size bounds the warehouse detector uses. This
+ *    is what stops the tool reporting "missing" for a key the detector found
+ *    in `apps/api/.env.local`.
+ *  - `filePath` given: check that one file only — the original behaviour,
+ *    kept for callers that already pass a path.
+ *
+ * SECURITY: returns key NAMES and file paths only. A `.env` value is never
+ * read into the result and never logged.
+ */
+export function checkEnvKeys(
+  workingDirectory: string,
+  keys: string[],
+  filePath?: string,
+): Record<string, EnvKeyPresence> {
+  const locations =
+    filePath === undefined
+      ? collectProjectEnvKeys(workingDirectory)
+      : readSingleEnvFile(workingDirectory, filePath);
+
+  // Key names only — never the values, and never the file contents.
+  logToFile(
+    `check_env_keys: ${
+      filePath === undefined
+        ? `project scan of ${workingDirectory}`
+        : resolveEnvPath(workingDirectory, filePath)
+    }, keys: ${keys.join(', ')}`,
+  );
+
+  const results: Record<string, EnvKeyPresence> = {};
+  for (const key of keys) {
+    const foundIn = locations.get(key);
+    results[key] = foundIn
+      ? { status: 'present', foundIn: [...foundIn] }
+      : { status: 'missing', foundIn: [] };
   }
-  return keys;
+  return results;
+}
+
+/**
+ * The single-file arm of `checkEnvKeys`, shaped like the project scan so the
+ * caller handles one type. Reads through `readProjectFile`, which returns null
+ * for a missing file, an oversized file, or a `.env` that is a DIRECTORY —
+ * the last of which used to crash the tool with EISDIR.
+ */
+function readSingleEnvFile(
+  workingDirectory: string,
+  filePath: string,
+): Map<string, string[]> {
+  const resolved = resolveEnvPath(workingDirectory, filePath);
+  const content = readProjectFile(resolved);
+  const locations = new Map<string, string[]>();
+  if (content === null) return locations;
+
+  const relative = toRelativePosixPath(workingDirectory, resolved);
+  for (const key of parseEnvKeyNames(content)) {
+    if (!locations.has(key)) locations.set(key, [relative]);
+  }
+  return locations;
 }
 
 /**

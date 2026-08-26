@@ -3,7 +3,7 @@
  * so the tools the wizard prompt depends on — skill discovery/install and
  * fenced `.env` edits — are exposed to pi as native `defineTool` tools backed
  * by the same helpers the claude-agent-sdk path uses (`fetchSkillMenu`,
- * `installSkillById`, `parseEnvKeys`, `mergeEnvValues`). Same tool names as the
+ * `installSkillById`, `checkEnvKeys`, `mergeEnvValues`). Same tool names as the
  * MCP server so the shared prompt is unchanged. `wizard_ask` is wired here too
  * (same schema, caps, and askBridge as the MCP tool) so interactive programs
  * can interview the user on pi; without a bridge (CI) it errors on call.
@@ -19,14 +19,16 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import {
+  CHECK_ENV_KEYS_DESCRIPTION,
+  CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
   WIZARD_TOOL_NAMES,
+  checkEnvKeys as checkEnvKeysCore,
   evaluateAskCap,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
-  parseEnvKeys,
   resolveEnvPath,
   resolveEnvSecretRefs,
   vaultSensitiveAnswers,
@@ -152,26 +154,25 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   const checkEnvKeys = defineTool({
     name: 'check_env_keys',
     label: 'Check env keys',
-    description:
-      'Check which environment variable keys are present or missing in a .env file. Never reveals values.',
-    promptSnippet: 'check_env_keys(filePath, keys) — see which .env keys exist',
+    description: CHECK_ENV_KEYS_DESCRIPTION,
+    promptSnippet:
+      'check_env_keys(keys) — see which .env keys exist, and in which file',
     parameters: Type.Object({
-      filePath: Type.String({
-        description: ENV_FILE_PATH_DESCRIPTION,
-      }),
+      filePath: Type.Optional(
+        Type.String({
+          description: CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
+        }),
+      ),
       keys: Type.Array(Type.String(), {
         description: 'Environment variable key names to check',
       }),
     }),
-    async execute(_id, args) {
-      const resolved = resolveEnvPath(workingDirectory, args.filePath);
-      const existing = fs.existsSync(resolved)
-        ? parseEnvKeys(await fs.promises.readFile(resolved, 'utf8'))
-        : new Set<string>();
-      const results: Record<string, 'present' | 'missing'> = {};
-      for (const key of args.keys) {
-        results[key] = existing.has(key) ? 'present' : 'missing';
-      }
+    execute(_id, args) {
+      const results = checkEnvKeysCore(
+        workingDirectory,
+        args.keys,
+        args.filePath,
+      );
       return text(JSON.stringify(results, null, 2));
     },
   });

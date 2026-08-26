@@ -28,6 +28,10 @@ function buildPrompt(session: WizardSession): string {
     'The wizard detected the following data warehouse sources in this project:',
     ...lines,
     '',
+    'Each signal names the file it came from. Trust that path — the wizard ' +
+      'read it. To confirm a key is set, call `check_env_keys` with the key ' +
+      'names and no `filePath`; it scans every `.env` file in the project.',
+    '',
     'Set these up in PostHog following the skill instructions: create `in-cli` ' +
       'sources directly via the PostHog MCP after collecting credentials; for ' +
       '`deep-link` sources, provide the user the pre-filled new-source URL.',

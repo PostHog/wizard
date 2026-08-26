@@ -7,6 +7,7 @@ import {
   DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_TOOL_NAMES,
   __test,
+  checkEnvKeys,
   ensureGitignoreCoverage,
   evaluateAskCap,
   fetchSkillMenu,
@@ -91,6 +92,188 @@ DB_URL=postgres://host:5432/db?opt=1
 `);
 
     expect(keys).toEqual(new Set(['FOO', 'BAR', 'MY_KEY_2', 'DB_URL']));
+  });
+});
+
+describe('checkEnvKeys', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  function writeEnv(relativePath: string, content: string): void {
+    const full = path.join(tmpDir, relativePath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content);
+  }
+
+  describe('project scan (no filePath)', () => {
+    it.each([
+      ['.env'],
+      ['.env.local'],
+      ['.env.production'],
+      ['apps/api/.env'],
+      ['apps/web/.env.local'],
+    ])('reports a key in %s as present and names the file', (relativePath) => {
+      writeEnv(relativePath, 'OPENAI_API_KEY=sk-live-secret\n');
+
+      expect(checkEnvKeys(tmpDir, ['OPENAI_API_KEY'])).toEqual({
+        OPENAI_API_KEY: { status: 'present', foundIn: [relativePath] },
+      });
+    });
+
+    it('agrees with the detector: a key only in a nested .env.local is present', () => {
+      // The mismatch this tool used to produce — the detector saw the key in
+      // apps/api/.env.local while the tool looked only at .env.
+      writeEnv('apps/api/.env.local', 'ANTHROPIC_API_KEY=sk-ant-secret\n');
+      writeEnv('.env', 'UNRELATED=1\n');
+
+      const result = checkEnvKeys(tmpDir, ['ANTHROPIC_API_KEY']);
+      expect(result.ANTHROPIC_API_KEY.status).toBe('present');
+      expect(result.ANTHROPIC_API_KEY.foundIn).toEqual(['apps/api/.env.local']);
+    });
+
+    it('reports a key defined nowhere as missing with no files', () => {
+      writeEnv('.env', 'OTHER=1\n');
+      expect(checkEnvKeys(tmpDir, ['NOPE'])).toEqual({
+        NOPE: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('reports every file that defines the same key', () => {
+      writeEnv('.env', 'SHARED=a\n');
+      writeEnv('apps/api/.env', 'SHARED=b\n');
+
+      const result = checkEnvKeys(tmpDir, ['SHARED']);
+      expect(result.SHARED.status).toBe('present');
+      expect(result.SHARED.foundIn).toHaveLength(2);
+      expect(result.SHARED.foundIn).toEqual(
+        expect.arrayContaining(['.env', 'apps/api/.env']),
+      );
+    });
+
+    it('reads the `export KEY=` form', () => {
+      writeEnv('.env.local', 'export STRIPE_SECRET_KEY=sk_live_x\n');
+      expect(
+        checkEnvKeys(tmpDir, ['STRIPE_SECRET_KEY']).STRIPE_SECRET_KEY,
+      ).toEqual({ status: 'present', foundIn: ['.env.local'] });
+    });
+
+    it('does not crash when .env is a directory', () => {
+      fs.mkdirSync(path.join(tmpDir, '.env'));
+      fs.writeFileSync(
+        path.join(tmpDir, '.env', 'pyvenv.cfg'),
+        'home = /usr\n',
+      );
+      writeEnv('.env.local', 'STRIPE_SECRET_KEY=sk_live_x\n');
+
+      expect(
+        checkEnvKeys(tmpDir, ['STRIPE_SECRET_KEY']).STRIPE_SECRET_KEY,
+      ).toEqual({ status: 'present', foundIn: ['.env.local'] });
+    });
+
+    it('ignores env files below the depth limit and inside node_modules', () => {
+      writeEnv('a/b/c/d/.env', 'TOO_DEEP=x\n');
+      writeEnv('node_modules/pkg/.env', 'VENDORED=x\n');
+      writeEnv('a/b/c/.env', 'IN_RANGE=x\n');
+
+      expect(
+        checkEnvKeys(tmpDir, ['TOO_DEEP', 'VENDORED', 'IN_RANGE']),
+      ).toEqual({
+        TOO_DEEP: { status: 'missing', foundIn: [] },
+        VENDORED: { status: 'missing', foundIn: [] },
+        IN_RANGE: { status: 'present', foundIn: ['a/b/c/.env'] },
+      });
+    });
+
+    it('returns an empty answer for a project with no env files', () => {
+      expect(checkEnvKeys(tmpDir, ['ANY'])).toEqual({
+        ANY: { status: 'missing', foundIn: [] },
+      });
+    });
+  });
+
+  describe('single-file mode (filePath given)', () => {
+    it('checks only the named file', () => {
+      writeEnv('.env', 'IN_ROOT=x\n');
+      writeEnv('apps/api/.env', 'IN_NESTED=x\n');
+
+      expect(checkEnvKeys(tmpDir, ['IN_ROOT', 'IN_NESTED'], '.env')).toEqual({
+        IN_ROOT: { status: 'present', foundIn: ['.env'] },
+        IN_NESTED: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('resolves a nested path relative to the working directory', () => {
+      writeEnv('apps/api/.env.local', 'NESTED_KEY=x\n');
+
+      expect(
+        checkEnvKeys(tmpDir, ['NESTED_KEY'], 'apps/api/.env.local'),
+      ).toEqual({
+        NESTED_KEY: { status: 'present', foundIn: ['apps/api/.env.local'] },
+      });
+    });
+
+    it('reports every key as missing when the file does not exist', () => {
+      expect(checkEnvKeys(tmpDir, ['A', 'B'], '.env.local')).toEqual({
+        A: { status: 'missing', foundIn: [] },
+        B: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('reports missing instead of crashing when the path is a directory', () => {
+      // Regression guard: `.env` as a Python virtualenv threw EISDIR.
+      fs.mkdirSync(path.join(tmpDir, '.env'));
+
+      expect(() => checkEnvKeys(tmpDir, ['ANY'], '.env')).not.toThrow();
+      expect(checkEnvKeys(tmpDir, ['ANY'], '.env')).toEqual({
+        ANY: { status: 'missing', foundIn: [] },
+      });
+    });
+
+    it('still rejects a path that escapes the working directory', () => {
+      expect(() => checkEnvKeys(tmpDir, ['ANY'], '../../etc/passwd')).toThrow(
+        'Path traversal rejected',
+      );
+    });
+  });
+
+  describe('the values-never-returned guarantee', () => {
+    const secrets = [
+      'sk-live-supersecret',
+      'postgres://user:hunter2@db.internal:5432/app',
+      'AKIAIOSFODNN7EXAMPLE',
+    ];
+
+    it.each([[undefined], ['.env.local']])(
+      'returns key names and paths only (filePath=%s)',
+      (filePath) => {
+        writeEnv(
+          '.env.local',
+          [
+            `OPENAI_API_KEY=${secrets[0]}`,
+            `DATABASE_URL=${secrets[1]}`,
+            `AWS_ACCESS_KEY_ID=${secrets[2]}`,
+          ].join('\n'),
+        );
+
+        const serialized = JSON.stringify(
+          checkEnvKeys(
+            tmpDir,
+            ['OPENAI_API_KEY', 'DATABASE_URL', 'AWS_ACCESS_KEY_ID'],
+            filePath,
+          ),
+        );
+
+        expect(serialized).toContain('OPENAI_API_KEY');
+        expect(serialized).toContain('.env.local');
+        for (const secret of secrets) {
+          expect(serialized).not.toContain(secret);
+        }
+      },
+    );
   });
 });
 

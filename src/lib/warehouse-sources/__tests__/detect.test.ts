@@ -222,6 +222,57 @@ describe('detectWarehouseSources', () => {
     }
   });
 
+  it.each([
+    ['.env'],
+    ['.env.local'],
+    ['.env.production'],
+    ['apps/api/.env'],
+    ['apps/web/.env.local'],
+  ])('names %s in matchedSignal when the key lives there', (relativePath) => {
+    const full = path.join(tmpDir, relativePath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, 'OPENAI_API_KEY=sk-live-secret\n');
+
+    const [openai] = detectWarehouseSources(tmpDir);
+    expect(openai.kind).toBe('OpenAI');
+    // The agent acts on this string — it must point at the real file, not `.env`.
+    expect(openai.matchedSignal).toBe(
+      `found \`OPENAI_API_KEY\` in ${relativePath}`,
+    );
+    expect(openai.matchedSignal).not.toContain('sk-live-secret');
+  });
+
+  it('detects a key written with the `export` prefix', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.env.local'),
+      'export STRIPE_SECRET_KEY=sk_live_x\n',
+    );
+    expect(kinds(tmpDir)).toEqual(['Stripe']);
+  });
+
+  it('does not crash when .env is a directory', () => {
+    // A Python virtualenv named `.env`; reading it would throw EISDIR.
+    fs.mkdirSync(path.join(tmpDir, '.env'));
+    fs.writeFileSync(path.join(tmpDir, '.env', 'pyvenv.cfg'), 'home = /usr\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.env.local'),
+      'STRIPE_SECRET_KEY=sk_live_x\n',
+    );
+
+    const [stripe] = detectWarehouseSources(tmpDir);
+    expect(stripe.kind).toBe('Stripe');
+    expect(stripe.matchedSignal).toBe(
+      'found `STRIPE_SECRET_KEY` in .env.local',
+    );
+  });
+
+  it('ignores env keys below the depth limit', () => {
+    const tooDeep = path.join(tmpDir, 'a', 'b', 'c', 'd');
+    fs.mkdirSync(tooDeep, { recursive: true });
+    fs.writeFileSync(path.join(tooDeep, '.env'), 'STRIPE_SECRET_KEY=x\n');
+    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+  });
+
   it('ignores node_modules', () => {
     const nm = path.join(tmpDir, 'node_modules', 'pg');
     fs.mkdirSync(nm, { recursive: true });

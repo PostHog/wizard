@@ -35,6 +35,8 @@ import {
 import type { LLMProvider } from '@posthog/warlock';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
+  CHECK_ENV_KEYS_DESCRIPTION,
+  CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
   ENV_FILE_PATH_DESCRIPTION,
   SERVER_NAME,
   appendAuditChecksToLedger,
@@ -43,8 +45,8 @@ import {
   ensureGitignoreCoverage,
   evaluateAskCap,
   fetchSkillMenu,
+  checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
-  parseEnvKeys,
   readLedger,
   resolveEnvPath,
   resolveEnvSecretRefs,
@@ -179,25 +181,22 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const checkEnvKeys = tool(
     'check_env_keys',
-    'Check which environment variable keys are present or missing in a .env file. Never reveals values.',
+    CHECK_ENV_KEYS_DESCRIPTION,
     {
-      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
+      filePath: z
+        .string()
+        .optional()
+        .describe(CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION),
       keys: z
         .array(z.string())
         .describe('Environment variable key names to check'),
     },
-    (args: { filePath: string; keys: string[] }) => {
-      const resolved = resolveEnvPath(workingDirectory, args.filePath);
-      logToFile(`check_env_keys: ${resolved}, keys: ${args.keys.join(', ')}`);
-
-      const existingKeys: Set<string> = fs.existsSync(resolved)
-        ? parseEnvKeys(fs.readFileSync(resolved, 'utf8'))
-        : new Set<string>();
-
-      const results: Record<string, 'present' | 'missing'> = {};
-      for (const key of args.keys) {
-        results[key] = existingKeys.has(key) ? 'present' : 'missing';
-      }
+    (args: { filePath?: string; keys: string[] }) => {
+      const results = checkEnvKeysCore(
+        workingDirectory,
+        args.keys,
+        args.filePath,
+      );
 
       return {
         content: [

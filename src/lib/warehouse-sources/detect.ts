@@ -11,6 +11,13 @@
 
 import { analytics } from '@utils/analytics';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
+import {
+  ENV_SCAN_MAX_DEPTH,
+  MAX_ENV_KEY_SET,
+  isEnvFileName,
+  parseEnvKeyNames,
+  toRelativePosixPath,
+} from '@utils/env-scan';
 import type { PackageJson } from '@utils/package-json';
 import {
   parseRequirementsTxt,
@@ -24,13 +31,16 @@ interface ProjectSignals {
   npm: Set<string>;
   python: Set<string>;
   ruby: Set<string>;
-  envKeys: Set<string>;
+  /** Key NAME → the project-relative `.env*` file that first defined it. */
+  envKeys: Map<string, string>;
 }
 
-const MAX_DEPTH = 3;
+// Shared with `check_env_keys` so the tool scans exactly what the detector
+// scanned — see `@utils/env-scan`.
+const MAX_DEPTH = ENV_SCAN_MAX_DEPTH;
 
 // Each signal Set retains at most this many entries.
-const MAX_SIGNAL_SET = 5_000;
+const MAX_SIGNAL_SET = MAX_ENV_KEY_SET;
 
 function addCapped(set: Set<string>, value: string): void {
   if (set.size < MAX_SIGNAL_SET) set.add(value);
@@ -79,9 +89,12 @@ function matchDetector(
   if (rubyHit) return `found \`${rubyHit}\` in Gemfile`;
 
   if (envKeys) {
-    for (const key of signals.envKeys) {
+    // Name the file that actually matched. The agent acts on this string, so
+    // pointing it at `.env` when the key lives in `apps/api/.env.local` sends
+    // it to look in the wrong place and conclude the credential is absent.
+    for (const [key, file] of signals.envKeys) {
       if (envKeys.some((re) => re.test(key))) {
-        return `found \`${key}\` in .env`;
+        return `found \`${key}\` in ${file}`;
       }
     }
   }
@@ -94,12 +107,12 @@ function collectSignals(installDir: string): ProjectSignals {
     npm: new Set(),
     python: new Set(),
     ruby: new Set(),
-    envKeys: new Set(),
+    envKeys: new Map(),
   };
 
   walkProjectFiles(
     installDir,
-    (name, fullPath) => ingestFile(name, fullPath, signals),
+    (name, fullPath) => ingestFile(installDir, name, fullPath, signals),
     MAX_DEPTH,
   );
 
@@ -113,6 +126,7 @@ function collectSignals(installDir: string): ProjectSignals {
  * memory just to discard it.
  */
 function ingestFile(
+  installDir: string,
   name: string,
   fullPath: string,
   signals: ProjectSignals,
@@ -123,10 +137,14 @@ function ingestFile(
   const content = safeReadFile(fullPath);
   if (content === null) return;
 
-  ingest(content, signals);
+  ingest(content, signals, toRelativePosixPath(installDir, fullPath));
 }
 
-type Ingestor = (content: string, signals: ProjectSignals) => void;
+type Ingestor = (
+  content: string,
+  signals: ProjectSignals,
+  relativePath: string,
+) => void;
 
 /** Pick the parser for a manifest filename, or null if it's not one we read. */
 function ingestorFor(name: string): Ingestor | null {
@@ -141,9 +159,26 @@ function ingestorFor(name: string): Ingestor | null {
     return (c, s) => parsePipfile(c).forEach((d) => addCapped(s.python, d));
   if (name === 'Gemfile')
     return (c, s) => parseGemfile(c).forEach((g) => addCapped(s.ruby, g));
-  if (name.startsWith('.env'))
-    return (c, s) => parseEnvKeys(c).forEach((k) => addCapped(s.envKeys, k));
+  if (isEnvFileName(name))
+    return (c, s, relativePath) => addEnvKeys(c, s, relativePath);
   return null;
+}
+
+/**
+ * Record each key NAME against the file that defined it. The first file wins,
+ * so the reported signal stays stable when several `.env*` files repeat a key.
+ * Values are never read.
+ */
+function addEnvKeys(
+  content: string,
+  signals: ProjectSignals,
+  relativePath: string,
+): void {
+  for (const key of parseEnvKeyNames(content)) {
+    if (signals.envKeys.has(key)) continue;
+    if (signals.envKeys.size >= MAX_SIGNAL_SET) return;
+    signals.envKeys.set(key, relativePath);
+  }
 }
 
 function addNpmDeps(content: string, signals: ProjectSignals): void {
@@ -173,14 +208,9 @@ export function parseGemfile(content: string): string[] {
   return gems;
 }
 
-/** Extract KEY NAMES from a dotenv file. Values are intentionally discarded. */
-export function parseEnvKeys(content: string): string[] {
-  const keys: string[] = [];
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-    if (match) keys.push(match[1]);
-  }
-  return keys;
-}
+/**
+ * Extract KEY NAMES from a dotenv file. Values are intentionally discarded.
+ * Re-exported from `@utils/env-scan`, which `check_env_keys` shares, so the
+ * detector and the tool cannot disagree about what counts as a key.
+ */
+export { parseEnvKeyNames as parseEnvKeys } from '@utils/env-scan';
