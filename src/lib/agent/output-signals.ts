@@ -32,6 +32,48 @@ const OUTPUT_SIGNALS = {
 type OutputSignal = keyof typeof OUTPUT_SIGNALS;
 const SIGNAL_NEEDLES = Object.values(OUTPUT_SIGNALS);
 
+/** The gateway's rejection reason parsed from a 401 `API Error:` line. */
+export type GatewayError = { code?: string; message?: string };
+
+/**
+ * The concrete cause of a gateway 401, used to pick the auth-screen next step
+ * and to bucket the failure in telemetry. `unknown` when the gateway body does
+ * not match a known wording — the screen then shows the raw message plus the
+ * common-cause list rather than guessing.
+ */
+export type GatewayAuthReason =
+  | 'expired'
+  | 'missing_scope'
+  | 'wrong_region'
+  | 'unknown';
+
+/**
+ * Classify a gateway 401 body into a concrete reason. Conservative: only the
+ * wordings the gateway actually returns map to a reason; anything else stays
+ * `unknown`.
+ */
+/** Narrow an unknown JSON value to an index-able record, or an empty one. */
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export function classifyGatewayAuthError(
+  gatewayError: GatewayError | undefined,
+): GatewayAuthReason {
+  if (!gatewayError) return 'unknown';
+  const haystack = `${gatewayError.code ?? ''} ${
+    gatewayError.message ?? ''
+  }`.toLowerCase();
+  if (/expir|revok/.test(haystack)) return 'expired';
+  if (/scope|permission|forbidden|insufficient/.test(haystack)) {
+    return 'missing_scope';
+  }
+  if (/region|wrong cloud|wrong host/.test(haystack)) return 'wrong_region';
+  return 'unknown';
+}
+
 export class AgentOutputSignals {
   private readonly lines: string[] = [];
   private apiKeySourceValue: string | undefined;
@@ -80,6 +122,38 @@ export class AgentOutputSignals {
   /** True for a specific HTTP status, e.g. 401 (auth) or 429 (rate limit). */
   hasApiErrorStatus(code: number): boolean {
     return this.text.includes(`${OUTPUT_SIGNALS.API_ERROR} ${code}`);
+  }
+
+  /**
+   * The gateway's rejection reason parsed from a 401 `API Error:` line. The SDK
+   * appends the gateway's JSON body after the status code, e.g.
+   *   API Error: 401 {"type":"error","error":{"type":"authentication_error",
+   *   "message":"..."}}
+   * We keep the error `code` (machine type) and `message` (human reason) so the
+   * auth screen names the concrete cause and telemetry buckets the 401 by
+   * reason. Returns undefined when no 401 line was retained; a line with no
+   * parseable body still returns its trailing text as the message.
+   */
+  gatewayError(): GatewayError | undefined {
+    const needle = `${OUTPUT_SIGNALS.API_ERROR} 401`;
+    const line = this.lines.find((l) => l.includes(needle));
+    if (!line) return undefined;
+    const after = line.slice(line.indexOf(needle) + needle.length).trim();
+    const jsonStart = after.indexOf('{');
+    if (jsonStart !== -1) {
+      try {
+        const parsed: unknown = JSON.parse(after.slice(jsonStart));
+        const body = asRecord(parsed);
+        const err = body.error !== undefined ? asRecord(body.error) : body;
+        const code = typeof err.type === 'string' ? err.type : undefined;
+        const message =
+          typeof err.message === 'string' ? err.message : undefined;
+        if (code || message) return { code, message };
+      } catch {
+        // Body was not JSON — fall through to the raw trailing text.
+      }
+    }
+    return after ? { message: after } : undefined;
   }
 
   /** Joined `API Error: …` lines for the user-facing message, or undefined. */
