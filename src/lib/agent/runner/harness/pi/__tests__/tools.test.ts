@@ -174,6 +174,51 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
   });
 
+  it.each(['.env.example', '.env.sample', '.env.template', '.env.dist'])(
+    'refuses to write a credential into %s, and writes nothing',
+    async (template) => {
+      // check_env_keys now hands the agent file paths, and a template is one
+      // of them. Writing there publishes the credential with the repository —
+      // and the gitignore pass that follows does not help, because adding an
+      // already-tracked file to .gitignore changes nothing.
+      const { wizardAsk, setEnvValues, workingDirectory } = makeTools({
+        token: SECRET,
+      });
+      const asked = await call(wizardAsk, {
+        questions: [
+          { id: 'token', prompt: 'Token', kind: 'text', sensitive: true },
+        ],
+      });
+      const { answers } = JSON.parse(textOf(asked)) as {
+        answers: { token: { secretRef: string } };
+      };
+
+      const result = await call(setEnvValues, {
+        filePath: template,
+        values: { ZENDESK_TOKEN: answers.token },
+      });
+
+      expect(textOf(result)).toMatch(/would be published/);
+      await expect(
+        readFile(join(workingDirectory, template), 'utf8'),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('still writes a real env file whose name merely starts like a template', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+
+    const result = await call(setEnvValues, {
+      filePath: '.env.example.local',
+      values: { POSTHOG_HOST: 'https://us.posthog.com' },
+    });
+
+    expect(textOf(result)).not.toMatch(/would be published/);
+    expect(
+      await readFile(join(workingDirectory, '.env.example.local'), 'utf8'),
+    ).toContain('POSTHOG_HOST=https://us.posthog.com');
+  });
+
   it('an unknown ref fails with a clear error and writes nothing', async () => {
     const { setEnvValues, workingDirectory } = makeTools({});
     const result = await call(setEnvValues, {

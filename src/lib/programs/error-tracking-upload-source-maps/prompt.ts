@@ -55,8 +55,12 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
    Use the wizard-tools MCP server. Reuse the env file the skill tells you to
    pick — the prerequisite PostHog integration usually already wrote
    POSTHOG_* vars to one, so seed your keys alongside them.
-   - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly).
+   - First call check_env_keys with the key names and that file as filePath.
+     It answers { status: "present" | "missing", foundIn: [paths] } per key —
+     names and paths only, never values, so don't read the file directly.
+     "present" means a real env file sets the key; a key found only in a
+     committed template (.env.example and friends) reads as "missing",
+     because a template documents a key rather than setting it.
    - Env tool path rule: ${envFilePathGuidance}
    - Then call set_env_values, passing the STEP 1 secretRef as a value
      object, not a literal string:

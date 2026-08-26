@@ -31,6 +31,7 @@ import {
   mergeEnvValues,
   resolveEnvPath,
   resolveEnvSecretRefs,
+  templateEnvWriteRefusal,
   vaultSensitiveAnswers,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
 } from '@lib/wizard-tools/tools';
@@ -214,6 +215,14 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         );
       }
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
+      const templateRefusal = templateEnvWriteRefusal(resolved);
+      if (templateRefusal) {
+        logToFile(`[pi] set_env_values: refused template target ${resolved}`);
+        analytics.wizardCapture('set_env_values template target refused', {
+          file_name: path.basename(resolved),
+        });
+        return text(templateRefusal);
+      }
       const existing = fs.existsSync(resolved)
         ? await fs.promises.readFile(resolved, 'utf8')
         : '';

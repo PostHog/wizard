@@ -35,6 +35,22 @@ export function isEnvFileName(name: string): boolean {
 }
 
 /**
+ * Committed template files: `.env.example` and its conventional siblings. They
+ * document the keys a project expects and hold placeholders, not credentials,
+ * which is why the agent's Read/Write gate lets them through untouched
+ * (`agent-interface.ts`) while blocking every other `.env*`.
+ *
+ * A scan still reads them — a key named only in a template is a real signal
+ * about what the project uses, and on a fresh checkout the template is often
+ * the only env file there is. What a template must never do is make a key look
+ * SET: `OPENAI_API_KEY=` in `.env.example` is a project saying it needs the
+ * key, not a project that has it.
+ */
+export function isTemplateEnvFileName(name: string): boolean {
+  return /^\.env\.(example|sample|template|dist)$/.test(name);
+}
+
+/**
  * Extract KEY NAMES from a dotenv file's content. Values are intentionally
  * discarded — the right-hand side of `=` is never captured.
  *
@@ -140,8 +156,20 @@ export function toPromptSafeRelativePath(
   return sanitizeReportedPath(toRelativePosixPath(rootDir, fullPath));
 }
 
-/** Key name → the project-relative env files that define it, in walk order. */
-export type EnvKeyLocations = Map<string, string[]>;
+/** One env file's declaration of a key. */
+export interface EnvKeyDefinition {
+  /** Project-relative path of the file, already prompt-safe. */
+  file: string;
+  /**
+   * The declaration documents the key rather than setting it — see
+   * {@link isTemplateEnvFileName}. Callers that answer "is this key set?" must
+   * not count it.
+   */
+  template: boolean;
+}
+
+/** Key name → the env files that declare it, in walk order. */
+export type EnvKeyLocations = Map<string, EnvKeyDefinition[]>;
 
 /**
  * Walk `rootDir` for `.env*` files and map every key NAME to the files that
@@ -162,13 +190,18 @@ export function collectProjectEnvKeys(rootDir: string): EnvKeyLocations {
       const content = safeReadFile(fullPath);
       if (content === null) return;
 
-      const relative = toPromptSafeRelativePath(rootDir, fullPath);
+      const definition: EnvKeyDefinition = {
+        file: toPromptSafeRelativePath(rootDir, fullPath),
+        template: isTemplateEnvFileName(name),
+      };
       for (const key of parseEnvKeyNames(content)) {
         const existing = locations.get(key);
         if (existing) {
-          if (!existing.includes(relative)) existing.push(relative);
+          if (!existing.some((d) => d.file === definition.file)) {
+            existing.push(definition);
+          }
         } else if (locations.size < MAX_ENV_KEY_SET) {
-          locations.set(key, [relative]);
+          locations.set(key, [definition]);
         }
       }
     },

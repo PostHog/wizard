@@ -50,6 +50,7 @@ import {
   readLedger,
   resolveEnvPath,
   resolveEnvSecretRefs,
+  templateEnvWriteRefusal,
   vaultSensitiveAnswers,
   writeLedgerAtomic,
   type SkillEntry,
@@ -258,6 +259,17 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const { values: resolvedValues, refKeys: resolvedRefKeys } = resolution;
 
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
+      const templateRefusal = templateEnvWriteRefusal(resolved);
+      if (templateRefusal) {
+        logToFile(`set_env_values: refused template target ${resolved}`);
+        analytics.wizardCapture('set_env_values template target refused', {
+          file_name: path.basename(resolved),
+        });
+        return {
+          content: [{ type: 'text' as const, text: templateRefusal }],
+          isError: true,
+        };
+      }
       logToFile(
         `set_env_values: ${resolved}, keys: ${Object.keys(resolvedValues).join(
           ', ',

@@ -5,15 +5,22 @@ import {
   ENV_SCAN_MAX_DEPTH,
   collectProjectEnvKeys,
   isEnvFileName,
+  isTemplateEnvFileName,
   MAX_REPORTED_PATH_LENGTH,
   parseEnvKeyNames,
   sanitizeReportedPath,
   toPromptSafeRelativePath,
   toRelativePosixPath,
+  type EnvKeyLocations,
 } from '@utils/env-scan';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'env-scan-'));
+}
+
+/** The files declaring `key`, for assertions that don't care about template-ness. */
+function filesFor(found: EnvKeyLocations, key: string): string[] | undefined {
+  return found.get(key)?.map((d) => d.file);
 }
 
 function cleanup(dir: string): void {
@@ -37,6 +44,23 @@ describe('isEnvFileName', () => {
     ['sample.env', false],
   ])('classifies %s as %s', (name, expected) => {
     expect(isEnvFileName(name)).toBe(expected);
+  });
+});
+
+describe('isTemplateEnvFileName', () => {
+  it.each([
+    ['.env.example', true],
+    ['.env.sample', true],
+    ['.env.template', true],
+    ['.env.dist', true],
+    ['.env', false],
+    ['.env.local', false],
+    ['.env.production', false],
+    // Not the template convention — a real env file for an "example" stage.
+    ['.env.example.local', false],
+    ['.env.examples', false],
+  ])('classifies %s as %s', (name, expected) => {
+    expect(isTemplateEnvFileName(name)).toBe(expected);
   });
 });
 
@@ -205,7 +229,7 @@ describe('collectProjectEnvKeys', () => {
     ['packages/a/b/.env'],
   ])('finds a key in %s and reports that path', (relativePath) => {
     writeEnv(tmpDir, relativePath, 'OPENAI_API_KEY=sk-live-secret\n');
-    expect(collectProjectEnvKeys(tmpDir).get('OPENAI_API_KEY')).toEqual([
+    expect(filesFor(collectProjectEnvKeys(tmpDir), 'OPENAI_API_KEY')).toEqual([
       relativePath,
     ]);
   });
@@ -214,7 +238,7 @@ describe('collectProjectEnvKeys', () => {
     writeEnv(tmpDir, '.env', 'SHARED=a\n');
     writeEnv(tmpDir, 'apps/api/.env.local', 'SHARED=b\n');
 
-    const found = collectProjectEnvKeys(tmpDir).get('SHARED');
+    const found = filesFor(collectProjectEnvKeys(tmpDir), 'SHARED');
     expect(found).toHaveLength(2);
     expect(found).toEqual(
       expect.arrayContaining(['.env', 'apps/api/.env.local']),
@@ -248,7 +272,7 @@ describe('collectProjectEnvKeys', () => {
     writeEnv(tmpDir, pastLimit, 'TOO_DEEP=x\n');
 
     const found = collectProjectEnvKeys(tmpDir);
-    expect(found.get('IN_RANGE')).toEqual([atLimit]);
+    expect(filesFor(found, 'IN_RANGE')).toEqual([atLimit]);
     expect(found.has('TOO_DEEP')).toBe(false);
   });
 
@@ -259,7 +283,39 @@ describe('collectProjectEnvKeys', () => {
     writeEnv(tmpDir, '.env.local', 'STRIPE_SECRET_KEY=sk_live_x\n');
 
     const found = collectProjectEnvKeys(tmpDir);
-    expect(found.get('STRIPE_SECRET_KEY')).toEqual(['.env.local']);
+    expect(filesFor(found, 'STRIPE_SECRET_KEY')).toEqual(['.env.local']);
+  });
+
+  it('still scans a template, and marks the declaration as one', () => {
+    // A template is a real signal about what the project uses — on a fresh
+    // checkout it is often the only env file there is — so it is scanned. It
+    // is marked so callers answering "is this key SET?" can discount it.
+    writeEnv(tmpDir, '.env.example', 'OPENAI_API_KEY=\n');
+
+    expect(collectProjectEnvKeys(tmpDir).get('OPENAI_API_KEY')).toEqual([
+      { file: '.env.example', template: true },
+    ]);
+  });
+
+  it('marks a real env file as not a template', () => {
+    writeEnv(tmpDir, '.env.local', 'OPENAI_API_KEY=sk-live-secret\n');
+
+    expect(collectProjectEnvKeys(tmpDir).get('OPENAI_API_KEY')).toEqual([
+      { file: '.env.local', template: false },
+    ]);
+  });
+
+  it('keeps both declarations when a template and a real file share a key', () => {
+    writeEnv(tmpDir, '.env.example', 'DATABASE_URL=\n');
+    writeEnv(tmpDir, '.env', 'DATABASE_URL=postgres://u:pw@h/db\n');
+
+    const found = collectProjectEnvKeys(tmpDir).get('DATABASE_URL');
+    expect(found).toEqual(
+      expect.arrayContaining([
+        { file: '.env.example', template: true },
+        { file: '.env', template: false },
+      ]),
+    );
   });
 
   it('ignores env files inside dependency directories', () => {
