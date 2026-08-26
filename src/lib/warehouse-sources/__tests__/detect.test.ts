@@ -6,6 +6,7 @@ import {
   parseGemfile,
   parseEnvKeys,
 } from '@lib/warehouse-sources/detect';
+import { SOURCE_DETECTORS } from '@lib/warehouse-sources/registry';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-detect-'));
@@ -222,11 +223,33 @@ describe('detectWarehouseSources', () => {
     }
   });
 
+  it.each([
+    ['Intercom', { 'intercom-client': '^5.0.0' }, 'INTERCOM_ACCESS_TOKEN'],
+    ['Plain', { '@team-plain/typescript-sdk': '^5.0.0' }, 'PLAIN_API_KEY'],
+    ['Polar', { '@polar-sh/sdk': '^0.30.0' }, 'POLAR_ACCESS_TOKEN'],
+  ])(
+    'no longer detects %s — it is gated behind a PostHog feature flag',
+    (kind, deps, envKey) => {
+      writePackageJson(tmpDir, deps);
+      fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
+      expect(kinds(tmpDir)).not.toContain(kind);
+    },
+  );
+
   it('ignores node_modules', () => {
     const nm = path.join(tmpDir, 'node_modules', 'pg');
     fs.mkdirSync(nm, { recursive: true });
     writePackageJson(nm, { pg: '^8.0.0' });
     expect(detectWarehouseSources(tmpDir)).toEqual([]);
+  });
+});
+
+describe('SOURCE_DETECTORS', () => {
+  it('omits the flag-gated kinds the wizard cannot complete', () => {
+    const kindSet = new Set(SOURCE_DETECTORS.map((d) => d.kind));
+    for (const gated of ['Intercom', 'Plain', 'Polar']) {
+      expect(kindSet.has(gated)).toBe(false);
+    }
   });
 });
 

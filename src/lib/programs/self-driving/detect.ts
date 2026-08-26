@@ -333,7 +333,8 @@ export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   'Front',
   'Gorgias',
   'Kustomer',
-  'Plain',
+  // 'Plain' is intentionally absent: the source registry dropped it while the
+  // dwh_plain feature flag keeps it out of reach for most users.
   // Security scanners
   'Snyk',
   // Product feedback
