@@ -160,6 +160,31 @@ describe('apply functions', () => {
     expect(r.ok).toBe(true);
     expect(store.get(t.id)?.status).toBe('not needed');
     expect(store.nextRunnable().map((task) => task.id)).toContain(dependent.id);
+    // An agent deciding a step does not apply is a different fact from a user
+    // declining one; the skipped-task event has to be able to tell them apart.
+    expect(store.get(t.id)?.skipReason).toBe('agent-not-needed');
+  });
+
+  it("keeps the agent's own words out of the skip reason", () => {
+    // The handoff is free text an LLM wrote, on a flow that reaches live
+    // database and API credentials. It stays in the run's queue.json, where the
+    // report reads it, and out of telemetry, which has no redaction pass.
+    const t = store.enqueue({ type: 'warehouse' });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
+    applyComplete(ctx, {
+      status: 'not needed',
+      handoff: {
+        goals: 'g',
+        did: 'nothing — postgres://user:hunter2@db.internal was unreachable',
+        forNextAgent: 'n',
+      },
+    });
+
+    expect(store.get(t.id)?.skipReason).toBe('agent-not-needed');
+    expect(JSON.stringify(store.get(t.id)?.skipReason)).not.toContain(
+      'hunter2',
+    );
   });
 
   it('a remark is captured against its task type, never left in the handoff', () => {

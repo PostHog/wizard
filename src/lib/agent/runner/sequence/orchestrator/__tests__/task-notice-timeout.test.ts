@@ -1,28 +1,39 @@
 /**
- * The notice's timeout.
+ * The notice's timeout, and where the notice is asked.
  *
- * The offer sits in front of the run's last steps, so an unanswered one holds
- * the report — and with it the notebook and the outro — behind a modal nobody is
- * looking at. It defaults to declining rather than waiting forever.
+ * The offer defaults to declining rather than waiting forever: a modal nobody
+ * answers would otherwise hold the run behind a screen nobody is looking at.
+ * That default is only safe where the user actually is, which is seconds into
+ * the run — so the offer is made at seed time, and only the work it gates is
+ * deferred to the end of the queue.
  */
 import type { TaskNotice } from '@lib/wizard-session';
 
-const showTaskNotice = vi.fn<[TaskNotice], Promise<boolean>>();
-const cancelTaskNotice = vi.fn();
+// Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
+// factory would otherwise read these before they exist.
+const { showTaskNotice, cancelTaskNotice, wizardCapture, captureException } =
+  vi.hoisted(() => ({
+    showTaskNotice: vi.fn<[TaskNotice], Promise<boolean>>(),
+    cancelTaskNotice: vi.fn(),
+    wizardCapture: vi.fn(),
+    captureException: vi.fn(),
+  }));
 
 vi.mock('@ui', () => ({
   getUI: () => ({ showTaskNotice, cancelTaskNotice }),
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: {
-    wizardCapture: vi.fn(),
+    wizardCapture,
     setTag: vi.fn(),
     capture: vi.fn(),
-    captureException: vi.fn(),
+    captureException,
   },
 }));
 
 import {
+  askSeededConsent,
+  consentSkipReason,
   offerSeededTask,
   TASK_NOTICE_TIMEOUT_MS,
 } from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
@@ -36,11 +47,15 @@ const NOTICE: TaskNotice = {
   cancelLabel: 'Skip [Esc]',
 };
 
+const resetMocks = () => {
+  showTaskNotice.mockReset();
+  cancelTaskNotice.mockReset();
+  wizardCapture.mockReset();
+  captureException.mockReset();
+};
+
 describe('task notice timeout', () => {
-  beforeEach(() => {
-    showTaskNotice.mockReset();
-    cancelTaskNotice.mockReset();
-  });
+  beforeEach(resetMocks);
 
   it('waits five minutes before giving up on an answer', () => {
     expect(TASK_NOTICE_TIMEOUT_MS).toBe(5 * 60 * 1000);
@@ -86,7 +101,7 @@ describe('task notice timeout', () => {
       showTaskNotice.mockResolvedValue(false);
 
       // Both decline, but only one of them means "the user was not there" —
-      // the run reports them differently.
+      // the run reports them differently, and now skips them differently too.
       await expect(offerSeededTask(NOTICE, 1000)).resolves.toEqual({
         keep: false,
         timedOut: false,
@@ -99,36 +114,143 @@ describe('task notice timeout', () => {
 });
 
 /**
- * Two hazards created by offering the notice from inside the drain rather than
- * from the seed loop. Seeding awaited its notices sequentially, so neither was
- * reachable before; the executor starts every runnable task at once, so both
- * are now. Both are pinned here because each fails silently — one as a repeated
- * modal, the other as a run that never ends.
+ * Every way of not saying yes maps to its own skip reason.
+ *
+ * The three are different facts about the user: one said no, one was not there,
+ * and one was never asked. Collapsing them is what made a week of auto-declines
+ * look like ordinary skipped steps.
  */
-describe('offering a notice from inside the drain', () => {
-  beforeEach(() => {
-    showTaskNotice.mockReset();
-    cancelTaskNotice.mockReset();
+describe('consentSkipReason', () => {
+  it.each([
+    [
+      'an explicit Skip',
+      { keep: false, timedOut: false, errored: false },
+      'user-declined',
+    ],
+    [
+      'an unanswered offer',
+      { keep: false, timedOut: true, errored: false },
+      'notice-timeout',
+    ],
+    [
+      'an offer that could not be shown',
+      { keep: false, timedOut: false, errored: true },
+      'notice-error',
+    ],
+  ])('maps %s to %s', (_label, consent, expected) => {
+    expect(consentSkipReason(consent)).toBe(expected);
   });
 
-  it('shows a task’s notice at most once, even across a retry', async () => {
-    // The executor requeues a task that ends without reporting, calling runTask
-    // again with the same id. Consent is per task, not per attempt.
-    const notices = new Map<string, TaskNotice>([['task-1', NOTICE]]);
+  it('reports a failed notice as an error, not as a timeout', () => {
+    // Both are "the user did not decline", and only one of them is worth
+    // paging someone about.
+    expect(
+      consentSkipReason({ keep: false, timedOut: true, errored: true }),
+    ).toBe('notice-error');
+  });
+});
+
+/**
+ * Asking for consent at seed time.
+ *
+ * #1103 moved this ask to the moment the task became runnable — a median seven
+ * minutes into the run, after every coding task, with the user long since gone.
+ * The five-minute default then answered for them. Consent belongs where the
+ * user still is; only the work it gates belongs at the end.
+ */
+describe('askSeededConsent', () => {
+  beforeEach(resetMocks);
+
+  it('records an acceptance', async () => {
     showTaskNotice.mockResolvedValue(true);
 
-    const offerOnce = async (taskId: string) => {
-      const notice = notices.get(taskId);
-      if (!notice) return;
-      notices.delete(taskId);
-      await offerSeededTask(notice, 1000);
-    };
-
-    await offerOnce('task-1');
-    await offerOnce('task-1'); // the retry
-
-    expect(showTaskNotice).toHaveBeenCalledTimes(1);
+    await expect(askSeededConsent('warehouse', NOTICE, 1000)).resolves.toEqual({
+      keep: true,
+      timedOut: false,
+      errored: false,
+    });
   });
+
+  it('records an explicit decline', async () => {
+    showTaskNotice.mockResolvedValue(false);
+
+    await expect(askSeededConsent('warehouse', NOTICE, 1000)).resolves.toEqual({
+      keep: false,
+      timedOut: false,
+      errored: false,
+    });
+  });
+
+  it('records a timeout as a decline the user never gave', async () => {
+    vi.useFakeTimers();
+    try {
+      showTaskNotice.mockReturnValue(new Promise<boolean>(() => undefined));
+
+      const promise = askSeededConsent('warehouse', NOTICE, 1000);
+      vi.advanceTimersByTime(1000);
+
+      await expect(promise).resolves.toEqual({
+        keep: false,
+        timedOut: true,
+        errored: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports the answer on one event per offer', async () => {
+    showTaskNotice.mockResolvedValue(true);
+
+    await askSeededConsent('warehouse', NOTICE, 1000);
+
+    expect(wizardCapture).toHaveBeenCalledTimes(1);
+    expect(wizardCapture).toHaveBeenCalledWith(
+      'orchestrator task notice answered',
+      { type: 'warehouse', kept: true, timed_out: false, errored: false },
+    );
+  });
+
+  it('is treated as a decline when the notice throws, never as consent', async () => {
+    // The step this gates goes on to ask for live credentials, so a question
+    // that could not be put to the user must never be read as a yes.
+    showTaskNotice.mockRejectedValue(new Error('UI blew up'));
+
+    await expect(askSeededConsent('warehouse', NOTICE, 1000)).resolves.toEqual({
+      keep: false,
+      timedOut: false,
+      errored: true,
+    });
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(wizardCapture).toHaveBeenCalledWith(
+      'orchestrator task notice answered',
+      { type: 'warehouse', kept: false, timed_out: false, errored: true },
+    );
+  });
+});
+
+/**
+ * Two hazards that come from *where* the offer is made.
+ *
+ * #1103 offered notices from inside the drain, which starts every runnable task
+ * at once; that made a second modal and a re-offer on retry reachable for the
+ * first time, and each fails silently — one as a repeated modal, the other as a
+ * run that never ends. Asking from the seed loop instead removes both by
+ * construction, and these pin that the seed loop keeps the properties the
+ * in-drain gate had to build by hand.
+ */
+describe('offering notices from the seed loop', () => {
+  beforeEach(resetMocks);
+
+  /** The seed loop: one entry at a time, each awaited before the next. */
+  const seedLoop = async (entries: readonly { type: string }[]) => {
+    const answers: { keep: boolean; timedOut: boolean; errored: boolean }[] =
+      [];
+    for (const entry of entries) {
+      answers.push(await askSeededConsent(entry.type, NOTICE, 60_000));
+    }
+    return answers;
+  };
 
   it('never puts two notices on screen at once', async () => {
     // The store holds one pending-notice slot: a second showTaskNotice
@@ -136,66 +258,42 @@ describe('offering a notice from inside the drain', () => {
     // its task hangs for the rest of the run.
     let onScreen = 0;
     let maxOnScreen = 0;
-    let releaseFirst: ((v: boolean) => void) | undefined;
 
-    showTaskNotice.mockImplementation(() => {
+    showTaskNotice.mockImplementation(async () => {
       onScreen += 1;
       maxOnScreen = Math.max(maxOnScreen, onScreen);
-      if (!releaseFirst) {
-        return new Promise<boolean>((resolve) => {
-          releaseFirst = (v) => {
-            onScreen -= 1;
-            resolve(v);
-          };
-        });
-      }
+      await Promise.resolve();
       onScreen -= 1;
-      return Promise.resolve(true);
+      return true;
     });
 
-    let gate: Promise<unknown> = Promise.resolve();
-    const offer = (): Promise<{ keep: boolean; timedOut: boolean }> => {
-      const p = gate.then(() => offerSeededTask(NOTICE, 60_000));
-      gate = p.catch(() => undefined);
-      return p;
-    };
-
-    const first = offer();
-    const second = offer();
-    await Promise.resolve();
+    const answers = await seedLoop([{ type: 'warehouse' }, { type: 'other' }]);
 
     expect(maxOnScreen).toBe(1);
-    releaseFirst?.(true);
-
-    await expect(first).resolves.toEqual({ keep: true, timedOut: false });
-    await expect(second).resolves.toEqual({ keep: true, timedOut: false });
-    expect(maxOnScreen).toBe(1);
+    expect(answers).toEqual([
+      { keep: true, timedOut: false, errored: false },
+      { keep: true, timedOut: false, errored: false },
+    ]);
     expect(showTaskNotice).toHaveBeenCalledTimes(2);
   });
-});
 
-/**
- * Which way consent breaks when the offer itself fails.
- *
- * The notice is consumed before it is shown (so a retry cannot re-ask), which
- * means a thrown offer would otherwise leave the executor's retry path with no
- * notice to show — and the step would run, and start asking for credentials,
- * with nobody having agreed to it. It must break towards declining.
- */
-describe('a notice that fails to show', () => {
-  beforeEach(() => {
-    showTaskNotice.mockReset();
-    cancelTaskNotice.mockReset();
-  });
+  it('shows a task’s notice at most once, whatever the drain does later', async () => {
+    // The executor requeues a task that ends without reporting, calling runTask
+    // again with the same id. The offer is no longer in runTask at all, so a
+    // retry cannot re-ask — consent is per task, not per attempt, and it was
+    // taken before the drain started.
+    showTaskNotice.mockResolvedValue(true);
 
-  it('is treated as a decline, never as consent', async () => {
-    showTaskNotice.mockRejectedValue(new Error('UI blew up'));
+    const consent = new Map(
+      (await seedLoop([{ type: 'warehouse' }])).map((answer) => [
+        'task-1',
+        answer,
+      ]),
+    );
+    const runTask = (taskId: string) => consent.get(taskId)?.keep === true;
 
-    const result = await offerSeededTask(NOTICE, 1000).catch(() => ({
-      keep: false,
-      timedOut: false,
-    }));
-
-    expect(result.keep).toBe(false);
+    expect(runTask('task-1')).toBe(true);
+    expect(runTask('task-1')).toBe(true); // the retry
+    expect(showTaskNotice).toHaveBeenCalledTimes(1);
   });
 });
