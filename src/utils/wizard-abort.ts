@@ -12,7 +12,7 @@ import { getUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@lib/errors';
-import { emitPhwError, sanitizeErrorDetail } from '@lib/errors';
+import { emitWizardError, sanitizeErrorDetail } from '@lib/errors';
 
 export class WizardError extends Error {
   readonly code?: ErrorCode;
@@ -126,7 +126,7 @@ export async function wizardAbort(
   // 6. Emit the machine-readable error line for non-interactive hosts
   //    (LoggingUI and its HeadlessUI subclass); the TUI never sees it.
   if (code && ui instanceof LoggingUI) {
-    emitPhwError({
+    emitWizardError({
       code,
       message: resolvedOutroData.message ?? message,
       detail: sanitizeErrorDetail(resolvedOutroData.errorDetail ?? detail),

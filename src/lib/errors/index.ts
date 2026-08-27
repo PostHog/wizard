@@ -12,8 +12,8 @@ export { detectErrorCode, type DetectErrorKind } from './detect-map';
 export { skillErrorCode } from './skill-map';
 export {
   PHW_ERROR_PREFIX,
-  emitPhwError,
-  formatPhwErrorLine,
-  type PhwErrorLine,
+  emitWizardError,
+  formatWizardErrorLine,
+  type WizardErrorLine,
 } from './emit';
 export { sanitizeErrorDetail } from './sanitize';

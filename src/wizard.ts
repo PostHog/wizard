@@ -6,7 +6,7 @@ import { Harness, Sequence } from '@lib/constants';
 import { initLocalDev, localMcpSkillsNotice } from '@lib/local-dev';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@lib/errors';
-import { emitPhwError } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 
 /**
  * Global yargs options applied to every command. These are read from the
@@ -192,7 +192,7 @@ export class Wizard {
           `\n\x1b[1;91m✖ ${text}\x1b[0m\n` +
             `  Run \`wizard --help\` to see available commands and options.\n\n`,
         );
-        emitPhwError({ code: ErrorCodes.CliBadArgs, message: text });
+        emitWizardError({ code: ErrorCodes.CliBadArgs, message: text });
         process.exit(1);
       })
       .help()
@@ -233,7 +233,7 @@ export class Wizard {
         process.stderr.write(
           `\n\x1b[1;91m✖ CI mode is not currently supported in published builds.\x1b[0m\n\n`,
         );
-        emitPhwError({
+        emitWizardError({
           code: ErrorCodes.CliFlagUnavailable,
           message: 'CI mode is not supported in published builds.',
         });
@@ -268,7 +268,7 @@ export class Wizard {
         process.stderr.write(
           `\n\x1b[1;91m✖ The --harness, --sequence, --model, and --capture-aio overrides are not available in published builds.\x1b[0m\n\n`,
         );
-        emitPhwError({
+        emitWizardError({
           code: ErrorCodes.CliFlagUnavailable,
           message:
             'The --harness, --sequence, --model, and --capture-aio overrides are not available in published builds.',
@@ -291,7 +291,7 @@ export class Wizard {
           `\n\x1b[1;91m✖ The --local-dev, --local-context-mill, --local-mcp, and --local-posthog targets are not available in published builds.\x1b[0m\n` +
             `  They point the wizard at development servers on localhost.\n\n`,
         );
-        emitPhwError({
+        emitWizardError({
           code: ErrorCodes.CliFlagUnavailable,
           message:
             'The --local-dev, --local-context-mill, --local-mcp, and --local-posthog targets are not available in published builds.',

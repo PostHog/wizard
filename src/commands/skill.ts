@@ -8,7 +8,7 @@ import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
 import { runCommandHandler } from './factories/shared';
 import { ErrorCodes } from '@lib/errors';
-import { emitPhwError } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 import type { Command } from './command';
 
 /** Read the `<skill-name>` positional (yargs camelCases the hyphenated key). */
@@ -99,7 +99,7 @@ const listCommand: Command = {
           `\n\x1b[1;91m✖ Couldn't reach the skill registry.\x1b[0m\n` +
             `  Check your network connection and try again.\n\n`,
         );
-        emitPhwError({
+        emitWizardError({
           code: ErrorCodes.SkillMenuFetchFailed,
           message: "Couldn't reach the skill registry.",
         });

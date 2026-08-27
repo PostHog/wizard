@@ -13,7 +13,7 @@ import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
 import { join } from 'node:path';
-import { ErrorCodes, detectErrorCode, emitPhwError } from '@lib/errors';
+import { ErrorCodes, detectErrorCode, emitWizardError } from '@lib/errors';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -49,7 +49,7 @@ export function validateNonInteractiveOptions(
   if (!options.apiKey) {
     getUI().intro('PostHog Wizard');
     getUI().log.error(`${label} mode requires --api-key (${keyHint})`);
-    emitPhwError({
+    emitWizardError({
       code: ErrorCodes.ArgsMissingApiKey,
       message: `${label} mode requires --api-key (${keyHint})`,
     });
@@ -60,7 +60,7 @@ export function validateNonInteractiveOptions(
     getUI().log.error(
       `${label} mode requires --install-dir (directory to install in)`,
     );
-    emitPhwError({
+    emitWizardError({
       code: ErrorCodes.ArgsMissingInstallDir,
       message: `${label} mode requires --install-dir`,
     });
@@ -327,7 +327,7 @@ export function runNonInteractive(
       });
     }
   })().catch((error: unknown) => {
-    emitPhwError({
+    emitWizardError({
       code: ErrorCodes.InternalUnhandled,
       message: error instanceof Error ? error.message : String(error),
     });

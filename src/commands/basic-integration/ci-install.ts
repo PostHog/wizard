@@ -6,7 +6,7 @@ import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { ErrorCodes, type ErrorCode } from '@lib/errors';
-import { emitPhwError } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 
 type Options = Arguments & {
   region?: string;
@@ -87,7 +87,7 @@ function runNonInteractiveInstall(
     }
     runWizard(posthogIntegrationConfig, options);
   })().catch((error: unknown) => {
-    emitPhwError({
+    emitWizardError({
       code: ErrorCodes.ArgsSignupProvisionFailed,
       message: error instanceof Error ? error.message : String(error),
     });
@@ -99,7 +99,7 @@ function failCI(message: string, code?: ErrorCode): void {
   setUI(new LoggingUI());
   getUI().intro('PostHog Wizard');
   getUI().log.error(message);
-  if (code) emitPhwError({ code, message });
+  if (code) emitWizardError({ code, message });
   process.exit(1);
 }
 

@@ -11,7 +11,7 @@ import { analytics } from '@utils/analytics';
 import { dispatchProgram } from '../../commands/factories/shared';
 import type { Command } from '../../commands/command';
 import { ErrorCodes } from '@lib/errors';
-import { emitPhwError } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 
 /**
  * Capture a CLI dispatch error, flush analytics, and exit. The wizard never
@@ -31,7 +31,7 @@ async function exitDispatchError(
     /* flush is best-effort; never block the exit */
   }
   process.stderr.write(message);
-  emitPhwError({ code: ErrorCodes.CliBadArgs, message: reason });
+  emitWizardError({ code: ErrorCodes.CliBadArgs, message: reason });
   return process.exit(code);
 }
 

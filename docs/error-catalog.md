@@ -52,7 +52,7 @@ New codes follow the pattern `PHW_<GROUP>_<NAME>` (see `ERROR_CODE_PATTERN` in
 `WizardError(message, context, code)` carries the code alongside its telemetry
 context. Codes are also emitted at raw `process.exit` sites that run before the
 abort funnel exists (CLI arg validation, Node version preflight, yargs failures)
-via `emitPhwError()`.
+via `emitWizardError()`.
 
 `errorDetail` is allowlisted (`reason`, `detected`, `platform`) at both egress
 boundaries — the `phw-error:` stderr line and the task-stream push — so fields

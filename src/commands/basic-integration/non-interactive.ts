@@ -1,6 +1,6 @@
 import { getUI } from '@ui';
 import { ErrorCodes } from '@lib/errors';
-import { emitPhwError } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 
 /** Print the "needs a TTY" error and exit. Used when no `--ci` flag and no TTY. */
 export function failNonInteractive(): void {
@@ -12,7 +12,7 @@ export function failNonInteractive(): void {
       'For CI/CD environments, use --ci mode:\n' +
       '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
   );
-  emitPhwError({
+  emitWizardError({
     code: ErrorCodes.CliInteractiveRequired,
     message: 'This installer requires an interactive terminal (TTY) to run.',
   });
