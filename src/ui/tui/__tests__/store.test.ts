@@ -209,6 +209,47 @@ describe('WizardStore', () => {
       expect(store.session.warehouseSourcesReported).toBe(true);
     });
 
+    it('sets the warehouse tags before it sends setup confirmed', () => {
+      const store = createStore();
+      // A granted run with a scan behind it, which is when tags get set.
+      store.session = {
+        ...store.session,
+        scanConsent: ScanConsent.Granted,
+        frameworkContext: {
+          warehouseScanState: 'ok',
+          detectedWarehouseSources: [
+            {
+              kind: 'Stripe',
+              label: 'Stripe',
+              mode: 'in-cli',
+              matchedSignal: 'x',
+            },
+          ],
+        },
+      };
+      (analytics.setTag as Mock).mockClear();
+      wizardCaptureMock.mockClear();
+
+      store.completeSetup();
+
+      // Analytics merges tags into an event as it is sent, so a tag set after
+      // the capture lands one event too late.
+      const taggedKinds = (analytics.setTag as Mock).mock.calls.findIndex(
+        ([key]) => key === 'warehouse_source_kinds',
+      );
+      expect(taggedKinds).toBeGreaterThanOrEqual(0);
+      const tagOrder = (analytics.setTag as Mock).mock.invocationCallOrder[
+        taggedKinds
+      ];
+      const captureOrder =
+        wizardCaptureMock.mock.invocationCallOrder[
+          wizardCaptureMock.mock.calls.findIndex(
+            ([event]) => event === 'setup confirmed',
+          )
+        ];
+      expect(tagOrder).toBeLessThan(captureOrder);
+    });
+
     it('declineSharing leaves the report unclaimed while the choice can change', () => {
       const store = createStore();
 

@@ -430,11 +430,14 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed, and is one of the two points consent resolves by. */
+  /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
-    analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
+    // Reports first: analytics merges tags into an event as it is sent, so
+    // `setup confirmed` only carries the warehouse tags if they are already
+    // set. On main they were, because reporting happened back in detect.
     this._markWarehouseSourcesReportedIfNeeded();
+    analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
   }
 
