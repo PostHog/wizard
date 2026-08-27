@@ -127,9 +127,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
   {
+    // Firebase authenticates with a service-account JSON key file, not a
+    // pasteable string. The terminal credential prompt only collects
+    // single-line text, so there is no safe in-cli path: the file upload lives
+    // in the app's new-source form. Deep-link there instead of dead-ending on a
+    // credential the CLI cannot accept.
     kind: 'Firebase',
     label: 'Firebase',
-    mode: 'in-cli',
+    mode: 'deep-link',
     signals: {
       // NOTE: the `firebase` client SDK also covers auth-only projects, which
       // have no Firestore data to import. We accept the false positives — the
