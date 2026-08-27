@@ -39,7 +39,7 @@ const SUBTITLE = (
     <Text dimColor>
       We'll use AI to analyze your project and complete work.
     </Text>
-    <Text dimColor>Review what data is shared in "{PRIVACY_PANEL_LABEL}".</Text>
+    <Text dimColor>Review what data is shared in "{PRIVACY_PANEL_LABEL}."</Text>
     <Text dimColor>.env* values stay on your machine.</Text>
   </>
 );
