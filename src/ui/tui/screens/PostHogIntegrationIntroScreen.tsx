@@ -23,6 +23,7 @@ import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { ScanConsent } from '@lib/wizard-session';
 import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
+import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
 
 type View = 'default' | 'more-info';
 
@@ -38,6 +39,7 @@ const SUBTITLE = (
     <Text dimColor>
       We'll use AI to analyze your project and complete work.
     </Text>
+    <Text dimColor>Review what data is shared in "{PRIVACY_PANEL_LABEL}".</Text>
     <Text dimColor>.env* values stay on your machine.</Text>
   </>
 );
