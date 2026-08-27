@@ -9,7 +9,10 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import {
+  PrivacyPanel,
+  PRIVACY_PANEL_LABEL,
+} from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 
 type View = 'default' | 'more-info' | 'privacy';
@@ -79,7 +82,7 @@ export const SourceMapsIntroScreen = ({
     view === 'more-info'
       ? [
           { label: 'Back', value: 'back' },
-          { label: 'Privacy & data usage', value: 'privacy' },
+          { label: PRIVACY_PANEL_LABEL, value: 'privacy' },
         ]
       : view === 'privacy'
       ? [{ label: 'Back', value: 'back' }]
@@ -89,8 +92,7 @@ export const SourceMapsIntroScreen = ({
           { label: 'Cancel', value: 'cancel' },
         ];
 
-  const title =
-    view === 'privacy' ? 'Wizard privacy & usage' : 'PostHog Wizard 🦔';
+  const title = view === 'privacy' ? PRIVACY_PANEL_LABEL : 'PostHog Wizard 🦔';
 
   return (
     <IntroScreenLayout

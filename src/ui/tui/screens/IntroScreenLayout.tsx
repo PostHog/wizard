@@ -13,7 +13,7 @@
 import path from 'path';
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
-import { PickerMenu } from '@ui/tui/primitives/index';
+import { PickerMenu, type PickerOption } from '@ui/tui/primitives/index';
 
 export interface DetectionRow {
   label: string;
@@ -51,10 +51,12 @@ interface IntroScreenLayoutProps {
   /** Content rendered between detection rows and the menu */
   children?: ReactNode;
 
-  /** Menu options. Pass null to hide the menu entirely. */
-  menuOptions?: { label: string; value: string }[] | null;
-  /** The default 24 wraps longer labels; a screen needing more opts in. */
-  menuWidth?: number;
+  /**
+   * Menu options, forwarded to PickerMenu as-is — so a screen can mark a row
+   * `disabled` (navigation skips it, which is how a blank spacer row works) or
+   * give it an `icon`. Pass null to hide the menu entirely.
+   */
+  menuOptions?: PickerOption<string>[] | null;
 
   /**
    * Menu alignment. 'center' (default) matches the wizard's standard
@@ -105,7 +107,6 @@ export const IntroScreenLayout = ({
   children,
   menuOptions,
   menuAlign = 'center',
-  menuWidth,
   onSelect,
   programLabel,
   skillId,
@@ -202,10 +203,7 @@ export const IntroScreenLayout = ({
           </Box>
         )}
 
-        <Box
-          width={menuWidth ?? (menuAlign === 'left' ? 64 : 24)}
-          marginTop={1}
-        >
+        <Box width={menuAlign === 'left' ? 64 : 24} marginTop={1}>
           {resolvedMenuOptions && onSelect && (
             <Box
               justifyContent={menuAlign === 'left' ? 'flex-start' : 'center'}

@@ -15,7 +15,10 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox } from '@ui/tui/primitives/index';
 import { MAX_WIDTH } from '@ui/tui/primitives/ScreenContainer';
-import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import {
+  PrivacyPanel,
+  PRIVACY_PANEL_LABEL,
+} from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
 import { useKeyBindings, type KeyBinding } from '@ui/tui/hooks/useKeyBindings';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
@@ -81,7 +84,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
     bindings.push({
       match: ['i', 'I'],
       label: 'I',
-      action: 'privacy info',
+      action: PRIVACY_PANEL_LABEL.toLowerCase(),
       handler: () => setShowPrivacy(true),
     });
   }
@@ -91,7 +94,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
     return (
       <IntroScreenLayout
         installDir={session.installDir}
-        title="Wizard privacy & usage"
+        title={PRIVACY_PANEL_LABEL}
         showSubtitle={false}
         showDetection={false}
         body={<PrivacyPanel />}
@@ -138,7 +141,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
 
       <Box flexDirection="column" marginBottom={1}>
         <Text bold dimColor>
-          How does the wizard use your data?
+          {PRIVACY_PANEL_LABEL}
         </Text>
         <Text dimColor>
           {'•'} Source files are read by Claude for AI context

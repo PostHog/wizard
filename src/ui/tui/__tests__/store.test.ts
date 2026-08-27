@@ -209,6 +209,29 @@ describe('WizardStore', () => {
       expect(store.session.warehouseSourcesReported).toBe(true);
     });
 
+    it('declineSharing leaves the report unclaimed while the choice can change', () => {
+      const store = createStore();
+
+      store.declineSharing();
+
+      // warehouseSourcesReported is a send-once latch: the reporter returns at
+      // its first line once set. The privacy panel's choice is reversible, so
+      // claiming it here would silence the report of a user who turns sharing
+      // off and then back on. completeSetup() owns the single report.
+      expect(store.session.warehouseSourcesReported).toBe(false);
+    });
+
+    it('still reports for a user who turns sharing off and on again', () => {
+      const store = createStore();
+
+      store.declineSharing();
+      store.grantSharing();
+      store.completeSetup();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
     it('setRunPhase updates session.runPhase', () => {
       const store = createStore();
       store.setRunPhase(RunPhase.Running);
