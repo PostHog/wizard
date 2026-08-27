@@ -1042,7 +1042,7 @@ export async function runAgent(
         hooks: {
           PreToolUse: warlockDisabled
             ? []
-            : createPreToolUseYaraHooks(triageProvider),
+            : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
           PostToolUse: warlockDisabled
             ? []
             : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
