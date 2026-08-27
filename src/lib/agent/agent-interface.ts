@@ -11,10 +11,12 @@ import type { TokenUsageDelta } from '@ui/wizard-ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
+import { isTemplateEnvFileName } from '@utils/env-scan';
 import { runtimeEnv } from '@env';
 import type { AioCapture } from '@lib/agent/aio-capture';
 import {
   Harness,
+  CallType,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
@@ -41,6 +43,7 @@ import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
+import { classifyAuthFailure } from '@lib/errors';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -345,6 +348,8 @@ export function buildRunTags(args: {
     integration: args.integration,
     run_id: args.runId,
     build: args.build,
+    // Triage and detection spread these tags and override this one.
+    call_type: CallType.agent,
     ...(args.skillId ? { skill_id: args.skillId } : {}),
   };
 }
@@ -444,10 +449,7 @@ export function wizardCanUseTool(
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
-      basename,
-    );
-    if (basename.startsWith('.env') && !isEnvExample) {
+    if (basename.startsWith('.env') && !isTemplateEnvFileName(basename)) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -525,9 +527,19 @@ export async function initializeAgent(
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
 
     // Same values the env vars above carry, handed over explicitly so triage
-    // never has to read them back out of the environment.
+    // never has to read them back out of the environment. The run tags ride
+    // along so scan spend bills to this program, with `call_type` keeping it
+    // separable from the agent's own calls.
     const triageProvider = createTriageLLMProvider(
-      { baseURL: gatewayUrl, authToken: config.posthogApiKey },
+      {
+        baseURL: gatewayUrl,
+        authToken: config.posthogApiKey,
+        wizardMetadata: {
+          ...(config.wizardMetadata ?? {}),
+          call_type: CallType.yaraTriage,
+        },
+        wizardFlags: config.wizardFlags ?? {},
+      },
       Harness.anthropic,
     );
 
@@ -1031,7 +1043,7 @@ export async function runAgent(
         hooks: {
           PreToolUse: warlockDisabled
             ? []
-            : createPreToolUseYaraHooks(triageProvider),
+            : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
           PostToolUse: warlockDisabled
             ? []
             : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
@@ -1142,6 +1154,13 @@ export async function runAgent(
           os.homedir(),
           signals.apiKeySource,
         );
+        const authCode = classifyAuthFailure({
+          hasSettingsConflict: authError.hasSettingsConflict,
+          usingManagedLogin: authError.usingManagedLogin,
+          apiKey: options.apiKey,
+          gatewayRegion: authError.region,
+          sessionRegion: options.cloudRegion,
+        });
         logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
@@ -1151,16 +1170,21 @@ export async function runAgent(
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
+          code: authCode,
           message: 'Authentication failed (401)',
-          error: new WizardError('Authentication failed', {
-            hasSettingsConflict: authError.hasSettingsConflict,
-            conflictSources: authError.conflictSources,
-            conflictKeys: authError.conflictKeys,
-            gatewayUrl: authError.gatewayUrl,
-            region: authError.region,
-            usingManagedLogin: authError.usingManagedLogin,
-            apiKeySource: authError.apiKeySource,
-          }),
+          error: new WizardError(
+            'Authentication failed',
+            {
+              hasSettingsConflict: authError.hasSettingsConflict,
+              conflictSources: authError.conflictSources,
+              conflictKeys: authError.conflictKeys,
+              gatewayUrl: authError.gatewayUrl,
+              region: authError.region,
+              usingManagedLogin: authError.usingManagedLogin,
+              apiKeySource: authError.apiKeySource,
+            },
+            authCode,
+          ),
         });
       }
 

@@ -15,6 +15,13 @@ export interface RunMetricsSummary {
   time_to_first_completion_ms?: number;
   /** Longest silence between two consecutive user-visible transitions. */
   max_gap_ms?: number;
+  /**
+   * Run start → the first question put to the user. The number that says whether
+   * a task which waits on a person actually runs late: small means it interrupted
+   * the autonomous work, large means it waited for it. `undefined` on a run that
+   * asked nothing, which is most of them.
+   */
+  time_to_first_ask_ms?: number;
 }
 
 /** The per-event timing the `orchestrator task started` event reports. */
@@ -27,6 +34,7 @@ export class RunMetrics {
   private firstStartMs?: number;
   private lastStartMs?: number;
   private firstCompleteMs?: number;
+  private firstAskMs?: number;
   private lastVisibleMs?: number;
   private maxGapMs = 0;
 
@@ -57,6 +65,15 @@ export class RunMetrics {
   }
 
   /**
+   * A question was put to the user. Only the first matters here, and it is not a
+   * queue transition — waiting on a person is not the silence `max_gap_ms`
+   * measures, so this deliberately does not mark visible progress.
+   */
+  recordAsk(nowMs: number): void {
+    this.firstAskMs ??= nowMs;
+  }
+
+  /**
    * The run-level responsiveness summary. Timings are `undefined` when the
    * relevant transition never happened (e.g. a run that started no task), so a
    * no-task run stays distinguishable from a genuine zero.
@@ -72,6 +89,10 @@ export class RunMetrics {
           ? undefined
           : this.firstCompleteMs - this.runStartMs,
       max_gap_ms: this.lastVisibleMs === undefined ? undefined : this.maxGapMs,
+      time_to_first_ask_ms:
+        this.firstAskMs === undefined
+          ? undefined
+          : this.firstAskMs - this.runStartMs,
     };
   }
 

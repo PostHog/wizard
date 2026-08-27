@@ -1,5 +1,86 @@
 # Changelog
 
+## [2.67.0](https://github.com/PostHog/wizard/compare/v2.66.0...v2.67.0) (2026-08-27)
+
+
+### Features
+
+* export handoffs to host paths ([#1141](https://github.com/PostHog/wizard/issues/1141)) ([216ffac](https://github.com/PostHog/wizard/commit/216ffacbb04995c647df0afd03743a2a38bbb0be))
+* stable error catalog with machine-readable error codes ([#1148](https://github.com/PostHog/wizard/issues/1148)) ([25be176](https://github.com/PostHog/wizard/commit/25be176ad5ea0f295aeb13c5468e003ed0d61366))
+
+## [2.66.0](https://github.com/PostHog/wizard/compare/v2.65.0...v2.66.0) (2026-08-26)
+
+
+### Features
+
+* **warehouse:** cover 258 warehouse source kinds ([#1145](https://github.com/PostHog/wizard/issues/1145)) ([e5cafaa](https://github.com/PostHog/wizard/commit/e5cafaa1968f7dd5dc25251cfeb5a432c699a03e))
+
+
+### Bug Fixes
+
+* **mcp:** drop feature-selection menus, surface the editor's login command ([#1122](https://github.com/PostHog/wizard/issues/1122)) ([e9e407f](https://github.com/PostHog/wizard/commit/e9e407f85f3fdc1cd2b1dbde203fa9a96dae7d56))
+* **orchestrator:** take warehouse consent at seed time, and name every skip ([#1147](https://github.com/PostHog/wizard/issues/1147)) ([bcf1052](https://github.com/PostHog/wizard/commit/bcf10523a12c6b996618e174f9b4235555385576))
+* **warehouse:** make check_env_keys agree with the source detector ([#1144](https://github.com/PostHog/wizard/issues/1144)) ([d6f1937](https://github.com/PostHog/wizard/commit/d6f1937c9ec01e4f434bac8a271424c2b78aadf5))
+* **wizard-ask:** count the batching nudge per subject, not per run ([#1146](https://github.com/PostHog/wizard/issues/1146)) ([ba774ab](https://github.com/PostHog/wizard/commit/ba774ab27db0a499b0e9a2c4aee40b3572a2d8e3))
+
+## [2.65.0](https://github.com/PostHog/wizard/compare/v2.64.1...v2.65.0) (2026-08-24)
+
+
+### Features
+
+* add Elixir framework support ([#946](https://github.com/PostHog/wizard/issues/946)) ([b8b8aa6](https://github.com/PostHog/wizard/commit/b8b8aa6212b98af1d710c6edc46d882caf649ff3))
+* add Go framework support ([#945](https://github.com/PostHog/wizard/issues/945)) ([50965d7](https://github.com/PostHog/wizard/commit/50965d7ae98eaf5f18b4f02f91097566cc9734b7))
+* add Java framework support ([#948](https://github.com/PostHog/wizard/issues/948)) ([c56a894](https://github.com/PostHog/wizard/commit/c56a894ca7753f4d25da837de208b3d504267f6f))
+* add Rust framework support ([#947](https://github.com/PostHog/wizard/issues/947)) ([9b768a0](https://github.com/PostHog/wizard/commit/9b768a01a84e4efcba5e899692b6668b7a123411))
+* **metrics:** add `wizard metrics` program (runs the context-mill metrics skill) ([#1102](https://github.com/PostHog/wizard/issues/1102)) ([9f45ef5](https://github.com/PostHog/wizard/commit/9f45ef520f8fab4fcc24c08c0f9ae754888c0121))
+* new local flags ([#1125](https://github.com/PostHog/wizard/issues/1125)) ([b91dbe8](https://github.com/PostHog/wizard/commit/b91dbe88f8b537d847eefb857b6c8bac17b4c37b))
+
+
+### Bug Fixes
+
+* adding analytics tags to blindspots and other stuff ([#1119](https://github.com/PostHog/wizard/issues/1119)) ([1b4fd5c](https://github.com/PostHog/wizard/commit/1b4fd5c777acd633a22c1c517a99c9dbd10e9a74))
+* **e2e:** read pubspec dependencies in the result JSON ([#1113](https://github.com/PostHog/wizard/issues/1113)) ([56b1aa5](https://github.com/PostHog/wizard/commit/56b1aa59344e15fb39d6738ee9fefb671b5290c9))
+* fix smoke test ([#1126](https://github.com/PostHog/wizard/issues/1126)) ([f0f123f](https://github.com/PostHog/wizard/commit/f0f123f9660d446ba5b62a9baf5a55b1d204c3d4))
+* **orchestrator:** pause Write/Edit while a task's wizard_ask is open ([#1133](https://github.com/PostHog/wizard/issues/1133)) ([841d3ad](https://github.com/PostHog/wizard/commit/841d3ad6b31e5f0ce02940ba3381e068cf039967))
+* **wizard-tools:** share wizard_ask sensitive-field guidance across harnesses ([#1135](https://github.com/PostHog/wizard/issues/1135)) ([f190954](https://github.com/PostHog/wizard/commit/f190954df0966087739a14654b05e6415bcad739))
+
+## [2.64.1](https://github.com/PostHog/wizard/compare/v2.64.0...v2.64.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* request replay vision scopes during signup provisioning ([#1115](https://github.com/PostHog/wizard/issues/1115)) ([74276e8](https://github.com/PostHog/wizard/commit/74276e8916ca2334cce3708d918539fe7d2a54f6))
+
+## [2.64.0](https://github.com/PostHog/wizard/compare/v2.63.0...v2.64.0) (2026-08-19)
+
+
+### Features
+
+* **replay-vision:** replay-vision command on the orchestrator sequence ([#1101](https://github.com/PostHog/wizard/issues/1101)) ([be6c8bf](https://github.com/PostHog/wizard/commit/be6c8bf7529445701bf46ef0a464de6ae065f0f2))
+
+
+### Bug Fixes
+
+* **orchestrator:** surface the app host to task prompts for browser links ([#1097](https://github.com/PostHog/wizard/issues/1097)) ([10c9cb7](https://github.com/PostHog/wizard/commit/10c9cb710357441bbd8a330ca9f25b56e725dee2))
+* **tui:** let users skip a wizard_ask prompt with Esc ([#1110](https://github.com/PostHog/wizard/issues/1110)) ([0aa92fa](https://github.com/PostHog/wizard/commit/0aa92fa2e1eb6d4bd8b0c39dd488cfade9120f07))
+
+## [2.63.0](https://github.com/PostHog/wizard/compare/v2.62.0...v2.63.0) (2026-08-18)
+
+
+### Features
+
+* adding deps for runnerSeeded tasks; move dw sources to the end ([#1103](https://github.com/PostHog/wizard/issues/1103)) ([2942041](https://github.com/PostHog/wizard/commit/29420413ceb236a6698c776fae25cea913d79e3c))
+* **self-driving:** key step events by step, not by the agent's wording ([#1083](https://github.com/PostHog/wizard/issues/1083)) ([07758d1](https://github.com/PostHog/wizard/commit/07758d1e9b429e5c7905a9eb3a57427420a2c034))
+* **warehouse:** hand over a pre-filled link per detected source ([#1087](https://github.com/PostHog/wizard/issues/1087)) ([f6f80d3](https://github.com/PostHog/wizard/commit/f6f80d38578548577013aeff11652c3fb8038ddf))
+
+
+### Bug Fixes
+
+* avoid EISDIR crash when .env is a directory ([#721](https://github.com/PostHog/wizard/issues/721)) ([e923a33](https://github.com/PostHog/wizard/commit/e923a33f7136830574733133e98bd2dbc99adf73))
+* **orchestrator:** give pi agents the reportSection handoff field ([#1086](https://github.com/PostHog/wizard/issues/1086)) ([d232375](https://github.com/PostHog/wizard/commit/d232375b22cba7338fa112f60d798a381000c15f))
+* Warn at login when the OAuth grant is narrower than requested ([#1090](https://github.com/PostHog/wizard/issues/1090)) ([30579e6](https://github.com/PostHog/wizard/commit/30579e6c743d2f4fc8aa2212a73b39364e72ba27))
+* **wizard-ask:** frame the adjacency cap as a retryable nudge, not a refusal ([#1096](https://github.com/PostHog/wizard/issues/1096)) ([e223c11](https://github.com/PostHog/wizard/commit/e223c1176a83be4a98c0b56afe903d5c1a8fdcea))
+
 ## [2.62.0](https://github.com/PostHog/wizard/compare/v2.61.0...v2.62.0) (2026-08-12)
 
 

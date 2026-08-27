@@ -271,6 +271,14 @@ export class Analytics {
     });
   }
 
+  groupIdentify(
+    groupType: string,
+    groupKey: string,
+    properties: Record<string, unknown>,
+  ) {
+    this.client.groupIdentify({ groupType, groupKey, properties });
+  }
+
   // Built from the resolved map, not the SDK snapshot: a CI-forced variant must own its events.
   private wizardFlagFeatureProperties(): Record<string, unknown> {
     if (this.activeFlags === null) return {};

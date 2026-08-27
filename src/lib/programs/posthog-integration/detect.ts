@@ -11,6 +11,7 @@
 
 import type { ProgramReadyContext } from '@lib/programs/program-step';
 import {
+  DiscoveredFeature,
   mayReportScanResults,
   ScanConsent,
   type WizardSession,
@@ -24,6 +25,8 @@ import {
 } from '@lib/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import { AI_SOURCE_KINDS } from '@lib/warehouse-sources/registry';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -43,9 +46,7 @@ export async function detectPostHogIntegration(
     const sessionOptions = {
       installDir,
       debug: session.debug,
-      default: false,
       signup: session.signup,
-      localMcp: session.localMcp,
       ci: session.ci,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
@@ -141,6 +142,33 @@ function detectWarehouseSourcesForSuggestion(
   }
 }
 
+function hasAiSdkEvidence(
+  session: WizardSession,
+  sources: DetectedSource[],
+): boolean {
+  return (
+    sources.some((s) => AI_SOURCE_KINDS.has(s.kind)) ||
+    session.discoveredFeatures.includes(DiscoveredFeature.LLM)
+  );
+}
+
+/**
+ * Boolean only, on the org, never the list of kinds or any non-AI tool: a
+ * decline must not leak even the shape of what local detection saw.
+ */
+function stampAiSdkDetected(
+  session: WizardSession,
+  sources: DetectedSource[],
+): void {
+  const organizationId = session.apiUser?.organization?.id;
+  if (!organizationId) return;
+  if (!hasAiSdkEvidence(session, sources)) return;
+
+  analytics.groupIdentify('organization', organizationId, {
+    wizard_ai_sdk_detected: true,
+  });
+}
+
 /**
  * The single place scan results become telemetry. Called from
  * `WizardStore.completeSetup()`, the point consent becomes final — the privacy
@@ -159,6 +187,9 @@ export function reportWarehouseSourcesDetected(
   if (session.scanConsent === ScanConsent.Undecided) return false;
 
   if (mayReportScanResults(session)) {
+    const sources = getDetectedWarehouseSources(session);
+    stampAiSdkDetected(session, sources);
+
     // Only an 'ok' scan has something to say. Absent means this program never
     // scanned, and reporting a zero count there would invent a scan that never
     // ran; 'failed' already fired captureException.
@@ -166,8 +197,6 @@ export function reportWarehouseSourcesDetected(
       | WarehouseScanState
       | undefined;
     if (scanState !== 'ok') return true;
-
-    const sources = getDetectedWarehouseSources(session);
 
     // Captured on every run, including the empty case. The denominator is
     // the whole point: without the zero rows, "20% of runs have a Postgres"

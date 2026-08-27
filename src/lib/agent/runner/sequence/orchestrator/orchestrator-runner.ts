@@ -20,7 +20,11 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import {
+  OutroKind,
+  type TaskNotice,
+  type WizardSession,
+} from '@lib/wizard-session';
 import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
@@ -36,7 +40,9 @@ import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
+import { ringTerminalBell } from '@utils/terminal-bell';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult, ProgramRun } from '../../shared/types';
 import {
@@ -51,12 +57,14 @@ import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
+  SkipReason,
   TaskStatus,
   type QueuedTask,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
-import { uncoveredBySink } from './queue-tools';
+import { dependencyClosure, uncoveredBySink } from './queue-tools';
+import { deferSeededTasks } from './seeded-deps';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
@@ -189,6 +197,108 @@ function resolveReferenceSkillId(
  * — the executor holds the task's promise — so the only real limit is this one.
  */
 const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+
+/**
+ * How long an optional step's notice waits for an answer.
+ *
+ * Much shorter than the ask timeout above, because it is asking for something
+ * much smaller: one keypress to accept or decline, not "go mint a restricted
+ * Stripe key". It cannot be unbounded either — the notice is a modal, and a run
+ * that stops forever behind one nobody is looking at is worse than one that
+ * takes the safe answer and carries on.
+ *
+ * The offer is made at seed time, seconds into the run, so five minutes is a
+ * generous allowance for a person who is by then still watching the wizard
+ * start. It was not: from 2.63.0 to 2.65.0 the offer was made at the moment the
+ * step became runnable — a median seven minutes in, after every coding task —
+ * and this timeout became the answer for about a quarter of all runs.
+ */
+export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Offer an optional step, defaulting to declining it if nobody answers.
+ *
+ * Skip is the right default on a timeout: continuing would send the step on to
+ * ask for credentials that the same absent user cannot supply either, burning
+ * {@link TASK_ASK_TIMEOUT_MS} per question before falling back to the same
+ * links declining gives immediately.
+ */
+export async function offerSeededTask(
+  notice: TaskNotice,
+  timeoutMs: number = TASK_NOTICE_TIMEOUT_MS,
+): Promise<{ keep: boolean; timedOut: boolean }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      // Dismisses the overlay and settles the showTaskNotice promise too, so
+      // the losing side of the race cannot leave a modal on screen.
+      getUI().cancelTaskNotice();
+      resolve(false);
+    }, timeoutMs);
+  });
+  try {
+    const keep = await Promise.race([getUI().showTaskNotice(notice), timeout]);
+    return { keep, timedOut };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** One seeded task's answer to its notice, taken once, at seed time. */
+export interface SeededConsent {
+  keep: boolean;
+  timedOut: boolean;
+  /** The notice could not be shown at all. Read as a decline, never as a yes. */
+  errored: boolean;
+}
+
+/** Which skip reason a negative {@link SeededConsent} carries onto the event. */
+export function consentSkipReason(consent: SeededConsent): SkipReason {
+  if (consent.errored) return SkipReason.NoticeError;
+  return consent.timedOut ? SkipReason.NoticeTimeout : SkipReason.UserDeclined;
+}
+
+/**
+ * Ask for one seeded task's consent, and record how the answer came about.
+ *
+ * Consent and execution are separate concerns, and this is the consent half.
+ * It runs at seed time — seconds into the run, with the user still watching —
+ * while `seeded-deps.ts` keeps the work itself at the end of the queue. Asking
+ * at the moment of execution instead, as 2.63.0 did, put the question in front
+ * of a user who had long since tabbed away.
+ *
+ * Fails closed. The step this gates goes on to ask for live database and API
+ * credentials, so a question that could not be put to the user is never read as
+ * a yes.
+ */
+export async function askSeededConsent(
+  type: string,
+  notice: TaskNotice,
+  timeoutMs?: number,
+): Promise<SeededConsent> {
+  const consent = await offerSeededTask(notice, timeoutMs).then(
+    (answer): SeededConsent => ({ ...answer, errored: false }),
+    (err: unknown): SeededConsent => {
+      logToFile(
+        `[orchestrator] notice failed for ${type}, declining: ${String(err)}`,
+      );
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_task_notice' },
+      );
+      return { keep: false, timedOut: false, errored: true };
+    },
+  );
+  analytics.wizardCapture('orchestrator task notice answered', {
+    type,
+    kept: consent.keep,
+    timed_out: consent.timedOut,
+    errored: consent.errored,
+  });
+  return consent;
+}
 
 /** Whether a task's prompt lets it ask the user, and so needs the ask bridge. */
 function canAsk(prompt: AgentPrompt | undefined): boolean {
@@ -360,6 +470,12 @@ export async function runOrchestrator(
           analytics.wizardCapture('orchestrator task skipped', {
             ...base,
             duration_ms: durationMs(task),
+            // Additive: the event's name and every other property are unchanged,
+            // so existing dashboards keep reading. Without this a step the user
+            // declined, a step nobody answered for, and a step the agent found
+            // did not apply were one number — which is how a regression that
+            // halved the warehouse completion rate stayed invisible for a week.
+            reason: task.skipReason,
           });
           break;
         case 'fail':
@@ -384,8 +500,15 @@ export async function runOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  const referenceSkillId = session.skillId
-    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
+  // The framework key for reference + variant resolution. `session.integration`
+  // is the detected framework and always wins; `session.skillId` is the
+  // fallback for the basic-integration path, where bootstrap sets it to the
+  // framework label. Programs whose run config carries their own skill id
+  // (agent-skill commands like replay-vision) would otherwise leak that id in
+  // here as a bogus framework after bootstrap overwrites the detect result.
+  const framework = session.integration ?? session.skillId ?? undefined;
+  const referenceSkillId = framework
+    ? resolveReferenceSkillId(menuSkillEntries, framework)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -412,9 +535,9 @@ export async function runOrchestrator(
         `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
       );
     }
-  } else if (session.skillId) {
+  } else if (framework) {
     logToFile(
-      `[orchestrator] no integration skill for framework "${session.skillId}"`,
+      `[orchestrator] no integration skill for framework "${framework}"`,
     );
   }
 
@@ -422,28 +545,29 @@ export async function runOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
         continue;
       }
       missingVariants.push(`${type}/${skillId}`);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
-          session.skillId ?? 'none'
+          framework ?? 'none'
         }`,
       );
       analytics.wizardCapture('orchestrator skill variant missing', {
         task_type: type,
         skill: skillId,
-        framework: session.skillId,
+        framework,
       });
     }
   }
   if (missingVariants.length > 0) {
     // The framework's own docs page from its config; generic docs when detection found none.
-    const docsUrl = session.skillId
-      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+    const docsUrl = framework
+      ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
       : undefined;
     await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
         'Setup instructions for this project failed to download.\n' +
         'Please try again, or contact wizard@posthog.com.\n\n' +
@@ -451,10 +575,14 @@ export async function runOrchestrator(
         '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +
         `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
-      error: new WizardError('Orchestrator preflight: skill variant missing', {
-        missing: missingVariants.join(', '),
-        framework: session.skillId,
-      }),
+      error: new WizardError(
+        'Orchestrator preflight: skill variant missing',
+        {
+          missing: missingVariants.join(', '),
+          framework,
+        },
+        ErrorCodes.AgentOrchestratorSkillVariantMissing,
+      ),
     });
   }
 
@@ -502,6 +630,11 @@ export async function runOrchestrator(
     // guard instead of duplicating work the wizard already placed.
     validTypes: registry.enqueueableTypes,
     sinkTypes: registry.sinkTypes,
+    // The edge to a runner-seeded task is one-way: the sink may wait for it,
+    // nothing else may. Enforced at enqueue, because prose alone cannot hold it
+    // — a single planner edge is enough to pull the task back to the front of
+    // the drain and put its prompt in front of the code work again.
+    runnerSeededTypes: registry.runnerSeededTypes,
     currentTaskId,
   });
 
@@ -514,6 +647,26 @@ export async function runOrchestrator(
     ? programConfig.seedTasks?.(session) ?? []
     : [];
   const seededTypes: string[] = [];
+  // Kept so their dependencies can be resolved once the planner has run — they
+  // are queued before it, so they cannot name what they wait for yet.
+  const seededTasks: QueuedTask[] = [];
+  // Each seeded task's answer to its notice, taken here and applied later.
+  //
+  // Consent belongs at seed time: the user is at the keyboard, watching the run
+  // start, and one keypress is all the question needs. The work does not — the
+  // warehouse step asks for credentials, and those questions belong after the
+  // autonomous coding, which is what `seeded-deps.ts` arranges. 2.63.0 collapsed
+  // the two onto one modal at the moment of execution, a median seven minutes
+  // in, by which time the user had gone; the five-minute timeout then answered
+  // for them, and it answers "skip".
+  //
+  // The answer is recorded rather than acted on, so a declined task still enters
+  // the queue as an ordinary pending task. The planner plans around it,
+  // `deferSeededTasks` can still add its edges, and the sink invariant still
+  // covers it — none of which is true of a task that was enqueued and skipped
+  // before the planner ever ran. `runTask` applies the answer when the drain
+  // reaches the task.
+  const seededConsent = new Map<string, SeededConsent>();
   for (const seeded of seedEntries) {
     if (!registry.runnerSeededTypes.includes(seeded.type)) {
       logToFile(
@@ -521,21 +674,7 @@ export async function runOrchestrator(
       );
       continue;
     }
-    // A task that stops for the user is offered, not imposed: show its notice
-    // and drop it entirely when the user would rather not. Declining before
-    // the queue is planned is cheaper than skipping it once it is in there.
-    if (seeded.notice) {
-      const keep = await getUI().showTaskNotice(seeded.notice);
-      analytics.wizardCapture('orchestrator task notice answered', {
-        type: seeded.type,
-        kept: keep,
-      });
-      if (!keep) {
-        logToFile(`[orchestrator] user declined runner-seeded ${seeded.type}`);
-        continue;
-      }
-    }
-    store.enqueue({
+    const task = store.enqueue({
       type: seeded.type,
       label: seeded.label,
       inputs: seeded.inputs,
@@ -544,13 +683,34 @@ export async function runOrchestrator(
       optional: true,
     });
     seededTypes.push(seeded.type);
+    seededTasks.push(task);
+    if (seeded.notice) {
+      // Awaited inside the loop, so at most one notice is ever on screen. The
+      // store holds a single pending-notice slot: a second `showTaskNotice`
+      // overwrites the first's resolver, the first promise never settles, and
+      // its task hangs for the rest of the run. A serial loop makes that
+      // unreachable; the drain, which starts every runnable task at once, does
+      // not, which is why the offer lives here and not there.
+      seededConsent.set(
+        task.id,
+        await askSeededConsent(seeded.type, seeded.notice),
+      );
+    }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
 
   // A run that stops to ask a person is not comparable with one that does not
   // — its wall-clock is the user's, not the model's. Tag every event of the run
   // from here on, so those runs filter out cleanly.
-  const askingTypes = seededTypes.filter((type) => canAsk(registry.get(type)));
+  //
+  // A declined step asks nothing, and the answer is known by now, so it leaves
+  // the tag alone. While the offer was made mid-drain this was unknowable here,
+  // and roughly a quarter of runs were tagged as waiting on a user who had in
+  // fact already been auto-declined out of the only step that asks.
+  const askingTypes = seededTasks
+    .filter((task) => seededConsent.get(task.id)?.keep !== false)
+    .map((task) => task.type)
+    .filter((type) => canAsk(registry.get(type)));
   analytics.setTag('orchestrator_awaits_user', askingTypes.length > 0);
   analytics.setTag(
     'orchestrator_runner_seeded_types',
@@ -569,7 +729,18 @@ export async function runOrchestrator(
     ? undefined
     : createWizardAskBridge({
         getSource: () => session.skillId ?? programConfig.id,
-        showQuestion: (q) => getUI().requestQuestion(q),
+        showQuestion: (q) => {
+          // How late the first ask lands is the measure of this run shape: it
+          // should follow the autonomous work, not interrupt it.
+          metrics.recordAsk(Date.now());
+          // Consent is taken in the first seconds of the run and these questions
+          // arrive at the end of it, so the user who agreed may well be looking
+          // at another window by now. Nothing here waits on the bell — an
+          // unanswered ask still times out into the deep-link fallback — it just
+          // gives a person who stepped away a chance to come back first.
+          ringTerminalBell();
+          return getUI().requestQuestion(q);
+        },
         cancelQuestion: () => getUI().cancelPendingQuestion(),
         richLinks: config.richLinks ?? false,
         timeoutMs: TASK_ASK_TIMEOUT_MS,
@@ -600,6 +771,7 @@ export async function runOrchestrator(
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
+    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -614,6 +786,76 @@ export async function runOrchestrator(
     types: store.list().map((t) => t.type),
   });
   renderQueue();
+
+  // Now that the graph exists, give each runner-seeded task the dependencies it
+  // could not name when it was queued. Without this it sits at depth 0 and runs
+  // in the first tier — which for the warehouse step means its credential
+  // prompts arrive while the coding tasks are still writing files. Deferred, the
+  // one step that waits on a person waits until the autonomous work is done.
+  //
+  // Before the sink check below on purpose: sinks are never added as
+  // dependencies, so a planner that forgot to make its sink wait for a seeded
+  // task is still caught there rather than masked here.
+  const deferred = deferSeededTasks(
+    store,
+    seededTasks,
+    (type) => registry.get(type)?.dependsOn ?? [],
+    registry.sinkTypes,
+  );
+  for (const entry of deferred) {
+    logToFile(
+      `[orchestrator] deferred runner-seeded ${entry.type}: ` +
+        `${entry.added.length} deps (${
+          entry.declared
+            ? `declared: ${entry.declaredTypes.join(', ')}`
+            : 'default'
+        })${
+          entry.refused.length > 0 ? `, ${entry.refused.length} refused` : ''
+        }${
+          entry.unresolvedTypes.length > 0
+            ? `, unresolved: ${entry.unresolvedTypes.join(', ')}`
+            : ''
+        }`,
+    );
+    analytics.wizardCapture('orchestrator seeded task deferred', {
+      type: entry.type,
+      dep_count: entry.added.length,
+      declared: entry.declared,
+      declared_types: entry.declaredTypes,
+      unresolved_types: entry.unresolvedTypes,
+      // Non-empty means a cycle or an unknown id was rejected — the resolver and
+      // the queue disagreeing, never expected in a good run.
+      refused_count: entry.refused.length,
+    });
+  }
+  if (deferred.length > 0) renderQueue();
+
+  // Canary for the one-way rule. The enqueue guard rejects the edge outright, so
+  // this should never fire — but if it ever does, the seeded task has been
+  // pulled back toward the front of the drain and its prompt lands mid-run
+  // again, which is precisely the failure this whole step exists to prevent.
+  // Silent regressions here would look like "the ordering just stopped
+  // working", so make it visible rather than abort a run that is otherwise fine.
+  for (const seeded of seededTasks) {
+    const dependants = store
+      .list()
+      .filter(
+        (t) =>
+          !registry.sinkTypes.includes(t.type) &&
+          t.id !== seeded.id &&
+          dependencyClosure(store, [t.id]).has(seeded.id),
+      );
+    if (dependants.length === 0) continue;
+    logToFile(
+      `[orchestrator] one-way rule broken: ${dependants
+        .map((t) => t.type)
+        .join(', ')} depend on runner-seeded ${seeded.type}`,
+    );
+    analytics.wizardCapture('orchestrator seeded task depended on', {
+      type: seeded.type,
+      dependant_types: dependants.map((t) => t.type),
+    });
+  }
 
   // The enqueue guard rejects a sink that misses part of the queue, so a
   // planner that respected its errors cannot get here with a broken graph.
@@ -633,13 +875,18 @@ export async function runOrchestrator(
       uncovered_types: unwaited.map((t) => t.type),
     });
     await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorSinkInvariant,
       message: `The wizard could not plan this setup: the final step would have skipped ${unwaited
         .map((t) => t.type)
         .join(', ')}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
-      error: new WizardError('orchestrator sink does not cover the queue', {
-        uncovered: unwaited.map((t) => `${t.type} (${t.id})`).join(', '),
-        queue_state: JSON.stringify(store.list()),
-      }),
+      error: new WizardError(
+        'orchestrator sink does not cover the queue',
+        {
+          uncovered: unwaited.map((t) => `${t.type} (${t.id})`).join(', '),
+          queue_state: JSON.stringify(store.list()),
+        },
+        ErrorCodes.AgentOrchestratorSinkInvariant,
+      ),
     });
   }
 
@@ -657,6 +904,38 @@ export async function runOrchestrator(
   );
   const runTask: RunTask = async (task) => {
     renderQueue();
+
+    // A task that stops for the user is offered, not imposed. The offer was
+    // made at seed time; this applies the answer, now that the drain has
+    // reached the task.
+    //
+    // A declined task is skipped here rather than dropped at seed time, for two
+    // reasons. The graph the planner saw is then the graph that ran — the sink
+    // already depends on this task, and `nextRunnable` treats a skipped
+    // dependency as satisfied, so the report still runs and can say the step was
+    // declined. And the decline stays in the funnel: it arrives as a `skipped`
+    // event carrying the reason that caused it, rather than as a task that
+    // silently never existed. `orchestrator task skipped` is only readable that
+    // way because it now carries `reason`; without it, declines and timeouts and
+    // agent no-ops were one indistinguishable number.
+    const consent = seededConsent.get(task.id);
+    if (consent && !consent.keep) {
+      const reason = consentSkipReason(consent);
+      logToFile(`[orchestrator] runner-seeded ${task.type} skipped: ${reason}`);
+      const declinedByUser = reason === SkipReason.UserDeclined;
+      store.skip(task.id, reason, {
+        goals: labelFor(task),
+        did: declinedByUser
+          ? 'Nothing — the user chose to skip this step when offered it.'
+          : 'Nothing — the step was offered at the start of the run and never accepted.',
+        forNextAgent: declinedByUser
+          ? 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.'
+          : 'This step was offered and never accepted, so it did no work. Report it as not set up, and point the user at how to do it later.',
+      });
+      renderQueue();
+      return;
+    }
+
     try {
       const resolved = resolveTask(registry, task, store);
       // Task instructions are one-run scaffolding, not durable skills, so they
@@ -671,13 +950,13 @@ export async function runOrchestrator(
         const variantId = resolveSkillVariantId(
           menuSkillEntries,
           skillId,
-          session.skillId,
+          framework,
         );
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
-            } skill=${skillId} framework=${session.skillId ?? 'none'}`,
+            } skill=${skillId} framework=${framework ?? 'none'}`,
           );
           continue;
         }
@@ -729,6 +1008,7 @@ export async function runOrchestrator(
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
+        requestRemark: false,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -850,14 +1130,19 @@ export async function runOrchestrator(
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
     await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorTasksFailed,
       message,
-      error: new WizardError('orchestrator drain ended with failed tasks', {
-        tasks_failed: summary.failed,
-        tasks_blocked: blocked,
-        failed_types: failedTypes,
-        missing_oauth_scopes: missingScopes.join(' '),
-        queue_state: JSON.stringify(store.list()),
-      }),
+      error: new WizardError(
+        'orchestrator drain ended with failed tasks',
+        {
+          tasks_failed: summary.failed,
+          tasks_blocked: blocked,
+          failed_types: failedTypes,
+          missing_oauth_scopes: missingScopes.join(' '),
+          queue_state: JSON.stringify(store.list()),
+        },
+        ErrorCodes.AgentOrchestratorTasksFailed,
+      ),
     });
   }
 

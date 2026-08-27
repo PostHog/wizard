@@ -157,6 +157,12 @@ export class InkUI implements WizardUI {
     return this.store.showTaskNotice(notice);
   }
 
+  cancelTaskNotice(): void {
+    // Same path as pressing Skip: closes the overlay and resolves the pending
+    // showTaskNotice promise with false.
+    this.store.resolveTaskNotice(false);
+  }
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,

@@ -15,7 +15,10 @@ import {
 import type { CloudRegion, WizardRunOptions } from './types';
 import { getDeclaredVersion } from './package-json';
 import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@lib/constants';
-import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
+import {
+  getOAuthScopesForProgram,
+  getProvisioningScopesForProgram,
+} from '@lib/oauth/program-scopes';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
@@ -589,6 +592,7 @@ async function askForWizardLogin(options: {
       options.region,
       options.baseUrl,
       options.localMcp,
+      options.programId,
     );
   }
 
@@ -707,6 +711,7 @@ async function askForProvisioningSignup(
   region?: CloudRegion,
   baseUrl?: string,
   localMcp?: boolean,
+  programId?: ProgramId | null,
 ): Promise<ProjectData> {
   if (!email || !email.includes('@')) {
     getUI().log.error(
@@ -726,6 +731,7 @@ async function askForProvisioningSignup(
       orgName,
       projectName,
       baseUrl,
+      scopes: getProvisioningScopesForProgram(programId),
     });
 
     spinner.stop('Account created!');

@@ -20,7 +20,7 @@ import { WizardStore, Overlay } from '@ui/tui/store';
 const NOTICE: TaskNotice = {
   title: 'Connect your data sources',
   body: [
-    "We detected some warehouse sources we can connect to enrich your PostHog data. To connect them, stick around, we'll prompt you to provide some credentials to setup warehouse sources.",
+    'We detected some warehouse sources we can connect to enrich your PostHog data. This runs at the end, once your code changes are done — we’ll prompt you then for the credentials, so you can leave the setup to run until it asks.',
     "You can select [Skip] if you'd like to do this later in PostHog.",
   ],
   items: ['Postgres', 'Stripe'],

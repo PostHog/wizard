@@ -70,6 +70,7 @@ describe('Analytics', () => {
       captureException: vi.fn(),
       alias: vi.fn(),
       identify: vi.fn(),
+      groupIdentify: vi.fn(),
       shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
@@ -683,6 +684,20 @@ describe('Analytics', () => {
       expect(groupsFromUser(user, 'https://us.posthog.com')).toEqual({
         instance: 'https://us.posthog.com',
         organization: 'org-uuid',
+      });
+    });
+  });
+
+  describe('groupIdentify', () => {
+    it('forwards groupType, groupKey, and properties to the client', () => {
+      analytics.groupIdentify('organization', 'org-1', {
+        wizard_ai_sdk_detected: true,
+      });
+
+      expect(mockPostHogInstance.groupIdentify).toHaveBeenCalledWith({
+        groupType: 'organization',
+        groupKey: 'org-1',
+        properties: { wizard_ai_sdk_detected: true },
       });
     });
   });

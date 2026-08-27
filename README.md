@@ -527,9 +527,14 @@ This builds, links globally, and watches for changes. Leave it running - any `.t
 ```bash
 wizard --integration=nextjs
 
-# Or use local MCP server:
-wizard --integration=nextjs --local-mcp
+# Point individual services at local dev servers:
+wizard --integration=nextjs --local-context-mill   # skills from localhost:8765
+wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
+wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
 ```
+
+See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog. Note
+`--local-mcp` selects the MCP server only — it no longer also switches skills.
 
 ### Testing
 

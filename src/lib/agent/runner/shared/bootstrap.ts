@@ -28,8 +28,11 @@ import {
 } from '@lib/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
-import { getSkillsBaseUrl } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, IS_DEV } from '@lib/constants';
+import { VERSION } from '@lib/version';
+import { mcpUrlFor } from '@lib/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
@@ -53,9 +56,7 @@ export function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    default: false,
     signup: session.signup,
-    localMcp: session.localMcp,
     ci: session.ci,
     benchmark: session.benchmark,
     projectId: session.projectId,
@@ -89,7 +90,16 @@ export async function bootstrapProgram(
     enableDebugLogs();
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
+  const skillsBaseUrl = getSkillsBaseUrl();
+
+  // Where this run actually points. The three services switch independently,
+  // so otherwise "why did it use prod skills?" means reading three call sites.
+  logToFile(
+    `[agent-runner] targets build=${VERSION}${IS_DEV ? '/dev' : ''} ` +
+      `skills=${skillsBaseUrl} ` +
+      `mcp=${mcpUrlFor(session.localMcp)} ` +
+      `posthog=${session.baseUrl ?? 'region-resolved'}`,
+  );
 
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs that declare a health-check screen get pre-flight checks;
@@ -129,6 +139,7 @@ export async function bootstrapProgram(
       // above, but we proceed rather than aborting on a transient upstream blip.
       if (!isNonInteractiveEnvironment()) {
         await wizardAbort({
+          code: ErrorCodes.EnvServiceOutage,
           message:
             'Cannot start — external services are down:\n' +
             blockingLabels.map((l) => `  - ${l}`).join('\n') +
@@ -201,6 +212,18 @@ export async function bootstrapProgram(
     // writable file we failed to back up) must be fixed by the user. Fail
     // closed: the screen names the file + keys and exits.
     if (unfixable.length > 0) {
+      if (isNonInteractiveEnvironment()) {
+        await wizardAbort({
+          code: ErrorCodes.SettingsUnfixableConflict,
+          message:
+            'Cannot start — a Claude settings file redirects the agent away ' +
+            'from the PostHog gateway and cannot be neutralized automatically:\n' +
+            unfixable
+              .map((c) => `  - ${c.source} (${c.path}): ${c.keys.join(', ')}`)
+              .join('\n') +
+            '\n\nRemove the conflicting keys and re-run the wizard.',
+        });
+      }
       await getUI().showSettingsOverride(unfixable, () =>
         backupAndFixClaudeSettings(session.installDir),
       );
@@ -282,7 +305,9 @@ export async function bootstrapProgram(
       {
         baseURL: credentials.host.gatewayUrl,
         authToken: credentials.accessToken,
-        wizardMetadata,
+        // `call_type` splits scan spend out of the program's agent cost —
+        // same tag the in-run triage provider carries.
+        wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
         wizardFlags,
       },
       resolveHarness({

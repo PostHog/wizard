@@ -91,7 +91,10 @@ export async function detectSelfDrivingIntegrationProjects(
   session: WizardSession,
   onEvent?: DetectEvent,
 ): Promise<IntegrationDetectionReport> {
-  const report = await detectIntegrationProjects(session, { onEvent });
+  const report = await detectIntegrationProjects(session, {
+    programId: 'self-driving',
+    onEvent,
+  });
   return toIntegrationReport(report);
 }
 
@@ -115,9 +118,7 @@ export async function prepSelfDrivingIntegration(
   const context = await gatherFrameworkContext(frameworkConfig, {
     installDir: session.installDir,
     debug: session.debug,
-    default: false,
     signup: session.signup,
-    localMcp: session.localMcp,
     ci: session.ci,
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,
