@@ -128,7 +128,8 @@ Two rules make the detect group safe for automated retry policy:
 
 - **Codes may be shared, `kind` is not lost.** `no-posthog-sdk`, `no-posthog`,
   and `missing-posthog` all resolve to `PHW_DETECT_NO_POSTHOG_SDK` — one failure
-  class, one code. Hosts that need to tell the programs apart read `detail.kind`.
+  class, one code. Hosts that need to tell the programs apart read
+  `detail.kind`.
 - **The fallback stays inside the group.** An unrecognized `kind` resolves to
   `PHW_DETECT_UNCLASSIFIED` (`retry: 'no'`), never to `PHW_INTERNAL_UNHANDLED`
   (`retry: 'yes'`). A detect failure is a property of the user's project;

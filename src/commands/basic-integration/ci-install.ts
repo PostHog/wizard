@@ -5,7 +5,7 @@ import { runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes, type ErrorCode } from '@lib/errors';
 import { emitPhwError } from '@lib/errors';
 
 type Options = Arguments & {
@@ -95,7 +95,7 @@ function runNonInteractiveInstall(
   });
 }
 
-function failCI(message: string, code?: string): void {
+function failCI(message: string, code?: ErrorCode): void {
   setUI(new LoggingUI());
   getUI().intro('PostHog Wizard');
   getUI().log.error(message);

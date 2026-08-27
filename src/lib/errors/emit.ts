@@ -1,7 +1,9 @@
+import type { ErrorCode } from './codes';
+
 export const PHW_ERROR_PREFIX = 'phw-error:';
 
 export interface PhwErrorLine {
-  code: string;
+  code: ErrorCode;
   message: string;
   detail?: Record<string, unknown>;
 }
