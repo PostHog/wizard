@@ -14,6 +14,7 @@ import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
@@ -207,6 +208,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
+        code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
       return;
