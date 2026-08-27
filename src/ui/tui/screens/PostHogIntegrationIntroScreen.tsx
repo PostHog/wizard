@@ -138,10 +138,7 @@ export const PostHogIntegrationIntroScreen = ({
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
-  const { skillEntry, fetchFailed } = useSkillEntry(
-    session.skillId,
-    session.localMcp,
-  );
+  const { skillEntry, fetchFailed } = useSkillEntry(session.skillId);
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;

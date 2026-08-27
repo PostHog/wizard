@@ -10,6 +10,8 @@ import { analytics } from '@utils/analytics';
 
 import { dispatchProgram } from '../../commands/factories/shared';
 import type { Command } from '../../commands/command';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 
 /**
  * Capture a CLI dispatch error, flush analytics, and exit. The wizard never
@@ -29,6 +31,7 @@ async function exitDispatchError(
     /* flush is best-effort; never block the exit */
   }
   process.stderr.write(message);
+  emitWizardError({ code: ErrorCodes.CliBadArgs, message: reason });
   return process.exit(code);
 }
 
@@ -97,7 +100,7 @@ export async function dispatchFamily(
     return;
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+  const skillsBaseUrl = getSkillsBaseUrl();
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) {
     return exitDispatchError(

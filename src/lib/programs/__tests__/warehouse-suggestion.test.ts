@@ -128,18 +128,18 @@ describe('outro suggestion', () => {
   });
 });
 
-describe('report instruction', () => {
-  const promptFor = async (sources: DetectedSource[]) => {
-    const s = sessionWith(sources);
-    const runDef = await resolveRun(s);
-    return runDef.customPrompt!({
-      projectId: 1,
-      projectApiKey: 'phc_test',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      host: CREDENTIALS.host as any,
-    });
-  };
+const promptFor = async (sources: DetectedSource[]) => {
+  const s = sessionWith(sources);
+  const runDef = await resolveRun(s);
+  return runDef.customPrompt!({
+    projectId: 1,
+    projectApiKey: 'phc_test',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    host: CREDENTIALS.host as any,
+  });
+};
 
+describe('report instruction', () => {
   it('asks the agent to note the sources in the report checklist', async () => {
     const prompt = await promptFor([POSTGRES]);
     expect(prompt).toContain('Verify before merging');
@@ -155,6 +155,34 @@ describe('report instruction', () => {
     const prompt = await promptFor([]);
     expect(prompt).not.toContain('warehouse');
     expect(prompt).not.toContain('data sources PostHog can import');
+  });
+});
+
+/**
+ * The default flow's STEP 5 writes the PostHog token to an env file, so what
+ * it says about `check_env_keys` decides whether the agent trusts a key it
+ * should not. The tool answers `{ status, foundIn }` and discounts committed
+ * templates; a prompt still describing the single-file tool it used to be
+ * teaches the agent to read the answer wrong.
+ */
+describe('env tool instruction', () => {
+  it('tells the agent it can omit filePath and scan the project', async () => {
+    const prompt = await promptFor([]);
+    expect(prompt).toContain('Omit filePath');
+    expect(prompt).not.toMatch(
+      /keys already exist in the project's \.env file/,
+    );
+  });
+
+  it('says a template declaration does not count as set', async () => {
+    const prompt = await promptFor([]);
+    expect(prompt).toMatch(/\.env\.example/);
+    expect(prompt).toMatch(/documents a key rather than setting it/);
+  });
+
+  it('warns the agent off writing credentials into a template', async () => {
+    const prompt = await promptFor([]);
+    expect(prompt).toMatch(/never a file to write credentials into/);
   });
 });
 

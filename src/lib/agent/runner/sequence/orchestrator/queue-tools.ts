@@ -13,6 +13,7 @@ import {
   VALID_MODELS,
 } from '@lib/agent/runner/switchboard/models';
 import {
+  SkipReason,
   TaskStatus,
   type QueueStore,
   type QueuedTask,
@@ -34,6 +35,13 @@ export interface OrchestratorToolsContext {
    * planner ran can never be left un-awaited.
    */
   sinkTypes?: readonly string[];
+  /**
+   * Types the wizard queues itself, before the planner runs. They are deferred
+   * to the end of the drain and may stop to ask the user for input, so the edge
+   * to them is one-way: the sink depends on them, nothing else may. See
+   * {@link seededDepViolations}.
+   */
+  runnerSeededTypes?: readonly string[];
   /**
    * The id of the task this tool server is bound to. Each task agent gets its
    * own wizard-tools server, so attribution holds when independent tasks run
@@ -109,10 +117,37 @@ export function uncoveredBySink(
 }
 
 /**
+ * Runner-seeded tasks a non-sink task would end up waiting for.
+ *
+ * The edge to a runner-seeded task is one-way. Such a task is deferred to the
+ * end of the drain and may stop to ask the user for input, so anything that
+ * waits on it inherits that wait — a coding step gated on someone typing a
+ * database password. The sink is the sole exception: it runs last by
+ * definition and must depend on every task, this one included.
+ *
+ * The whole closure is checked, not just direct dependencies, so the rule
+ * cannot be reached through an intermediate hop.
+ *
+ * Empty for a sink, and for any task that does not reach a seeded task.
+ */
+export function seededDepViolations(
+  ctx: OrchestratorToolsContext,
+  args: Pick<EnqueueArgs, 'type' | 'dependsOn'>,
+): QueuedTask[] {
+  const seeded = ctx.runnerSeededTypes ?? [];
+  if (seeded.length === 0) return [];
+  if (ctx.sinkTypes?.includes(args.type)) return [];
+  const reached = dependencyClosure(ctx.store, args.dependsOn ?? []);
+  return ctx.store
+    .list()
+    .filter((t) => reached.has(t.id) && seeded.includes(t.type));
+}
+
+/**
  * Validate an enqueue. Structural checks only — a real type, real dependencies,
- * a sink that waits for everything, not a literal duplicate, and not past the
- * runaway backstop. How much runs, and in what shape, is the task graph's
- * business, not a knob's.
+ * a sink that waits for everything, no non-sink task waiting on a runner-seeded
+ * one, not a literal duplicate, and not past the runaway backstop. How much
+ * runs, and in what shape, is the task graph's business, not a knob's.
  */
 export function checkEnqueueGuards(
   ctx: OrchestratorToolsContext,
@@ -161,8 +196,32 @@ export function checkEnqueueGuards(
     }
   }
 
+  const seededDeps = seededDepViolations(ctx, args);
+  if (seededDeps.length > 0) {
+    return {
+      ok: false,
+      guard: 'seeded-dep',
+      message: `A "${args.type}" task must not wait for ${seededDeps
+        .map((t) => `${t.type} (${t.id})`)
+        .join(
+          ', ',
+        )} — directly or through its dependencies. The wizard placed those, runs them at the end, and they stop to ask the user for input, so anything waiting on one waits on a person. Remove them from dependsOn and enqueue it again; only the final reporting task may depend on them.`,
+    };
+  }
+
   const uncovered = uncoveredBySink(ctx, args);
   if (uncovered.length > 0) {
+    const seededUncovered = uncovered.filter((t) =>
+      (ctx.runnerSeededTypes ?? []).includes(t.type),
+    );
+    // "Or to a task already in dependsOn" is the right advice for an ordinary
+    // task and exactly wrong for a runner-seeded one — routing it through an
+    // intermediate satisfies the closure while breaking the one-way rule above.
+    // So a seeded task is named with the only placement that is legal for it.
+    const how =
+      seededUncovered.length === uncovered.length
+        ? "Add them to this task's own dependsOn — for a task the wizard placed, that is the only legal spot — and enqueue it again."
+        : 'Add them to dependsOn, or to a task already in dependsOn, and enqueue it again.';
     return {
       ok: false,
       guard: 'sink-closure',
@@ -170,9 +229,7 @@ export function checkEnqueueGuards(
         args.type
       }" task runs last, so it must depend on every other task — directly or through its dependencies. These are not covered: ${uncovered
         .map((t) => `${t.type} (${t.id})`)
-        .join(
-          ', ',
-        )}. Add them to dependsOn, or to a task already in dependsOn, and enqueue it again.`,
+        .join(', ')}. ${how}`,
     };
   }
 
@@ -245,7 +302,11 @@ export function applyComplete(
       args.handoff,
     );
   } else if (args.status === TaskStatus.Skipped) {
-    ctx.store.skip(id, args.handoff);
+    // The agent's own words stay in the handoff and out of telemetry. This flow
+    // reaches live database and API credentials, and the repo has no redaction
+    // pass for handoff prose, so the event carries the reason and the task type
+    // only — enough to separate an agent no-op from a user decline.
+    ctx.store.skip(id, SkipReason.AgentNotNeeded, args.handoff);
   } else {
     ctx.store.complete(id, args.handoff);
   }

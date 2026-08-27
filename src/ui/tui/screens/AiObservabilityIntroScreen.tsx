@@ -25,7 +25,7 @@ export const AiObservabilityIntroScreen = ({
   // anthropic-node, langchain-python, …), so there's no pre-seeded skillId
   // here. Fall back to the group id for the "more info" lookup.
   const skillId = session.skillId ?? 'ai-observability';
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId);
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>

@@ -406,6 +406,7 @@ export async function detectSourceMapsProjects(
 ): Promise<DetectionReport> {
   const report = await detectProjectsWithAgent(session, {
     targets: SOURCE_MAPS_TARGETS,
+    programId: 'error-tracking-upload-source-maps',
     purpose: 'set up PostHog Error Tracking source-map upload',
     rerankIds: JS_RERANK_VARIANTS,
     onEvent,

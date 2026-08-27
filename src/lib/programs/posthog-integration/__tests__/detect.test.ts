@@ -10,6 +10,7 @@ vi.mock('@utils/analytics', () => ({
     setTag: vi.fn(),
     capture: vi.fn(),
     captureException: vi.fn(),
+    groupIdentify: vi.fn(),
   },
 }));
 
@@ -396,18 +397,130 @@ describe('the full decline contract, end to end', () => {
   });
 });
 
-describe('only a non-interactive session starts with consent resolved', () => {
+describe('wizard_ai_sdk_detected group stamp', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => cleanup(tmpDir));
+
+  function withOrgUser(session: WizardSession): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    session.apiUser = { organization: { id: 'org-1' } } as any;
+  }
+
+  function withDeps(deps: Record<string, string>): void {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: deps }),
+    );
+  }
+
+  it('fires with wizard_ai_sdk_detected: true when consent is granted and an AI kind is detected', async () => {
+    withDeps({ openai: '^4.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    withOrgUser(session);
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.groupIdentify).toHaveBeenCalledWith(
+      'organization',
+      'org-1',
+      {
+        wizard_ai_sdk_detected: true,
+      },
+    );
+  });
+
+  it('fires on a discovered LLM feature even without an AI warehouse-source kind', async () => {
+    withDeps({ stripe: '^14.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    session.discoveredFeatures = [DiscoveredFeature.LLM];
+    withOrgUser(session);
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.groupIdentify).toHaveBeenCalledWith(
+      'organization',
+      'org-1',
+      {
+        wizard_ai_sdk_detected: true,
+      },
+    );
+  });
+
+  it('does not fire when consent is declined', async () => {
+    withDeps({ openai: '^4.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Declined;
+    withOrgUser(session);
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+  });
+
+  it('does not fire while consent is undecided', async () => {
+    withDeps({ openai: '^4.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    withOrgUser(session);
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+  });
+
+  it('does not fire when only non-AI kinds are detected', async () => {
+    withDeps({ stripe: '^14.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    withOrgUser(session);
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+  });
+
+  it('does not fire when the organization id is unknown', async () => {
+    withDeps({ openai: '^4.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+
+    await detectPostHogIntegration(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+  });
+});
+
+describe('only a scripted CI run starts with consent already granted', () => {
   it('ci: true builds scanConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', ci: true });
     expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 
-  it('signup: true still starts undecided', () => {
-    // --signup renders the full TUI and creates the account during auth, two
-    // steps after the intro. That user is asked like anyone else, so granting
-    // up front would put scan results on the events fired before they answer.
+  it('signup: true alone starts undecided: the new account never saw the disclosure', () => {
     const session = buildSession({ installDir: '/tmp/app', signup: true });
     expect(session.scanConsent).toBe(ScanConsent.Undecided);
+  });
+
+  it('ci: true with signup: true still builds scanConsent as granted', () => {
+    const session = buildSession({
+      installDir: '/tmp/app',
+      ci: true,
+      signup: true,
+    });
+    expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 
   it('a plain interactive session starts undecided', () => {

@@ -10,6 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
+import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
 import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
@@ -122,6 +123,10 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** Stable machine-readable error code from the error catalog (@lib/errors). */
+  errorCode?: import('@lib/errors').ErrorCode;
+  /** Structured context for the error code; safe for telemetry payloads. */
+  errorDetail?: Record<string, unknown>;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
@@ -214,6 +219,11 @@ export interface WizardSession {
   installDir: string;
   ci: boolean;
   signup: boolean;
+  /**
+   * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
+   * from `getLocalDev()` — neither belongs here. This one stays because
+   * `mcp add|remove|tutorial --local` populate it from their own flag.
+   */
   localMcp: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
@@ -321,6 +331,8 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
+  mcpLoginCommands: string[];
   mcpSuggestedPromptsDismissed: boolean;
   /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
   slackStepDismissed: boolean;
@@ -407,7 +419,9 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  localDev?: boolean;
   localMcp?: boolean;
+  localPosthog?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
   email?: string;
@@ -424,17 +438,21 @@ export function buildSession(args: {
   integrate?: boolean;
   captureAio?: boolean;
 }): WizardSession {
+  const local = resolveLocalDev(args);
   return {
     debug: args.debug ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
-    localMcp: args.localMcp ?? false,
+    localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
-    baseUrl: args.baseUrl,
+    // `--local-posthog` is sugar over `--base-url`, which every downstream URL
+    // helper already honours. An explicit `--base-url` is more specific, so it wins.
+    baseUrl:
+      args.baseUrl ?? (local.localPosthog ? POSTHOG_LOCAL_URL : undefined),
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
@@ -445,8 +463,10 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
-    // `ci` only: no screen renders, so nothing can ask. Not `signup` — that
-    // run is interactive and gets asked on the intro screen like any other.
+    // No screen can ask in a scripted CI run, so granting keeps CI's
+    // telemetry as it was. --signup alone still provisions a brand-new
+    // account headlessly, and that user has never seen the disclosure — a
+    // headless `--ci --signup` run stays covered by the ci branch above.
     scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
     integration: args.integration ?? null,
@@ -462,6 +482,7 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpLoginCommands: [],
     mcpSuggestedPromptsDismissed: false,
     slackStepDismissed: false,
     slackConnected: null,
