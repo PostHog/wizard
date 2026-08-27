@@ -43,6 +43,7 @@ import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
+import { classifyAuthFailure } from '@lib/errors';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -1042,7 +1043,7 @@ export async function runAgent(
         hooks: {
           PreToolUse: warlockDisabled
             ? []
-            : createPreToolUseYaraHooks(triageProvider),
+            : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
           PostToolUse: warlockDisabled
             ? []
             : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
@@ -1153,6 +1154,13 @@ export async function runAgent(
           os.homedir(),
           signals.apiKeySource,
         );
+        const authCode = classifyAuthFailure({
+          hasSettingsConflict: authError.hasSettingsConflict,
+          usingManagedLogin: authError.usingManagedLogin,
+          apiKey: options.apiKey,
+          gatewayRegion: authError.region,
+          sessionRegion: options.cloudRegion,
+        });
         logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
@@ -1162,16 +1170,21 @@ export async function runAgent(
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
+          code: authCode,
           message: 'Authentication failed (401)',
-          error: new WizardError('Authentication failed', {
-            hasSettingsConflict: authError.hasSettingsConflict,
-            conflictSources: authError.conflictSources,
-            conflictKeys: authError.conflictKeys,
-            gatewayUrl: authError.gatewayUrl,
-            region: authError.region,
-            usingManagedLogin: authError.usingManagedLogin,
-            apiKeySource: authError.apiKeySource,
-          }),
+          error: new WizardError(
+            'Authentication failed',
+            {
+              hasSettingsConflict: authError.hasSettingsConflict,
+              conflictSources: authError.conflictSources,
+              conflictKeys: authError.conflictKeys,
+              gatewayUrl: authError.gatewayUrl,
+              region: authError.region,
+              usingManagedLogin: authError.usingManagedLogin,
+              apiKeySource: authError.apiKeySource,
+            },
+            authCode,
+          ),
         });
       }
 

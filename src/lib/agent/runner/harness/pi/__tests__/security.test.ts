@@ -218,6 +218,48 @@ describe('pi-security: warlock scan wiring', () => {
     });
     expect(await block('bash', { command: 'npm install' })).toBe(false);
   });
+
+  test('a high-severity publish_handoff match does NOT block the report', async () => {
+    // The same piiMatch that blocks a write lets a handoff through.
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: "Found posthog.capture('login', { email: user.email })",
+    });
+    expect(decision.block).toBe(false);
+  });
+
+  test('a critical publish_handoff match blocks — a live key must not reach a PR body', async () => {
+    mockedScan.mockResolvedValueOnce({
+      matched: true,
+      matches: [
+        {
+          rule: 'posthog_hardcoded_personal_api_key',
+          metadata: {
+            description: 'PostHog personal API key hardcoded in source',
+            severity: 'critical',
+            category: 'posthog_hardcoded_key',
+            action: 'remediate',
+            remediation: 'Rotate the key and use an environment variable',
+            scan_context: 'output',
+          },
+          matchedStrings: ['phx_'],
+        } as ScanMatch,
+      ],
+    });
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: '# Report\n\nphx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
+    expect(decision.reason).toContain('Fix: Rotate the key');
+  });
+
+  test('a clean publish_handoff report is allowed through', async () => {
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: '# Setup report\n\nAll done.',
+    });
+    expect(decision.block).toBe(false);
+  });
 });
 
 describe('pi-security: extension state machine (fail-closed + runaway + latch)', () => {
@@ -252,6 +294,35 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
         input: { command: 'npm install' },
       }),
     ).toEqual({});
+  });
+
+  test('a scanner error on publish_handoff latches and ends the run', async () => {
+    // Blocking alone would leave the agent rewording a report forever.
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
+    expect(
+      await handlers.tool_call({
+        toolName: 'publish_handoff',
+        input: { content: '# Report' },
+      }),
+    ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(true);
+  });
+
+  test('a scanner error on a write blocks without ending the run', async () => {
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
+    expect(
+      await handlers.tool_call({
+        toolName: 'write',
+        input: { path: 'src/a.ts', content: 'x' },
+      }),
+    ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(false);
   });
 
   test('a post-scan violation latches and terminates all further calls', async () => {

@@ -66,6 +66,7 @@ type RuntimeEnvKey =
   // which would tie every sandbox deploy to an npm release of this package.
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
+  | 'POSTHOG_HANDOFF_OUTPUT_PATH'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
