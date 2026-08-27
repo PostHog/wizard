@@ -27,8 +27,15 @@ export interface WizardE2eProfile {
   slack: 'skip';
   /** Keep or delete the wizard-installed skills at the end. */
   skills: 'keep' | 'delete';
-  /** Default answer strategy for an agent `wizard_ask` overlay. */
+  /** Answer strategy for an agent `wizard_ask` overlay: the first option (its
+   * affirmative "continue" — e.g. self-driving's "GitHub connected → done"). */
   ask: 'first';
+  /**
+   * Self-driving integration-check answer: `true` → "no, set it up first"
+   * (integrate the SDK as part of the run); `false` → "yes, already
+   * integrated". Only read on the integration-check screen.
+   */
+  integrate?: boolean;
 }
 
 /** Happy-path default: take every screen forward, leave nothing behind. */
@@ -39,6 +46,7 @@ export const DEFAULT_E2E_PROFILE: WizardE2eProfile = {
   slack: 'skip',
   skills: 'delete',
   ask: 'first',
+  integrate: false,
 };
 
 /**
@@ -117,7 +125,19 @@ export function decideE2eAction(
       };
     }
 
+    case ScreenId.SelfDrivingIntegrationCheck:
+      return {
+        action: {
+          id: 'set_integrate',
+          params: { integrate: profile.integrate === true },
+        },
+      };
+
+    case ScreenId.SelfDrivingHandoff:
+      return { action: { id: 'confirm_self_driving_handoff' } };
+
     case ScreenId.Outro:
+    case ScreenId.SourceMapsOutro:
       return { action: { id: 'dismiss_outro' } };
 
     case ScreenId.Mcp:
@@ -170,7 +190,9 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.Intro,
   ScreenId.HealthCheck,
   ScreenId.Setup,
+  ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.Outro,
+  ScreenId.SourceMapsOutro,
   ScreenId.Mcp,
   ScreenId.McpSuggestedPrompts,
   ScreenId.SlackConnect,
