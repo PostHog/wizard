@@ -219,6 +219,11 @@ export interface WizardSession {
    * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
    * flag, `bin.ts` never populates it, and nothing in a published build reads
    * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
+   *
+   * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
+   * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
+   * `POSTHOG_WIZARD_e2e_ask=true` set this field. `readEnvironment` drops it —
+   * see `NEVER_FROM_ENV`, and keep that list in step with this comment.
    */
   e2eAsk: boolean;
   /**
