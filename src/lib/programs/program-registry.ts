@@ -118,11 +118,14 @@ export const Program = {
 export type ProgramId = (typeof PROGRAM_REGISTRY)[number]['id'];
 
 /**
- * Look up a program config by its id. `ProgramId` is a union of every
- * registered id, so a typed call is statically guaranteed to find a match.
- * The runtime check names the bad id when a caller casts an untyped string
- * (e.g. an env var), so a typo fails loudly here instead of surfacing as an
- * opaque crash deeper in the pipeline.
+ * Look up a program config by its id, throwing when the id is unknown.
+ *
+ * `ProgramId` is meant to be the union of every registered id, but because
+ * `ProgramConfig.id` is typed `string` the union collapses to `string` — so
+ * the parameter type does not statically reject an unknown id. The runtime
+ * check below is the real guard: it names the bad id when a caller passes an
+ * untyped string (e.g. a mistyped env var), so a typo fails loudly here
+ * instead of surfacing as an opaque crash deeper in the pipeline.
  */
 export function getProgramConfig(id: ProgramId): ProgramConfig {
   const config = PROGRAM_REGISTRY.find((c) => c.id === id);
