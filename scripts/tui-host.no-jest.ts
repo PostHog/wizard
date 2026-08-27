@@ -30,9 +30,15 @@ import { logToFile } from '@utils/debug';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
+  type AskAnswerRule,
   type WizardE2eProfile,
 } from '@e2e-harness/e2e-profile';
-import { profileFor } from '@e2e-harness/profiles';
+import { profileFor, resolveE2eProfile } from '@e2e-harness/profiles';
+import {
+  E2eRunRecorder,
+  buildE2eResult,
+  readReportFile,
+} from '@e2e-harness/e2e-result';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -63,6 +69,11 @@ async function main() {
   store.session = buildSession({
     installDir: process.env.APP_DIR!,
     ci: true,
+    // Keep the `wizard_ask` bridge wired despite `ci: true`. The driver loop
+    // below is the answerer — without this the agent-in-the-loop layer of a
+    // flow (credential questions, the orchestrator's seeded warehouse task) is
+    // never exercised. Only this host sets it; see `shouldDisableAsk`.
+    e2eAsk: process.env.E2E_ASK === 'true',
     apiKey,
     projectId,
     region: 'us',
@@ -188,8 +199,18 @@ async function main() {
   // ---- CI route: self-drive the fixed profile, snapshot each screen ----
   async function fixed() {
     const CTRL = process.env.SNAP_CTRL!;
-    const profile: WizardE2eProfile = profileFor(programId);
+    // Fold the run's env inputs into the profile once, here. `decideE2eAction`
+    // stays pure, so the same state + profile always yields the same decision.
+    const profile: WizardE2eProfile = resolveE2eProfile(profileFor(programId), {
+      notice: process.env.E2E_NOTICE,
+      extraAskAnswers: readAnswersFile(process.env.E2E_ANSWERS_FILE),
+      env: process.env,
+    });
+    const recorder = new E2eRunRecorder();
     const screenPath: string[] = [];
+    let resultWritten = false;
+    // An abort exits from inside the runner, so hook `exit` too — see writeResult.
+    process.on('exit', () => writeResult());
     // Snapshot on key moments — a screen change, a task-list update, or a
     // runPhase change — so the run screen's progression (the agent working) is
     // captured, not just screen transitions. The driver loop snaps each screen
@@ -218,12 +239,19 @@ async function main() {
       });
       return chain;
     };
-    const unsub = store.subscribe(() => void snap());
+    // Log every ask batch and task notice as it opens. The store fires on every
+    // commit, so an overlay that opens and closes between two driver-loop turns
+    // is still recorded.
+    const unsub = store.subscribe(() => {
+      recorder.observe(store.session);
+      void snap();
+    });
 
     let stop = false;
     const driverLoop = async () => {
       while (!stop && !store.session.skillsComplete) {
         await snap(); // capture this screen as presented, before acting
+        recorder.observe(store.session);
         const state = driver.readState();
         const before = state.currentScreen;
         let acted = false;
@@ -236,6 +264,9 @@ async function main() {
             );
             acted = true;
           }
+          // Only the decision knows how it resolved an ask or a notice; the
+          // report is ids and a verdict, never an answer value.
+          if (decision.report) recorder.applyReport(decision.report);
           if (decision.done) stop = true;
         } catch (e) {
           mark(`action error on ${before}: ${(e as Error).message}`);
@@ -259,9 +290,20 @@ async function main() {
     await snap(); // the final screen
     await chain; // flush any pending snapshots
 
+    writeResult();
+    process.exit(0);
+
     // Structured result the --e2e assertion path reads: run phase, posthog deps,
-    // env file, and the screens walked.
-    if (process.env.E2E_RESULT_JSON) {
+    // env file, the screens walked, and the agent-in-the-loop record (asks,
+    // notices, tasks, detected sources, report file, abort reason).
+    //
+    // Registered on `exit` as well as called on the happy path: `wizardAbort`
+    // renders the error outro and then exits the process, so an aborted run
+    // would otherwise write nothing at all — and "why did it abort" is exactly
+    // what the workbench needs in that case.
+    function writeResult() {
+      if (!process.env.E2E_RESULT_JSON || resultWritten) return;
+      resultWritten = true;
       const appDir = process.env.APP_DIR!;
       // One dependency-name pattern per ecosystem manifest. A run only needs
       // the names, so a line-level scan beats per-format parsers.
@@ -313,20 +355,37 @@ async function main() {
       fs.writeFileSync(
         process.env.E2E_RESULT_JSON,
         JSON.stringify(
-          {
-            runPhase: store.session.runPhase,
-            hasPosthogDep: posthogDeps.length > 0,
-            newDeps: posthogDeps,
-            envFile,
-            screenPath,
-            skillsComplete: store.session.skillsComplete,
-          },
+          buildE2eResult({
+            base: {
+              runPhase: store.session.runPhase,
+              hasPosthogDep: posthogDeps.length > 0,
+              newDeps: posthogDeps,
+              envFile,
+              screenPath,
+              skillsComplete: store.session.skillsComplete,
+            },
+            recorder,
+            session: store.session,
+            tasks: store.tasks,
+            reportFile: readReportFile(appDir, programConfig.reportFile),
+          }),
           null,
           2,
         ),
       );
     }
-    process.exit(0);
+  }
+}
+
+/** Extra `askAnswers` rules from `E2E_ANSWERS_FILE`, or none. */
+function readAnswersFile(file: string | undefined): AskAnswerRule[] {
+  if (!file) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Array.isArray(parsed) ? (parsed as AskAnswerRule[]) : [];
+  } catch (e) {
+    mark(`could not read E2E_ANSWERS_FILE ${file}: ${(e as Error).message}`);
+    return [];
   }
 }
 

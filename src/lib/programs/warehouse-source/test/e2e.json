@@ -1,0 +1,83 @@
+{
+  "program": "warehouse-source",
+  "summary": "Happy path: confirm the intro over the detected sources, keep any task notice, answer the agent's credential questions from E2E_* env vars, delete installed skills. Rules carrying a real credential are marked \"secret\": they answer only a sensitive text question, so a skill cannot name a plain question \"password\" and get the value back unvaulted.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first",
+    "notice": "keep",
+    "askAnswers": [
+      {
+        "match": "prefix",
+        "value": "${E2E_SOURCE_PREFIX}"
+      },
+      {
+        "match": "stripe",
+        "value": "${E2E_STRIPE_API_KEY}",
+        "secret": true
+      },
+      {
+        "match": "host|hostname|server|endpoint",
+        "value": "${E2E_PG_HOST}"
+      },
+      {
+        "match": "port",
+        "value": "${E2E_PG_PORT}"
+      },
+      {
+        "match": "database|db_?name",
+        "value": "${E2E_PG_DATABASE}"
+      },
+      {
+        "match": "password|passwd|pwd",
+        "value": "${E2E_PG_PASSWORD}",
+        "secret": true
+      },
+      {
+        "match": "user|username|role",
+        "value": "${E2E_PG_USER}"
+      },
+      {
+        "match": "schema",
+        "value": "public"
+      }
+    ]
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "linear / anthropic / sonnet — parity with main"
+    }
+  ],
+  "path": [
+    {
+      "screen": "(headless) detect",
+      "auto": "scan installDir for warehouse signals — writes detectedWarehouseSources, or a detectError when the project has none"
+    },
+    {
+      "screen": "warehouse-intro",
+      "auto": "confirm & continue — lists what detection found"
+    },
+    { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "task-notice",
+      "auto": "keep — only shown on the orchestrator sequence, where the warehouse step is a seeded task the user can decline"
+    },
+    {
+      "screen": "run",
+      "auto": "(external) — the agent runs the data-warehouse-source-setup skill: it collects credentials through wizard_ask, creates in-cli sources over the PostHog MCP, and emits a deep link for the rest"
+    },
+    {
+      "screen": "wizard-ask",
+      "auto": "answer every question in the batch — askAnswers routes each credential field to its E2E_* env var; anything unrouted takes the first option, else the 'e2e' sentinel"
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    {
+      "screen": "keep-skills",
+      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
+    }
+  ]
+}
