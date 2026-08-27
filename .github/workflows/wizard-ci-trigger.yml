@@ -132,6 +132,11 @@ jobs:
             }
 
             bodyParts.push('');
+            bodyParts.push('**Test against a Context Mill branch:**');
+            bodyParts.push('- `/wizard-ci all context-mill:my-branch`');
+            bodyParts.push('');
+            bodyParts.push('Add `context-mill:<branch>` to any command above to pin the Context Mill branch. It defaults to `main`.');
+            bodyParts.push('');
             bodyParts.push('Results will be posted here when complete.');
 
             const body = bodyParts.join('\n');
@@ -188,7 +193,36 @@ jobs:
 
             const comment = context.payload.comment.body;
             const match = comment.match(/\/wizard-ci\s+(\S+)/);
-            const app = match ? match[1] : 'all';
+            const firstArg = match ? match[1] : 'all';
+
+            // A reviewer can pin the companion repo with `context-mill:<ref>`.
+            // A lone pin is not an app name, so fall back to every app.
+            const app = firstArg.startsWith('context-mill:') ? 'all' : firstArg;
+
+            // The ref arrives in a PR comment, so treat it as untrusted. Accept
+            // git ref characters only. Reject traversal, a leading dash and a
+            // trailing slash.
+            const isPlausibleRef = (ref) =>
+              ref.length <= 200 &&
+              /^[A-Za-z0-9._\/-]+$/.test(ref) &&
+              !ref.includes('..') &&
+              !ref.startsWith('-') &&
+              !ref.startsWith('/') &&
+              !ref.endsWith('/');
+
+            // Read the pin from the command line only, not from later prose.
+            const companion = comment
+              .split(/\r?\n/)[0]
+              .match(/(?:^|\s)context-mill:(\S+)/);
+            const contextMillRef = companion ? companion[1] : null;
+
+            if (contextMillRef && !isPlausibleRef(contextMillRef)) {
+              core.setFailed(
+                'The context-mill ref is not a valid git ref. ' +
+                  'Use `/wizard-ci <app> context-mill:<branch>`.'
+              );
+              return;
+            }
 
             // React with rocket to show we're processing
             await github.rest.reactions.createForIssueComment({
@@ -210,12 +244,15 @@ jobs:
                 source_pr_number: context.payload.issue.number,
                 source_pr_url: pr.data.html_url,
                 wizard_ref: pr.data.head.ref,
+                // Omit the key when unpinned. The workbench then uses `main`.
+                ...(contextMillRef ? { context_mill_ref: contextMillRef } : {}),
                 notify_slack: 'false',
                 notify_pr: 'true'
               }
             });
 
-            console.log(`Triggered wizard-ci for app: ${app}`);
+            const pinNote = contextMillRef ? ` (context-mill ref ${contextMillRef})` : '';
+            console.log(`Triggered wizard-ci for app: ${app}${pinNote}`);
 
   # ============================================================================
   # HANDLE SNAPSHOTS: Parse /wizard-ci-snapshots and trigger the snapshots workflow
@@ -253,12 +290,50 @@ jobs:
               return;
             }
 
-            // /wizard-ci-snapshots <app> [wizard_ref] — ref defaults to this PR's branch.
-            const m = context.payload.comment.body.match(
-              /\/wizard-ci-snapshots\s+(\S+)(?:\s+(\S+))?/
-            );
+            const body = context.payload.comment.body;
+
+            // The ref arrives in a PR comment, so treat it as untrusted. Accept
+            // git ref characters only. Reject traversal, a leading dash and a
+            // trailing slash.
+            const isPlausibleRef = (ref) =>
+              ref.length <= 200 &&
+              /^[A-Za-z0-9._\/-]+$/.test(ref) &&
+              !ref.includes('..') &&
+              !ref.startsWith('-') &&
+              !ref.startsWith('/') &&
+              !ref.endsWith('/');
+
+            // Optional companion pin. Read it from the command line only.
+            const companionToken = /(?:^|\s)context-mill:(\S+)/;
+            const companion = body.split(/\r?\n/)[0].match(companionToken);
+            const contextMillRef = companion ? companion[1] : null;
+
+            if (contextMillRef && !isPlausibleRef(contextMillRef)) {
+              core.setFailed(
+                'The context-mill ref is not a valid git ref. Use ' +
+                  '`/wizard-ci-snapshots <app> context-mill:<branch>`.'
+              );
+              return;
+            }
+
+            // Remove the pin so the positional ref cannot capture it.
+            const args = contextMillRef ? body.replace(companionToken, ' ') : body;
+
+            // /wizard-ci-snapshots <app> [wizard_ref] [context-mill:<ref>] —
+            // wizard_ref defaults to this PR's branch.
+            const m = args.match(/\/wizard-ci-snapshots\s+(\S+)(?:\s+(\S+))?/);
             const app = m ? m[1] : 'basic-integration/javascript-node/express-todo';
-            const wizardRef = m && m[2] ? m[2] : pr.data.head.ref;
+
+            // The positional ref also comes from the comment. Check it too.
+            const wizardRefArg = m && m[2] ? m[2] : null;
+            if (wizardRefArg && !isPlausibleRef(wizardRefArg)) {
+              core.setFailed(
+                'The wizard ref is not a valid git ref. Use ' +
+                  '`/wizard-ci-snapshots <app> <wizard-branch>`.'
+              );
+              return;
+            }
+            const wizardRef = wizardRefArg || pr.data.head.ref;
 
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
@@ -282,10 +357,13 @@ jobs:
                 source_pr_number: context.payload.issue.number,
                 source_pr_url: pr.data.html_url,
                 wizard_ref: wizardRef,
+                // Omit the key when unpinned. The workbench then uses `main`.
+                ...(contextMillRef ? { context_mill_ref: contextMillRef } : {}),
                 notify_slack: 'false',
                 notify_pr: 'true',
                 snapshots: true
               }
             });
 
-            console.log(`Triggered snapshots for app: ${app} (ref ${wizardRef})`);
+            const pinNote = contextMillRef ? `, context-mill ref ${contextMillRef}` : '';
+            console.log(`Triggered snapshots for app: ${app} (ref ${wizardRef}${pinNote})`);
