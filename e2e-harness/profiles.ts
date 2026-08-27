@@ -101,8 +101,10 @@ export function resolveE2eProfile(
     ...base,
     ...(rules.length > 0
       ? {
+          // Spread the rule: interpolation only rewrites `value`, and dropping
+          // any other field here would silently unset a rule's `secret` flag.
           askAnswers: rules.map((rule) => ({
-            match: rule.match,
+            ...rule,
             value: interpolateEnv(rule.value, env),
           })),
         }

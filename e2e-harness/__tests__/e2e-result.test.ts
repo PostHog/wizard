@@ -90,6 +90,7 @@ describe('E2eRunRecorder — ask batches', () => {
       prompts: ['Postgres host', 'Port'],
       answeredIds: [],
       sentinelIds: [],
+      refusedIds: [],
       at: '2026-08-27T10:00:00.000Z',
     });
   });
@@ -132,6 +133,7 @@ describe('E2eRunRecorder — ask batches', () => {
       id: 'a1',
       answeredIds: ['host'],
       sentinelIds: ['password'],
+      refusedIds: [],
     });
     expect(recorder.asks[0].answeredIds).toEqual(['host']);
     expect(recorder.asks[0].sentinelIds).toEqual(['password']);
@@ -145,6 +147,7 @@ describe('E2eRunRecorder — ask batches', () => {
       id: 'ghost',
       answeredIds: [],
       sentinelIds: ['x'],
+      refusedIds: [],
     });
     expect(recorder.asks).toEqual([]);
     expect(recorder.unansweredAsks).toBe(0);
@@ -162,9 +165,32 @@ describe('E2eRunRecorder — ask batches', () => {
         id,
         answeredIds: [],
         sentinelIds: ['p'],
+        refusedIds: [],
       });
     }
     expect(recorder.unansweredAsks).toBe(2);
+  });
+
+  it('records a refusal, and counts it as unanswered', () => {
+    const recorder = new E2eRunRecorder();
+    recorder.observe(
+      observed({
+        pendingQuestion: ask('a1', [
+          question('host', 'Host'),
+          question('password', 'Password'),
+        ]),
+      }),
+    );
+    recorder.applyReport({
+      kind: 'ask',
+      id: 'a1',
+      answeredIds: ['host'],
+      sentinelIds: [],
+      refusedIds: ['password'],
+    });
+    expect(recorder.asks[0].refusedIds).toEqual(['password']);
+    expect(recorder.refusedAsks).toBe(1);
+    expect(recorder.unansweredAsks).toBe(1);
   });
 });
 
@@ -319,6 +345,57 @@ describe('readReportFile', () => {
       text: '# Report\n',
     });
   });
+
+  // The app directory is a checkout the run does not control, so the file at
+  // the report path is attacker-controlled input. A symlink must never be
+  // dereferenced into the payload.
+  it('refuses a report path that is a symlink to a host file', () => {
+    const outside = path.join(os.tmpdir(), `e2e-outside-${process.pid}.txt`);
+    fs.writeFileSync(outside, 'AWS_SECRET_ACCESS_KEY=leak\n');
+    fs.symlinkSync(outside, path.join(dir, 'posthog-warehouse-report.md'));
+    const result = readReportFile(dir, 'posthog-warehouse-report.md');
+    expect(result).toEqual({
+      path: path.join(dir, 'posthog-warehouse-report.md'),
+      exists: false,
+      rejected: 'not-a-regular-file',
+    });
+    expect(JSON.stringify(result)).not.toContain('leak');
+    fs.rmSync(outside, { force: true });
+  });
+
+  it('refuses a symlink that points back inside the app dir', () => {
+    fs.writeFileSync(path.join(dir, 'real.md'), '# Real\n');
+    fs.symlinkSync(
+      path.join(dir, 'real.md'),
+      path.join(dir, 'posthog-warehouse-report.md'),
+    );
+    expect(readReportFile(dir, 'posthog-warehouse-report.md')?.rejected).toBe(
+      'not-a-regular-file',
+    );
+  });
+
+  it('refuses a report reached through a symlinked parent directory', () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-outside-'));
+    fs.writeFileSync(path.join(outsideDir, 'report.md'), 'host secrets\n');
+    fs.symlinkSync(outsideDir, path.join(dir, 'reports'));
+    const result = readReportFile(dir, 'reports/report.md');
+    expect(result?.exists).toBe(false);
+    expect(result?.rejected).toBe('outside-app-dir');
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  });
+
+  it('refuses a report name that escapes the app dir', () => {
+    expect(readReportFile(dir, '../../etc/passwd')?.rejected).toBe(
+      'outside-app-dir',
+    );
+  });
+
+  it('refuses a directory standing in for the report', () => {
+    fs.mkdirSync(path.join(dir, 'posthog-warehouse-report.md'));
+    expect(readReportFile(dir, 'posthog-warehouse-report.md')?.rejected).toBe(
+      'not-a-regular-file',
+    );
+  });
 });
 
 describe('buildE2eResult', () => {
@@ -365,6 +442,7 @@ describe('buildE2eResult', () => {
         'hasPosthogDep',
         'newDeps',
         'notices',
+        'refusedAsks',
         'reportFile',
         'runPhase',
         'screenPath',
@@ -406,6 +484,7 @@ describe('buildE2eResult', () => {
       id: 'a1',
       answeredIds: [],
       sentinelIds: ['p'],
+      refusedIds: [],
     });
     expect(build(recorder).unansweredAsks).toBe(1);
   });
@@ -494,6 +573,7 @@ describe('security rail — no answer value reaches the payload', () => {
       'prompts',
       'questionCount',
       'questionIds',
+      'refusedIds',
       'sentinelIds',
       'source',
       'subject',

@@ -89,6 +89,14 @@ sets `session.e2eAsk` from `E2E_ASK=true`, which keeps the bridge wired (see
 `askAnswers` routes a question to a value, else the first option, else the `'e2e'`
 sentinel. Route credentials with `${ENV_VAR}` values, never literals.
 
+Mark a credential rule `"secret": true`. The skill names its own questions, so a
+rule matches text the agent controls — without the flag, a question called
+`password` takes the value, and by omitting `sensitive: true` gets it back
+unvaulted in plaintext. A secret rule answers only free text flagged sensitive
+and refuses every other question shape; refusals land in the payload's
+`refusedIds` / `refusedAsks`, so a run that withholds a credential says so
+instead of looking like an ordinary sentinel.
+
 Task-notice overlay. `profile.notice` decides `keep` or `decline`. `E2E_NOTICE`
 overrides it per run.
 
@@ -106,6 +114,12 @@ it.
 ever does.** The decision function reports ids and a keep/decline verdict, so the
 recorder never holds an answer. Keep it that way — the workbench scans the file
 for its own injected credentials.
+
+The report file is the one payload field whose *content* comes from the app
+directory, which is a checkout the run does not control. `readReportFile` reads
+only a regular file inside `appDir` — never a symlink, and never through a
+symlinked parent — so a committed `posthog-warehouse-report.md` pointing at a
+host file cannot copy it into the payload.
 
 ## Visual-regression snapshots (the workbench flow)
 

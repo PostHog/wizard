@@ -27,6 +27,12 @@ const text = (id: string, prompt = id): AskQuestion => ({
   kind: 'text',
 });
 
+/** Free text the skill flagged sensitive — the only shape a secret rule answers. */
+const sensitiveText = (id: string, prompt = id): AskQuestion => ({
+  ...text(id, prompt),
+  sensitive: true,
+});
+
 const single = (id: string, values: string[]): AskQuestion => ({
   id,
   prompt: id,
@@ -179,6 +185,85 @@ describe('answerQuestions — askAnswers matching', () => {
   });
 });
 
+/**
+ * The skill names its own questions, so a rule matching on `id` or `prompt` is
+ * matching agent-controlled text. A rule carrying a real credential therefore
+ * answers only a question shaped so `wizard_ask` will vault the answer — free
+ * text flagged sensitive. Anything else is refused, never answered.
+ */
+describe('answerQuestions — secret rules', () => {
+  const secretRule = { match: 'stripe', value: 'sk_live_real', secret: true };
+
+  it('answers a sensitive text question', () => {
+    const batch = answerQuestions(
+      [sensitiveText('stripe_api_key', 'Stripe API key')],
+      profile({ askAnswers: [secretRule] }),
+    );
+    expect(batch.answers.stripe_api_key).toBe('sk_live_real');
+    expect(batch.answeredIds).toEqual(['stripe_api_key']);
+    expect(batch.refusedIds).toEqual([]);
+  });
+
+  it('refuses a text question the skill did not flag sensitive', () => {
+    const batch = answerQuestions(
+      [text('stripe_api_key', 'Stripe API key')],
+      profile({ askAnswers: [secretRule] }),
+    );
+    expect(batch.answers.stripe_api_key).toBe(E2E_ANSWER_SENTINEL);
+    expect(batch.refusedIds).toEqual(['stripe_api_key']);
+    expect(batch.answeredIds).toEqual([]);
+  });
+
+  it('refuses a picker question wearing a credential name', () => {
+    const batch = answerQuestions(
+      [{ ...single('stripe_key', ['a', 'b']), sensitive: true }],
+      profile({ askAnswers: [secretRule] }),
+    );
+    // Even flagged sensitive: `sensitive` is text-only, so a picker would come
+    // back unvaulted. Refused rather than falling through to option 'a'.
+    expect(batch.answers.stripe_key).toBe(E2E_ANSWER_SENTINEL);
+    expect(batch.refusedIds).toEqual(['stripe_key']);
+  });
+
+  it('refuses on a prompt match too, not just an id match', () => {
+    const batch = answerQuestions(
+      [text('q1', 'Paste your Stripe key here')],
+      profile({ askAnswers: [secretRule] }),
+    );
+    expect(batch.refusedIds).toEqual(['q1']);
+    expect(JSON.stringify(batch.answers)).not.toContain('sk_live_real');
+  });
+
+  it('leaves non-secret rules alone — an ordinary field still answers', () => {
+    const batch = answerQuestions(
+      [text('host', 'Postgres host')],
+      profile({ askAnswers: [secretRule, { match: 'host', value: 'db' }] }),
+    );
+    expect(batch.answers.host).toBe('db');
+    expect(batch.refusedIds).toEqual([]);
+  });
+
+  it('is inert when the credential env var is unset — sentinel, not refusal', () => {
+    const resolved = resolveE2eProfile(
+      profile({ askAnswers: [{ ...secretRule, value: '${NOPE}' }] }),
+      { env: {} },
+    );
+    const batch = answerQuestions([text('stripe_key', 'Stripe key')], resolved);
+    expect(batch.sentinelIds).toEqual(['stripe_key']);
+    expect(batch.refusedIds).toEqual([]);
+  });
+
+  it('survives interpolation with its secret flag intact', () => {
+    const resolved = resolveE2eProfile(
+      profile({ askAnswers: [{ ...secretRule, value: '${KEY}' }] }),
+      { env: { KEY: 'sk_test_1' } },
+    );
+    expect(resolved.askAnswers?.[0].secret).toBe(true);
+    const batch = answerQuestions([text('stripe_key', 'Stripe key')], resolved);
+    expect(batch.refusedIds).toEqual(['stripe_key']);
+  });
+});
+
 describe('resolveE2eProfile — env interpolation', () => {
   const base = profile({
     askAnswers: [
@@ -293,6 +378,7 @@ describe('decideE2eAction — wizard_ask overlay', () => {
       id: 'ask_1',
       answeredIds: ['host'],
       sentinelIds: ['port'],
+      refusedIds: [],
     });
     expect(JSON.stringify(decision.report)).not.toContain('db');
   });
@@ -465,12 +551,12 @@ describe('warehouse-source profile', () => {
     const batch = answerQuestions(
       [
         text('prefix', 'Table prefix'),
-        text('stripe_api_key', 'Stripe API key'),
+        sensitiveText('stripe_api_key', 'Stripe API key'),
         text('host', 'Postgres host'),
         text('port', 'Port'),
         text('database', 'Database name'),
         text('user', 'Username'),
-        text('password', 'Password'),
+        sensitiveText('password', 'Password'),
       ],
       resolved,
     );
@@ -484,14 +570,35 @@ describe('warehouse-source profile', () => {
       password: 'hunter2',
     });
     expect(batch.sentinelIds).toEqual([]);
+    expect(batch.refusedIds).toEqual([]);
+  });
+
+  it('marks its credential-bearing rules secret', () => {
+    const secretMatches = (warehouse.askAnswers ?? [])
+      .filter((r) => r.secret)
+      .map((r) => r.match);
+    expect(secretMatches).toEqual(['stripe', 'password|passwd|pwd']);
+  });
+
+  it('withholds the API key from a question that is not sensitive', () => {
+    const resolved = resolveE2eProfile(warehouse, {
+      env: { E2E_STRIPE_API_KEY: 'sk_test_7' },
+    });
+    const batch = answerQuestions(
+      [text('stripe_api_key', 'Stripe API key')],
+      resolved,
+    );
+    expect(batch.answers.stripe_api_key).toBe(E2E_ANSWER_SENTINEL);
+    expect(batch.refusedIds).toEqual(['stripe_api_key']);
   });
 
   it('sentinels every credential when the env is empty', () => {
     const resolved = resolveE2eProfile(warehouse, { env: {} });
     const batch = answerQuestions(
-      [text('host', 'Postgres host'), text('password', 'Password')],
+      [text('host', 'Postgres host'), sensitiveText('password', 'Password')],
       resolved,
     );
     expect(batch.sentinelIds).toEqual(['host', 'password']);
+    expect(batch.refusedIds).toEqual([]);
   });
 });

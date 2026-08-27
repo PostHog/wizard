@@ -184,6 +184,7 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
       },
       {
         "match": "stripe",
+        "secret": true,
         "value": "\${E2E_STRIPE_API_KEY}",
       },
       {
@@ -200,6 +201,7 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
       },
       {
         "match": "password|passwd|pwd",
+        "secret": true,
         "value": "\${E2E_PG_PASSWORD}",
       },
       {

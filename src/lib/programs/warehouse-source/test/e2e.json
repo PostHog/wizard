@@ -1,6 +1,6 @@
 {
   "program": "warehouse-source",
-  "summary": "Happy path: confirm the intro over the detected sources, keep any task notice, answer the agent's credential questions from E2E_* env vars, delete installed skills.",
+  "summary": "Happy path: confirm the intro over the detected sources, keep any task notice, answer the agent's credential questions from E2E_* env vars, delete installed skills. Rules carrying a real credential are marked \"secret\": they answer only a sensitive text question, so a skill cannot name a plain question \"password\" and get the value back unvaulted.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
@@ -16,7 +16,8 @@
       },
       {
         "match": "stripe",
-        "value": "${E2E_STRIPE_API_KEY}"
+        "value": "${E2E_STRIPE_API_KEY}",
+        "secret": true
       },
       {
         "match": "host|hostname|server|endpoint",
@@ -32,7 +33,8 @@
       },
       {
         "match": "password|passwd|pwd",
-        "value": "${E2E_PG_PASSWORD}"
+        "value": "${E2E_PG_PASSWORD}",
+        "secret": true
       },
       {
         "match": "user|username|role",

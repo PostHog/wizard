@@ -25,10 +25,20 @@ export const E2E_ANSWER_SENTINEL = 'e2e';
  * against the `prompt`. Within a pass the first matching rule wins. `value` may
  * carry `${ENV_VAR}` references — `resolveE2eProfile` expands them once, at
  * profile load. See {@link answerQuestions}.
+ *
+ * `secret` marks a rule whose value is a real credential. The agent controls
+ * every field the rule matches on, so an unmarked rule will hand its value to
+ * whatever question claims the name — and a question that omits
+ * `sensitive: true` gets that value back unvaulted, in plaintext. A `secret`
+ * rule therefore answers only a `kind: 'text'` question with `sensitive: true`,
+ * and refuses the question outright otherwise. Set it on any rule pointed at an
+ * API key or a password; leave it off for hostnames, ports and prefixes, which
+ * a skill has no reason to flag sensitive.
  */
 export interface AskAnswerRule {
   match: string;
   value: string;
+  secret?: boolean;
 }
 
 export interface WizardE2eProfile {
@@ -113,6 +123,12 @@ export type E2eDecisionReport =
       answeredIds: string[];
       /** Question ids that fell back to the `'e2e'` sentinel. */
       sentinelIds: string[];
+      /**
+       * Question ids a `secret` rule refused — the question claimed a
+       * credential field but was not a sensitive text question. Disjoint from
+       * the other two.
+       */
+      refusedIds: string[];
     }
   | { kind: 'notice'; title: string; decision: 'keep' | 'decline' };
 
@@ -135,6 +151,8 @@ export interface AnsweredBatch {
   answers: AskAnswers;
   answeredIds: string[];
   sentinelIds: string[];
+  /** Ids a `secret` rule refused to answer. See {@link AskAnswerRule}. */
+  refusedIds: string[];
 }
 
 /**
@@ -151,6 +169,12 @@ export interface AnsweredBatch {
  * credential question — one with no options — that lands on the sentinel, which
  * is what the workbench reads to say "this run answered nothing here".
  *
+ * A `secret` rule matching a question that is not sensitive free text refuses
+ * it: the answer is the sentinel and the id lands in `refusedIds` rather than
+ * falling through to an option. The skill names its own questions, so without
+ * that rail a question called `stripe` could take a credential and — by leaving
+ * `sensitive` off — get it back in plaintext instead of a vault ref.
+ *
  * `multi` questions always get an array answer, as the ask bridge expects.
  * Pure: rule values arrive already interpolated (see `resolveE2eProfile`).
  */
@@ -162,17 +186,27 @@ export function answerQuestions(
   const answers: AskAnswers = {};
   const answeredIds: string[] = [];
   const sentinelIds: string[] = [];
+  const refusedIds: string[] = [];
 
   for (const q of questions) {
     const routed = matchRule(q, rules);
-    const value = routed ?? q.options?.[0]?.value ?? E2E_ANSWER_SENTINEL;
-    const isSentinel = routed === null && q.options?.[0] === undefined;
+    if (routed?.refused) {
+      answers[q.id] =
+        q.kind === 'multi' ? [E2E_ANSWER_SENTINEL] : E2E_ANSWER_SENTINEL;
+      refusedIds.push(q.id);
+      continue;
+    }
+    const value = routed?.value ?? q.options?.[0]?.value ?? E2E_ANSWER_SENTINEL;
+    const isSentinel = !routed && q.options?.[0] === undefined;
     answers[q.id] = q.kind === 'multi' ? [value] : value;
     (isSentinel ? sentinelIds : answeredIds).push(q.id);
   }
 
-  return { answers, answeredIds, sentinelIds };
+  return { answers, answeredIds, sentinelIds, refusedIds };
 }
+
+/** What a rule pass produced: a value, a refusal, or nothing. */
+type RuleMatch = { value: string; refused?: false } | { refused: true };
 
 /**
  * The value routed to a question, or null when no rule routes it.
@@ -181,11 +215,14 @@ export function answerQuestions(
  * `prompt`. The id is the field the skill controls, so an id match is the
  * stronger signal — a rule aimed at `host` must not claim the `port` question
  * just because the prompt happens to say "host and port".
+ *
+ * A matching `secret` rule yields its value only for a sensitive text question;
+ * any other question shape gets a refusal, never the value.
  */
 function matchRule(
   question: AskQuestion,
   rules: readonly AskAnswerRule[],
-): string | null {
+): RuleMatch | null {
   for (const field of [question.id, question.prompt]) {
     for (const rule of rules) {
       let re: RegExp;
@@ -194,10 +231,24 @@ function matchRule(
       } catch {
         continue; // a malformed profile regex must not break the whole run
       }
-      if (re.test(field)) return rule.value === '' ? null : rule.value;
+      if (!re.test(field)) continue;
+      // An unset `${ENV_VAR}` leaves nothing to route and nothing to withhold,
+      // so the rule is inert — the question takes the normal fallback.
+      if (rule.value === '') return null;
+      if (rule.secret && !acceptsSecret(question)) return { refused: true };
+      return { value: rule.value };
     }
   }
   return null;
+}
+
+/**
+ * Whether a question may receive a `secret` rule's value: free text the skill
+ * flagged sensitive, so `wizard_ask` vaults the answer and hands the agent a
+ * ref instead of the credential.
+ */
+function acceptsSecret(question: AskQuestion): boolean {
+  return question.kind === 'text' && question.sensitive === true;
 }
 
 /**
@@ -293,6 +344,7 @@ export function decideE2eAction(
           id: pending.id,
           answeredIds: batch.answeredIds,
           sentinelIds: batch.sentinelIds,
+          refusedIds: batch.refusedIds,
         },
       };
     }
