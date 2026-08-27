@@ -15,6 +15,7 @@
  */
 import fs from 'fs';
 import net from 'net';
+import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@lib/version';
 import {
@@ -86,6 +87,34 @@ async function pickIntegrationTarget(
   return rootFw && FRAMEWORK_REGISTRY[rootFw]
     ? { integration: rootFw, path: '.' }
     : null;
+}
+
+/**
+ * Run the app's build synchronously, returning whether it succeeded. The
+ * source-maps skill's test step defers `npm run build` to the human; the e2e
+ * host stands in for that human so the snapshot run exercises the real upload
+ * (`posthog-cli sourcemap process` against the target project). Harness-only —
+ * opt in with SOURCE_MAPS_RUN_BUILD=1.
+ */
+function runAppBuild(root: string): boolean {
+  const r = spawnSync('npm', ['run', 'build'], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 300_000,
+    env: { ...process.env, CI: 'true' },
+  });
+  if (r.error || r.status !== 0) {
+    mark(
+      `app build failed (status=${r.status}): ${(
+        r.stderr ||
+        r.error?.message ||
+        ''
+      ).slice(-800)}`,
+    );
+    return false;
+  }
+  mark('app build succeeded');
+  return true;
 }
 
 async function main() {
@@ -279,13 +308,17 @@ async function main() {
     // Program-specific wizard_ask answers the generic 'first' strategy can't
     // give. Source-maps STEP 1 wants a real upload key — the driver supplies
     // the raw value and the wizard_ask tool vaults it, so the agent only ever
-    // sees a secretRef — and STEP 8's "test it now?" must be declined: nobody
-    // is at the keyboard to run a build. An unset env answer falls through to
-    // the generic strategy (the 'e2e' sentinel).
+    // sees a secretRef. The test step defers `npm run build` to the human: by
+    // default we decline it ('no') since there's usually nobody at the
+    // keyboard, but with SOURCE_MAPS_RUN_BUILD=1 the host answers 'yes' and
+    // runs the real build itself (see the WizardAsk branch below), so the
+    // snapshot run exercises the actual source-map upload. An unset env answer
+    // falls through to the generic strategy (the 'e2e' sentinel).
+    const runBuild = process.env.SOURCE_MAPS_RUN_BUILD === '1';
     const askOverrides: Record<string, Record<string, string | undefined>> = {
       [Program.ErrorTrackingUploadSourceMaps]: {
         'api-key': process.env.SOURCE_MAPS_CLI_KEY,
-        'test-affordance': 'no',
+        'test-affordance': runBuild ? 'yes' : 'no',
       },
     };
     const screenPath: string[] = [];
@@ -389,6 +422,21 @@ async function main() {
           if (q && override !== undefined) {
             driver.performAction('answer_question', {
               answers: { [q.id]: override },
+            });
+            continue;
+          }
+          // The source-maps test step asks the human to run `npm run build`
+          // (id "test-done"). With SOURCE_MAPS_RUN_BUILD=1 the host stands in:
+          // run the real build, then answer truthfully so the snapshot reflects
+          // whether the upload actually worked.
+          if (
+            runBuild &&
+            programId === Program.ErrorTrackingUploadSourceMaps &&
+            q?.id === 'test-done'
+          ) {
+            const ok = runAppBuild(store.session.installDir);
+            driver.performAction('answer_question', {
+              answers: { [q.id]: ok ? 'yes' : 'no' },
             });
             continue;
           }
