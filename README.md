@@ -29,7 +29,7 @@ Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn mor
 The wizard uses **Anthropic Claude** (via PostHog's LLM gateway) to read your project's source files and integrate PostHog. A few things worth knowing up front:
 
 - **Source files** are sent to Anthropic as part of the agent's context.
-- **Your source code is your content, not personal data.** PostHog processes it under the [Data Processing Agreement](https://posthog.com/dpa). See also the [Terms](https://posthog.com/terms) and [Privacy policy](https://posthog.com/privacy).
+- **Your source code remains your content.** If it holds personal data, PostHog processes that data under the [Data Processing Agreement](https://posthog.com/dpa). See also the [Terms](https://posthog.com/terms) and [Privacy policy](https://posthog.com/privacy).
 - **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
 - **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
 - **AI opt-in**: the wizard honors your PostHog organization's `is_ai_data_processing_approved` setting (the same toggle that gates Max). If your org has not opted in, the wizard explains how to enable it and exits without sending source to Anthropic.
@@ -150,11 +150,11 @@ npx @posthog/wizard skill <skill-name>      # run one by name
 
 Every skill is published on the public [context-mill releases](https://github.com/PostHog/context-mill/releases/latest). You can pull one and run it in your own agent, with your own model keys — the wizard is not required.
 
-1. List the skills and their download URLs:
+1. List the standalone skills and their download URLs. The `select(.bundle != true)` filter drops multi-framework bundles, whose downloads are JSON rather than zips:
 
    ```bash
    curl -sL https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json \
-     | jq -r '.categories[][] | "\(.id)\t\(.downloadUrl)"'
+     | jq -r '.categories[][] | select(.bundle != true) | "\(.id)\t\(.downloadUrl)"'
    ```
 
 2. Download a skill and unzip it into your agent's skills directory. Each zip holds a `SKILL.md` plus its reference files:

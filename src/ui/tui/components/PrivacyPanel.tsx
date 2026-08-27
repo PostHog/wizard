@@ -14,6 +14,11 @@
  * so it may only render on a screen that puts one below the panel — three of
  * the four callers show `Back` and nothing else, and would be promising a
  * choice that is not there.
+ *
+ * The `canOptOut` variant also renders the sharing picker below the panel, so
+ * its row budget is tight. The content-vs-personal-data note and the DPA link
+ * therefore render only on the roomier variants (the auth [I] overlay and the
+ * self-driving screen), where they cannot push the picker off a 24-row screen.
  */
 
 import { useEffect } from 'react';
@@ -57,12 +62,15 @@ export const PrivacyPanel = ({ canOptOut = false }: PrivacyPanelProps = {}) => {
         anything matched by the security scanner stay on your machine.
       </Text>
 
-      <Box marginTop={1}>
-        <Text>
-          Your source code is your content, not personal data. PostHog processes
-          it under the Data Processing Agreement (DPA) below.
-        </Text>
-      </Box>
+      {!canOptOut && (
+        <Box marginTop={1}>
+          <Text>
+            Your source code remains your content. If it holds personal data,
+            PostHog processes that data under the Data Processing Agreement (DPA)
+            below.
+          </Text>
+        </Box>
+      )}
 
       <Box marginTop={1}>
         <Text>
@@ -78,9 +86,11 @@ export const PrivacyPanel = ({ canOptOut = false }: PrivacyPanelProps = {}) => {
         <Text>
           Privacy: <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
         </Text>
-        <Text>
-          DPA: <Text color="cyan">{POSTHOG_DPA_URL}</Text>
-        </Text>
+        {!canOptOut && (
+          <Text>
+            DPA: <Text color="cyan">{POSTHOG_DPA_URL}</Text>
+          </Text>
+        )}
         <Text>
           AI settings: <Text color="cyan">{POSTHOG_ORG_AI_SETTINGS_URL}</Text>
         </Text>
