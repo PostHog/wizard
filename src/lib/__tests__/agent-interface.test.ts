@@ -72,9 +72,7 @@ describe('runAgent', () => {
   const defaultOptions: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    default: false,
     signup: false,
-    localMcp: false,
     ci: false,
     benchmark: false,
     yaraReport: false,

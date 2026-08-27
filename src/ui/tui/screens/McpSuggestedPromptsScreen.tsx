@@ -43,6 +43,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
+import { Program } from '@lib/programs/program-registry';
 import { Colors, Icons } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import {
@@ -135,9 +136,30 @@ export const McpSuggestedPromptsScreen = ({
 
   const session = store.session;
 
-  // Phase.Choose is the no-commitment entry. Login fires only when the
-  // user picks 'Start tutorial' — explicit consent for the OAuth dance.
-  const [phase, setPhase] = useState<Phase>(Phase.Choose);
+  // Events report under the tutorial, not whichever program hosts the screen.
+  // Sampled at mount so captures landing after dismissal still resolve here.
+  const programId = useMemo(() => store.analyticsProgramId, [store]);
+  const capture = useMemo(
+    () =>
+      (event: string, properties?: Record<string, unknown>): void => {
+        analytics.wizardCapture(event, {
+          program_id: programId,
+          ...properties,
+        });
+      },
+    [programId],
+  );
+
+  // Phase.Choose is the tutorial's no-commitment entry: login fires only when
+  // the user picks 'Start tutorial' — explicit consent for the OAuth dance.
+  // After an install (`mcp add`), skip the pitch entirely: land on the
+  // all-set screen with the login commands, no surprise OAuth. The tutorial
+  // stays reachable via `wizard mcp tutorial`.
+  const [phase, setPhase] = useState<Phase>(
+    store.router.activeProgram === Program.McpTutorial
+      ? Phase.Choose
+      : Phase.Goodbye,
+  );
   // The scout's read of the project, set in the Scouting phase. Drives the
   // data-aware picker, greeting flavor, and Goodbye samples. Null until the
   // probe completes (the picker treats null as legacy / data-unaware).
@@ -268,7 +290,7 @@ export const McpSuggestedPromptsScreen = ({
       // misroute or an unwanted write leaves a permanent trail.
       const offerSeed =
         probed.tier === 'empty' && isKnownCloudHost(credentials.host.apiHost);
-      analytics.wizardCapture('mcp suggested prompts scouted', {
+      capture('mcp suggested prompts scouted', {
         tier: probed.tier,
         totalEvents: probed.totalEvents,
         distinctEvents: probed.distinctEventCount,
@@ -306,14 +328,14 @@ export const McpSuggestedPromptsScreen = ({
         });
         if (cancelled) return;
         setProfile(seeded);
-        analytics.wizardCapture('mcp suggested prompts seeded', {
+        capture('mcp suggested prompts seeded', {
           totalEvents: seeded.totalEvents,
         });
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
         logToFile(`[McpSuggestedPromptsScreen] seeding failed: ${message}`);
-        analytics.wizardCapture('mcp suggested prompts seed failed', {
+        capture('mcp suggested prompts seed failed', {
           error: message,
         });
         // Keep the empty profile; the picker handles the empty case.
@@ -357,12 +379,12 @@ export const McpSuggestedPromptsScreen = ({
       if (controller.signal.aborted) return;
       setRunDurationSecs(Math.round(durationMs / 1000));
       if (kind === 'done') {
-        analytics.wizardCapture('mcp suggested prompts run', {
+        capture('mcp suggested prompts run', {
           prompt: runningPrompt,
           durationMs,
         });
       } else {
-        analytics.wizardCapture('mcp suggested prompts run failed', {
+        capture('mcp suggested prompts run failed', {
           prompt: runningPrompt,
           error: errorText,
         });
@@ -445,7 +467,7 @@ export const McpSuggestedPromptsScreen = ({
     const choice = Array.isArray(value) ? value[0] : value;
     setLoginError(null);
     if (choice === ChoiceValue.Login) {
-      analytics.wizardCapture('mcp suggested prompts choose', {
+      capture('mcp suggested prompts choose', {
         choice: 'login',
       });
       startedTutorialRef.current = true;
@@ -454,7 +476,7 @@ export const McpSuggestedPromptsScreen = ({
       // scout — same landing as post-auth for a started tutorial.
       setPhase(session.credentials ? Phase.Scouting : Phase.Authenticating);
     } else {
-      analytics.wizardCapture('mcp suggested prompts choose', {
+      capture('mcp suggested prompts choose', {
         choice: 'exit',
       });
       enterGoodbye();
@@ -466,12 +488,12 @@ export const McpSuggestedPromptsScreen = ({
   const handleSeedChoice = (value: string | string[]): void => {
     const choice = Array.isArray(value) ? value[0] : value;
     if (choice === SeedChoice.Seed) {
-      analytics.wizardCapture('mcp suggested prompts seed offer', {
+      capture('mcp suggested prompts seed offer', {
         choice: 'seed',
       });
       setPhase(Phase.Seeding);
     } else {
-      analytics.wizardCapture('mcp suggested prompts seed offer', {
+      capture('mcp suggested prompts seed offer', {
         choice: 'skip',
       });
       setPhase(Phase.Greeting);
@@ -495,14 +517,14 @@ export const McpSuggestedPromptsScreen = ({
   const handleFollowUpPick = (value: string | string[]): void => {
     const picked = Array.isArray(value) ? value[0] : value;
     if (picked === FOLLOW_UP_EXIT_SENTINEL) {
-      analytics.wizardCapture('mcp suggested prompts follow-up', {
+      capture('mcp suggested prompts follow-up', {
         choice: 'exit',
         depth: branchHistory.length,
       });
       enterGoodbye();
       return;
     }
-    analytics.wizardCapture('mcp suggested prompts follow-up', {
+    capture('mcp suggested prompts follow-up', {
       choice: 'continue',
       depth: branchHistory.length,
       lastToolName,
@@ -670,6 +692,7 @@ export const McpSuggestedPromptsScreen = ({
             integration={session.integration}
             profile={profile}
             engaged={branchHistory.length > 0}
+            loginCommands={session.mcpLoginCommands}
             onClose={closeWizard}
           />
         )}
@@ -1232,6 +1255,8 @@ interface GoodbyePhaseProps {
   profile: ProjectDataProfile | null;
   /** True if the user actually ran at least one prompt this session. */
   engaged: boolean;
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`). */
+  loginCommands: string[];
   onClose: () => void;
 }
 
@@ -1241,6 +1266,7 @@ const GoodbyePhase = ({
   integration,
   profile,
   engaged,
+  loginCommands,
   onClose,
 }: GoodbyePhaseProps) => {
   // Three "next time you open your IDE, try this" reminders. Prefer quests
@@ -1280,6 +1306,22 @@ const GoodbyePhase = ({
       </Box>
 
       <Box marginBottom={1}>{introLine}</Box>
+
+      {loginCommands.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="green" bold>
+            {'\u2714'} Authenticate to finish (opens your browser):
+          </Text>
+          {loginCommands.map((command) => (
+            <Text key={command}>
+              {'  '}
+              <Text bold color="green">
+                {command}
+              </Text>
+            </Text>
+          ))}
+        </Box>
+      )}
 
       <Box marginBottom={1} flexDirection="column">
         {samples.map((p, i) => (

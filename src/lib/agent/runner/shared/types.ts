@@ -23,6 +23,7 @@ export interface AbortCase {
   message: string;
   body: string;
   docsUrl?: string;
+  errorCode?: import('@lib/errors').ErrorCode;
 }
 
 /**

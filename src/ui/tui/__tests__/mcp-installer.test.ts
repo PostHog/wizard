@@ -282,14 +282,24 @@ describe('createMcpInstaller — detectClients', () => {
     const detected = await installer.detectClients();
 
     expect(detected).toEqual([
-      { name: 'Cursor', supportsPlugin: false, finish: undefined },
+      {
+        name: 'Cursor',
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        finish: undefined,
+        loginCommand: undefined,
+        pluginLoginCommand: undefined,
+      },
       {
         name: 'Claude Desktop/Web',
         supportsPlugin: false,
+        pluginBundlesMcp: false,
         finish: {
           url: 'https://claude.ai/directory/connectors/posthog',
           instruction: 'Sign in and click "Connect" to finish.',
         },
+        loginCommand: undefined,
+        pluginLoginCommand: undefined,
       },
     ]);
   });

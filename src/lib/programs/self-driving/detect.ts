@@ -30,6 +30,7 @@ import { join } from 'path';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { ErrorCodes } from '@lib/errors';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
@@ -256,6 +257,7 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
   {
     // Skill emits: [ABORT] requires-interactive-mode
     match: /^requires-interactive-mode$/i,
+    errorCode: ErrorCodes.CliInteractiveRequired,
     message: 'Interactive terminal required',
     body:
       'Self-driving setup asks questions along the way (GitHub and ' +
