@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.67.0](https://github.com/PostHog/wizard/compare/v2.66.0...v2.67.0) (2026-08-27)
+
+
+### Features
+
+* export handoffs to host paths ([#1141](https://github.com/PostHog/wizard/issues/1141)) ([216ffac](https://github.com/PostHog/wizard/commit/216ffacbb04995c647df0afd03743a2a38bbb0be))
+* stable error catalog with machine-readable error codes ([#1148](https://github.com/PostHog/wizard/issues/1148)) ([25be176](https://github.com/PostHog/wizard/commit/25be176ad5ea0f295aeb13c5468e003ed0d61366))
+
 ## [2.66.0](https://github.com/PostHog/wizard/compare/v2.65.0...v2.66.0) (2026-08-26)
 
 

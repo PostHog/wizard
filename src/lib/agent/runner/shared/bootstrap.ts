@@ -28,6 +28,7 @@ import {
 } from '@lib/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { CallType, getSkillsBaseUrl, IS_DEV } from '@lib/constants';
 import { VERSION } from '@lib/version';
@@ -147,6 +148,7 @@ export async function bootstrapProgram(
       // above, but we proceed rather than aborting on a transient upstream blip.
       if (!isNonInteractiveEnvironment()) {
         await wizardAbort({
+          code: ErrorCodes.EnvServiceOutage,
           message:
             'Cannot start — external services are down:\n' +
             blockingLabels.map((l) => `  - ${l}`).join('\n') +
@@ -219,6 +221,18 @@ export async function bootstrapProgram(
     // writable file we failed to back up) must be fixed by the user. Fail
     // closed: the screen names the file + keys and exits.
     if (unfixable.length > 0) {
+      if (isNonInteractiveEnvironment()) {
+        await wizardAbort({
+          code: ErrorCodes.SettingsUnfixableConflict,
+          message:
+            'Cannot start — a Claude settings file redirects the agent away ' +
+            'from the PostHog gateway and cannot be neutralized automatically:\n' +
+            unfixable
+              .map((c) => `  - ${c.source} (${c.path}): ${c.keys.join(', ')}`)
+              .join('\n') +
+            '\n\nRemove the conflicting keys and re-run the wizard.',
+        });
+      }
       await getUI().showSettingsOverride(unfixable, () =>
         backupAndFixClaudeSettings(session.installDir),
       );

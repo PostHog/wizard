@@ -17,6 +17,7 @@ import {
   WizardError,
   registerCleanup,
 } from '../../../../utils/wizard-abort';
+import { ErrorCodes, AGENT_ERROR_CODE } from '@lib/errors';
 import { analytics } from '../../../../utils/analytics';
 import {
   formatScanReport,
@@ -143,18 +144,23 @@ export async function runLinearProgram(
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
     const matched = config.abortCases?.find((c) => c.match.test(reason));
+    const abortCode = matched?.errorCode ?? ErrorCodes.AgentAbort;
     const outroData: WizardSession['outroData'] = matched
       ? {
           kind: OutroKind.Error,
           message: matched.message,
           body: matched.body,
           docsUrl: matched.docsUrl,
+          errorCode: abortCode,
+          errorDetail: { reason },
         }
       : {
           kind: OutroKind.Error,
           message: `${config.integrationLabel} aborted`,
           body: reason || 'The agent aborted the program.',
           docsUrl: config.docsUrl,
+          errorCode: abortCode,
+          errorDetail: { reason },
         };
     analytics.wizardCapture('agent aborted', {
       integration: config.integrationLabel,
@@ -163,50 +169,70 @@ export async function runLinearProgram(
     });
     await wizardAbort({
       outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
+      code: abortCode,
+      error: new WizardError(
+        `Agent aborted: ${reason}`,
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.ABORT,
+          reason,
+        },
+        abortCode,
+      ),
     });
   }
 
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
       message:
         'Could not access the PostHog MCP server\n\n' +
         'The wizard was unable to connect to the PostHog MCP server.\n' +
         'This could be due to a network issue or a configuration problem.\n\n' +
         `Please try again, or check the documentation:\n${config.docsUrl}`,
-      error: new WizardError('Agent could not access PostHog MCP server', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.MCP_MISSING,
-        signal: AgentSignals.ERROR_MCP_MISSING,
-      }),
+      error: new WizardError(
+        'Agent could not access PostHog MCP server',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.MCP_MISSING,
+          signal: AgentSignals.ERROR_MCP_MISSING,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
+      ),
     });
   }
 
   if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
       message:
         'Could not access the setup resource\n\n' +
         'This may indicate a version mismatch or a temporary service issue.\n\n' +
         `Please try again, or check the documentation:\n${config.docsUrl}`,
-      error: new WizardError('Agent could not access setup resource', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.RESOURCE_MISSING,
-        signal: AgentSignals.ERROR_RESOURCE_MISSING,
-      }),
+      error: new WizardError(
+        'Agent could not access setup resource',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.RESOURCE_MISSING,
+          signal: AgentSignals.ERROR_RESOURCE_MISSING,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
+      ),
     });
   }
 
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
       message: formatYaraAbortMessage(),
-      error: new WizardError('YARA scanner terminated session', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.YARA_VIOLATION,
-      }),
+      error: new WizardError(
+        'YARA scanner terminated session',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.YARA_VIOLATION,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
+      ),
     });
   }
 
@@ -216,13 +242,18 @@ export async function runLinearProgram(
       error_type: AgentErrorType.NO_PROGRESS,
     });
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
       message:
         'The Wizard exited without changing your project. Please contact the ' +
         'PostHog team with wizard@posthog.com about this error.',
-      error: new WizardError('Agent made no progress', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.NO_PROGRESS,
-      }),
+      error: new WizardError(
+        'Agent made no progress',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.NO_PROGRESS,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
+      ),
     });
   }
 
@@ -232,13 +263,18 @@ export async function runLinearProgram(
       error_type: AgentErrorType.INCOMPLETE_TASKS,
     });
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
       message:
         'The Wizard exited without completing its planned tasks. Please contact ' +
         'the PostHog team with wizard@posthog.com about this error.',
-      error: new WizardError('Agent left planned tasks incomplete', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.INCOMPLETE_TASKS,
-      }),
+      error: new WizardError(
+        'Agent left planned tasks incomplete',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.INCOMPLETE_TASKS,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
+      ),
     });
   }
 
@@ -253,13 +289,18 @@ export async function runLinearProgram(
     });
 
     await wizardAbort({
+      code: AGENT_ERROR_CODE[agentResult.error],
       message: `API Error\n\n${
         agentResult.message || 'Unknown error'
       }\n\nPlease report this to: wizard@posthog.com`,
-      error: new WizardError(`API error: ${agentResult.message}`, {
-        integration: config.integrationLabel,
-        error_type: agentResult.error,
-      }),
+      error: new WizardError(
+        `API error: ${agentResult.message}`,
+        {
+          integration: config.integrationLabel,
+          error_type: agentResult.error,
+        },
+        AGENT_ERROR_CODE[agentResult.error],
+      ),
     });
   }
 
