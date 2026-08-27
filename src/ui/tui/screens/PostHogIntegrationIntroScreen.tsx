@@ -42,10 +42,7 @@ const SUBTITLE = (
     <Text dimColor>
       We'll use AI to analyze your project and complete work.
     </Text>
-    <Text dimColor>
-      .env* values stay on your machine. We share the tools we detect.
-    </Text>
-    <Text dimColor>See {PRIVACY_PANEL_LABEL} to change that.</Text>
+    <Text dimColor>.env* values stay on your machine.</Text>
   </>
 );
 
