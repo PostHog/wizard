@@ -159,6 +159,7 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       startsWith(github.event.comment.body, '/wizard-ci') &&
       !startsWith(github.event.comment.body, '/wizard-ci-snapshots')
     runs-on: ubuntu-latest
@@ -257,10 +258,13 @@ jobs:
   # ============================================================================
   # HANDLE SNAPSHOTS: Parse /wizard-ci-snapshots and trigger the snapshots workflow
   # ============================================================================
+  # Same write-access restriction as handle-command above. This job matters more:
+  # its positional `[ref]` argument is attacker-chosen, not the PR's own branch.
   handle-snapshots-command:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       startsWith(github.event.comment.body, '/wizard-ci-snapshots')
     runs-on: ubuntu-latest
     timeout-minutes: 5
