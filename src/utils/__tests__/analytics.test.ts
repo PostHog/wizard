@@ -790,6 +790,19 @@ describe('sessionProperties', () => {
     expect(properties).not.toHaveProperty('discovered_features');
   });
 
+  it('sends scan_consent in every state, so an absent list is explainable', () => {
+    for (const consent of [
+      ScanConsent.Undecided,
+      ScanConsent.Granted,
+      ScanConsent.Declined,
+    ]) {
+      const session = buildSession({ installDir: '/tmp/app' });
+      session.scanConsent = consent;
+
+      expect(sessionProperties(session).scan_consent).toBe(consent);
+    }
+  });
+
   it('never sends an empty array in place of the omitted key', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [];
