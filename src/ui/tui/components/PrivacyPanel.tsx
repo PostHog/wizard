@@ -5,20 +5,26 @@
  * identically from the intro screen (the `PRIVACY_PANEL_LABEL` menu option)
  * and as an overlay from the auth screen ([I] keystroke).
  *
- * Must fit in a default-sized macOS Terminal (~24 rows). Two condensed
+ * Must fit in a default-sized macOS Terminal (~24 rows). Condensed
  * paragraphs carry the top-level disclosure; the link footer follows.
- * Users who want the full legal text follow the Terms / Privacy URLs to
- * their browser.
+ * Users who want the full legal text follow the Terms / Privacy / DPA URLs
+ * to their browser.
  *
  * The scan paragraph is opt-in per caller. It ends by pointing at a control,
  * so it may only render on a screen that puts one below the panel — three of
  * the four callers show `Back` and nothing else, and would be promising a
  * choice that is not there.
+ *
+ * The `canOptOut` variant also renders the sharing picker below the panel, so
+ * its row budget is tight. The content-vs-personal-data note and the DPA link
+ * therefore render only on the roomier variants (the auth [I] overlay and the
+ * self-driving screen), where they cannot push the picker off a 24-row screen.
  */
 
 import { useEffect } from 'react';
 import { Box, Text } from 'ink';
 import {
+  POSTHOG_DPA_URL,
   POSTHOG_ORG_AI_SETTINGS_URL,
   POSTHOG_PRIVACY_URL,
   POSTHOG_TERMS_URL,
@@ -56,6 +62,16 @@ export const PrivacyPanel = ({ canOptOut = false }: PrivacyPanelProps = {}) => {
         anything matched by the security scanner stay on your machine.
       </Text>
 
+      {!canOptOut && (
+        <Box marginTop={1}>
+          <Text>
+            Your source code remains your content. If it holds personal data,
+            PostHog processes that data under the Data Processing Agreement (DPA)
+            below.
+          </Text>
+        </Box>
+      )}
+
       <Box marginTop={1}>
         <Text>
           To use the wizard, AI features must be enabled in your organization's
@@ -70,6 +86,11 @@ export const PrivacyPanel = ({ canOptOut = false }: PrivacyPanelProps = {}) => {
         <Text>
           Privacy: <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
         </Text>
+        {!canOptOut && (
+          <Text>
+            DPA: <Text color="cyan">{POSTHOG_DPA_URL}</Text>
+          </Text>
+        )}
         <Text>
           AI settings: <Text color="cyan">{POSTHOG_ORG_AI_SETTINGS_URL}</Text>
         </Text>

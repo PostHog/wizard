@@ -160,6 +160,7 @@ export const POSTHOG_DOCS_URL = 'https://posthog.com/docs';
 export const POSTHOG_WIZARD_REPO_URL = 'https://github.com/PostHog/wizard';
 export const POSTHOG_TERMS_URL = 'https://posthog.com/terms';
 export const POSTHOG_PRIVACY_URL = 'https://posthog.com/privacy';
+export const POSTHOG_DPA_URL = 'https://posthog.com/dpa';
 export const POSTHOG_ORG_AI_SETTINGS_URL =
   'https://app.posthog.com/settings/organization-details#setting=organization-ai-consent';
 export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
