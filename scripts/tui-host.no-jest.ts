@@ -91,7 +91,7 @@ async function pickIntegrationTarget(
 
 // Run the app's build, returning success — stands in for the human the source-maps skill defers `npm run build` to. Opt in with SOURCE_MAPS_RUN_BUILD=1.
 function runAppBuild(root: string): boolean {
-  // Load the app's env file: the Next.js posthog plugin reads credentials from process.env at build time (unlike posthog-cli, which self-loads).
+  // Load the app's env file: the Next.js posthog plugin reads credentials from process.env at build time (unlike posthog-cli, which self-loads). The app's file wins over any POSTHOG_* the host inherited, else a stray host key shadows the fixture's upload key.
   const env: NodeJS.ProcessEnv = { ...process.env, CI: 'true' };
   for (const name of ['.env.local', '.env']) {
     try {
@@ -99,8 +99,7 @@ function runAppBuild(root: string): boolean {
         .readFileSync(join(root, name), 'utf8')
         .split('\n')) {
         const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-        if (m && env[m[1]] === undefined)
-          env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+        if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
       }
     } catch {
       /* no env file of this name */
