@@ -9,13 +9,9 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import {
-  PrivacyPanel,
-  PRIVACY_PANEL_LABEL,
-} from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 
-type View = 'default' | 'more-info' | 'privacy';
+type View = 'default' | 'more-info';
 
 interface SourceMapsIntroScreenProps {
   store: WizardStore;
@@ -64,8 +60,6 @@ export const SourceMapsIntroScreen = ({
           </Text>
         </Box>
       </Box>
-    ) : view === 'privacy' ? (
-      <PrivacyPanel />
     ) : (
       <Box flexDirection="column" width={60}>
         <Text>
@@ -78,13 +72,9 @@ export const SourceMapsIntroScreen = ({
       </Box>
     );
 
+  // No privacy row here: IntroScreenLayout appends it to every intro menu.
   const menuOptions =
     view === 'more-info'
-      ? [
-          { label: 'Back', value: 'back' },
-          { label: PRIVACY_PANEL_LABEL, value: 'privacy' },
-        ]
-      : view === 'privacy'
       ? [{ label: 'Back', value: 'back' }]
       : [
           { label: 'Continue', value: 'continue' },
@@ -92,7 +82,7 @@ export const SourceMapsIntroScreen = ({
           { label: 'Cancel', value: 'cancel' },
         ];
 
-  const title = view === 'privacy' ? PRIVACY_PANEL_LABEL : 'PostHog Wizard 🦔';
+  const title = 'PostHog Wizard 🦔';
 
   return (
     <IntroScreenLayout
@@ -109,10 +99,8 @@ export const SourceMapsIntroScreen = ({
           process.exit(0);
         } else if (value === 'more-info') {
           setView('more-info');
-        } else if (value === 'privacy') {
-          setView('privacy');
         } else if (value === 'back') {
-          setView(view === 'privacy' ? 'more-info' : 'default');
+          setView('default');
         } else {
           store.completeSetup();
         }

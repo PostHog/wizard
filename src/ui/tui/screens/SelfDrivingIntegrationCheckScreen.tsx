@@ -83,6 +83,7 @@ export const SelfDrivingIntegrationCheckScreen = ({
         showSubtitle={false}
         showDetection={false}
         body={<PrivacyPanel />}
+        showPrivacy={false}
         menuOptions={[{ label: 'Back', value: 'back' }]}
         menuAlign="left"
         onSelect={() => setShowPrivacy(false)}

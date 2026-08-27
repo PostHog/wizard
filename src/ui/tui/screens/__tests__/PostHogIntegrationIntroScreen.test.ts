@@ -10,7 +10,6 @@ import {
   CONTINUE_MENU_OPTIONS,
   sharingOptions,
 } from '@ui/tui/screens/PostHogIntegrationIntroScreen';
-import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
 
 // IntroScreenLayout renders a centered menu in a 24-column box. A row with an
 // icon spends four columns before the label: focus marker, gap, glyph, gap.
@@ -31,11 +30,10 @@ describe('PostHogIntegrationIntroScreen menu labels', () => {
     },
   );
 
-  it('offers the disclosure panel from the top-level menu', () => {
-    expect(CONTINUE_MENU_OPTIONS).toContainEqual({
-      label: PRIVACY_PANEL_LABEL,
-      value: 'privacy',
-    });
+  it('leaves the disclosure row to the layout', () => {
+    // IntroScreenLayout appends it to every intro menu — see its own test.
+    // A copy here would drift, which is how the panel got five names.
+    expect(CONTINUE_MENU_OPTIONS.map((o) => o.value)).not.toContain('privacy');
   });
 
   it('does not ask the user to decide about sharing to continue', () => {
@@ -52,7 +50,8 @@ describe('the sharing choice', () => {
       .filter((o) => !o.disabled)
       .map((o) => o.value);
 
-    expect(values).toEqual(['share', 'no-share', 'back']);
+    // No Back: IntroScreenLayout appends it, so a program cannot omit it.
+    expect(values).toEqual(['share', 'no-share']);
   });
 
   it('marks whichever row is live', () => {
@@ -64,14 +63,12 @@ describe('the sharing choice', () => {
     expect(offDecline.icon?.glyph).toBe(onShare.icon?.glyph);
   });
 
-  it('separates Back with a row navigation skips', () => {
+  it('ends with a row navigation skips, to separate the appended Back', () => {
     // A disabled row renders blank and cannot be focused, which is how the
     // menu holds a margin without the layout knowing about it.
-    const options = sharingOptions(true);
-    const spacer = options[options.length - 2];
+    const spacer = sharingOptions(true).at(-1);
 
-    expect(spacer.disabled).toBe(true);
-    expect(spacer.label).toBe('');
-    expect(options[options.length - 1].value).toBe('back');
+    expect(spacer?.disabled).toBe(true);
+    expect(spacer?.label).toBe('');
   });
 });

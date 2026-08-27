@@ -20,15 +20,11 @@ import {
 } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import {
-  PrivacyPanel,
-  PRIVACY_PANEL_LABEL,
-} from '@ui/tui/components/PrivacyPanel';
 import { ScanConsent } from '@lib/wizard-session';
 import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
 
-type View = 'default' | 'more-info' | 'privacy';
+type View = 'default' | 'more-info';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
@@ -46,12 +42,15 @@ const SUBTITLE = (
   </>
 );
 
-/** Exported so a test can measure every label against the menu's column. */
+/**
+ * Exported so a test can measure every label against the menu's column.
+ * `Privacy & data` is not here: IntroScreenLayout appends it to every intro
+ * menu, so no screen carries its own copy.
+ */
 export const CONTINUE_MENU_OPTIONS: { label: string; value: string }[] = [
   { label: 'Continue', value: 'continue' },
   { label: 'Change framework', value: 'framework' },
   { label: 'More info', value: 'more-info' },
-  { label: PRIVACY_PANEL_LABEL, value: 'privacy' },
   { label: 'Cancel', value: 'cancel' },
 ];
 
@@ -69,8 +68,9 @@ const MENU_SPACER: PickerOption<string> = {
  * The sharing choice, as two explicit rows rather than one toggle. A toggle
  * label has to describe either the current state or the next action, and a
  * reader cannot tell which; two rows with the filled diamond on the live one
- * say both at once. Back sits below a spacer because it leaves the screen
- * rather than changing anything on it.
+ * say both at once. The trailing spacer separates them from the Back that
+ * IntroScreenLayout appends, since leaving the screen is a different kind of
+ * act from changing something on it.
  */
 export function sharingOptions(sharing: boolean): PickerOption<string>[] {
   const mark = (on: boolean) => ({
@@ -80,8 +80,6 @@ export function sharingOptions(sharing: boolean): PickerOption<string>[] {
     { label: 'Share tools', value: 'share', icon: mark(sharing) },
     { label: "Don't share tools", value: 'no-share', icon: mark(!sharing) },
     MENU_SPACER,
-    // A blank glyph keeps Back's label on the same column as the two above it.
-    { label: 'Back', value: 'back', icon: { glyph: ' ' } },
   ];
 }
 
@@ -155,12 +153,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Title ──────────────────────────────────────────────────────────
 
-  const title =
-    view === 'privacy'
-      ? PRIVACY_PANEL_LABEL
-      : detecting
-      ? 'PostHog Wizard starting up'
-      : 'PostHog Wizard 🦔';
+  const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
 
   // ── Description ────────────────────────────────────────────────────
 
@@ -226,8 +219,6 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
-  } else if (view === 'privacy') {
-    body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
       <Box>
@@ -300,8 +291,6 @@ export const PostHogIntegrationIntroScreen = ({
   if (view === 'more-info') {
     // No route to the panel from here: it has its own top-level menu item.
     menuOptions = [{ label: 'Back', value: 'back' }];
-  } else if (view === 'privacy') {
-    menuOptions = sharingOptions(sharing);
   } else if (showContinue) {
     menuOptions = CONTINUE_MENU_OPTIONS;
   }
@@ -315,8 +304,6 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
-    } else if (value === 'privacy') {
-      setView('privacy');
     } else if (value === 'back') {
       setView('default');
     } else if (value === 'share') {
@@ -344,6 +331,8 @@ export const PostHogIntegrationIntroScreen = ({
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       menuAlign="center"
+      // The one program whose disclosure view can be acted on.
+      privacyOptions={sharingOptions(sharing)}
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}
