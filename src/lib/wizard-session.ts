@@ -209,6 +209,15 @@ export interface WizardSession {
   ci: boolean;
   signup: boolean;
   /**
+   * Harness-only escape hatch: keep the `wizard_ask` bridge wired in a `ci`
+   * session so an e2e run can answer the agent's questions.
+   *
+   * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
+   * flag, `bin.ts` never populates it, and nothing in a published build reads
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
+   */
+  e2eAsk: boolean;
+  /**
    * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
    * from `getLocalDev()` — neither belongs here. This one stays because
    * `mcp add|remove|tutorial --local` populate it from their own flag.
@@ -400,6 +409,8 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
+  e2eAsk?: boolean;
   localDev?: boolean;
   localMcp?: boolean;
   localPosthog?: boolean;
@@ -425,6 +436,7 @@ export function buildSession(args: {
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
+    e2eAsk: args.e2eAsk ?? false,
     localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
