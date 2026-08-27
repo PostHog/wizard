@@ -87,8 +87,20 @@ export async function detectPostHogIntegration(
   ctx.setDetectionComplete();
 }
 
-/** Set on failure so a crash is not reported as a scan that found nothing. */
-const WAREHOUSE_SCAN_FAILED_KEY = 'warehouseScanFailed';
+/**
+ * How the scan went, for the reporter to read later. Three states, and the
+ * absent one carries the most weight:
+ *
+ *   absent   this program never scanned. Only `posthog-integration` runs the
+ *            scan below, but every program's intro screen resolves consent
+ *            through the same store method, so the reporter is reached on runs
+ *            where no scan ever happened.
+ *   'failed' the scan threw. A zero-count row would read as "scanned, found
+ *            nothing", which is a different fact.
+ *   'ok'     the scan ran. Zero sources is a real result and gets reported.
+ */
+const WAREHOUSE_SCAN_STATE_KEY = 'warehouseScanState';
+type WarehouseScanState = 'ok' | 'failed';
 
 /**
  * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
@@ -115,10 +127,13 @@ function detectWarehouseSourcesForSuggestion(
 ): void {
   try {
     const sources = detectWarehouseSources(installDir);
+    // Before the empty-list return: a scan that found nothing still ran, and
+    // those rows are the denominator.
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
     if (sources.length === 0) return;
     ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
   } catch (error) {
-    ctx.setFrameworkContext(WAREHOUSE_SCAN_FAILED_KEY, true);
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'detectWarehouseSourcesForSuggestion' },
@@ -127,8 +142,14 @@ function detectWarehouseSourcesForSuggestion(
 }
 
 /**
- * The single place scan results become telemetry. Called from the two points
- * `WizardStore` resolves consent, so it must stay idempotent.
+ * The single place scan results become telemetry. Called from
+ * `WizardStore.completeSetup()`, the point consent becomes final — the privacy
+ * panel's choice is reversible until then, so nothing may report earlier.
+ *
+ * Returns true when consent has resolved and the caller should latch
+ * `warehouseSourcesReported`, which is not the same as "this sent something":
+ * a decline, a failed scan, and a program that never scanned all resolve
+ * without sending.
  */
 export function reportWarehouseSourcesDetected(
   session: WizardSession,
@@ -138,9 +159,13 @@ export function reportWarehouseSourcesDetected(
   if (session.scanConsent === ScanConsent.Undecided) return false;
 
   if (mayReportScanResults(session)) {
-    // A crash must not read as "scanned, found nothing", which is what a
-    // zero-count row means. captureException already fired at the failure.
-    if (session.frameworkContext[WAREHOUSE_SCAN_FAILED_KEY]) return true;
+    // Only an 'ok' scan has something to say. Absent means this program never
+    // scanned, and reporting a zero count there would invent a scan that never
+    // ran; 'failed' already fired captureException.
+    const scanState = session.frameworkContext[WAREHOUSE_SCAN_STATE_KEY] as
+      | WarehouseScanState
+      | undefined;
+    if (scanState !== 'ok') return true;
 
     const sources = getDetectedWarehouseSources(session);
 
