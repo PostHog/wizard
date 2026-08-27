@@ -101,8 +101,7 @@ export function runWizard(
         return;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id);
       const activeTui = tui;
 
       const session = buildSession({

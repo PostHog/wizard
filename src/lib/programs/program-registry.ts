@@ -119,11 +119,20 @@ export type ProgramId = (typeof PROGRAM_REGISTRY)[number]['id'];
 
 /**
  * Look up a program config by its id. `ProgramId` is a union of every
- * registered id, so the lookup is statically guaranteed to find a match
- * — the `!` is a load-bearing assertion of that invariant, not a hope.
+ * registered id, so a typed call is statically guaranteed to find a match.
+ * The runtime check names the bad id when a caller casts an untyped string
+ * (e.g. an env var), so a typo fails loudly here instead of surfacing as an
+ * opaque crash deeper in the pipeline.
  */
 export function getProgramConfig(id: ProgramId): ProgramConfig {
-  return PROGRAM_REGISTRY.find((c) => c.id === id)!;
+  const config = PROGRAM_REGISTRY.find((c) => c.id === id);
+  if (!config) {
+    const known = PROGRAM_REGISTRY.map((c) => c.id).join(', ');
+    throw new Error(
+      `Unknown program id "${id}". Registered program ids: ${known}.`,
+    );
+  }
+  return config;
 }
 
 /** A program config that is exposed as a CLI subcommand. */
