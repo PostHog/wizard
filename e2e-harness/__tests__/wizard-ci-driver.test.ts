@@ -173,6 +173,62 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
   });
 });
 
+describe('WizardCiDriver — task-notice overlay', () => {
+  const notice = {
+    title: 'Connect your data sources',
+    body: ['We detected some warehouse sources.'],
+    items: ['Postgres', 'Stripe'],
+    confirmLabel: 'Continue [Enter]',
+    cancelLabel: 'Skip [Esc]',
+    prompt: 'Connect these during setup?',
+  };
+
+  it('projects the notice into read_state and keeps the step', async () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+
+    const kept = store.showTaskNotice(notice);
+
+    const state = driver.readState();
+    expect(state.currentScreen).toBe(Overlay.TaskNotice);
+    expect(state.taskNotice).toEqual({
+      title: 'Connect your data sources',
+      items: ['Postgres', 'Stripe'],
+      prompt: 'Connect these during setup?',
+    });
+    expect(driver.listActions().map((a) => a.id)).toContain('resolve_notice');
+
+    driver.performAction('resolve_notice', { keep: true });
+
+    await expect(kept).resolves.toBe(true);
+    expect(driver.readState().taskNotice).toBeNull();
+    expect(driver.readState().currentScreen).not.toBe(Overlay.TaskNotice);
+  });
+
+  it('skips the step when keep is false', async () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+    const kept = store.showTaskNotice(notice);
+    driver.performAction('resolve_notice', { keep: false });
+    await expect(kept).resolves.toBe(false);
+  });
+
+  it('defaults to keeping the step when keep is omitted', async () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+    const kept = store.showTaskNotice(notice);
+    driver.performAction('resolve_notice');
+    await expect(kept).resolves.toBe(true);
+  });
+
+  it('projects an empty items list when the notice has none', () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+    void store.showTaskNotice({ ...notice, items: undefined });
+    expect(driver.readState().taskNotice?.items).toEqual([]);
+  });
+});
+
 describe('action registry exhaustiveness', () => {
   it('every screen and overlay is either actionable or explicitly no-action', () => {
     const allScreens = [...Object.values(ScreenId), ...Object.values(Overlay)];
