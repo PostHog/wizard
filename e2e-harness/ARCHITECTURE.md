@@ -21,7 +21,8 @@ e2e-harness/
   wizard-ci-driver.ts   WizardCiDriver — read_state / perform_action over the store
   action-registry.ts    screen → the actions legal on it (+ NO_ACTION_SCREENS)
   e2e-profile.ts        WizardE2eProfile + decideE2eAction — the scripted walk policy
-  profiles.ts           per-program profiles + profileFor(programId)
+  profiles.ts           per-program profiles + profileFor(programId) + resolveE2eProfile(env)
+  e2e-result.ts         the E2E_RESULT_JSON payload: E2eRunRecorder + buildE2eResult
   tui-capture.ts        run a command in a PTY (node-pty) + read its real screen (@xterm/headless)
 scripts/
   tui-host.no-jest.ts   the real-TUI host: startTUI + WizardCiDriver, MODE=fixed | serve
@@ -77,6 +78,34 @@ not on the program config — so this machinery stays out of production source. 
 the program's entry (typed by `WizardE2eProfile`); the host asks
 `decideE2eAction(state, profile)` what to commit on each screen. The (screen →
 decision) trace is snapshot-tested offline in `__tests__/` (`jest -u` to update).
+
+## Driving the agent-in-the-loop layer
+
+Two decision points ask a person to act, and the harness stands in for them.
+
+`wizard_ask` overlay. A `ci` session normally has no ask bridge at all. The host
+sets `session.e2eAsk` from `E2E_ASK=true`, which keeps the bridge wired (see
+`shouldDisableAsk`). The profile then answers every question in the batch:
+`askAnswers` routes a question to a value, else the first option, else the `'e2e'`
+sentinel. Route credentials with `${ENV_VAR}` values, never literals.
+
+Task-notice overlay. `profile.notice` decides `keep` or `decline`. `E2E_NOTICE`
+overrides it per run.
+
+Both env inputs are folded into the profile by `resolveE2eProfile`, at load.
+`decideE2eAction` must stay pure — it reads no env and no store.
+
+## The result payload
+
+A `MODE=fixed` run writes `E2E_RESULT_JSON`: the run phase and screens walked,
+plus every ask batch, every task notice, the task list, the detected warehouse
+sources, the program's report file, and the abort reason. `e2e-result.ts` builds
+it.
+
+**Only question prompt text and question ids go in the payload. No answer value
+ever does.** The decision function reports ids and a keep/decline verdict, so the
+recorder never holds an answer. Keep it that way — the workbench scans the file
+for its own injected credentials.
 
 ## Visual-regression snapshots (the workbench flow)
 
