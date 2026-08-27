@@ -89,19 +89,28 @@ async function pickIntegrationTarget(
     : null;
 }
 
-/**
- * Run the app's build synchronously, returning whether it succeeded. The
- * source-maps skill's test step defers `npm run build` to the human; the e2e
- * host stands in for that human so the snapshot run exercises the real upload
- * (`posthog-cli sourcemap process` against the target project). Harness-only —
- * opt in with SOURCE_MAPS_RUN_BUILD=1.
- */
+// Run the app's build, returning success — stands in for the human the source-maps skill defers `npm run build` to. Opt in with SOURCE_MAPS_RUN_BUILD=1.
 function runAppBuild(root: string): boolean {
+  // Load the app's env file: the Next.js posthog plugin reads credentials from process.env at build time (unlike posthog-cli, which self-loads).
+  const env: NodeJS.ProcessEnv = { ...process.env, CI: 'true' };
+  for (const name of ['.env.local', '.env']) {
+    try {
+      for (const line of fs
+        .readFileSync(join(root, name), 'utf8')
+        .split('\n')) {
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (m && env[m[1]] === undefined)
+          env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    } catch {
+      /* no env file of this name */
+    }
+  }
   const r = spawnSync('npm', ['run', 'build'], {
     cwd: root,
     encoding: 'utf8',
     timeout: 300_000,
-    env: { ...process.env, CI: 'true' },
+    env,
   });
   if (r.error || r.status !== 0) {
     mark(
@@ -305,15 +314,7 @@ async function main() {
   async function fixed() {
     const CTRL = process.env.SNAP_CTRL!;
     const profile: WizardE2eProfile = profileFor(programId);
-    // Program-specific wizard_ask answers the generic 'first' strategy can't
-    // give. Source-maps STEP 1 wants a real upload key — the driver supplies
-    // the raw value and the wizard_ask tool vaults it, so the agent only ever
-    // sees a secretRef. The test step defers `npm run build` to the human: by
-    // default we decline it ('no') since there's usually nobody at the
-    // keyboard, but with SOURCE_MAPS_RUN_BUILD=1 the host answers 'yes' and
-    // runs the real build itself (see the WizardAsk branch below), so the
-    // snapshot run exercises the actual source-map upload. An unset env answer
-    // falls through to the generic strategy (the 'e2e' sentinel).
+    // Source-maps ask answers: the upload key is vaulted to a secretRef; the test build runs only under SOURCE_MAPS_RUN_BUILD=1, else it's declined.
     const runBuild = process.env.SOURCE_MAPS_RUN_BUILD === '1';
     const askOverrides: Record<string, Record<string, string | undefined>> = {
       [Program.ErrorTrackingUploadSourceMaps]: {
@@ -425,10 +426,7 @@ async function main() {
             });
             continue;
           }
-          // The source-maps test step asks the human to run `npm run build`
-          // (id "test-done"). With SOURCE_MAPS_RUN_BUILD=1 the host stands in:
-          // run the real build, then answer truthfully so the snapshot reflects
-          // whether the upload actually worked.
+          // test-done: run the real build, answer by outcome.
           if (
             runBuild &&
             programId === Program.ErrorTrackingUploadSourceMaps &&
