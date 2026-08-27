@@ -35,6 +35,7 @@ import {
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
 import { logToFile } from '@utils/debug';
+import { sanitizeErrorDetail } from '@lib/errors';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -82,7 +83,8 @@ function buildError(
     const message = outroData.message ?? outroData.body ?? 'Wizard run failed';
     const error: TaskStreamError = { type: 'wizard_error', message };
     if (outroData.errorCode) error.code = outroData.errorCode;
-    if (outroData.errorDetail) error.detail = outroData.errorDetail;
+    const safeDetail = sanitizeErrorDetail(outroData.errorDetail);
+    if (safeDetail) error.detail = safeDetail;
     return error;
   }
   return { type: 'wizard_error', message: 'Wizard run failed' };

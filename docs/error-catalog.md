@@ -54,6 +54,11 @@ context. Codes are also emitted at raw `process.exit` sites that run before the
 abort funnel exists (CLI arg validation, Node version preflight, yargs failures)
 via `emitPhwError()`.
 
+`errorDetail` is allowlisted (`reason`, `detected`, `platform`) at both egress
+boundaries — the `phw-error:` stderr line and the task-stream push — so fields
+like filesystem paths never reach remote telemetry. Local surfaces (TUI error
+screen, debug log) keep the full detail.
+
 ## Catalog
 
 | Code                                           | Group    | Fires when                                                                                                                                                                                                   | Retry        |

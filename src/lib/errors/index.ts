@@ -16,3 +16,4 @@ export {
   formatPhwErrorLine,
   type PhwErrorLine,
 } from './emit';
+export { sanitizeErrorDetail } from './sanitize';

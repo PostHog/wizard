@@ -12,7 +12,7 @@ import { getUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@lib/errors';
-import { emitPhwError } from '@lib/errors';
+import { emitPhwError, sanitizeErrorDetail } from '@lib/errors';
 
 export class WizardError extends Error {
   readonly code?: ErrorCode;
@@ -129,7 +129,7 @@ export async function wizardAbort(
     emitPhwError({
       code,
       message: resolvedOutroData.message ?? message,
-      detail: resolvedOutroData.errorDetail ?? detail,
+      detail: sanitizeErrorDetail(resolvedOutroData.errorDetail ?? detail),
     });
   }
 
