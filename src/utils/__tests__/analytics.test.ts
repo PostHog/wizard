@@ -766,6 +766,18 @@ describe('sessionProperties', () => {
     expect(properties).not.toHaveProperty('discovered_features');
   });
 
+  it('omits discovered_features on a --signup run before the user answers', () => {
+    // --signup renders the full TUI, so these events fire while the intro
+    // screen is still on screen. Granting on the flag would put scan results
+    // on every one of them, including for a user who then declines.
+    const session = buildSession({ installDir: '/tmp/app', signup: true });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+
+    const properties = sessionProperties(session);
+
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
   it('omits discovered_features while consent is still undecided', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];

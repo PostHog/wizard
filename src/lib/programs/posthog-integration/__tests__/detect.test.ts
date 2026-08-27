@@ -264,9 +264,9 @@ describe('reportWarehouseSourcesDetected', () => {
 
   it('a program that never scanned reports nothing, even when granted', () => {
     // Every intro screen resolves consent through the same store method, so the
-    // reporter is reached on runs of programs that never scan. --signup and
-    // --ci grant consent up front, so the guard cannot be consent alone.
-    const session = buildSession({ installDir: tmpDir, signup: true });
+    // reporter is reached on runs of programs that never scan, and --ci grants
+    // consent up front, so the guard cannot be consent alone.
+    const session = buildSession({ installDir: tmpDir, ci: true });
     expect(session.scanConsent).toBe(ScanConsent.Granted);
 
     const fired = reportWarehouseSourcesDetected(session);
@@ -283,7 +283,7 @@ describe('reportWarehouseSourcesDetected', () => {
     // detect, and sets its own tags. Without a scan-state marker it would also
     // emit this event, which six saved insights read as "the integration flow
     // scanned".
-    const session = buildSession({ installDir: tmpDir, signup: true });
+    const session = buildSession({ installDir: tmpDir, ci: true });
     const { detectWarehousePrerequisites } = await import(
       '@lib/programs/warehouse-source/detect'
     );
@@ -396,15 +396,18 @@ describe('the full decline contract, end to end', () => {
   });
 });
 
-describe('non-interactive sessions start with consent already granted', () => {
+describe('only a non-interactive session starts with consent resolved', () => {
   it('ci: true builds scanConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', ci: true });
     expect(session.scanConsent).toBe(ScanConsent.Granted);
   });
 
-  it('signup: true builds scanConsent as granted', () => {
+  it('signup: true still starts undecided', () => {
+    // --signup renders the full TUI and creates the account during auth, two
+    // steps after the intro. That user is asked like anyone else, so granting
+    // up front would put scan results on the events fired before they answer.
     const session = buildSession({ installDir: '/tmp/app', signup: true });
-    expect(session.scanConsent).toBe(ScanConsent.Granted);
+    expect(session.scanConsent).toBe(ScanConsent.Undecided);
   });
 
   it('a plain interactive session starts undecided', () => {

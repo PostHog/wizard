@@ -445,10 +445,9 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
-    // No screen can ask in a scripted run, and it is the user's own
-    // automation, so granting keeps their telemetry as it was.
-    scanConsent:
-      args.ci || args.signup ? ScanConsent.Granted : ScanConsent.Undecided,
+    // `ci` only: no screen renders, so nothing can ask. Not `signup` — that
+    // run is interactive and gets asked on the intro screen like any other.
+    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
