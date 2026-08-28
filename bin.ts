@@ -70,6 +70,7 @@ import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
 import { releaseTerminal } from './src/ui/tui/terminal';
+import { runCleanups } from './src/utils/wizard-abort';
 
 // Last-resort net for any error no local handler caught. A TUI command may
 // already own the alt screen, so leave it, print a readable line, and exit —
@@ -82,6 +83,11 @@ function handleFatal(err: unknown): void {
   // eslint-disable-next-line no-console
   console.error(`\n\x1b[1;91m✖ The PostHog wizard crashed: ${message}\x1b[0m\n`);
   emitWizardError({ code: ErrorCodes.InternalUnhandled, message });
+  // Run registered cleanups before exiting, same as wizardAbort() and the
+  // runner catch/signal paths — a fatal event otherwise skips them, leaving
+  // state a cleanup owns unrestored (e.g. the backed-up .claude/settings.json
+  // that backupAndFixClaudeSettings deletes and registers a restore for).
+  runCleanups();
   process.exit(1);
 }
 // Skip under test: the CLI suites import bin.ts and mock process.exit to throw,
