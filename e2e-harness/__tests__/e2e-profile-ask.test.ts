@@ -524,6 +524,18 @@ describe('E2E_DRIVABLE_SCREENS', () => {
   });
 });
 
+/** The env the workbench runner injects for a warehouse e2e leg. */
+const WAREHOUSE_ENV = {
+  E2E_SOURCE_PREFIX: 'e2e_7_',
+  E2E_STRIPE_API_KEY: 'sk_test_7',
+  E2E_PG_HOST: 'db.internal',
+  E2E_PG_PORT: '5432',
+  E2E_PG_DATABASE: 'appdb',
+  E2E_PG_USER: 'app',
+  E2E_PG_PASSWORD: 'hunter2',
+  E2E_API_TOKEN: 'hf_e2e_token',
+};
+
 describe('warehouse-source profile', () => {
   const warehouse = profileFor(Program.WarehouseSource);
 
@@ -538,64 +550,136 @@ describe('warehouse-source profile', () => {
   });
 
   it('routes each credential question to its own env var', () => {
-    const env = {
-      E2E_SOURCE_PREFIX: 'e2e_7_',
-      E2E_STRIPE_API_KEY: 'sk_test_7',
-      E2E_PG_HOST: 'db.internal',
-      E2E_PG_PORT: '5432',
-      E2E_PG_DATABASE: 'appdb',
-      E2E_PG_USER: 'app',
-      E2E_PG_PASSWORD: 'hunter2',
-    };
-    const resolved = resolveE2eProfile(warehouse, { env });
+    const resolved = resolveE2eProfile(warehouse, { env: WAREHOUSE_ENV });
     const batch = answerQuestions(
       [
         text('prefix', 'Table prefix'),
-        sensitiveText('stripe_api_key', 'Stripe API key'),
+        text('stripe_secret_key', 'Stripe API key'),
         text('host', 'Postgres host'),
         text('port', 'Port'),
         text('database', 'Database name'),
         text('user', 'Username'),
-        sensitiveText('password', 'Password'),
+        text('password', 'Password'),
+        text('schema', 'Schema'),
       ],
       resolved,
     );
     expect(batch.answers).toEqual({
       prefix: 'e2e_7_',
-      stripe_api_key: 'sk_test_7',
+      stripe_secret_key: 'sk_test_7',
       host: 'db.internal',
       port: '5432',
       database: 'appdb',
       user: 'app',
       password: 'hunter2',
+      schema: 'public',
     });
     expect(batch.sentinelIds).toEqual([]);
     expect(batch.refusedIds).toEqual([]);
   });
 
-  it('marks its credential-bearing rules secret', () => {
-    const secretMatches = (warehouse.askAnswers ?? [])
-      .filter((r) => r.secret)
-      .map((r) => r.match);
-    expect(secretMatches).toEqual(['stripe', 'password|passwd|pwd']);
+  /**
+   * The skill tells the agent to collect a warehouse credential as ordinary
+   * text, because `external-data-sources-create` rejects a `{ secretRef }`. A
+   * `secret` rule answers only a *sensitive* text question, so marking these
+   * rules secret refused every credential the skill asked for — 2 refusals on
+   * the Stripe leg, 3 on the Postgres+Stripe leg, and no create anywhere.
+   */
+  it('marks no rule secret, so a plain credential question is answered', () => {
+    expect((warehouse.askAnswers ?? []).filter((r) => r.secret)).toEqual([]);
+    const resolved = resolveE2eProfile(warehouse, { env: WAREHOUSE_ENV });
+    const batch = answerQuestions([text('password', 'Password')], resolved);
+    expect(batch.answers.password).toBe('hunter2');
+    expect(batch.refusedIds).toEqual([]);
   });
 
-  it('withholds the API key from a question that is not sensitive', () => {
-    const resolved = resolveE2eProfile(warehouse, {
-      env: { E2E_STRIPE_API_KEY: 'sk_test_7' },
-    });
+  /**
+   * The exact batch the 2026-08-28 CI run asked on the Stripe leg. Two of these
+   * three questions fell back to the sentinel then; none may now.
+   */
+  it("answers the Stripe leg's real question ids", () => {
+    const resolved = resolveE2eProfile(warehouse, { env: WAREHOUSE_ENV });
     const batch = answerQuestions(
-      [text('stripe_api_key', 'Stripe API key')],
+      [
+        text('api_key', 'Paste your restricted Stripe API key here:'),
+        text('account_id', 'Stripe Account ID (optional — leave blank)'),
+        text('table_prefix', 'Table name prefix (optional)'),
+      ],
       resolved,
     );
-    expect(batch.answers.stripe_api_key).toBe(E2E_ANSWER_SENTINEL);
-    expect(batch.refusedIds).toEqual(['stripe_api_key']);
+    expect(batch.answers).toEqual({
+      // The credential net claims a vendor-less `api_key` on the id pass,
+      // before the `stripe` rule can claim it on the prompt pass. Both values
+      // are fake placeholders, so the routing costs nothing and the question
+      // never reaches the sentinel.
+      api_key: 'hf_e2e_token',
+      account_id: 'acct_e2efixture',
+      table_prefix: 'e2e_7_',
+    });
+    expect(batch.sentinelIds).toEqual([]);
+    expect(batch.refusedIds).toEqual([]);
+  });
+
+  /** The exact batch the same run asked on the Postgres legs. */
+  it("answers the Postgres leg's real question ids, prefixed or not", () => {
+    const resolved = resolveE2eProfile(warehouse, { env: WAREHOUSE_ENV });
+    const batch = answerQuestions(
+      [
+        text('pg-host', 'PostgreSQL host'),
+        text('pg-port', 'PostgreSQL port'),
+        text('pg-database', 'PostgreSQL database name'),
+        text('pg-user', 'PostgreSQL user'),
+        text('pg-password', 'PostgreSQL password'),
+        text('pg-schema', 'PostgreSQL schema'),
+      ],
+      resolved,
+    );
+    expect(batch.answers).toEqual({
+      'pg-host': 'db.internal',
+      'pg-port': '5432',
+      'pg-database': 'appdb',
+      'pg-user': 'app',
+      'pg-password': 'hunter2',
+      'pg-schema': 'public',
+    });
+    expect(batch.sentinelIds).toEqual([]);
+  });
+
+  /**
+   * Precedence the rule order is built on: `account[ _-]?id` sits ahead of
+   * `stripe`, so an optional account-id question cannot take the API key.
+   */
+  it('gives the Stripe account id an account id, never the API key', () => {
+    const resolved = resolveE2eProfile(warehouse, { env: WAREHOUSE_ENV });
+    const batch = answerQuestions(
+      [text('stripe_account_id', 'Stripe account id (optional)')],
+      resolved,
+    );
+    expect(batch.answers.stripe_account_id).toBe('acct_e2efixture');
+  });
+
+  it('covers the optional fields that used to match no rule at all', () => {
+    const resolved = resolveE2eProfile(warehouse, { env: WAREHOUSE_ENV });
+    const batch = answerQuestions(
+      [
+        text('connection_string', 'Connection string (optional)'),
+        text('api_token', 'Hugging Face access token'),
+        text('author', 'Username or organization'),
+      ],
+      resolved,
+    );
+    expect(batch.answers).toEqual({
+      connection_string: 'postgresql://app:hunter2@db.internal:5432/appdb',
+      api_token: 'hf_e2e_token',
+      author: 'app',
+    });
+    expect(batch.sentinelIds).toEqual([]);
   });
 
   it('sentinels every credential when the env is empty', () => {
     const resolved = resolveE2eProfile(warehouse, { env: {} });
     const batch = answerQuestions(
-      [text('host', 'Postgres host'), sensitiveText('password', 'Password')],
+      [text('host', 'Postgres host'), text('password', 'Password')],
       resolved,
     );
     expect(batch.sentinelIds).toEqual(['host', 'password']);

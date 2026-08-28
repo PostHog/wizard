@@ -179,12 +179,19 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
     "ask": "first",
     "askAnswers": [
       {
+        "match": "account[ _-]?id",
+        "value": "acct_e2efixture",
+      },
+      {
         "match": "prefix",
         "value": "\${E2E_SOURCE_PREFIX}",
       },
       {
+        "match": "connection[ _-]?string",
+        "value": "postgresql://\${E2E_PG_USER}:\${E2E_PG_PASSWORD}@\${E2E_PG_HOST}:\${E2E_PG_PORT}/\${E2E_PG_DATABASE}",
+      },
+      {
         "match": "stripe",
-        "secret": true,
         "value": "\${E2E_STRIPE_API_KEY}",
       },
       {
@@ -201,16 +208,19 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
       },
       {
         "match": "password|passwd|pwd",
-        "secret": true,
         "value": "\${E2E_PG_PASSWORD}",
       },
       {
-        "match": "user|username|role",
+        "match": "user|username|role|author",
         "value": "\${E2E_PG_USER}",
       },
       {
         "match": "schema",
         "value": "public",
+      },
+      {
+        "match": "api[ _-]?key|api[ _-]?token|access[ _-]?token|auth[ _-]?token|^token$|secret|credential",
+        "value": "\${E2E_API_TOKEN}",
       },
     ],
     "healthCheck": "dismiss",
