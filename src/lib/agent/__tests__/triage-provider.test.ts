@@ -42,7 +42,7 @@ describe('createTriageLLMProvider', () => {
     });
   });
 
-  it('triages a pi run on luna at the table effort, over openai-responses', async () => {
+  it('triages a legacy pi run on luna at the table effort, over openai-completions', async () => {
     complete.mockResolvedValue(reply('true_positive'));
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
@@ -50,11 +50,25 @@ describe('createTriageLLMProvider', () => {
 
     const [model, context, options] = complete.mock.calls[0];
     expect(model.id).toBe(GPT5_6_LUNA_MODEL);
-    expect(model.api).toBe('openai-responses');
+    expect(model.api).toBe('openai-completions');
     expect(model.baseUrl).toBe('https://gw.posthog.test/v1');
     // Luna rejects the request without an effort it recognises.
     expect(options?.reasoning).toBe('low');
     expect(context.messages[0].content).toBe('verdict?');
+  });
+
+  it('triages a v2 pi run over openai-responses', async () => {
+    complete.mockResolvedValue(reply('true_positive'));
+    const provider = createTriageLLMProvider(
+      { ...AUTH, edition: 'v2' as const },
+      Harness.pi,
+    );
+
+    await expect(provider('verdict?')).resolves.toBe('true_positive');
+
+    const [model] = complete.mock.calls[0];
+    expect(model.api).toBe('openai-responses');
+    expect(model.baseUrl).toBe('https://gw.posthog.test/v1');
   });
 
   it('triages an anthropic run on haiku over anthropic-messages', async () => {

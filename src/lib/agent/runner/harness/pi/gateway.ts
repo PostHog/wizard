@@ -22,20 +22,29 @@ import {
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';
 
+/** The pi transports the gateway serves. */
+export type GatewayApi =
+  | 'anthropic-messages'
+  | 'openai-completions'
+  | 'openai-responses';
+
 /**
  * The gateway speaks two shapes on two endpoints: Anthropic models over
  * `anthropic-messages` (the SDK appends `/v1/messages`, so the base URL has no
- * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over the Responses API at
- * `/v1/responses` (base URL keeps `/v1`). Infer the shape from the model id so
- * a pair's model selects the right transport. OpenAI rejects function tools
- * combined with `reasoning_effort` on chat completions, and every task sends both.
+ * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over an OpenAI shape at
+ * `/v1/responses` or `/v1/chat/completions` (base URL keeps `/v1`). Infer the
+ * shape from the model id so a pair's model selects the right transport.
+ *
+ * v2 takes the Responses API because OpenAI rejects function tools combined
+ * with `reasoning_effort` on chat completions and every task sends both. Legacy
+ * stays on chat completions, where litellm does that routing itself.
  */
 export function gatewayApiFor(
   modelId: string,
-): 'anthropic-messages' | 'openai-responses' {
-  return modelId.startsWith('openai/')
-    ? 'openai-responses'
-    : 'anthropic-messages';
+  edition: GatewayEdition = 'legacy',
+): GatewayApi {
+  if (!modelId.startsWith('openai/')) return 'anthropic-messages';
+  return edition === 'v2' ? 'openai-responses' : 'openai-completions';
 }
 
 /**
@@ -101,7 +110,7 @@ export interface GatewayProviderInputs {
 export function buildGatewayModel(inputs: GatewayProviderInputs) {
   const { gatewayUrl, wizardMetadata, wizardFlags, modelId, edition, teamId } =
     inputs;
-  const api = gatewayApiFor(modelId);
+  const api = gatewayApiFor(modelId, edition);
   return {
     id: modelId,
     name: `${modelId} (PostHog Gateway)`,
@@ -127,13 +136,13 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
  */
 export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   provider: Record<string, unknown>;
-  api: 'anthropic-messages' | 'openai-responses';
+  api: GatewayApi;
   caps: ReturnType<typeof modelCapabilities>;
   gatewayUrl: string;
   baseUrl: string;
 } {
-  const { gatewayUrl, accessToken, modelId, effort } = inputs;
-  const api = gatewayApiFor(modelId);
+  const { gatewayUrl, accessToken, modelId, effort, edition } = inputs;
+  const api = gatewayApiFor(modelId, edition);
   // One resolution point for the model's traits and the run's effort override.
   // pi clamps whatever comes out of here against the levels this spec declares,
   // so a level the spec doesn't carry is silently reduced by the session.
