@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.69.0](https://github.com/PostHog/wizard/compare/v2.68.0...v2.69.0) (2026-08-28)
+
+
+### Features
+
+* **gateway:** tag events with the gateway edition and fail hollow runs ([#1165](https://github.com/PostHog/wizard/issues/1165)) ([db0c556](https://github.com/PostHog/wizard/commit/db0c556fedd1cc2bf012e28e369d5b22b9ebb482))
+
+
+### Bug Fixes
+
+* **gateway:** route v2 openai calls over the responses api ([#1166](https://github.com/PostHog/wizard/issues/1166)) ([a8c3ef1](https://github.com/PostHog/wizard/commit/a8c3ef1f21a764f0189b93b27591cc0cd1ef4d56))
+
 ## [2.68.0](https://github.com/PostHog/wizard/compare/v2.67.0...v2.68.0) (2026-08-28)
 
 
