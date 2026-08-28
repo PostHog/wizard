@@ -69,6 +69,28 @@ import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
+import { releaseTerminal } from './src/ui/tui/terminal';
+
+// Last-resort net for any error no local handler caught. A TUI command may
+// already own the alt screen, so leave it, print a readable line, and exit —
+// otherwise the user is stranded on a blank screen with the real error lost in
+// the discarded alt buffer. Node already terminates on these events; this only
+// makes the exit clean.
+function handleFatal(err: unknown): void {
+  releaseTerminal();
+  const message = err instanceof Error ? err.message : String(err);
+  // eslint-disable-next-line no-console
+  console.error(`\n\x1b[1;91m✖ The PostHog wizard crashed: ${message}\x1b[0m\n`);
+  emitWizardError({ code: ErrorCodes.InternalUnhandled, message });
+  process.exit(1);
+}
+// Skip under test: the CLI suites import bin.ts and mock process.exit to throw,
+// so a global handler would turn every mocked exit into a worker crash. Prod
+// builds inline NODE_ENV as 'production', so the net is always live for users.
+if (process.env.NODE_ENV !== 'test') {
+  process.on('unhandledRejection', handleFatal);
+  process.on('uncaughtException', handleFatal);
+}
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and
