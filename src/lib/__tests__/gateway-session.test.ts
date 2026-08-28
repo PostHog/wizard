@@ -7,6 +7,11 @@ import {
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { setTag: vi.fn(), captureException: vi.fn() },
+}));
 
 const host = {
   apiHost: 'https://us.posthog.com',
@@ -19,6 +24,7 @@ describe('gatewayAuth', () => {
   beforeEach(() => {
     resetGatewaySession();
     fetchMock.mockReset();
+    vi.mocked(analytics.setTag).mockClear();
     vi.stubGlobal('fetch', fetchMock);
   });
 
@@ -45,6 +51,7 @@ describe('gatewayAuth', () => {
       edition: 'v2',
       teamId: 42,
     });
+    expect(analytics.setTag).toHaveBeenCalledWith('gateway_edition', 'v2');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://us.posthog.com/api/wizard/gateway_token/',
       expect.objectContaining({
@@ -177,6 +184,7 @@ describe('gatewayAuth', () => {
     // it would make the flip all-or-nothing.
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth.edition).toBe('legacy');
+    expect(analytics.setTag).toHaveBeenCalledWith('gateway_edition', 'legacy');
   });
 
   it.each([500, 502, 503])(

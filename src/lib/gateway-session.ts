@@ -8,6 +8,7 @@
  */
 
 import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 import type { HostResolution } from '@lib/host-resolution';
 
 export type GatewayEdition = 'legacy' | 'v2';
@@ -89,6 +90,7 @@ async function resolveGatewayAuth(
   const minted = await mintGatewayToken(host, accessToken, program);
   if (!minted) {
     // 404 only: this org is not on the new gateway yet.
+    analytics.setTag('gateway_edition', 'legacy');
     const auth = legacyAuth(host, accessToken);
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
     return auth;
@@ -106,6 +108,7 @@ async function resolveGatewayAuth(
     );
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
+  analytics.setTag('gateway_edition', 'v2');
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
