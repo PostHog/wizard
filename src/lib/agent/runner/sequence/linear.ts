@@ -170,15 +170,20 @@ export async function runLinearProgram(
     await wizardAbort({
       outroData,
       code: abortCode,
-      error: new WizardError(
-        `Agent aborted: ${reason}`,
-        {
-          integration: config.integrationLabel,
-          error_type: AgentErrorType.ABORT,
-          reason,
-        },
-        abortCode,
-      ),
+      // A matched abort case is an expected outcome, so it keeps the friendly
+      // outro and the `agent aborted` event but files no exception. Only an
+      // unclassified abort passes a WizardError, which triggers captureException.
+      error: matched
+        ? undefined
+        : new WizardError(
+            `Agent aborted: ${reason}`,
+            {
+              integration: config.integrationLabel,
+              error_type: AgentErrorType.ABORT,
+              reason,
+            },
+            abortCode,
+          ),
     });
   }
 
