@@ -12,6 +12,7 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate } from './authenticate';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
+import { gatewayAuth } from '@lib/gateway-session';
 import { resolveHarness } from '../switchboard';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
@@ -301,9 +302,20 @@ export async function bootstrapProgram(
   // set them — so downstream readers get a non-null type without asserting.
   const credentials = session.credentials!;
 
+  // Resolve the gateway posture once for the boot: v2 scoped token when the
+  // backend mints, legacy OAuth otherwise.
+  const auth = await gatewayAuth(
+    credentials.host,
+    credentials.accessToken,
+    programConfig.id,
+  );
+
   return {
     skillsBaseUrl,
     credentials,
+    // Carried so per-task sessions re-resolve against the same program the boot
+    // minted for, rather than digging it back out of the metadata bag.
+    programId: programConfig.id,
     wizardFlags,
     wizardFlagPayloads,
     wizardMetadata,
@@ -312,8 +324,10 @@ export async function bootstrapProgram(
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(
       {
-        baseURL: credentials.host.gatewayUrl,
-        authToken: credentials.accessToken,
+        baseURL: auth.gatewayUrl,
+        authToken: auth.token,
+        edition: auth.edition,
+        teamId: auth.teamId,
         // `call_type` splits scan spend out of the program's agent cost —
         // same tag the in-run triage provider carries.
         wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
