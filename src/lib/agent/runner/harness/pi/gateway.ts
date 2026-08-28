@@ -25,15 +25,16 @@ export const GATEWAY_PROVIDER = 'posthog-gateway';
 /**
  * The gateway speaks two shapes on two endpoints: Anthropic models over
  * `anthropic-messages` (the SDK appends `/v1/messages`, so the base URL has no
- * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over OpenAI completions at
- * `/v1/chat/completions` (base URL keeps `/v1`). Infer the shape from the model
- * id so a pair's model selects the right transport.
+ * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over the Responses API at
+ * `/v1/responses` (base URL keeps `/v1`). Infer the shape from the model id so
+ * a pair's model selects the right transport. OpenAI rejects function tools
+ * combined with `reasoning_effort` on chat completions, and every task sends both.
  */
 export function gatewayApiFor(
   modelId: string,
-): 'anthropic-messages' | 'openai-completions' {
+): 'anthropic-messages' | 'openai-responses' {
   return modelId.startsWith('openai/')
-    ? 'openai-completions'
+    ? 'openai-responses'
     : 'anthropic-messages';
 }
 
@@ -106,8 +107,8 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     name: `${modelId} (PostHog Gateway)`,
     api,
     provider: GATEWAY_PROVIDER,
-    // openai-completions keeps /v1; the SDK appends the route either way.
-    baseUrl: api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl,
+    // Anthropic drops /v1 (the SDK appends /v1/messages); the OpenAI shape keeps it.
+    baseUrl: api === 'anthropic-messages' ? gatewayUrl : `${gatewayUrl}/v1`,
     // A model trait resolved by the switchboard, not a harness guess:
     // non-reasoning openai models reject `reasoning_effort` (gpt-4o → gateway
     // UnsupportedParamsError → the run no-ops).
@@ -126,7 +127,7 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
  */
 export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   provider: Record<string, unknown>;
-  api: 'anthropic-messages' | 'openai-completions';
+  api: 'anthropic-messages' | 'openai-responses';
   caps: ReturnType<typeof modelCapabilities>;
   gatewayUrl: string;
   baseUrl: string;

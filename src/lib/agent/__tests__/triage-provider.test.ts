@@ -42,7 +42,7 @@ describe('createTriageLLMProvider', () => {
     });
   });
 
-  it('triages a pi run on luna at the table effort, over openai-completions', async () => {
+  it('triages a pi run on luna at the table effort, over openai-responses', async () => {
     complete.mockResolvedValue(reply('true_positive'));
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
@@ -50,8 +50,7 @@ describe('createTriageLLMProvider', () => {
 
     const [model, context, options] = complete.mock.calls[0];
     expect(model.id).toBe(GPT5_6_LUNA_MODEL);
-    expect(model.api).toBe('openai-completions');
-    // openai-completions keeps /v1; the SDK appends the route.
+    expect(model.api).toBe('openai-responses');
     expect(model.baseUrl).toBe('https://gw.posthog.test/v1');
     // Luna rejects the request without an effort it recognises.
     expect(options?.reasoning).toBe('low');
