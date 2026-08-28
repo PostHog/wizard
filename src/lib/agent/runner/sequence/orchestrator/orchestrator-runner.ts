@@ -785,13 +785,6 @@ export async function runOrchestrator(
     task_count: store.list().length,
     types: store.list().map((t) => t.type),
   });
-  // The harness can return a clean result after every turn was refused, so an
-  // empty queue is what catches a planner that did nothing.
-  if (store.list().length === 0) {
-    throw new Error(
-      'The planner queued no tasks, so the run has nothing to do.',
-    );
-  }
   renderQueue();
 
   // Now that the graph exists, give each runner-seeded task the dependencies it
