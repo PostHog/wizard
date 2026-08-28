@@ -129,3 +129,26 @@ describe('e2e flow snapshot — metrics', () => {
     expect(trace.length).toBeLessThan(40);
   });
 });
+
+describe('e2e flow snapshot — warehouse-source', () => {
+  it('walks intro → auth → run → outro → skills', () => {
+    expect({
+      program: 'warehouse-source',
+      profile: profileFor(Program.WarehouseSource),
+      trace: traceFlow(Integration.javascriptNode, Program.WarehouseSource),
+    }).toMatchSnapshot();
+  });
+
+  it('reaches a terminal decision instead of stalling on the intro', () => {
+    const trace = traceFlow(
+      Integration.javascriptNode,
+      Program.WarehouseSource,
+    );
+    expect(trace[0]).toEqual({
+      screen: 'warehouse-intro',
+      action: 'confirm_setup',
+    });
+    expect(trace.at(-1)?.action).toBe('keep_skills');
+    expect(trace.length).toBeLessThan(40);
+  });
+});

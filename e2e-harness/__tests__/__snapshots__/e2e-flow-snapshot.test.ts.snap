@@ -86,6 +86,7 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     "ask": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
+    "notice": "keep",
     "setup": "first",
     "skills": "delete",
     "slack": "skip",
@@ -163,6 +164,89 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
     {
       "action": "dismiss_slack",
       "screen": "slack-connect",
+    },
+    {
+      "action": "keep_skills",
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run → outro → skills 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "askAnswers": [
+      {
+        "match": "account[ _-]?id",
+        "value": "acct_e2efixture",
+      },
+      {
+        "match": "prefix",
+        "value": "\${E2E_SOURCE_PREFIX}",
+      },
+      {
+        "match": "connection[ _-]?string",
+        "value": "postgresql://\${E2E_PG_USER}:\${E2E_PG_PASSWORD}@\${E2E_PG_HOST}:\${E2E_PG_PORT}/\${E2E_PG_DATABASE}",
+      },
+      {
+        "match": "stripe",
+        "value": "\${E2E_STRIPE_API_KEY}",
+      },
+      {
+        "match": "host|hostname|server|endpoint",
+        "value": "\${E2E_PG_HOST}",
+      },
+      {
+        "match": "port",
+        "value": "\${E2E_PG_PORT}",
+      },
+      {
+        "match": "database|db_?name",
+        "value": "\${E2E_PG_DATABASE}",
+      },
+      {
+        "match": "password|passwd|pwd",
+        "value": "\${E2E_PG_PASSWORD}",
+      },
+      {
+        "match": "user|username|role|author",
+        "value": "\${E2E_PG_USER}",
+      },
+      {
+        "match": "schema",
+        "value": "public",
+      },
+      {
+        "match": "api[ _-]?key|api[ _-]?token|access[ _-]?token|auth[ _-]?token|^token$|secret|credential",
+        "value": "\${E2E_API_TOKEN}",
+      },
+    ],
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "notice": "keep",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "warehouse-source",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "warehouse-intro",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
     },
     {
       "action": "keep_skills",

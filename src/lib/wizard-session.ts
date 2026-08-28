@@ -116,6 +116,10 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** Stable machine-readable error code from the error catalog (@lib/errors). */
+  errorCode?: import('@lib/errors').ErrorCode;
+  /** Structured context for the error code; safe for telemetry payloads. */
+  errorDetail?: Record<string, unknown>;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
@@ -208,6 +212,20 @@ export interface WizardSession {
   installDir: string;
   ci: boolean;
   signup: boolean;
+  /**
+   * Harness-only escape hatch: keep the `wizard_ask` bridge wired in a `ci`
+   * session so an e2e run can answer the agent's questions.
+   *
+   * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
+   * flag, `bin.ts` never populates it, and nothing in a published build reads
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
+   *
+   * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
+   * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
+   * `POSTHOG_WIZARD_e2e_ask=true` set this field. `readEnvironment` drops it —
+   * see `NEVER_FROM_ENV`, and keep that list in step with this comment.
+   */
+  e2eAsk: boolean;
   /**
    * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
    * from `getLocalDev()` — neither belongs here. This one stays because
@@ -312,6 +330,8 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
+  mcpLoginCommands: string[];
   mcpSuggestedPromptsDismissed: boolean;
   /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
   slackStepDismissed: boolean;
@@ -398,6 +418,8 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
+  e2eAsk?: boolean;
   localDev?: boolean;
   localMcp?: boolean;
   localPosthog?: boolean;
@@ -423,6 +445,7 @@ export function buildSession(args: {
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
+    e2eAsk: args.e2eAsk ?? false,
     localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
@@ -455,6 +478,7 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpLoginCommands: [],
     mcpSuggestedPromptsDismissed: false,
     slackStepDismissed: false,
     slackConnected: null,

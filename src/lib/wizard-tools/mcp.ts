@@ -35,24 +35,30 @@ import {
 import type { LLMProvider } from '@posthog/warlock';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
+  CHECK_ENV_KEYS_DESCRIPTION,
+  CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
   ENV_FILE_PATH_DESCRIPTION,
   SERVER_NAME,
   appendAuditChecksToLedger,
   applyAuditUpdates,
   downloadSkill,
   ensureGitignoreCoverage,
-  evaluateAskCap,
+  createAskAccounting,
   fetchSkillMenu,
+  checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
-  parseEnvKeys,
+  normaliseAskSubject,
   readLedger,
   resolveEnvPath,
   resolveEnvSecretRefs,
+  templateEnvWriteRefusal,
   vaultSensitiveAnswers,
   writeLedgerAtomic,
   type SkillEntry,
   AUDIT_STATUSES,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
+  WIZARD_ASK_SUBJECT_DESCRIPTION,
+  WIZARD_ASK_TOOL_DESCRIPTION,
 } from './tools';
 
 const auditCheckSchema = z.object({
@@ -107,8 +113,9 @@ export interface WizardToolsOptions {
 
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}.
-   * The 4th call always returns a "batch your questions" error regardless
-   * of this cap — see {@link ASK_BATCH_THRESHOLD}.
+   * A separate one-time "batch your questions" nudge fires when several calls
+   * in a row share a `subject` — see {@link ASK_BATCH_THRESHOLD}. That nudge is
+   * per subject, so a flow that asks once per detected source never trips it.
    */
   askMaxQuestions?: number;
 
@@ -156,10 +163,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
-  // Per-server counter for wizard_ask call accounting (adjacency + total cap).
-  let askCallCount = 0;
-  // The adjacency nudge fires once per run; after that only the total cap applies.
-  let askAdjacencyNudged = false;
+  // Per-server wizard_ask accounting: the total cap plus the per-subject
+  // adjacency run. Shared with the pi facade so neither can drift.
+  const askAccounting = createAskAccounting(askMaxQuestions);
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -179,25 +185,22 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const checkEnvKeys = tool(
     'check_env_keys',
-    'Check which environment variable keys are present or missing in a .env file. Never reveals values.',
+    CHECK_ENV_KEYS_DESCRIPTION,
     {
-      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
+      filePath: z
+        .string()
+        .optional()
+        .describe(CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION),
       keys: z
         .array(z.string())
         .describe('Environment variable key names to check'),
     },
-    (args: { filePath: string; keys: string[] }) => {
-      const resolved = resolveEnvPath(workingDirectory, args.filePath);
-      logToFile(`check_env_keys: ${resolved}, keys: ${args.keys.join(', ')}`);
-
-      const existingKeys: Set<string> = fs.existsSync(resolved)
-        ? parseEnvKeys(fs.readFileSync(resolved, 'utf8'))
-        : new Set<string>();
-
-      const results: Record<string, 'present' | 'missing'> = {};
-      for (const key of args.keys) {
-        results[key] = existingKeys.has(key) ? 'present' : 'missing';
-      }
+    (args: { filePath?: string; keys: string[] }) => {
+      const results = checkEnvKeysCore(
+        workingDirectory,
+        args.keys,
+        args.filePath,
+      );
 
       return {
         content: [
@@ -259,6 +262,17 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const { values: resolvedValues, refKeys: resolvedRefKeys } = resolution;
 
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
+      const templateRefusal = templateEnvWriteRefusal(resolved);
+      if (templateRefusal) {
+        logToFile(`set_env_values: refused template target ${resolved}`);
+        analytics.wizardCapture('set_env_values template target refused', {
+          file_name: path.basename(resolved),
+        });
+        return {
+          content: [{ type: 'text' as const, text: templateRefusal }],
+          isError: true,
+        };
+      }
       logToFile(
         `set_env_values: ${resolved}, keys: ${Object.keys(resolvedValues).join(
           ', ',
@@ -628,15 +642,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const wizardAsk = tool(
     'wizard_ask',
-    'Ask the user one or more structured questions and wait for their answers. ' +
-      'Use this whenever you would otherwise inline a question in your text output. ' +
-      'Batch related questions into a single call (up to 8) rather than asking one at a ' +
-      'time; sequential calls are fine when later questions genuinely depend on earlier ' +
-      'answers. A fully cancelled or timed-out response does NOT count against the per-run ' +
-      'cap — treat it as "the user declined" and fall back gracefully (e.g. hand over a ' +
-      'deep link) without worrying about a wasted call.',
+    WIZARD_ASK_TOOL_DESCRIPTION,
     {
       questions: z.array(askQuestionSchema).min(1).max(8),
+      subject: z.string().optional().describe(WIZARD_ASK_SUBJECT_DESCRIPTION),
     },
     async (args: {
       questions: Array<{
@@ -647,6 +656,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         required?: boolean;
         sensitive?: boolean;
       }>;
+      subject?: string;
     }) => {
       if (!askBridge) {
         return {
@@ -660,19 +670,14 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const capDecision = evaluateAskCap(
-        askCallCount,
-        askMaxQuestions,
-        askAdjacencyNudged,
-      );
+      const capDecision = askAccounting.evaluate(args.subject);
       if (capDecision.kind === 'capped') {
-        if (capDecision.reason === 'adjacency') {
-          askAdjacencyNudged = true;
-        }
         analytics.wizardCapture('wizard_ask capped', {
           reason: capDecision.reason,
-          call_count: askCallCount,
+          call_count: askAccounting.snapshot().callCount,
           max_questions: askMaxQuestions,
+          subject: capDecision.subject,
+          subject_run_length: capDecision.subjectRunLength,
         });
         return {
           content: [{ type: 'text' as const, text: capDecision.message }],
@@ -730,10 +735,13 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         ids.add(q.id);
       }
 
-      askCallCount += 1;
+      askAccounting.record(args.subject);
 
       try {
-        const answers = await askBridge.request({ questions: args.questions });
+        const answers = await askBridge.request({
+          questions: args.questions,
+          subject: normaliseAskSubject(args.subject),
+        });
 
         // A fully cancelled/timed-out ask (the user dismissed the overlay or let
         // it time out) shouldn't burn the per-run cap. Otherwise one cancellation
@@ -741,7 +749,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         // fallback even when the user was willing to answer. Refund the slot we
         // optimistically took so cancellation is free.
         if (isFullyCancelled(answers)) {
-          askCallCount -= 1;
+          askAccounting.refund(args.subject);
         }
 
         // Sensitive answers go to the vault; the agent sees an opaque ref.
@@ -768,7 +776,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         // A failed ask never reached the user, so it shouldn't burn the
         // per-run cap either — otherwise a transient bridge error eats the
         // budget for every remaining source.
-        askCallCount -= 1;
+        askAccounting.refund(args.subject);
         logToFile(`wizard_ask: error: ${err?.message ?? err}`);
         return {
           content: [

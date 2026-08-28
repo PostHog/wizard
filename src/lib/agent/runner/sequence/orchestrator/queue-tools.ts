@@ -13,6 +13,7 @@ import {
   VALID_MODELS,
 } from '@lib/agent/runner/switchboard/models';
 import {
+  SkipReason,
   TaskStatus,
   type QueueStore,
   type QueuedTask,
@@ -301,7 +302,11 @@ export function applyComplete(
       args.handoff,
     );
   } else if (args.status === TaskStatus.Skipped) {
-    ctx.store.skip(id, args.handoff);
+    // The agent's own words stay in the handoff and out of telemetry. This flow
+    // reaches live database and API credentials, and the repo has no redaction
+    // pass for handoff prose, so the event carries the reason and the task type
+    // only — enough to separate an agent no-op from a user decline.
+    ctx.store.skip(id, SkipReason.AgentNotNeeded, args.handoff);
   } else {
     ctx.store.complete(id, args.handoff);
   }

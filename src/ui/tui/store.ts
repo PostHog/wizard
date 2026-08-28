@@ -735,10 +735,12 @@ export class WizardStore {
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
+    loginCommands: string[] = [],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    this.$session.setKey('mcpLoginCommands', loginCommands);
     const featuresPayload =
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }

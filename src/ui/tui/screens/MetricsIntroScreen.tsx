@@ -41,10 +41,10 @@ export const MetricsIntroScreen = ({ store }: MetricsIntroScreenProps) => {
         </Text>{' '}
         program instruments your service with PostHog application metrics —
         counters, gauges, and histograms via{' '}
-        <Text color="cyan">posthog.metrics</Text> — at operational choke
-        points: request middleware, background jobs, external calls, and
-        business commit sites. Supports Python, Node.js, web JavaScript,
-        Kubernetes, and any other language via OTLP.
+        <Text color="cyan">posthog.metrics</Text> — at operational choke points:
+        request middleware, background jobs, external calls, and business commit
+        sites. Supports Python, Node.js, web JavaScript, Kubernetes, and any
+        other language via OTLP.
       </Text>
       <Box marginTop={1}>
         <SkillSourceInfo

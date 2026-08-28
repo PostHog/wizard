@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.67.0](https://github.com/PostHog/wizard/compare/v2.66.0...v2.67.0) (2026-08-27)
+
+
+### Features
+
+* export handoffs to host paths ([#1141](https://github.com/PostHog/wizard/issues/1141)) ([216ffac](https://github.com/PostHog/wizard/commit/216ffacbb04995c647df0afd03743a2a38bbb0be))
+* stable error catalog with machine-readable error codes ([#1148](https://github.com/PostHog/wizard/issues/1148)) ([25be176](https://github.com/PostHog/wizard/commit/25be176ad5ea0f295aeb13c5468e003ed0d61366))
+
+## [2.66.0](https://github.com/PostHog/wizard/compare/v2.65.0...v2.66.0) (2026-08-26)
+
+
+### Features
+
+* **warehouse:** cover 258 warehouse source kinds ([#1145](https://github.com/PostHog/wizard/issues/1145)) ([e5cafaa](https://github.com/PostHog/wizard/commit/e5cafaa1968f7dd5dc25251cfeb5a432c699a03e))
+
+
+### Bug Fixes
+
+* **mcp:** drop feature-selection menus, surface the editor's login command ([#1122](https://github.com/PostHog/wizard/issues/1122)) ([e9e407f](https://github.com/PostHog/wizard/commit/e9e407f85f3fdc1cd2b1dbde203fa9a96dae7d56))
+* **orchestrator:** take warehouse consent at seed time, and name every skip ([#1147](https://github.com/PostHog/wizard/issues/1147)) ([bcf1052](https://github.com/PostHog/wizard/commit/bcf10523a12c6b996618e174f9b4235555385576))
+* **warehouse:** make check_env_keys agree with the source detector ([#1144](https://github.com/PostHog/wizard/issues/1144)) ([d6f1937](https://github.com/PostHog/wizard/commit/d6f1937c9ec01e4f434bac8a271424c2b78aadf5))
+* **wizard-ask:** count the batching nudge per subject, not per run ([#1146](https://github.com/PostHog/wizard/issues/1146)) ([ba774ab](https://github.com/PostHog/wizard/commit/ba774ab27db0a499b0e9a2c4aee40b3572a2d8e3))
+
 ## [2.65.0](https://github.com/PostHog/wizard/compare/v2.64.1...v2.65.0) (2026-08-24)
 
 

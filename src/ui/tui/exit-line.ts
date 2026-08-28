@@ -49,10 +49,25 @@ function tokenCostLine(store: WizardStore): string | null {
   );
 }
 
+/**
+ * The one manual step the wizard can't do itself: the editor's own MCP login.
+ * Echoed into scrollback like the handoff prompt — command on its own plain
+ * line so a terminal can triple-click-select it.
+ */
+function mcpLoginBlock(store: WizardStore): string | null {
+  const commands = store.session.mcpLoginCommands;
+  if (!commands || commands.length === 0) return null;
+  return (
+    `${GREEN}${BOLD}\u2714 Authenticate to finish (opens your browser):${RESET_ATTRS}\n` +
+    commands.join('\n')
+  );
+}
+
 export function getExitLine(store: WizardStore): string {
   const outro = store.session.outroData;
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);
+  const loginBlock = mcpLoginBlock(store);
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
@@ -87,12 +102,15 @@ export function getExitLine(store: WizardStore): string {
       );
     }
 
+    if (loginBlock) parts.push(loginBlock);
     if (costLine) parts.push(costLine);
 
     return parts.join('\n\n');
   }
 
-  return costLine
-    ? `${DIM}${label} exited.${RESET_ATTRS}\n\n${costLine}`
-    : `${DIM}${label} exited.${RESET_ATTRS}`;
+  const parts = loginBlock
+    ? [loginBlock]
+    : [`${DIM}${label} exited.${RESET_ATTRS}`];
+  if (costLine) parts.push(costLine);
+  return parts.join('\n\n');
 }
