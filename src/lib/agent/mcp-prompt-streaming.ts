@@ -202,8 +202,8 @@ export async function* runMcpPromptViaSdk(args: {
    *  context so the follow-up prompt can reference what the agent
    *  already showed. */
   resumeSessionId?: string;
-  /** Program this run's gateway spend attributes to; omitting it leaves the
-   *  spend unattributed. */
+  /** Program this run's gateway spend attributes to. Omitting it fails the run
+   *  rather than going unattributed, so every caller must supply one. */
   programId?: string;
   /** Integration label for the trace tags; the tutorial usually has none. */
   integration?: string;

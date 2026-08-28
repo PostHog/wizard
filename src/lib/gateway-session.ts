@@ -50,11 +50,7 @@ const LEGACY_RETRY_MS = 10 * 60 * 1000;
 // CLI hangs up spends a daily mint and orphans a live token.
 const MINT_TIMEOUT_MS = 20_000;
 
-/**
- * Resolve the gateway auth for this run, minting (and re-minting near expiry)
- * through the wizard backend. Throws on every failure except a 404, which is the
- * rollout switch and resolves to the legacy posture.
- */
+/** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
   host: HostResolution,
   accessToken: string,
@@ -133,7 +129,8 @@ export function resetGatewaySession(): void {
 
 /**
  * Whether a server-supplied origin may receive a bearer and prompt content:
- * https, and either a posthog.com host or the one the run authenticated against.
+ * https (loopback excepted), and either a posthog.com host or the one the run
+ * authenticated against.
  */
 export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
   let url: URL;
@@ -192,9 +189,7 @@ export class GatewayMintRefused extends Error {
 
 /**
  * The mint could not produce a usable credential: unreachable, a 5xx, or a
- * response the client cannot use. Thrown rather than downgraded, because the
- * legacy posture enforces none of the wizard's caps, budgets or attribution, so
- * a silent downgrade spends unattributed money to hide an outage.
+ * response the client cannot use.
  */
 export class GatewayMintFailed extends Error {
   constructor(message: string) {
@@ -205,13 +200,8 @@ export class GatewayMintFailed extends Error {
 
 /**
  * Whether a mint status means "refused this run" rather than "not available".
- *
- * The legacy gateway enforces none of the wizard's controls, so falling back on
- * a refusal makes every one of them optional: 429 is the per-program daily run
- * limit, 403 project access that was revoked after the token was issued, 401 a
- * credential that may not mint. Only a 404 falls back, and it is the rollout
- * switch; a 5xx fails the run, because downgrading on an outage spends
- * unattributed money to hide it.
+ * 429 is the daily run limit, 403 revoked project access, 401 a credential that
+ * may not mint. Only 404 falls back; it is the rollout switch.
  */
 function isMintRefusal(status: number): boolean {
   return status === 400 || status === 401 || status === 403 || status === 429;
