@@ -89,7 +89,7 @@ async function resolveGatewayAuth(
   }
   const minted = await mintGatewayToken(host, accessToken, program);
   if (!minted) {
-    // 404 only: this org is not on the new gateway yet.
+    // The mint is not enabled here, or does not recognise this credential.
     analytics.setTag('gateway_edition', 'legacy');
     const auth = legacyAuth(host, accessToken);
     cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
@@ -203,11 +203,12 @@ export class GatewayMintFailed extends Error {
 
 /**
  * Whether a mint status means "refused this run" rather than "not available".
- * 429 is the daily run limit, 403 revoked project access, 401 a credential that
- * may not mint. Only 404 falls back; it is the rollout switch.
+ * These are the statuses the endpoint returns after it has authenticated the
+ * caller: 429 the daily run limit, 403 revoked project access, 400 a login
+ * covering more than one project. 404 and 401 fall back instead.
  */
 function isMintRefusal(status: number): boolean {
-  return status === 400 || status === 401 || status === 403 || status === 429;
+  return status === 400 || status === 403 || status === 429;
 }
 
 function mintRefusalMessage(status: number): string {
@@ -221,7 +222,7 @@ function mintRefusalMessage(status: number): string {
       // unrecognised program is a 404 and falls back instead.
       return 'Your PostHog login must cover exactly one project. Re-authenticate and try again.';
     default:
-      return 'The wizard could not authenticate to the PostHog gateway.';
+      return 'The PostHog gateway refused this run.';
   }
 }
 
@@ -250,12 +251,12 @@ async function mintGatewayToken(
           mintRefusalMessage(resp.status),
         );
       }
-      if (resp.status === 404) {
-        // The only downgrade left. 404 is the rollout switch: the endpoint is
-        // unconfigured, or this org is not flagged on yet, and both mean the run
-        // belongs on the posture it used before this feature existed.
+      if (resp.status === 404 || resp.status === 401) {
+        // 404 is the rollout switch. 401 is a credential the mint does not
+        // recognise, an API key rather than an OAuth login; the legacy gateway
+        // authenticates it separately, so falling back grants nothing.
         logToFile(
-          '[gateway] mint not enabled for this org; staying on the existing gateway',
+          `[gateway] mint unavailable for this credential (HTTP ${resp.status}); staying on the existing gateway`,
         );
         return null;
       }
