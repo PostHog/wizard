@@ -430,17 +430,21 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed, and is one of the two points consent resolves by. */
+  /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
-    analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
+    // Reports first: analytics merges tags into an event as it is sent, so
+    // `setup confirmed` only carries the warehouse tags if they are already
+    // set. On main they were, because reporting happened back in detect.
     this._markWarehouseSourcesReportedIfNeeded();
+    analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
   }
 
   /**
-   * User picked "Continue" (not the decline option) on the intro screen.
-   * Set before completeSetup() resolves the intro gate.
+   * Sharing is on: either the user turned it back on in the panel, or they
+   * pressed Continue without ever touching it. Both are reversible until
+   * completeSetup() resolves the intro gate and reports.
    */
   grantSharing(): void {
     this.$session.setKey('scanConsent', ScanConsent.Granted);
@@ -448,15 +452,16 @@ export class WizardStore {
   }
 
   /**
-   * User picked "Continue without sharing what you use" on the intro
-   * screen. Set before completeSetup() resolves the intro gate. Suppresses
-   * reporting only, local detection still runs; see `scanConsent` on
-   * `WizardSession`. Reports immediately (idempotently) rather than waiting
-   * for completeSetup(), since consent has just resolved here too.
+   * Sharing is off. Suppresses reporting only — local detection still ran and
+   * the results stay in the session, so the outro suggestion and the warehouse
+   * task are unaffected; see `scanConsent` on `WizardSession`.
+   *
+   * Deliberately does not report. The panel's toggle can come back here, so
+   * marking the run reported would strand a user who turns sharing off and
+   * then on again. completeSetup() owns the single report.
    */
   declineSharing(): void {
     this.$session.setKey('scanConsent', ScanConsent.Declined);
-    this._markWarehouseSourcesReportedIfNeeded();
     this.emitChange();
   }
 

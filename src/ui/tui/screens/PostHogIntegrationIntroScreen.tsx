@@ -13,46 +13,77 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
-import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
+import {
+  PickerMenu,
+  LoadingBox,
+  type PickerOption,
+} from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import { ScanConsent } from '@lib/wizard-session';
+import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
+import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
 
-type View = 'default' | 'more-info' | 'privacy';
+type View = 'default' | 'more-info';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
- * shared default's second line (".env* file contents will not leave your
- * machine") reads as a flat contradiction next to this screen's disclosure
- * paragraph, which says variable names are read and shared. Spelling out
- * values-vs-names here resolves that without touching the default other
- * screens rely on.
+ * shared default (".env* file contents will not leave your machine") is true
+ * of values and false of variable names, which this screen reads and reports.
+ * Two lines carry the fact and name the screen that holds the detail, so the
+ * disclosure reaches people who never open it.
  */
 const SUBTITLE = (
   <>
     <Text dimColor>
       We'll use AI to analyze your project and complete work.
     </Text>
-    <Text dimColor>
-      .env* values stay local; matched variable names may be shared.
-    </Text>
+    <Text dimColor>Review what data is shared in "{PRIVACY_PANEL_LABEL}."</Text>
+    <Text dimColor>.env* values stay on your machine.</Text>
   </>
 );
 
 /**
- * Exported so a test can measure every label without rendering the screen.
- * A row spends 2 columns on the focus marker and its gap.
+ * Exported so a test can measure every label against the menu's column.
+ * `Privacy & data` is not here: IntroScreenLayout appends it to every intro
+ * menu, so no screen carries its own copy.
  */
-export const CONTINUE_MENU_WIDTH = 30;
-
 export const CONTINUE_MENU_OPTIONS: { label: string; value: string }[] = [
   { label: 'Continue', value: 'continue' },
-  { label: "Continue, don't share tools", value: 'continue-no-scan' },
   { label: 'Change framework', value: 'framework' },
   { label: 'More info', value: 'more-info' },
   { label: 'Cancel', value: 'cancel' },
 ];
+
+/**
+ * A blank, unselectable row. Navigation skips disabled options, so this is a
+ * margin the menu can hold rather than one the layout has to special-case.
+ */
+const MENU_SPACER: PickerOption<string> = {
+  label: '',
+  value: 'spacer',
+  disabled: true,
+};
+
+/**
+ * The sharing choice, as two explicit rows rather than one toggle. A toggle
+ * label has to describe either the current state or the next action, and a
+ * reader cannot tell which; two rows with the filled diamond on the live one
+ * say both at once. The trailing spacer separates them from the Back that
+ * IntroScreenLayout appends, since leaving the screen is a different kind of
+ * act from changing something on it.
+ */
+export function sharingOptions(sharing: boolean): PickerOption<string>[] {
+  const mark = (on: boolean) => ({
+    glyph: on ? Icons.diamond : Icons.diamondOpen,
+  });
+  return [
+    { label: 'Share tools', value: 'share', icon: mark(sharing) },
+    { label: "Don't share tools", value: 'no-share', icon: mark(!sharing) },
+    MENU_SPACER,
+  ];
+}
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -103,6 +134,7 @@ export const PostHogIntegrationIntroScreen = ({
   const [view, setView] = useState<View>('default');
 
   const { session } = store;
+  const sharing = session.scanConsent !== ScanConsent.Declined;
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
@@ -120,12 +152,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Title ──────────────────────────────────────────────────────────
 
-  const title =
-    view === 'privacy'
-      ? 'Wizard privacy & usage'
-      : detecting
-      ? 'PostHog Wizard starting up'
-      : 'PostHog Wizard 🦔';
+  const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
 
   // ── Description ────────────────────────────────────────────────────
 
@@ -191,22 +218,11 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
-  } else if (view === 'privacy') {
-    body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
-      <>
-        <Box>
-          <Text>Let's do two hours of work in eight minutes.</Text>
-        </Box>
-        <Box flexDirection="column" width={64} flexShrink={0} marginTop={1}>
-          <Text dimColor>
-            We check dependency files and .env variable names for tools you use,
-            and share what we find with PostHog to suggest features and
-            understand what customers build.
-          </Text>
-        </Box>
-      </>
+      <Box>
+        <Text>Let's do two hours of work in eight minutes.</Text>
+      </Box>
     );
   }
 
@@ -269,14 +285,10 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Menu ───────────────────────────────────────────────────────────
 
-  let menuOptions: { label: string; value: string }[] | null = null;
+  let menuOptions: PickerOption<string>[] | null = null;
 
   if (view === 'more-info') {
-    menuOptions = [
-      { label: 'Back', value: 'back' },
-      { label: 'Privacy & data usage', value: 'privacy' },
-    ];
-  } else if (view === 'privacy') {
+    // No route to the panel from here: it has its own top-level menu item.
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
     menuOptions = CONTINUE_MENU_OPTIONS;
@@ -291,15 +303,16 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
-    } else if (value === 'privacy') {
-      setView('privacy');
     } else if (value === 'back') {
-      setView(view === 'privacy' ? 'more-info' : 'default');
-    } else if (value === 'continue-no-scan') {
-      store.declineSharing();
-      store.completeSetup();
-    } else {
+      setView('default');
+    } else if (value === 'share') {
       store.grantSharing();
+    } else if (value === 'no-share') {
+      store.declineSharing();
+    } else if (value === 'continue') {
+      // Sharing is on by default, so consent nobody touched resolves to granted
+      // here. A choice already made in the panel stands.
+      if (session.scanConsent === ScanConsent.Undecided) store.grantSharing();
       store.completeSetup();
     }
   };
@@ -317,7 +330,8 @@ export const PostHogIntegrationIntroScreen = ({
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       menuAlign="center"
-      menuWidth={CONTINUE_MENU_WIDTH}
+      // The one program whose disclosure view can be acted on.
+      privacyOptions={sharingOptions(sharing)}
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}

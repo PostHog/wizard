@@ -12,8 +12,12 @@
 
 import path from 'path';
 import { Box, Text } from 'ink';
-import type { ReactNode } from 'react';
-import { PickerMenu } from '@ui/tui/primitives/index';
+import { useState, type ReactNode } from 'react';
+import { PickerMenu, type PickerOption } from '@ui/tui/primitives/index';
+import {
+  PrivacyPanel,
+  PRIVACY_PANEL_LABEL,
+} from '@ui/tui/components/PrivacyPanel';
 
 export interface DetectionRow {
   label: string;
@@ -51,10 +55,12 @@ interface IntroScreenLayoutProps {
   /** Content rendered between detection rows and the menu */
   children?: ReactNode;
 
-  /** Menu options. Pass null to hide the menu entirely. */
-  menuOptions?: { label: string; value: string }[] | null;
-  /** The default 24 wraps longer labels; a screen needing more opts in. */
-  menuWidth?: number;
+  /**
+   * Menu options, forwarded to PickerMenu as-is — so a screen can mark a row
+   * `disabled` (navigation skips it, which is how a blank spacer row works) or
+   * give it an `icon`. Pass null to hide the menu entirely.
+   */
+  menuOptions?: PickerOption<string>[] | null;
 
   /**
    * Menu alignment. 'center' (default) matches the wizard's standard
@@ -62,6 +68,22 @@ interface IntroScreenLayoutProps {
    * menu should align with the panel content rather than viewport center.
    */
   menuAlign?: 'center' | 'left';
+
+  /**
+   * Adds the disclosure row to the menu and owns the view behind it, so every
+   * program intro offers it at the top level rather than buried under More
+   * info. Set false on screens that are not a program intro — the auth
+   * overlay renders the panel itself and would otherwise nest inside itself.
+   */
+  showPrivacy?: boolean;
+
+  /**
+   * Rows shown above Back on the disclosure view, for a program that lets the
+   * user act on what the panel describes. Their selections reach `onSelect`
+   * like any other. Passing them also un-gates the panel's scan paragraph,
+   * which points the reader at exactly these rows.
+   */
+  privacyOptions?: PickerOption<string>[];
 
   /** Called when the user picks a menu option */
   onSelect?: (value: string) => void;
@@ -94,6 +116,54 @@ const DEFAULT_SUBTITLE = (
   </>
 );
 
+/** Default menu when a screen passes none. */
+const DEFAULT_MENU: PickerOption<string>[] = [
+  { label: 'Continue', value: 'continue' },
+  { label: 'Cancel', value: 'cancel' },
+];
+
+/**
+ * The menu for the current view. The disclosure row is appended here rather
+ * than left to each screen: ten intro screens would otherwise carry the same
+ * row, view and back handler, which is how this panel came to answer to five
+ * different names and to sit two levels deep on the one screen that had it.
+ *
+ * Pure and exported so the guarantee is testable without a renderer.
+ */
+export function buildIntroMenu({
+  menuOptions,
+  showPrivacy = true,
+  showingPrivacy = false,
+  privacyOptions,
+}: {
+  menuOptions?: PickerOption<string>[] | null;
+  showPrivacy?: boolean;
+  showingPrivacy?: boolean;
+  privacyOptions?: PickerOption<string>[];
+}): PickerOption<string>[] | null {
+  if (showingPrivacy) {
+    // Always supplied here, so a program cannot strand the user by omitting
+    // it. A blank glyph keeps its label on the same column as rows above that
+    // carry one.
+    const back = {
+      label: 'Back',
+      value: 'privacy-back',
+      ...(privacyOptions?.some((o) => o.icon) ? { icon: { glyph: ' ' } } : {}),
+    };
+    return [...(privacyOptions ?? []), back];
+  }
+
+  const base = menuOptions === undefined ? DEFAULT_MENU : menuOptions;
+  // A screen with no menu at all (a fatal state) gains nothing to select.
+  if (base === null || !showPrivacy) return base;
+
+  const row = { label: PRIVACY_PANEL_LABEL, value: 'privacy' };
+  // Above a trailing Cancel: leaving the wizard stays the last thing offered.
+  const insertAt =
+    base.at(-1)?.value === 'cancel' ? base.length - 1 : base.length;
+  return [...base.slice(0, insertAt), row, ...base.slice(insertAt)];
+}
+
 export const IntroScreenLayout = ({
   installDir,
   title = 'PostHog Wizard 🦔',
@@ -105,20 +175,27 @@ export const IntroScreenLayout = ({
   children,
   menuOptions,
   menuAlign = 'center',
-  menuWidth,
+  showPrivacy = true,
+  privacyOptions,
   onSelect,
   programLabel,
   skillId,
   errorView,
 }: IntroScreenLayoutProps) => {
-  // Default menu: Continue / Cancel
-  const resolvedMenuOptions =
-    menuOptions === undefined
-      ? [
-          { label: 'Continue', value: 'continue' },
-          { label: 'Cancel', value: 'cancel' },
-        ]
-      : menuOptions;
+  const [showingPrivacy, setShowingPrivacy] = useState(false);
+
+  const resolvedMenuOptions = buildIntroMenu({
+    menuOptions,
+    showPrivacy,
+    showingPrivacy,
+    privacyOptions,
+  });
+
+  const handleSelect = (value: string) => {
+    if (value === 'privacy') return setShowingPrivacy(true);
+    if (value === 'privacy-back') return setShowingPrivacy(false);
+    onSelect?.(value);
+  };
 
   if (errorView) {
     return (
@@ -145,24 +222,32 @@ export const IntroScreenLayout = ({
         justifyContent="center"
       >
         <Box flexDirection="column" alignItems="center">
-          <WizardTitle title={title} />
+          <WizardTitle title={showingPrivacy ? PRIVACY_PANEL_LABEL : title} />
 
-          {showSubtitle && (
+          {showSubtitle && !showingPrivacy && (
             <Box flexDirection="column" alignItems="center" marginTop={1}>
               {subtitle ?? DEFAULT_SUBTITLE}
             </Box>
           )}
 
-          {body && (
+          {showingPrivacy ? (
             <Box flexDirection="column" alignItems="center" marginTop={1}>
-              {body}
+              {/* The paragraph ends by pointing below, so it only renders
+                  where this screen actually put a choice there. */}
+              <PrivacyPanel canOptOut={privacyOptions !== undefined} />
             </Box>
+          ) : (
+            body && (
+              <Box flexDirection="column" alignItems="center" marginTop={1}>
+                {body}
+              </Box>
+            )
           )}
         </Box>
 
-        {children}
+        {!showingPrivacy && children}
 
-        {showDetection && (
+        {showDetection && !showingPrivacy && (
           <Box flexDirection="column" marginTop={1}>
             <Text>
               <Text>
@@ -202,10 +287,7 @@ export const IntroScreenLayout = ({
           </Box>
         )}
 
-        <Box
-          width={menuWidth ?? (menuAlign === 'left' ? 64 : 24)}
-          marginTop={1}
-        >
+        <Box width={menuAlign === 'left' ? 64 : 24} marginTop={1}>
           {resolvedMenuOptions && onSelect && (
             <Box
               justifyContent={menuAlign === 'left' ? 'flex-start' : 'center'}
@@ -215,7 +297,7 @@ export const IntroScreenLayout = ({
                 options={resolvedMenuOptions}
                 onSelect={(value) => {
                   const choice = Array.isArray(value) ? value[0] : value;
-                  onSelect(choice);
+                  handleSelect(choice);
                 }}
               />
             </Box>

@@ -263,6 +263,46 @@ describe('reportWarehouseSourcesDetected', () => {
     expect(sources.map((s) => s.kind)).toContain('Stripe');
   });
 
+  it('a program that never scanned reports nothing, even when granted', () => {
+    // Every intro screen resolves consent through the same store method, so the
+    // reporter is reached on runs of programs that never scan, and --ci grants
+    // consent up front, so the guard cannot be consent alone.
+    const session = buildSession({ installDir: tmpDir, ci: true });
+    expect(session.scanConsent).toBe(ScanConsent.Granted);
+
+    const fired = reportWarehouseSourcesDetected(session);
+
+    // Resolved, so the caller stops asking, but a scan that never ran must not
+    // produce a row indistinguishable from one that found nothing.
+    expect(fired).toBe(true);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+    expect(analytics.setTag).not.toHaveBeenCalled();
+  });
+
+  it('the standalone warehouse command does not report through this path', async () => {
+    // `wizard warehouse` writes the same frameworkContext key from its own
+    // detect, and sets its own tags. Without a scan-state marker it would also
+    // emit this event, which six saved insights read as "the integration flow
+    // scanned".
+    const session = buildSession({ installDir: tmpDir, ci: true });
+    const { detectWarehousePrerequisites } = await import(
+      '@lib/programs/warehouse-source/detect'
+    );
+    detectWarehousePrerequisites(session, (key, value) => {
+      session.frameworkContext[key] = value;
+    });
+    expect(
+      session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],
+    ).toBeDefined();
+
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'warehouse sources detected',
+      expect.anything(),
+    );
+  });
+
   it('is idempotent: a second call, from either consent path, does nothing', async () => {
     const session = await scannedSession(ScanConsent.Granted);
 

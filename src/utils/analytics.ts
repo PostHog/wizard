@@ -55,6 +55,7 @@ export function sessionProperties(
     ...(discoveredFeatures !== undefined
       ? { discovered_features: discoveredFeatures }
       : {}),
+    scan_consent: session.scanConsent,
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
   };
