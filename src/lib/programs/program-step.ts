@@ -59,6 +59,8 @@ export interface ProgramReadyContext {
   }) => void;
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
+  /** Latches `warehouseSourcesReported` once a scan has been reported or declined. */
+  readonly markScanReported: () => void;
 }
 
 export interface ProgramStep {
@@ -269,6 +271,16 @@ export interface ProgramConfig {
   }>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
+  /**
+   * Turn this program's warehouse-source scan into telemetry once scan
+   * consent resolves. `WizardStore` calls this generically (via
+   * `getProgramConfig`) from the two points consent resolves, rather than
+   * importing a specific program's reporting function — so the store stays
+   * unaware of which program is active. Returns whether reporting resolved
+   * (granted or declined), so the store can set its idempotency flag. Omit
+   * for a program that never scans for warehouse sources.
+   */
+  reportScanResults?: (session: WizardSession) => boolean;
   /**
    * Path (relative to installDir) of the report file the program writes.
    * Mirrors `run.reportFile` but lifted to the top level so UI screens can

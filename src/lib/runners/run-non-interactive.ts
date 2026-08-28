@@ -236,6 +236,9 @@ export function runNonInteractive(
           },
           addDiscoveredFeature: () => undefined,
           setDetectionComplete: () => undefined,
+          markScanReported: () => {
+            session.warehouseSourcesReported = true;
+          },
         };
         for (const step of config.steps) {
           if (step.onReady) {
