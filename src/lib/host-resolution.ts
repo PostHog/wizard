@@ -66,6 +66,10 @@ function assetHostFromApiHost(apiHost: string): string {
  * smoke-test.sh greps dist/*.js for it, and JSDoc survives bundling.
  */
 export function mcpUrlFor(localMcp: boolean): string {
+  const hostEndpoint = IS_PRODUCTION_BUILD
+    ? undefined
+    : runtimeEnv('POSTHOG_MCP_ENDPOINT');
+  if (hostEndpoint) return hostEndpoint;
   const override = IS_PRODUCTION_BUILD ? undefined : runtimeEnv('MCP_URL');
   if (override) return override;
   return localMcp ? MCP_LOCAL_URL : MCP_PROD_URL;

@@ -98,11 +98,25 @@ describe('mcpUrlFor', () => {
     }
   });
 
-  it('ignores MCP_URL entirely in production builds', async () => {
+  it('takes a host-provided MCP endpoint in development builds', () => {
+    const prevEndpoint = process.env.POSTHOG_MCP_ENDPOINT;
+    process.env.POSTHOG_MCP_ENDPOINT = 'http://host.docker.internal:8787/mcp';
+    try {
+      expect(mcpUrlFor(false)).toBe('http://host.docker.internal:8787/mcp');
+      expect(mcpUrlFor(true)).toBe('http://host.docker.internal:8787/mcp');
+    } finally {
+      if (prevEndpoint === undefined) delete process.env.POSTHOG_MCP_ENDPOINT;
+      else process.env.POSTHOG_MCP_ENDPOINT = prevEndpoint;
+    }
+  });
+
+  it('ignores MCP endpoint overrides in production builds', async () => {
     const prevEnv = process.env.NODE_ENV;
     const prevUrl = process.env.MCP_URL;
+    const prevEndpoint = process.env.POSTHOG_MCP_ENDPOINT;
     process.env.NODE_ENV = 'production';
     process.env.MCP_URL = 'https://evil.example.com/mcp';
+    process.env.POSTHOG_MCP_ENDPOINT = 'https://evil.example.com/host-mcp';
     try {
       vi.resetModules();
       const fresh = await import('@lib/host-resolution');
@@ -112,6 +126,8 @@ describe('mcpUrlFor', () => {
       process.env.NODE_ENV = prevEnv;
       if (prevUrl === undefined) delete process.env.MCP_URL;
       else process.env.MCP_URL = prevUrl;
+      if (prevEndpoint === undefined) delete process.env.POSTHOG_MCP_ENDPOINT;
+      else process.env.POSTHOG_MCP_ENDPOINT = prevEndpoint;
       vi.resetModules();
     }
   });

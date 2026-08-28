@@ -67,6 +67,7 @@ type RuntimeEnvKey =
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'
+  | 'POSTHOG_MCP_ENDPOINT'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
