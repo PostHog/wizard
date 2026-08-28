@@ -165,7 +165,6 @@ describe('gatewayAuth', () => {
     [429, 'daily run limit'],
     [400, 'exactly one project'],
     [403, 'access to this project'],
-    [401, 'could not authenticate'],
   ])(
     'refuses rather than falling back on HTTP %i',
     async (status, fragment) => {
@@ -178,14 +177,21 @@ describe('gatewayAuth', () => {
     },
   );
 
-  it('stays on the existing gateway when the org is not rolled out (404)', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 404 });
-    // The one surviving downgrade: 404 is the staged-rollout switch, so removing
-    // it would make the flip all-or-nothing.
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth.edition).toBe('legacy');
-    expect(analytics.setTag).toHaveBeenCalledWith('gateway_edition', 'legacy');
-  });
+  it.each([404, 401])(
+    'stays on the existing gateway on HTTP %i',
+    async (status) => {
+      fetchMock.mockResolvedValue({ ok: false, status });
+      // 404 is the staged-rollout switch, so removing it would make the flip
+      // all-or-nothing. 401 covers a credential the mint cannot authenticate,
+      // such as the API key CI runs with.
+      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(auth.edition).toBe('legacy');
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'gateway_edition',
+        'legacy',
+      );
+    },
+  );
 
   it.each([500, 502, 503])(
     'fails the run when the mint errors (HTTP %i)',
