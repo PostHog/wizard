@@ -41,7 +41,7 @@ function ensurePostHogCli(variant: SkillVariant): void {
     analytics.captureException(
       result.errorObject ??
         new Error(`posthog-cli pre-install failed: ${result.error}`),
-      { source: 'source_maps_cli_preinstall', variant },
+      { source: 'source_maps_cli_preinstall', variant, detail: result.detail },
     );
     getUI().log.warn(
       `Could not pre-install posthog-cli (${result.error}). Your release build ` +

@@ -82,6 +82,43 @@ describe('install-cli-steering', () => {
       expect(result.error).toContain('install failed');
     });
 
+    it('gives every npm failure a stable exception message so they group', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: `npm error path ${os.homedir()}\\AppData\\Roaming\\npm\n`,
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.errorObject?.message).toBe(
+        'npm install --global @posthog/cli@latest failed',
+      );
+    });
+
+    it('drops personal data from the reported detail', () => {
+      const home = os.homedir();
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: [
+          'npm error code E404',
+          'npm error 404 Not Found - GET https://registry.npmjs.org/@posthog/cli',
+          `npm error path ${home}\\AppData\\Roaming\\npm`,
+          `npm error command ${home}\\node.exe install`,
+          `npm error A complete log is in ${home}\\npm-cache\\log`,
+        ].join('\n'),
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.detail).not.toContain(home);
+      expect(result.detail).not.toContain('npm error path');
+      expect(result.detail).not.toContain('npm error command');
+      // Keeps the diagnosable bits: HTTP status and the failing registry URL.
+      expect(result.detail).toContain('E404');
+      expect(result.detail).toContain('registry.npmjs.org');
+      expect(result.error).not.toContain(home);
+    });
+
     it('explains when npm itself cannot be run', () => {
       spawnSyncMock.mockReturnValue({
         error: new Error('spawn npm ENOENT'),

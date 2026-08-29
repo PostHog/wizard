@@ -73,6 +73,12 @@ export interface CliInstallResult {
    * false.
    */
   errorObject?: Error;
+  /**
+   * Sanitized npm output for callers to attach as an exception property. Keeps
+   * the HTTP status and CLI version out of the grouping message while the
+   * message itself stays stable. Truncated and free of personal data.
+   */
+  detail?: string;
 }
 
 const spawnOptions = {
@@ -81,6 +87,31 @@ const spawnOptions = {
   // resolves them through a shell.
   shell: process.platform === 'win32',
 };
+
+/** Stable message so npm install failures group into one error-tracking issue. */
+const NPM_INSTALL_FAILED_MESSAGE =
+  'npm install --global @posthog/cli@latest failed';
+
+/** Cap on the sanitized npm output stored as an exception property. */
+const NPM_FAILURE_DETAIL_LIMIT = 1000;
+
+/**
+ * Strip personal data from npm's output before it reaches error tracking. npm
+ * prints `npm error path <dir>` and `npm error command <cmd>` lines that carry
+ * the user's name and home directory, so drop those lines and redact any home
+ * directory that remains.
+ */
+function sanitizeNpmFailure(raw: string): string {
+  const home = os.homedir();
+  const cleaned = raw
+    .split('\n')
+    .filter((line) => {
+      const normalized = line.trim().toLowerCase();
+      return !/^npm (error|err!) (path|command)\b/.test(normalized);
+    })
+    .join('\n');
+  return (home ? cleaned.split(home).join('~') : cleaned).trim();
+}
 
 /**
  * Install or update the PostHog CLI in the user's environment. `npm install
@@ -101,16 +132,12 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
     };
   }
   if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').trim();
-    const message =
-      detail ||
-      `npm install --global @posthog/cli@latest exited with status ${
-        result.status ?? 'unknown'
-      }`;
+    const detail = sanitizeNpmFailure(result.stderr || result.stdout || '');
     return {
       success: false,
-      error: message,
-      errorObject: new Error(message),
+      error: detail || NPM_INSTALL_FAILED_MESSAGE,
+      errorObject: new Error(NPM_INSTALL_FAILED_MESSAGE),
+      detail: detail.slice(0, NPM_FAILURE_DETAIL_LIMIT) || undefined,
     };
   }
   return { success: true };
