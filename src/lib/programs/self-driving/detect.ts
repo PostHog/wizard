@@ -246,13 +246,18 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
   },
   {
     // Skill emits: [ABORT] github connection declined
-    match: /^github connection declined$/i,
-    message: 'GitHub connection required',
+    // Safety net only — STEP 3 now degrades instead of aborting when the user
+    // declines GitHub (see prompt.ts). The `\W*` bounds tolerate stray quotes
+    // or punctuation the skill sometimes wraps around the contract string
+    // (e.g. `github connection declined`.') so it still renders this screen
+    // instead of the generic abort outro.
+    match: /^\W*github connection declined\W*$/i,
+    message: 'GitHub connection skipped',
     body:
-      'Self-driving needs GitHub access to research issues in your code and ' +
-      'open fixes, so setup cannot finish without it. Nothing was left ' +
-      'half-configured. When you are ready to install the PostHog GitHub ' +
-      'App, run the wizard again.',
+      'You chose not to connect GitHub, so Self-driving stopped before it ' +
+      'could finish. Nothing was left half-configured. Connect the PostHog ' +
+      'GitHub App from your PostHog project integration settings, then run ' +
+      'Self-driving again — findings need GitHub to become code fixes.',
   },
   {
     // Skill emits: [ABORT] requires-interactive-mode

@@ -166,6 +166,22 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     expect(matched[0].body).toBeTruthy();
   });
 
+  it('still matches the github-declined reason when the skill wraps it in stray punctuation', () => {
+    // The skill sometimes emits punctuation around the contract string; the
+    // reason must still resolve to the tailored screen, not the generic outro.
+    for (const reason of [
+      'github connection declined.',
+      "github connection declined`.')",
+      '`github connection declined`',
+    ]) {
+      const matched = SELF_DRIVING_ABORT_CASES.filter((c) =>
+        c.match.test(reason),
+      );
+      expect(matched).toHaveLength(1);
+      expect(matched[0].message).toBe('GitHub connection skipped');
+    }
+  });
+
   it('frames the unavailable-access abort as open beta, not a closed per-team beta', () => {
     // STEP 1 no longer gates on access — Self-driving is open beta — but the
     // abort is kept as a safety net. Its copy must say the product is still
@@ -195,6 +211,34 @@ describe('selfDrivingConfig', () => {
     expect(
       typeof last === 'object' && 'content' in last ? last.content : '',
     ).toBe('Your product drives itself.');
+  });
+
+  it('ties the outro PR action to a GitHub connection, honest for a degraded run', async () => {
+    // A declined GitHub connection now reaches the success outro (STEP 3
+    // degrades instead of aborting), so the PR next-step must not read as
+    // immediately available — it names the GitHub prerequisite for the user
+    // who skipped it.
+    const { run } = selfDrivingConfig;
+    const resolved =
+      typeof run === 'function' ? await run(buildSession({})) : run;
+    const credentials = {
+      accessToken: 'tok',
+      projectApiKey: 'phc_test',
+      projectId: '1',
+      host: {
+        apiHost: 'https://us.i.posthog.com',
+        appHost: 'https://us.posthog.com',
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const outro = resolved!.buildOutroData!(
+      buildSession({}),
+      credentials as any,
+    );
+    const prItem = outro.nextSteps?.items.find((i: string) =>
+      i.includes('Kick off a PR'),
+    );
+    expect(prItem).toContain('connect GitHub first if you skipped it');
   });
 
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
