@@ -4,6 +4,7 @@ import {
   getProgramConfig,
   getSubcommandPrograms,
 } from '@lib/programs/program-registry';
+import type { ProgramId } from '@lib/programs/program-registry';
 import type { WizardSession } from '@lib/wizard-session';
 
 describe('PROGRAM_REGISTRY', () => {
@@ -25,6 +26,15 @@ describe('getProgramConfig', () => {
     );
     expect(getProgramConfig('revenue-analytics-setup').command).toBe(
       'revenue-analytics',
+    );
+  });
+
+  it('throws a named error for an unknown id', () => {
+    // A string-sourced id (e.g. a mistyped PROGRAM env var) reaches this
+    // function via a cast. It must name the bad id here, not crash opaquely
+    // deeper in the pipeline.
+    expect(() => getProgramConfig('does-not-exist' as ProgramId)).toThrow(
+      /does-not-exist/,
     );
   });
 });

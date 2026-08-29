@@ -60,7 +60,8 @@ async function main() {
   const projectId = process.env.PROJECT_ID!;
 
   // Which program to drive — PROGRAM env from the workbench e2e runner;
-  // defaults to the integration flow. getProgramConfig throws on unknown ids.
+  // defaults to the integration flow. getProgramConfig throws and names the id
+  // when PROGRAM holds a typo.
   const programId = (process.env.PROGRAM ||
     Program.PostHogIntegration) as ProgramId;
   const programConfig = getProgramConfig(programId);
