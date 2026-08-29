@@ -133,11 +133,21 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
   }
   if (result.status !== 0) {
     const detail = sanitizeNpmFailure(result.stderr || result.stdout || '');
+    // A quieted npm (e.g. `--loglevel=silent` from .npmrc) can exit non-zero
+    // with no output. The exit status or terminating signal is then the only
+    // diagnostic left, so fall back to it instead of a bare constant. Neither
+    // is personal data, and the stable `errorObject` message still groups these
+    // failures into one issue regardless of the fallback text.
+    const exitDetail = result.signal
+      ? `npm install --global @posthog/cli@latest terminated by signal ${result.signal}`
+      : `npm install --global @posthog/cli@latest exited with status ${
+          result.status ?? 'unknown'
+        }`;
     return {
       success: false,
-      error: detail || NPM_INSTALL_FAILED_MESSAGE,
+      error: detail || exitDetail,
       errorObject: new Error(NPM_INSTALL_FAILED_MESSAGE),
-      detail: detail.slice(0, NPM_FAILURE_DETAIL_LIMIT) || undefined,
+      detail: detail.slice(0, NPM_FAILURE_DETAIL_LIMIT) || exitDetail,
     };
   }
   return { success: true };

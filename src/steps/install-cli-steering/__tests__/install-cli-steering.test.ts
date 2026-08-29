@@ -119,6 +119,43 @@ describe('install-cli-steering', () => {
       expect(result.error).not.toContain(home);
     });
 
+    it('keeps the exit status when npm fails with no output', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        signal: null,
+        stdout: '',
+        stderr: '',
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.success).toBe(false);
+      // Grouping message stays stable...
+      expect(result.errorObject?.message).toBe(
+        'npm install --global @posthog/cli@latest failed',
+      );
+      // ...but the exit status survives in the error and detail so a silent
+      // failure is still distinguishable.
+      expect(result.error).toContain('exited with status 1');
+      expect(result.detail).toContain('exited with status 1');
+    });
+
+    it('keeps the terminating signal when npm is killed with no output', () => {
+      spawnSyncMock.mockReturnValue({
+        status: null,
+        signal: 'SIGKILL',
+        stdout: '',
+        stderr: '',
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.success).toBe(false);
+      expect(result.errorObject?.message).toBe(
+        'npm install --global @posthog/cli@latest failed',
+      );
+      expect(result.error).toContain('terminated by signal SIGKILL');
+      expect(result.detail).toContain('terminated by signal SIGKILL');
+    });
+
     it('explains when npm itself cannot be run', () => {
       spawnSyncMock.mockReturnValue({
         error: new Error('spawn npm ENOENT'),
