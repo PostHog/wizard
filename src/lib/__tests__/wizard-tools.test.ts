@@ -1134,6 +1134,51 @@ describe('downloadWithRetry', () => {
     expect(attempts).toBe(2);
   });
 
+  it('retries a body read that aborts mid-stream', async () => {
+    let attempts = 0;
+
+    const bytes = await __test.downloadWithRetry(url, {
+      fetchImpl: (() => {
+        attempts += 1;
+        const failBody = attempts < 3;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          arrayBuffer: () =>
+            failBody
+              ? Promise.reject(
+                  new Error('The operation was aborted due to timeout'),
+                )
+              : Promise.resolve(new ArrayBuffer(3)),
+        });
+      }) as any,
+      sleepImpl: noSleep,
+    });
+
+    expect(attempts).toBe(3);
+    expect(bytes).toHaveLength(3);
+  });
+
+  it('keeps the url in the message when every body read aborts', async () => {
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            arrayBuffer: () =>
+              Promise.reject(
+                new Error('The operation was aborted due to timeout'),
+              ),
+          })) as any,
+        sleepImpl: noSleep,
+        maxAttempts: 3,
+      }),
+    ).rejects.toThrow(/example\.com\/skill\.zip failed/);
+  });
+
   it('reports every attempt when all retries fail', async () => {
     await expect(
       __test.downloadWithRetry(url, {
@@ -1164,6 +1209,32 @@ describe('fetchSkillMenu', () => {
         attempts += 1;
         if (attempts < 3) return Promise.reject(new Error('reset'));
         return menuResponse();
+      }) as any,
+      sleepImpl: noSleep,
+    });
+
+    expect(attempts).toBe(3);
+    expect(result).toEqual(menu);
+  });
+
+  it('retries a body read that aborts mid-stream', async () => {
+    let attempts = 0;
+
+    const result = await fetchSkillMenu('http://localhost:8765', {
+      fetchImpl: (() => {
+        attempts += 1;
+        const failBody = attempts < 3;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            failBody
+              ? Promise.reject(
+                  new Error('The operation was aborted due to timeout'),
+                )
+              : Promise.resolve(menu),
+        });
       }) as any,
       sleepImpl: noSleep,
     });

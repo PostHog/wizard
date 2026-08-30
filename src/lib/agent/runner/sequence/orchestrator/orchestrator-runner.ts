@@ -969,16 +969,22 @@ export async function runOrchestrator(
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
         } else {
+          const detail =
+            result.kind === 'download-failed' ? `: ${result.message}` : '';
           logToFile(
-            `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
+            `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}${detail}`,
           );
           // A task without its instructions must fail here, not run blind:
           // run 91cf40eb's report task started after two EACCES install
           // failures (unwritable external-volume cache) and died silently.
           // The executor catches this, captures the exception, and fails the
           // task through the normal outcome check.
+          //
+          // The message stays constant across skills and tasks — the variant and
+          // task ids live in the log line above. Interpolating them here split
+          // one defect across dozens of error-tracking issues.
           throw new Error(
-            `Skill "${variantId}" for task "${task.type}" could not be installed (${result.kind}). ` +
+            `A required skill could not be installed (${result.kind}). ` +
               'If this is a permissions error, check that the project directory is writable.',
           );
         }

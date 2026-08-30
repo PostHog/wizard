@@ -21,11 +21,21 @@ export interface RetryOpts {
   backoffMs?: number;
 }
 
-/** Fetch a URL, retrying transient failures (network error or non-ok HTTP) with backoff. */
-export async function fetchWithRetry(
+/**
+ * Fetch a URL, read its body with `read`, and retry transient failures with
+ * backoff. Transient failures are a network error, a non-ok HTTP status, or a
+ * body read that aborts mid-stream.
+ *
+ * The body read runs inside the retry loop and under the same per-attempt
+ * timeout as the request. A slow body read that hits the timeout therefore
+ * retries like any other transient failure, instead of throwing once with the
+ * URL stripped from its message.
+ */
+export async function fetchWithRetry<T>(
   url: string,
+  read: (resp: Response) => Promise<T>,
   opts: RetryOpts = {},
-): Promise<Response> {
+): Promise<T> {
   const {
     fetchImpl = fetch,
     sleepImpl = sleep,
@@ -41,7 +51,7 @@ export async function fetchWithRetry(
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
-      return resp;
+      return await read(resp);
     } catch (err: any) {
       failures.push(`attempt ${attempt}: ${err.message}`);
       if (attempt < maxAttempts) {

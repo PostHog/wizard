@@ -406,8 +406,7 @@ export function parseAgentPrompt(
 }
 
 async function fetchText(url: string): Promise<string> {
-  const res = await fetchWithRetry(url);
-  return res.text();
+  return fetchWithRetry(url, (res) => res.text());
 }
 
 /**
