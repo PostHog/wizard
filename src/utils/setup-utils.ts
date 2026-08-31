@@ -50,6 +50,8 @@ interface ProjectData {
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
   expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   host: HostResolution;
   distinctId: string;
   projectId: number;
@@ -433,6 +435,8 @@ export async function getOrAskForProjectData(
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
   expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   projectId: number;
   roleAtOrganization: string | null;
   user: ApiUser | null;
@@ -505,6 +509,7 @@ export async function getOrAskForProjectData(
     accessToken,
     refreshToken,
     expiresAt,
+    oauthClientId,
     projectId,
     roleAtOrganization,
     user,
@@ -539,6 +544,7 @@ ${cloudUrl}/settings/project#variables`);
     accessToken,
     refreshToken,
     expiresAt,
+    oauthClientId,
     host,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
@@ -759,6 +765,7 @@ async function askForProvisioningSignup(
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       expiresAt: result.expiresAt,
+      oauthClientId: result.oauthClientId,
       projectApiKey: result.projectApiKey,
       host,
       distinctId: email,

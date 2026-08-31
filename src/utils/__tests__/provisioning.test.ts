@@ -57,6 +57,7 @@ describe('provisionNewAccount', () => {
       accessToken: 'pha_recorded_access',
       refreshToken: 'phr_recorded_refresh',
       expiresAt,
+      oauthClientId: expect.any(String),
       projectApiKey: 'phc_recorded',
       host: 'https://us.posthog.com',
       personalApiKey: 'phx_recorded',

@@ -33,6 +33,7 @@ export async function authenticate(
     accessToken,
     refreshToken,
     expiresAt,
+    oauthClientId,
     projectId,
     roleAtOrganization,
     user,
@@ -54,6 +55,7 @@ export async function authenticate(
     accessToken,
     refreshToken,
     expiresAt,
+    oauthClientId,
     projectApiKey,
     host,
     projectId,
@@ -99,6 +101,7 @@ export async function refreshAccessTokenIfNeeded(
     const token = await refreshAccessToken(
       credentials.refreshToken,
       session.baseUrl,
+      credentials.oauthClientId,
     );
     // Replaced, not mutated: readers hold this object, and a new one keeps the
     // store and the (possibly shallow-copied) session explicitly in step.

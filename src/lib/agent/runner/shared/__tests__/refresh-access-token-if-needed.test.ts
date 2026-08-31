@@ -71,12 +71,31 @@ describe('refreshAccessTokenIfNeeded', () => {
 
     await refreshAccessTokenIfNeeded(session);
 
-    expect(mockedRefresh).toHaveBeenCalledWith('phr_old', undefined);
+    expect(mockedRefresh).toHaveBeenCalledWith('phr_old', undefined, undefined);
     expect(session.credentials!.accessToken).toBe('pha_new');
     expect(session.credentials!.refreshToken).toBe('phr_rotated');
     // Unrelated fields survive the swap.
     expect(session.credentials!.projectId).toBe(7);
     expect(setAccessToken).toHaveBeenCalledWith(session.credentials);
+  });
+
+  it('refreshes under the minting client id when the credential carries one (provisioning signups)', async () => {
+    mockedRefresh.mockResolvedValueOnce({
+      access_token: 'pha_new',
+      expires_in: 3600,
+      token_type: 'Bearer',
+      scope: 'project:read',
+    });
+
+    await refreshAccessTokenIfNeeded(
+      sessionWith(aging({ oauthClientId: 'client_us_provisioning' })),
+    );
+
+    expect(mockedRefresh).toHaveBeenCalledWith(
+      'phr_old',
+      undefined,
+      'client_us_provisioning',
+    );
   });
 
   it('replaces the credentials object rather than mutating it in place', async () => {

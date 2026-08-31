@@ -270,6 +270,8 @@ export interface ProvisioningResult {
   refreshToken: string;
   /** Epoch ms when `accessToken` expires. */
   expiresAt: number;
+  /** OAuth client the grant was minted under — refreshes must present the same one. */
+  oauthClientId: string;
   projectApiKey: string;
   host: string;
   personalApiKey?: string;
@@ -299,6 +301,7 @@ export async function provisionNewAccount(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   const provisioningBaseUrl = getProvisioningBaseUrl(region, opts?.baseUrl);
+  const oauthClientId = getProvisioningClientId(region, opts?.baseUrl);
 
   logToFile('[provisioning] starting account creation');
 
@@ -309,7 +312,7 @@ export async function provisionNewAccount(
       id: crypto.randomUUID(),
       email,
       name,
-      client_id: getProvisioningClientId(region, opts?.baseUrl),
+      client_id: oauthClientId,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       scopes: opts?.scopes ?? WIZARD_PROVISIONING_SCOPES,
@@ -431,6 +434,7 @@ export async function provisionNewAccount(
     accessToken: tokenData.access_token,
     refreshToken: tokenData.refresh_token,
     expiresAt: Date.now() + tokenData.expires_in * 1000,
+    oauthClientId,
     projectApiKey: resource.access.api_key,
     host: resource.access.host,
     personalApiKey: resource.access.personal_api_key,

@@ -418,6 +418,7 @@ async function exchangeCodeForToken(
 export async function refreshAccessToken(
   refreshToken: string,
   baseUrl?: string,
+  clientId?: string,
 ): Promise<OAuthTokenResponse> {
   const oauthUrl = getOAuthUrl(baseUrl);
   logToFile(`[oauth] refreshing access token at ${oauthUrl}/oauth/token`);
@@ -427,7 +428,8 @@ export async function refreshAccessToken(
       {
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: getOAuthClientId(baseUrl),
+        // The grant only refreshes under its minting app — provisioning signups pass their regional client.
+        client_id: clientId ?? getOAuthClientId(baseUrl),
       },
       {
         headers: {

@@ -24,6 +24,8 @@ export interface Credentials {
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
   expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   projectApiKey: string;
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
