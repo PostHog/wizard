@@ -237,8 +237,9 @@ const IntegrationsResponseSchema = z.object({
 /**
  * Check whether the project already has a Slack integration connected.
  * Requires the `integration:read` scope. Throws on failure — callers
- * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
+ * (including the SlackConnectScreen poll) decide how to degrade. A
+ * missing-scope 401/403 is an expected outcome, not a crash: use
+ * `isMissingScopeError` to tell it apart from failures worth capturing.
  */
 export async function fetchSlackConnected(
   accessToken: string,
@@ -259,6 +260,21 @@ export async function fetchSlackConnected(
   const parsed = IntegrationsResponseSchema.safeParse(response.data);
   if (!parsed.success) return false;
   return parsed.data.results.some((i) => i.kind === 'slack');
+}
+
+/**
+ * True when an error from `fetchSlackConnected` is the expected, documented
+ * degradation: the access token lacks the `integration:read` scope, so the
+ * integrations endpoint answers 401/403. This is a benign "scope unavailable
+ * / treat as not connected" outcome (see `CONNECT_SLACK_SCOPE_ADDITIONS`),
+ * not a crash — callers fall back to the connect nudge and should NOT capture
+ * it as an exception. Genuinely unexpected failures (network, 5xx, parse)
+ * return false here and stay worth capturing.
+ */
+export function isMissingScopeError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  return status === 401 || status === 403;
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {
