@@ -144,9 +144,10 @@ STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
 
 STEP 3b — Enable products. (skill: "Enable products")
    Turn ON the PostHog products Signals reads from — Session Replay,
-   Error Tracking, and Support — so the sources you enable next have data
-   to read. These are server-side enables with conservative defaults
-   (owned by the server, not you). The project-state block above covers
+   Error Tracking, and Support — so the sources you enable next, and the
+   Replay Vision scanners in STEP 6c, have data to read. These are
+   server-side enables with conservative defaults (owned by the server,
+   not you). The project-state block above covers
    only Session Replay and Error Tracking, so you can skip those if they
    are already ON; it does not show Support, but every enable is idempotent
    so enabling any of them again is safe regardless. For a web app, also
