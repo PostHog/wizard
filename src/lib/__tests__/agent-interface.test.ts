@@ -6,6 +6,7 @@ import {
   createStopHook,
   isWarlockDisabled,
   buildAuthErrorContext,
+  buildAgentEnv,
 } from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { Sequence } from '@lib/constants';
@@ -85,6 +86,14 @@ describe('runAgent', () => {
     posthogApiKey: 'phx_test_token',
     sequence: Sequence.linear,
     triageProvider: () => Promise.resolve('false_positive'),
+    gatewayAuth: {
+      // Deliberately different from posthogApiKey above: the subprocess must
+      // take its bearer from the run's resolved auth, and identical values
+      // would make either source pass.
+      gatewayUrl: 'https://gateway.test',
+      token: 'phe_run_scoped_token',
+      edition: 'legacy' as const,
+    },
   };
 
   beforeEach(() => {
@@ -580,5 +589,120 @@ describe('buildAuthErrorContext', () => {
     expect(
       ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
     ).toBe(true);
+  });
+});
+
+describe('buildAgentEnv header shape', () => {
+  const metadata = { run_id: 'r1', integration: 'nextjs' };
+  const flags = { 'wizard-orchestrator': 'test' };
+
+  it('sends per-key headers and the bedrock opt-in on the legacy gateway', () => {
+    const encoded = buildAgentEnv(metadata, flags, {
+      gatewayUrl: 'https://gateway.us.posthog.com/wizard',
+      token: 'pha_oauth',
+      edition: 'legacy',
+    });
+    expect(encoded).toContain('x-posthog-use-bedrock-fallback');
+    expect(encoded).toContain('X-POSTHOG-PROPERTY-run_id');
+    expect(encoded).not.toContain('X-PostHog-Properties');
+  });
+
+  it('sends one properties blob and no bedrock opt-in on the new gateway', () => {
+    const encoded = buildAgentEnv(metadata, flags, {
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      token: 'phe_minted',
+      edition: 'v2',
+      teamId: 42,
+    });
+    expect(encoded).toContain('X-PostHog-Properties');
+    expect(encoded).not.toContain('x-posthog-use-bedrock-fallback');
+    expect(encoded).not.toContain('X-POSTHOG-PROPERTY-run_id');
+    // Fallback is native in the new gateway's routing chain, and the run tags
+    // ride the blob rather than per-key headers.
+    expect(encoded).toContain('run_id');
+    expect(encoded).toContain('team_id');
+  });
+});
+
+describe('subprocess gateway credentials', () => {
+  // Self-contained: the fixtures inside the runAgent describe are not in scope
+  // here, and this test only needs a config plus a spinner.
+  const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+  const config = {
+    workingDirectory: '/test/dir',
+    mcpServers: {},
+    model: 'claude-sonnet-4-6',
+    // Deliberately different from the gateway bearer below: identical values
+    // would let either source pass.
+    posthogApiKey: 'phx_user_oauth_token',
+    sequence: Sequence.linear,
+    triageProvider: () => Promise.resolve('false_positive'),
+    gatewayAuth: {
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      token: 'phe_run_scoped_token',
+      edition: 'v2' as const,
+      teamId: 42,
+    },
+  };
+  const options: WizardRunOptions = {
+    debug: false,
+    installDir: '/test/dir',
+    signup: false,
+    ci: false,
+    benchmark: false,
+    yaraReport: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUIInstance.spinner.mockReturnValue(spinner);
+  });
+
+  it('takes the base url and bearer from the run own auth', async () => {
+    function* ok() {
+      yield {
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        result: 'done',
+      };
+    }
+    mockQuery.mockReturnValue(ok());
+
+    await runAgent(
+      config,
+      'test prompt',
+      options,
+      spinner as unknown as SpinnerHandle,
+      {
+        successMessage: 'ok',
+        errorMessage: 'err',
+      },
+    );
+
+    const env = mockQuery.mock.calls[0][0].options.env;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://ai-gateway.us.posthog.com');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('phe_run_scoped_token');
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('phe_run_scoped_token');
+    // The MCP token is the user's own OAuth key and must not be swapped for
+    // the gateway bearer.
+    expect(env.POSTHOG_MCP_TOKEN).toBe('phx_user_oauth_token');
+    // v2 carries one properties blob, not the per-key legacy headers.
+    expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
+  });
+});
+
+describe('auth error context', () => {
+  // The 401 screen's region comes from whichever url it is handed, which is why
+  // runAgent passes the run's resolved auth rather than the process global a
+  // concurrent run also writes.
+  it.each([
+    ['https://ai-gateway.us.posthog.com', 'us'],
+    ['https://gateway.eu.posthog.com/wizard', 'eu'],
+    ['http://localhost:3308', 'local'],
+  ])('derives the region from the url it is given (%s)', (url, region) => {
+    const ctx = buildAuthErrorContext('/test/dir', url);
+    expect(ctx.gatewayUrl).toBe(url);
+    expect(ctx.region).toBe(region);
   });
 });

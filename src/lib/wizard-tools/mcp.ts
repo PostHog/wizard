@@ -47,6 +47,7 @@ import {
   fetchSkillMenu,
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
+  normaliseAskSubject,
   readLedger,
   resolveEnvPath,
   resolveEnvSecretRefs,
@@ -737,7 +738,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       askAccounting.record(args.subject);
 
       try {
-        const answers = await askBridge.request({ questions: args.questions });
+        const answers = await askBridge.request({
+          questions: args.questions,
+          subject: normaliseAskSubject(args.subject),
+        });
 
         // A fully cancelled/timed-out ask (the user dismissed the overlay or let
         // it time out) shouldn't burn the per-run cap. Otherwise one cancellation

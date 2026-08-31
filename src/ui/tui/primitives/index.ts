@@ -8,7 +8,7 @@ export { LoadingBox } from './LoadingBox.js';
 export { ProgressList } from './ProgressList.js';
 export type { ProgressItem } from './ProgressList.js';
 export { PromptLabel } from './PromptLabel.js';
-export { PickerMenu } from './PickerMenu.js';
+export { PickerMenu, type PickerOption } from './PickerMenu.js';
 export { GroupedPickerMenu } from './GroupedPickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
 export { ConfirmButton } from './ConfirmButton.js';
