@@ -252,8 +252,6 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
-  // A later run reuses the first login's aging token; the agent subprocess can't swap tokens mid-run.
-  await refreshAccessTokenIfNeeded(session);
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -298,6 +296,9 @@ export async function bootstrapProgram(
     build: analytics.build,
     skillId: config.skillId,
   });
+
+  // The agent can't swap tokens mid-run, so freshness is measured after every park above, right before the mint.
+  await refreshAccessTokenIfNeeded(session);
 
   // Credentials (incl. the resolved host family and its MCP url) live on
   // `session.credentials`; narrow once at this boundary — `authenticate` above
