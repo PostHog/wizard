@@ -31,7 +31,10 @@ describe('buildSelfDrivingPrompt', () => {
     expect(prompt).not.toContain('load_skill_menu');
     // The Self-driving steps are present.
     expect(prompt).toContain('STEP 1 — Check Self-driving access');
-    expect(prompt).toContain('Connect GitHub');
+    expect(prompt).toContain('STEP 3b — Enable products');
+    // GitHub is connected on the pre-run gate screen, never by the agent.
+    expect(prompt).not.toContain('STEP 3 — Connect GitHub');
+    expect(prompt).not.toContain('github connection declined');
   });
 
   it('enables products before sources, mirroring the skill step labels', () => {

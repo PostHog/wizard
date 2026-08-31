@@ -58,7 +58,7 @@ export function buildSelfDrivingPrompt(
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings: ${integrationsSettingsUrl}
@@ -87,7 +87,6 @@ call so the user can follow your progress in the TUI. Use exactly these
 tasks, in this order:
   1. Check Self-driving access
   2. Read project and current Self-driving state
-  3. Connect GitHub (required)
   3b. Enable products (replay, error tracking, support)
   4. Enable signal sources
   5. Offer issue-tracker integrations
@@ -96,8 +95,11 @@ tasks, in this order:
   6c. Set up Replay Vision scanners
   7. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
-it and completed when done. If a step turns out to be a no-op (e.g.
-GitHub is already connected), still mark its task completed.
+it and completed when done. If a step turns out to be a no-op (e.g. a
+product is already enabled), still mark its task completed.
+
+The PostHog GitHub App is already connected — the wizard verified it
+before this run started, so never ask the user to connect or install it.
 
 Wizard mechanics:
 - Ask the user things ONLY with the wizard_ask MCP tool, and batch
@@ -132,15 +134,6 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
    repo evidence rules products in, never out. Do a light scan ONLY for
    what neither covers. List the currently enabled signal sources so every
    later write is idempotent.
-
-STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
-   Signals cannot research or fix issues without code access. Check for
-   an existing GitHub integration first; if absent, send the user
-   through the GitHub App connection via wizard_ask exactly as the skill
-   describes (it builds the one-click authorize link), and verify the
-   connection after they confirm. If the user cannot connect now, emit
-   ${AgentSignals.ABORT} github connection declined
-   and halt — never finish setup without GitHub.
 
 STEP 3b — Enable products. (skill: "Enable products")
    Turn ON the PostHog products Signals reads from — Session Replay,

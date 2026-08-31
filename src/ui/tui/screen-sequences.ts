@@ -30,6 +30,7 @@ export enum ScreenId {
   SelfDrivingIntegrationCheck = 'self-driving-integration-check',
   SelfDrivingIntegrationDetect = 'self-driving-integration-detect',
   SelfDrivingHandoff = 'self-driving-handoff',
+  SelfDrivingGithub = 'self-driving-github',
   AuditIntro = 'audit-intro',
   AuditRun = 'audit-run',
   AuditOutro = 'audit-outro',

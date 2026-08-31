@@ -2,16 +2,20 @@
  * Canonical step keys for the Self-driving run's `wizard: step` analytics.
  *
  * The agent writes its own task labels, so the same step reaches analytics under whatever wording
- * that run's model picked — "Connect GitHub", "Connecting GitHub", "Connect GitHub (required)" and
- * "Checking GitHub connection" are all STEP 3. A funnel keyed on that label silently loses runs the
- * moment the wording drifts, which is invisible: the number just drops.
+ * that run's model picked — "Enable products", "Enabling products" and "Turn on PostHog products"
+ * are all STEP 3b. A funnel keyed on that label silently loses runs the moment the wording drifts,
+ * which is invisible: the number just drops.
  *
  * These rules map a label back to the step it belongs to, so a funnel can key on `step_key` and stay
  * correct across rewordings. `step_name` still ships alongside it, unchanged, for anything that wants
  * the label the user actually saw.
  */
 
-/** Canonical keys, in the order the prompt's STEPs run. Frozen: these are event property values. */
+/**
+ * Canonical keys, in the order the prompt's STEPs run. Frozen: these are event property values.
+ * `connect_github` is retained for historical runs — the GitHub App is now connected on a wizard
+ * screen before the agent starts, so no current run emits it.
+ */
 export const SELF_DRIVING_STEP_KEYS = [
   'check_access',
   'read_context',
