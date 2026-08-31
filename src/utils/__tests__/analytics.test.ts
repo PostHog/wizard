@@ -232,6 +232,69 @@ describe('Analytics', () => {
         },
       );
     });
+
+    it('drops a raw socket error carrying a transport errno code', () => {
+      const error = Object.assign(new Error('read ECONNRESET'), {
+        code: 'ECONNRESET',
+      });
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('drops a host-unreachable socket error', () => {
+      const error = Object.assign(
+        new Error('connect EHOSTUNREACH 1.2.3.4:443'),
+        {
+          code: 'EHOSTUNREACH',
+        },
+      );
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('drops a wrapped API error that folds the errno into its message', () => {
+      // api.ts drops `code` and leaves the errno only in the message text.
+      const error = new Error('Failed to fetch user data (ECONNRESET)');
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('still captures an install failure whose embedded CLI stderr mentions an errno', () => {
+      // A wrapped tool failure that merely quotes a benign errno in its stderr
+      // must still report — the errno is not the "(ECONNRESET)" wrapper api.ts
+      // emits, so it does not mean the user's own transport dropped.
+      const error = new Error(
+        'Codex MCP add failed: request failed ECONNRESET, retrying\npermission denied',
+      );
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a filesystem timeout on a network-backed mount', () => {
+      const error = Object.assign(new Error('ETIMEDOUT: operation timed out'), {
+        code: 'ETIMEDOUT',
+      });
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('still captures a genuine wizard error', () => {
+      const error = new Error('Something the wizard did wrong');
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('flag exposure', () => {
