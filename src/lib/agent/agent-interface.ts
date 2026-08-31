@@ -617,7 +617,7 @@ export async function initializeAgent(
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
-      'posthog-wizard': {
+      [POSTHOG_MCP_SERVER_NAME]: {
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
@@ -1391,6 +1391,13 @@ export enum TaskTool {
  * `'Agent'` to opt into subagent dispatch). Skills and PostHog MCP tools
  * are enabled separately (skills option / mcpServers).
  */
+/**
+ * The PostHog MCP server's name in `mcpServers`, and so the prefix of the tool
+ * the agent calls it by (`mcp__posthog-wizard__exec`). Named once because the
+ * init handler has to recognise this server in the SDK's status report.
+ */
+export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
+
 export const BASE_ALLOWED_TOOLS: readonly string[] = [
   'Read',
   'Write',
@@ -1603,6 +1610,55 @@ function extractTokenUsageDelta(message: SDKMessage): TokenUsageDelta | null {
   };
 }
 
+/** A server entry in the SDK's `system/init` report. */
+type McpServerStatus = { name: string; status: string };
+
+/**
+ * Report what the SDK did with our MCP servers, and capture it when the PostHog
+ * one did not come up.
+ *
+ * The SDK connects `mcpServers` itself and drops a server it cannot reach — the
+ * run continues, the tool is simply absent, and the agent finds out only by not
+ * having it. What that looks like from outside is a run that collects every
+ * credential and then tells the user to do the work by hand.
+ *
+ * The pi harness has captured `mcp setup failed` for a while (`harness/pi`), so
+ * a pi run that lost the tool says so. The anthropic harness never did, even
+ * though the SDK hands it a per-server verdict on the init message and this
+ * code already had it in hand — it went to the log file and no further. A
+ * warehouse run with zero creates therefore cost three investigations to
+ * explain. The same event name and property shape as pi's, so one query covers
+ * both harnesses.
+ */
+export function reportMcpSetup(message: {
+  mcp_servers?: McpServerStatus[];
+  tools?: string[];
+}): void {
+  const servers = message.mcp_servers ?? [];
+  const posthog = servers.find((s) => s.name === POSTHOG_MCP_SERVER_NAME);
+  const toolPrefix = `mcp__${POSTHOG_MCP_SERVER_NAME}__`;
+  const hasTool = (message.tools ?? []).some((t) => t.startsWith(toolPrefix));
+
+  // Connected and the tool is there — nothing to say.
+  if (posthog?.status === 'connected' && hasTool) return;
+
+  const reason = !posthog
+    ? 'server missing from the SDK init report'
+    : posthog.status !== 'connected'
+    ? `server status: ${posthog.status}`
+    : 'server connected but registered no tool';
+
+  logToFile(`[anthropic] PostHog MCP unavailable — ${reason}`);
+  analytics.wizardCapture('mcp setup failed', {
+    harness: 'anthropic',
+    scope: 'run',
+    error: reason,
+    // The whole roster, so a run that lost several servers is one event and
+    // the PostHog one can still be told apart.
+    mcp_servers: servers.map((s) => `${s.name}:${s.status}`).join(','),
+  });
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
@@ -1807,6 +1863,7 @@ function handleSDKMessage(
           mcpServers: message.mcp_servers,
           apiKeySource: message.apiKeySource,
         });
+        reportMcpSetup(message);
       }
       break;
     }
