@@ -24,7 +24,7 @@ import {
   type KeyMatchOrChar,
 } from '@ui/tui/hooks/useKeyBindings';
 
-interface PickerOption<T> {
+export interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;

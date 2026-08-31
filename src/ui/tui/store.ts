@@ -31,6 +31,7 @@ import {
   AdditionalFeature,
   McpOutcome,
   RunPhase,
+  ScanConsent,
   buildSession,
   type TaskNotice,
 } from '@lib/wizard-session';
@@ -56,6 +57,7 @@ import type {
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
@@ -428,11 +430,52 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed. Gate resolves via _checkGates(). */
+  /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
+    // Reports first: analytics merges tags into an event as it is sent, so
+    // `setup confirmed` only carries the warehouse tags if they are already
+    // set. On main they were, because reporting happened back in detect.
+    this._markWarehouseSourcesReportedIfNeeded();
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
+  }
+
+  /**
+   * Sharing is on: either the user turned it back on in the panel, or they
+   * pressed Continue without ever touching it. Both are reversible until
+   * completeSetup() resolves the intro gate and reports.
+   */
+  grantSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Granted);
+    this.emitChange();
+  }
+
+  /**
+   * Sharing is off. Suppresses reporting only — local detection still ran and
+   * the results stay in the session, so the outro suggestion and the warehouse
+   * task are unaffected; see `scanConsent` on `WizardSession`.
+   *
+   * Deliberately does not report. The panel's toggle can come back here, so
+   * marking the run reported would strand a user who turns sharing off and
+   * then on again. completeSetup() owns the single report.
+   */
+  declineSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Declined);
+    this.emitChange();
+  }
+
+  /**
+   * reportWarehouseSourcesDetected() is the single place scan results turn
+   * into telemetry; this just supplies its idempotency flag via the normal
+   * setter path (never mutate session directly). A no-op once
+   * `warehouseSourcesReported` is set, or for any program that never
+   * populated a warehouse-scan result in the first place.
+   */
+  private _markWarehouseSourcesReportedIfNeeded(): void {
+    if (reportWarehouseSourcesDetected(this.session)) {
+      this.$session.setKey('warehouseSourcesReported', true);
+    }
   }
 
   setRunPhase(phase: RunPhase): void {

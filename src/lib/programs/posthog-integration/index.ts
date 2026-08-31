@@ -2,7 +2,7 @@ import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
+import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -14,6 +14,7 @@ import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
@@ -144,10 +145,14 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return [];
 
-  analytics.wizardCapture('orchestrator warehouse task queued', {
-    warehouse_source_count: sources.length,
-    warehouse_source_kinds: sources.map((s) => s.kind),
-  });
+  // The task is queued either way. A decline withholds reporting, not the
+  // feature. See the matching gate in reportWarehouseSourcesDetected.
+  if (mayReportScanResults(sess)) {
+    analytics.wizardCapture('orchestrator warehouse task queued', {
+      warehouse_source_count: sources.length,
+      warehouse_source_kinds: sources.map((s) => s.kind),
+    });
+  }
   return [
     {
       type: 'warehouse',
@@ -207,6 +212,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
+        code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
       return;

@@ -61,6 +61,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'ai-observability') continue; // pinned below
+      if (program === 'error-tracking-upload-source-maps') continue; // pinned below
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
@@ -76,6 +77,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
         harness: Harness.anthropic,
         model: SONNET_5_MODEL,
         thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds source-map uploads to pi + sol medium',
+      ctx: { program: 'error-tracking-upload-source-maps', flags: {} },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -213,6 +225,13 @@ describe('switchboard composed clamp', () => {
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : program === 'ai-observability'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
+          : program === 'error-tracking-upload-source-maps'
+          ? {
+              ...DEFAULT_RESOLVED,
+              harness: Harness.pi,
+              model: GPT5_6_SOL_MODEL,
+              thinkingLevel: 'medium',
+            }
           : program === 'metrics'
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : DEFAULT_RESOLVED,

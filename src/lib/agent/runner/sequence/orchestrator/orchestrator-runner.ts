@@ -42,6 +42,7 @@ import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult, ProgramRun } from '../../shared/types';
 import {
@@ -563,9 +564,10 @@ export async function runOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page from its config; generic docs when detection found none.
     const docsUrl = framework
-      ? FRAMEWORK_REGISTRY[framework as Integration]?.docsUrl
+      ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
       : undefined;
     await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
         'Setup instructions for this project failed to download.\n' +
         'Please try again, or contact wizard@posthog.com.\n\n' +
@@ -573,10 +575,14 @@ export async function runOrchestrator(
         '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +
         `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
-      error: new WizardError('Orchestrator preflight: skill variant missing', {
-        missing: missingVariants.join(', '),
-        framework,
-      }),
+      error: new WizardError(
+        'Orchestrator preflight: skill variant missing',
+        {
+          missing: missingVariants.join(', '),
+          framework,
+        },
+        ErrorCodes.AgentOrchestratorSkillVariantMissing,
+      ),
     });
   }
 
@@ -765,6 +771,7 @@ export async function runOrchestrator(
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
+    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -868,13 +875,18 @@ export async function runOrchestrator(
       uncovered_types: unwaited.map((t) => t.type),
     });
     await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorSinkInvariant,
       message: `The wizard could not plan this setup: the final step would have skipped ${unwaited
         .map((t) => t.type)
         .join(', ')}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
-      error: new WizardError('orchestrator sink does not cover the queue', {
-        uncovered: unwaited.map((t) => `${t.type} (${t.id})`).join(', '),
-        queue_state: JSON.stringify(store.list()),
-      }),
+      error: new WizardError(
+        'orchestrator sink does not cover the queue',
+        {
+          uncovered: unwaited.map((t) => `${t.type} (${t.id})`).join(', '),
+          queue_state: JSON.stringify(store.list()),
+        },
+        ErrorCodes.AgentOrchestratorSinkInvariant,
+      ),
     });
   }
 
@@ -996,6 +1008,7 @@ export async function runOrchestrator(
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
+        requestRemark: false,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -1117,14 +1130,34 @@ export async function runOrchestrator(
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
     await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorTasksFailed,
       message,
-      error: new WizardError('orchestrator drain ended with failed tasks', {
-        tasks_failed: summary.failed,
-        tasks_blocked: blocked,
-        failed_types: failedTypes,
-        missing_oauth_scopes: missingScopes.join(' '),
-        queue_state: JSON.stringify(store.list()),
-      }),
+      error: new WizardError(
+        'orchestrator drain ended with failed tasks',
+        {
+          tasks_failed: summary.failed,
+          tasks_blocked: blocked,
+          failed_types: failedTypes,
+          missing_oauth_scopes: missingScopes.join(' '),
+          queue_state: JSON.stringify(store.list()),
+        },
+        ErrorCodes.AgentOrchestratorTasksFailed,
+      ),
+    });
+  }
+
+  // A drain that produced no tasks at all means the seed step never got a
+  // usable model response (e.g. the gateway returned empty completions).
+  // "0/0 completed" is a dead run, not a success with an empty denominator.
+  if (summary.total === 0) {
+    await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorHollowRun,
+      message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(
+        'orchestrator drain produced zero tasks',
+        { queue_state: JSON.stringify(store.list()) },
+        ErrorCodes.AgentOrchestratorHollowRun,
+      ),
     });
   }
 

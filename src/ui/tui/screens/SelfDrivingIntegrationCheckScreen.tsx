@@ -21,7 +21,10 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import type { CloudRegion } from '@lib/wizard-session';
 import { PickerMenu } from '@ui/tui/primitives/index';
-import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import {
+  PrivacyPanel,
+  PRIVACY_PANEL_LABEL,
+} from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
 import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@lib/constants';
 import { Colors } from '@ui/tui/styles';
@@ -76,10 +79,11 @@ export const SelfDrivingIntegrationCheckScreen = ({
     return (
       <IntroScreenLayout
         installDir={store.session.installDir}
-        title="Wizard privacy & usage"
+        title={PRIVACY_PANEL_LABEL}
         showSubtitle={false}
         showDetection={false}
         body={<PrivacyPanel />}
+        showPrivacy={false}
         menuOptions={[{ label: 'Back', value: 'back' }]}
         menuAlign="left"
         onSelect={() => setShowPrivacy(false)}
@@ -125,7 +129,7 @@ export const SelfDrivingIntegrationCheckScreen = ({
         <Box marginTop={1}>
           <Text dimColor>
             <Text color={Colors.accent}>[Esc]</Text> back{'  ·  '}
-            <Text color={Colors.accent}>[I]</Text> privacy & usage
+            <Text color={Colors.accent}>[I]</Text> {PRIVACY_PANEL_LABEL}
           </Text>
         </Box>
       </Box>
@@ -219,7 +223,7 @@ export const SelfDrivingIntegrationCheckScreen = ({
 
       <Box marginTop={1}>
         <Text dimColor>
-          <Text color={Colors.accent}>[I]</Text> privacy & usage
+          <Text color={Colors.accent}>[I]</Text> {PRIVACY_PANEL_LABEL}
         </Text>
       </Box>
     </Box>

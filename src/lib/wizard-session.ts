@@ -61,6 +61,13 @@ export enum DiscoveredFeature {
   LLM = 'llm',
 }
 
+/** Consent to report what local detection found (see `scanConsent` below). */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
+}
+
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
   LLM = 'llm',
@@ -116,6 +123,10 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** Stable machine-readable error code from the error catalog (@lib/errors). */
+  errorCode?: import('@lib/errors').ErrorCode;
+  /** Structured context for the error code; safe for telemetry payloads. */
+  errorDetail?: Record<string, unknown>;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
@@ -209,6 +220,20 @@ export interface WizardSession {
   ci: boolean;
   signup: boolean;
   /**
+   * Harness-only escape hatch: keep the `wizard_ask` bridge wired in a `ci`
+   * session so an e2e run can answer the agent's questions.
+   *
+   * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
+   * flag, `bin.ts` never populates it, and nothing in a published build reads
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
+   *
+   * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
+   * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
+   * `POSTHOG_WIZARD_e2e_ask=true` set this field. `readEnvironment` drops it —
+   * see `NEVER_FROM_ENV`, and keep that list in step with this comment.
+   */
+  e2eAsk: boolean;
+  /**
    * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
    * from `getLocalDev()` — neither belongs here. This one stays because
    * `mcp add|remove|tutorial --local` populate it from their own flag.
@@ -248,6 +273,14 @@ export interface WizardSession {
 
   // From detection + screens
   setupConfirmed: boolean;
+  /**
+   * Gates reporting only; local detection runs either way. Reporting treats
+   * 'undecided' as 'declined', so a path that reports before the user was
+   * asked sends nothing rather than everything.
+   */
+  scanConsent: ScanConsent;
+  /** Guards against reporting twice; consent resolves from two paths. */
+  warehouseSourcesReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -400,6 +433,8 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
+  e2eAsk?: boolean;
   localDev?: boolean;
   localMcp?: boolean;
   localPosthog?: boolean;
@@ -425,6 +460,7 @@ export function buildSession(args: {
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
+    e2eAsk: args.e2eAsk ?? false,
     localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
@@ -444,6 +480,12 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
+    // No screen can ask in a scripted CI run, so granting keeps CI's
+    // telemetry as it was. --signup alone still provisions a brand-new
+    // account headlessly, and that user has never seen the disclosure — a
+    // headless `--ci --signup` run stays covered by the ci branch above.
+    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
+    warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,
@@ -490,4 +532,16 @@ export function buildSession(args: {
     frameworkConfig: null,
     pendingQuestion: null,
   };
+}
+
+/** One place to ask, so a new consent state does not need three edits. */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }

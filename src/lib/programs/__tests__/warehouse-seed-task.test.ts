@@ -80,6 +80,20 @@ describe('warehouse seed task', () => {
     );
     expect(tasks).toEqual([]);
   });
+
+  it('queues the task in an e2e run, where the harness answers', () => {
+    // The e2e host runs a `ci` session but drives the ask overlay itself, so
+    // the seeded-task path gets pre-merge coverage instead of none.
+    const tasks = seed(
+      session({
+        ci: true,
+        e2eAsk: true,
+        frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [POSTGRES] },
+      }),
+    );
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].type).toBe('warehouse');
+  });
 });
 
 describe('warehouse task notice', () => {
