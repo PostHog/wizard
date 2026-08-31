@@ -11,6 +11,10 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
 } from '@lib/constants';
 import {
+  buildWizardPropertiesBlob,
+  type GatewayEdition,
+} from '@lib/gateway-session';
+import {
   modelCapabilities,
   type ThinkingLevel,
 } from '../../switchboard/models';
@@ -18,36 +22,57 @@ import {
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';
 
+/** The pi transports the gateway serves. */
+export type GatewayApi =
+  | 'anthropic-messages'
+  | 'openai-completions'
+  | 'openai-responses';
+
 /**
  * The gateway speaks two shapes on two endpoints: Anthropic models over
  * `anthropic-messages` (the SDK appends `/v1/messages`, so the base URL has no
- * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over OpenAI completions at
- * `/v1/chat/completions` (base URL keeps `/v1`). Infer the shape from the model
- * id so a pair's model selects the right transport.
+ * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over an OpenAI shape at
+ * `/v1/responses` or `/v1/chat/completions` (base URL keeps `/v1`). Infer the
+ * shape from the model id so a pair's model selects the right transport.
+ *
+ * v2 takes the Responses API because OpenAI rejects function tools combined
+ * with `reasoning_effort` on chat completions and every task sends both. Legacy
+ * stays on chat completions, where litellm does that routing itself.
  */
 export function gatewayApiFor(
   modelId: string,
-): 'anthropic-messages' | 'openai-completions' {
-  return modelId.startsWith('openai/')
-    ? 'openai-completions'
-    : 'anthropic-messages';
+  edition: GatewayEdition = 'legacy',
+): GatewayApi {
+  if (!modelId.startsWith('openai/')) return 'anthropic-messages';
+  return edition === 'v2' ? 'openai-responses' : 'openai-completions';
 }
 
 /**
- * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path: always
- * the Bedrock-fallback header, plus wizard metadata (`X-POSTHOG-PROPERTY-*`) and
- * wizard feature flags (`X-POSTHOG-FLAG-*`).
+ * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path. The
+ * shape follows the gateway edition: legacy sends per-key metadata/flag
+ * headers plus the explicit Bedrock-fallback opt-in; v2 (the Go ai-gateway)
+ * takes one `X-PostHog-Properties` JSON blob and falls back natively. The 1M
+ * context beta rides both, since pi otherwise runs at 200k and overflows on larger
+ * projects (the post-run compaction failures).
  */
 export function buildGatewayHeaders(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
+  edition: GatewayEdition = 'legacy',
+  teamId?: number,
 ): Record<string, string> {
   const headers: Record<string, string> = {
-    'x-posthog-use-bedrock-fallback': 'true',
-    // 1M context window, same as the anthropic edition — pi otherwise runs at
-    // 200k and overflows on larger projects (the post-run compaction failures).
     'anthropic-beta': 'context-1m-2025-08-07',
   };
+  if (edition === 'v2') {
+    headers['X-PostHog-Properties'] = buildWizardPropertiesBlob(
+      wizardMetadata,
+      wizardFlags,
+      teamId,
+    );
+    return headers;
+  }
+  headers['x-posthog-use-bedrock-fallback'] = 'true';
   for (const [key, value] of Object.entries(wizardMetadata)) {
     const name = key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
       ? key
@@ -64,6 +89,10 @@ export function buildGatewayHeaders(
 export interface GatewayProviderInputs {
   gatewayUrl: string;
   accessToken: string;
+  /** Gateway contract in play; selects the header shape. Default legacy. */
+  edition?: GatewayEdition;
+  /** Customer team for the v2 properties blob (from the mint response). */
+  teamId?: number;
   wizardMetadata: Record<string, string>;
   wizardFlags: Record<string, string>;
   modelId: string;
@@ -79,15 +108,16 @@ export interface GatewayProviderInputs {
  * callers (scan triage) hand it straight to `completeSimple`.
  */
 export function buildGatewayModel(inputs: GatewayProviderInputs) {
-  const { gatewayUrl, wizardMetadata, wizardFlags, modelId } = inputs;
-  const api = gatewayApiFor(modelId);
+  const { gatewayUrl, wizardMetadata, wizardFlags, modelId, edition, teamId } =
+    inputs;
+  const api = gatewayApiFor(modelId, edition);
   return {
     id: modelId,
     name: `${modelId} (PostHog Gateway)`,
     api,
     provider: GATEWAY_PROVIDER,
-    // openai-completions keeps /v1; the SDK appends the route either way.
-    baseUrl: api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl,
+    // Anthropic drops /v1 (the SDK appends /v1/messages); the OpenAI shape keeps it.
+    baseUrl: api === 'anthropic-messages' ? gatewayUrl : `${gatewayUrl}/v1`,
     // A model trait resolved by the switchboard, not a harness guess:
     // non-reasoning openai models reject `reasoning_effort` (gpt-4o → gateway
     // UnsupportedParamsError → the run no-ops).
@@ -96,7 +126,7 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
     maxTokens: 64_000,
-    headers: buildGatewayHeaders(wizardMetadata, wizardFlags),
+    headers: buildGatewayHeaders(wizardMetadata, wizardFlags, edition, teamId),
   };
 }
 
@@ -106,19 +136,24 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
  */
 export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   provider: Record<string, unknown>;
-  api: 'anthropic-messages' | 'openai-completions';
+  api: GatewayApi;
   caps: ReturnType<typeof modelCapabilities>;
   gatewayUrl: string;
   baseUrl: string;
 } {
-  const { gatewayUrl, accessToken, modelId, effort } = inputs;
-  const api = gatewayApiFor(modelId);
+  const { gatewayUrl, accessToken, modelId, effort, edition } = inputs;
+  const api = gatewayApiFor(modelId, edition);
+  // One resolution point for the model's traits and the run's effort override.
+  // pi clamps whatever comes out of here against the levels this spec declares,
+  // so a level the spec doesn't carry is silently reduced by the session.
   const tableCaps = modelCapabilities(modelId);
-  // An explicit effort override wins over the table for a reasoning model.
   const caps =
-    effort && tableCaps.reasoning
-      ? { ...tableCaps, thinkingLevel: effort }
+    effort && effort !== 'off' && tableCaps.reasoning
+      ? modelCapabilities(modelId, effort)
+      : effort === 'off' && tableCaps.reasoning
+      ? { ...tableCaps, thinkingLevel: 'off' as const }
       : tableCaps;
+
   const model = buildGatewayModel(inputs);
   const provider = {
     name: 'PostHog Gateway',

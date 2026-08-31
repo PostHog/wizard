@@ -51,6 +51,7 @@ export default defineConfig({
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
+      { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@utils\/(.*)$/, replacement: `${r('src/utils')}/$1` },
       { find: /^@ui$/, replacement: r('src/ui/index.ts') },
       { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },

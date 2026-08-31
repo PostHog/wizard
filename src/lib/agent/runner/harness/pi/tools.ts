@@ -29,6 +29,7 @@ import {
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
+  normaliseAskSubject,
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
@@ -375,7 +376,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       // mutate files while it's waiting on the user's answer.
       onAskPendingChange?.(true);
       try {
-        const answers = await askBridge.request({ questions: args.questions });
+        const answers = await askBridge.request({
+          questions: args.questions,
+          subject: normaliseAskSubject(args.subject),
+        });
         if (isFullyCancelled(answers)) askAccounting.refund(args.subject);
         // Sensitive answers go to the vault; the agent sees an opaque ref
         // (same contract as the MCP wizard_ask).

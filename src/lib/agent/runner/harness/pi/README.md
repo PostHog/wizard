@@ -27,7 +27,8 @@ Entry points:
   `anthropic-messages` provider on pi's in-memory `ModelRegistry`, authed
   bearer-style with the user's OAuth token. Same Bedrock fallback +
   wizard-flag/metadata headers as the anthropic path. OpenAI-class models (e.g.
-  `GPT5_6_TERRA_MODEL`) route to `/v1/chat/completions` via `openai-completions`
+  `GPT5_6_TERRA_MODEL`) route to `/v1/responses` via `openai-responses` on
+  the v2 gateway, and to `/v1/chat/completions` via `openai-completions` on legacy
   shape automatically.
 - **Context window:** 1M-context beta enabled
   (`anthropic-beta: context-1m-2025-08-07`) — otherwise runs at 200k and

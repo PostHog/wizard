@@ -41,6 +41,7 @@ export const ErrorCodes = {
   AgentOrchestratorSkillVariantMissing:
     'PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING',
   AgentOrchestratorTasksFailed: 'PHW_AGENT_ORCHESTRATOR_TASKS_FAILED',
+  AgentOrchestratorHollowRun: 'PHW_AGENT_ORCHESTRATOR_HOLLOW_RUN',
   AgentOrchestratorSinkInvariant: 'PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT',
   SettingsUnfixableConflict: 'PHW_SETTINGS_UNFIXABLE_CONFLICT',
   InternalUnhandled: 'PHW_INTERNAL_UNHANDLED',

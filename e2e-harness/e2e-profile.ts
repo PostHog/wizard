@@ -8,10 +8,38 @@
  */
 
 import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
+import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 import type { CiState } from './wizard-ci-driver.js';
 
 /** Which option to pick for a setup disambiguation question. */
 export type SetupChoice = 'first' | 'last';
+
+/** The literal answer used when a profile has nothing better to offer. */
+export const E2E_ANSWER_SENTINEL = 'e2e';
+
+/**
+ * One routing rule for an agent question.
+ *
+ * `match` is a case-insensitive regex source string. Every rule is tested
+ * against the question `id` first; only if none matches is every rule tested
+ * against the `prompt`. Within a pass the first matching rule wins. `value` may
+ * carry `${ENV_VAR}` references — `resolveE2eProfile` expands them once, at
+ * profile load. See {@link answerQuestions}.
+ *
+ * `secret` marks a rule whose value is a real credential. The agent controls
+ * every field the rule matches on, so an unmarked rule will hand its value to
+ * whatever question claims the name — and a question that omits
+ * `sensitive: true` gets that value back unvaulted, in plaintext. A `secret`
+ * rule therefore answers only a `kind: 'text'` question with `sensitive: true`,
+ * and refuses the question outright otherwise. Set it on any rule pointed at an
+ * API key or a password; leave it off for hostnames, ports and prefixes, which
+ * a skill has no reason to flag sensitive.
+ */
+export interface AskAnswerRule {
+  match: string;
+  value: string;
+  secret?: boolean;
+}
 
 export interface WizardE2eProfile {
   /** Setup disambiguation (e.g. Next.js router): which option to commit. */
@@ -36,6 +64,18 @@ export interface WizardE2eProfile {
    * integrated". Only read on the integration-check screen.
    */
   integrate?: boolean;
+  /**
+   * Task-notice overlay: `keep` runs the optional step the notice covers,
+   * `decline` skips it. The workbench flips this per run variation through
+   * `E2E_NOTICE` — see {@link ./profiles resolveE2eProfile}.
+   */
+  notice?: 'keep' | 'decline';
+  /**
+   * Per-question answer routing for `wizard_ask`, ahead of the `ask` strategy.
+   * Lets a program point a credential question at an env var instead of taking
+   * a useless first option or the sentinel.
+   */
+  askAnswers?: AskAnswerRule[];
 }
 
 /** Happy-path default: take every screen forward, leave nothing behind. */
@@ -47,6 +87,7 @@ export const DEFAULT_E2E_PROFILE: WizardE2eProfile = {
   skills: 'delete',
   ask: 'first',
   integrate: false,
+  notice: 'keep',
 };
 
 /**
@@ -72,10 +113,39 @@ export const DEFAULT_E2E_VARIATION: WizardE2eVariation = {
   summary: 'linear / anthropic / sonnet — parity with main',
 };
 
+/**
+ * What a decision did, for the host's run log.
+ *
+ * The host records *that* an ask or a notice happened by watching the store,
+ * but only the decision function knows how it resolved each one. This is that
+ * report back. It carries question ids and a keep/decline verdict — never an
+ * answer value, so nothing derived from it can leak a credential into the
+ * result payload.
+ */
+export type E2eDecisionReport =
+  | {
+      kind: 'ask';
+      /** PendingQuestion.id of the batch this reports on. */
+      id: string;
+      /** Question ids the profile produced a real answer for. */
+      answeredIds: string[];
+      /** Question ids that fell back to the `'e2e'` sentinel. */
+      sentinelIds: string[];
+      /**
+       * Question ids a `secret` rule refused — the question claimed a
+       * credential field but was not a sensitive text question. Disjoint from
+       * the other two.
+       */
+      refusedIds: string[];
+    }
+  | { kind: 'notice'; title: string; decision: 'keep' | 'decline' };
+
 /** What the harness should do for the current screen. */
 export interface E2eDecision {
   /** A driver action to commit, if any. */
   action?: { id: string; params?: Record<string, unknown> };
+  /** What this decision resolved, when it resolved an ask or a notice. */
+  report?: E2eDecisionReport;
   /** Set on the keep-skills screen — the orchestrator does the fs deletion. */
   skillsPolicy?: 'keep' | 'delete';
   /** True once the terminal commit has been made. */
@@ -84,11 +154,123 @@ export interface E2eDecision {
   wait?: boolean;
 }
 
+/** The answers for one `wizard_ask` batch, plus which ids fell back. */
+export interface AnsweredBatch {
+  answers: AskAnswers;
+  answeredIds: string[];
+  sentinelIds: string[];
+  /** Ids a `secret` rule refused to answer. See {@link AskAnswerRule}. */
+  refusedIds: string[];
+}
+
+/**
+ * Answer every question in one `wizard_ask` batch.
+ *
+ * Resolution order per question:
+ *   1. the first `askAnswers` rule matching the id, else the first matching
+ *      the prompt;
+ *   2. the first option, for `single` and `multi` questions;
+ *   3. the literal `'e2e'` sentinel.
+ *
+ * A rule that resolves to an empty string (its `${ENV_VAR}` was unset) counts
+ * as no match, so the question falls through to the next step. For a `text`
+ * credential question — one with no options — that lands on the sentinel, which
+ * is what the workbench reads to say "this run answered nothing here".
+ *
+ * A `secret` rule matching a question that is not sensitive free text refuses
+ * it: the answer is the sentinel and the id lands in `refusedIds` rather than
+ * falling through to an option. The skill names its own questions, so without
+ * that rail a question called `stripe` could take a credential and — by leaving
+ * `sensitive` off — get it back in plaintext instead of a vault ref.
+ *
+ * `multi` questions always get an array answer, as the ask bridge expects.
+ * Pure: rule values arrive already interpolated (see `resolveE2eProfile`).
+ */
+export function answerQuestions(
+  questions: readonly AskQuestion[],
+  profile: WizardE2eProfile,
+): AnsweredBatch {
+  const rules = profile.askAnswers ?? [];
+  const answers: AskAnswers = {};
+  const answeredIds: string[] = [];
+  const sentinelIds: string[] = [];
+  const refusedIds: string[] = [];
+
+  for (const q of questions) {
+    const routed = matchRule(q, rules);
+    if (routed?.refused) {
+      answers[q.id] =
+        q.kind === 'multi' ? [E2E_ANSWER_SENTINEL] : E2E_ANSWER_SENTINEL;
+      refusedIds.push(q.id);
+      continue;
+    }
+    const value = routed?.value ?? q.options?.[0]?.value ?? E2E_ANSWER_SENTINEL;
+    const isSentinel = !routed && q.options?.[0] === undefined;
+    answers[q.id] = q.kind === 'multi' ? [value] : value;
+    (isSentinel ? sentinelIds : answeredIds).push(q.id);
+  }
+
+  return { answers, answeredIds, sentinelIds, refusedIds };
+}
+
+/** What a rule pass produced: a value, a refusal, or nothing. */
+type RuleMatch = { value: string; refused?: false } | { refused: true };
+
+/**
+ * The value routed to a question, or null when no rule routes it.
+ *
+ * Two passes: every rule against the question `id`, then every rule against the
+ * `prompt`. The id is the field the skill controls, so an id match is the
+ * stronger signal — a rule aimed at `host` must not claim the `port` question
+ * just because the prompt happens to say "host and port".
+ *
+ * A matching `secret` rule yields its value only for a sensitive text question;
+ * any other question shape gets a refusal, never the value.
+ */
+function matchRule(
+  question: AskQuestion,
+  rules: readonly AskAnswerRule[],
+): RuleMatch | null {
+  for (const field of [question.id, question.prompt]) {
+    for (const rule of rules) {
+      let re: RegExp;
+      try {
+        re = new RegExp(rule.match, 'i');
+      } catch {
+        continue; // a malformed profile regex must not break the whole run
+      }
+      if (!re.test(field)) continue;
+      // An unset `${ENV_VAR}` leaves nothing to route and nothing to withhold,
+      // so the rule is inert — the question takes the normal fallback.
+      if (rule.value === '') return null;
+      if (rule.secret && !acceptsSecret(question)) return { refused: true };
+      return { value: rule.value };
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a question may receive a `secret` rule's value: free text the skill
+ * flagged sensitive, so `wizard_ask` vaults the answer and hands the agent a
+ * ref instead of the credential.
+ */
+function acceptsSecret(question: AskQuestion): boolean {
+  return question.kind === 'text' && question.sensitive === true;
+}
+
 /**
  * Map the current screen + profile to the commit to make. Pure: no store, no
- * fs — the caller applies the returned action via the driver and handles
- * `skillsPolicy` itself. Returns `{ wait: true }` for screens the runner/agent
- * advances on their own (auth, run, ai-opt-in, a clean health probe).
+ * fs, and no `process.env` — the caller applies the returned action via the
+ * driver and handles `skillsPolicy` itself. Returns `{ wait: true }` for
+ * screens the runner/agent advances on their own (auth, run, ai-opt-in, a
+ * clean health probe).
+ *
+ * Env-var inputs (`E2E_NOTICE`, `${...}` inside `askAnswers`) are folded into
+ * the profile once, at load, by `resolveE2eProfile` in `./profiles`. Reading
+ * `process.env` here would make the same (state, profile) pair return different
+ * decisions in different processes, and the flow-snapshot test depends on it
+ * not doing that.
  */
 export function decideE2eAction(
   state: CiState,
@@ -167,14 +349,36 @@ export function decideE2eAction(
       };
 
     case Overlay.WizardAsk: {
-      const q = state.pendingQuestion?.questions[0];
-      if (!q) return { wait: true };
-      // 'first': first option for single/multi, sentinel for free text.
-      const answer = q.options?.[0]?.value ?? 'e2e';
+      const pending = state.pendingQuestion;
+      if (!pending || pending.questions.length === 0) return { wait: true };
+      // Answer the whole batch. The bridge resolves on one answers map, so a
+      // partial map would leave the unanswered fields empty for the agent.
+      const batch = answerQuestions(pending.questions, profile);
       return {
         action: {
           id: 'answer_question',
-          params: { answers: { [q.id]: answer } },
+          params: { answers: batch.answers },
+        },
+        report: {
+          kind: 'ask',
+          id: pending.id,
+          answeredIds: batch.answeredIds,
+          sentinelIds: batch.sentinelIds,
+          refusedIds: batch.refusedIds,
+        },
+      };
+    }
+
+    case Overlay.TaskNotice: {
+      const notice = state.taskNotice;
+      if (!notice) return { wait: true };
+      const keep = profile.notice !== 'decline';
+      return {
+        action: { id: 'resolve_notice', params: { keep } },
+        report: {
+          kind: 'notice',
+          title: notice.title,
+          decision: keep ? 'keep' : 'decline',
         },
       };
     }
@@ -198,4 +402,5 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.SlackConnect,
   ScreenId.KeepSkills,
   Overlay.WizardAsk,
+  Overlay.TaskNotice,
 ];
