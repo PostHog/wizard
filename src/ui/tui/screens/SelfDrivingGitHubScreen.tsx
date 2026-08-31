@@ -11,10 +11,9 @@
  * unambiguous (declining is an explicit pick), and un-timeoutable (the screen
  * waits as long as the browser install takes).
  *
- * Mirrors SlackConnectScreen's shape: open the authorize link, poll
- * `/integrations/` until GitHub appears, flip the screen when it does. Unlike
- * Slack this is not skippable — the second option ends the run on the outro
- * rather than continuing without it.
+ * Unlike SlackConnectScreen this is not skippable: declining ends the run on
+ * the outro rather than continuing without it. The connection poll lives in
+ * {@link useGithubConnection}.
  */
 
 import { Box, Text } from 'ink';
@@ -24,7 +23,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
-import { fetchGithubConnected } from '@lib/api';
+import { useGithubConnection } from '@ui/tui/hooks/useGithubConnection';
 import { OutroKind } from '@lib/wizard-session';
 import {
   GITHUB_REQUIRED_BODY,
@@ -32,6 +31,7 @@ import {
 } from '@lib/programs/self-driving/detect';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
+import { getIntegrationAuthorizeUrl } from '@utils/urls';
 
 interface SelfDrivingGitHubScreenProps {
   store: WizardStore;
@@ -41,21 +41,6 @@ enum ChoiceValue {
   Open = 'open',
   Decline = 'decline',
 }
-
-const POLL_INTERVAL_MS = 3000;
-
-/**
- * One-click GitHub App install for this project. Opening it in the user's
- * logged-in browser runs the install directly — no settings-page hunting.
- */
-export const githubAuthorizeUrl = (
-  appHost: string,
-  projectId: number,
-): string =>
-  `${appHost.replace(
-    /\/$/,
-    '',
-  )}/api/environments/${projectId}/integrations/authorize?kind=github`;
 
 export const SelfDrivingGitHubScreen = ({
   store,
@@ -70,8 +55,14 @@ export const SelfDrivingGitHubScreen = ({
   const connected = connectedState === true;
 
   const authorizeUrl = credentials
-    ? githubAuthorizeUrl(credentials.host.appHost, credentials.projectId)
+    ? getIntegrationAuthorizeUrl(
+        credentials.host.appHost,
+        credentials.projectId,
+        'github',
+      )
     : null;
+
+  useGithubConnection(store);
 
   // Once the install link has been opened, re-offering it as the headline CTA
   // is confusing — the poll flips the screen on its own when the install lands.
@@ -80,69 +71,14 @@ export const SelfDrivingGitHubScreen = ({
   // Impression fires once the connected state is known, so `already_connected`
   // is real: users who arrive connected segment apart from users who connect
   // during the screen.
-  const known = connectedState !== null;
   const impressionFired = useRef(false);
   useEffect(() => {
-    if (!known || impressionFired.current) return;
+    if (connectedState === null || impressionFired.current) return;
     impressionFired.current = true;
     analytics.wizardCapture('github connect shown', {
       already_connected: connected,
     });
-  }, [known, connected]);
-
-  // Installing the App is a manual browser step, so the poll is what flips the
-  // screen once the user comes back. The first tick also resolves the
-  // null/unknown state.
-  useEffect(() => {
-    if (!credentials || connected) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const controller = new AbortController();
-    const check = (): void => {
-      fetchGithubConnected(
-        credentials.accessToken,
-        credentials.projectId,
-        credentials.host.apiHost,
-        controller.signal,
-      )
-        .then((isConnected) => {
-          if (cancelled) return;
-          if (isConnected) {
-            // Only a false→true flip means the user installed during this
-            // screen; true on the first check means they arrived connected.
-            if (store.session.githubConnected === false) {
-              analytics.wizardCapture('github connect completed');
-            }
-            store.setGithubConnected(true);
-            return;
-          }
-          if (store.session.githubConnected === null) {
-            store.setGithubConnected(false);
-          }
-          timer = setTimeout(check, POLL_INTERVAL_MS);
-        })
-        .catch((err: unknown) => {
-          if (cancelled) return;
-          // Capture once and keep polling: unlike Slack, a failed check can't
-          // fall back to a nudge — the run cannot proceed until this resolves,
-          // so a transient API blip must not strand the user on a dead screen.
-          if (store.session.githubConnected === null) {
-            store.setGithubConnected(false);
-            analytics.captureException(
-              err instanceof Error ? err : new Error(String(err)),
-              { step: 'github_connected_check' },
-            );
-          }
-          timer = setTimeout(check, POLL_INTERVAL_MS);
-        });
-    };
-    check();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      controller.abort();
-    };
-  }, [credentials, connected, store]);
+  }, [connectedState, connected]);
 
   const openInstall = (): void => {
     if (!authorizeUrl) return;
@@ -166,11 +102,8 @@ export const SelfDrivingGitHubScreen = ({
 
   const handleSelect = (value: ChoiceValue | ChoiceValue[]): void => {
     const choice = Array.isArray(value) ? value[0] : value;
-    if (choice === ChoiceValue.Open) {
-      openInstall();
-      return;
-    }
-    decline();
+    if (choice === ChoiceValue.Open) openInstall();
+    else decline();
   };
 
   useKeyBindings('self-driving-github', [
@@ -179,8 +112,7 @@ export const SelfDrivingGitHubScreen = ({
       label: 'esc',
       action: connected ? 'continue' : 'end setup',
       handler: () => {
-        if (connected) return;
-        decline();
+        if (!connected) decline();
       },
     },
   ]);
@@ -247,29 +179,18 @@ export const SelfDrivingGitHubScreen = ({
 
         <Box marginTop={1}>
           <PickerMenu
-            options={
-              installOpened
-                ? [
-                    {
-                      label: 'Re-open GitHub App install',
-                      value: ChoiceValue.Open,
-                    },
-                    {
-                      label: "I can't connect right now",
-                      value: ChoiceValue.Decline,
-                    },
-                  ]
-                : [
-                    {
-                      label: 'Open GitHub App install',
-                      value: ChoiceValue.Open,
-                    },
-                    {
-                      label: "I can't connect right now",
-                      value: ChoiceValue.Decline,
-                    },
-                  ]
-            }
+            options={[
+              {
+                label: installOpened
+                  ? 'Re-open GitHub App install'
+                  : 'Open GitHub App install',
+                value: ChoiceValue.Open,
+              },
+              {
+                label: "I can't connect right now",
+                value: ChoiceValue.Decline,
+              },
+            ]}
             onSelect={handleSelect}
           />
         </Box>
