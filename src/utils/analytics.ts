@@ -87,6 +87,7 @@ const BENIGN_TRANSPORT_ERROR_CODES: ReadonlySet<string> = new Set([
   'ENETDOWN', // local network interface down
   'EPIPE', // wrote to a closed socket
   'EAI_AGAIN', // temporary DNS resolution failure
+  'ENOTFOUND', // DNS lookup failed — host not found (offline / captive portal)
 ]);
 
 /**

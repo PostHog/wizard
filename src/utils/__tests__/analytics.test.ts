@@ -1,9 +1,10 @@
 import { Analytics, groupsFromUser } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
+import { AxiosError } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
 import { VERSION } from '@lib/version';
-import type { ApiUser } from '@lib/api';
+import { handleApiError, type ApiUser } from '@lib/api';
 
 vi.mock('posthog-node');
 vi.mock('uuid');
@@ -270,6 +271,20 @@ describe('Analytics', () => {
       analytics.captureException(error);
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops an ENOTFOUND ApiError produced by handleApiError (DNS lookup failure)', () => {
+      // A user with no working DNS. api.ts folds the errno into the message and
+      // drops `code`, so the "(ENOTFOUND)" wrapper is the only trace — the same
+      // path the message scan handles. Must not open an error tracking issue.
+      const axiosError = new AxiosError('connect error');
+      axiosError.config = { url: '/api/users/@me/' } as never;
+      axiosError.code = 'ENOTFOUND';
+      const apiError = handleApiError(axiosError, 'fetch user data');
+
+      analytics.captureException(apiError);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
     });
 
     it('drops a filesystem timeout on a network-backed mount', () => {
