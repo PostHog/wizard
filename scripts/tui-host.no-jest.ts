@@ -15,6 +15,7 @@
  */
 import fs from 'fs';
 import net from 'net';
+import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@lib/version';
 import {
@@ -25,8 +26,19 @@ import {
 import type { Harness, Sequence } from '@lib/constants';
 import { buildSession } from '@lib/wizard-session';
 import { runAgent } from '@lib/agent/agent-runner';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
+import { join } from 'path';
+import { detectFramework } from '@lib/detection/index';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import type { Integration } from '@lib/constants';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import {
+  detectSourceMapsPrerequisites,
+  SOURCE_MAPS_CONTEXT_KEYS,
+} from '@lib/programs/error-tracking-upload-source-maps/index';
+import { ScreenId, Overlay } from '@ui/tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
@@ -50,6 +62,119 @@ function envFlag(name: string): boolean | undefined {
   return raw === 'true';
 }
 
+/**
+ * Pick the project to set PostHog up in, headlessly: the repo root if it's a
+ * single app, else the first instrumentable sub-app of a monorepo (under
+ * `apps/` or `packages/`). Mirrors what the detect screen's picker commits, so
+ * the e2e host can drive a monorepo fixture (e.g. a Turborepo) without
+ * keystrokes — the store driver can't actuate the interactive picker.
+ */
+async function pickIntegrationTarget(
+  root: string,
+): Promise<{ integration: Integration; path: string } | null> {
+  // A monorepo: integrate a real sub-app, not the workspace root (which tends
+  // to detect as generic node). Scan apps/ then packages/ for the first one
+  // with a framework. Fall back to the root for a single-app fixture.
+  for (const group of ['apps', 'packages']) {
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(join(root, group)).sort();
+    } catch {
+      continue; // group dir absent
+    }
+    for (const name of entries) {
+      const rel = `${group}/${name}`;
+      if (!fs.statSync(join(root, rel)).isDirectory()) continue;
+      const fw = await detectFramework(join(root, rel));
+      if (fw && FRAMEWORK_REGISTRY[fw]) return { integration: fw, path: rel };
+    }
+  }
+  const rootFw = await detectFramework(root);
+  return rootFw && FRAMEWORK_REGISTRY[rootFw]
+    ? { integration: rootFw, path: '.' }
+    : null;
+}
+
+/**
+ * The variant to drive when the static prerequisite detector won't name one.
+ *
+ * `detectSourceMapsPrerequisites` deliberately does not automate native
+ * platforms ("the legacy filesystem detector does not automate native
+ * platforms" — detect.ts); the real screen resolves those through the agentic
+ * picker, which the store driver cannot actuate. So mirror its verdict here,
+ * or the run exits at the detect screen and no native fixture is ever
+ * e2e-drivable.
+ *
+ * Two cases: the detector recognised the platform and only refused to automate
+ * it (the name is in `detected`), or it returned "unknown" — Go and Rust,
+ * which it never classifies — and the identifying manifest names it.
+ */
+function nativeVariantFor(root: string, detectError: unknown): string | null {
+  const detected = (detectError as { detected?: string } | undefined)?.detected;
+  if (detected && detected !== 'unknown') return detected;
+
+  const manifests: ReadonlyArray<readonly [string, string]> = [
+    ['go.mod', 'go'],
+    ['Cargo.toml', 'rust'],
+    ['pubspec.yaml', 'flutter'],
+    ['Package.swift', 'ios'],
+    ['settings.gradle.kts', 'android'],
+    ['settings.gradle', 'android'],
+  ];
+  for (const [file, variant] of manifests) {
+    if (fs.existsSync(join(root, file))) return variant;
+  }
+  // CocoaPods-style iOS fixtures carry no Package.swift.
+  try {
+    if (
+      fs
+        .readdirSync(root)
+        .some((f) => f.endsWith('.xcodeproj') || f.endsWith('.xcworkspace'))
+    ) {
+      return 'ios';
+    }
+  } catch {
+    /* unreadable root — the caller reports the original detect error */
+  }
+  return null;
+}
+
+// Run the app's build, returning success — stands in for the human the source-maps skill defers `npm run build` to. Opt in with SOURCE_MAPS_RUN_BUILD=1.
+function runAppBuild(root: string): boolean {
+  // Load the app's env file: the Next.js posthog plugin reads credentials from process.env at build time (unlike posthog-cli, which self-loads). The app's file wins over any POSTHOG_* the host inherited, else a stray host key shadows the fixture's upload key.
+  const env: NodeJS.ProcessEnv = { ...process.env, CI: 'true' };
+  for (const name of ['.env.local', '.env']) {
+    try {
+      for (const line of fs
+        .readFileSync(join(root, name), 'utf8')
+        .split('\n')) {
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    } catch {
+      /* no env file of this name */
+    }
+  }
+  const r = spawnSync('npm', ['run', 'build'], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 300_000,
+    env,
+  });
+  if (r.error || r.status !== 0) {
+    mark(
+      `app build failed (status=${r.status}): ${(
+        r.stderr ||
+        r.error?.message ||
+        ''
+      ).slice(-800)}`,
+    );
+    return false;
+  }
+  mark('app build succeeded');
+  return true;
+}
+
 async function main() {
   const apiKey = (
     process.env.POSTHOG_PERSONAL_API_KEY ??
@@ -58,12 +183,17 @@ async function main() {
       : '')
   ).trim();
   const projectId = process.env.PROJECT_ID!;
-
-  // Which program to drive — PROGRAM env from the workbench e2e runner;
-  // defaults to the integration flow. getProgramConfig throws on unknown ids.
-  const programId = (process.env.PROGRAM ||
-    Program.PostHogIntegration) as ProgramId;
+  // Which program to drive — defaults to the integration flow. Set PROGRAM to
+  // an id (e.g. `self-driving`) to host a different one.
+  const programId =
+    (process.env.PROGRAM as ProgramId) || Program.PostHogIntegration;
   const programConfig = getProgramConfig(programId);
+
+  // This host answers wizard_ask via its e2e driver, so keep the ask bridge
+  // wired even though the session is `ci` (which here is only for headless
+  // auth). Without it, ask-driven flows like self-driving abort with
+  // requires-interactive-mode the moment they need to ask a question.
+  process.env.WIZARD_ASK_AUTODRIVE = '1';
 
   const { store } = startTUI(VERSION, programId);
   store.session = buildSession({
@@ -89,6 +219,11 @@ async function main() {
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
   });
+  // Optional skip-ahead: pre-resolve the self-driving integration check so its
+  // screen never shows (INTEGRATE=true integrates first; false = already set up).
+  if (process.env.INTEGRATE === 'true' || process.env.INTEGRATE === 'false') {
+    store.setIntegrate(process.env.INTEGRATE === 'true');
+  }
   const driver = new WizardCiDriver(store);
 
   // Resolve credentials from the phx key (same bearer as an OAuth token) and set
@@ -109,12 +244,45 @@ async function main() {
     });
   };
 
-  // Pass the intro and health-check gates and run the program's real agent.
-  // The auth and run screens never advance on their own; this is what moves them.
-  const runIntegration = async () => {
+  // Pass the pre-run gates and run the program's real agent. The auth and run
+  // screens never advance on their own; this is what moves them. Mirrors
+  // run-wizard's flow, including in-program run phases.
+  const runProgram = async () => {
     await store.getGate('intro');
+    await store.getGate('integration-check');
     await store.getGate('health-check');
-    await runAgent(programConfig, store.session);
+
+    // Mirror run-wizard's composed walk for programs whose steps splice in
+    // their own run steps (self-driving: detect → integrate → handoff → run).
+    // `authenticate` here resolves the phx key, not OAuth, since the session is
+    // built with ci + apiKey.
+    if (programConfig.steps.some((s) => s.run)) {
+      for (const step of programConfig.steps) {
+        if (step.screenId === 'outro') break;
+        if (step.show && !step.show(store.session)) continue;
+        if (step.screenId === 'auth') {
+          await authenticate(store.session, programConfig.id);
+        } else if (step.run) {
+          const live = store.session;
+          const runSession = step.targetDir
+            ? {
+                ...live,
+                installDir: step.targetDir(live),
+                frameworkContext: { ...live.frameworkContext },
+              }
+            : live;
+          if (step.onRunPrep) await step.onRunPrep(runSession);
+          await step.run(runSession);
+          store.completeRunStep(step.id);
+        } else if (step.screenId === 'run') {
+          await runAgent(programConfig, store.session);
+        } else if (step.isComplete) {
+          await store.waitUntil(step.isComplete);
+        }
+      }
+    } else {
+      await runAgent(programConfig, store.session);
+    }
   };
 
   if (process.env.MODE === 'serve') return serve();
@@ -154,7 +322,7 @@ async function main() {
             runStatus = 'running';
             void (async () => {
               try {
-                await runIntegration();
+                await runProgram();
                 runStatus = 'done';
               } catch (e) {
                 runStatus = 'failed';
@@ -206,6 +374,14 @@ async function main() {
       extraAskAnswers: readAnswersFile(process.env.E2E_ANSWERS_FILE),
       env: process.env,
     });
+    // Source-maps ask answers: the upload key is vaulted to a secretRef; the test build runs only under SOURCE_MAPS_RUN_BUILD=1, else it's declined.
+    const runBuild = process.env.SOURCE_MAPS_RUN_BUILD === '1';
+    const askOverrides: Record<string, Record<string, string | undefined>> = {
+      [Program.ErrorTrackingUploadSourceMaps]: {
+        'api-key': process.env.SOURCE_MAPS_CLI_KEY,
+        'test-affordance': runBuild ? 'yes' : 'no',
+      },
+    };
     const recorder = new E2eRunRecorder();
     const screenPath: string[] = [];
     let resultWritten = false;
@@ -225,6 +401,10 @@ async function main() {
         overlay: store.router.hasOverlay,
         tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
         phase: store.session.runPhase,
+        // Snap on within-screen state too: when a screen publishes new
+        // framework-context (e.g. the detector's projects), so the picker frame
+        // is captured, not just the loading state. Generic — keys, not values.
+        ctx: Object.keys(store.session.frameworkContext).sort().join(','),
       });
     const snap = (): Promise<void> => {
       const sig = signature();
@@ -254,6 +434,93 @@ async function main() {
         recorder.observe(store.session);
         const state = driver.readState();
         const before = state.currentScreen;
+
+        // Headless detect: the screen runs a real detector + an interactive
+        // pick the store driver can't actuate. Inject the pick — the repo root
+        // for a single app, or a monorepo's first instrumentable sub-app — so
+        // the composed integrate-run can proceed.
+        if (
+          state.currentScreen === ScreenId.SelfDrivingIntegrationDetect &&
+          state.session.integration == null
+        ) {
+          const pick = await pickIntegrationTarget(store.session.installDir);
+          if (pick) {
+            store.setFrameworkContext(
+              SELF_DRIVING_INTEGRATE_PATH_KEY,
+              pick.path,
+            );
+            store.setFrameworkConfig(
+              pick.integration,
+              FRAMEWORK_REGISTRY[pick.integration],
+            );
+          }
+          continue;
+        }
+
+        // Headless source-maps detect: the screen's candidate list lives in
+        // its own agentic report (React state), so compute the pick here with
+        // the static prerequisite detector — right for a single-app fixture —
+        // and commit it through the driver the way the picker would.
+        if (
+          state.currentScreen === ScreenId.SourceMapsDetect &&
+          store.session.frameworkContext[
+            SOURCE_MAPS_CONTEXT_KEYS.selectedVariant
+          ] == null
+        ) {
+          const ctx: Record<string, unknown> = {};
+          detectSourceMapsPrerequisites(store.session, (k, v) => {
+            ctx[k] = v;
+          });
+          const detected = ctx[SOURCE_MAPS_CONTEXT_KEYS.skillVariant];
+          const variant =
+            typeof detected === 'string'
+              ? detected
+              : nativeVariantFor(
+                  store.session.installDir,
+                  ctx[SOURCE_MAPS_CONTEXT_KEYS.detectError],
+                );
+          if (typeof variant !== 'string') {
+            mark(
+              'source-maps detect found nothing to instrument: ' +
+                JSON.stringify(ctx[SOURCE_MAPS_CONTEXT_KEYS.detectError]),
+            );
+            process.exit(1);
+          }
+          if (typeof detected !== 'string') {
+            mark(`source-maps detect: native fallback picked ${variant}`);
+          }
+          driver.performAction('pick_source_maps_project', {
+            variant,
+            path: '.',
+          });
+          continue;
+        }
+
+        // Program-specific ask answers take precedence over the generic
+        // profile strategy.
+        if (state.currentScreen === Overlay.WizardAsk) {
+          const q = state.pendingQuestion?.questions[0];
+          const override = q ? askOverrides[programId]?.[q.id] : undefined;
+          if (q && override !== undefined) {
+            driver.performAction('answer_question', {
+              answers: { [q.id]: override },
+            });
+            continue;
+          }
+          // test-done: run the real build, answer by outcome.
+          if (
+            runBuild &&
+            programId === Program.ErrorTrackingUploadSourceMaps &&
+            q?.id === 'test-done'
+          ) {
+            const ok = runAppBuild(store.session.installDir);
+            driver.performAction('answer_question', {
+              answers: { [q.id]: ok ? 'yes' : 'no' },
+            });
+            continue;
+          }
+        }
+
         let acted = false;
         try {
           const decision = decideE2eAction(state, profile);
@@ -277,31 +544,13 @@ async function main() {
     };
     const drive = driverLoop();
 
-    await store.runReadyHooks();
-    await runIntegration();
-    const deadline = Date.now() + 120_000;
-    while (!store.session.skillsComplete && Date.now() < deadline)
-      await driver.waitForChange(5_000);
-    // The run reached skillsComplete, so the driver loop is done — but it may be
-    // parked in waitForChange, so don't block on it; the process exit ends it.
-    stop = true;
-    void drive;
-    unsub();
-    await snap(); // the final screen
-    await chain; // flush any pending snapshots
-
-    writeResult();
-    process.exit(0);
-
-    // Structured result the --e2e assertion path reads: run phase, posthog deps,
-    // env file, the screens walked, and the agent-in-the-loop record (asks,
-    // notices, tasks, detected sources, report file, abort reason).
-    //
-    // Registered on `exit` as well as called on the happy path: `wizardAbort`
-    // renders the error outro and then exits the process, so an aborted run
-    // would otherwise write nothing at all — and "why did it abort" is exactly
-    // what the workbench needs in that case.
-    function writeResult() {
+    // Write the structured result the --e2e assertion path reads. Programs whose
+    // outro is terminal (self-driving) exit via the outro's ExitScreen before
+    // the end-of-run path below, so capture it the moment the outro is reached;
+    // integration re-writes it after keep-skills (skillsComplete). Registered
+    // on `exit` too: `wizardAbort` renders the error outro and exits, and an
+    // aborted run would otherwise write nothing at all.
+    const writeResult = (): void => {
       if (!process.env.E2E_RESULT_JSON || resultWritten) return;
       resultWritten = true;
       const appDir = process.env.APP_DIR!;
@@ -373,7 +622,26 @@ async function main() {
           2,
         ),
       );
-    }
+    };
+    const unsubResult = store.subscribe(() => {
+      if (store.currentScreen === 'outro') writeResult();
+    });
+
+    await store.runReadyHooks();
+    await runProgram();
+    const deadline = Date.now() + 120_000;
+    while (!store.session.skillsComplete && Date.now() < deadline)
+      await driver.waitForChange(5_000);
+    // The run reached skillsComplete, so the driver loop is done — but it may be
+    // parked in waitForChange, so don't block on it; the process exit ends it.
+    stop = true;
+    void drive;
+    unsub();
+    unsubResult();
+    await snap(); // the final screen
+    await chain; // flush any pending snapshots
+    writeResult(); // final write (integration: after keep-skills)
+    process.exit(0);
   }
 }
 

@@ -9,6 +9,7 @@
 
 import {
   DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
   SONNET_5_MODEL,
   Harness,
   Sequence,
@@ -123,7 +124,12 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'posthog-integration': DEFAULT_BINDING,
   'revenue-analytics-setup': DEFAULT_BINDING,
   'warehouse-source': DEFAULT_BINDING,
-  'error-tracking-upload-source-maps': DEFAULT_BINDING,
+  'error-tracking-upload-source-maps': {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
   audit: DEFAULT_BINDING,
   'events-audit': DEFAULT_BINDING,
   'posthog-doctor': DEFAULT_BINDING,

@@ -16,6 +16,10 @@ import type { WizardStore } from '@ui/tui/store';
 import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
 import { McpOutcome } from '@lib/wizard-session';
 import type { AskAnswers } from '@lib/wizard-session';
+import {
+  SOURCE_MAPS_CONTEXT_KEYS,
+  VARIANT_DISPLAY_NAME,
+} from '@lib/programs/error-tracking-upload-source-maps/index';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {
@@ -60,8 +64,7 @@ function requireString(
  *     (agent sets runPhase), ai-opt-in (org approval / ci auto-consent), exit,
  *     and the no-dismiss terminal overlays.
  *   - screens of programs the integration e2e profile never enters (audit,
- *     doctor, source-maps). source-maps-detect is interactive, so wire it into
- *     ACTION_REGISTRY when a source-maps profile starts driving that program.
+ *     doctor).
  */
 export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Auth,
@@ -70,8 +73,8 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Exit,
   ScreenId.AuditRun,
   ScreenId.DoctorReport,
-  ScreenId.SourceMapsDetect,
-  ScreenId.SourceMapsOutro,
+  // The detector + picker are interactive; no headless e2e drives this screen.
+  ScreenId.SelfDrivingIntegrationDetect,
   ScreenId.AuditOutro,
   ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.SelfDrivingIntegrationDetect,
@@ -105,6 +108,67 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.DoctorIntro]: [confirmSetupAction],
   [ScreenId.WarehouseIntro]: [confirmSetupAction],
   [ScreenId.SelfDrivingIntro]: [confirmSetupAction],
+
+  // ── Self-driving integration check ────────────────────────────────────
+  [ScreenId.SelfDrivingIntegrationCheck]: [
+    {
+      id: 'set_integrate',
+      description:
+        'Answer the self-driving integration check. integrate=true sets up ' +
+        'the PostHog SDK first; false goes straight to Self-driving.',
+      params: { integrate: 'boolean (default false)' },
+      apply: (store, params) => store.setIntegrate(params.integrate === true),
+    },
+  ],
+
+  // ── Self-driving handoff (after the integration run) ───────────────────
+  [ScreenId.SelfDrivingHandoff]: [
+    {
+      id: 'confirm_self_driving_handoff',
+      description:
+        'Acknowledge the post-integration handoff and start the Self-driving run.',
+      apply: (store) => store.confirmSelfDrivingHandoff(),
+    },
+  ],
+
+  // ── Source-maps project pick + outro ───────────────────────────────────
+  [ScreenId.SourceMapsDetect]: [
+    {
+      id: 'pick_source_maps_project',
+      description:
+        'Commit the project to wire source-map upload for, as the detect ' +
+        "screen's picker would. The candidate list lives in the screen's " +
+        'agentic report, so the caller supplies the pick.',
+      params: {
+        variant: 'skill variant (e.g. "node", "nextjs")',
+        path: 'project path relative to the repo root ("." = root)',
+      },
+      apply: (store, params) => {
+        const variant = requireString(
+          'pick_source_maps_project',
+          params,
+          'variant',
+        );
+        const path = requireString('pick_source_maps_project', params, 'path');
+        store.setFrameworkContext(
+          SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
+          variant,
+        );
+        store.setFrameworkContext(
+          SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
+          (VARIANT_DISPLAY_NAME as Record<string, string>)[variant] ?? variant,
+        );
+        store.setFrameworkContext(SOURCE_MAPS_CONTEXT_KEYS.selectedPath, path);
+      },
+    },
+  ],
+  [ScreenId.SourceMapsOutro]: [
+    {
+      id: 'dismiss_outro',
+      description: 'Dismiss the source-maps outro (sets outroDismissed).',
+      apply: (store) => store.setOutroDismissed(),
+    },
+  ],
 
   // ── Health check — dismiss a blocking outage ──────────────────────────
   [ScreenId.HealthCheck]: [

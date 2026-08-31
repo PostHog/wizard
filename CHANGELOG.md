@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.70.1](https://github.com/PostHog/wizard/compare/v2.70.0...v2.70.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **tui:** don't let wizard_ask submit an empty required field ([#1171](https://github.com/PostHog/wizard/issues/1171)) ([a2b492b](https://github.com/PostHog/wizard/commit/a2b492bdc0b068602bb743d8e3f578b51c3fb0ff))
+* **warehouse:** route Firebase source setup to the browser, not the CLI ([#1149](https://github.com/PostHog/wizard/issues/1149)) ([7debc38](https://github.com/PostHog/wizard/commit/7debc38d3256c40e8e89d22819df2e20b1eb23d4))
+
+## [2.70.0](https://github.com/PostHog/wizard/compare/v2.69.0...v2.70.0) (2026-08-31)
+
+
+### Features
+
+* **privacy:** disclose the dependency scan and let users decline sharing ([#1099](https://github.com/PostHog/wizard/issues/1099)) ([dc65104](https://github.com/PostHog/wizard/commit/dc65104f55a4b5012c91fff0788f0b21627dbab8))
+
 ## [2.69.0](https://github.com/PostHog/wizard/compare/v2.68.0...v2.69.0) (2026-08-28)
 
 

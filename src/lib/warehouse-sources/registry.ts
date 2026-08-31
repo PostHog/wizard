@@ -12,7 +12,7 @@
 
 import type { SourceDetector } from './types.js';
 
-export const SOURCE_DETECTORS: SourceDetector[] = [
+const CORE_SOURCE_DETECTORS: SourceDetector[] = [
   {
     kind: 'Postgres',
     label: 'PostgreSQL',
@@ -127,9 +127,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
   {
+    // Firebase authenticates with a service-account JSON key file, not a
+    // pasteable string. The terminal credential prompt only collects
+    // single-line text, so there is no safe in-cli path: the file upload lives
+    // in the app's new-source form. Deep-link there instead of dead-ending on a
+    // credential the CLI cannot accept.
     kind: 'Firebase',
     label: 'Firebase',
-    mode: 'in-cli',
+    mode: 'deep-link',
     signals: {
       // NOTE: the `firebase` client SDK also covers auth-only projects, which
       // have no Firestore data to import. We accept the false positives — the
@@ -680,12 +685,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       ruby: ['octokit'],
     },
   },
+];
 
-  // ============================================================
-  // Additional released source types (see PostHog data-warehouse
-  // source catalog). Detected by SDK package or .env key convention.
-  // ============================================================
-  // ---- LLM / AI ----
+// ============================================================
+// Additional released source types (see PostHog data-warehouse
+// source catalog). Detected by SDK package or .env key convention.
+// ============================================================
+// ---- LLM / AI ----
+const LLM_SOURCE_DETECTORS: SourceDetector[] = [
   {
     kind: 'OpenAI',
     label: 'OpenAI',
@@ -922,6 +929,9 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^ZEP_API_KEY$/],
     },
   },
+];
+
+const OTHER_SOURCE_DETECTORS: SourceDetector[] = [
   // ---- Payments / billing ----
   {
     kind: 'Paystack',
@@ -2516,3 +2526,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
 ];
+
+export const SOURCE_DETECTORS: SourceDetector[] = [
+  ...CORE_SOURCE_DETECTORS,
+  ...LLM_SOURCE_DETECTORS,
+  ...OTHER_SOURCE_DETECTORS,
+];
+
+/** Kinds from the LLM / AI section above — the only ones that may set `wizard_ai_sdk_detected`. */
+export const AI_SOURCE_KINDS: ReadonlySet<string> = new Set(
+  LLM_SOURCE_DETECTORS.map((detector) => detector.kind),
+);
