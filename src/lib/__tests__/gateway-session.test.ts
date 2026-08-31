@@ -8,10 +8,13 @@ import {
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn(), captureException: vi.fn() },
 }));
+
+vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
 const host = {
   apiHost: 'https://us.posthog.com',
@@ -25,6 +28,7 @@ describe('gatewayAuth', () => {
     resetGatewaySession();
     fetchMock.mockReset();
     vi.mocked(analytics.setTag).mockClear();
+    vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
   });
 
@@ -65,6 +69,29 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache, so no second mint.
     await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a successful mint without ever logging the token', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_secret_value',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://gateway.us.posthog.com',
+          team_id: 42,
+        }),
+    });
+
+    await gatewayAuth(host, 'pha_oauth', 'integration');
+
+    const lines = vi.mocked(logToFile).mock.calls.map((c) => String(c[0]));
+    const minted = lines.filter((l) => l.includes('minted a scoped token'));
+    expect(minted).toHaveLength(1);
+    expect(minted[0]).toContain('program=integration');
+    expect(minted[0]).toContain('team=42');
+    // A run that never reached the mint logs nothing, so success must say so.
+    expect(lines.join('\n')).not.toContain('phe_secret_value');
   });
 
   it('serves a short-lived token from cache instead of re-minting every call', async () => {

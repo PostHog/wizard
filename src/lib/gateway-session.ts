@@ -109,6 +109,14 @@ async function resolveGatewayAuth(
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
   analytics.setTag('gateway_edition', 'v2');
+  // The only positive record of a mint. Every other branch here logs a failure,
+  // so without this a successful run and one that never reached this code look
+  // identical in the log. Never log the token itself.
+  logToFile(
+    `[gateway] minted a scoped token: program=${program} team=${
+      minted.teamId ?? 'unknown'
+    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}`,
+  );
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
