@@ -18,7 +18,7 @@ export const MIN_VIEWPORT_COLUMNS = 80;
 export const MIN_VIEWPORT_ROWS = 28;
 
 export const VIEWPORT_TOO_SMALL_MESSAGE =
-  'Hey, can you make this terminal window a little bigger? The interactive Wizard needs more room to display properly.';
+  'The Wizard needs more room to display required text. Please make this terminal bigger.';
 
 export function isViewportTooSmall(columns: number, rows: number): boolean {
   return columns < MIN_VIEWPORT_COLUMNS || rows < MIN_VIEWPORT_ROWS;
