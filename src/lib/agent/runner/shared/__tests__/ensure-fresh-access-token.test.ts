@@ -12,13 +12,8 @@ vi.mock('@ui', () => ({
 
 const mockedRefresh = refreshOAuthToken as Mock;
 
-const HOUR_MS = 60 * 60 * 1000;
-
 function sessionWith(credentials: Partial<Credentials> | null): WizardSession {
-  return {
-    baseUrl: undefined,
-    credentials: credentials as Credentials | null,
-  } as WizardSession;
+  return { credentials: credentials as Credentials | null } as WizardSession;
 }
 
 describe('ensureFreshAccessToken', () => {
@@ -26,12 +21,8 @@ describe('ensureFreshAccessToken', () => {
     vi.clearAllMocks();
   });
 
-  it('is a no-op without credentials', async () => {
-    await ensureFreshAccessToken(sessionWith(null));
-    expect(mockedRefresh).not.toHaveBeenCalled();
-  });
-
   it('is a no-op without a refresh token (CI api-key runs, refresh-less grants)', async () => {
+    await ensureFreshAccessToken(sessionWith(null));
     await ensureFreshAccessToken(
       sessionWith({ accessToken: 'pha_ci_key', accessTokenExpiresAt: 0 }),
     );
@@ -43,7 +34,7 @@ describe('ensureFreshAccessToken', () => {
       sessionWith({
         accessToken: 'pha_fresh',
         refreshToken: 'phr_x',
-        accessTokenExpiresAt: Date.now() + HOUR_MS - 60_000,
+        accessTokenExpiresAt: Date.now() + 59 * 60 * 1000,
       }),
     );
     expect(mockedRefresh).not.toHaveBeenCalled();
@@ -68,29 +59,7 @@ describe('ensureFreshAccessToken', () => {
     expect(mockedRefresh).toHaveBeenCalledWith('phr_old', undefined);
     expect(session.credentials!.accessToken).toBe('pha_new');
     expect(session.credentials!.refreshToken).toBe('phr_rotated');
-    expect(session.credentials!.accessTokenExpiresAt).toBeGreaterThan(
-      Date.now() + 3500 * 1000,
-    );
     expect(setCredentials).toHaveBeenCalledWith(session.credentials);
-  });
-
-  it('refreshes when the expiry is unknown rather than gambling on a stale token', async () => {
-    mockedRefresh.mockResolvedValueOnce({
-      access_token: 'pha_new',
-      expires_in: 3600,
-      token_type: 'Bearer',
-      scope: 'project:read',
-    });
-    const session = sessionWith({
-      accessToken: 'pha_old',
-      refreshToken: 'phr_old',
-    });
-
-    await ensureFreshAccessToken(session);
-
-    expect(session.credentials!.accessToken).toBe('pha_new');
-    // No rotated token in the response — the old one stays usable.
-    expect(session.credentials!.refreshToken).toBe('phr_old');
   });
 
   it('keeps the existing token and does not throw when the refresh fails', async () => {

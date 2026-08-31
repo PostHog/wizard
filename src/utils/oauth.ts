@@ -414,27 +414,20 @@ async function exchangeCodeForToken(
   return token;
 }
 
-/**
- * Exchange a refresh token for a fresh access token (RFC 6749 §6). PostHog
- * rotates refresh tokens on use, so the response usually carries a new
- * `refresh_token` — callers must store it or the next refresh fails.
- */
+// Refresh-token grant (RFC 6749 §6); the server rotates, so callers must store the returned refresh_token.
 export async function refreshOAuthToken(
   refreshToken: string,
   baseUrl?: string,
 ): Promise<OAuthTokenResponse> {
-  const clientId = getOAuthClientId(baseUrl);
   const oauthUrl = getOAuthUrl(baseUrl);
-
   logToFile(`[oauth] refreshing access token at ${oauthUrl}/oauth/token`);
-  let response;
   try {
-    response = await axios.post(
+    const response = await axios.post(
       `${oauthUrl}/oauth/token`,
       {
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: clientId,
+        client_id: getOAuthClientId(baseUrl),
       },
       {
         headers: {
@@ -444,22 +437,17 @@ export async function refreshOAuthToken(
         timeout: 30_000,
       },
     );
+    return OAuthTokenResponseSchema.parse(response.data);
   } catch (e) {
-    const status = axios.isAxiosError(e) ? e.response?.status : undefined;
     logToFile(
-      `[oauth] token refresh failed${status ? ` (HTTP ${status})` : ''}:`,
+      '[oauth] token refresh failed:',
       e instanceof Error ? e.message : e,
     );
     const refreshError = axios.isAxiosError(e)
       ? oauthErrorFromTokenBody(e.response?.data)
       : null;
-    if (refreshError) throw refreshError;
-    throw e;
+    throw refreshError ?? e;
   }
-
-  const token = OAuthTokenResponseSchema.parse(response.data);
-  logToFile('[oauth] access token refreshed');
-  return token;
 }
 
 /**

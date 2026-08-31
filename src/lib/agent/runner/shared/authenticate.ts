@@ -71,20 +71,15 @@ export async function authenticate(
   analytics.setGroups(groupsFromUser(user, host.apiHost));
 }
 
-/**
- * The access token is handed to the agent subprocess via its environment at
- * spawn and cannot change mid-run, while a run can block on a wizard_ask for
- * the rest of the token's life — so every run must START with a near-full TTL.
- * Refresh whenever less than this much lifetime remains; a just-minted 1-hour
- * token skips, and a long-lived token (7-day first-party grants) always skips.
- */
+// The agent subprocess freezes its token at spawn and a run can block on a wizard_ask
+// for the rest of the token's life, so each run must start near-full; skip only
+// just-minted 1-hour tokens and long-lived (7-day first-party) grants.
 const REFRESH_WHEN_REMAINING_MS = 50 * 60 * 1000;
 
 /**
- * Mint a fresh access token before an agent run when the current one has
- * meaningfully aged. Best-effort: refresh-less credentials (CI api keys,
- * grants without a refresh token) and failed refreshes leave the existing
- * token in place — the run then behaves exactly as before this existed.
+ * Mint a fresh access token before an agent run when the current one has aged.
+ * Best-effort: refresh-less credentials (CI api keys) and failed refreshes
+ * leave the existing token in place, so behavior degrades to the status quo.
  */
 export async function ensureFreshAccessToken(
   session: WizardSession,
@@ -92,10 +87,7 @@ export async function ensureFreshAccessToken(
   const credentials = session.credentials;
   if (!credentials?.refreshToken) return;
 
-  const remaining =
-    credentials.accessTokenExpiresAt !== undefined
-      ? credentials.accessTokenExpiresAt - Date.now()
-      : 0;
+  const remaining = (credentials.accessTokenExpiresAt ?? 0) - Date.now();
   if (remaining >= REFRESH_WHEN_REMAINING_MS) return;
 
   try {
@@ -104,8 +96,7 @@ export async function ensureFreshAccessToken(
       session.baseUrl,
     );
     credentials.accessToken = token.access_token;
-    // Rotation: the server usually invalidates the old refresh token when it
-    // issues a new one — keep whichever the response carried.
+    // Rotation: keep the returned refresh token or the old one stops working.
     credentials.refreshToken = token.refresh_token ?? credentials.refreshToken;
     credentials.accessTokenExpiresAt = Date.now() + token.expires_in * 1000;
     getUI().setCredentials(credentials);
