@@ -1,14 +1,7 @@
-import { Agent } from 'node:https';
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { WIZARD_USER_AGENT } from './constants';
-
-// Node defaults to 250ms between IPv6 and IPv4 connection attempts, which is
-// too short for some regional PostHog API connections after OAuth completes.
-export const posthogApiHttpsAgent = new Agent({
-  autoSelectFamilyAttemptTimeout: 2_000,
-});
 
 /**
  * User payload from `/api/users/@me/`. Schema typed for the fields the
@@ -155,7 +148,6 @@ export async function fetchUserData(
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
-      httpsAgent: posthogApiHttpsAgent,
     });
 
     return ApiUserSchema.parse(response.data);
@@ -195,7 +187,6 @@ export async function fetchRecentActivity(
           Authorization: `Bearer ${accessToken}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
-        httpsAgent: posthogApiHttpsAgent,
         // Short timeout — best-effort probe, not a critical path.
         timeout: 4000,
       },
@@ -224,7 +215,6 @@ export async function fetchProjectData(
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
-      httpsAgent: posthogApiHttpsAgent,
     });
 
     return ApiProjectSchema.parse(response.data);
@@ -263,7 +253,6 @@ export async function fetchSlackConnected(
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
-      httpsAgent: posthogApiHttpsAgent,
       signal,
     },
   );
