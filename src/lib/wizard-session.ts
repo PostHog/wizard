@@ -61,6 +61,13 @@ export enum DiscoveredFeature {
   LLM = 'llm',
 }
 
+/** Consent to report what local detection found (see `scanConsent` below). */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
+}
+
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
   LLM = 'llm',
@@ -266,6 +273,14 @@ export interface WizardSession {
 
   // From detection + screens
   setupConfirmed: boolean;
+  /**
+   * Gates reporting only; local detection runs either way. Reporting treats
+   * 'undecided' as 'declined', so a path that reports before the user was
+   * asked sends nothing rather than everything.
+   */
+  scanConsent: ScanConsent;
+  /** Guards against reporting twice; consent resolves from two paths. */
+  warehouseSourcesReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -465,6 +480,12 @@ export function buildSession(args: {
     model: args.model,
 
     setupConfirmed: false,
+    // No screen can ask in a scripted CI run, so granting keeps CI's
+    // telemetry as it was. --signup alone still provisions a brand-new
+    // account headlessly, and that user has never seen the disclosure — a
+    // headless `--ci --signup` run stays covered by the ci branch above.
+    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
+    warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,
@@ -511,4 +532,16 @@ export function buildSession(args: {
     frameworkConfig: null,
     pendingQuestion: null,
   };
+}
+
+/** One place to ask, so a new consent state does not need three edits. */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }

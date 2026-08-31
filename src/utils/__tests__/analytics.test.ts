@@ -1,9 +1,14 @@
-import { Analytics, groupsFromUser } from '@utils/analytics';
+import { Analytics, groupsFromUser, sessionProperties } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
 import { VERSION } from '@lib/version';
 import type { ApiUser } from '@lib/api';
+import {
+  buildSession,
+  DiscoveredFeature,
+  ScanConsent,
+} from '@lib/wizard-session';
 
 vi.mock('posthog-node');
 vi.mock('uuid');
@@ -65,6 +70,7 @@ describe('Analytics', () => {
       captureException: vi.fn(),
       alias: vi.fn(),
       identify: vi.fn(),
+      groupIdentify: vi.fn(),
       shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
@@ -682,6 +688,20 @@ describe('Analytics', () => {
     });
   });
 
+  describe('groupIdentify', () => {
+    it('forwards groupType, groupKey, and properties to the client', () => {
+      analytics.groupIdentify('organization', 'org-1', {
+        wizard_ai_sdk_detected: true,
+      });
+
+      expect(mockPostHogInstance.groupIdentify).toHaveBeenCalledWith({
+        groupType: 'organization',
+        groupKey: 'org-1',
+        properties: { wizard_ai_sdk_detected: true },
+      });
+    });
+  });
+
   describe('integration with other methods', () => {
     it('should work correctly with setTag and captureException', () => {
       const error = new Error('Test error');
@@ -736,6 +756,94 @@ describe('Analytics', () => {
           integration: 'svelte',
         },
       );
+    });
+  });
+});
+
+describe('sessionProperties', () => {
+  it('includes discovered_features once consent is granted', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+    session.scanConsent = ScanConsent.Granted;
+
+    const properties = sessionProperties(session);
+
+    expect(properties.discovered_features).toEqual([DiscoveredFeature.Stripe]);
+  });
+
+  it('omits discovered_features entirely when the user declined sharing', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+    session.scanConsent = ScanConsent.Declined;
+
+    const properties = sessionProperties(session);
+
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
+  it('omits discovered_features on a --signup run before the user answers', () => {
+    // --signup renders the full TUI, so these events fire while the intro
+    // screen is still on screen. Granting on the flag would put scan results
+    // on every one of them, including for a user who then declines.
+    const session = buildSession({ installDir: '/tmp/app', signup: true });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+
+    const properties = sessionProperties(session);
+
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
+  it('omits discovered_features while consent is still undecided', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+    session.scanConsent = ScanConsent.Undecided;
+
+    const properties = sessionProperties(session);
+
+    // Undecided reads the same as declined: a path that reports before the
+    // user has been asked must send nothing, not everything.
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
+  it('sends scan_consent in every state, so an absent list is explainable', () => {
+    for (const consent of [
+      ScanConsent.Undecided,
+      ScanConsent.Granted,
+      ScanConsent.Declined,
+    ]) {
+      const session = buildSession({ installDir: '/tmp/app' });
+      session.scanConsent = consent;
+
+      expect(sessionProperties(session).scan_consent).toBe(consent);
+    }
+  });
+
+  it('never sends an empty array in place of the omitted key', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [];
+    session.scanConsent = ScanConsent.Declined;
+
+    const properties = sessionProperties(session);
+
+    // Absent, not []. An empty array would misread as "we looked and found
+    // nothing" instead of "we didn't report what we found".
+    expect('discovered_features' in properties).toBe(false);
+  });
+
+  it('leaves every other property untouched by a decline', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.scanConsent = ScanConsent.Declined;
+    session.integration = null;
+    session.additionalFeatureQueue = [];
+
+    const properties = sessionProperties(session);
+
+    expect(properties).toMatchObject({
+      integration: null,
+      detected_framework: null,
+      typescript: false,
+      additional_features: [],
+      run_phase: session.runPhase,
     });
   });
 });

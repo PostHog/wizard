@@ -63,14 +63,19 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
      because a template documents a key rather than setting it.
    - Env tool path rule: ${envFilePathGuidance}
    - Then call set_env_values, passing the STEP 1 secretRef as a value
-     object, not a literal string:
+     object, not a literal string. Take the three variable NAMES from the
+     skill's per-uploader list in "Write credentials to the env file" — they
+     differ by uploader, and only the shape below is fixed:
        values: {
-         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
-         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${uiHost}"
+         "<key var for the uploader you wired>": { secretRef: "<the ref from STEP 1>" },
+         "<project id var>": "${projectId}",
+         "<host var>": "${uiHost}"
        }
-   Variable names follow the skill's per-uploader conventions. The wizard
-   resolves the ref locally before writing, so you never see the key value.`;
+     Write that one set only. Do not also write another uploader's variables
+     as a fallback — a credential nothing reads is an unused secret sitting
+     in the user's env file.
+   The wizard resolves the ref locally before writing, so you never see the
+   key value.`;
 
   return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
 
