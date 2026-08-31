@@ -11,6 +11,7 @@ import { emitWizardError } from '@lib/errors';
 type Options = Arguments & {
   region?: string;
   baseUrl?: string;
+  oauthClientId?: string;
   installDir?: string;
   apiKey?: string;
   signup?: boolean;
@@ -167,7 +168,7 @@ async function provisionForSignup(
       options.email as string,
       options.name ?? '',
       signupRegion,
-      { baseUrl: options.baseUrl },
+      { baseUrl: options.baseUrl, oauthClientId: options.oauthClientId },
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

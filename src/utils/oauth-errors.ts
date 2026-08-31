@@ -179,7 +179,7 @@ function headlineAndRemediation(params: FailureMessageParams): {
       return {
         headline: `PostHog at ${oauthUrl} does not recognize the wizard's OAuth client (invalid_client).`,
         whatToDo:
-          'The client ID below is not registered on the target instance. If you pointed the wizard at a local or self-hosted stack (--base-url), seed its wizard OAuth app first; otherwise re-run without --base-url to use PostHog Cloud.',
+          'The client ID below is not registered on the target instance. If you pointed the wizard at a local or self-hosted stack (--base-url), either seed its wizard OAuth app or pass --oauth-client-id with a client the instance registers; otherwise re-run without --base-url to use PostHog Cloud.',
       };
     case 'invalid_grant':
       return {

@@ -115,19 +115,22 @@ interface OAuthConfig {
    * OAuth server and selects the matching client ID.
    */
   baseUrl?: string;
+  /**
+   * Explicit OAuth client ID (`--oauth-client-id`, from
+   * `session.oauthClientId`). Wins over the base-URL heuristic below.
+   */
+  oauthClientId?: string;
 }
 
 /**
- * OAuth client ID for the current target. A pinned base URL (`--base-url`, or
- * IS_DEV's implicit localhost) means we're talking to a dev-seeded stack, which
- * registers the dev client; prod uses the proxy client.
- *
- * TODO: this assumes any pinned base URL is a dev-seeded instance that
- * registers POSTHOG_DEV_CLIENT_ID. If we ever point `--base-url` at a non-dev
- * instance with its own OAuth app, make the client ID configurable (e.g. a
- * `--oauth-client-id` flag) instead of always falling back to the dev client.
+ * OAuth client ID for the current target. An explicit `--oauth-client-id` wins,
+ * so a pinned instance with its own OAuth app can present a client it registers.
+ * Otherwise a pinned base URL (`--base-url`, or IS_DEV's implicit localhost)
+ * means a dev-seeded stack, which registers the dev client; prod uses the proxy
+ * client.
  */
-function getOAuthClientId(baseUrl?: string): string {
+function getOAuthClientId(baseUrl?: string, oauthClientId?: string): string {
+  if (oauthClientId) return oauthClientId;
   return resolveBaseUrl(baseUrl)
     ? POSTHOG_DEV_CLIENT_ID
     : POSTHOG_PROXY_CLIENT_ID;
@@ -351,8 +354,9 @@ async function exchangeCodeForToken(
   codeVerifier: string,
   callbackUrl: string,
   baseUrl?: string,
+  oauthClientId?: string,
 ): Promise<OAuthTokenResponse> {
-  const clientId = getOAuthClientId(baseUrl);
+  const clientId = getOAuthClientId(baseUrl, oauthClientId);
   const oauthUrl = getOAuthUrl(baseUrl);
 
   logToFile(`[oauth] exchanging code for token at ${oauthUrl}/oauth/token`);
@@ -456,7 +460,7 @@ function reportNarrowedGrant(
 export async function performOAuthFlow(
   config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
-  const clientId = getOAuthClientId(config.baseUrl);
+  const clientId = getOAuthClientId(config.baseUrl, config.oauthClientId);
   const oauthUrl = getOAuthUrl(config.baseUrl);
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -559,6 +563,7 @@ export async function performOAuthFlow(
           codeVerifier,
           callbackUrl,
           config.baseUrl,
+          config.oauthClientId,
         );
 
         server.close();

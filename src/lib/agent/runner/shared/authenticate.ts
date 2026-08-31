@@ -41,6 +41,7 @@ export async function authenticate(
     email: session.email,
     region: session.region,
     baseUrl: session.baseUrl,
+    oauthClientId: session.oauthClientId,
     localMcp: session.localMcp,
     programId,
   });

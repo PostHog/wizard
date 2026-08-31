@@ -34,6 +34,7 @@ function runMcpTutorial(argv: Arguments): void {
         debug,
         localMcp,
         baseUrl: argv.baseUrl as string | undefined,
+        oauthClientId: argv.oauthClientId as string | undefined,
       });
     } catch (err) {
       // TUI unavailable — the tutorial has no headless fallback.

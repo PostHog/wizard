@@ -115,6 +115,7 @@ export function createMcpSuggestedPromptsServices(
         email: undefined,
         region: undefined,
         baseUrl: store.session.baseUrl,
+        oauthClientId: store.session.oauthClientId,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,
         // replays, errors, web/LLM analytics, cohorts, persons) plus

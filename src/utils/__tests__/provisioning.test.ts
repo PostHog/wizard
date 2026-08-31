@@ -344,6 +344,43 @@ describe('provisionNewAccount', () => {
     );
   });
 
+  it('sends an explicit oauthClientId instead of the region client', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_cid', type: 'oauth', oauth: { code: 'code_cid' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_cid',
+          refresh_token: 'phr_cid',
+          expires_in: 3600,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '8',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_cid',
+              host: 'https://selfhosted.example.com',
+            },
+          },
+        },
+      });
+
+    await provisionNewAccount('self@example.com', '', 'US', {
+      baseUrl: 'https://selfhosted.example.com',
+      oauthClientId: 'my-instance-client-id',
+    });
+
+    const accountCall = mockedAxios.post.mock.calls[0];
+    expect((accountCall[1] as Record<string, unknown>).client_id).toBe(
+      'my-instance-client-id',
+    );
+  });
+
   it('sends project name in resources configuration', async () => {
     mockedAxios.post
       .mockResolvedValueOnce({

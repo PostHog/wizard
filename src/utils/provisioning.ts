@@ -42,18 +42,18 @@ const getProvisioningBaseUrl = (
 };
 
 /**
- * OAuth client ID for provisioning. A pinned base URL means a dev-seeded stack
- * that registers the dev client; prod uses the client registered for the target
- * region (the wizard OAuth app is registered separately per region).
- *
- * TODO: same assumption as `getOAuthClientId` in oauth.ts — a pinned base URL is
- * treated as a dev-seeded instance. Make configurable if we ever point
- * `--base-url` at a non-dev instance with its own OAuth app.
+ * OAuth client ID for provisioning. An explicit `--oauth-client-id` wins, so a
+ * pinned instance with its own OAuth app can present a client it registers.
+ * Otherwise a pinned base URL means a dev-seeded stack that registers the dev
+ * client; prod uses the client registered for the target region (the wizard
+ * OAuth app is registered separately per region).
  */
 const getProvisioningClientId = (
   region: 'US' | 'EU',
   baseUrl?: string,
+  oauthClientId?: string,
 ): string => {
+  if (oauthClientId) return oauthClientId;
   if (resolveBaseUrl(baseUrl)) return POSTHOG_DEV_CLIENT_ID;
   return region === 'EU' ? POSTHOG_EU_CLIENT_ID : POSTHOG_US_CLIENT_ID;
 };
@@ -290,6 +290,8 @@ export async function provisionNewAccount(
     orgName?: string;
     projectName?: string;
     baseUrl?: string;
+    /** Explicit OAuth client ID (`--oauth-client-id`); wins over the base-URL heuristic. */
+    oauthClientId?: string;
     /** Scope list to request; defaults to `WIZARD_PROVISIONING_SCOPES`. */
     scopes?: readonly string[];
   },
@@ -307,7 +309,11 @@ export async function provisionNewAccount(
       id: crypto.randomUUID(),
       email,
       name,
-      client_id: getProvisioningClientId(region, opts?.baseUrl),
+      client_id: getProvisioningClientId(
+        region,
+        opts?.baseUrl,
+        opts?.oauthClientId,
+      ),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       scopes: opts?.scopes ?? WIZARD_PROVISIONING_SCOPES,

@@ -240,6 +240,7 @@ describe('buildOAuthFailureMessage', () => {
       'PostHog at http://localhost:8010 does not recognize',
     );
     expect(message).toContain('--base-url');
+    expect(message).toContain('--oauth-client-id');
     expect(message).toContain('What to do:');
   });
 

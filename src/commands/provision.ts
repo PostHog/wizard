@@ -46,6 +46,7 @@ function runProvision(argv: Arguments): void {
     region: (argv.region as string).toUpperCase() as 'US' | 'EU',
     name: (argv.name as string) ?? '',
     baseUrl: argv.baseUrl as string | undefined,
+    oauthClientId: argv.oauthClientId as string | undefined,
     jsonMode,
   });
 }
@@ -55,6 +56,7 @@ type ProvisionArgs = {
   region: 'US' | 'EU';
   name: string;
   baseUrl?: string;
+  oauthClientId?: string;
   jsonMode: boolean;
 };
 
@@ -63,6 +65,7 @@ async function provision({
   region,
   name,
   baseUrl,
+  oauthClientId,
   jsonMode,
 }: ProvisionArgs): Promise<void> {
   try {
@@ -70,7 +73,10 @@ async function provision({
     if (!jsonMode) {
       getUI().log.info(`Provisioning account for ${email} in ${region}...`);
     }
-    const result = await provisionNewAccount(email, name, region, { baseUrl });
+    const result = await provisionNewAccount(email, name, region, {
+      baseUrl,
+      oauthClientId,
+    });
     emitResult(result, jsonMode);
     process.exit(0);
   } catch (error) {

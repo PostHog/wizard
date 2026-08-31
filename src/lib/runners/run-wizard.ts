@@ -117,6 +117,7 @@ export function runWizard(
         projectId: options.projectId as string | undefined,
         email: options.email as string | undefined,
         baseUrl: options.baseUrl as string | undefined,
+        oauthClientId: options.oauthClientId as string | undefined,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
         noTelemetry: resolveNoTelemetry(options),
@@ -212,6 +213,7 @@ export function runWizard(
             apiKey: session.apiKey,
             projectId: session.projectId,
             baseUrl: session.baseUrl,
+            oauthClientId: session.oauthClientId,
             programId: config.id,
           });
         activeTui.store.setCredentials({

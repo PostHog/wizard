@@ -230,6 +230,8 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           ci: false,
           apiKey: undefined,
           projectId: undefined,
+          baseUrl: store.session.baseUrl,
+          oauthClientId: store.session.oauthClientId,
           programId: Program.SlackConnect,
         });
         if (cancelled) return;

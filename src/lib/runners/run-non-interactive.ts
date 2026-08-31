@@ -128,6 +128,7 @@ export function runNonInteractive(
       email: options.email as string | undefined,
       projectId: options.projectId as string | undefined,
       baseUrl: options.baseUrl as string | undefined,
+      oauthClientId: options.oauthClientId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
       noTelemetry: resolveNoTelemetry(options),

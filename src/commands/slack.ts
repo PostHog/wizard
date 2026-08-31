@@ -33,6 +33,7 @@ function runSlackConnect(argv: Arguments): void {
       tui.store.session = buildSession({
         debug,
         baseUrl: argv.baseUrl as string | undefined,
+        oauthClientId: argv.oauthClientId as string | undefined,
       });
     } catch (err) {
       // TUI unavailable — connecting Slack has no headless fallback.

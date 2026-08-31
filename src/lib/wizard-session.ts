@@ -244,6 +244,13 @@ export interface WizardSession {
    * `@utils/urls`. Empty/unset → region-based resolution.
    */
   baseUrl?: string;
+  /**
+   * Explicit OAuth client ID (`--oauth-client-id`). Overrides the client ID the
+   * login and provisioning flows would otherwise pick from `baseUrl`, so a
+   * pinned self-hosted instance can present a client its own OAuth app
+   * registers. Threaded into `@utils/oauth` and `@utils/provisioning`.
+   */
+  oauthClientId?: string;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
@@ -428,6 +435,7 @@ export function buildSession(args: {
   email?: string;
   region?: CloudRegion;
   baseUrl?: string;
+  oauthClientId?: string;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
@@ -455,6 +463,7 @@ export function buildSession(args: {
     // helper already honours. An explicit `--base-url` is more specific, so it wins.
     baseUrl:
       args.baseUrl ?? (local.localPosthog ? POSTHOG_LOCAL_URL : undefined),
+    oauthClientId: args.oauthClientId,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),

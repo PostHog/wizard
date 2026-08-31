@@ -61,6 +61,12 @@ export const GLOBAL_OPTIONS = {
     type: 'string' as const,
     hidden: true,
   },
+  'oauth-client-id': {
+    describe:
+      'Override the OAuth client ID sent during login. Use with --base-url when the target instance registers its own wizard OAuth app instead of the dev-seeded one.\nenv: POSTHOG_WIZARD_OAUTH_CLIENT_ID',
+    type: 'string' as const,
+    hidden: true,
+  },
   benchmark: {
     default: false,
     describe:

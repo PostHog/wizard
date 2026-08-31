@@ -414,6 +414,9 @@ export async function getOrAskForProjectData(
     /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
      *  set, pins every PostHog origin and bypasses region resolution. */
     baseUrl?: string;
+    /** Explicit OAuth client ID (`--oauth-client-id`, from
+     *  `session.oauthClientId`). Threaded into the login/provisioning flow. */
+    oauthClientId?: string;
     /** `--local-mcp`: forwarded into the resolved host so `host.mcpUrl` is local. */
     localMcp?: boolean;
     /** Optional — picks the OAuth scope set via
@@ -506,6 +509,7 @@ export async function getOrAskForProjectData(
       email: _options.email,
       region: _options.region,
       baseUrl: _options.baseUrl,
+      oauthClientId: _options.oauthClientId,
       programId: _options.programId,
       projectId: _options.projectId,
       localMcp: _options.localMcp,
@@ -577,6 +581,8 @@ async function askForWizardLogin(options: {
   region?: CloudRegion;
   /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
   baseUrl?: string;
+  /** Explicit OAuth client ID (`--oauth-client-id`); overrides the base-URL heuristic. */
+  oauthClientId?: string;
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
@@ -593,6 +599,7 @@ async function askForWizardLogin(options: {
       options.baseUrl,
       options.localMcp,
       options.programId,
+      options.oauthClientId,
     );
   }
 
@@ -602,6 +609,7 @@ async function askForWizardLogin(options: {
     signup: false,
     projectId: options.projectId,
     baseUrl: options.baseUrl,
+    oauthClientId: options.oauthClientId,
   });
 
   try {
@@ -712,6 +720,7 @@ async function askForProvisioningSignup(
   baseUrl?: string,
   localMcp?: boolean,
   programId?: ProgramId | null,
+  oauthClientId?: string,
 ): Promise<ProjectData> {
   if (!email || !email.includes('@')) {
     getUI().log.error(
@@ -731,6 +740,7 @@ async function askForProvisioningSignup(
       orgName,
       projectName,
       baseUrl,
+      oauthClientId,
       scopes: getProvisioningScopesForProgram(programId),
     });
 
@@ -758,7 +768,12 @@ async function askForProvisioningSignup(
       getUI().log.warn(message);
       getUI().log.info('Signing you in to your new account instead...');
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({
+        signup: false,
+        baseUrl,
+        oauthClientId,
+        localMcp,
+      });
     }
 
     spinner.stop('Account creation failed.');
@@ -768,7 +783,12 @@ async function askForProvisioningSignup(
         'This email already has a PostHog account. Switching to login flow...',
       );
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({
+        signup: false,
+        baseUrl,
+        oauthClientId,
+        localMcp,
+      });
     }
 
     getUI().log.error(`Failed to create account: ${message}`);
