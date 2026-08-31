@@ -3,7 +3,7 @@
  *
  * The agent writes its own task labels, so the same step reaches analytics under whatever wording
  * that run's model picked — "Enable products", "Enabling products" and "Turn on PostHog products"
- * are all STEP 3b. A funnel keyed on that label silently loses runs the moment the wording drifts,
+ * are all STEP 3. A funnel keyed on that label silently loses runs the moment the wording drifts,
  * which is invisible: the number just drops.
  *
  * These rules map a label back to the step it belongs to, so a funnel can key on `step_key` and stay

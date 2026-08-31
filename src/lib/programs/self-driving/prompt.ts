@@ -87,7 +87,7 @@ call so the user can follow your progress in the TUI. Use exactly these
 tasks, in this order:
   1. Check Self-driving access
   2. Read project and current Self-driving state
-  3b. Enable products (replay, error tracking, support)
+  3. Enable products (replay, error tracking, support)
   4. Enable signal sources
   5. Offer issue-tracker integrations
   6. Configure the scout troop
@@ -135,7 +135,7 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
    what neither covers. List the currently enabled signal sources so every
    later write is idempotent.
 
-STEP 3b — Enable products. (skill: "Enable products")
+STEP 3 — Enable products. (skill: "Enable products")
    Turn ON the PostHog products Signals reads from — Session Replay,
    Error Tracking, and Support — so the sources you enable next have data
    to read. These are server-side enables with conservative defaults
@@ -208,7 +208,7 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
 STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
    Create the scanner skeletons the skill defines, filling the per-product
    blanks it leaves you from this repo's code. Scanners need Session Replay
-   on (STEP 3b). Every failure here — no recordings yet, a backend-only
+   on (STEP 3). Every failure here — no recordings yet, a backend-only
    project, the scanner API missing — is a follow-up, never an abort; mark
    the task completed regardless.
 
