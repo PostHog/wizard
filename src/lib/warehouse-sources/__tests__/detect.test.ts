@@ -107,6 +107,15 @@ describe('detectWarehouseSources', () => {
     expect(byKind.Mollie).toBe('in-cli');
   });
 
+  it('detects Firebase as a deep-link source (service-account key file)', () => {
+    writePackageJson(tmpDir, { 'firebase-admin': '^12.0.0' });
+    const [firebase] = detectWarehouseSources(tmpDir);
+    expect(firebase.kind).toBe('Firebase');
+    // The credential is a JSON key file, which the terminal prompt cannot
+    // collect — so it routes to the browser new-source form, not in-cli.
+    expect(firebase.mode).toBe('deep-link');
+  });
+
   it('detects Slack and GitHub as deep-link OAuth sources', () => {
     writePackageJson(tmpDir, {
       '@slack/web-api': '^7.0.0',

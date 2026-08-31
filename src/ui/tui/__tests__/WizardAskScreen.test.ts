@@ -20,7 +20,10 @@ vi.mock('../../../utils/analytics.js', () => ({
 }));
 
 import { WizardStore } from '@ui/tui/store';
-import { handleAskKey } from '@ui/tui/screens/WizardAskScreen';
+import {
+  handleAskKey,
+  isRequiredButEmpty,
+} from '@ui/tui/screens/WizardAskScreen';
 
 const pending = {
   id: 'req-1',
@@ -56,5 +59,28 @@ describe('handleAskKey', () => {
       port: '__cancelled__',
     });
     expect(store.session.pendingQuestion).toBeNull();
+  });
+});
+
+describe('isRequiredButEmpty', () => {
+  it('blocks an empty required text field (required defaults to true)', () => {
+    expect(isRequiredButEmpty({}, '')).toBe(true);
+    expect(isRequiredButEmpty({}, '   ')).toBe(true);
+    expect(isRequiredButEmpty({ required: true }, '')).toBe(true);
+  });
+
+  it('allows a non-empty answer', () => {
+    expect(isRequiredButEmpty({}, 'db.example.com')).toBe(false);
+    expect(isRequiredButEmpty({ required: true }, '5432')).toBe(false);
+  });
+
+  it('never blocks an optional field', () => {
+    expect(isRequiredButEmpty({ required: false }, '')).toBe(false);
+    expect(isRequiredButEmpty({ required: false }, [])).toBe(false);
+  });
+
+  it('treats an empty multi-select selection as unanswered when required', () => {
+    expect(isRequiredButEmpty({}, [])).toBe(true);
+    expect(isRequiredButEmpty({}, ['events'])).toBe(false);
   });
 });
