@@ -49,6 +49,7 @@ import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { classifyAuthFailure } from '@lib/errors';
+import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -1196,19 +1197,28 @@ export async function runAgent(
           os.homedir(),
           signals.apiKeySource,
         );
+        // A refresh that already failed on a dead grant explains this 401
+        // outright; without it the screen falls through to generic key-type
+        // and scope advice that cannot apply.
+        const sessionExpired = isGrantRevoked();
         const authCode = classifyAuthFailure({
           hasSettingsConflict: authError.hasSettingsConflict,
           usingManagedLogin: authError.usingManagedLogin,
+          sessionExpired,
           apiKey: options.apiKey,
           gatewayRegion: authError.region,
           sessionRegion: options.cloudRegion,
         });
-        logToFile('Agent error: 401, showing auth error screen', authError);
+        logToFile('Agent error: 401, showing auth error screen', {
+          ...authError,
+          sessionExpired,
+        });
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
           conflicts: authError.conflicts,
           usingManagedLogin: authError.usingManagedLogin,
           credentialPlaces: authError.credentialPlaces,
+          sessionExpired,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({

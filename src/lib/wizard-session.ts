@@ -398,9 +398,13 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  /** Mirrors `AuthErrorDetail` in `@ui/wizard-ui` — keep the two in step. */
   authErrorDetail: {
     hasSettingsConflict: boolean;
     conflicts?: SettingsConflict[];
+    usingManagedLogin?: boolean;
+    credentialPlaces?: string[];
+    sessionExpired?: boolean;
     logFilePath: string;
   } | null;
   portConflictProcess: {

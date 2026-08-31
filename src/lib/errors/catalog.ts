@@ -53,6 +53,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description: 'The credential was rejected by the LLM gateway or API.',
   },
+  [ErrorCodes.AuthSessionExpired]: {
+    group: 'auth',
+    // Retryable, unlike its neighbours: a new run means a new login.
+    retry: 'yes',
+    description: 'The OAuth grant expired or was revoked mid-run.',
+  },
   [ErrorCodes.AuthMissingScope]: {
     group: 'auth',
     retry: 'no',

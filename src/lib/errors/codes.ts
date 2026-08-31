@@ -11,6 +11,8 @@ export const ErrorCodes = {
   AuthMissingScope: 'PHW_AUTH_MISSING_SCOPE',
   AuthRegionMismatch: 'PHW_AUTH_REGION_MISMATCH',
   AuthInvalidOrExpired: 'PHW_AUTH_INVALID_OR_EXPIRED',
+  /** The OAuth grant itself is gone — distinct from a merely expired token. */
+  AuthSessionExpired: 'PHW_AUTH_SESSION_EXPIRED',
   AuthSettingsConflict: 'PHW_AUTH_SETTINGS_CONFLICT',
   AuthStoredLoginConflict: 'PHW_AUTH_STORED_LOGIN_CONFLICT',
   AuthProjectFetchFailed: 'PHW_AUTH_PROJECT_FETCH_FAILED',
