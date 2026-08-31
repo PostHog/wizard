@@ -268,6 +268,8 @@ async function readBackResource(
 export interface ProvisioningResult {
   accessToken: string;
   refreshToken: string;
+  /** Epoch ms when `accessToken` expires. */
+  expiresAt: number;
   projectApiKey: string;
   host: string;
   personalApiKey?: string;
@@ -428,6 +430,7 @@ export async function provisionNewAccount(
   return {
     accessToken: tokenData.access_token,
     refreshToken: tokenData.refresh_token,
+    expiresAt: Date.now() + tokenData.expires_in * 1000,
     projectApiKey: resource.access.api_key,
     host: resource.access.host,
     personalApiKey: resource.access.personal_api_key,

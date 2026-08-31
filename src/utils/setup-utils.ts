@@ -46,9 +46,9 @@ import { OutroKind } from '@lib/wizard-session';
 interface ProjectData {
   projectApiKey: string;
   accessToken: string;
-  /** OAuth refresh token when the grant carried one; absent on CI/signup paths. */
+  /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
   refreshToken?: string;
-  /** Epoch ms when `accessToken` expires; absent on CI/signup paths. */
+  /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
   expiresAt?: number;
   host: HostResolution;
   distinctId: string;
@@ -429,9 +429,9 @@ export async function getOrAskForProjectData(
   host: HostResolution;
   projectApiKey: string;
   accessToken: string;
-  /** OAuth refresh token when the grant carried one; absent on CI/signup paths. */
+  /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
   refreshToken?: string;
-  /** Epoch ms when `accessToken` expires; absent on CI/signup paths. */
+  /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
   expiresAt?: number;
   projectId: number;
   roleAtOrganization: string | null;
@@ -757,6 +757,8 @@ async function askForProvisioningSignup(
 
     return {
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresAt: result.expiresAt,
       projectApiKey: result.projectApiKey,
       host,
       distinctId: email,
