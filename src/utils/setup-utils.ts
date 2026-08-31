@@ -36,6 +36,7 @@ import {
 import {
   fetchUserData,
   fetchProjectData,
+  ApiError,
   type ApiUser,
   type ApiProject,
 } from '@lib/api';
@@ -541,7 +542,25 @@ async function fetchProjectDataWithApiKey(
   apiKey: string,
   cloudUrl: string,
 ): Promise<{ api_token: string; id: number; project: ApiProject }> {
-  const userData = await fetchUserData(apiKey, cloudUrl);
+  // The user lookup only exists to read the key owner's team. Report a blip
+  // once, then rethrow with guidance instead of an undiagnosable crash — with
+  // --project-id the run skips this lookup entirely (fetchProjectDataById).
+  let userData: ApiUser;
+  try {
+    userData = await fetchUserData(apiKey, cloudUrl);
+  } catch (error) {
+    analytics.captureUnknown(error, {
+      step: 'ci_project_lookup',
+      baseUrl: cloudUrl,
+    });
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ApiError(
+      `${reason} — pass --project-id to skip the API key user lookup.`,
+      error instanceof ApiError ? error.statusCode : undefined,
+      error instanceof ApiError ? error.endpoint : undefined,
+    );
+  }
+
   const projectId = userData.team?.id;
 
   if (!projectId) {
@@ -550,12 +569,7 @@ async function fetchProjectDataWithApiKey(
     );
   }
 
-  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
-  return {
-    api_token: projectData.api_token,
-    id: projectId,
-    project: projectData,
-  };
+  return fetchProjectDataById(apiKey, projectId, cloudUrl);
 }
 
 async function fetchProjectDataById(
@@ -563,7 +577,18 @@ async function fetchProjectDataById(
   projectId: number,
   cloudUrl: string,
 ): Promise<{ api_token: string; id: number; project: ApiProject }> {
-  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+  let projectData: ApiProject;
+  try {
+    projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+  } catch (error) {
+    // The fetch helper no longer captures — report this genuine CI failure once.
+    analytics.captureUnknown(error, {
+      step: 'ci_project_lookup',
+      baseUrl: cloudUrl,
+      projectId,
+    });
+    throw error;
+  }
   return {
     api_token: projectData.api_token,
     id: projectId,
@@ -678,12 +703,25 @@ async function askForWizardLogin(options: {
   );
   const cloudUrl = host.appHost;
 
-  const projectData = await fetchProjectData(
-    tokenResponse.access_token,
-    projectId!,
-    cloudUrl,
-  );
-  const userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
+  let projectData: ApiProject;
+  let userData: ApiUser;
+  try {
+    projectData = await fetchProjectData(
+      tokenResponse.access_token,
+      projectId!,
+      cloudUrl,
+    );
+    userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
+  } catch (error) {
+    // The fetch helpers no longer capture — report the genuine login failure
+    // once, with the message now carrying the status or code.
+    analytics.captureUnknown(error, {
+      step: 'wizard_login',
+      baseUrl: cloudUrl,
+      projectId,
+    });
+    throw error;
+  }
 
   const data = {
     accessToken: tokenResponse.access_token,
