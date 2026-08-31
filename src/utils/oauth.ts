@@ -437,7 +437,9 @@ export async function refreshOAuthToken(
         timeout: 30_000,
       },
     );
-    return OAuthTokenResponseSchema.parse(response.data);
+    const token = OAuthTokenResponseSchema.parse(response.data);
+    logToFile('[oauth] access token refreshed');
+    return token;
   } catch (e) {
     logToFile(
       '[oauth] token refresh failed:',
