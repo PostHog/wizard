@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.70.0](https://github.com/PostHog/wizard/compare/v2.69.0...v2.70.0) (2026-08-31)
+
+
+### Features
+
+* **privacy:** disclose the dependency scan and let users decline sharing ([#1099](https://github.com/PostHog/wizard/issues/1099)) ([dc65104](https://github.com/PostHog/wizard/commit/dc65104f55a4b5012c91fff0788f0b21627dbab8))
+
 ## [2.69.0](https://github.com/PostHog/wizard/compare/v2.68.0...v2.69.0) (2026-08-28)
 
 
