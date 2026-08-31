@@ -12,7 +12,7 @@
 
 import type { SourceDetector } from './types.js';
 
-export const SOURCE_DETECTORS: SourceDetector[] = [
+const CORE_SOURCE_DETECTORS: SourceDetector[] = [
   {
     kind: 'Postgres',
     label: 'PostgreSQL',
@@ -680,12 +680,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       ruby: ['octokit'],
     },
   },
+];
 
-  // ============================================================
-  // Additional released source types (see PostHog data-warehouse
-  // source catalog). Detected by SDK package or .env key convention.
-  // ============================================================
-  // ---- LLM / AI ----
+// ============================================================
+// Additional released source types (see PostHog data-warehouse
+// source catalog). Detected by SDK package or .env key convention.
+// ============================================================
+// ---- LLM / AI ----
+const LLM_SOURCE_DETECTORS: SourceDetector[] = [
   {
     kind: 'OpenAI',
     label: 'OpenAI',
@@ -922,6 +924,9 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^ZEP_API_KEY$/],
     },
   },
+];
+
+const OTHER_SOURCE_DETECTORS: SourceDetector[] = [
   // ---- Payments / billing ----
   {
     kind: 'Paystack',
@@ -2516,3 +2521,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
 ];
+
+export const SOURCE_DETECTORS: SourceDetector[] = [
+  ...CORE_SOURCE_DETECTORS,
+  ...LLM_SOURCE_DETECTORS,
+  ...OTHER_SOURCE_DETECTORS,
+];
+
+/** Kinds from the LLM / AI section above — the only ones that may set `wizard_ai_sdk_detected`. */
+export const AI_SOURCE_KINDS: ReadonlySet<string> = new Set(
+  LLM_SOURCE_DETECTORS.map((detector) => detector.kind),
+);

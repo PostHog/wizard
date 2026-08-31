@@ -1,13 +1,22 @@
 // Mock variable names must be unique across .test.ts files (shared TS scope).
-const mockBuildSessionMcp = vi.fn((args: Record<string, unknown>) => args);
-const mockStartTUIMcp = vi.fn(() => ({
-  unmount: vi.fn(),
-  store: { session: {} },
-}));
-const mockReadApiKeyFromEnvMcp = vi.fn(() => undefined as string | undefined);
+// Hoisted, not a plain const: analytics.ts now imports wizard-session.ts
+// statically, so the mock factory runs before a const would initialize.
+const { mockBuildSessionMcp, mockStartTUIMcp, mockReadApiKeyFromEnvMcp } =
+  vi.hoisted(() => ({
+    mockBuildSessionMcp: vi.fn((args: Record<string, unknown>) => args),
+    mockStartTUIMcp: vi.fn(() => ({
+      unmount: vi.fn(),
+      store: { session: {} },
+    })),
+    mockReadApiKeyFromEnvMcp: vi.fn(() => undefined as string | undefined),
+  }));
 
 vi.mock('@lib/wizard-session', () => ({
   buildSession: mockBuildSessionMcp,
+  // analytics.ts imports this for sessionProperties(); unused by this
+  // suite's assertions, stubbed only so the mocked module still satisfies
+  // the real module's exports.
+  reportableDiscoveredFeatures: () => undefined,
 }));
 vi.mock('@ui/tui/start-tui', () => ({
   startTUI: mockStartTUIMcp,
