@@ -10,7 +10,7 @@
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
-import { authenticate } from './authenticate';
+import { authenticate, ensureFreshAccessToken } from './authenticate';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { gatewayAuth } from '@lib/gateway-session';
 import { resolveHarness } from '../switchboard';
@@ -252,6 +252,9 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
+  // A later run in the same invocation reuses the first login's token, which
+  // may be near expiry — and the agent subprocess can't swap tokens mid-run.
+  await ensureFreshAccessToken(session);
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is

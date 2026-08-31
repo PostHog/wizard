@@ -20,6 +20,15 @@ import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
+  /**
+   * OAuth refresh token, when the grant carried one — absent on CI api-key
+   * runs and refresh-less grants. Lets a run that outlives the access token's
+   * TTL (a wizard_ask left open, a multi-phase program) mint a fresh token
+   * instead of 401ing. Rotated on every refresh; always store the returned one.
+   */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
+  accessTokenExpiresAt?: number;
   projectApiKey: string;
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
