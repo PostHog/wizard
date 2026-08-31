@@ -252,8 +252,7 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
-  // A later run in the same invocation reuses the first login's token, which
-  // may be near expiry — and the agent subprocess can't swap tokens mid-run.
+  // A later run reuses the first login's aging token; the agent subprocess can't swap tokens mid-run.
   await refreshAccessTokenIfNeeded(session);
   const project = session.apiProject;
 

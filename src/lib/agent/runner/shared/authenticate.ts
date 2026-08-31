@@ -71,16 +71,10 @@ export async function authenticate(
   analytics.setGroups(groupsFromUser(user, host.apiHost));
 }
 
-// The agent subprocess freezes its token at spawn and a run can block on a wizard_ask
-// for the rest of the token's life, so each run must start near-full; skip only
-// just-minted 1-hour tokens and long-lived (7-day first-party) grants.
+// Below this remaining lifetime a run risks outliving its token; just-minted and 7-day tokens skip.
 const REFRESH_WHEN_REMAINING_MS = 50 * 60 * 1000;
 
-/**
- * Mint a fresh access token before an agent run when the current one has aged.
- * Best-effort: refresh-less credentials (CI api keys) and failed refreshes
- * leave the existing token in place, so behavior degrades to the status quo.
- */
+// Best-effort pre-run refresh: no refresh token or a failed grant keeps the existing token.
 export async function refreshAccessTokenIfNeeded(
   session: WizardSession,
 ): Promise<void> {
