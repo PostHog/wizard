@@ -47,7 +47,7 @@ describe('isViewportTooSmall', () => {
 describe('viewport notice text', () => {
   it('keeps the copy the product asked for in one place', () => {
     expect(VIEWPORT_TOO_SMALL_MESSAGE).toBe(
-      'Hey, can you make this terminal window a little bigger? The interactive Wizard needs more room to display properly.',
+      'The Wizard needs more room to display required text. Please make this terminal bigger.',
     );
   });
 
