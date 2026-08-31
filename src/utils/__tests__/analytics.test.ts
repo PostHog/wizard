@@ -226,6 +226,56 @@ describe('Analytics', () => {
         },
       );
     });
+
+    it('drops a raw socket error carrying a transport errno code', () => {
+      const error = Object.assign(new Error('read ECONNRESET'), {
+        code: 'ECONNRESET',
+      });
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('drops a host-unreachable socket error', () => {
+      const error = Object.assign(
+        new Error('connect EHOSTUNREACH 1.2.3.4:443'),
+        {
+          code: 'EHOSTUNREACH',
+        },
+      );
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('drops a wrapped API error that folds the errno into its message', () => {
+      // api.ts drops `code` and leaves the errno only in the message text.
+      const error = new Error('Failed to fetch user data (ECONNRESET)');
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('drops a filesystem timeout on a network-backed mount', () => {
+      const error = Object.assign(new Error('ETIMEDOUT: operation timed out'), {
+        code: 'ETIMEDOUT',
+      });
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
+    });
+
+    it('still captures a genuine wizard error', () => {
+      const error = new Error('Something the wizard did wrong');
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('flag exposure', () => {

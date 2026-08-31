@@ -68,6 +68,43 @@ export function groupsFromUser(
   return groups;
 }
 
+/**
+ * Transport-level errno codes that mean the user's own network or machine
+ * dropped a connection mid-call, not that the wizard is broken. Every caller
+ * that hits these already degrades on its own — the Slack poll falls back to
+ * the connect nudge, a project-tree walk skips the entry, an API caller
+ * retries — so a capture adds only noise. And because each errno (and the
+ * host string Node folds into a raw socket message) fingerprints as its own
+ * error tracking issue, every one-off opens a fresh issue that buries real
+ * wizard bugs. Mirrors BENIGN_FS_ERROR_CODES in bounded-fs.ts.
+ */
+const BENIGN_TRANSPORT_ERROR_CODES: ReadonlySet<string> = new Set([
+  'ECONNRESET', // connection reset by peer / socket dropped
+  'ECONNREFUSED', // nothing listening at the far end
+  'ETIMEDOUT', // connection or network-backed filesystem read timed out
+  'EHOSTUNREACH', // no route to host
+  'ENETUNREACH', // no route to network
+  'ENETDOWN', // local network interface down
+  'EPIPE', // wrote to a closed socket
+  'EAI_AGAIN', // temporary DNS resolution failure
+]);
+
+/**
+ * The benign transport errno for an error, or undefined. Reads the `code`
+ * field first (raw socket and filesystem errors carry it), then falls back to
+ * scanning the message — api.ts folds the errno into the ApiError message and
+ * drops `code`, so "(ECONNRESET)" in the text is the only trace left.
+ */
+function benignTransportCode(error: unknown): string | undefined {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code && BENIGN_TRANSPORT_ERROR_CODES.has(code)) return code;
+  const message = error instanceof Error ? error.message : '';
+  for (const candidate of BENIGN_TRANSPORT_ERROR_CODES) {
+    if (message.includes(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 const WIZARD_FLAGS: ReadonlySet<string> = new Set(WIZARD_FLAG_KEYS);
 
 // Widen back to the SDK's shape — a filter on `true` never matches `'true'`.
@@ -240,6 +277,13 @@ export class Analytics {
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
+    // Drop transport-level failures on the user's side. They never mean the
+    // wizard is broken and each variant opens its own error tracking issue.
+    const benign = benignTransportCode(error);
+    if (benign) {
+      logToFile(`[analytics] skipped benign transport error (${benign})`);
+      return;
+    }
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
       team: ANALYTICS_TEAM_TAG,
       ...this.tags,
