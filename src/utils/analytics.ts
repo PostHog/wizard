@@ -286,7 +286,17 @@ export class Analytics {
     // wizard is broken and each variant opens its own error tracking issue.
     const benign = benignTransportCode(error);
     if (benign) {
-      logToFile(`[analytics] skipped benign transport error (${benign})`);
+      // This debug line is the only record of a dropped failure, and the same
+      // errno can come from unrelated operations (a Slack poll, a project-tree
+      // read, a doctor fetch). Keep the operation context (step/source) and the
+      // message so support can name what failed — callers already redact
+      // secrets from these before reporting. Mirrors bounded-fs's skip log.
+      const op = properties.step ?? properties.source;
+      logToFile(
+        `[analytics] skipped benign transport error (${benign})${
+          op ? ` [${String(op)}]` : ''
+        }: ${error.message}`,
+      );
       return;
     }
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
