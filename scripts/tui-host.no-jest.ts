@@ -89,6 +89,50 @@ async function pickIntegrationTarget(
     : null;
 }
 
+/**
+ * The variant to drive when the static prerequisite detector won't name one.
+ *
+ * `detectSourceMapsPrerequisites` deliberately does not automate native
+ * platforms ("the legacy filesystem detector does not automate native
+ * platforms" — detect.ts); the real screen resolves those through the agentic
+ * picker, which the store driver cannot actuate. So mirror its verdict here,
+ * or the run exits at the detect screen and no native fixture is ever
+ * e2e-drivable.
+ *
+ * Two cases: the detector recognised the platform and only refused to automate
+ * it (the name is in `detected`), or it returned "unknown" — Go and Rust,
+ * which it never classifies — and the identifying manifest names it.
+ */
+function nativeVariantFor(root: string, detectError: unknown): string | null {
+  const detected = (detectError as { detected?: string } | undefined)?.detected;
+  if (detected && detected !== 'unknown') return detected;
+
+  const manifests: ReadonlyArray<readonly [string, string]> = [
+    ['go.mod', 'go'],
+    ['Cargo.toml', 'rust'],
+    ['pubspec.yaml', 'flutter'],
+    ['Package.swift', 'ios'],
+    ['settings.gradle.kts', 'android'],
+    ['settings.gradle', 'android'],
+  ];
+  for (const [file, variant] of manifests) {
+    if (fs.existsSync(join(root, file))) return variant;
+  }
+  // CocoaPods-style iOS fixtures carry no Package.swift.
+  try {
+    if (
+      fs
+        .readdirSync(root)
+        .some((f) => f.endsWith('.xcodeproj') || f.endsWith('.xcworkspace'))
+    ) {
+      return 'ios';
+    }
+  } catch {
+    /* unreadable root — the caller reports the original detect error */
+  }
+  return null;
+}
+
 // Run the app's build, returning success — stands in for the human the source-maps skill defers `npm run build` to. Opt in with SOURCE_MAPS_RUN_BUILD=1.
 function runAppBuild(root: string): boolean {
   // Load the app's env file: the Next.js posthog plugin reads credentials from process.env at build time (unlike posthog-cli, which self-loads). The app's file wins over any POSTHOG_* the host inherited, else a stray host key shadows the fixture's upload key.
@@ -399,13 +443,23 @@ async function main() {
           detectSourceMapsPrerequisites(store.session, (k, v) => {
             ctx[k] = v;
           });
-          const variant = ctx[SOURCE_MAPS_CONTEXT_KEYS.skillVariant];
+          const detected = ctx[SOURCE_MAPS_CONTEXT_KEYS.skillVariant];
+          const variant =
+            typeof detected === 'string'
+              ? detected
+              : nativeVariantFor(
+                  store.session.installDir,
+                  ctx[SOURCE_MAPS_CONTEXT_KEYS.detectError],
+                );
           if (typeof variant !== 'string') {
             mark(
               'source-maps detect found nothing to instrument: ' +
                 JSON.stringify(ctx[SOURCE_MAPS_CONTEXT_KEYS.detectError]),
             );
             process.exit(1);
+          }
+          if (typeof detected !== 'string') {
+            mark(`source-maps detect: native fallback picked ${variant}`);
           }
           driver.performAction('pick_source_maps_project', {
             variant,
