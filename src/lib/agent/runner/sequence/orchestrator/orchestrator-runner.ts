@@ -1146,6 +1146,21 @@ export async function runOrchestrator(
     });
   }
 
+  // A drain that produced no tasks at all means the seed step never got a
+  // usable model response (e.g. the gateway returned empty completions).
+  // "0/0 completed" is a dead run, not a success with an empty denominator.
+  if (summary.total === 0) {
+    await wizardAbort({
+      code: ErrorCodes.AgentOrchestratorHollowRun,
+      message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(
+        'orchestrator drain produced zero tasks',
+        { queue_state: JSON.stringify(store.list()) },
+        ErrorCodes.AgentOrchestratorHollowRun,
+      ),
+    });
+  }
+
   // A failed optional step leaves the denominator and is named instead.
   const optionalFailedCount = verdict.optionalFailedTypes.length;
   const stepNotes = [

@@ -7,7 +7,8 @@
     "mcp": "skip",
     "slack": "skip",
     "skills": "delete",
-    "ask": "first"
+    "ask": "first",
+    "notice": "keep"
   },
   "variations": [
     {
@@ -39,6 +40,10 @@
       "auto": "pick the first option — only appears when the framework needs disambiguation (e.g. Next.js router); Node/Express has none"
     },
     { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "task-notice",
+      "auto": "keep — shown on the orchestrator sequence when detection seeded the warehouse task; keeping it runs that task at the end of the queue"
+    },
     {
       "screen": "run",
       "auto": "(external) — the real agent integrates the SDK + instruments events"

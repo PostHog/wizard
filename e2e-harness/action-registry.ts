@@ -241,6 +241,17 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       apply: (store) => store.cancelPendingQuestion(),
     },
   ],
+  [Overlay.TaskNotice]: [
+    {
+      id: 'resolve_notice',
+      description:
+        'Resolve the task-notice overlay a program shows before an optional ' +
+        'step. keep=true runs the step, keep=false skips it. See ' +
+        'read_state.taskNotice.',
+      params: { keep: 'boolean (default true)' },
+      apply: (store, params) => store.resolveTaskNotice(params.keep !== false),
+    },
+  ],
   [Overlay.SettingsOverride]: [
     {
       id: 'backup_and_fix',

@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.69.0](https://github.com/PostHog/wizard/compare/v2.68.0...v2.69.0) (2026-08-28)
+
+
+### Features
+
+* **gateway:** tag events with the gateway edition and fail hollow runs ([#1165](https://github.com/PostHog/wizard/issues/1165)) ([db0c556](https://github.com/PostHog/wizard/commit/db0c556fedd1cc2bf012e28e369d5b22b9ebb482))
+
+
+### Bug Fixes
+
+* **gateway:** route v2 openai calls over the responses api ([#1166](https://github.com/PostHog/wizard/issues/1166)) ([a8c3ef1](https://github.com/PostHog/wizard/commit/a8c3ef1f21a764f0189b93b27591cc0cd1ef4d56))
+
+## [2.68.0](https://github.com/PostHog/wizard/compare/v2.67.0...v2.68.0) (2026-08-28)
+
+
+### Features
+
+* **e2e:** let the e2e harness drive the warehouse flow ([#1152](https://github.com/PostHog/wizard/issues/1152)) ([0b87fc8](https://github.com/PostHog/wizard/commit/0b87fc8f97fa76ab9f9de39b9c9f848fc0e39b84))
+* **gateway:** use server-minted scoped tokens for model calls ([#1130](https://github.com/PostHog/wizard/issues/1130)) ([dc32339](https://github.com/PostHog/wizard/commit/dc32339cdfaf7aa8064de88d504acf9092c58750))
+* **telemetry:** stamp wizard_ask outcome events with the ask subject ([#1162](https://github.com/PostHog/wizard/issues/1162)) ([d1cce49](https://github.com/PostHog/wizard/commit/d1cce49244e9462861220c03d317858cf95bef63))
+* **wizard-ci:** let a PR comment pin the context-mill ref ([#1153](https://github.com/PostHog/wizard/issues/1153)) ([b494975](https://github.com/PostHog/wizard/commit/b4949755db48c9f10484634446f69b8d05edf424))
+
+
+### Bug Fixes
+
+* **warehouse-e2e:** stop the secret rule refusing every credential question ([#1161](https://github.com/PostHog/wizard/issues/1161)) ([f0e024d](https://github.com/PostHog/wizard/commit/f0e024d301dcdb53587e06fbf51e01d1cd06e5b2))
+
 ## [2.67.0](https://github.com/PostHog/wizard/compare/v2.66.0...v2.67.0) (2026-08-27)
 
 

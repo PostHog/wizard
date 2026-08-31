@@ -215,6 +215,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'case-by-case',
     description: 'The orchestrator queue drained with failed or blocked tasks.',
   },
+  [ErrorCodes.AgentOrchestratorHollowRun]: {
+    group: 'agent',
+    retry: 'yes',
+    description:
+      'The orchestrator drained with zero tasks — the seed step got no usable model output.',
+  },
   [ErrorCodes.AgentOrchestratorSinkInvariant]: {
     group: 'agent',
     retry: 'no',
