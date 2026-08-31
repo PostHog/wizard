@@ -92,15 +92,20 @@ const BENIGN_TRANSPORT_ERROR_CODES: ReadonlySet<string> = new Set([
 /**
  * The benign transport errno for an error, or undefined. Reads the `code`
  * field first (raw socket and filesystem errors carry it), then falls back to
- * scanning the message — api.ts folds the errno into the ApiError message and
- * drops `code`, so "(ECONNRESET)" in the text is the only trace left.
+ * the message — api.ts folds the errno into the ApiError message and drops
+ * `code`, so the parenthesized "(ECONNRESET)" wrapper is the only trace left.
+ * The fallback matches only that wrapper, never a bare mention: several callers
+ * wrap raw CLI stderr in a `new Error(...)` when an install fails, and that
+ * output can quote a benign errno (a "retrying ECONNRESET" log line) while the
+ * command actually failed for an unrelated reason. A bare substring match would
+ * silently drop those install failures — a class the team wants to see.
  */
 function benignTransportCode(error: unknown): string | undefined {
   const code = (error as NodeJS.ErrnoException | null)?.code;
   if (code && BENIGN_TRANSPORT_ERROR_CODES.has(code)) return code;
   const message = error instanceof Error ? error.message : '';
   for (const candidate of BENIGN_TRANSPORT_ERROR_CODES) {
-    if (message.includes(candidate)) return candidate;
+    if (message.includes(`(${candidate})`)) return candidate;
   }
   return undefined;
 }

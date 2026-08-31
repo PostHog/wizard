@@ -259,6 +259,19 @@ describe('Analytics', () => {
       expect(mockPostHogInstance.captureException).not.toHaveBeenCalled();
     });
 
+    it('still captures an install failure whose embedded CLI stderr mentions an errno', () => {
+      // A wrapped tool failure that merely quotes a benign errno in its stderr
+      // must still report — the errno is not the "(ECONNRESET)" wrapper api.ts
+      // emits, so it does not mean the user's own transport dropped.
+      const error = new Error(
+        'Codex MCP add failed: request failed ECONNRESET, retrying\npermission denied',
+      );
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledTimes(1);
+    });
+
     it('drops a filesystem timeout on a network-backed mount', () => {
       const error = Object.assign(new Error('ETIMEDOUT: operation timed out'), {
         code: 'ETIMEDOUT',
