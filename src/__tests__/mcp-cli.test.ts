@@ -90,6 +90,22 @@ describe('mcp add handler', () => {
     );
   });
 
+  test('passes --base-url and --oauth-client-id through to buildSession', async () => {
+    mcpAddCommand.handler!(
+      makeArgv({
+        baseUrl: 'https://posthog.example.com',
+        oauthClientId: 'own-client',
+      }),
+    );
+    await flush();
+    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: 'https://posthog.example.com',
+        oauthClientId: 'own-client',
+      }),
+    );
+  });
+
   test('parses --features into a trimmed array', async () => {
     mcpAddCommand.handler!(makeArgv({ features: 'flags, errors , logs' }));
     await flush();

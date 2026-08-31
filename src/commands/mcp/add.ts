@@ -59,6 +59,7 @@ function runMcpAdd(argv: Arguments): void {
         mcpFeatures: features,
         apiKey,
         baseUrl: argv.baseUrl as string | undefined,
+        oauthClientId: argv.oauthClientId as string | undefined,
       });
     } catch (error) {
       if (!isTUIUnavailable(error)) throw error;
