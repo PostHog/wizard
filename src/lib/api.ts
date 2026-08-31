@@ -235,10 +235,19 @@ const IntegrationsResponseSchema = z.object({
 });
 
 /**
+ * Bound each connectivity poll so a hung request can't wedge the loop.
+ * Comfortably shorter than the poll interval, so a stalled tick aborts
+ * and the next tick retries rather than piling up in-flight requests.
+ */
+const SLACK_POLL_TIMEOUT_MS = 5000;
+
+/**
  * Check whether the project already has a Slack integration connected.
  * Requires the `integration:read` scope. Throws on failure — callers
  * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
+ * are responsible for capturing the error exactly once. Use
+ * {@link isTransientApiError} to tell a recoverable blip (gateway
+ * timeout, request timeout, network drop) from a genuine error.
  */
 export async function fetchSlackConnected(
   accessToken: string,
@@ -254,11 +263,33 @@ export async function fetchSlackConnected(
         'User-Agent': WIZARD_USER_AGENT,
       },
       signal,
+      timeout: SLACK_POLL_TIMEOUT_MS,
     },
   );
   const parsed = IntegrationsResponseSchema.safeParse(response.data);
   if (!parsed.success) return false;
   return parsed.data.results.some((i) => i.kind === 'slack');
+}
+
+/**
+ * True when an error is a transient, server-/network-side blip that a
+ * retry can recover from — a gateway timeout (502/503/504), a client
+ * request timeout, or a dropped connection with no response. Callers
+ * that poll (e.g. the Slack connectivity check) use this to keep
+ * retrying quietly instead of reporting noise to error tracking, while
+ * still surfacing genuinely unexpected failures.
+ */
+export function isTransientApiError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  if (status === 502 || status === 503 || status === 504) return true;
+  // Client-side timeout (axios) or the OS giving up on a stalled socket.
+  if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+    return true;
+  }
+  // Connection never completed — no HTTP response came back at all.
+  if (!error.response && error.code === 'ERR_NETWORK') return true;
+  return false;
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {
