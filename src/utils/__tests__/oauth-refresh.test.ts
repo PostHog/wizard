@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { refreshOAuthToken } from '@utils/oauth';
+import { refreshAccessToken } from '@utils/oauth';
 import { POSTHOG_PROXY_CLIENT_ID } from '@lib/constants';
 
 vi.mock('axios');
@@ -12,7 +12,7 @@ vi.mock('../debug', () => ({ logToFile: vi.fn() }));
 
 const mockedAxios = axios as Mocked<typeof axios>;
 
-describe('refreshOAuthToken', () => {
+describe('refreshAccessToken', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -28,7 +28,7 @@ describe('refreshOAuthToken', () => {
       },
     });
 
-    const token = await refreshOAuthToken('phr_old');
+    const token = await refreshAccessToken('phr_old');
 
     const [url, body] = mockedAxios.post.mock.calls[0];
     expect(url).toMatch(/\/oauth\/token$/);
@@ -44,7 +44,7 @@ describe('refreshOAuthToken', () => {
   it('propagates a failed refresh instead of returning a stale token', async () => {
     mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
 
-    await expect(refreshOAuthToken('phr_revoked')).rejects.toThrow(
+    await expect(refreshAccessToken('phr_revoked')).rejects.toThrow(
       'invalid_grant',
     );
   });

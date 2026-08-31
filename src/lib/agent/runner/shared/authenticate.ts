@@ -13,7 +13,7 @@
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { refreshOAuthToken } from '@utils/oauth';
+import { refreshAccessToken } from '@utils/oauth';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
@@ -30,7 +30,7 @@ export async function authenticate(
     host,
     accessToken,
     refreshToken,
-    accessTokenExpiresAt,
+    expiresAt,
     projectId,
     roleAtOrganization,
     user,
@@ -51,7 +51,7 @@ export async function authenticate(
   session.credentials = {
     accessToken,
     refreshToken,
-    accessTokenExpiresAt,
+    expiresAt,
     projectApiKey,
     host,
     projectId,
@@ -81,24 +81,24 @@ const REFRESH_WHEN_REMAINING_MS = 50 * 60 * 1000;
  * Best-effort: refresh-less credentials (CI api keys) and failed refreshes
  * leave the existing token in place, so behavior degrades to the status quo.
  */
-export async function ensureFreshAccessToken(
+export async function refreshAccessTokenIfNeeded(
   session: WizardSession,
 ): Promise<void> {
   const credentials = session.credentials;
   if (!credentials?.refreshToken) return;
 
-  const remaining = (credentials.accessTokenExpiresAt ?? 0) - Date.now();
+  const remaining = (credentials.expiresAt ?? 0) - Date.now();
   if (remaining >= REFRESH_WHEN_REMAINING_MS) return;
 
   try {
-    const token = await refreshOAuthToken(
+    const token = await refreshAccessToken(
       credentials.refreshToken,
       session.baseUrl,
     );
     credentials.accessToken = token.access_token;
     // Rotation: keep the returned refresh token or the old one stops working.
     credentials.refreshToken = token.refresh_token ?? credentials.refreshToken;
-    credentials.accessTokenExpiresAt = Date.now() + token.expires_in * 1000;
+    credentials.expiresAt = Date.now() + token.expires_in * 1000;
     getUI().setCredentials(credentials);
   } catch (error) {
     logToFile(

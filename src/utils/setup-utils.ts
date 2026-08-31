@@ -49,7 +49,7 @@ interface ProjectData {
   /** OAuth refresh token when the grant carried one; absent on CI/signup paths. */
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires; absent on CI/signup paths. */
-  accessTokenExpiresAt?: number;
+  expiresAt?: number;
   host: HostResolution;
   distinctId: string;
   projectId: number;
@@ -432,7 +432,7 @@ export async function getOrAskForProjectData(
   /** OAuth refresh token when the grant carried one; absent on CI/signup paths. */
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires; absent on CI/signup paths. */
-  accessTokenExpiresAt?: number;
+  expiresAt?: number;
   projectId: number;
   roleAtOrganization: string | null;
   user: ApiUser | null;
@@ -504,7 +504,7 @@ export async function getOrAskForProjectData(
     projectApiKey,
     accessToken,
     refreshToken,
-    accessTokenExpiresAt,
+    expiresAt,
     projectId,
     roleAtOrganization,
     user,
@@ -538,7 +538,7 @@ ${cloudUrl}/settings/project#variables`);
   return {
     accessToken,
     refreshToken,
-    accessTokenExpiresAt,
+    expiresAt,
     host,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
@@ -700,7 +700,7 @@ async function askForWizardLogin(options: {
   const data = {
     accessToken: tokenResponse.access_token,
     refreshToken: tokenResponse.refresh_token,
-    accessTokenExpiresAt: Date.now() + tokenResponse.expires_in * 1000,
+    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
     projectApiKey: projectData.api_token,
     host,
     distinctId: userData.distinct_id,

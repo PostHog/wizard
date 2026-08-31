@@ -23,7 +23,7 @@ export interface Credentials {
   /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
-  accessTokenExpiresAt?: number;
+  expiresAt?: number;
   projectApiKey: string;
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;

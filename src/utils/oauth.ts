@@ -415,7 +415,7 @@ async function exchangeCodeForToken(
 }
 
 // Refresh-token grant (RFC 6749 §6); the server rotates, so callers must store the returned refresh_token.
-export async function refreshOAuthToken(
+export async function refreshAccessToken(
   refreshToken: string,
   baseUrl?: string,
 ): Promise<OAuthTokenResponse> {
