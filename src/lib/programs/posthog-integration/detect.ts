@@ -181,6 +181,15 @@ function stampAiSdkDetected(
  * call — still correctly finding no evidence, since CI skips the detect step.
  */
 export function maybeStampAiSdkDetected(session: WizardSession): void {
+  // Direct mutation, not a store setter: unlike `warehouseSourcesReported`
+  // (latched only from TUI-only consent screens), this runs from
+  // `authenticate()`, which also fires in `--ci` mode, where the session is a
+  // plain object with no nanostore — see run-non-interactive.ts. A setter
+  // routed through WizardStore would silently never latch there.
+  //
+  // Depends on consent resolving before auth, same as every program's step
+  // list orders 'intro' before 'auth' today; a program that reversed that
+  // would latch this before consent exists and never stamp even once granted.
   if (session.aiSdkStampReported) return;
   session.aiSdkStampReported = true;
   if (!mayReportScanResults(session)) return;
