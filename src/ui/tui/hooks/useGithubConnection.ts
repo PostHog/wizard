@@ -10,10 +10,24 @@
 import { useEffect } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
+import type { WizardSession } from '@lib/wizard-session';
 import { fetchGithubConnected } from '@lib/api';
+import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
 
 const POLL_INTERVAL_MS = 3000;
+
+// Provisioned signups have no browser session for the install link; deep link when the partner tier grants one, else the login page.
+export async function fetchLoginUrl(
+  session: WizardSession,
+): Promise<string | null> {
+  if (!session.signup || !session.credentials) return null;
+  const deepLink = await requestDeepLink(
+    session.credentials.accessToken,
+    session.credentials.host,
+  );
+  return deepLink ?? `${session.credentials.host.appHost}/login`;
+}
 
 export function useGithubConnection(store: WizardStore): void {
   const credentials = store.session.credentials;

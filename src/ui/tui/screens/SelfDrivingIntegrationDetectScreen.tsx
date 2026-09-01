@@ -144,7 +144,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
     return (
       <Box flexDirection="column">
         <Text bold color={Colors.accent}>
-          Detecting your project...
+          Detecting your project. Stick around, this will take a few seconds...
         </Text>
         <Box marginY={1}>
           <LoadingBox message="Scanning the repo for frameworks and PostHog SDKs..." />
