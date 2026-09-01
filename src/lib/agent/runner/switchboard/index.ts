@@ -154,9 +154,12 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     harness: Harness.anthropic,
     model: DEFAULT_AGENT_MODEL,
   },
+  // Orchestrator on pi, like metrics. The binding routes only; every stage's
+  // model and effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
   'error-tracking': {
     sequence: Sequence.orchestrator,
-    harness: Harness.anthropic,
+    harness: Harness.pi,
     model: DEFAULT_AGENT_MODEL,
   },
   'ai-observability': {

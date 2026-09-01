@@ -115,11 +115,11 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'binds error-tracking to the orchestrator sequence',
+      name: 'binds error-tracking to the orchestrator on pi; stage models come from the flow frontmatter',
       ctx: { program: 'error-tracking', flags: {} },
       binding: {
         sequence: Sequence.orchestrator,
-        harness: Harness.anthropic,
+        harness: Harness.pi,
         model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
@@ -244,7 +244,7 @@ describe('switchboard composed clamp', () => {
               model: GPT5_6_SOL_MODEL,
               thinkingLevel: 'medium',
             }
-          : program === 'metrics'
+          : program === 'metrics' || program === 'error-tracking'
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
           : DEFAULT_RESOLVED,
       );
