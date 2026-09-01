@@ -69,6 +69,14 @@ command names.** Old names mostly no longer exist — only some are kept as alia
 | `wizard audit session-replay` | session replay setup |
 | `wizard audit web-analytics` | web analytics setup (**wizard-native**, not a skill) |
 
+### Feature flags
+
+`wizard feature-flags` is a **flat skill command** (same shape as
+`revenue-analytics` / `mcp-analytics`). It runs the `feature-flags-setup`
+context-mill skill: Next.js App Router only, server `evaluateFlags()` + client
+bootstrap, skip-first, optional 0% boolean flag + additive UI path after
+confirm. Distinct from `wizard audit feature-flags`, which is read-only.
+
 ### Commands vs. skills (the `audit [skill]` gotcha)
 
 A skill and a command are the **same machinery** — a context-mill skill becomes a
@@ -86,7 +94,7 @@ confuse it with the top-level `wizard skill` command.
 - **Registration:** [`bin.ts`](bin.ts) — the `.use()` chain wires each command.
 - **Command shape:** [`src/commands/command.ts`](src/commands/command.ts) — the
   `Command` interface every command implements.
-- **Flat native commands** (e.g. `revenue-analytics`, `upload-source-maps`) are
+- **Flat native commands** (e.g. `feature-flags`, `revenue-analytics`, `upload-source-maps`) are
   built with `nativeCommandFactory`
   ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the

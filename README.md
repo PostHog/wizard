@@ -103,6 +103,22 @@ new audits appear without a wizard release (`web-analytics` is wizard-native).
 > (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
 > a subcommand.")
 
+### Feature flags
+
+Add PostHog feature flags to a Next.js App Router app: evaluate once per request
+on the server, bootstrap those values into the client, and disable `/flags`
+polling in CI. After one confirm, optionally create one boolean flag at **0%
+rollout** and gate one additive UI path. Skip is the default — no new flag and
+no UI change. Production users keep current behavior until someone raises
+rollout in PostHog.
+
+```bash
+npx @posthog/wizard feature-flags
+```
+
+Next.js App Router only. Distinct from `wizard audit feature-flags`, which
+audits existing flag usage and cost and does not install anything.
+
 ### Revenue Analytics
 
 Wire up an existing PostHog + Stripe project for revenue analytics:
@@ -165,8 +181,8 @@ route review to their owning team instead.
 | `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
 
 Ownership is by directory. Programs not listed above
-(`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
-`shared`, `slack`) fall through the default and are owned by
+(`agent-skill`, `audit`, `events-audit`, `feature-flags`, `mcp`, `migration`,
+`posthog-doctor`, `shared`, `slack`) fall through the default and are owned by
 `team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
 not a merge gate.
 

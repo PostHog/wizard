@@ -141,6 +141,7 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  'feature-flags': DEFAULT_BINDING,
   // Orchestrator on pi. The binding routes only; every stage's model and
   // effort are pinned context-mill side in the flow's frontmatter
   // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).

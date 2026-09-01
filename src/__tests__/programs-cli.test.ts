@@ -21,6 +21,7 @@ import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
+import { featureFlagsCommand } from '../commands/feature-flags';
 import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
@@ -84,6 +85,11 @@ describe('top-level command shapes', () => {
   test('mcp-analytics is a flat skill command', () => {
     expect(mcpAnalyticsCommand.name).toBe('mcp-analytics');
     expect(mcpAnalyticsCommand.children).toBeUndefined();
+  });
+
+  test('feature-flags is a flat skill command', () => {
+    expect(featureFlagsCommand.name).toBe('feature-flags');
+    expect(featureFlagsCommand.children).toBeUndefined();
   });
 
   test('replay-vision is a flat skill command', () => {
@@ -188,6 +194,12 @@ describe('flat skill commands', () => {
     mcpAnalyticsCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('mcp-analytics');
+  });
+
+  test('feature-flags dispatches with feature-flags-setup skillId', () => {
+    featureFlagsCommand.handler!(makeArgv({ debug: true }));
+    const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
+    expect(config.skillId).toBe('feature-flags-setup');
   });
 
   test('replay-vision dispatches with replay-vision-setup skillId', () => {

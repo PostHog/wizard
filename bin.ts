@@ -55,6 +55,7 @@ import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
 import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
+import { featureFlagsCommand } from './src/commands/feature-flags';
 import { replayVisionCommand } from './src/commands/replay-vision';
 import { aiObservabilityCommand } from './src/commands/ai-observability';
 import { metricsCommand } from './src/commands/metrics';
@@ -88,6 +89,7 @@ function resolveInstallDir(): string {
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
   .use(mcpAnalyticsCommand)
+  .use(featureFlagsCommand)
   .use(replayVisionCommand)
   .use(aiObservabilityCommand)
   .use(metricsCommand)

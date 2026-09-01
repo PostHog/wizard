@@ -13,7 +13,8 @@
  * Current additions: `McpTutorial` layers read-only on every product
  * surface (feature flags, experiments, surveys, replays, errors, web
  * analytics, LLM analytics, cohorts, persons) plus read/write on
- * annotations; `AgentSkill` adds feature-flag read/write; the default
+ * annotations; `AgentSkill` adds feature-flag read/write plus
+ * `property_definition:read`; `feature-flags` adds only flag read/write; the default
  * `PostHogIntegration` run and the standalone `slack` flow add
  * `integration:read` for the Connect-Slack step. Persistence writes (dashboard:write,
  * insight:write, notebook:write, query:read) come for free from the
@@ -120,6 +121,22 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
   'feature_flag:read',
   'feature_flag:write',
   'property_definition:read',
+] as const;
+
+/**
+ * Extra scopes `wizard feature-flags` needs on top of `WIZARD_OAUTH_SCOPES`.
+ *
+ * After the user confirms a gate target the skill creates one boolean flag
+ * at 0% rollout. Without `feature_flag:write` the MCP catalog hides
+ * create-feature-flag and the run cannot finish. `:write` does not imply
+ * `:read`, so listing existing keys still needs `feature_flag:read`.
+ *
+ * Narrower than `AGENT_SKILL_SCOPE_ADDITIONS`: this install does not build
+ * person-property targeting, so it does not request `property_definition:read`.
+ */
+export const FEATURE_FLAGS_SCOPE_ADDITIONS = [
+  'feature_flag:read',
+  'feature_flag:write',
 ] as const;
 
 /**
@@ -268,6 +285,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'feature-flags': FEATURE_FLAGS_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   // The integration run carries the Slack outro step, and — when detection

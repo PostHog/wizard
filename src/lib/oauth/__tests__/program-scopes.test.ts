@@ -22,6 +22,26 @@ describe('posthog-integration scopes', () => {
   });
 });
 
+describe('feature-flags scopes', () => {
+  it('can list and create flags after the user confirms a gate target', () => {
+    const scopes = getOAuthScopesForProgram('feature-flags');
+    expect(scopes).toContain('feature_flag:read');
+    expect(scopes).toContain('feature_flag:write');
+  });
+
+  it('does not request person-property targeting scopes', () => {
+    expect(getOAuthScopesForProgram('feature-flags')).not.toContain(
+      'property_definition:read',
+    );
+  });
+
+  it('does not strip the base completion scopes', () => {
+    expect(getOAuthScopesForProgram('feature-flags')).toEqual(
+      expect.arrayContaining([...getOAuthScopesForProgram(null)]),
+    );
+  });
+});
+
 /**
  * Run 69afc6f8 requested only the base set, so the PostHog MCP served a
  * catalog without the scanner tools: every scanner task took its "tool
@@ -58,6 +78,13 @@ describe('provisioning scopes', () => {
     expect(scopes).toContain('session_recording:read');
     expect(scopes).toContain('product_enablement:write');
     expect(scopes).toContain('project:read');
+  });
+
+  it('layers feature-flags write scopes on the provisioning base', () => {
+    const scopes = getProvisioningScopesForProgram('feature-flags');
+    expect(scopes).toContain('feature_flag:write');
+    expect(scopes).toContain('feature_flag:read');
+    expect(scopes).not.toContain('property_definition:read');
   });
 
   it('keeps other programs on the unmodified base', () => {

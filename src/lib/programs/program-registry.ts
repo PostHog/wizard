@@ -30,6 +30,7 @@ import {
   mcpTutorialConfig,
 } from './mcp/index.js';
 import { mcpAnalyticsConfig } from './mcp-analytics/index.js';
+import { featureFlagsConfig } from './feature-flags/index.js';
 import { replayVisionConfig } from './replay-vision/index.js';
 import { aiObservabilityConfig } from './ai-observability/index.js';
 import { metricsConfig } from './metrics/index.js';
@@ -81,6 +82,7 @@ export const PROGRAM_REGISTRY = [
   mcpRemoveConfig,
   mcpTutorialConfig,
   mcpAnalyticsConfig,
+  featureFlagsConfig,
   replayVisionConfig,
   aiObservabilityConfig,
   metricsConfig,
@@ -108,6 +110,7 @@ export const Program = {
   McpRemove: mcpRemoveConfig.id,
   McpTutorial: mcpTutorialConfig.id,
   McpAnalytics: mcpAnalyticsConfig.id,
+  FeatureFlags: featureFlagsConfig.id,
   ReplayVision: replayVisionConfig.id,
   AiObservability: aiObservabilityConfig.id,
   Metrics: metricsConfig.id,
