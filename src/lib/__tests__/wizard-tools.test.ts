@@ -1241,10 +1241,7 @@ describe('downloadSkill (e2e over HTTP)', () => {
           downloadUrl: `${server.baseUrl}/skill.zip`,
         },
         tmpDir,
-<<<<<<< HEAD
         { triage: undefined },
-=======
->>>>>>> origin/posthog-code/skill-download-non-retryable-status
       );
 
       expect(result.success).toBe(true);
@@ -1276,10 +1273,7 @@ describe('downloadSkill (e2e over HTTP)', () => {
           downloadUrl: `${server.baseUrl}/skill.zip`,
         },
         tmpDir,
-<<<<<<< HEAD
         { triage: undefined },
-=======
->>>>>>> origin/posthog-code/skill-download-non-retryable-status
       );
 
       expect(result.success).toBe(true);
@@ -1289,7 +1283,6 @@ describe('downloadSkill (e2e over HTTP)', () => {
       await server.close();
     }
   });
-<<<<<<< HEAD
 });
 
 describe('fetchSkillMenu', () => {
@@ -1334,6 +1327,4 @@ describe('fetchSkillMenu', () => {
     expect(attempts).toBe(3);
     expect(result).toBeNull();
   });
-=======
->>>>>>> origin/posthog-code/skill-download-non-retryable-status
 });
