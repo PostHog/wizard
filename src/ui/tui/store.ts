@@ -301,6 +301,7 @@ export class WizardStore {
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
@@ -481,6 +482,11 @@ export class WizardStore {
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
     analytics.setTag('detected_framework', label);
+    this.emitChange();
+  }
+
+  setPosthogSdkDetected(detected: boolean): void {
+    this.$session.setKey('posthogSdkDetected', detected);
     this.emitChange();
   }
 
@@ -866,6 +872,23 @@ export class WizardStore {
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);
+    this.emitChange();
+  }
+
+  switchProgram(program: ProgramId): void {
+    if (program === this.router.activeProgram) return;
+
+    // Flush unresolved promises so the wizard can advance
+    for (const gate of this._gates.values()) gate.resolve();
+    this._gates.clear();
+
+    this.router.setProgram(program);
+    this._initFromProgram(program);
+
+    const config = getProgramConfig(program);
+    this.$session.setKey('setupConfirmed', false);
+    this.$session.setKey('programLabel', config.id);
+    this.$session.setKey('skillId', config.skillId ?? null);
     this.emitChange();
   }
 

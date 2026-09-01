@@ -59,6 +59,7 @@ export interface ProgramReadyContext {
   }) => void;
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
+  readonly setPosthogSdkDetected: (detected: boolean) => void;
 }
 
 export interface ProgramStep {

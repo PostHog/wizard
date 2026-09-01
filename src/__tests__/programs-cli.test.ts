@@ -35,6 +35,9 @@ import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { auditConfig } from '@lib/programs/audit/index';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import { parseCommand } from './helpers/parse-command.no-jest';
+import { ALL_COMMANDS } from '../commands';
+import { commandKeys } from '../commands/command';
+import { getSubcommandPrograms } from '@lib/programs/program-registry';
 
 const mockFetchSkillMenu = fetchSkillMenu as MockedFunction<
   typeof fetchSkillMenu
@@ -56,6 +59,28 @@ function entry(partial: Partial<CliEntry> & { skillId: string }): CliEntry {
 function mockMenu(cliEntries: CliEntry[]): void {
   mockFetchSkillMenu.mockResolvedValue({ categories: {}, cliEntries });
 }
+
+// A program's `command` field says what it calls itself, not whether the CLI
+// can run it. Retiring or moving a command leaves that field behind, and the
+// program keeps advertising a word nobody can type.
+describe('advertised commands', () => {
+  const registered = new Set(
+    ALL_COMMANDS.flatMap((command) => commandKeys(command.name)),
+  );
+
+  test('every advertised command is one the CLI registers', () => {
+    // A nested program is reached through its parent, so that's the word
+    // yargs knows — `audit`, not `web-analytics`.
+    const wordFor = (program: { parentCommand?: string; command: string }) =>
+      program.parentCommand ?? program.command;
+
+    const unrunnable = getSubcommandPrograms()
+      .filter((program) => !registered.has(wordFor(program)))
+      .map((program) => `${program.id} advertises "${wordFor(program)}"`);
+
+    expect(unrunnable).toEqual([]);
+  });
+});
 
 describe('top-level command shapes', () => {
   beforeEach(() => {

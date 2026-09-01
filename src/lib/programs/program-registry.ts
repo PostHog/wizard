@@ -135,3 +135,17 @@ export function getSubcommandPrograms(): SubcommandProgram[] {
     (c): c is SubcommandProgram => c.command != null,
   );
 }
+
+/** What a user types to reach the program. Nested ones go through its parent. */
+export function getCommandPath(config: SubcommandProgram): string {
+  return config.parentCommand
+    ? `${config.parentCommand} ${config.command}`
+    : config.command;
+}
+
+/** Programs the intro can launch, Family parents open a picker instead. */
+export function getLaunchablePrograms(): SubcommandProgram[] {
+  const all = getSubcommandPrograms();
+  const parents = new Set(all.map((config) => config.parentCommand));
+  return all.filter((config) => !parents.has(config.command));
+}
