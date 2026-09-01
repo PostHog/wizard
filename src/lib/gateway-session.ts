@@ -109,6 +109,13 @@ async function resolveGatewayAuth(
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
   analytics.setTag('gateway_edition', 'v2');
+  // Only failures and fallbacks are logged otherwise, so a successful run leaves no
+  // local trace. Never log the token itself.
+  logToFile(
+    `[gateway] minted a scoped token: program=${program} team=${
+      minted.teamId ?? 'unknown'
+    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}`,
+  );
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,

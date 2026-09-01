@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import {
   GatewayMintFailed,
   GatewayMintRefused,
@@ -8,10 +9,30 @@ import {
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn(), captureException: vi.fn() },
 }));
+
+vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
+
+// logToFile is variadic, so a leak in any argument is a leak. Rendered every way the
+// sink might: JSON (which invokes getters and toJSON), an Error's stack, and inspect.
+const renderArg = (a: unknown): string => {
+  if (typeof a === 'string') return a;
+  const parts = [inspect(a, { depth: null })];
+  if (a instanceof Error) parts.push(a.stack ?? String(a));
+  try {
+    parts.push(String(JSON.stringify(a)));
+  } catch {
+    // Cyclic, so JSON.stringify throws and the sink falls back to inspect too.
+  }
+  return parts.join(' ');
+};
+
+const loggedLines = () =>
+  vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
 const host = {
   apiHost: 'https://us.posthog.com',
@@ -25,6 +46,7 @@ describe('gatewayAuth', () => {
     resetGatewaySession();
     fetchMock.mockReset();
     vi.mocked(analytics.setTag).mockClear();
+    vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
   });
 
@@ -65,6 +87,28 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache, so no second mint.
     await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a successful mint without ever logging the token', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_secret_value',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://gateway.us.posthog.com',
+          team_id: 42,
+        }),
+    });
+
+    await gatewayAuth(host, 'pha_oauth', 'integration');
+
+    const lines = loggedLines();
+    const minted = lines.filter((l) => l.includes('minted a scoped token'));
+    expect(minted).toHaveLength(1);
+    expect(minted[0]).toContain('program=integration');
+    expect(minted[0]).toContain('team=42');
+    expect(lines.join('\n')).not.toContain('phe_secret_value');
   });
 
   it('serves a short-lived token from cache instead of re-minting every call', async () => {
