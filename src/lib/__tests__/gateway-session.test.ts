@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import {
   GatewayMintFailed,
   GatewayMintRefused,
@@ -15,6 +16,23 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
+
+// logToFile is variadic, so a leak in any argument is a leak. Rendered every way the
+// sink might: JSON (which invokes getters and toJSON), an Error's stack, and inspect.
+const renderArg = (a: unknown): string => {
+  if (typeof a === 'string') return a;
+  const parts = [inspect(a, { depth: null })];
+  if (a instanceof Error) parts.push(a.stack ?? String(a));
+  try {
+    parts.push(String(JSON.stringify(a)));
+  } catch {
+    // Cyclic, so JSON.stringify throws and the sink falls back to inspect too.
+  }
+  return parts.join(' ');
+};
+
+const loggedLines = () =>
+  vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
 const host = {
   apiHost: 'https://us.posthog.com',
@@ -85,12 +103,11 @@ describe('gatewayAuth', () => {
 
     await gatewayAuth(host, 'pha_oauth', 'integration');
 
-    const lines = vi.mocked(logToFile).mock.calls.map((c) => String(c[0]));
+    const lines = loggedLines();
     const minted = lines.filter((l) => l.includes('minted a scoped token'));
     expect(minted).toHaveLength(1);
     expect(minted[0]).toContain('program=integration');
     expect(minted[0]).toContain('team=42');
-    // A run that never reached the mint logs nothing, so success must say so.
     expect(lines.join('\n')).not.toContain('phe_secret_value');
   });
 
