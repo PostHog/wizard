@@ -66,7 +66,7 @@ import {
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,
   claudeConfigDir,
-  createIsolatedAgentConfigDir,
+  isolatedAgentCredentialEnv,
 } from './stored-login';
 import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
@@ -591,16 +591,17 @@ export async function initializeAgent(
     );
 
     // A pre-existing Claude login (the SDK's "/login managed key") could outrank
-    // the gateway token and 401 the run. The subprocess now gets an isolated,
-    // empty CLAUDE_CONFIG_DIR at the spawn site (see below), so a stored login
-    // in `~/.claude` can no longer reach the gateway. Still detect + log it to
-    // measure how often the isolation saves a run.
+    // the gateway token and 401 the run. The subprocess now gets isolated,
+    // empty config and secure-storage dirs at the spawn site (see below), so
+    // neither a stored login in `~/.claude` nor one in the macOS keychain can
+    // reach the gateway. Still detect + log it to measure how often the
+    // isolation saves a run.
     const storedLogin = detectStoredClaudeLogin();
     if (hasStoredClaudeLogin(storedLogin)) {
       logToFile(
         `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
-          `keychain=${storedLogin.keychain}). The isolated CLAUDE_CONFIG_DIR keeps it out of ` +
-          `the agent run, so it no longer outranks the wizard's gateway token.`,
+          `keychain=${storedLogin.keychain}). The isolated config and secure-storage dirs keep ` +
+          `it out of the agent run, so it no longer outranks the wizard's gateway token.`,
       );
       analytics.wizardCapture('claude stored login detected', {
         credentials_file: storedLogin.credentialsFile,
@@ -1033,11 +1034,10 @@ export async function runAgent(
           ANTHROPIC_BASE_URL: agentConfig.gatewayAuth.gatewayUrl,
           ANTHROPIC_AUTH_TOKEN: agentConfig.gatewayAuth.token,
           CLAUDE_CODE_OAUTH_TOKEN: agentConfig.gatewayAuth.token,
-          // Point the binary at an empty config dir so it cannot resolve a
-          // stored Claude login (a `~/.claude/.credentials.json`) and send that
-          // to the gateway, which 401s it. The env token above is then the only
-          // credential it can find. See stored-login.ts.
-          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
+          // Per-run empty config + secure-storage dirs, so no stored Claude
+          // login reaches the gateway and 401s the run. The env token above is
+          // then the only credential the binary can find. See stored-login.ts.
+          ...isolatedAgentCredentialEnv(),
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.
