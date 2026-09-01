@@ -56,7 +56,7 @@ export interface WizardE2eProfile {
   /** Keep or delete the wizard-installed skills at the end. */
   skills: 'keep' | 'delete';
   /** Answer strategy for an agent `wizard_ask` overlay: the first option (its
-   * affirmative "continue" — e.g. self-driving's "GitHub connected → done"). */
+   * affirmative "continue"). */
   ask: 'first';
   /**
    * Self-driving integration-check answer: `true` → "no, set it up first"

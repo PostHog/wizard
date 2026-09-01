@@ -20,6 +20,12 @@ import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
+  /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
+  expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   projectApiKey: string;
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
@@ -389,14 +395,33 @@ export interface WizardSession {
    */
   selfDrivingHandoffConfirmed: boolean;
 
+  /**
+   * Self-driving only: whether the project has the PostHog GitHub App
+   * connected. `null` until the GitHub gate's first check resolves. Self-driving
+   * cannot research issues or open fixes without it, so the gate holds the run
+   * until this is `true`.
+   */
+  githubConnected: boolean | null;
+
+  /**
+   * Self-driving only: the user answered "I can't connect right now" on the
+   * GitHub gate. Completes the gate step and hides the run step, so the flow
+   * lands on the outro without starting the agent.
+   */
+  githubDeclined: boolean;
+
   // Runtime
   readinessResult: WizardReadinessResult | null;
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  /** Mirrors `AuthErrorDetail` in `@ui/wizard-ui` — keep the two in step. */
   authErrorDetail: {
     hasSettingsConflict: boolean;
     conflicts?: SettingsConflict[];
+    usingManagedLogin?: boolean;
+    credentialPlaces?: string[];
+    sessionExpired?: boolean;
     logFilePath: string;
   } | null;
   portConflictProcess: {
@@ -510,6 +535,8 @@ export function buildSession(args: {
     integrate: args.integrate === true ? true : null,
     completedRuns: [],
     selfDrivingHandoffConfirmed: false,
+    githubConnected: null,
+    githubDeclined: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,

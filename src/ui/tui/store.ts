@@ -495,6 +495,12 @@ export class WizardStore {
     this.emitChange();
   }
 
+  /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
+  setAccessToken(credentials: WizardSession['credentials']): void {
+    this.$session.setKey('credentials', credentials);
+    this.emitChange();
+  }
+
   setRoleAtOrganization(role: string | null): void {
     this.$session.setKey('roleAtOrganization', role);
     this.emitChange();
@@ -818,6 +824,22 @@ export class WizardStore {
 
   setSlackConnected(connected: boolean): void {
     this.$session.setKey('slackConnected', connected);
+    this.emitChange();
+  }
+
+  setGithubConnected(connected: boolean): void {
+    this.$session.setKey('githubConnected', connected);
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving GitHub gate declined. Carries the outro the user lands on,
+   * since declining ends the flow before the agent runs and there is no abort
+   * case to render one.
+   */
+  declineGithub(outroData: OutroData): void {
+    this.$session.setKey('githubDeclined', true);
+    this.$session.setKey('outroData', outroData);
     this.emitChange();
   }
 

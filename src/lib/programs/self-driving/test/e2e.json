@@ -1,6 +1,6 @@
 {
   "program": "self-driving",
-  "summary": "Self-driving, integration-first: answer \"no, set it up first\" at the integration check so the run sets up the PostHog SDK before Self-driving. After auth the detector scans the repo and a project is picked; the composed integration run instruments it; a handoff bridges to the Self-driving run; then the terminal outro exits (no keep-skills). The integration run's own screens + task list are not captured in this self-driving control-plane trace.",
+  "summary": "Self-driving, integration-first: answer \"no, set it up first\" at the integration check so the run sets up the PostHog SDK before Self-driving. After auth the detector scans the repo and a project is picked; the composed integration run instruments it; a handoff bridges to the Self-driving run; the GitHub gate confirms the App is connected; then the terminal outro exits (no keep-skills). The integration run's own screens + task list are not captured in this self-driving control-plane trace.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
@@ -17,35 +17,39 @@
     },
     {
       "screen": "self-driving-integration-check",
-      "auto": "answer \"no, set it up first\" → integrate=true. \"--integrate\" pre-answers this and skips the screen."
+      "auto": "answer \"no, set it up first\" \u2192 integrate=true. \"--integrate\" pre-answers this and skips the screen."
     },
     {
       "screen": "health-check",
-      "auto": "dismiss outage — proceed even if the readiness probe flags an issue"
+      "auto": "dismiss outage \u2014 proceed even if the readiness probe flags an issue"
     },
     {
       "screen": "auth",
-      "auto": "(external) — the runner injects credentials"
+      "auto": "(external) \u2014 the runner injects credentials"
     },
     {
       "screen": "self-driving-integration-detect",
-      "auto": "(external) — the detector scans the repo; the pick (framework + path) commits which project to set PostHog up in"
+      "auto": "(external) \u2014 the detector scans the repo; the pick (framework + path) commits which project to set PostHog up in"
     },
     {
       "screen": "run",
-      "auto": "(external) — the composed integration run sets up the PostHog SDK in the picked project"
+      "auto": "(external) \u2014 the composed integration run sets up the PostHog SDK in the picked project"
     },
     {
       "screen": "self-driving-handoff",
-      "auto": "acknowledge — \"PostHog is installed, now set up Self-driving\""
+      "auto": "acknowledge \u2014 \"PostHog is installed, now set up Self-driving\""
+    },
+    {
+      "screen": "self-driving-github",
+      "auto": "(external) \u2014 the gate polls /integrations/ until the PostHog GitHub App appears; Self-driving cannot run without it"
     },
     {
       "screen": "run",
-      "auto": "(external) — the Self-driving agent run (signal sources, scouts, inbox)"
+      "auto": "(external) \u2014 the Self-driving agent run (signal sources, scouts, inbox)"
     },
     {
       "screen": "outro",
-      "auto": "dismiss — terminal: self-driving has no keep-skills, so the outro exits the wizard"
+      "auto": "dismiss \u2014 terminal: self-driving has no keep-skills, so the outro exits the wizard"
     }
   ]
 }

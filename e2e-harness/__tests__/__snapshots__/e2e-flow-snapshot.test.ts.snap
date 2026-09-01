@@ -220,6 +220,10 @@ exports[`e2e flow snapshot — self-driving > already-integrated (skips SDK setu
     },
     {
       "action": "(external)",
+      "screen": "self-driving-github",
+    },
+    {
+      "action": "(external)",
       "screen": "run",
     },
     {
@@ -273,6 +277,10 @@ exports[`e2e flow snapshot — self-driving > integration-first (no existing Pos
     {
       "action": "confirm_self_driving_handoff",
       "screen": "self-driving-handoff",
+    },
+    {
+      "action": "(external)",
+      "screen": "self-driving-github",
     },
     {
       "action": "(external)",

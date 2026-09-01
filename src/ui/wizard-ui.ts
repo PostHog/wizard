@@ -75,6 +75,12 @@ export interface AuthErrorDetail {
   usingManagedLogin?: boolean;
   /** Human-readable places a conflicting Anthropic credential may live. */
   credentialPlaces?: string[];
+  /**
+   * True when a pre-run refresh already failed on a dead grant. The login is
+   * gone and re-running is the only fix, so this outranks every other branch —
+   * none of the usual advice (key type, scopes, region) applies.
+   */
+  sessionExpired?: boolean;
   logFilePath: string;
 }
 
@@ -117,6 +123,13 @@ export interface WizardUI {
 
   /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
   setCredentials(credentials: Credentials): void;
+
+  /**
+   * Replace the credentials after a token refresh. Same store write as
+   * {@link setCredentials} without the `auth complete` capture — the user
+   * authenticated once, and a refresh is not a second login.
+   */
+  setAccessToken(credentials: Credentials): void;
 
   /**
    * Persist the user's `role_at_organization` once it's been fetched from
