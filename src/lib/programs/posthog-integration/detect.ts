@@ -170,9 +170,30 @@ function stampAiSdkDetected(
 }
 
 /**
+ * Fires the org stamp once per session, right after `authenticate()` succeeds
+ * — never from the consent path, since consent on the intro screen resolves
+ * before login and `session.apiUser` is unset there. Called right after
+ * `authenticate()` from run-wizard.ts's auth step and from bootstrap.ts,
+ * whichever completes it first for a given program; a no-op on every call
+ * after that. In the `--ci` path, project-scope.ts authenticates first as a
+ * prerequisite (no evidence gathered yet, so nothing would stamp there
+ * anyway) and this only ever runs from the later, idempotent bootstrap.ts
+ * call — still correctly finding no evidence, since CI skips the detect step.
+ */
+export function maybeStampAiSdkDetected(session: WizardSession): void {
+  if (session.aiSdkStampReported) return;
+  session.aiSdkStampReported = true;
+  if (!mayReportScanResults(session)) return;
+
+  stampAiSdkDetected(session, getDetectedWarehouseSources(session));
+}
+
+/**
  * The single place scan results become telemetry. Called from
  * `WizardStore.completeSetup()`, the point consent becomes final — the privacy
  * panel's choice is reversible until then, so nothing may report earlier.
+ * The org stamp is a separate concern: see `maybeStampAiSdkDetected`, which
+ * runs post-auth rather than at consent resolution.
  *
  * Returns true when consent has resolved and the caller should latch
  * `warehouseSourcesReported`, which is not the same as "this sent something":
@@ -188,7 +209,6 @@ export function reportWarehouseSourcesDetected(
 
   if (mayReportScanResults(session)) {
     const sources = getDetectedWarehouseSources(session);
-    stampAiSdkDetected(session, sources);
 
     // Only an 'ok' scan has something to say. Absent means this program never
     // scanned, and reporting a zero count there would invent a scan that never

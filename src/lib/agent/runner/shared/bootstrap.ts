@@ -11,6 +11,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
+import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { gatewayAuth } from '@lib/gateway-session';
 import { resolveHarness } from '../switchboard';
@@ -252,6 +253,7 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
+  maybeStampAiSdkDetected(session);
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
