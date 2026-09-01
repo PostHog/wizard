@@ -4,8 +4,7 @@ import { POSTHOG_DOCTOR_PROGRAM } from './steps.js';
 
 export const posthogDoctorConfig: ProgramConfig = {
   command: 'doctor',
-  description:
-    'Diagnose your PostHog project for configuration issues and setup warnings',
+  description: 'Diagnose your PostHog project setup',
   id: 'posthog-doctor',
   requiresAi: false,
   steps: POSTHOG_DOCTOR_PROGRAM,

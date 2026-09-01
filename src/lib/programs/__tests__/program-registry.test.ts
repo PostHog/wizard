@@ -82,6 +82,23 @@ describe('getLaunchablePrograms', () => {
     expect(ids()).toContain('metrics');
   });
 
+  // The intro renders these as "<command path><description>" on one line, in a
+  // block it centers. A row past the terminal's width stops the block from
+  // centering at all — it pins to the left edge, which is how three overlong
+  // descriptions made the whole list look misaligned. 80 columns less the
+  // command column and the focus marker is what a row has to live within.
+  it('keeps every row inside an 80-column terminal', () => {
+    const COMMAND_COLUMN = 21;
+    const MARKER_PREFIX = 2;
+    const BUDGET = 80 - COMMAND_COLUMN - MARKER_PREFIX;
+
+    const tooLong = getLaunchablePrograms()
+      .filter((config) => config.description.length > BUDGET)
+      .map((config) => `${config.id} (${config.description.length})`);
+
+    expect(tooLong).toEqual([]);
+  });
+
   // The intro copy names auditing, source maps and self-drive, and the list
   // sits directly under that sentence. Registry order alone would put whatever
   // was appended most recently in front of them.
