@@ -31,16 +31,19 @@ describe('buildSelfDrivingPrompt', () => {
     expect(prompt).not.toContain('load_skill_menu');
     // The Self-driving steps are present.
     expect(prompt).toContain('STEP 1 — Check Self-driving access');
-    expect(prompt).toContain('Connect GitHub');
+    expect(prompt).toContain('STEP 3 — Enable products');
+    // GitHub is connected on the pre-run gate screen, never by the agent.
+    expect(prompt).not.toContain('STEP 3 — Connect GitHub');
+    expect(prompt).not.toContain('github connection declined');
   });
 
   it('enables products before sources, mirroring the skill step labels', () => {
     const prompt = buildSelfDrivingPrompt(ctx);
-    // Step labels match the context-mill skill files exactly (3b before 4), so the
+    // Step labels match the context-mill skill files exactly (3 before 4), so the
     // wizard STEP and the `(skill: …)` reference never disagree on the number.
-    expect(prompt).toContain('STEP 3b — Enable products');
+    expect(prompt).toContain('STEP 3 — Enable products');
     expect(prompt).toContain('STEP 4 — Enable signal sources');
-    expect(prompt.indexOf('STEP 3b — Enable products')).toBeLessThan(
+    expect(prompt.indexOf('STEP 3 — Enable products')).toBeLessThan(
       prompt.indexOf('STEP 4 — Enable signal sources'),
     );
     // Tail mirrors the skill: custom scouts is 6b, scanners 6c, report is 7.
@@ -86,9 +89,9 @@ describe('STEP 6c — Replay Vision scanners', () => {
     expect(step6c()).toContain('never an abort');
   });
 
-  it('names the STEP 3b (Session Replay) dependency', () => {
+  it('names the STEP 3 (Session Replay) dependency', () => {
     // Cross-step ordering is the wizard's to own, not the skill's.
-    expect(step6c()).toContain('STEP 3b');
+    expect(step6c()).toContain('STEP 3');
   });
 
   it('does not restate the skill-owned scanner mechanics', () => {
