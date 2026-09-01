@@ -14,12 +14,16 @@
 
 import type { WizardStore } from '@ui/tui/store';
 import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
-import { McpOutcome } from '@lib/wizard-session';
+import { McpOutcome, OutroKind } from '@lib/wizard-session';
 import type { AskAnswers } from '@lib/wizard-session';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
 } from '@lib/programs/error-tracking-upload-source-maps/index';
+import {
+  GITHUB_REQUIRED_BODY,
+  GITHUB_REQUIRED_MESSAGE,
+} from '@lib/programs/self-driving/detect';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {
@@ -260,6 +264,25 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   ],
 
   // ── Slack ─────────────────────────────────────────────────────────────
+  [ScreenId.SelfDrivingGithub]: [
+    {
+      id: 'set_github_connected',
+      description: 'Resolve the GitHub App connection check',
+      params: { connected: 'boolean' },
+      apply: (store, params) =>
+        store.setGithubConnected(params.connected !== false),
+    },
+    {
+      id: 'decline_github',
+      description: 'Answer "I can\'t connect right now" and end the run',
+      apply: (store) =>
+        store.declineGithub({
+          kind: OutroKind.Cancel,
+          message: GITHUB_REQUIRED_MESSAGE,
+          body: GITHUB_REQUIRED_BODY,
+        }),
+    },
+  ],
   [ScreenId.SlackConnect]: [
     {
       id: 'dismiss_slack',

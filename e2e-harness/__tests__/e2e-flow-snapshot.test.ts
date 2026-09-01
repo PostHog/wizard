@@ -92,6 +92,10 @@ function traceFlow(
         host: 'https://us.posthog.com',
         projectId: 1,
       });
+    } else if (screen === ScreenId.SelfDrivingGithub) {
+      // The GitHub gate resolves from a poll against /integrations/, not from a
+      // driver action — inject the connected result the poll would land.
+      store.setGithubConnected(true);
     } else if (screen === ScreenId.SelfDrivingIntegrationDetect) {
       // The detect screen self-advances in ci by picking a project; simulate
       // that pick (framework + path) so the run phase can proceed.

@@ -827,6 +827,22 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setGithubConnected(connected: boolean): void {
+    this.$session.setKey('githubConnected', connected);
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving GitHub gate declined. Carries the outro the user lands on,
+   * since declining ends the flow before the agent runs and there is no abort
+   * case to render one.
+   */
+  declineGithub(outroData: OutroData): void {
+    this.$session.setKey('githubDeclined', true);
+    this.$session.setKey('outroData', outroData);
+    this.emitChange();
+  }
+
   /**
    * Self-driving integration-check answer. `true` → integrate the SDK as part
    * of this run; `false` → PostHog is already set up, go straight to

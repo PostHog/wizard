@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.71.0](https://github.com/PostHog/wizard/compare/v2.70.1...v2.71.0) (2026-09-01)
+
+
+### Features
+
+* **gateway:** record a successful mint in the run log ([#1179](https://github.com/PostHog/wizard/issues/1179)) ([b6f6e42](https://github.com/PostHog/wizard/commit/b6f6e42791029d5369a03c335d2148b2692a3c75))
+* **self-driving:** gate GitHub on a screen before the agent runs ([#1178](https://github.com/PostHog/wizard/issues/1178)) ([2360b82](https://github.com/PostHog/wizard/commit/2360b8207944fd36491ff71eac0de2cffc7fe410))
+* **tui:** show a red notice when the terminal is too small ([#1181](https://github.com/PostHog/wizard/issues/1181)) ([bd839d3](https://github.com/PostHog/wizard/commit/bd839d34cf2b6cfa7ca975a0a2ee203172f961d5))
+
+
+### Bug Fixes
+
+* **agent:** isolate CLAUDE_CONFIG_DIR so a stored Claude login cannot 401 the run ([#1180](https://github.com/PostHog/wizard/issues/1180)) ([919e7d1](https://github.com/PostHog/wizard/commit/919e7d15089499901fa2717bf4098c3d6b01e0ad))
+* **agent:** report a dropped PostHog MCP server, and stop promising tools a run does not have ([#1168](https://github.com/PostHog/wizard/issues/1168)) ([7943eb1](https://github.com/PostHog/wizard/commit/7943eb139ce488e9bb13549274a4b0fb8d3a7904))
+* **auth:** refresh the OAuth access token before each agent run ([#1176](https://github.com/PostHog/wizard/issues/1176)) ([fdf6d4e](https://github.com/PostHog/wizard/commit/fdf6d4e21e83f1898b96a0231bb6aca92e7dcc9a))
+* **self-driving:** drop replay from the step 4 native sources ([#1174](https://github.com/PostHog/wizard/issues/1174)) ([2ca84f3](https://github.com/PostHog/wizard/commit/2ca84f3b6b33803a2f97216987faa364c805a309))
+
 ## [2.70.1](https://github.com/PostHog/wizard/compare/v2.70.0...v2.70.1) (2026-08-31)
 
 
