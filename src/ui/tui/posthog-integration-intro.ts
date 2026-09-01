@@ -4,16 +4,21 @@ export type IntroMenuView = 'default' | 'more-info' | 'commands';
 
 export const CONTINUE_LABEL = 'Continue';
 export const CONTINUE_ANYWAY_LABEL = 'Continue anyway';
-// Shorter than the "wizard tricks" this was written as: IntroScreenLayout
-// renders the menu in a 24-column box, and the label past that wraps mid-word.
-export const COMMANDS_LABEL = 'Explore tricks';
+// Two words shorter than the prose calls it: IntroScreenLayout renders the
+// menu in a 24-column box, and a label past that wraps mid-word.
+export const COMMANDS_LABEL = 'Explore spell book';
 
 export const DEFAULT_HEADLINE = "Let's do two hours of work in eight minutes.";
-export const DETECTED_HEADLINE =
-  'Looks like you already have PostHog installed.';
+export const DETECTED_HEADLINE = [
+  'It looks like PostHog is already installed. The Wizard has many tricks ' +
+    'up its sleeve, like auditing, uploading source maps, or making your ' +
+    'product self-drive.',
+  'You can still rerun the command, but it might overwrite some of your work.',
+];
 
-export function introHeadline(posthogSdkDetected: boolean): string {
-  return posthogSdkDetected ? DETECTED_HEADLINE : DEFAULT_HEADLINE;
+/** Paragraphs, so the detected state can say more than the clean one. */
+export function introHeadline(posthogSdkDetected: boolean): string[] {
+  return posthogSdkDetected ? DETECTED_HEADLINE : [DEFAULT_HEADLINE];
 }
 
 export function introMenuOptions({

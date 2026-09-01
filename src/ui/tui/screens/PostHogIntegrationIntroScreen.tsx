@@ -216,7 +216,7 @@ export const PostHogIntegrationIntroScreen = ({
   } else if (view === 'commands') {
     body = (
       <PickerMenu
-        message="The wizard can do more than integrate with your project:"
+        message="The Wizard can do more than integrate with your project:"
         options={getLaunchablePrograms().map((program) => ({
           label: `${getCommandPath(program).padEnd(21)}${program.description}`,
           value: program.id,
@@ -228,9 +228,21 @@ export const PostHogIntegrationIntroScreen = ({
       />
     );
   } else if (showContinue) {
+    const paragraphs = introHeadline(session.posthogSdkDetected);
     body = (
-      <Box>
-        <Text>{introHeadline(session.posthogSdkDetected)}</Text>
+      <Box
+        flexDirection="column"
+        width={64}
+        flexShrink={0}
+        // One line stays centered as it always was. A wrapped block reads as
+        // ragged centered, so it aligns left inside the same width.
+        alignItems={paragraphs.length > 1 ? undefined : 'center'}
+      >
+        {paragraphs.map((paragraph, i) => (
+          <Box key={paragraph} marginTop={i === 0 ? 0 : 1}>
+            <Text>{paragraph}</Text>
+          </Box>
+        ))}
       </Box>
     );
   }
@@ -254,7 +266,9 @@ export const PostHogIntegrationIntroScreen = ({
 
   if (session.posthogSdkDetected) {
     detectionRows.push({
-      label: 'PostHog',
+      // Padded to the width the layout hardcodes for its own rows, so the
+      // ticks line up in one column.
+      label: 'PostHog  ',
       value: 'detected in package.json',
     });
   }

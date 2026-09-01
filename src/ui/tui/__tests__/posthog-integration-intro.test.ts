@@ -34,17 +34,24 @@ const valuesFor = (args: {
 
 describe('introHeadline', () => {
   it('leads with the detection when PostHog is already installed', () => {
-    expect(introHeadline(true)).toBe(DETECTED_HEADLINE);
+    expect(introHeadline(true)).toEqual(DETECTED_HEADLINE);
   });
 
   it('keeps the default headline for a clean project', () => {
-    expect(introHeadline(false)).toBe(DEFAULT_HEADLINE);
+    expect(introHeadline(false)).toEqual([DEFAULT_HEADLINE]);
   });
 
   // Without literals on either side, both assertions above pass vacuously if
-  // the two headlines ever collapse to the same string.
+  // the two headlines ever collapse to the same copy.
   it('resolves the two states to different copy', () => {
-    expect(DETECTED_HEADLINE).not.toBe(DEFAULT_HEADLINE);
+    expect(DETECTED_HEADLINE).not.toEqual([DEFAULT_HEADLINE]);
+  });
+
+  // The screen centers a single line and left-aligns a block, so the count is
+  // a layout decision rather than an incidental shape.
+  it('keeps the clean project to one line and says more on a detection', () => {
+    expect(introHeadline(false)).toHaveLength(1);
+    expect(introHeadline(true).length).toBeGreaterThan(1);
   });
 });
 
