@@ -1,6 +1,5 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { ErrorCodes } from '@lib/errors';
-import { regionOption } from '@lib/headless-mode';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
@@ -73,6 +72,5 @@ export const mcpAnalyticsConfig = createSkillProgram({
   docsUrl: 'https://posthog.com/docs/mcp-analytics',
   spinnerMessage: 'Setting up MCP analytics...',
   estimatedDurationMinutes: 5,
-  cliOptions: regionOption,
   abortCases: MCP_ANALYTICS_ABORT_CASES,
 });

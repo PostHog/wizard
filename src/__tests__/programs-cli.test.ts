@@ -208,14 +208,6 @@ describe('flat skill commands', () => {
 });
 
 describe('yargs parsing for program commands', () => {
-  test('accepts the CI region for mcp-analytics', async () => {
-    const argv = await parseCommand(
-      mcpAnalyticsCommand,
-      'mcp-analytics --region us',
-    );
-    expect(argv.region).toBe('us');
-  });
-
   test('camelCases --install-dir end-to-end', async () => {
     const argv = await parseCommand(
       auditCommand,
