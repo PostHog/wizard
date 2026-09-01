@@ -12,6 +12,8 @@ import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/tas
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
@@ -285,6 +287,10 @@ export function runWizard(
       console.error('Wizard run failed:', err);
       // eslint-disable-next-line no-console
       console.error(`Full logs: ${getLogFilePath()}`);
+      emitWizardError({
+        code: ErrorCodes.InternalUnhandled,
+        message: err instanceof Error ? err.message : String(err),
+      });
       process.exit(1);
     }
   })();

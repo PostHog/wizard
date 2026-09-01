@@ -17,16 +17,68 @@ import {
   getCommandPath,
   getLaunchablePrograms,
 } from '@lib/programs/program-registry';
-import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
+import {
+  PickerMenu,
+  LoadingBox,
+  type PickerOption,
+} from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import { ScanConsent } from '@lib/wizard-session';
+import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
+import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
 import type { IntroMenuView } from '@ui/tui/posthog-integration-intro';
 import {
   introHeadline,
   introMenuOptions,
 } from '@ui/tui/posthog-integration-intro';
+
+/**
+ * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
+ * shared default (".env* file contents will not leave your machine") is true
+ * of values and false of variable names, which this screen reads and reports.
+ * Two lines carry the fact and name the screen that holds the detail, so the
+ * disclosure reaches people who never open it.
+ */
+const SUBTITLE = (
+  <>
+    <Text dimColor>
+      We'll use AI to analyze your project and complete work.
+    </Text>
+    <Text dimColor>Review what data is shared in "{PRIVACY_PANEL_LABEL}."</Text>
+    <Text dimColor>.env* values stay on your machine.</Text>
+  </>
+);
+
+/**
+ * A blank, unselectable row. Navigation skips disabled options, so this is a
+ * margin the menu can hold rather than one the layout has to special-case.
+ */
+const MENU_SPACER: PickerOption<string> = {
+  label: '',
+  value: 'spacer',
+  disabled: true,
+};
+
+/**
+ * The sharing choice, as two explicit rows rather than one toggle. A toggle
+ * label has to describe either the current state or the next action, and a
+ * reader cannot tell which; two rows with the filled diamond on the live one
+ * say both at once. The trailing spacer separates them from the Back that
+ * IntroScreenLayout appends, since leaving the screen is a different kind of
+ * act from changing something on it.
+ */
+export function sharingOptions(sharing: boolean): PickerOption<string>[] {
+  const mark = (on: boolean) => ({
+    glyph: on ? Icons.diamond : Icons.diamondOpen,
+  });
+  return [
+    { label: 'Share tools', value: 'share', icon: mark(sharing) },
+    { label: "Don't share tools", value: 'no-share', icon: mark(!sharing) },
+    MENU_SPACER,
+  ];
+}
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -77,6 +129,7 @@ export const PostHogIntegrationIntroScreen = ({
   const [view, setView] = useState<IntroMenuView>('default');
 
   const { session } = store;
+  const sharing = session.scanConsent !== ScanConsent.Declined;
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
@@ -94,12 +147,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Title ──────────────────────────────────────────────────────────
 
-  const title =
-    view === 'privacy'
-      ? 'Wizard privacy & usage'
-      : detecting
-      ? 'PostHog Wizard starting up'
-      : 'PostHog Wizard 🦔';
+  const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
 
   // ── Description ────────────────────────────────────────────────────
 
@@ -179,8 +227,6 @@ export const PostHogIntegrationIntroScreen = ({
         }}
       />
     );
-  } else if (view === 'privacy') {
-    body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
       <Box>
@@ -272,11 +318,16 @@ export const PostHogIntegrationIntroScreen = ({
       setView('more-info');
     } else if (value === 'commands') {
       setView('commands');
-    } else if (value === 'privacy') {
-      setView('privacy');
     } else if (value === 'back') {
-      setView(view === 'privacy' ? 'more-info' : 'default');
-    } else {
+      setView('default');
+    } else if (value === 'share') {
+      store.grantSharing();
+    } else if (value === 'no-share') {
+      store.declineSharing();
+    } else if (value === 'continue') {
+      // Sharing is on by default, so consent nobody touched resolves to granted
+      // here. A choice already made in the panel stands.
+      if (session.scanConsent === ScanConsent.Undecided) store.grantSharing();
       store.completeSetup();
     }
   };
@@ -288,11 +339,14 @@ export const PostHogIntegrationIntroScreen = ({
       installDir={session.installDir}
       title={title}
       showSubtitle={view === 'default'}
+      subtitle={SUBTITLE}
       body={body}
       showDetection={showContinue}
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       menuAlign="center"
+      // The one program whose disclosure view can be acted on.
+      privacyOptions={sharingOptions(sharing)}
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}

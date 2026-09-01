@@ -8,7 +8,7 @@ import {
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
-import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
@@ -263,6 +263,102 @@ describe('WizardStore', () => {
       expect(store.session.setupConfirmed).toBe(true);
       await store.getGate('intro');
       expect(cb).toHaveBeenCalled();
+    });
+
+    it('grantSharing sets scanConsent to granted and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.grantSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('declineSharing sets scanConsent to declined and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.declineSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('completeSetup marks the warehouse-scan report done after consent resolves', () => {
+      const store = createStore();
+
+      store.grantSharing();
+      expect(store.session.warehouseSourcesReported).toBe(false);
+
+      store.completeSetup();
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
+    it('sets the warehouse tags before it sends setup confirmed', () => {
+      const store = createStore();
+      // A granted run with a scan behind it, which is when tags get set.
+      store.session = {
+        ...store.session,
+        scanConsent: ScanConsent.Granted,
+        frameworkContext: {
+          warehouseScanState: 'ok',
+          detectedWarehouseSources: [
+            {
+              kind: 'Stripe',
+              label: 'Stripe',
+              mode: 'in-cli',
+              matchedSignal: 'x',
+            },
+          ],
+        },
+      };
+      (analytics.setTag as Mock).mockClear();
+      wizardCaptureMock.mockClear();
+
+      store.completeSetup();
+
+      // Analytics merges tags into an event as it is sent, so a tag set after
+      // the capture lands one event too late.
+      const taggedKinds = (analytics.setTag as Mock).mock.calls.findIndex(
+        ([key]) => key === 'warehouse_source_kinds',
+      );
+      expect(taggedKinds).toBeGreaterThanOrEqual(0);
+      const tagOrder = (analytics.setTag as Mock).mock.invocationCallOrder[
+        taggedKinds
+      ];
+      const captureOrder =
+        wizardCaptureMock.mock.invocationCallOrder[
+          wizardCaptureMock.mock.calls.findIndex(
+            ([event]) => event === 'setup confirmed',
+          )
+        ];
+      expect(tagOrder).toBeLessThan(captureOrder);
+    });
+
+    it('declineSharing leaves the report unclaimed while the choice can change', () => {
+      const store = createStore();
+
+      store.declineSharing();
+
+      // warehouseSourcesReported is a send-once latch: the reporter returns at
+      // its first line once set. The privacy panel's choice is reversible, so
+      // claiming it here would silence the report of a user who turns sharing
+      // off and then back on. completeSetup() owns the single report.
+      expect(store.session.warehouseSourcesReported).toBe(false);
+    });
+
+    it('still reports for a user who turns sharing off and on again', () => {
+      const store = createStore();
+
+      store.declineSharing();
+      store.grantSharing();
+      store.completeSetup();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.warehouseSourcesReported).toBe(true);
     });
 
     it('setRunPhase updates session.runPhase', () => {

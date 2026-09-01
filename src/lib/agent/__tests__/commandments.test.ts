@@ -135,3 +135,40 @@ describe('commandments by axis', () => {
     });
   });
 });
+
+/**
+ * The prompt must only promise tools the session really mounted.
+ *
+ * `harness/pi/index.ts` used to pass `posthogMcp: true` hardcoded, right after
+ * a try/catch that logs a failed MCP setup and carries on. So a run whose
+ * handshake failed still told the agent to drive everything through
+ * `posthog_exec` — a tool that was never registered. `task.ts` tracked it
+ * properly all along; `index.ts` now does too.
+ */
+describe('runtime caps gate the pi runtime notes', () => {
+  const withCaps = (caps: { bash: boolean; posthogMcp: boolean }) =>
+    assembleCommandments({
+      program: 'warehouse-source',
+      sequence: Sequence.linear,
+      harness: Harness.pi,
+      caps,
+    });
+
+  it('names posthog_exec when the MCP came up', () => {
+    expect(withCaps({ bash: true, posthogMcp: true })).toContain(
+      'posthog_exec',
+    );
+  });
+
+  it('never names posthog_exec when the MCP did not', () => {
+    expect(withCaps({ bash: true, posthogMcp: false })).not.toContain(
+      'posthog_exec',
+    );
+  });
+
+  it('still produces a usable prompt without the MCP', () => {
+    const notes = withCaps({ bash: true, posthogMcp: false });
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes).toContain(WIZARD_COMMANDMENTS[0]);
+  });
+});

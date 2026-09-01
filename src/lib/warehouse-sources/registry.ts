@@ -12,7 +12,7 @@
 
 import type { SourceDetector } from './types.js';
 
-export const SOURCE_DETECTORS: SourceDetector[] = [
+const CORE_SOURCE_DETECTORS: SourceDetector[] = [
   {
     kind: 'Postgres',
     label: 'PostgreSQL',
@@ -124,6 +124,79 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       npm: ['convex'],
       python: ['convex'],
       envKeys: [/^CONVEX_/, /^NEXT_PUBLIC_CONVEX_URL$/],
+    },
+  },
+  {
+    // Firebase authenticates with a service-account JSON key file, not a
+    // pasteable string. The terminal credential prompt only collects
+    // single-line text, so there is no safe in-cli path: the file upload lives
+    // in the app's new-source form. Deep-link there instead of dead-ending on a
+    // credential the CLI cannot accept.
+    kind: 'Firebase',
+    label: 'Firebase',
+    mode: 'deep-link',
+    signals: {
+      // NOTE: the `firebase` client SDK also covers auth-only projects, which
+      // have no Firestore data to import. We accept the false positives — the
+      // package is a strong signal for the common case.
+      npm: ['firebase-admin', 'firebase'],
+      python: ['firebase-admin'],
+      envKeys: [/^FIREBASE_/, /^NEXT_PUBLIC_FIREBASE_/],
+    },
+  },
+  {
+    kind: 'Neon',
+    label: 'Neon',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@neondatabase/serverless'],
+      envKeys: [/^NEON_/],
+    },
+  },
+  {
+    kind: 'PlanetScaleMySQL',
+    label: 'PlanetScale MySQL',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@planetscale/database'],
+      envKeys: [/^PLANETSCALE_/],
+    },
+  },
+  {
+    kind: 'DynamoDB',
+    label: 'DynamoDB',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@aws-sdk/client-dynamodb', '@aws-sdk/lib-dynamodb'],
+      python: ['pynamodb'],
+    },
+  },
+  {
+    kind: 'Motherduck',
+    label: 'MotherDuck',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@motherduck/wasm-client'],
+      envKeys: [/^MOTHERDUCK_/],
+    },
+  },
+  {
+    kind: 'Databricks',
+    label: 'Databricks',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@databricks/sql'],
+      python: ['databricks-sql-connector', 'databricks-sdk'],
+      envKeys: [/^DATABRICKS_/],
+    },
+  },
+  {
+    kind: 'Singlestore',
+    label: 'SingleStore',
+    mode: 'in-cli',
+    signals: {
+      python: ['singlestoredb'],
+      envKeys: [/^SINGLESTORE_/],
     },
   },
   {
@@ -612,12 +685,14 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       ruby: ['octokit'],
     },
   },
+];
 
-  // ============================================================
-  // Additional released source types (see PostHog data-warehouse
-  // source catalog). Detected by SDK package or .env key convention.
-  // ============================================================
-  // ---- LLM / AI ----
+// ============================================================
+// Additional released source types (see PostHog data-warehouse
+// source catalog). Detected by SDK package or .env key convention.
+// ============================================================
+// ---- LLM / AI ----
+const LLM_SOURCE_DETECTORS: SourceDetector[] = [
   {
     kind: 'OpenAI',
     label: 'OpenAI',
@@ -805,6 +880,58 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^OPENROUTER_/],
     },
   },
+  {
+    kind: 'Browserbase',
+    label: 'Browserbase',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@browserbasehq/sdk', '@browserbasehq/stagehand'],
+      python: ['browserbase'],
+      envKeys: [/^BROWSERBASE_/],
+    },
+  },
+  {
+    kind: 'E2B',
+    label: 'E2B',
+    mode: 'in-cli',
+    signals: {
+      npm: ['e2b', '@e2b/code-interpreter'],
+      python: ['e2b', 'e2b-code-interpreter'],
+      envKeys: [/^E2B_/],
+    },
+  },
+  {
+    kind: 'WeightsAndBiases',
+    label: 'Weights & Biases',
+    mode: 'in-cli',
+    signals: {
+      python: ['wandb'],
+      envKeys: [/^WANDB_/],
+    },
+  },
+  {
+    kind: 'LlamaCloud',
+    label: 'LlamaCloud',
+    mode: 'in-cli',
+    signals: {
+      npm: ['llama-cloud-services'],
+      python: ['llama-cloud-services'],
+      envKeys: [/^LLAMA_CLOUD_/],
+    },
+  },
+  {
+    kind: 'Zep',
+    label: 'Zep',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@getzep/zep-cloud'],
+      python: ['zep-cloud'],
+      envKeys: [/^ZEP_API_KEY$/],
+    },
+  },
+];
+
+const OTHER_SOURCE_DETECTORS: SourceDetector[] = [
   // ---- Payments / billing ----
   {
     kind: 'Paystack',
@@ -902,6 +1029,84 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^INVOICED_/],
     },
   },
+  {
+    kind: 'LemonSqueezy',
+    label: 'Lemon Squeezy',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@lemonsqueezy/lemonsqueezy.js'],
+      envKeys: [/^LEMONSQUEEZY_/, /^LEMON_SQUEEZY_/],
+    },
+  },
+  {
+    kind: 'Razorpay',
+    label: 'Razorpay',
+    mode: 'in-cli',
+    signals: {
+      npm: ['razorpay'],
+      python: ['razorpay'],
+      ruby: ['razorpay'],
+      envKeys: [/^RAZORPAY_/],
+    },
+  },
+  {
+    kind: 'Adyen',
+    label: 'Adyen',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@adyen/api-library'],
+      python: ['adyen'],
+      envKeys: [/^ADYEN_/],
+    },
+  },
+  {
+    kind: 'ChartMogul',
+    label: 'ChartMogul',
+    mode: 'in-cli',
+    signals: {
+      npm: ['chartmogul-node'],
+      python: ['chartmogul'],
+      envKeys: [/^CHARTMOGUL_/],
+    },
+  },
+  {
+    kind: 'Airwallex',
+    label: 'Airwallex',
+    mode: 'in-cli',
+    signals: {
+      npm: ['airwallex-payment-elements'],
+      envKeys: [/^AIRWALLEX_/],
+    },
+  },
+  {
+    kind: 'Flutterwave',
+    label: 'Flutterwave',
+    mode: 'in-cli',
+    signals: {
+      npm: ['flutterwave-node-v3'],
+      python: ['flutterwave'],
+      envKeys: [/^FLUTTERWAVE_/, /^FLW_(PUBLIC|SECRET)_KEY$/],
+    },
+  },
+  {
+    kind: 'DodoPayments',
+    label: 'Dodo Payments',
+    mode: 'in-cli',
+    signals: {
+      npm: ['dodopayments'],
+      python: ['dodopayments'],
+      envKeys: [/^DODO_PAYMENTS_/],
+    },
+  },
+  {
+    kind: 'Whop',
+    label: 'Whop',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@whop/api', '@whop-apps/sdk'],
+      envKeys: [/^WHOP_/],
+    },
+  },
   // ---- Email / marketing ----
   {
     kind: 'SparkPost',
@@ -987,6 +1192,98 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     mode: 'in-cli',
     signals: {
       envKeys: [/^LEMLIST_/],
+    },
+  },
+  {
+    kind: 'Loops',
+    label: 'Loops',
+    mode: 'in-cli',
+    signals: {
+      npm: ['loops'],
+      envKeys: [/^LOOPS_/],
+    },
+  },
+  {
+    kind: 'Knock',
+    label: 'Knock',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@knocklabs/node', '@knocklabs/client'],
+      python: ['knockapi'],
+      envKeys: [/^KNOCK_/],
+    },
+  },
+  {
+    kind: 'AwsSes',
+    label: 'Amazon SES',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@aws-sdk/client-ses', '@aws-sdk/client-sesv2'],
+      // A bare /^AWS_/ would fire on every AWS project, so we match only
+      // the SES-specific prefix.
+      envKeys: [/^AWS_SES_/],
+    },
+  },
+  {
+    kind: 'Beehiiv',
+    label: 'beehiiv',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^BEEHIIV_/],
+    },
+  },
+  {
+    kind: 'Mailtrap',
+    label: 'Mailtrap',
+    mode: 'in-cli',
+    signals: {
+      npm: ['mailtrap'],
+      python: ['mailtrap'],
+      envKeys: [/^MAILTRAP_/],
+    },
+  },
+  {
+    kind: 'Plunk',
+    label: 'Plunk',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@plunk/node'],
+      envKeys: [/^PLUNK_/],
+    },
+  },
+  {
+    kind: 'Ortto',
+    label: 'Ortto',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^ORTTO_/],
+    },
+  },
+  {
+    kind: 'Postscript',
+    label: 'Postscript',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^POSTSCRIPT_/],
+    },
+  },
+  {
+    kind: 'Marketo',
+    label: 'Marketo',
+    mode: 'in-cli',
+    signals: {
+      python: ['marketorestpython'],
+      envKeys: [/^MARKETO_/],
+    },
+  },
+  {
+    kind: 'Lob',
+    label: 'Lob',
+    mode: 'in-cli',
+    signals: {
+      npm: ['lob'],
+      python: ['lob'],
+      envKeys: [/^LOB_API_KEY$/],
     },
   },
   // ---- Product analytics / CDP ----
@@ -1164,6 +1461,37 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^JUSTCALL_/],
     },
   },
+  {
+    kind: 'Telnyx',
+    label: 'Telnyx',
+    mode: 'in-cli',
+    signals: {
+      npm: ['telnyx'],
+      python: ['telnyx'],
+      envKeys: [/^TELNYX_/],
+    },
+  },
+  {
+    kind: 'Plivo',
+    label: 'Plivo',
+    mode: 'in-cli',
+    signals: {
+      npm: ['plivo'],
+      python: ['plivo'],
+      envKeys: [/^PLIVO_/],
+    },
+  },
+  {
+    kind: 'Courier',
+    label: 'Courier',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@trycourier/courier'],
+      python: ['trycourier'],
+      // COURIER_ is a generic shipping word, so we match the exact key.
+      envKeys: [/^COURIER_AUTH_TOKEN$/],
+    },
+  },
   // ---- E-commerce / logistics ----
   {
     kind: 'WooCommerce',
@@ -1244,6 +1572,15 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     mode: 'in-cli',
     signals: {
       envKeys: [/^PRINTIFY_/],
+    },
+  },
+  {
+    kind: 'BigCommerce',
+    label: 'BigCommerce',
+    mode: 'in-cli',
+    signals: {
+      npm: ['node-bigcommerce'],
+      envKeys: [/^BIGCOMMERCE_/],
     },
   },
   // ---- Support / helpdesk ----
@@ -1482,6 +1819,244 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^VERCEL_API_TOKEN$/],
     },
   },
+  {
+    kind: 'Algolia',
+    label: 'Algolia',
+    mode: 'in-cli',
+    signals: {
+      npm: ['algoliasearch'],
+      python: ['algoliasearch'],
+      ruby: ['algolia'],
+      envKeys: [/^ALGOLIA_/],
+    },
+  },
+  {
+    kind: 'Inngest',
+    label: 'Inngest',
+    mode: 'in-cli',
+    signals: {
+      npm: ['inngest'],
+      python: ['inngest'],
+      envKeys: [/^INNGEST_/],
+    },
+  },
+  {
+    kind: 'TriggerDev',
+    label: 'Trigger.dev',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@trigger.dev/sdk'],
+      // TRIGGER_ alone is a common app-domain prefix, so we match only the
+      // three keys Trigger.dev actually documents.
+      envKeys: [/^TRIGGER_(SECRET_KEY|API_KEY|PROJECT_ID)$/],
+    },
+  },
+  {
+    kind: 'Ably',
+    label: 'Ably',
+    mode: 'in-cli',
+    signals: {
+      npm: ['ably'],
+      python: ['ably'],
+      envKeys: [/^ABLY_/],
+    },
+  },
+  {
+    kind: 'Netlify',
+    label: 'Netlify',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@netlify/functions'],
+      envKeys: [/^NETLIFY_/],
+    },
+  },
+  {
+    kind: 'Railway',
+    label: 'Railway',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^RAILWAY_/],
+    },
+  },
+  {
+    kind: 'Render',
+    label: 'Render',
+    mode: 'in-cli',
+    signals: {
+      // RENDER_ is a generic word in front-end code — exact key only.
+      envKeys: [/^RENDER_API_KEY$/],
+    },
+  },
+  {
+    kind: 'FlyIo',
+    label: 'Fly.io',
+    mode: 'in-cli',
+    signals: {
+      // `fly.toml` is not one of the manifests we read, so env keys are the
+      // only signal available.
+      envKeys: [/^FLY_API_TOKEN$/, /^FLY_APP_NAME$/],
+    },
+  },
+  {
+    kind: 'Heroku',
+    label: 'Heroku',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^HEROKU_/],
+    },
+  },
+  {
+    kind: 'DigitalOcean',
+    label: 'DigitalOcean',
+    mode: 'in-cli',
+    signals: {
+      // DO_ is too short to be safe, so we match the full product name.
+      envKeys: [/^DIGITALOCEAN_/],
+    },
+  },
+  {
+    kind: 'Grafana',
+    label: 'Grafana',
+    mode: 'in-cli',
+    signals: {
+      python: ['grafana-client'],
+      envKeys: [/^GRAFANA_/],
+    },
+  },
+  {
+    kind: 'BetterStack',
+    label: 'Better Stack',
+    mode: 'in-cli',
+    signals: {
+      // Logtail is Better Stack's log product — same account, same source.
+      npm: ['@logtail/node', '@logtail/js'],
+      envKeys: [/^BETTERSTACK_/, /^BETTER_STACK_/, /^LOGTAIL_/],
+    },
+  },
+  {
+    kind: 'Honeycomb',
+    label: 'Honeycomb',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@honeycombio/opentelemetry-node', 'honeycomb-beeline'],
+      python: ['honeycomb-beeline', 'libhoney'],
+      envKeys: [/^HONEYCOMB_/],
+    },
+  },
+  {
+    kind: 'Descope',
+    label: 'Descope',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@descope/node-sdk', '@descope/nextjs-sdk', '@descope/react-sdk'],
+      python: ['descope'],
+      envKeys: [/^DESCOPE_/],
+    },
+  },
+  {
+    kind: 'FusionAuth',
+    label: 'FusionAuth',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@fusionauth/typescript-client'],
+      python: ['fusionauth-client'],
+      envKeys: [/^FUSIONAUTH_/, /^FUSION_AUTH_/],
+    },
+  },
+  {
+    kind: 'Hookdeck',
+    label: 'Hookdeck',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@hookdeck/sdk'],
+      envKeys: [/^HOOKDECK_/],
+    },
+  },
+  {
+    kind: 'N8n',
+    label: 'n8n',
+    mode: 'in-cli',
+    signals: {
+      npm: ['n8n'],
+      envKeys: [/^N8N_/],
+    },
+  },
+  {
+    kind: 'Dbt',
+    label: 'dbt',
+    mode: 'in-cli',
+    signals: {
+      // NOTE: these signals prove the project uses dbt, not that it uses dbt
+      // Cloud — the source needs dbt Cloud credentials. Local-only dbt users
+      // are a known false positive.
+      python: [
+        'dbt-core',
+        'dbt-snowflake',
+        'dbt-postgres',
+        'dbt-bigquery',
+        'dbt-redshift',
+        'dbt-databricks',
+      ],
+      envKeys: [/^DBT_/],
+    },
+  },
+  {
+    kind: 'Fastly',
+    label: 'Fastly',
+    mode: 'in-cli',
+    signals: {
+      npm: ['fastly'],
+      python: ['fastly'],
+      envKeys: [/^FASTLY_/],
+    },
+  },
+  {
+    kind: 'Bunny',
+    label: 'Bunny.net',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^BUNNY_/],
+    },
+  },
+  {
+    kind: 'Codecov',
+    label: 'Codecov',
+    mode: 'in-cli',
+    signals: {
+      npm: ['codecov'],
+      envKeys: [/^CODECOV_/],
+    },
+  },
+  {
+    kind: 'Sourcegraph',
+    label: 'Sourcegraph',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^SOURCEGRAPH_/, /^SRC_ACCESS_TOKEN$/],
+    },
+  },
+  {
+    kind: 'TemporalIO',
+    label: 'Temporal.io',
+    mode: 'in-cli',
+    signals: {
+      // NOTE: these signals also match a self-hosted Temporal cluster, but the
+      // source wants Temporal Cloud mTLS certificates.
+      npm: ['@temporalio/client', '@temporalio/worker'],
+      python: ['temporalio'],
+      envKeys: [/^TEMPORAL_/],
+    },
+  },
+  {
+    kind: 'Hatchet',
+    label: 'Hatchet',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@hatchet-dev/typescript-sdk'],
+      python: ['hatchet-sdk'],
+      envKeys: [/^HATCHET_/],
+    },
+  },
   // ---- CRM / sales ----
   {
     kind: 'Pipedrive',
@@ -1556,6 +2131,32 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     mode: 'in-cli',
     signals: {
       envKeys: [/^VITALLY_/],
+    },
+  },
+  {
+    kind: 'Docusign',
+    label: 'DocuSign',
+    mode: 'in-cli',
+    signals: {
+      npm: ['docusign-esign'],
+      python: ['docusign-esign'],
+      envKeys: [/^DOCUSIGN_/],
+    },
+  },
+  {
+    kind: 'PandaDoc',
+    label: 'PandaDoc',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^PANDADOC_/],
+    },
+  },
+  {
+    kind: 'Gong',
+    label: 'Gong',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^GONG_/],
     },
   },
   // ---- PM / productivity ----
@@ -1674,6 +2275,71 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     mode: 'in-cli',
     signals: {
       envKeys: [/^PRODUCTBOARD_/],
+    },
+  },
+  {
+    kind: 'GoogleSheets',
+    label: 'Google Sheets',
+    mode: 'in-cli',
+    signals: {
+      npm: ['google-spreadsheet'],
+      python: ['gspread'],
+      envKeys: [/^GOOGLE_SHEETS_/],
+    },
+  },
+  {
+    kind: 'Formbricks',
+    label: 'Formbricks',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@formbricks/js'],
+      envKeys: [/^FORMBRICKS_/],
+    },
+  },
+  {
+    kind: 'Tally',
+    label: 'Tally',
+    mode: 'in-cli',
+    signals: {
+      // Tally is also an accounting product, so we match the exact key.
+      envKeys: [/^TALLY_API_KEY$/],
+    },
+  },
+  {
+    kind: 'Jotform',
+    label: 'Jotform',
+    mode: 'in-cli',
+    signals: {
+      python: ['jotform'],
+      envKeys: [/^JOTFORM_/],
+    },
+  },
+  {
+    kind: 'GitBook',
+    label: 'GitBook',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@gitbook/api'],
+      envKeys: [/^GITBOOK_/],
+    },
+  },
+  {
+    kind: 'Wordpress',
+    label: 'WordPress',
+    mode: 'in-cli',
+    signals: {
+      // NOTE: recall is low here. Most WordPress projects are PHP, and
+      // `composer.json` is not one of the manifests we read.
+      npm: ['wpapi'],
+      envKeys: [/^WORDPRESS_/],
+    },
+  },
+  {
+    kind: 'Clockify',
+    label: 'Clockify',
+    mode: 'in-cli',
+    signals: {
+      envKeys: [/^CLOCKIFY_/],
     },
   },
   // ---- Scheduling / events ----
@@ -1849,4 +2515,25 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       envKeys: [/^APPSFLYER_/],
     },
   },
+  {
+    kind: 'Dub',
+    label: 'Dub',
+    mode: 'in-cli',
+    signals: {
+      npm: ['dub'],
+      python: ['dub'],
+      envKeys: [/^DUB_API_KEY$/],
+    },
+  },
 ];
+
+export const SOURCE_DETECTORS: SourceDetector[] = [
+  ...CORE_SOURCE_DETECTORS,
+  ...LLM_SOURCE_DETECTORS,
+  ...OTHER_SOURCE_DETECTORS,
+];
+
+/** Kinds from the LLM / AI section above — the only ones that may set `wizard_ai_sdk_detected`. */
+export const AI_SOURCE_KINDS: ReadonlySet<string> = new Set(
+  LLM_SOURCE_DETECTORS.map((detector) => detector.kind),
+);

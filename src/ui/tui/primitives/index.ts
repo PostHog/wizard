@@ -8,7 +8,7 @@ export { LoadingBox } from './LoadingBox.js';
 export { ProgressList } from './ProgressList.js';
 export type { ProgressItem } from './ProgressList.js';
 export { PromptLabel } from './PromptLabel.js';
-export { PickerMenu } from './PickerMenu.js';
+export { PickerMenu, type PickerOption } from './PickerMenu.js';
 export { GroupedPickerMenu } from './GroupedPickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
 export { ConfirmButton } from './ConfirmButton.js';
@@ -26,6 +26,13 @@ export { LogViewer } from './LogViewer.js';
 export { EventPlanViewer } from './EventPlanViewer.js';
 export { ScreenContainer } from './ScreenContainer.js';
 export { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
+export {
+  ViewportTooSmall,
+  isViewportTooSmall,
+  MIN_VIEWPORT_COLUMNS,
+  MIN_VIEWPORT_ROWS,
+  VIEWPORT_TOO_SMALL_MESSAGE,
+} from './ViewportTooSmall.js';
 export { TabContainer } from './TabContainer.js';
 export type { TabDefinition } from './TabContainer.js';
 export { HNViewer } from './HNViewer.js';

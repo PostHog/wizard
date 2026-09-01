@@ -224,6 +224,7 @@ describe('selfDrivingConfig', () => {
       'integrate-detect',
       'integrate-run',
       'self-driving-handoff',
+      'self-driving-github',
       'run',
       'outro',
     ]);

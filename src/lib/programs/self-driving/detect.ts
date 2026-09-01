@@ -30,6 +30,7 @@ import { join } from 'path';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { ErrorCodes } from '@lib/errors';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
@@ -232,6 +233,15 @@ export type SelfDrivingDetectError = {
  * reason strings are part of the skill contract — the context-mill
  * `self-driving-setup` skill emits these exact strings.
  */
+/** Headline shown when the run ends because GitHub was not connected. */
+export const GITHUB_REQUIRED_MESSAGE = 'GitHub connection required';
+
+/** Body for {@link GITHUB_REQUIRED_MESSAGE}. Shared by the pre-run gate and the abort case. */
+export const GITHUB_REQUIRED_BODY =
+  'Self-driving needs GitHub access to research issues in your code and ' +
+  'open fixes, so setup cannot finish without it. Nothing was changed. ' +
+  'When you are ready to install the PostHog GitHub App, run the wizard again.';
+
 export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
   {
     // Skill emits: [ABORT] self-driving is not available for this project
@@ -244,18 +254,16 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
       'keeps happening reach out to wizard@posthog.com.',
   },
   {
-    // Skill emits: [ABORT] github connection declined
+    // Retained as a safety net: the GitHub gate now runs before the agent, but
+    // a cached older skill can still emit this mid-run.
     match: /^github connection declined$/i,
-    message: 'GitHub connection required',
-    body:
-      'Self-driving needs GitHub access to research issues in your code and ' +
-      'open fixes, so setup cannot finish without it. Nothing was left ' +
-      'half-configured. When you are ready to install the PostHog GitHub ' +
-      'App, run the wizard again.',
+    message: GITHUB_REQUIRED_MESSAGE,
+    body: GITHUB_REQUIRED_BODY,
   },
   {
     // Skill emits: [ABORT] requires-interactive-mode
     match: /^requires-interactive-mode$/i,
+    errorCode: ErrorCodes.CliInteractiveRequired,
     message: 'Interactive terminal required',
     body:
       'Self-driving setup asks questions along the way (GitHub and ' +

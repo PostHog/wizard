@@ -20,7 +20,7 @@ import {
 } from '@ui/tui/posthog-integration-intro';
 
 const valuesFor = (args: {
-  view?: 'default' | 'more-info' | 'privacy' | 'commands';
+  view?: 'default' | 'more-info' | 'commands';
   showContinue?: boolean;
   posthogSdkDetected?: boolean;
 }): string[] =>
@@ -109,12 +109,10 @@ describe('introMenuOptions', () => {
       );
     });
 
-    it('gives the privacy view a way back', () => {
-      expect(valuesFor({ view: 'privacy' })).toEqual(['back']);
-    });
-
-    it('reaches privacy from more info', () => {
-      expect(valuesFor({ view: 'more-info' })).toEqual(['back', 'privacy']);
+    // IntroScreenLayout appends the disclosure row to every intro menu, so
+    // neither sub-view carries its own route to it.
+    it('gives the more-info view a way back and nothing else', () => {
+      expect(valuesFor({ view: 'more-info' })).toEqual(['back']);
     });
   });
 

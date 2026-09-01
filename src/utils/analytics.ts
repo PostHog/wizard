@@ -5,7 +5,10 @@ import {
   ANALYTICS_TEAM_TAG,
   WIZARD_FLAG_KEYS,
 } from '@lib/constants';
-import type { WizardSession } from '@lib/wizard-session';
+import {
+  reportableDiscoveredFeatures,
+  type WizardSession,
+} from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
@@ -38,12 +41,21 @@ function invocationProperties(): { command: string; cli_flags: string } {
 export function sessionProperties(
   session: WizardSession,
 ): Record<string, unknown> {
+  // reportableDiscoveredFeatures() owns the consent decision; this file
+  // never needs to know what `scanConsent` means, only that the result
+  // might be absent. An absent key is unambiguous, while an empty array
+  // would read as "we looked and found nothing" instead of "not reported".
+  const discoveredFeatures = reportableDiscoveredFeatures(session);
+
   return {
     integration: session.integration,
     detected_framework: session.detectedFrameworkLabel,
     typescript: session.typescript,
     project_id: session.credentials?.projectId,
-    discovered_features: session.discoveredFeatures,
+    ...(discoveredFeatures !== undefined
+      ? { discovered_features: discoveredFeatures }
+      : {}),
+    scan_consent: session.scanConsent,
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
     posthog_sdk_detected: session.posthogSdkDetected,
@@ -258,6 +270,14 @@ export class Analytics {
         ...properties,
       },
     });
+  }
+
+  groupIdentify(
+    groupType: string,
+    groupKey: string,
+    properties: Record<string, unknown>,
+  ) {
+    this.client.groupIdentify({ groupType, groupKey, properties });
   }
 
   // Built from the resolved map, not the SDK snapshot: a CI-forced variant must own its events.

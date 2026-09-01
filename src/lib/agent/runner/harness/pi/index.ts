@@ -27,6 +27,7 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
+import { gatewayAuth } from '@lib/gateway-session';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import { createAioCapture } from '@lib/agent/aio-capture';
 import type {
@@ -40,7 +41,14 @@ import type { TaskStore } from './tasks';
 import { completionFailure } from './completion';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
-function piMcpContext(boot: BootstrapResult, instructions?: string): string {
+function piMcpContext(
+  boot: BootstrapResult,
+  instructions?: string,
+  posthogMcp = true,
+): string {
+  // No tool, no block. The fallback below names `posthog_exec`, so emitting it
+  // after a failed handshake points the agent at a tool that is not registered.
+  if (!posthogMcp) return '';
   if (instructions) {
     // Heading + verbatim server instructions (see PR #862 for a full sample).
     return ['', '## PostHog MCP server', instructions].join('\n');
@@ -238,10 +246,19 @@ export const piBackend: AgentHarness = {
       } = await import('@earendil-works/pi-coding-agent');
 
       // the claude-agent-sdk path. The provider spec is shared with the
-      // orchestrator's per-task sessions (gateway.ts).
+      // orchestrator's per-task sessions (gateway.ts). gatewayAuth resolves
+      // the v2 scoped-token posture, or the legacy OAuth posture when the
+      // backend doesn't mint.
+      const auth = await gatewayAuth(
+        boot.credentials.host,
+        boot.credentials.accessToken,
+        boot.programId,
+      );
       const { provider, caps } = buildGatewayProvider({
-        gatewayUrl: boot.credentials.host.gatewayUrl,
-        accessToken: boot.credentials.accessToken,
+        gatewayUrl: auth.gatewayUrl,
+        accessToken: auth.token,
+        edition: auth.edition,
+        teamId: auth.teamId,
         wizardMetadata: boot.wizardMetadata,
         wizardFlags: boot.wizardFlags,
         modelId,
@@ -295,6 +312,11 @@ export const piBackend: AgentHarness = {
       >;
       let mcpCleanup: (() => void) | undefined;
       let mcpInstructions: string | undefined;
+      // Whether the agent really got the tool. The commandments below claim
+      // `posthog_exec` exists when this is true, so it must track the setup and
+      // not the intent — a hardcoded `true` told the agent to call a tool the
+      // failed handshake never registered. `task.ts` has always done this.
+      let posthogMcp = false;
       try {
         const { setupPostHogMcp, fetchInstructions } = await import('./mcp');
         // Overlaps the network handshake with the adapter's jiti load.
@@ -311,6 +333,7 @@ export const piBackend: AgentHarness = {
         extensionFactories.push(mcp.extensionFactory);
         mcpCleanup = mcp.cleanup;
         mcpInstructions = await instructionsPromise;
+        posthogMcp = true;
       } catch (err) {
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
         analytics.wizardCapture('mcp setup failed', {
@@ -328,10 +351,10 @@ export const piBackend: AgentHarness = {
             program: programConfig.id,
             sequence: Sequence.linear,
             harness: Harness.pi,
-            caps: { bash: true, posthogMcp: true },
+            caps: { bash: true, posthogMcp },
           }) +
           '\n' +
-          piMcpContext(boot, mcpInstructions),
+          piMcpContext(boot, mcpInstructions, posthogMcp),
         noExtensions: true,
         noSkills: true,
         noContextFiles: true,

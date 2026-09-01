@@ -14,6 +14,7 @@ import type {
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -55,6 +56,7 @@ async function abortUnsupportedPlatform(
 ): Promise<void> {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
   await wizardAbort({
+    code: ErrorCodes.DetectUnsupportedPlatform,
     message:
       `Session replay isn't available for ${name} projects, and Replay ` +
       'vision needs session recordings to watch — so there is nothing to ' +
@@ -166,6 +168,7 @@ export const replayVisionConfig: ProgramConfig = {
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
+        code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
       return;

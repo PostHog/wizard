@@ -1,0 +1,100 @@
+{
+  "program": "warehouse-source",
+  "summary": "Happy path: confirm the intro over the detected sources, keep any task notice, answer the agent's credential questions from E2E_* env vars, delete installed skills. No rule is marked \"secret\". The data-warehouse-source-setup skill tells the agent to collect a warehouse credential as ordinary (non-sensitive) text, because external-data-sources-create rejects a { secretRef }. A secret rule answers only a sensitive text question, so a secret rule refused every credential question the skill asked, and no source could ever be created. Each value here is a fake, unroutable placeholder, and the workbench's \"no secret leakage\" check is what holds those placeholders out of the report, the result payload, the MCP journal and the captured frames.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first",
+    "notice": "keep",
+    "askAnswers": [
+      {
+        "match": "account[ _-]?id",
+        "value": "acct_e2efixture"
+      },
+      {
+        "match": "prefix",
+        "value": "${E2E_SOURCE_PREFIX}"
+      },
+      {
+        "match": "connection[ _-]?string",
+        "value": "postgresql://${E2E_PG_USER}:${E2E_PG_PASSWORD}@${E2E_PG_HOST}:${E2E_PG_PORT}/${E2E_PG_DATABASE}"
+      },
+      {
+        "match": "stripe",
+        "value": "${E2E_STRIPE_API_KEY}"
+      },
+      {
+        "match": "host|hostname|server|endpoint",
+        "value": "${E2E_PG_HOST}"
+      },
+      {
+        "match": "port",
+        "value": "${E2E_PG_PORT}"
+      },
+      {
+        "match": "database|db_?name",
+        "value": "${E2E_PG_DATABASE}"
+      },
+      {
+        "match": "password|passwd|pwd",
+        "value": "${E2E_PG_PASSWORD}"
+      },
+      {
+        "match": "user|username|role|author",
+        "value": "${E2E_PG_USER}"
+      },
+      {
+        "match": "schema",
+        "value": "public"
+      },
+      {
+        "match": "api[ _-]?key|api[ _-]?token|access[ _-]?token|auth[ _-]?token|^token$|secret|credential",
+        "value": "${E2E_API_TOKEN}"
+      }
+    ]
+  },
+  "askAnswerNotes": [
+    "Rules are first-match-wins. Every rule is tested against the question id before any rule is tested against the prompt, so a rule that claims an id shadows a later rule that would have claimed the prompt.",
+    "The agent writes its own question ids. The 2026-08-28 CI run asked: api_key, account_id, table_prefix and stripe_secret_key for Stripe; host, port, database, user, password, schema and pg-host, pg-port, pg-database, pg-user, pg-password, pg-schema for Postgres.",
+    "account[ _-]?id sits ahead of stripe so \"Stripe Account ID (optional)\" takes an account id instead of the API key.",
+    "The last rule is a net, not a router. It claims a vendor-less id such as api_key on the id pass, ahead of the stripe rule that would claim the same question on the prompt pass. That is deliberate: a placeholder token and a placeholder Stripe key are equally fake, and a question that reaches the sentinel breaks the create it feeds.",
+    "E2E_API_TOKEN comes from the workbench runner. An unset var makes the rule inert, and the question falls through to the sentinel."
+  ],
+  "variations": [
+    {
+      "name": "default",
+      "summary": "linear / anthropic / sonnet — parity with main"
+    }
+  ],
+  "path": [
+    {
+      "screen": "(headless) detect",
+      "auto": "scan installDir for warehouse signals — writes detectedWarehouseSources, or a detectError when the project has none"
+    },
+    {
+      "screen": "warehouse-intro",
+      "auto": "confirm & continue — lists what detection found"
+    },
+    { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "task-notice",
+      "auto": "keep — only shown on the orchestrator sequence, where the warehouse step is a seeded task the user can decline"
+    },
+    {
+      "screen": "run",
+      "auto": "(external) — the agent runs the data-warehouse-source-setup skill: it collects credentials through wizard_ask, creates in-cli sources over the PostHog MCP, and emits a deep link for the rest"
+    },
+    {
+      "screen": "wizard-ask",
+      "auto": "answer every question in the batch — askAnswers routes each credential field to its E2E_* env var; anything unrouted takes the first option, else the 'e2e' sentinel"
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    {
+      "screen": "keep-skills",
+      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
+    }
+  ]
+}

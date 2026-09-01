@@ -38,7 +38,11 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
-import { highestSeverityMatch, scanVerdict } from './yara-policy';
+import {
+  highestSeverityMatch,
+  publishBlockingMatch,
+  scanVerdict,
+} from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 // TODO(wizard#594): invert this dependency.
@@ -710,15 +714,24 @@ export async function scanAndTriage(
 
 /**
  * Create PreToolUse hook matchers for YARA scanning.
- * Scans Bash commands before execution for exfiltration, destructive
- * operations, and supply chain violations ('command'-context rules).
+ * 1. Bash — scans commands before execution for exfiltration, destructive
+ *    operations, and supply chain violations ('command'-context rules).
+ * 2. publish_handoff — scans the report content with the same 'output'-context
+ *    rules + triage as the PostToolUse Write/Edit hook, but BEFORE the MCP
+ *    tool runs: the report is agent-authored and is persisted to a
+ *    host-designated file (POSTHOG_HANDOFF_OUTPUT_PATH) as well as pushed to
+ *    the task stream. Only a CRITICAL match refuses the publish; below that
+ *    the report goes out with the match recorded.
  */
 export function createPreToolUseYaraHooks(
-  // Accepted for API symmetry with createPostToolUseYaraHooks, but
-  // intentionally unused: PreToolUse Bash always blocks on any flagged
-  // command regardless of triage verdict, so the LLM call would be wasted.
-  // Future PreToolUse hooks that need triage can wire this through.
-  _llmProvider?: LLMProvider,
+  // Used only by the publish_handoff matcher below (output-context triage,
+  // same fail-closed semantics as Write/Edit). The Bash matcher still passes
+  // undefined — any flagged command blocks regardless of triage verdict, so
+  // the LLM call would be wasted.
+  llmProvider?: LLMProvider,
+  // Ends the run when a handoff scan errors — without it that path just blocks,
+  // which is the old behavior, so it stays optional.
+  onTerminate?: (reason: string) => void,
 ): HookCallbackMatcher[] {
   const repeatTracker = createRepeatBlockTracker();
   return [
@@ -762,6 +775,79 @@ export function createPreToolUseYaraHooks(
               decision: 'block',
               reason: '[YARA] Scanner error — command blocked as a precaution.',
             };
+          }
+        },
+      ],
+      timeout: HOOK_TIMEOUT_MS,
+    },
+    {
+      // ── publish_handoff content scanning ──
+      hooks: [
+        async (input: HookInput): Promise<HookOutput> => {
+          try {
+            const toolName = input.tool_name as string;
+            // The wizard's publish_handoff MCP tool, fully qualified by the
+            // SDK (e.g. mcp__wizard-tools__publish_handoff). Matched by
+            // suffix so a server rename can't silently reopen the gap — the
+            // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts),
+            // which this module can't import without a cycle (tools.ts
+            // imports scanInstalledSkill from here).
+            if (
+              typeof toolName !== 'string' ||
+              !toolName.endsWith('__publish_handoff')
+            ) {
+              return {};
+            }
+
+            const toolInput = input.tool_input as Record<string, unknown>;
+            const content =
+              typeof toolInput?.content === 'string' ? toolInput.content : '';
+
+            if (!content) return {};
+
+            recordScan();
+            // Same 'output'-context scan + triage as the Write/Edit hook:
+            // the report is agent-authored, quotes the user's code, and now
+            // reaches a second persisted consumer (the host file + the cloud
+            // worker's PR body) — so it must clear the bar of any other
+            // agent-driven write BEFORE the tool executes.
+            const matches = await scanAndTriage(content, 'output', llmProvider);
+            if (matches.length === 0) return {};
+
+            // Below critical: record it, don't cost the run its only report.
+            const match = publishBlockingMatch(matches);
+            if (!match) {
+              const worst = highestSeverityMatch(matches);
+              recordMatch('PreToolUse', 'publish_handoff', worst, 'warned');
+              logToFile(
+                `[YARA] publish_handoff allowed with a ${
+                  worst.metadata.severity ?? 'unknown'
+                } match (${worst.rule}) — below the critical publish bar`,
+              );
+              return {};
+            }
+
+            recordMatch('PreToolUse', 'publish_handoff', match, 'blocked');
+
+            const attempt = repeatTracker.attempt('publish_handoff', content);
+            return {
+              decision: 'block',
+              reason: repeatBlockReason(
+                attempt,
+                'publish_handoff',
+                `[YARA] ${match.rule}: ${
+                  match.metadata.description ?? 'security policy violation'
+                }. Handoff blocked for security — remove the flagged content from the report.`,
+              ),
+            };
+          } catch (error) {
+            logToFile('[YARA] PreToolUse publish_handoff hook error:', error);
+            // Fail closed, but end the run: a silent block would just leave
+            // the agent rewording a report that can never publish.
+            const reason =
+              '[YARA] Scanner error while scanning the handoff report — session terminated as a precaution.';
+            onTerminate?.(reason);
+            return { decision: 'block', reason };
           }
         },
       ],

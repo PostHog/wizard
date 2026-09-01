@@ -13,6 +13,7 @@ import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
 import { join } from 'node:path';
+import { ErrorCodes, detectErrorCode, emitWizardError } from '@lib/errors';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -48,6 +49,10 @@ export function validateNonInteractiveOptions(
   if (!options.apiKey) {
     getUI().intro('PostHog Wizard');
     getUI().log.error(`${label} mode requires --api-key (${keyHint})`);
+    emitWizardError({
+      code: ErrorCodes.ArgsMissingApiKey,
+      message: `${label} mode requires --api-key (${keyHint})`,
+    });
     process.exit(1);
   }
   if (!options.installDir) {
@@ -55,6 +60,10 @@ export function validateNonInteractiveOptions(
     getUI().log.error(
       `${label} mode requires --install-dir (directory to install in)`,
     );
+    emitWizardError({
+      code: ErrorCodes.ArgsMissingInstallDir,
+      message: `${label} mode requires --install-dir`,
+    });
     process.exit(1);
   }
 }
@@ -149,7 +158,10 @@ export function runNonInteractive(
       localPosthog: session.baseUrl === POSTHOG_LOCAL_URL,
     });
     if (localServicesError) {
-      await wizardAbort({ message: localServicesError });
+      await wizardAbort({
+        code: ErrorCodes.EnvLocalServicesDown,
+        message: localServicesError,
+      });
       return;
     }
 
@@ -215,9 +227,18 @@ export function runNonInteractive(
           setSkillId: (skillId: string | null) => {
             session.skillId = skillId;
           },
-          setUnsupportedVersion: () => undefined,
+          setUnsupportedVersion: (info: {
+            current: string;
+            minimum: string;
+            docsUrl: string;
+          }) => {
+            session.unsupportedVersion = info;
+          },
           addDiscoveredFeature: () => undefined,
           setDetectionComplete: () => undefined,
+          setPosthogSdkDetected: (detected: boolean) => {
+            session.posthogSdkDetected = detected;
+          },
         };
         for (const step of config.steps) {
           if (step.onReady) {
@@ -228,19 +249,54 @@ export function runNonInteractive(
         const detectError = session.frameworkContext.detectError as
           | { kind: string; [k: string]: unknown }
           | undefined;
-        if (detectError) {
+        if (session.unsupportedVersion) {
+          const { current, minimum, docsUrl } = session.unsupportedVersion;
+          const message = `Detected framework version ${current} is not supported. Minimum supported version is ${minimum}.`;
           await settleStream(RunPhase.Error, {
             kind: OutroKind.Error,
-            message: `Prerequisites not met: ${detectError.kind}`,
+            message,
+            errorCode: ErrorCodes.DetectUnsupportedVersion,
           });
           await wizardAbort({
-            message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
+            code: ErrorCodes.DetectUnsupportedVersion,
+            message: `${message}\n\nSee ${docsUrl}`,
+            error: new WizardError(
+              `${config.id} unsupported framework version`,
+              {
+                integration: config.id,
+                current,
+                minimum,
+              },
+              ErrorCodes.DetectUnsupportedVersion,
+            ),
+          });
+        }
+        if (detectError) {
+          const code = detectErrorCode(detectError.kind);
+          const detectKind = detectError.kind;
+          // `kind` stays in the detail: several kinds share one code, so it is
+          // the only thing telling a host which precondition actually failed.
+          const detail = { ...detectError };
+          await settleStream(RunPhase.Error, {
+            kind: OutroKind.Error,
+            message: `Prerequisites not met: ${detectKind}`,
+            errorCode: code,
+            errorDetail: detail,
+          });
+          await wizardAbort({
+            code,
+            detail,
+            message: `Prerequisites not met: ${detectKind}\n\nSee ${
               runDef?.docsUrl ?? POSTHOG_DOCS_URL
             }`,
-            error: new WizardError(`${config.id} prerequisites failed`, {
-              integration: config.id,
-              detect_error_kind: detectError.kind,
-            }),
+            error: new WizardError(
+              `${config.id} prerequisites failed`,
+              {
+                integration: config.id,
+                detect_error_kind: detectKind,
+              },
+              code,
+            ),
           });
         }
       }
@@ -265,13 +321,19 @@ export function runNonInteractive(
       await settleStream(RunPhase.Error, {
         kind: OutroKind.Error,
         message: errorMessage,
+        errorCode: ErrorCodes.InternalUnhandled,
       });
       await wizardAbort({
+        code: ErrorCodes.InternalUnhandled,
         message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,
       });
     }
-  })().catch(() => {
+  })().catch((error: unknown) => {
+    emitWizardError({
+      code: ErrorCodes.InternalUnhandled,
+      message: error instanceof Error ? error.message : String(error),
+    });
     process.exit(1);
   });
 }

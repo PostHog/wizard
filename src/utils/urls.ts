@@ -114,3 +114,18 @@ const PROD_OAUTH_URL = 'https://oauth.posthog.com';
  */
 export const getOAuthUrl = (baseUrl?: string): string =>
   resolveBaseUrl(baseUrl) ?? PROD_OAUTH_URL;
+
+/**
+ * One-click integration install/authorize deep-link. Opening it in the user's
+ * logged-in browser runs the install directly — no settings-page hunting. The
+ * one link covers fresh install, link-existing, and re-auth.
+ */
+export const getIntegrationAuthorizeUrl = (
+  appHost: string,
+  projectId: number,
+  kind: string,
+): string =>
+  `${appHost.replace(
+    /\/$/,
+    '',
+  )}/api/environments/${projectId}/integrations/authorize?kind=${kind}`;

@@ -11,6 +11,7 @@ import type { TokenUsageDelta } from '@ui/wizard-ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
+import { isTemplateEnvFileName } from '@utils/env-scan';
 import { runtimeEnv } from '@env';
 import type { AioCapture } from '@lib/agent/aio-capture';
 import {
@@ -29,6 +30,11 @@ import {
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
+import {
+  buildWizardPropertiesBlob,
+  gatewayAuth,
+  type GatewayAuth,
+} from '@lib/gateway-session';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -42,6 +48,8 @@ import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
+import { classifyAuthFailure } from '@lib/errors';
+import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -58,6 +66,7 @@ import {
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,
   claudeConfigDir,
+  createIsolatedAgentConfigDir,
 } from './stored-login';
 import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
@@ -188,6 +197,12 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /**
+   * Program this run is. Required and typed rather than read out of
+   * `wizardMetadata`: its absence fails the run at mint, and a wrong value bills
+   * another program's budget, so neither should depend on an optional string bag.
+   */
+  programId: string;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -321,6 +336,11 @@ type AgentRunConfig = {
   capture?: AioCapture;
   /** Scan-triage classifier, built from this run's gateway auth. */
   triageProvider: LLMProvider;
+  /**
+   * Resolved gateway posture for this run (v2 scoped token or legacy OAuth);
+   * selects the ANTHROPIC_CUSTOM_HEADERS shape for the SDK subprocess.
+   */
+  gatewayAuth: GatewayAuth;
   /** Program id, for the program-axis commandments. */
   program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
@@ -365,27 +385,38 @@ export function isWarlockDisabled(): boolean {
 }
 
 /**
- * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS, which always
- * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
- * Anthropic 5xx, plus any wizard metadata/flags.
+ * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS.
+ * The header shape follows the gateway edition. Legacy (Python gateway):
+ * per-key `X-POSTHOG-PROPERTY-*`/`X-POSTHOG-FLAG-*` plus the explicit
+ * `x-posthog-use-bedrock-fallback` opt-in. v2 (Go ai-gateway): one
+ * `X-PostHog-Properties` JSON blob. Bedrock fallback is native there, and
+ * per-key metadata headers are not read.
  */
 export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
+  auth?: GatewayAuth,
 ): string {
   const headers = createCustomHeaders();
-  headers.add('x-posthog-use-bedrock-fallback', 'true');
-  for (const [key, value] of Object.entries(wizardMetadata)) {
+  if (auth?.edition === 'v2') {
     headers.add(
-      key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
-        ? key
-        : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`,
-      value,
+      'X-PostHog-Properties',
+      buildWizardPropertiesBlob(wizardMetadata, wizardFlags, auth.teamId),
     );
-  }
-  for (const [flagKey, variant] of Object.entries(wizardFlags)) {
-    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
-    headers.addFlag(flagKey, variant);
+  } else {
+    headers.add('x-posthog-use-bedrock-fallback', 'true');
+    for (const [key, value] of Object.entries(wizardMetadata)) {
+      headers.add(
+        key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
+          ? key
+          : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`,
+        value,
+      );
+    }
+    for (const [flagKey, variant] of Object.entries(wizardFlags)) {
+      if (!flagKey.toLowerCase().startsWith('wizard')) continue;
+      headers.addFlag(flagKey, variant);
+    }
   }
   const encoded = headers.encode();
   logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
@@ -447,10 +478,7 @@ export function wizardCanUseTool(
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
-      basename,
-    );
-    if (basename.startsWith('.env') && !isEnvExample) {
+    if (basename.startsWith('.env') && !isTemplateEnvFileName(basename)) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -516,16 +544,24 @@ export async function initializeAgent(
 
   try {
     // Configure model routing (inherited by the SDK subprocess). All model
-    // calls route through the PostHog LLM gateway, authed with the user's
-    // OAuth token.
+    // calls route through the PostHog LLM gateway. gatewayAuth resolves the
+    // v2 posture (a server-minted scoped token + the Go gateway URL) and
+    // falls back to the legacy posture (the user's OAuth token + the Python
+    // gateway) when the backend doesn't mint.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const gatewayUrl = config.host.gatewayUrl;
+    const auth = await gatewayAuth(
+      config.host,
+      config.posthogApiKey,
+      config.programId,
+    );
+    const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+    process.env.ANTHROPIC_AUTH_TOKEN = auth.token;
 
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
+    logToFile('Gateway edition:', auth.edition);
 
     // Same values the env vars above carry, handed over explicitly so triage
     // never has to read them back out of the environment. The run tags ride
@@ -534,7 +570,9 @@ export async function initializeAgent(
     const triageProvider = createTriageLLMProvider(
       {
         baseURL: gatewayUrl,
-        authToken: config.posthogApiKey,
+        authToken: auth.token,
+        edition: auth.edition,
+        teamId: auth.teamId,
         wizardMetadata: {
           ...(config.wizardMetadata ?? {}),
           call_type: CallType.yaraTriage,
@@ -552,16 +590,17 @@ export async function initializeAgent(
         : '(missing)',
     );
 
-    // A pre-existing Claude login (the SDK's "/login managed key") can outrank
-    // the gateway token we just set and get sent to the PostHog gateway, which
-    // 401s it. The settings-conflict scan can't see it, so detect + report it
-    // here — this is the leading suspect behind the gateway auth_failed reports.
+    // A pre-existing Claude login (the SDK's "/login managed key") could outrank
+    // the gateway token and 401 the run. The subprocess now gets an isolated,
+    // empty CLAUDE_CONFIG_DIR at the spawn site (see below), so a stored login
+    // in `~/.claude` can no longer reach the gateway. Still detect + log it to
+    // measure how often the isolation saves a run.
     const storedLogin = detectStoredClaudeLogin();
     if (hasStoredClaudeLogin(storedLogin)) {
       logToFile(
         `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
-          `keychain=${storedLogin.keychain}). It can outrank the wizard's gateway token ` +
-          `and cause a 401 — 'claude auth logout' clears it.`,
+          `keychain=${storedLogin.keychain}). The isolated CLAUDE_CONFIG_DIR keeps it out of ` +
+          `the agent run, so it no longer outranks the wizard's gateway token.`,
       );
       analytics.wizardCapture('claude stored login detected', {
         credentials_file: storedLogin.credentialsFile,
@@ -581,7 +620,7 @@ export async function initializeAgent(
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
-      'posthog-wizard': {
+      [POSTHOG_MCP_SERVER_NAME]: {
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
@@ -632,6 +671,7 @@ export async function initializeAgent(
       suppressTaskRender: !!config.orchestrator,
       capture: config.capture,
       triageProvider,
+      gatewayAuth: auth,
       program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
@@ -987,9 +1027,17 @@ export async function runAgent(
           // Gateway routing — injected explicitly (initializeAgent set these on
           // process.env for in-process readers; the strip above removed them
           // from the inherited copy, so re-add the wizard's own values here).
-          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // From this run's resolved auth, not process.env: concurrent task
+          // runs each write those globals, so re-reading them here would hand
+          // a subprocess whichever run initialized last.
+          ANTHROPIC_BASE_URL: agentConfig.gatewayAuth.gatewayUrl,
+          ANTHROPIC_AUTH_TOKEN: agentConfig.gatewayAuth.token,
+          CLAUDE_CODE_OAUTH_TOKEN: agentConfig.gatewayAuth.token,
+          // Point the binary at an empty config dir so it cannot resolve a
+          // stored Claude login (a `~/.claude/.credentials.json`) and send that
+          // to the gateway, which 401s it. The env token above is then the only
+          // credential it can find. See stored-login.ts.
+          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.
@@ -1001,10 +1049,11 @@ export async function runAgent(
           // blocking behavior so the SDK waits up to 5s for MCP connect before
           // turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // PostHog gateway headers: Bedrock fallback + property/flag tags.
+          // PostHog gateway headers, shaped for the run's gateway edition.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             agentConfig.wizardMetadata ?? {},
             agentConfig.wizardFlags ?? {},
+            agentConfig.gatewayAuth,
           ),
         },
         canUseTool: (toolName: string, input: unknown) => {
@@ -1044,7 +1093,7 @@ export async function runAgent(
         hooks: {
           PreToolUse: warlockDisabled
             ? []
-            : createPreToolUseYaraHooks(triageProvider),
+            : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
           PostToolUse: warlockDisabled
             ? []
             : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
@@ -1151,29 +1200,50 @@ export async function runAgent(
         // Claude Code.
         const authError = buildAuthErrorContext(
           options.installDir,
-          process.env.ANTHROPIC_BASE_URL ?? '',
+          agentConfig.gatewayAuth.gatewayUrl,
           os.homedir(),
           signals.apiKeySource,
         );
-        logToFile('Agent error: 401, showing auth error screen', authError);
+        // A refresh that already failed on a dead grant explains this 401
+        // outright; without it the screen falls through to generic key-type
+        // and scope advice that cannot apply.
+        const sessionExpired = isGrantRevoked();
+        const authCode = classifyAuthFailure({
+          hasSettingsConflict: authError.hasSettingsConflict,
+          usingManagedLogin: authError.usingManagedLogin,
+          sessionExpired,
+          apiKey: options.apiKey,
+          gatewayRegion: authError.region,
+          sessionRegion: options.cloudRegion,
+        });
+        logToFile('Agent error: 401, showing auth error screen', {
+          ...authError,
+          sessionExpired,
+        });
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
           conflicts: authError.conflicts,
           usingManagedLogin: authError.usingManagedLogin,
           credentialPlaces: authError.credentialPlaces,
+          sessionExpired,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
+          code: authCode,
           message: 'Authentication failed (401)',
-          error: new WizardError('Authentication failed', {
-            hasSettingsConflict: authError.hasSettingsConflict,
-            conflictSources: authError.conflictSources,
-            conflictKeys: authError.conflictKeys,
-            gatewayUrl: authError.gatewayUrl,
-            region: authError.region,
-            usingManagedLogin: authError.usingManagedLogin,
-            apiKeySource: authError.apiKeySource,
-          }),
+          error: new WizardError(
+            'Authentication failed',
+            {
+              hasSettingsConflict: authError.hasSettingsConflict,
+              conflictSources: authError.conflictSources,
+              conflictKeys: authError.conflictKeys,
+              gatewayUrl: authError.gatewayUrl,
+              region: authError.region,
+              usingManagedLogin: authError.usingManagedLogin,
+              apiKeySource: authError.apiKeySource,
+            },
+            authCode,
+          ),
         });
       }
 
@@ -1338,6 +1408,13 @@ export enum TaskTool {
  * `'Agent'` to opt into subagent dispatch). Skills and PostHog MCP tools
  * are enabled separately (skills option / mcpServers).
  */
+/**
+ * The PostHog MCP server's name in `mcpServers`, and so the prefix of the tool
+ * the agent calls it by (`mcp__posthog-wizard__exec`). Named once because the
+ * init handler has to recognise this server in the SDK's status report.
+ */
+export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
+
 export const BASE_ALLOWED_TOOLS: readonly string[] = [
   'Read',
   'Write',
@@ -1550,6 +1627,55 @@ function extractTokenUsageDelta(message: SDKMessage): TokenUsageDelta | null {
   };
 }
 
+/** A server entry in the SDK's `system/init` report. */
+type McpServerStatus = { name: string; status: string };
+
+/**
+ * Report what the SDK did with our MCP servers, and capture it when the PostHog
+ * one did not come up.
+ *
+ * The SDK connects `mcpServers` itself and drops a server it cannot reach — the
+ * run continues, the tool is simply absent, and the agent finds out only by not
+ * having it. What that looks like from outside is a run that collects every
+ * credential and then tells the user to do the work by hand.
+ *
+ * The pi harness has captured `mcp setup failed` for a while (`harness/pi`), so
+ * a pi run that lost the tool says so. The anthropic harness never did, even
+ * though the SDK hands it a per-server verdict on the init message and this
+ * code already had it in hand — it went to the log file and no further. A
+ * warehouse run with zero creates therefore cost three investigations to
+ * explain. The same event name and property shape as pi's, so one query covers
+ * both harnesses.
+ */
+export function reportMcpSetup(message: {
+  mcp_servers?: McpServerStatus[];
+  tools?: string[];
+}): void {
+  const servers = message.mcp_servers ?? [];
+  const posthog = servers.find((s) => s.name === POSTHOG_MCP_SERVER_NAME);
+  const toolPrefix = `mcp__${POSTHOG_MCP_SERVER_NAME}__`;
+  const hasTool = (message.tools ?? []).some((t) => t.startsWith(toolPrefix));
+
+  // Connected and the tool is there — nothing to say.
+  if (posthog?.status === 'connected' && hasTool) return;
+
+  const reason = !posthog
+    ? 'server missing from the SDK init report'
+    : posthog.status !== 'connected'
+    ? `server status: ${posthog.status}`
+    : 'server connected but registered no tool';
+
+  logToFile(`[anthropic] PostHog MCP unavailable — ${reason}`);
+  analytics.wizardCapture('mcp setup failed', {
+    harness: 'anthropic',
+    scope: 'run',
+    error: reason,
+    // The whole roster, so a run that lost several servers is one event and
+    // the PostHog one can still be told apart.
+    mcp_servers: servers.map((s) => `${s.name}:${s.status}`).join(','),
+  });
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
@@ -1754,6 +1880,7 @@ function handleSDKMessage(
           mcpServers: message.mcp_servers,
           apiKeySource: message.apiKeySource,
         });
+        reportMcpSetup(message);
       }
       break;
     }

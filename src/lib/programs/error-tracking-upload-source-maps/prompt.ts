@@ -55,18 +55,27 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
    Use the wizard-tools MCP server. Reuse the env file the skill tells you to
    pick — the prerequisite PostHog integration usually already wrote
    POSTHOG_* vars to one, so seed your keys alongside them.
-   - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly).
+   - First call check_env_keys with the key names and that file as filePath.
+     It answers { status: "present" | "missing", foundIn: [paths] } per key —
+     names and paths only, never values, so don't read the file directly.
+     "present" means a real env file sets the key; a key found only in a
+     committed template (.env.example and friends) reads as "missing",
+     because a template documents a key rather than setting it.
    - Env tool path rule: ${envFilePathGuidance}
    - Then call set_env_values, passing the STEP 1 secretRef as a value
-     object, not a literal string:
+     object, not a literal string. Take the three variable NAMES from the
+     skill's per-uploader list in "Write credentials to the env file" — they
+     differ by uploader, and only the shape below is fixed:
        values: {
-         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
-         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${uiHost}"
+         "<key var for the uploader you wired>": { secretRef: "<the ref from STEP 1>" },
+         "<project id var>": "${projectId}",
+         "<host var>": "${uiHost}"
        }
-   Variable names follow the skill's per-uploader conventions. The wizard
-   resolves the ref locally before writing, so you never see the key value.`;
+     Write that one set only. Do not also write another uploader's variables
+     as a fallback — a credential nothing reads is an unused secret sitting
+     in the user's env file.
+   The wizard resolves the ref locally before writing, so you never see the
+   key value.`;
 
   return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
 
