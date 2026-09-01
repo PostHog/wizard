@@ -64,6 +64,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       if (program === 'error-tracking-upload-source-maps') continue; // pinned below
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
+      if (program === 'error-tracking') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -105,6 +106,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
     {
       name: 'binds replay-vision to the orchestrator sequence',
       ctx: { program: 'replay-vision', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds error-tracking to the orchestrator sequence',
+      ctx: { program: 'error-tracking', flags: {} },
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.anthropic,

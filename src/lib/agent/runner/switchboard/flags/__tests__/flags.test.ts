@@ -292,10 +292,10 @@ describe('isolation — everything on at once', () => {
           model: GPT5_6_SOL_MODEL,
           thinkingLevel: 'medium',
         });
-      } else if (program === 'replay-vision') {
-        // Orchestrator from its OWN binding, not the flag — the
-        // wizard-orchestrator experiment does not cover this program, so it
-        // lands here whether the flag is on or off. Anthropic, not pi.
+      } else if (program === 'replay-vision' || program === 'error-tracking') {
+        // Orchestrator from their OWN bindings, not the flag — the
+        // wizard-orchestrator experiment does not cover these programs, so
+        // they land here whether the flag is on or off. Anthropic, not pi.
         expect(resolved).toEqual({
           ...LINEAR_ANTHROPIC_DEFAULT,
           sequence: Sequence.orchestrator,

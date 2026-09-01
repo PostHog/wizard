@@ -251,6 +251,25 @@ export const REPLAY_VISION_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
+ * Extra scopes the error-tracking program needs on top of
+ * `WIZARD_OAUTH_SCOPES`.
+ *   • error_tracking:read — the flow's report task reads symbol sets and
+ *     issue state through `posthog_exec` to tell the user where to verify
+ *     that captured exceptions actually land.
+ *   • product_enablement:write — the report task turns on the Error Tracking
+ *     product (`products-enable`) so the captured exceptions have a UI to
+ *     land in; the server owns the enable recipe.
+ *
+ * No OAuth-ceiling edit needed — both are unprivileged public scope objects
+ * covered by the apps' `@default` sentinel, and self-driving already requests
+ * both.
+ */
+export const ERROR_TRACKING_SCOPE_ADDITIONS = [
+  'error_tracking:read',
+  'product_enablement:write',
+] as const;
+
+/**
  * Per-program scope additions, layered on top of `WIZARD_OAUTH_SCOPES`.
  *
  * Programs not listed here request the unchanged base set. Use this
@@ -280,6 +299,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   ],
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
   'replay-vision': REPLAY_VISION_SCOPE_ADDITIONS,
+  'error-tracking': ERROR_TRACKING_SCOPE_ADDITIONS,
 };
 
 /**
