@@ -10,10 +10,23 @@
 import { useEffect } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
+import type { WizardSession } from '@lib/wizard-session';
 import { fetchGithubConnected } from '@lib/api';
+import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
 
 const POLL_INTERVAL_MS = 3000;
+
+// Provisioning signups have no browser login, so the install link alone strands them on a login wall.
+export async function fetchSignupLoginUrl(
+  session: WizardSession,
+): Promise<string | null> {
+  if (!session.signup || !session.credentials) return null;
+  return requestDeepLink(
+    session.credentials.accessToken,
+    session.credentials.host,
+  );
+}
 
 export function useGithubConnection(store: WizardStore): void {
   const credentials = store.session.credentials;

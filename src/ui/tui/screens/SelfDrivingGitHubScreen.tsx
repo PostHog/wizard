@@ -23,7 +23,10 @@ import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
-import { useGithubConnection } from '@ui/tui/hooks/useGithubConnection';
+import {
+  useGithubConnection,
+  fetchSignupLoginUrl,
+} from '@ui/tui/hooks/useGithubConnection';
 import { OutroKind } from '@lib/wizard-session';
 import {
   GITHUB_REQUIRED_BODY,
@@ -67,6 +70,15 @@ export const SelfDrivingGitHubScreen = ({
   // Once the install link has been opened, re-offering it as the headline CTA
   // is confusing — the poll flips the screen on its own when the install lands.
   const [installOpened, setInstallOpened] = useState(false);
+
+  // One-time login link for provisioning signups, whose browser holds no session for the install link.
+  const [loginUrl, setLoginUrl] = useState<string | null>(null);
+  const loginUrlRequested = useRef(false);
+  useEffect(() => {
+    if (loginUrlRequested.current) return;
+    loginUrlRequested.current = true;
+    void fetchSignupLoginUrl(store.session).then(setLoginUrl);
+  }, [store]);
 
   // Impression fires once the connected state is known, so `already_connected`
   // is real: users who arrive connected segment apart from users who connect
@@ -164,6 +176,15 @@ export const SelfDrivingGitHubScreen = ({
               <Text color="cyan">{Icons.diamond} </Text>
               Grant it the repos you want Self-driving to work with — include
               this project&apos;s repo so it can also watch its issues.
+            </Text>
+          </Box>
+        )}
+
+        {loginUrl && (
+          <Box marginTop={1}>
+            <Text dimColor>
+              {'Log in to your new account first: '}
+              <Text color="cyan">{loginUrl}</Text>
             </Text>
           </Box>
         )}
