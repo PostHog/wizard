@@ -1,7 +1,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { analytics } from '@utils/analytics';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn() },
+}));
 import {
   applyComplete,
   applyEnqueue,
@@ -56,6 +61,28 @@ describe('checkEnqueueGuards', () => {
   it('allows a valid enqueue', () => {
     const r = checkEnqueueGuards(ctx, { type: 'init', reason: 'x' });
     expect(r).toEqual({ ok: true });
+  });
+
+  it('rejects an enqueue that pins a non-allow-listed model', () => {
+    const r = checkEnqueueGuards(ctx, {
+      type: 'init',
+      reason: 'x',
+      model: 'openai/gpt-5',
+    });
+    expect(r).toMatchObject({ ok: false, guard: 'invalid-model' });
+  });
+
+  it('allows an allow-listed model override and an omitted model', () => {
+    expect(
+      checkEnqueueGuards(ctx, {
+        type: 'init',
+        reason: 'x',
+        model: 'openai/gpt-5.6-terra',
+      }),
+    ).toEqual({ ok: true });
+    expect(checkEnqueueGuards(ctx, { type: 'capture', reason: 'x' })).toEqual({
+      ok: true,
+    });
   });
 
   it('refuses to grow the queue past the runaway cap', () => {
@@ -119,6 +146,64 @@ describe('apply functions', () => {
     expect(r.ok).toBe(true);
     expect(store.get(t.id)?.status).toBe('done');
     expect(store.readHandoff(t.id)?.did).toBe('added sdk');
+  });
+
+  it("complete_task status 'not needed' marks the task not needed, satisfying dependents", () => {
+    const t = store.enqueue({ type: 'install' });
+    const dependent = store.enqueue({ type: 'init', dependsOn: [t.id] });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
+    const r = applyComplete(ctx, {
+      status: 'not needed',
+      handoff: { goals: 'g', did: 'nothing to do', forNextAgent: 'n' },
+    });
+    expect(r.ok).toBe(true);
+    expect(store.get(t.id)?.status).toBe('not needed');
+    expect(store.nextRunnable().map((task) => task.id)).toContain(dependent.id);
+    // An agent deciding a step does not apply is a different fact from a user
+    // declining one; the skipped-task event has to be able to tell them apart.
+    expect(store.get(t.id)?.skipReason).toBe('agent-not-needed');
+  });
+
+  it("keeps the agent's own words out of the skip reason", () => {
+    // The handoff is free text an LLM wrote, on a flow that reaches live
+    // database and API credentials. It stays in the run's queue.json, where the
+    // report reads it, and out of telemetry, which has no redaction pass.
+    const t = store.enqueue({ type: 'warehouse' });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
+    applyComplete(ctx, {
+      status: 'not needed',
+      handoff: {
+        goals: 'g',
+        did: 'nothing — postgres://user:hunter2@db.internal was unreachable',
+        forNextAgent: 'n',
+      },
+    });
+
+    expect(store.get(t.id)?.skipReason).toBe('agent-not-needed');
+    expect(JSON.stringify(store.get(t.id)?.skipReason)).not.toContain(
+      'hunter2',
+    );
+  });
+
+  it('a remark is captured against its task type, never left in the handoff', () => {
+    const t = store.enqueue({ type: 'install' });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
+    applyComplete(ctx, {
+      status: 'done',
+      handoff: { goals: 'g', did: 'd', forNextAgent: 'n' },
+      remark: 'the docs omitted the peer dependency',
+    });
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator remark',
+      {
+        task_type: 'install',
+        remark: 'the docs omitted the peer dependency',
+      },
+    );
+    expect(store.readHandoff(t.id)).not.toHaveProperty('remark');
   });
 
   it('read_handoffs returns a dependency handoff for the running task', () => {

@@ -3,13 +3,36 @@ import {
   ANALYTICS_HOST_URL,
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
+  WIZARD_FLAG_KEYS,
 } from '@lib/constants';
-import type { WizardSession } from '@lib/wizard-session';
+import {
+  reportableDiscoveredFeatures,
+  type WizardSession,
+} from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
+import { VERSION } from '@lib/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
+
+/**
+ * The invocation, reduced to flag-safe strings: the command word (first
+ * positional, 'default' for the bare flow) and the sorted option NAMES.
+ * Option values never leave the machine — they carry paths, emails, keys.
+ */
+function invocationProperties(): { command: string; cli_flags: string } {
+  const args = process.argv.slice(2);
+  const command = args.find((a) => !a.startsWith('-')) ?? 'default';
+  const flags = [
+    ...new Set(
+      args
+        .filter((a) => a.startsWith('--'))
+        .map((a) => a.slice(2).split('=')[0]),
+    ),
+  ].sort();
+  return { command, cli_flags: flags.join(',') };
+}
 
 /**
  * Extract a standard property bag from the current session.
@@ -18,12 +41,21 @@ import { applyCiFlagOverrides } from './ci-flag-overrides';
 export function sessionProperties(
   session: WizardSession,
 ): Record<string, unknown> {
+  // reportableDiscoveredFeatures() owns the consent decision; this file
+  // never needs to know what `scanConsent` means, only that the result
+  // might be absent. An absent key is unambiguous, while an empty array
+  // would read as "we looked and found nothing" instead of "not reported".
+  const discoveredFeatures = reportableDiscoveredFeatures(session);
+
   return {
     integration: session.integration,
     detected_framework: session.detectedFrameworkLabel,
     typescript: session.typescript,
     project_id: session.credentials?.projectId,
-    discovered_features: session.discoveredFeatures,
+    ...(discoveredFeatures !== undefined
+      ? { discovered_features: discoveredFeatures }
+      : {}),
+    scan_consent: session.scanConsent,
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
   };
@@ -48,6 +80,15 @@ export function groupsFromUser(
   return groups;
 }
 
+const WIZARD_FLAGS: ReadonlySet<string> = new Set(WIZARD_FLAG_KEYS);
+
+// Widen back to the SDK's shape — a filter on `true` never matches `'true'`.
+function flagResponseValue(value: string): string | boolean {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return value;
+}
+
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
@@ -58,8 +99,10 @@ export class Analytics {
   private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
+  private activeFlagPayloads: Record<string, unknown> = {};
   private groups: Record<string, string> = {};
   private personProperties: Record<string, string> = {};
+  private terminalEventSent = false;
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -82,6 +125,10 @@ export class Analytics {
           void $process_person_profile;
           event.properties = { ...this.tags, ...properties };
         }
+        // The SDK captures this one itself, bypassing capture(), so tags merge here.
+        if (event.event === '$feature_flag_called') {
+          event.properties = { ...this.tags, ...(event.properties ?? {}) };
+        }
         return event;
       },
     });
@@ -95,6 +142,18 @@ export class Analytics {
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.tags.run_surface = RUN_SURFACE;
+
+    // The build this run came from. Already sent as a flag-evaluation person
+    // property; tagging it makes every event attributable to a release, so a
+    // regression can be bounded to the versions that carry it.
+    this.tags.version = VERSION;
+
+    // Cloud runs only: the task run that owns the sandbox. Without these the
+    // wizard's events and the run that launched it are two unrelated streams,
+    // since run_id above is minted per process and never leaves the wizard.
+    // Left unset for local runs so the properties stay absent rather than null.
+    if (TASK_RUN_ID) this.tags.task_run_id = TASK_RUN_ID;
+    if (TASK_ID) this.tags.task_id = TASK_ID;
 
     this.anonymousId = uuidv4();
 
@@ -161,11 +220,27 @@ export class Analytics {
     // intro screen reads the tools-menu flag) was anonymous — drop it so the
     // next read re-evaluates as this user.
     this.activeFlags = null;
+    this.activeFlagPayloads = {};
   }
 
   /** Person properties sent with flag evaluation: app name plus the user's. */
   private flagPersonProperties(): Record<string, string> {
-    return { $app_name: this.appName, ...this.personProperties };
+    // Environment facts flag conditions can scope on — evaluation-time only,
+    // never persisted onto the person. `version` gates an experiment to
+    // releases that implement it (a condition on a property older builds
+    // don't send silently never matches them); `run_surface`/`build` scope
+    // by invocation surface; `command`/`cli_flags` by subcommand; `os`/
+    // `node_major` by platform.
+    return {
+      $app_name: this.appName,
+      version: VERSION,
+      run_surface: RUN_SURFACE,
+      build: String(this.tags.build ?? 'dev'),
+      os: process.platform,
+      node_major: process.versions.node.split('.')[0],
+      ...invocationProperties(),
+      ...this.personProperties,
+    };
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
@@ -190,9 +265,33 @@ export class Analytics {
       event: eventName,
       properties: {
         ...this.tags,
+        ...this.wizardFlagFeatureProperties(),
         ...properties,
       },
     });
+  }
+
+  groupIdentify(
+    groupType: string,
+    groupKey: string,
+    properties: Record<string, unknown>,
+  ) {
+    this.client.groupIdentify({ groupType, groupKey, properties });
+  }
+
+  // Built from the resolved map, not the SDK snapshot: a CI-forced variant must own its events.
+  private wizardFlagFeatureProperties(): Record<string, unknown> {
+    if (this.activeFlags === null) return {};
+    const props: Record<string, unknown> = {};
+    const active: string[] = [];
+    for (const [key, value] of Object.entries(this.activeFlags)) {
+      if (!WIZARD_FLAGS.has(key)) continue;
+      const resolved = flagResponseValue(value);
+      props[`$feature/${key}`] = resolved;
+      if (resolved !== false) active.push(key);
+    }
+    if (active.length > 0) props.$active_feature_flags = active.sort();
+    return props;
   }
 
   /**
@@ -213,29 +312,18 @@ export class Analytics {
     await this.client.shutdown();
   }
 
-  async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
-    try {
-      const distinctId = this.distinctId ?? this.anonymousId;
-      return await this.client.getFeatureFlag(flagKey, distinctId, {
-        sendFeatureFlagEvents: true,
-        personProperties: this.flagPersonProperties(),
-      });
-    } catch (error) {
-      debug('Failed to get feature flag:', flagKey, error);
-      return undefined;
-    }
-  }
-
   /**
    * Evaluate all feature flags for the current user at the start of a run.
    * Result is cached; subsequent calls in the same run return the same map.
    * Returns flag key -> string value (booleans become 'true'/'false').
    */
+  // Only a getFlag read records an exposure; the bulk response records none.
   async getAllFlagsForWizard(): Promise<Record<string, string>> {
     if (this.activeFlags !== null) {
       return this.activeFlags;
     }
     const out: Record<string, string> = {};
+    const payloads: Record<string, unknown> = {};
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
       logToFile('[flags] evaluating as', {
@@ -243,13 +331,15 @@ export class Analytics {
         identified: this.distinctId !== undefined,
         personProperties: this.flagPersonProperties(),
       });
-      const result = await this.client.getAllFlagsAndPayloads(distinctId, {
+      const evaluation = await this.client.evaluateFlags(distinctId, {
         personProperties: this.flagPersonProperties(),
       });
-      const flags = result.featureFlags ?? {};
-      for (const [key, value] of Object.entries(flags)) {
+      for (const key of WIZARD_FLAG_KEYS) {
+        const value = evaluation.getFlag(key);
         if (value === undefined) continue;
-        out[key] = typeof value === 'boolean' ? String(value) : String(value);
+        out[key] = String(value);
+        const payload = evaluation.getFlagPayload(key);
+        if (payload !== undefined) payloads[key] = payload;
       }
     } catch (error) {
       debug('Failed to get all feature flags:', error);
@@ -261,15 +351,31 @@ export class Analytics {
     // Outside the fetch guard on purpose: a malformed CI override must fail
     // the run loudly, and a valid one applies even when the fetch failed —
     // CI routing stays deterministic either way.
-    this.activeFlags = applyCiFlagOverrides(out);
+    const merged = applyCiFlagOverrides(out, payloads);
+    this.activeFlags = merged.flags;
+    this.activeFlagPayloads = merged.payloads;
     logToFile('[flags] evaluated', this.activeFlags);
     return this.activeFlags;
+  }
+
+  /** Flag payloads from the same snapshot; empty until the flags are fetched. */
+  getWizardFlagPayloads(): Record<string, unknown> {
+    return this.activeFlagPayloads;
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
     if (Object.keys(this.tags).length === 0) {
       return;
     }
+
+    // First status wins. The interrupt fallback in start-tui fires
+    // shutdown('cancelled') on every TUI teardown; without this guard a run
+    // that already reported 'success' would emit a second, contradicting
+    // terminal event when the user dismisses the outro.
+    if (this.terminalEventSent) {
+      return;
+    }
+    this.terminalEventSent = true;
 
     this.client.capture({
       distinctId: this.distinctId ?? this.anonymousId,

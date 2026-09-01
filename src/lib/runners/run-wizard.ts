@@ -9,7 +9,11 @@ import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
+import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -17,7 +21,8 @@ type Step = ProgramConfig['steps'][number];
 
 /** The session a run step's agent runs in: scoped to the step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged. */
+ * A step without `targetDir` runs in the live session, unchanged.
+ * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
   step: Step,
   live: WizardSession,
@@ -80,13 +85,31 @@ export function runWizard(
         '@lib/task-stream/destinations/posthog'
       );
 
+      // Before the TUI mounts: once Ink owns the alt screen, anything written
+      // to it is wiped on unmount (see the catch block below), so an abort here
+      // would leave the user on a loading screen with no message.
+      const local = getLocalDev();
+      const localServicesError = await checkLocalServices({
+        ...local,
+        // An explicit --base-url wins over --local-posthog (see buildSession),
+        // so don't probe :8010 when one was given.
+        localPosthog: local.localPosthog && !options.baseUrl,
+      });
+      if (localServicesError) {
+        const { wizardAbort } = await import('@utils/wizard-abort');
+        await wizardAbort({ message: localServicesError });
+        return;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tui = startTUI(WIZARD_VERSION, config.id as any);
       const activeTui = tui;
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
+        localDev: options.localDev as boolean | undefined,
         localMcp: options.localMcp as boolean | undefined,
+        localPosthog: options.localPosthog as boolean | undefined,
         installDir,
         ci: false,
         signup: options.signup as boolean | undefined,
@@ -101,6 +124,7 @@ export function runWizard(
         sequence: options.sequence as Sequence | undefined,
         model: options.model as string | undefined,
         integrate: options.integrate as boolean | undefined,
+        captureAio: options.captureAio as boolean | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -121,6 +145,9 @@ export function runWizard(
             onError: (err) => logToFile('[task-stream-push]', err.message),
           }),
         ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         enabled: taskStreamEnabled,
       });
       const activeStream = taskStream;
@@ -253,6 +280,10 @@ export function runWizard(
       console.error('Wizard run failed:', err);
       // eslint-disable-next-line no-console
       console.error(`Full logs: ${getLogFilePath()}`);
+      emitWizardError({
+        code: ErrorCodes.InternalUnhandled,
+        message: err instanceof Error ? err.message : String(err),
+      });
       process.exit(1);
     }
   })();

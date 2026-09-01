@@ -12,19 +12,26 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '@ui/tui/store';
 import {
   ConfirmationInput,
-  PickerMenu,
   GroupedPickerMenu,
+  PickerMenu,
 } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import type {
   McpInstaller,
   McpClientInfo,
+  McpClientResult,
 } from '@ui/tui/services/mcp-installer';
+import {
+  McpClientStatus,
+  namesWithStatus,
+  isOk,
+  summarizeFailure,
+} from '@steps/add-mcp-server-to-clients/results';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
@@ -42,8 +49,8 @@ interface McpScreenProps {
 enum Phase {
   Detecting = 'detecting',
   Ask = 'ask',
-  Pick = 'pick',
   FeatureSelect = 'feature-select',
+  Pick = 'pick',
   Connector = 'connector',
   Working = 'working',
   Done = 'done',
@@ -55,12 +62,74 @@ const markDone = (
   outcome: McpOutcome,
   clients: string[] = [],
   featuresSelected?: 'all' | string[],
+  loginCommands: string[] = [],
 ) => {
-  store.setMcpComplete(outcome, clients, featuresSelected);
+  store.setMcpComplete(outcome, clients, featuresSelected, loginCommands);
+};
+
+/**
+ * The editor-owned login commands still to run after this install: fresh
+ * config entries use the client's own server name, plugin-provided servers
+ * their `plugin:` name. One entry per client.
+ */
+const pendingLoginCommands = (
+  clients: McpClientInfo[],
+  mcpResult: McpClientResult[],
+  pluginResult: McpClientResult[],
+): string[] => {
+  const commands = new Map<string, string>();
+  for (const r of pluginResult) {
+    const command = clients.find((c) => c.name === r.name)?.pluginLoginCommand;
+    if (isOk(r) && command) commands.set(r.name, command);
+  }
+  for (const r of mcpResult) {
+    const command = clients.find((c) => c.name === r.name)?.loginCommand;
+    if (r.status === McpClientStatus.Changed && command)
+      commands.set(r.name, command);
+  }
+  return [...commands.values()];
 };
 
 const reportFeatures = (features: string[]): 'all' | string[] =>
   isAllFeaturesSelected(features) ? 'all' : features;
+
+const errorText = (err: unknown): string =>
+  summarizeFailure(err instanceof Error ? err.message : String(err)) ??
+  'unknown error';
+
+/**
+ * One "✔ <title>" / "✖ <title>" block with a bullet per client, plus an optional
+ * dim explanation underneath. Rendered only when it has something to say.
+ */
+const ResultGroup = ({
+  title,
+  items,
+  color,
+  icon,
+  note,
+}: {
+  title: string;
+  items: string[];
+  color: string;
+  icon: string;
+  note?: string;
+}) => {
+  if (items.length === 0) return null;
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color={color} bold>
+        {icon} {title}
+      </Text>
+      {items.map((item, i) => (
+        <Text key={`${title}-${i}`}>
+          {' '}
+          {'•'} {item}
+        </Text>
+      ))}
+      {note && <Text dimColor> {note}</Text>}
+    </Box>
+  );
+};
 
 /**
  * Connector step prompt — Enter continues (opens the connector page). There's
@@ -76,6 +145,27 @@ const ConnectorContinue = ({ onContinue }: { onContinue: () => void }) => {
     <Text color={Colors.primary}>
       Press enter to continue {Icons.triangleRight}
     </Text>
+  );
+};
+
+/**
+ * Done-phase prompt — Enter dismisses the results screen and moves the flow on.
+ * Explicit acknowledgement instead of a timeout: the previous 2s auto-dismiss
+ * whipped past too fast to read on a normal install, especially when several
+ * result groups were stacked.
+ */
+const DoneContinue = ({ onContinue }: { onContinue: () => void }) => {
+  useInput((_input, key) => {
+    if (key.return) {
+      onContinue();
+    }
+  });
+  return (
+    <Box marginTop={1}>
+      <Text color={Colors.primary}>
+        Press enter to continue {Icons.triangleRight}
+      </Text>
+    </Box>
   );
 };
 
@@ -98,9 +188,17 @@ export const McpScreen = ({
   const [phase, setPhase] = useState<Phase>(Phase.Detecting);
   const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
-  const [resultClients, setResultClients] = useState<string[]>([]);
-  const [pluginClients, setPluginClients] = useState<string[]>([]);
-  const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
+  const [mcpResults, setMcpResults] = useState<McpClientResult[]>([]);
+  const [pluginResults, setPluginResults] = useState<McpClientResult[]>([]);
+  // Detection and the install/remove call can both blow up. Keep the reason so
+  // a crash reads as a crash instead of as "you have nothing installed" or
+  // "you selected nothing".
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  // The action that finishes the screen once the user has read the results.
+  // Held in a ref so the useInput handler inside DoneContinue can invoke the
+  // freshest closure without re-registering listeners on every render.
+  const finishFlow = useRef<null | (() => void)>(null);
 
   useEffect(() => {
     void (async () => {
@@ -113,40 +211,38 @@ export const McpScreen = ({
           setClients(detected);
           setPhase(Phase.Ask);
         }
-      } catch {
+      } catch (err) {
+        setDetectError(errorText(err));
+        // Long error text — wait for enter instead of a 3s auto-dismiss the
+        // user can't finish reading.
+        finishFlow.current = () => markDone(store, McpOutcome.Failed);
         setPhase(Phase.None);
-        setTimeout(() => markDone(store, McpOutcome.Failed), 1500);
       }
     })();
   }, [installer]); // eslint-disable-line
 
-  const proceedAfterClientPick = (
-    clientNames: string[],
-    chosenMode: 'all' | 'custom',
-  ) => {
+  // An api-key install bakes the key into the client config — no OAuth ever
+  // runs, so those flows keep the feature menus and never get a login command.
+  // OAuth flows ask nothing: access is chosen on the OAuth consent screen.
+  const oauthFlow = !store.session.apiKey;
+
+  const proceedAfterClientPick = (clientNames: string[]) => {
     setSelectedClientNames(clientNames);
 
-    // Recommended flow: install everything straight away. Browser connectors
-    // (e.g. Claude Desktop/Web) just open their connector page here, same as
-    // before — no extra screen.
-    if (chosenMode === 'all') {
-      void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
-      return;
-    }
-    if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures);
-      return;
-    }
-
-    // Customize flow: a browser connector configures its tools and features in
-    // Claude's UI, not through the wizard's feature picker. The picker keeps it
-    // mutually exclusive from local editors, so a connector selection is
-    // connector-only — show its own screen instead of the feature picker.
+    // Browser connectors just open their connector page — no extra screen.
     const isConnector = clientNames.some(
       (name) => clients.find((c) => c.name === name)?.finish,
     );
     if (isConnector) {
       setPhase(Phase.Connector);
+      return;
+    }
+    if (oauthFlow) {
+      void doInstall(clientNames);
+      return;
+    }
+    if (store.session.mcpFeatures) {
+      void doInstall(clientNames, store.session.mcpFeatures);
       return;
     }
     setPhase(Phase.FeatureSelect);
@@ -156,20 +252,7 @@ export const McpScreen = ({
     if (isRemove) {
       void doRemove();
     } else if (clients.length === 1) {
-      proceedAfterClientPick([clients[0]!.name], 'custom');
-    } else {
-      setPhase(Phase.Pick);
-    }
-  };
-
-  const handleTriStateChoice = (choice: 'all' | 'custom' | 'skip') => {
-    if (choice === 'skip') {
-      handleSkip();
-      return;
-    }
-    setInstallMode(choice);
-    if (clients.length === 1) {
-      proceedAfterClientPick([clients[0]!.name], choice);
+      proceedAfterClientPick([clients[0]!.name]);
     } else {
       setPhase(Phase.Pick);
     }
@@ -181,77 +264,81 @@ export const McpScreen = ({
 
   const doInstall = async (names: string[], features?: string[]) => {
     setPhase(Phase.Working);
-    let mcpResult: string[] = [];
-    let pluginResult: string[] = [];
+    let mcpResult: McpClientResult[] = [];
+    let pluginResult: McpClientResult[] = [];
 
     const pluginCapableSet = new Set(
       clients.filter((c) => c.supportsPlugin).map((c) => c.name),
     );
+    // A direct entry for everyone whose plugin doesn't already ship the MCP
+    // server (codex's plugin is skills-only; claude's bundles the server).
+    const bundledSet = new Set(
+      clients.filter((c) => c.pluginBundlesMcp).map((c) => c.name),
+    );
     const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
-    const directNames = names.filter((n) => !pluginCapableSet.has(n));
+    const directNames = names.filter((n) => !bundledSet.has(n));
 
-    if (installMode === 'all') {
-      // Plugin-capable clients get the plugin (which bundles MCP).
-      // Non-plugin-capable clients get a direct MCP config write.
-      try {
-        mcpResult = await installer.install(
-          directNames,
-          features,
-          store.session.apiKey,
-        );
-      } catch {
-        // mcpResult stays []
-      }
+    // OAuth: plugin-capable clients get the plugin (which bundles MCP), the
+    // rest get a direct MCP config write. Api-key installs write key-authed
+    // direct entries only — the plugin's server never carries the key.
+    try {
+      mcpResult = await installer.install(
+        oauthFlow ? directNames : names,
+        features,
+        store.session.apiKey,
+      );
+    } catch (err) {
+      setFlowError(errorText(err));
+    }
+    if (oauthFlow) {
       try {
         pluginResult = await installer.installPlugins(pluginCapableNames);
-      } catch {
-        // best-effort
-      }
-    } else {
-      // 'custom' — MCP-only for every selected client. Plugin install is
-      // skipped so the user's feature selection is actually respected.
-      try {
-        mcpResult = await installer.install(
-          names,
-          features,
-          store.session.apiKey,
-        );
-      } catch {
-        // mcpResult stays []
+      } catch (err) {
+        // Best-effort, but still say so rather than showing an empty screen.
+        setFlowError(errorText(err));
       }
     }
 
-    setResultClients(mcpResult);
-    setPluginClients(pluginResult);
-    setPhase(Phase.Done);
-    const succeeded = mcpResult.length + pluginResult.length > 0;
-    const outcome = succeeded ? McpOutcome.Installed : McpOutcome.Failed;
+    setMcpResults(mcpResult);
+    setPluginResults(pluginResult);
+    // Already-installed counts as installed: the user ends up with a working
+    // MCP either way, so the follow-on steps (Slack, tutorial) still apply.
+    const ready = [...mcpResult, ...pluginResult].filter(isOk);
+    const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
-    setTimeout(
-      () =>
-        markDone(
-          store,
-          outcome,
-          [...mcpResult, ...pluginResult],
-          featuresReport,
-        ),
-      2000,
-    );
+    const logins = oauthFlow
+      ? pendingLoginCommands(clients, mcpResult, pluginResult)
+      : [];
+    finishFlow.current = () =>
+      markDone(
+        store,
+        outcome,
+        ready.map((r) => r.name),
+        featuresReport,
+        logins,
+      );
+    setPhase(Phase.Done);
   };
 
   const doRemove = async () => {
     setPhase(Phase.Working);
-    let result: string[] = [];
+    let result: McpClientResult[] = [];
     try {
-      result = await installer.remove();
-      setResultClients(result);
-    } catch {
-      setResultClients([]);
+      result = await installer.remove(store.session.localMcp);
+    } catch (err) {
+      setFlowError(errorText(err));
     }
-    setPhase(Phase.Done);
+    setMcpResults(result);
+    const removed = result.filter(isOk);
     const outcome =
-      result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, result), 2000);
+      removed.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    finishFlow.current = () =>
+      markDone(
+        store,
+        outcome,
+        removed.map((r) => r.name),
+      );
+    setPhase(Phase.Done);
   };
 
   // The "what you get" preview shown above the install confirmation —
@@ -265,14 +352,45 @@ export const McpScreen = ({
   // Clients connected via a browser page (e.g. Claude Desktop/Web) aren't truly
   // "installed" — the user finishes in the browser. Split them out of the
   // "installed for" list and render the finish instructions separately.
+  const okMcpNames = mcpResults.filter(isOk).map((r) => r.name);
   const finishNotes = clients.flatMap((c) =>
-    c.finish && resultClients.includes(c.name)
+    c.finish && okMcpNames.includes(c.name)
       ? [{ name: c.name, url: c.finish.url, instruction: c.finish.instruction }]
       : [],
   );
-  const installedNow = resultClients.filter(
-    (name) => !finishNotes.some((n) => n.name === name),
+  const isConnectorName = (name: string) =>
+    finishNotes.some((n) => n.name === name);
+
+  const installedNow = namesWithStatus(
+    mcpResults,
+    McpClientStatus.Changed,
+  ).filter((name) => !isConnectorName(name));
+  const alreadyInstalled = namesWithStatus(
+    mcpResults,
+    McpClientStatus.Unchanged,
+  ).filter((name) => !isConnectorName(name));
+  const pluginInstalled = namesWithStatus(
+    pluginResults,
+    McpClientStatus.Changed,
   );
+  const pluginAlreadyInstalled = namesWithStatus(
+    pluginResults,
+    McpClientStatus.Unchanged,
+  );
+  // A failure the user can act on — the name alone says nothing, so carry the
+  // reason the underlying CLI or file write gave us.
+  const failures = [...mcpResults, ...pluginResults]
+    .filter((r) => r.status === McpClientStatus.Failed)
+    .map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name));
+
+  const hasAnyResult =
+    installedNow.length +
+      alreadyInstalled.length +
+      pluginInstalled.length +
+      pluginAlreadyInstalled.length +
+      failures.length +
+      finishNotes.length >
+    0;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -287,12 +405,26 @@ export const McpScreen = ({
           <Text dimColor>Detecting supported editors...</Text>
         )}
 
-        {phase === Phase.None && (
-          <Text dimColor>
-            No {isRemove ? 'installed' : 'supported'} MCP clients detected.
-            Skipping...
-          </Text>
-        )}
+        {phase === Phase.None &&
+          (detectError ? (
+            <Box flexDirection="column">
+              <Text color="red" bold>
+                {'\u2716'} Couldn&apos;t check which editors are installed
+              </Text>
+              <Text dimColor> {detectError}</Text>
+              <Text dimColor>
+                {' '}
+                Run with --debug for the full output, or report it at
+                github.com/PostHog/wizard/issues.
+              </Text>
+              <DoneContinue onContinue={() => finishFlow.current?.()} />
+            </Box>
+          ) : (
+            <Text dimColor>
+              No {isRemove ? 'installed' : 'supported'} MCP clients detected.
+              Skipping...
+            </Text>
+          ))}
 
         {phase === Phase.Ask && (
           <>
@@ -309,80 +441,47 @@ export const McpScreen = ({
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>
             <Box marginTop={1}>
-              {!isRemove && !store.session.mcpFeatures ? (
-                <PickerMenu
-                  message={`Install the PostHog MCP server${
-                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                  }?`}
-                  options={[
-                    {
-                      label: 'Install with all features',
-                      value: 'all',
-                      hint: 'recommended',
-                    },
-                    {
-                      label: 'Customize features',
-                      value: 'custom',
-                    },
-                    { label: 'No thanks', value: 'skip' },
-                  ]}
-                  mode="single"
-                  onSelect={(choice) =>
-                    handleTriStateChoice(choice as 'all' | 'custom' | 'skip')
-                  }
-                />
-              ) : (
-                <ConfirmationInput
-                  message={`${
-                    isRemove ? 'Remove' : 'Install'
-                  } the PostHog MCP server${
-                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                  }?`}
-                  confirmLabel={isRemove ? 'Remove' : 'Install'}
-                  cancelLabel="No thanks"
-                  onConfirm={handleConfirm}
-                  onCancel={handleSkip}
-                />
-              )}
+              <ConfirmationInput
+                message={`${
+                  isRemove ? 'Remove' : 'Install'
+                } the PostHog MCP server${
+                  clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                }?`}
+                confirmLabel={isRemove ? 'Remove' : 'Install'}
+                cancelLabel="No thanks"
+                onConfirm={handleConfirm}
+                onCancel={handleSkip}
+              />
             </Box>
           </>
         )}
 
         {phase === Phase.Pick && (
           <PickerMenu
-            message={
-              installMode === 'all'
-                ? 'Select editor to install'
-                : 'Select editor to install MCP server'
-            }
+            message="Select editor to install"
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
               // Browser connectors can't be installed alongside local editors
-              // and are configured on their own screen, not the feature picker.
+              // and are configured on their own screen.
               exclusive: Boolean(c.finish),
-              // Hints only show in the recommended flow; the customize flow
-              // keeps the list clean.
-              hint:
-                installMode === 'all'
-                  ? c.finish
-                    ? 'connector'
-                    : c.supportsPlugin
-                    ? 'plugin'
-                    : 'MCP'
-                  : undefined,
+              hint: c.finish
+                ? 'connector'
+                : c.supportsPlugin
+                ? 'plugin'
+                : 'MCP',
             }))}
             mode="multi"
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
-              proceedAfterClientPick(names, installMode);
+              proceedAfterClientPick(names);
             }}
           />
         )}
 
         {phase === Phase.FeatureSelect && (
           <GroupedPickerMenu
-            message="Select features to enable"
+            message="Select the PostHog areas your agent can reach"
             groups={AVAILABLE_FEATURES}
             initialSelected={[]}
             onSelect={(features) => {
@@ -395,7 +494,7 @@ export const McpScreen = ({
           <Box flexDirection="column">
             <Box marginBottom={1}>
               <Text dimColor>
-                You&apos;ll choose which features and tools to enable in
+                You&apos;ll choose which PostHog areas to enable in
                 Claude&apos;s UI after connecting.
               </Text>
             </Box>
@@ -413,40 +512,53 @@ export const McpScreen = ({
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {installedNow.length + pluginClients.length + finishNotes.length ===
-            0 ? (
-              <Text dimColor>
-                {isRemove ? 'Removal' : 'Installation'} skipped.
-              </Text>
-            ) : (
+            {hasAnyResult ? (
               <>
-                {pluginClients.length > 0 && (
-                  <>
-                    <Text color="green" bold>
-                      {'\u2714'} Plugin installed for:
-                    </Text>
-                    {pluginClients.map((name, i) => (
-                      <Text key={`p-${i}`}>
-                        {' '}
-                        {'\u2022'} {name}
-                      </Text>
-                    ))}
-                  </>
-                )}
-                {installedNow.length > 0 && (
-                  <>
-                    <Text color="green" bold>
-                      {'\u2714'} MCP server{' '}
-                      {isRemove ? 'removed from' : 'installed for'}:
-                    </Text>
-                    {installedNow.map((name, i) => (
-                      <Text key={`m-${i}`}>
-                        {' '}
-                        {'\u2022'} {name}
-                      </Text>
-                    ))}
-                  </>
-                )}
+                <ResultGroup
+                  title="Plugin installed for:"
+                  items={pluginInstalled}
+                  color="green"
+                  icon={'\u2714'}
+                />
+                <ResultGroup
+                  title="Plugin was already installed for:"
+                  items={pluginAlreadyInstalled}
+                  color="green"
+                  icon={'\u2714'}
+                  note="It was already set up, so nothing changed. You are good to go."
+                />
+                <ResultGroup
+                  title={`MCP server ${
+                    isRemove ? 'removed from' : 'installed for'
+                  }:`}
+                  items={installedNow}
+                  color="green"
+                  icon={'\u2714'}
+                />
+                <ResultGroup
+                  title={
+                    isRemove
+                      ? 'No PostHog entry left to remove for:'
+                      : 'MCP server was already installed for:'
+                  }
+                  items={alreadyInstalled}
+                  color="green"
+                  icon={'\u2714'}
+                  note={
+                    isRemove
+                      ? 'It was already gone, so nothing was changed.'
+                      : 'Left as-is. To change which PostHog areas it can reach, run `wizard mcp remove` first, then `wizard mcp add`.'
+                  }
+                />
+                <ResultGroup
+                  title={`Couldn't ${
+                    isRemove ? 'remove from' : 'install for'
+                  }:`}
+                  items={failures}
+                  color="red"
+                  icon={'\u2716'}
+                  note="Run with --debug for the full output, or report it at github.com/PostHog/wizard/issues."
+                />
                 {finishNotes.map((note) => (
                   <Box key={note.name} flexDirection="column" marginTop={1}>
                     <Text color="green" bold>
@@ -466,7 +578,26 @@ export const McpScreen = ({
                   </Box>
                 ))}
               </>
+            ) : flowError ? (
+              <Box flexDirection="column">
+                <Text color="red" bold>
+                  {'\u2716'} {isRemove ? 'Removal' : 'Installation'} failed
+                </Text>
+                <Text dimColor> {flowError}</Text>
+                <Text dimColor>
+                  {' '}
+                  Run with --debug for the full output, or report it at
+                  github.com/PostHog/wizard/issues.
+                </Text>
+              </Box>
+            ) : (
+              <Text dimColor>
+                {isRemove
+                  ? "Nothing to remove \u2014 the PostHog MCP server wasn't configured for any editor."
+                  : 'Nothing to install \u2014 no editor was selected.'}
+              </Text>
             )}
+            <DoneContinue onContinue={() => finishFlow.current?.()} />
           </Box>
         )}
       </Box>

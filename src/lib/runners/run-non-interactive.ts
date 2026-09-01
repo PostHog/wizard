@@ -1,4 +1,10 @@
 import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
+import {
+  checkLocalServices,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from '@lib/local-dev';
+import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -6,6 +12,8 @@ import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import { join } from 'node:path';
+import { ErrorCodes, detectErrorCode, emitWizardError } from '@lib/errors';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -24,8 +32,8 @@ function modeLabel(mode: NonInteractiveMode): string {
 }
 
 /**
- * The single non-interactive validation layer: defaults region and requires
- * api-key and install-dir. Every non-interactive entry point routes through
+ * The single non-interactive validation layer: requires api-key and
+ * install-dir. Every non-interactive entry point routes through
  * `runNonInteractive`, so this is the one place these checks live. UI must be
  * initialized before calling.
  */
@@ -38,10 +46,13 @@ export function validateNonInteractiveOptions(
     mode === 'headless'
       ? 'personal API key phx_xxx or pha_ OAuth access token'
       : 'personal API key phx_xxx';
-  if (!options.region) options.region = 'us';
   if (!options.apiKey) {
     getUI().intro('PostHog Wizard');
     getUI().log.error(`${label} mode requires --api-key (${keyHint})`);
+    emitWizardError({
+      code: ErrorCodes.ArgsMissingApiKey,
+      message: `${label} mode requires --api-key (${keyHint})`,
+    });
     process.exit(1);
   }
   if (!options.installDir) {
@@ -49,6 +60,10 @@ export function validateNonInteractiveOptions(
     getUI().log.error(
       `${label} mode requires --install-dir (directory to install in)`,
     );
+    emitWizardError({
+      code: ErrorCodes.ArgsMissingInstallDir,
+      message: `${label} mode requires --install-dir`,
+    });
     process.exit(1);
   }
 }
@@ -106,7 +121,9 @@ export function runNonInteractive(
       installDir,
       ci: true,
       signup: options.signup as boolean | undefined,
+      localDev: options.localDev as boolean | undefined,
       localMcp: options.localMcp as boolean | undefined,
+      localPosthog: options.localPosthog as boolean | undefined,
       apiKey,
       email: options.email as string | undefined,
       projectId: options.projectId as string | undefined,
@@ -117,7 +134,11 @@ export function runNonInteractive(
       harness: options.harness as Harness | undefined,
       sequence: options.sequence as Sequence | undefined,
       model: options.model as string | undefined,
+      captureAio: options.captureAio as boolean | undefined,
       ...env,
+      // After the spread: yargs already resolves flag-over-env for --region,
+      // so the parsed value must win over the raw env bag.
+      region: (options.region ?? env.region) as CloudRegion | undefined,
     });
     session.programLabel = config.id;
     if (config.skillId) {
@@ -127,6 +148,22 @@ export function runNonInteractive(
 
     getUI().intro('Welcome to the PostHog setup wizard');
     getUI().log.info(`Running ${config.id} in ${modeLabel(mode)} mode`);
+
+    // Before auth: a dead local PostHog otherwise surfaces as "Failed to fetch
+    // user data". Aborts even non-interactively — a CI run pointed at a local
+    // server that isn't there is testing nothing.
+    const localServicesError = await checkLocalServices({
+      ...getLocalDev(),
+      localMcp: session.localMcp,
+      localPosthog: session.baseUrl === POSTHOG_LOCAL_URL,
+    });
+    if (localServicesError) {
+      await wizardAbort({
+        code: ErrorCodes.EnvLocalServicesDown,
+        message: localServicesError,
+      });
+      return;
+    }
 
     // Headless streams run state to the PostHog backend so the web app can show
     // live progress. Reuses the interactive TaskStreamPush + WizardStore (no Ink
@@ -153,6 +190,9 @@ export function runNonInteractive(
             onError: (e) => logToFile('[headless task-stream]', e.message),
           }),
         ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         enabled: !session.noTelemetry,
       });
       taskStream.attach();
@@ -187,7 +227,13 @@ export function runNonInteractive(
           setSkillId: (skillId: string | null) => {
             session.skillId = skillId;
           },
-          setUnsupportedVersion: () => undefined,
+          setUnsupportedVersion: (info: {
+            current: string;
+            minimum: string;
+            docsUrl: string;
+          }) => {
+            session.unsupportedVersion = info;
+          },
           addDiscoveredFeature: () => undefined,
           setDetectionComplete: () => undefined,
         };
@@ -200,19 +246,54 @@ export function runNonInteractive(
         const detectError = session.frameworkContext.detectError as
           | { kind: string; [k: string]: unknown }
           | undefined;
-        if (detectError) {
+        if (session.unsupportedVersion) {
+          const { current, minimum, docsUrl } = session.unsupportedVersion;
+          const message = `Detected framework version ${current} is not supported. Minimum supported version is ${minimum}.`;
           await settleStream(RunPhase.Error, {
             kind: OutroKind.Error,
-            message: `Prerequisites not met: ${detectError.kind}`,
+            message,
+            errorCode: ErrorCodes.DetectUnsupportedVersion,
           });
           await wizardAbort({
-            message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
+            code: ErrorCodes.DetectUnsupportedVersion,
+            message: `${message}\n\nSee ${docsUrl}`,
+            error: new WizardError(
+              `${config.id} unsupported framework version`,
+              {
+                integration: config.id,
+                current,
+                minimum,
+              },
+              ErrorCodes.DetectUnsupportedVersion,
+            ),
+          });
+        }
+        if (detectError) {
+          const code = detectErrorCode(detectError.kind);
+          const detectKind = detectError.kind;
+          // `kind` stays in the detail: several kinds share one code, so it is
+          // the only thing telling a host which precondition actually failed.
+          const detail = { ...detectError };
+          await settleStream(RunPhase.Error, {
+            kind: OutroKind.Error,
+            message: `Prerequisites not met: ${detectKind}`,
+            errorCode: code,
+            errorDetail: detail,
+          });
+          await wizardAbort({
+            code,
+            detail,
+            message: `Prerequisites not met: ${detectKind}\n\nSee ${
               runDef?.docsUrl ?? POSTHOG_DOCS_URL
             }`,
-            error: new WizardError(`${config.id} prerequisites failed`, {
-              integration: config.id,
-              detect_error_kind: detectError.kind,
-            }),
+            error: new WizardError(
+              `${config.id} prerequisites failed`,
+              {
+                integration: config.id,
+                detect_error_kind: detectKind,
+              },
+              code,
+            ),
           });
         }
       }
@@ -237,13 +318,19 @@ export function runNonInteractive(
       await settleStream(RunPhase.Error, {
         kind: OutroKind.Error,
         message: errorMessage,
+        errorCode: ErrorCodes.InternalUnhandled,
       });
       await wizardAbort({
+        code: ErrorCodes.InternalUnhandled,
         message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,
       });
     }
-  })().catch(() => {
+  })().catch((error: unknown) => {
+    emitWizardError({
+      code: ErrorCodes.InternalUnhandled,
+      message: error instanceof Error ? error.message : String(error),
+    });
     process.exit(1);
   });
 }

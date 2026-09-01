@@ -1,4 +1,9 @@
-import { coerceAgenticReport, manifestGlob } from '@lib/detection/agentic';
+import {
+  coerceAgenticReport,
+  deriveReportJson,
+  manifestGlob,
+  resolveProjectDir,
+} from '@lib/detection/agentic';
 
 const TARGETS = ['nextjs', 'node', 'vite'];
 
@@ -103,5 +108,187 @@ describe('coerceAgenticReport', () => {
     expect(keep('apps/web')).toBe('apps/web');
     expect(keep('.')).toBe('.');
     expect(keep('ios')).toBe('ios');
+  });
+});
+
+describe('deriveReportJson', () => {
+  const verdict = (path: string, targetId: string) =>
+    `{"path":"${path}","framework":"Node.js","targetId":"${targetId}","hasPostHog":true}`;
+
+  it('merges verdict lines and a one-line assembly, later entries winning', () => {
+    // Every parseable line contributes: the pretty block parses on no line,
+    // the compact assembly's projects merge like verdicts, later wins.
+    const text = [
+      verdict('backend-1', 'node'),
+      verdict('backend-2', 'vite'),
+      '```json',
+      '{\n  "repoType": "monorepo",\n  "projects": []\n}',
+      '```',
+      '{"repoType":"monorepo","projects":[{"path":"backend-2","targetId":"rollup","hasPostHog":true}]}',
+    ].join('\n');
+
+    const parsed = deriveReportJson(text) as {
+      repoType: string;
+      projects: { path: string; targetId: string }[];
+    };
+    expect(parsed.repoType).toBe('monorepo');
+    expect(parsed.projects.map((p) => [p.path, p.targetId])).toEqual([
+      ['backend-1', 'node'],
+      ['backend-2', 'rollup'],
+    ]);
+  });
+
+  it('rebuilds the report from verdict lines when the assembly never arrived', () => {
+    // The model sometimes narrates the assembly as prose; verdict lines are
+    // the data. Shape echoes skip; repeated paths dedupe, last wins.
+    const text = [
+      'The shape is {"path":string}.',
+      verdict('backend-1', 'vite'),
+      verdict('backend-1', 'node'),
+      verdict('backend-2', 'rollup'),
+      '**Summary**: both projects classified.',
+    ].join('\n');
+
+    const parsed = deriveReportJson(text) as {
+      repoType: string;
+      projects: { path: string; targetId: string }[];
+    };
+    expect(parsed.repoType).toBe('monorepo');
+    expect(parsed.projects.map((p) => [p.path, p.targetId])).toEqual([
+      ['backend-1', 'node'],
+      ['backend-2', 'rollup'],
+    ]);
+  });
+
+  it('returns null when the text carries no usable objects', () => {
+    expect(deriveReportJson('no report here')).toBeNull();
+    expect(deriveReportJson('almost {"broken": json}')).toBeNull();
+  });
+});
+
+describe('coerceAgenticReport matchingTargets', () => {
+  const project = (
+    extra: Record<string, unknown>,
+    rerankIds?: readonly string[],
+  ) =>
+    coerceAgenticReport({ projects: [{ path: '.', ...extra }] }, TARGETS, {
+      rerankIds,
+    }).projects[0];
+
+  it('re-ranks a valid pick only among rerankIds', () => {
+    // Misordered honest enumeration: within the rerank set the priority
+    // winner replaces the pick (TARGETS ranks node above vite)...
+    expect(
+      project({ matchingTargets: ['vite', 'node'], targetId: 'vite' }, [
+        'node',
+        'vite',
+      ]).targetId,
+    ).toBe('node');
+    // ...but a winner outside the set never beats a valid pick — enumerations
+    // get padded across exclusive stacks (a Flutter app listing react-native).
+    expect(
+      project({ matchingTargets: ['nextjs', 'vite'], targetId: 'vite' }, [
+        'vite',
+      ]).targetId,
+    ).toBe('vite');
+    expect(
+      project({ matchingTargets: ['vite', 'node'], targetId: 'vite' }).targetId,
+    ).toBe('vite');
+  });
+
+  it('falls back to the highest-priority enumerated id when the pick is unusable', () => {
+    // TARGETS is the priority order; unknown ids are skipped.
+    expect(
+      project({ matchingTargets: ['rocket', 'vite', 'node'], targetId: null })
+        .targetId,
+    ).toBe('node');
+    expect(
+      project({ matchingTargets: ['vite'], targetId: 'rocket' }).targetId,
+    ).toBe('vite');
+    expect(project({ matchingTargets: ['rocket'] }).targetId).toBeNull();
+  });
+});
+
+describe('resolveProjectDir', () => {
+  it('scopes to the chosen sub-app inside the repo', () => {
+    expect(resolveProjectDir('/repo', 'apps/web')).toBe('/repo/apps/web');
+    expect(resolveProjectDir('/repo', '.')).toBe('/repo');
+  });
+
+  it('keeps the root for non-string values (session round-trips are unknown)', () => {
+    expect(resolveProjectDir('/repo', undefined)).toBe('/repo');
+    expect(resolveProjectDir('/repo', 42)).toBe('/repo');
+  });
+
+  it('falls back to the repo root when the path escapes it', () => {
+    // Defense-in-depth on top of coercePath: the value is LLM output.
+    expect(resolveProjectDir('/repo', '../../etc')).toBe('/repo');
+    expect(resolveProjectDir('/repo', '/etc')).toBe('/repo');
+    expect(resolveProjectDir('/repo', 'a/../..')).toBe('/repo');
+  });
+});
+
+describe('coerceAgenticReport recommendation', () => {
+  const projects = [
+    {
+      path: 'apps/api',
+      framework: 'Express',
+      targetId: 'node',
+      hasPostHog: false,
+    },
+    {
+      path: 'apps/web',
+      framework: 'Next.js',
+      targetId: 'nextjs',
+      hasPostHog: false,
+      recommended: true,
+    },
+  ];
+
+  it('strips recommended entirely when the scan did not ask for it', () => {
+    // Consumers that never opted in must never see the field, even when the agent emits it anyway.
+    const report = coerceAgenticReport({ projects }, TARGETS);
+    for (const p of report.projects) {
+      expect('recommended' in p).toBe(false);
+    }
+  });
+
+  it('keeps the recommended label when the scan asked for it', () => {
+    const report = coerceAgenticReport({ projects }, TARGETS, {
+      recommend: true,
+    });
+    expect(report.projects.map((p) => p.recommended)).toEqual([false, true]);
+  });
+
+  it('keeps at most one recommended project — the first', () => {
+    const doubled = projects.map((p) => ({ ...p, recommended: true }));
+    const report = coerceAgenticReport({ projects: doubled }, TARGETS, {
+      recommend: true,
+    });
+    expect(report.projects.map((p) => p.recommended)).toEqual([true, false]);
+  });
+
+  it('coerces malformed recommended values to false', () => {
+    const report = coerceAgenticReport(
+      {
+        projects: [
+          { path: '.', recommended: 'yes' },
+          { path: 'ios', recommended: 1 },
+        ],
+      },
+      TARGETS,
+      { recommend: true },
+    );
+    expect(report.projects.map((p) => p.recommended)).toEqual([false, false]);
+  });
+
+  it('keeps the label while an escaping path clamps to "."', () => {
+    const report = coerceAgenticReport(
+      { projects: [{ path: '/etc', recommended: true }] },
+      TARGETS,
+      { recommend: true },
+    );
+    expect(report.projects[0].path).toBe('.');
+    expect(report.projects[0].recommended).toBe(true);
   });
 });

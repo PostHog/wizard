@@ -13,6 +13,8 @@ interface PromptLabelProps {
 }
 
 export const PromptLabel = ({ message }: PromptLabelProps) => {
+  // No message → no row, so label-less pickers don't get a stray blank line.
+  if (!message) return null;
   return (
     <Box>
       <Text bold color={Colors.accent}>

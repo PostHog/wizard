@@ -1,6 +1,8 @@
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 import { runWizard } from '@lib/runners';
 import {
   posthogDoctorConfig,
@@ -40,6 +42,10 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
   if (!apiKey) {
     getUI().intro('PostHog Wizard');
     getUI().log.error('CI mode requires --api-key (personal API key phx_xxx)');
+    emitWizardError({
+      code: ErrorCodes.ArgsMissingApiKey,
+      message: 'CI mode requires --api-key (personal API key phx_xxx)',
+    });
     process.exit(1);
   }
 
@@ -58,7 +64,11 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
       baseUrl: options.baseUrl as string | undefined,
     });
 
-    const issues = await fetchHealthIssues(accessToken, host, projectId);
+    const issues = await fetchHealthIssues(
+      accessToken,
+      host.apiHost,
+      projectId,
+    );
     if (issues.length === 0) {
       getUI().log.success('No active issues — your project looks healthy.');
       process.exit(0);
@@ -85,6 +95,13 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
         ? error.message
         : String(error);
     getUI().log.error(`Doctor failed: ${message}`);
+    emitWizardError({
+      code:
+        error instanceof ApiError && error.statusCode === 401
+          ? ErrorCodes.AuthInvalidOrExpired
+          : ErrorCodes.InternalUnhandled,
+      message,
+    });
     process.exit(1);
   }
 }

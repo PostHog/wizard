@@ -5,6 +5,11 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
 } from '@ui/tui/hooks/file-watcher';
+import { logToFile } from '@utils/debug';
+
+vi.mock('@utils/debug', () => ({
+  logToFile: vi.fn(),
+}));
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,6 +19,7 @@ describe('startFileWatcher', () => {
 
   beforeEach(() => {
     workdir = mkdtempSync(path.join(tmpdir(), 'wizard-fw-'));
+    vi.mocked(logToFile).mockClear();
   });
 
   afterEach(() => {
@@ -97,6 +103,22 @@ describe('startFileWatcher', () => {
 
     await wait(100);
     expect(onUpdate).not.toHaveBeenCalled();
+    expect(logToFile).toHaveBeenCalledWith(
+      expect.stringContaining('could not read valid JSON'),
+    );
+  });
+
+  it('allows an initial update callback to stop its watcher', async () => {
+    const target = path.join(workdir, 'data.json');
+    writeFileSync(target, JSON.stringify({ a: 1 }));
+    const onUpdate = vi.fn(() => handle?.stop());
+
+    handle = startFileWatcher(target, onUpdate, { pollIntervalMs: 30 });
+    await wait(20);
+    writeFileSync(target, JSON.stringify({ a: 2 }));
+    await wait(100);
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('stop() halts polling and watchers', async () => {
@@ -131,5 +153,46 @@ describe('startFileWatcher', () => {
 
     await wait(150);
     expect(onUpdate.mock.calls.at(-1)?.[0]).toEqual({ v: 2 });
+  });
+
+  it('refreshes synchronously before shutdown', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+    handle = startFileWatcher(target, onUpdate, { pollIntervalMs: 10_000 });
+    writeFileSync(target, JSON.stringify({ final: true }));
+
+    handle.refresh();
+
+    expect(onUpdate).toHaveBeenCalledWith({ final: true });
+  });
+
+  it('ignores a pre-existing file until it changes', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+    writeFileSync(target, JSON.stringify({ stale: true }));
+    handle = startFileWatcher(target, onUpdate, {
+      ignoreInitialFile: true,
+    });
+
+    handle.refresh();
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    writeFileSync(target, JSON.stringify({ current: true }));
+    handle.refresh();
+    expect(onUpdate).toHaveBeenCalledWith({ current: true });
+  });
+
+  it('enforces file-size bounds', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+
+    writeFileSync(target, JSON.stringify({ oversized: 'x'.repeat(100) }));
+    handle = startFileWatcher(target, onUpdate, { maxFileSizeBytes: 20 });
+    handle.refresh();
+
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(logToFile).toHaveBeenCalledWith(
+      expect.stringContaining('refusing oversized JSON file'),
+    );
   });
 });

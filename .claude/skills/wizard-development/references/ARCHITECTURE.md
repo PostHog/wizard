@@ -38,6 +38,119 @@ Every wizard run — framework integration, revenue analytics, audit, generic sk
 
 The `agent-runner.ts` doesn't know what framework is being integrated. It doesn't know what skills exist. It doesn't know what env vars are called. It doesn't know what the outro should say. All of that comes from `ProgramRun` and `FrameworkConfig` — configuration, not code.
 
+## The switchboard contract — deterministic (flags in) → (binding out)
+
+There is exactly one seam that decides what runs: **`resolveBinding(ctx, role?)`**
+in `src/lib/agent/runner/switchboard/index.ts`. Give it a `SwitchboardCtx`, get
+back the full binding — every axis, no partials — and a trace of which
+precedence rung decided each axis. This is the unit-testable surface: if you
+want to know "with these flags, what exactly will run?", you call this and
+assert on the whole object.
+
+```ts
+// INPUT — everything a resolution may branch on. Built once per run.
+interface SwitchboardCtx {
+  program: ProgramId;
+  composed?: boolean;                    // dependency run inside a parent program
+  flags: Record<string, string>;         // PostHog flag snapshot (variants as strings)
+  flagPayloads?: Record<string, unknown>;// payload snapshot, same fetch
+  cliHarness?: Harness;                  // dev builds only
+  cliSequence?: Sequence;                // dev builds only
+  cliModel?: string;                     // dev builds only
+  trace?: SwitchboardTrace;              // filled during resolution
+}
+
+// OUTPUT — the complete run binding.
+interface ProgramBinding {
+  sequence: Sequence;                    // linear | orchestrator
+  harness: Harness;                      // anthropic | pi
+  model: string;                         // gateway model id
+  thinkingLevel?: EffortLevel;           // effort OVERRIDE; absent → model table default
+}
+
+// TRACE — which rung decided each axis (telemetry reads this).
+interface SwitchboardTrace {
+  harness?:  'cli' | 'flag' | 'binding';
+  model?:    'cli' | 'flag' | 'binding';
+  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'payload' | 'flag' | 'binding';
+}
+```
+
+Precedence, per axis (earlier wins):
+
+```
+harness/model:  CLI (dev builds) → flag experiment route → program binding → DEFAULT_BINDING
+sequence:       composed clamp → CLI (dev builds) → runTask capability clamp
+                → program's own flag route `sequence` → sequence experiment → binding
+```
+
+**Determinism.** `resolveBinding` is a pure function of the ctx plus three
+enumerated static/ambient inputs — nothing else. No session, no network, no
+clock:
+
+1. `RUN_SURFACE` (`@env`, ambient): `'cloud'` disables all harness-experiment
+   routes. Tests flip it with a mocked getter — the one input not on the ctx.
+2. `IS_PRODUCTION_BUILD` (build-time constant): strips the CLI rungs from the
+   chains in published builds.
+3. Static tables: `PROGRAM_BINDINGS`/`DEFAULT_BINDING`, the experiment
+   declarations in `switchboard/flags/`, and each harness's `runTask`
+   capability (a static property of the backend module).
+
+**Effort is two-stage, both stages pure.** The binding's `thinkingLevel` is
+the *override* (from a flag variant or payload). The *effective* effort is
+`modelCapabilities(binding.model, binding.thinkingLevel)` in
+`switchboard/models.ts` — capability table + transport default, override
+applied only when the model reasons. Compose the two calls for the complete
+deterministic answer: which model, at which effort, on which harness, in
+which sequence.
+
+**Flags may only enter through `switchboard/flags/`.** Each experiment module
+declares its flag keys AND the program(s) they route (`HarnessExperiment` /
+`SequenceExperiment`); the middlewares consult `resolveFlagRoute` /
+`resolveFlagSequence` and nothing else. Payload-carrying flags are
+zod-validated and fail closed: any unexpected payload resolves to no route and
+the non-flagged binding default stands.
+
+**Test convention: every resolution test is (ctx in) → full `resolveBinding`
+out.** Assert the whole four-axis object (`toEqual`), never a single axis via
+`resolveHarness`/`resolveSequence` — a partial assertion cannot see a flag
+moving an axis it doesn't look at. `modelCapabilities` is asserted directly as
+the second stage.
+
+**How this is held in place** (all under `switchboard/flags/__tests__/` plus
+`runner/__tests__/switchboard.test.ts`, mutation-tested):
+
+- One test file per experiment: routing behavior + a registry-wide isolation
+  sweep proving its flags leave every other program byte-identical to an
+  unflagged run.
+- `scoping.test.ts` — the cross-experiment pin: an empirically measured
+  flag → program → axes matrix asserted against an explicit table; every
+  `*_FLAG_KEY` constant forced on at once with uncovered programs required
+  to resolve unchanged; and a seam scan asserting `harness.ts`/`sequence.ts`/
+  `models.ts`/`index.ts` contain no direct flag reads — so a new flag cannot
+  route without a declaration, and every declaration is auto-probed.
+- `switchboard.test.ts` — machinery only: binding registry lockstep, CLI
+  precedence, trace stamping, `modelCapabilities`, the composed clamp.
+
+A canonical unit test of the contract looks like:
+
+```ts
+const ctx: SwitchboardCtx = {
+  program: 'self-driving',
+  flags: { 'wizard-self-driving-use-pi-harness': 'true' },
+  flagPayloads: {
+    'wizard-self-driving-use-pi-harness': { model: 'gpt-5-6-terra', effort: 'high' },
+  },
+};
+expect(resolveBinding(ctx)).toEqual({
+  sequence: Sequence.linear,
+  harness: Harness.pi,
+  model: GPT5_6_TERRA_MODEL,
+  thinkingLevel: 'high',
+});
+expect(ctx.trace).toEqual({ harness: 'flag', model: 'flag', sequence: 'binding' });
+```
+
 ## Session data flow
 
 ```

@@ -133,6 +133,18 @@ After any change, verify with:
 pnpm build && pnpm test && pnpm fix
 ```
 
+### Local dev targets
+
+Four things can independently point at a local server — the wizard binary,
+context-mill (`:8765`), the MCP server (`:8787`), and PostHog (`:8010`). One
+flag per service (`--local-context-mill`, `--local-mcp`, `--local-posthog`),
+plus `--local-dev` for all three. They're dev-build-only; published builds
+reject them.
+
+Note `wizard mcp add --local` is **not** one of these — it writes a
+`posthog-local` entry into your editor's MCP config, and is unrelated to where
+a wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
+
 ## Repository conventions
 
 - TypeScript everywhere. Use `type` (not `interface`) for framework context

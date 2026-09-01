@@ -2,8 +2,9 @@
  * Fixed-route snapshots of the REAL TUI (Node, single-stack).
  *
  * Spawns the real-TUI host (MODE=fixed) in a PTY, lets it self-drive the fixed
- * e2e profile through the real agent run, and writes the real rendered screen to
- * SNAP_OUT/NN-<screen>.txt at each key moment the host signals.
+ * e2e profile through the real agent run, and writes the real rendered screen —
+ * serialized back to ANSI, colors preserved — to SNAP_OUT/NN-<screen>.ans at
+ * each key moment the host signals.
  *
  *   SNAP_OUT=/tmp/snaps APP_DIR=/tmp/app POSTHOG_KEY_FILE=… PROJECT_ID=… \
  *     npx tsx scripts/tui-snapshots.no-jest.ts
@@ -43,8 +44,8 @@ async function drainCtrl() {
     if (!label) continue;
     await sleep(200); // let xterm apply the final writes for this screen
     seq += 1;
-    const fn = path.join(OUT, `${String(seq).padStart(2, '0')}-${label}.txt`);
-    fs.writeFileSync(fn, cap.frame());
+    const fn = path.join(OUT, `${String(seq).padStart(2, '0')}-${label}.ans`);
+    fs.writeFileSync(fn, cap.frameAnsi());
     // eslint-disable-next-line no-console
     console.log('snap ->', path.basename(fn));
   }

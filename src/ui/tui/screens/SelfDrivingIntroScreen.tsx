@@ -14,6 +14,11 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
+import {
+  NO_DEFAULT_LIMIT,
+  PRICING_LONG,
+  PRICING_SHORT,
+} from '@lib/programs/self-driving/content/pricing.js';
 import type { SelfDrivingDetectError } from '@lib/programs/self-driving/index';
 
 interface SelfDrivingIntroScreenProps {
@@ -71,6 +76,10 @@ export const SelfDrivingIntroScreen = ({
           persists
         </Text>
       </Box>
+      <Box flexDirection="column" marginTop={1}>
+        <Text>{PRICING_LONG}</Text>
+        <Text>{NO_DEFAULT_LIMIT}</Text>
+      </Box>
     </Box>
   ) : (
     <Box flexDirection="column" alignItems="center">
@@ -89,6 +98,7 @@ export const SelfDrivingIntroScreen = ({
         <Text dimColor>
           About 10 minutes, with a few questions along the way.
         </Text>
+        <Text dimColor>{PRICING_SHORT}</Text>
       </Box>
     </Box>
   );

@@ -7,7 +7,6 @@
  */
 
 import { useMemo, useSyncExternalStore } from 'react';
-import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -21,10 +20,9 @@ import {
 import type { ProgressItem } from '@ui/tui/primitives/index';
 import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
 import { LearnCard } from '@ui/tui/components/LearnCard';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
-import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
-import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
 
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
@@ -40,24 +38,6 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
-
-  // Mirror the agent's `.posthog-events.json` plan into the store so the
-  // Event plan tab appears as soon as the agent emits the file. The skill
-  // tells the agent to use `event_name`/`event_description` (the canonical
-  // form); `name`/`event`/`description` are legacy fallbacks for skills or
-  // one-off runs that drift. Drop any entry that still ends up nameless so
-  // the outro never shows blank bullets.
-  useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), (parsed) => {
-    if (!Array.isArray(parsed)) return;
-    store.setEventPlan(
-      parsed
-        .map((e: Record<string, unknown>) => ({
-          name: (e.event_name ?? e.name ?? e.event ?? '') as string,
-          description: (e.event_description ?? e.description ?? '') as string,
-        }))
-        .filter((e) => e.name),
-    );
-  });
 
   const [columns] = useStdoutDimensions();
 
@@ -135,8 +115,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
-    // Visualizer tab temporarily disabled: Tumblers crashes on short panels
-    // (negative pin row -> grid[undefined]). Component + demo left intact.
+    {
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
+    },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 

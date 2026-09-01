@@ -1,96 +1,106 @@
 /**
- * LLM provider for warlock security-scan triage.
- *
- * Warlock's triageMatches() takes a consumer-supplied `(prompt) => Promise<string>`
- * to run a second pass that filters false positives out of YARA matches. This
- * builds that provider on top of the wizard's existing PostHog LLM gateway auth
- * — the same ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN that initializeAgent()
- * sets for the agent SDK. The gateway speaks the standard Anthropic Messages API,
- * so we POST to it directly with axios (the plain @anthropic-ai/sdk isn't a dep).
+ * LLM provider for warlock security-scan triage — the `(prompt) => Promise<string>`
+ * its triageMatches() uses to filter false positives out of YARA matches. Runs
+ * through the pi SDK on the same gateway model spec the harnesses use, so
+ * transport, reasoning effort and trace headers come from one place.
  */
 
-import axios from 'axios';
+import { Harness } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import type { GatewayEdition } from '@lib/gateway-session';
+import { buildGatewayModel } from '@lib/agent/runner/harness/pi/gateway';
+import {
+  modelCapabilities,
+  triageModelFor,
+} from '@lib/agent/runner/switchboard/models';
 import type { LLMProvider } from '@posthog/warlock';
 
-// Haiku 4.5: triage is a fast, narrow "true_positive | false_positive" verdict
-// on already-flagged matches — Haiku's the right tier (cheap, fast, plenty
-// capable for boolean classification). Do NOT swap to Sonnet without reason;
-// the cost/latency difference matters on every flagged scan. temperature 0
-// keeps verdicts deterministic across identical inputs.
-const TRIAGE_MODEL = 'claude-haiku-4-5';
 const TRIAGE_MAX_TOKENS = 16_384;
-// Shorter than the hook timeout so a hung triage fails *inside* the hook's
+// Shorter than the hook timeout so a hung triage fails inside the hook's
 // try/catch (→ fail-closed) rather than tripping the SDK hook timeout.
 const TRIAGE_TIMEOUT_MS = 20_000;
 
-interface AnthropicTextBlock {
-  type: string;
-  text?: string;
-}
-
 export interface TriageGatewayAuth {
+  /** Gateway base url, from the run's resolved gateway auth. */
   baseURL: string;
+  /** The run's gateway bearer (minted phe_ on v2, OAuth token on legacy). */
   authToken: string;
+  /** Gateway contract in play; selects the header shape. Default legacy. */
+  edition?: GatewayEdition;
+  /** Customer team for the v2 properties blob. */
+  teamId?: number;
+  /** The run's trace tags, with `call_type` overridden to
+   *  `CallType.yaraTriage` so scan spend is separable from agent work. */
+  wizardMetadata?: Record<string, string>;
+  wizardFlags?: Record<string, string>;
 }
 
 /**
- * Build the triage LLM provider. Auth comes from the explicit `auth` param
- * when given (the pi harness — it auths the gateway programmatically and never
- * sets the env vars), otherwise from the gateway auth on process.env (set by
- * initializeAgent on the anthropic path). Returns undefined if neither is
- * configured — callers then skip triage and fail closed (act on every flagged
- * match), so a missing key never silently disables the scanner.
- *
- * The triage model is independent of the agent's model: it is a classifier
- * judging scan matches, and the gateway routes it by model id regardless of
- * which model runs the coding agent.
+ * Triage provider for a harness. Auth is always explicit: every caller already
+ * holds the gateway url and the run's token, and reading them back out of
+ * ANTHROPIC_* made an unauthed provider silent — it returned undefined, the
+ * caller failed closed, and a clean first-party skill got deleted.
  */
 export function createTriageLLMProvider(
-  auth?: TriageGatewayAuth,
-): LLMProvider | undefined {
-  const baseURL = auth?.baseURL ?? process.env.ANTHROPIC_BASE_URL;
-  const authToken = auth?.authToken ?? process.env.ANTHROPIC_AUTH_TOKEN;
-
-  if (!baseURL || !authToken) {
-    logToFile(
-      '[YARA] triage provider unavailable (no gateway auth) — flagged scans will fail closed',
-    );
-    return undefined;
-  }
-
-  logToFile(`[YARA] triage provider ready (model: ${TRIAGE_MODEL})`);
+  auth: TriageGatewayAuth,
+  harness: Harness,
+): LLMProvider {
+  const { baseURL, authToken } = auth;
+  const modelId = triageModelFor(harness);
+  const model = buildGatewayModel({
+    gatewayUrl: baseURL,
+    accessToken: authToken,
+    edition: auth.edition,
+    teamId: auth.teamId,
+    wizardMetadata: auth?.wizardMetadata ?? {},
+    wizardFlags: auth?.wizardFlags ?? {},
+    modelId,
+  });
+  const { reasoning, thinkingLevel } = modelCapabilities(modelId);
+  logToFile(
+    `[YARA] triage provider ready (model: ${modelId}, api: ${model.api})`,
+  );
 
   return async (prompt: string): Promise<string> => {
-    const res = await axios.post(
-      `${baseURL}/v1/messages`,
-      {
-        model: TRIAGE_MODEL,
-        max_tokens: TRIAGE_MAX_TOKENS,
-        temperature: 0,
-        messages: [{ role: 'user', content: prompt }],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
+    // Lazy: pi-ai is a 5MB ESM tree, and this module is in the static graph of
+    // every command. Same constraint as the pi harness's SDK imports.
+    const { completeSimple } = await import('@earendil-works/pi-ai');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TRIAGE_TIMEOUT_MS);
+    try {
+      const message = await completeSimple(
+        model,
+        {
+          messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
         },
-        timeout: TRIAGE_TIMEOUT_MS,
-      },
-    );
-
-    const data = res.data as { content?: AnthropicTextBlock[] } | undefined;
-    const content = data?.content;
-    if (Array.isArray(content)) {
-      return content
-        .filter(
-          (b: AnthropicTextBlock) =>
-            b?.type === 'text' && typeof b.text === 'string',
-        )
-        .map((b: AnthropicTextBlock) => b.text)
+        {
+          apiKey: authToken,
+          // Determinism where the model allows it: the gpt-5 line rejects any
+          // temperature but 1 while reasoning, and 400s the whole call.
+          temperature: model.api === 'anthropic-messages' ? 0 : undefined,
+          maxTokens: TRIAGE_MAX_TOKENS,
+          // Luna needs an effort it recognises; a non-reasoning model rejects the param.
+          reasoning:
+            reasoning && thinkingLevel !== 'off' ? thinkingLevel : undefined,
+          signal: controller.signal,
+        },
+      );
+      const text = message.content
+        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+        .map((c) => c.text)
         .join('');
+      // A failed call returns no text, which warlock fail-safes to
+      // true_positive — indistinguishable from a real verdict unless logged.
+      if (message.stopReason === 'error') {
+        logToFile(
+          `[YARA] triage call failed on ${model.id}: ${
+            message.errorMessage ?? 'unknown'
+          } — every flagged match will be acted on`,
+        );
+      }
+      return text;
+    } finally {
+      clearTimeout(timer);
     }
-    return '';
   };
 }

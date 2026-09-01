@@ -1,8 +1,14 @@
-import { Analytics, groupsFromUser } from '@utils/analytics';
+import { Analytics, groupsFromUser, sessionProperties } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
-import { ANALYTICS_TEAM_TAG } from '@lib/constants';
+import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
+import { VERSION } from '@lib/version';
 import type { ApiUser } from '@lib/api';
+import {
+  buildSession,
+  DiscoveredFeature,
+  ScanConsent,
+} from '@lib/wizard-session';
 
 vi.mock('posthog-node');
 vi.mock('uuid');
@@ -16,6 +22,8 @@ vi.mock('uuid');
 const envState = vi.hoisted(() => ({
   isProductionBuild: false,
   runSurface: 'local' as 'cloud' | 'local',
+  taskRunId: undefined as string | undefined,
+  taskId: undefined as string | undefined,
 }));
 vi.mock('@env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@env')>()),
@@ -24,6 +32,12 @@ vi.mock('@env', async (importOriginal) => ({
   },
   get RUN_SURFACE() {
     return envState.runSurface;
+  },
+  get TASK_RUN_ID() {
+    return envState.taskRunId;
+  },
+  get TASK_ID() {
+    return envState.taskId;
   },
 }));
 
@@ -37,6 +51,8 @@ describe('Analytics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     envState.isProductionBuild = false;
+    envState.taskRunId = undefined;
+    envState.taskId = undefined;
     // Each run mints several distinct uuids; mock them to different values
     // so the tests reflect reality (run_id !== $session_id) rather than
     // collapsing them. Call order: anonymousId, runId (both in the
@@ -54,6 +70,7 @@ describe('Analytics', () => {
       captureException: vi.fn(),
       alias: vi.fn(),
       identify: vi.fn(),
+      groupIdentify: vi.fn(),
       shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
@@ -78,6 +95,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           ...properties,
         },
       );
@@ -99,6 +117,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           testTag: 'testValue',
           ...properties,
         },
@@ -121,6 +140,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           $session_id: 'session-uuid',
         },
       );
@@ -140,6 +160,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
         },
       );
     });
@@ -149,7 +170,8 @@ describe('Analytics', () => {
       const properties = { integration: 'nextjs', step: 'installation' };
 
       analytics.setTag('environment', 'test');
-      analytics.setTag('version', '1.0.0');
+      // Not `version`: that key is now one of the constructor's own tags.
+      analytics.setTag('framework_version', '1.0.0');
       analytics.captureException(error, properties);
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
@@ -161,8 +183,9 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           environment: 'test',
-          version: '1.0.0',
+          framework_version: '1.0.0',
           integration: 'nextjs',
           step: 'installation',
         },
@@ -185,6 +208,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           integration: 'react',
         },
       );
@@ -204,8 +228,121 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
         },
       );
+    });
+  });
+
+  describe('flag exposure', () => {
+    // The getFlag spy *is* the exposure assertion — the SDK emits the event, not the wizard.
+    let snapshot: {
+      getFlag: MockedFunction<(key: string) => string | boolean | undefined>;
+      getFlagPayload: MockedFunction<() => undefined>;
+    };
+
+    function mockFlags(flags: Record<string, string | boolean>): void {
+      snapshot = {
+        getFlag: vi.fn((key: string) => flags[key]),
+        getFlagPayload: vi.fn(() => undefined),
+      };
+      (mockPostHogInstance as any).evaluateFlags = vi
+        .fn()
+        .mockResolvedValue(snapshot);
+    }
+
+    beforeEach(() => {
+      mockFlags({
+        'wizard-orchestrator': true,
+        'wizard-orchestrator-override': 'sol-review',
+        'unrelated-flag': 'variant-x',
+      });
+    });
+
+    it('reads each wizard flag through getFlag', async () => {
+      await analytics.getAllFlagsForWizard();
+      expect(snapshot.getFlag.mock.calls.map(([k]) => k)).toEqual([
+        ...WIZARD_FLAG_KEYS,
+      ]);
+    });
+
+    it("skips another team's flag", async () => {
+      await analytics.getAllFlagsForWizard();
+      expect(snapshot.getFlag).not.toHaveBeenCalledWith('unrelated-flag');
+    });
+
+    it('does not hand-roll $feature_flag_called', async () => {
+      await analytics.getAllFlagsForWizard();
+      const handRolled = mockPostHogInstance.capture.mock.calls.filter(
+        ([arg]) => (arg as any).event === '$feature_flag_called',
+      );
+      expect(handRolled).toEqual([]);
+    });
+
+    it('resolves only wizard flags into the map', async () => {
+      const flags = await analytics.getAllFlagsForWizard();
+      expect(flags).toEqual({
+        'wizard-orchestrator': 'true',
+        'wizard-orchestrator-override': 'sol-review',
+      });
+    });
+
+    it('stamps $feature/<key> for wizard flags only', async () => {
+      await analytics.getAllFlagsForWizard();
+      analytics.wizardCapture('switchboard resolved', { program: 'x' });
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
+      );
+      const props = (call![0] as any).properties;
+      expect(props['$feature/wizard-orchestrator']).toBe(true);
+      expect(props['$feature/wizard-orchestrator-override']).toBe('sol-review');
+      expect(props['$feature/unrelated-flag']).toBeUndefined();
+    });
+
+    it('lists only enabled wizard flags in $active_feature_flags', async () => {
+      mockFlags({
+        'wizard-orchestrator': true,
+        'wizard-self-driving-use-pi-harness': false,
+        'wizard-orchestrator-override': 'sol-review',
+        'unrelated-flag': 'variant-x',
+      });
+      await analytics.getAllFlagsForWizard();
+      analytics.wizardCapture('switchboard resolved');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
+      );
+      expect((call![0] as any).properties.$active_feature_flags).toEqual([
+        'wizard-orchestrator',
+        'wizard-orchestrator-override',
+      ]);
+    });
+
+    it("tags the SDK's exposure event", () => {
+      const beforeSend = MockedPostHog.mock.calls[0][1]!.before_send as (
+        e: any,
+      ) => any;
+      const sent = beforeSend({
+        event: '$feature_flag_called',
+        properties: { $feature_flag: 'wizard-orchestrator' },
+      });
+      expect(sent.properties).toMatchObject({
+        $feature_flag: 'wizard-orchestrator',
+        $app_name: 'wizard',
+        run_id: 'run-uuid',
+        run_surface: 'local',
+        build: 'dev',
+      });
+    });
+
+    it('carries no $feature props before the fetch', () => {
+      analytics.wizardCapture('early event');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'wizard: early event',
+      );
+      const keys = Object.keys((call![0] as any).properties).filter((k) =>
+        k.startsWith('$feature/'),
+      );
+      expect(keys).toEqual([]);
     });
   });
 
@@ -251,6 +388,36 @@ describe('Analytics', () => {
       } finally {
         envState.runSurface = 'local';
       }
+    });
+  });
+
+  describe('task run tags', () => {
+    it('omits both ids on a run the sandbox did not launch', () => {
+      analytics.capture('wizard: test');
+
+      const properties = (mockPostHogInstance.capture as Mock).mock.calls.at(
+        -1,
+      )?.[0].properties;
+      expect(properties).not.toHaveProperty('task_run_id');
+      expect(properties).not.toHaveProperty('task_id');
+    });
+
+    it('tags every event with the launching task run', () => {
+      envState.taskRunId = 'task-run-uuid';
+      envState.taskId = 'task-uuid';
+      const cloud = new Analytics();
+
+      cloud.capture('wizard: test');
+      cloud.captureException(new Error('e'));
+
+      // Both paths merge the same tag bag, so the join back to the task run has
+      // to hold for exceptions too, not just explicit captures.
+      expect(
+        (mockPostHogInstance.capture as Mock).mock.calls.at(-1)?.[0].properties,
+      ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
     });
   });
 
@@ -360,6 +527,7 @@ describe('Analytics', () => {
         build: 'dev',
         run_id: 'run-uuid',
         run_surface: 'local',
+        version: VERSION,
         command: 'slack',
         $exception_list: [{ type: 'Error' }],
       });
@@ -385,6 +553,24 @@ describe('Analytics', () => {
       expect(beforeSend(event)).toBe(event);
       expect(event.distinctId).toBe('d');
       expect(event.properties).toEqual({ a: 1 });
+    });
+  });
+
+  describe('shutdown', () => {
+    it('emits the terminal event once — the first status wins over the interrupt fallback', async () => {
+      analytics.setTag('program_id', 'warehouse-source');
+
+      await analytics.shutdown('success');
+      // start-tui's ctrl+c fallback fires this on every TUI teardown.
+      await analytics.shutdown('cancelled');
+
+      const finishedCalls = mockPostHogInstance.capture.mock.calls.filter(
+        ([arg]) => arg.event === 'setup wizard finished',
+      );
+      expect(finishedCalls).toHaveLength(1);
+      expect(finishedCalls[0][0].properties).toMatchObject({
+        status: 'success',
+      });
     });
   });
 
@@ -502,6 +688,20 @@ describe('Analytics', () => {
     });
   });
 
+  describe('groupIdentify', () => {
+    it('forwards groupType, groupKey, and properties to the client', () => {
+      analytics.groupIdentify('organization', 'org-1', {
+        wizard_ai_sdk_detected: true,
+      });
+
+      expect(mockPostHogInstance.groupIdentify).toHaveBeenCalledWith({
+        groupType: 'organization',
+        groupKey: 'org-1',
+        properties: { wizard_ai_sdk_detected: true },
+      });
+    });
+  });
+
   describe('integration with other methods', () => {
     it('should work correctly with setTag and captureException', () => {
       const error = new Error('Test error');
@@ -524,6 +724,7 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -550,10 +751,99 @@ describe('Analytics', () => {
           build: 'dev',
           run_id: 'run-uuid',
           run_surface: 'local',
+          version: VERSION,
           $session_id: 'session-uuid',
           integration: 'svelte',
         },
       );
+    });
+  });
+});
+
+describe('sessionProperties', () => {
+  it('includes discovered_features once consent is granted', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+    session.scanConsent = ScanConsent.Granted;
+
+    const properties = sessionProperties(session);
+
+    expect(properties.discovered_features).toEqual([DiscoveredFeature.Stripe]);
+  });
+
+  it('omits discovered_features entirely when the user declined sharing', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+    session.scanConsent = ScanConsent.Declined;
+
+    const properties = sessionProperties(session);
+
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
+  it('omits discovered_features on a --signup run before the user answers', () => {
+    // --signup renders the full TUI, so these events fire while the intro
+    // screen is still on screen. Granting on the flag would put scan results
+    // on every one of them, including for a user who then declines.
+    const session = buildSession({ installDir: '/tmp/app', signup: true });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+
+    const properties = sessionProperties(session);
+
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
+  it('omits discovered_features while consent is still undecided', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [DiscoveredFeature.Stripe];
+    session.scanConsent = ScanConsent.Undecided;
+
+    const properties = sessionProperties(session);
+
+    // Undecided reads the same as declined: a path that reports before the
+    // user has been asked must send nothing, not everything.
+    expect(properties).not.toHaveProperty('discovered_features');
+  });
+
+  it('sends scan_consent in every state, so an absent list is explainable', () => {
+    for (const consent of [
+      ScanConsent.Undecided,
+      ScanConsent.Granted,
+      ScanConsent.Declined,
+    ]) {
+      const session = buildSession({ installDir: '/tmp/app' });
+      session.scanConsent = consent;
+
+      expect(sessionProperties(session).scan_consent).toBe(consent);
+    }
+  });
+
+  it('never sends an empty array in place of the omitted key', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.discoveredFeatures = [];
+    session.scanConsent = ScanConsent.Declined;
+
+    const properties = sessionProperties(session);
+
+    // Absent, not []. An empty array would misread as "we looked and found
+    // nothing" instead of "we didn't report what we found".
+    expect('discovered_features' in properties).toBe(false);
+  });
+
+  it('leaves every other property untouched by a decline', () => {
+    const session = buildSession({ installDir: '/tmp/app' });
+    session.scanConsent = ScanConsent.Declined;
+    session.integration = null;
+    session.additionalFeatureQueue = [];
+
+    const properties = sessionProperties(session);
+
+    expect(properties).toMatchObject({
+      integration: null,
+      detected_framework: null,
+      typescript: false,
+      additional_features: [],
+      run_phase: session.runPhase,
     });
   });
 });

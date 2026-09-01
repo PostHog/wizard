@@ -23,6 +23,7 @@ import {
 } from '@lib/health-checks/readiness';
 import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
 import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
@@ -151,11 +152,11 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         s.id.startsWith(prefix),
       );
       for (const skill of skills) {
-        await downloadSkill(
-          skill,
-          store.session.installDir,
-          '.posthog/skills',
-        );
+        // Pre-auth outage cache: no gateway, so a flagged skill fails closed.
+        await downloadSkill(skill, store.session.installDir, {
+          skillsRoot: '.posthog/skills',
+          triage: undefined,
+        });
       }
     }
     setDownloaded(true);
@@ -164,7 +165,11 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   const handleCancel =
     canDownloadSkills && !isGithubReleasesDown
       ? () => void handleDownloadAndExit()
-      : () => void wizardAbort({ message: 'Exited due to service outage.' });
+      : () =>
+          void wizardAbort({
+            code: ErrorCodes.EnvServiceOutage,
+            message: 'Exited due to service outage.',
+          });
 
   const cancelLabel =
     canDownloadSkills && !isGithubReleasesDown
@@ -187,10 +192,16 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
             confirmLabel=""
             cancelLabel="Exit [Esc]"
             onConfirm={() =>
-              void wizardAbort({ message: 'Exited due to service outage.' })
+              void wizardAbort({
+                code: ErrorCodes.EnvServiceOutage,
+                message: 'Exited due to service outage.',
+              })
             }
             onCancel={() =>
-              void wizardAbort({ message: 'Exited due to service outage.' })
+              void wizardAbort({
+                code: ErrorCodes.EnvServiceOutage,
+                message: 'Exited due to service outage.',
+              })
             }
           />
         ) : (

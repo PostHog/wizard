@@ -11,6 +11,7 @@
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
+import type { Credentials, TaskNotice } from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -74,6 +75,12 @@ export interface AuthErrorDetail {
   usingManagedLogin?: boolean;
   /** Human-readable places a conflicting Anthropic credential may live. */
   credentialPlaces?: string[];
+  /**
+   * True when a pre-run refresh already failed on a dead grant. The login is
+   * gone and re-running is the only fix, so this outranks every other branch —
+   * none of the usual advice (key type, scopes, region) applies.
+   */
+  sessionExpired?: boolean;
   logFilePath: string;
 }
 
@@ -115,12 +122,14 @@ export interface WizardUI {
   startRun(): void;
 
   /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void;
+  setCredentials(credentials: Credentials): void;
+
+  /**
+   * Replace the credentials after a token refresh. Same store write as
+   * {@link setCredentials} without the `auth complete` capture — the user
+   * authenticated once, and a refresh is not a second login.
+   */
+  setAccessToken(credentials: Credentials): void;
 
   /**
    * Persist the user's `role_at_organization` once it's been fetched from
@@ -176,6 +185,19 @@ export interface WizardUI {
     backupAndFix: () => boolean,
   ): Promise<void>;
 
+  /**
+   * Show an optional step's notice and return whether to keep that step. Hosts
+   * that cannot prompt resolve false: a step nobody can answer must not run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean>;
+
+  /**
+   * Dismiss an in-flight task notice as declined. Called when the offer times
+   * out: the notice sits in front of the run's final steps, so left unanswered
+   * it would hold the report behind a modal nobody is looking at.
+   */
+  cancelTaskNotice(): void;
+
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
 
@@ -188,6 +210,13 @@ export interface WizardUI {
    * surface a clear "not available" error to the agent.
    */
   requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
+
+  /**
+   * Dismiss the in-flight wizard_ask overlay, resolving its request with
+   * cancelled sentinels. No-op when nothing is pending. The ask bridge calls
+   * this on timeout so a stale pending question can't block later asks.
+   */
+  cancelPendingQuestion(): void;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
@@ -221,6 +250,9 @@ export interface WizardUI {
 
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
+
+  /** Handoff doc from the `publish_handoff` tool; the task-stream push carries it as `handoff_text`. */
+  setHandoffText(text: string): void;
 
   /** Accumulate one assistant turn's token usage into the hidden Ctrl+T
    *  token/cost HUD's running estimate. No-op outside the TUI. */

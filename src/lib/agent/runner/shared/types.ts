@@ -9,8 +9,8 @@ import type {
 } from '@lib/wizard-session';
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import type { CloudRegion } from '@utils/types';
 import type { ApiProject } from '@lib/api';
+import type { LLMProvider } from '@posthog/warlock';
 
 export type { PromptContext, Credentials };
 
@@ -23,6 +23,7 @@ export interface AbortCase {
   message: string;
   body: string;
   docsUrl?: string;
+  errorCode?: import('@lib/errors').ErrorCode;
 }
 
 /**
@@ -58,7 +59,6 @@ export interface ProgramRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
@@ -87,23 +87,33 @@ export interface ProgramRun {
    * analytics change; opt in per program.
    */
   trackStepProgress?: boolean;
+  /**
+   * Map an agent-authored step label to a stable key, shipped on `wizard: step` as `step_key`.
+   * The runner knows nothing about any program's steps, so a program that wants its funnel to
+   * survive the agent rewording a task supplies the mapping itself. Omit it and only the label
+   * ships, as before.
+   */
+  resolveStepKey?: (stepName: string | undefined) => string | undefined;
 }
 
 /**
  * Result of the shared bootstrap, consumed by both the linear and the
- * orchestrator arm. Credentials, role, and user are already applied to the
- * session by `bootstrapProgram`; this carries the values both arms still need.
+ * orchestrator arm. `bootstrapProgram` runs `authenticate` before returning, so
+ * `credentials` is guaranteed non-null here — the single narrowing point owns
+ * the invariant, and downstream readers get a properly non-null type for free.
  */
 export interface BootstrapResult {
   skillsBaseUrl: string;
-  projectApiKey: Credentials['projectApiKey'];
-  host: Credentials['host'];
-  accessToken: Credentials['accessToken'];
-  projectId: Credentials['projectId'];
-  cloudRegion: CloudRegion;
-  mcpUrl: string;
+  /** Auth outputs (incl. the resolved host family and its MCP url), narrowed at the boundary. */
+  credentials: Credentials;
+  /** Program this run is, and the node its gateway spend pins to. */
+  programId: string;
   wizardFlags: Record<string, string>;
+  /** Flag payloads from the same snapshot (e.g. the self-driving pi `{model, effort?, harness?, sequence?}`). */
+  wizardFlagPayloads: Record<string, unknown>;
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */
   project: ApiProject | null;
+  /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
+  triageProvider: LLMProvider | undefined;
 }

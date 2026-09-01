@@ -1,0 +1,1042 @@
+/**
+ * Shared wizard-tool behavior — skill discovery/install, env-file helpers,
+ * the wizard_ask cap policy, secret-vault plumbing, and the audit ledger.
+ * One implementation consumed by both protocol facades: the MCP server
+ * (`./mcp`) and the pi-native tools (`harness/pi/tools.ts`) — tool behavior
+ * cannot drift between harnesses.
+ */
+
+import path from 'path';
+import fs from 'fs';
+import { unzipSync } from 'fflate';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { readProjectFile } from '@utils/bounded-fs';
+import {
+  collectProjectEnvKeys,
+  isTemplateEnvFileName,
+  parseEnvKeyNames,
+  toPromptSafeRelativePath,
+  type EnvKeyDefinition,
+  type EnvKeyLocations,
+} from '@utils/env-scan';
+import { scanInstalledSkill } from '@lib/yara-hooks';
+import type { LLMProvider } from '@posthog/warlock';
+import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
+import {
+  AUDIT_CHECKS_FILE,
+  coerceAuditChecks,
+  type AuditCheck,
+  type AuditStatus,
+} from '../programs/audit/types';
+import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
+import type { SecretVault } from '../secret-vault';
+import { fetchWithRetry, type RetryOpts } from '../fetch-retry';
+
+// ---------------------------------------------------------------------------
+// Skill types
+// ---------------------------------------------------------------------------
+
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
+  group?: string;
+  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
+  framework?: string;
+  /** The variant a bare framework id resolves to when its family has several. */
+  default?: boolean;
+  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
+  bundle?: boolean;
+  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
+  variants?: { id: string; framework?: string; default?: boolean }[];
+};
+
+/** A bundle's files, keyed by variant short id then path. */
+export type SkillBundle = {
+  id: string;
+  variants: Record<string, Record<string, string>>;
+};
+
+/**
+ * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
+ * publishes under `cliEntries` inside `skill-menu.json`. The wizard uses these
+ * to register skill-backed subcommands at runtime instead of from a baked
+ * build-time snapshot.
+ */
+export type CliEntry = {
+  skillId: string;
+  role: 'command' | 'skill' | 'internal';
+  command?: string;
+  parentCommand?: string;
+  default?: boolean;
+  displayName: string;
+  description: string;
+};
+
+export interface SkillMenu {
+  categories: Record<string, SkillEntry[]>;
+  /**
+   * Skills exposed as CLI commands. Optional because context-mill releases
+   * older than the runtime-resolver cutover don't emit this field.
+   */
+  cliEntries?: CliEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Standalone skill helpers (usable before the MCP server is created)
+// ---------------------------------------------------------------------------
+
+/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
+export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
+  if (!entry.bundle || !entry.variants) return [entry];
+  return entry.variants.map((variant) => ({
+    ...variant,
+    name: entry.name,
+    group: entry.group,
+    bundle: true,
+    downloadUrl: entry.downloadUrl,
+  }));
+}
+
+/**
+ * Fetch the skill menu from the skills server.
+ * Returns parsed data on success, `null` on failure.
+ */
+export async function fetchSkillMenu(
+  skillsBaseUrl: string,
+  opts: RetryOpts = {},
+): Promise<SkillMenu | null> {
+  const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
+  try {
+    logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
+    const resp = await fetchWithRetry(menuUrl, opts);
+    const data = (await resp.json()) as SkillMenu;
+    for (const [category, entries] of Object.entries(data.categories)) {
+      data.categories[category] = entries.flatMap(expandBundleEntry);
+    }
+    logToFile(
+      `fetchSkillMenu: loaded (${
+        Object.keys(data.categories).length
+      } categories)`,
+    );
+    return data;
+  } catch (err: any) {
+    logToFile(`fetchSkillMenu: error: ${err.message}`);
+    return null;
+  }
+}
+
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+function extractZipArchive(zip: Uint8Array, destDir: string): number {
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`zip entry escapes destination: ${entryPath}`);
+    }
+    if (entryPath.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, data);
+    written++;
+  }
+  return written;
+}
+
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
+  bundle: SkillBundle,
+  destDir: string,
+  entryId: string,
+): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
+  }
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, contents] of Object.entries(files)) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`bundle entry escapes destination: ${entryPath}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
+    written++;
+  }
+  return written;
+}
+
+/** Download a URL to a buffer, retrying transient failures with backoff. */
+async function downloadWithRetry(
+  url: string,
+  opts: RetryOpts = {},
+): Promise<Uint8Array> {
+  const resp = await fetchWithRetry(url, opts);
+  return new Uint8Array(await resp.arrayBuffer());
+}
+
+/** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
+export interface SkillInstallOptions {
+  /** Base directory override, e.g. `.posthog/skills`. Default `.claude/skills`. */
+  skillsRoot?: string;
+  /** Scan-triage classifier. `undefined` = no gateway, so a flagged skill fails closed. */
+  triage: LLMProvider | undefined;
+}
+
+/**
+ * Download and extract a skill.
+ * By default installs to `<installDir>/.claude/skills/<id>/`.
+ */
+export async function downloadSkill(
+  skillEntry: SkillEntry,
+  installDir: string,
+  { skillsRoot, triage }: SkillInstallOptions,
+): Promise<{ success: boolean; error?: string }> {
+  const skillDir = skillsRoot
+    ? path.join(installDir, skillsRoot, skillEntry.id)
+    : path.join(installDir, '.claude', 'skills', skillEntry.id);
+  let step: 'download' | 'extract' = 'download';
+
+  try {
+    fs.mkdirSync(skillDir, { recursive: true });
+    const data = await downloadWithRetry(skillEntry.downloadUrl);
+    step = 'extract';
+    const fileCount = skillEntry.bundle
+      ? extractBundle(
+          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
+          skillDir,
+          skillEntry.id,
+        )
+      : extractZipArchive(data, skillDir);
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+
+    // Same scan the Bash-install hook runs — TS-path installs (linear
+    // pre-install, MCP/pi install_skill, orchestrator cache + reference)
+    // must not skip it.
+    const poisonReason = await scanInstalledSkill(skillDir, triage);
+    if (poisonReason) {
+      fs.rmSync(skillDir, { recursive: true, force: true });
+      logToFile(`downloadSkill: ${poisonReason}`);
+      analytics.wizardCapture('skill install failed', {
+        skill_id: skillEntry.id,
+        step: 'scan',
+        platform: process.platform,
+        error: poisonReason.slice(0, 500),
+      });
+      return { success: false, error: poisonReason };
+    }
+
+    logToFile(
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
+    );
+    // The installed variant is a skill program's identity dimension in analytics.
+    analytics.wizardCapture('skill installed', {
+      skill_id: skillEntry.id,
+      platform: process.platform,
+    });
+    return { success: true };
+  } catch (err: any) {
+    logToFile(`downloadSkill: error: ${err.message}`);
+    // A skill-less run still reports success — keep the failure visible.
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id,
+      step,
+      platform: process.platform,
+      error: String(err.message).slice(0, 500),
+    });
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Structured result for installSkillById.
+ * - `ok`: the skill was fetched and extracted; `path` is where it lives
+ *   relative to installDir.
+ * - `menu-fetch-failed`: couldn't fetch or parse the skill menu.
+ * - `skill-not-found`: the menu didn't contain a skill with this id.
+ * - `download-failed`: found the skill but download/extract failed;
+ *   `message` has the underlying error.
+ */
+export type InstallSkillResult =
+  | { kind: 'ok'; path: string }
+  | { kind: 'menu-fetch-failed' }
+  | { kind: 'skill-not-found'; skillId: string }
+  | { kind: 'download-failed'; message: string };
+
+/**
+ * High-level "install a skill by ID" helper. Fetches the skill menu,
+ * finds the skill, downloads and extracts it. Programs should use this
+ * instead of composing fetchSkillMenu + downloadSkill themselves.
+ */
+export async function installSkillById(
+  skillId: string,
+  installDir: string,
+  skillsBaseUrl: string,
+  options: SkillInstallOptions,
+): Promise<InstallSkillResult> {
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return { kind: 'menu-fetch-failed' };
+
+  const skill = Object.values(menu.categories)
+    .flat()
+    .find((s) => s.id === skillId);
+  if (!skill) return { kind: 'skill-not-found', skillId };
+
+  const result = await downloadSkill(skill, installDir, options);
+  if (!result.success) {
+    return { kind: 'download-failed', message: result.error ?? 'unknown' };
+  }
+
+  const relPath = options.skillsRoot
+    ? `${options.skillsRoot}/${skillId}`
+    : `.claude/skills/${skillId}`;
+  return { kind: 'ok', path: relPath };
+}
+
+export const DEFAULT_ASK_MAX_QUESTIONS = 10;
+/**
+ * Consecutive calls about the *same subject* before the one-time
+ * batch-your-questions nudge fires. Adjacency is per subject, not per run:
+ * the guard exists to stop an agent firing many small prompts about one
+ * thing, not to stop a flow that legitimately walks a list — the warehouse
+ * task asks one call per detected source, and 5–8 sources need 15–25 fields,
+ * far more than the 8-question schema limit allows in a single call.
+ */
+export const ASK_BATCH_THRESHOLD = 3;
+
+/** Subject recorded for a `wizard_ask` call that declares none. */
+export const ASK_SUBJECT_UNSPECIFIED = '(unspecified)';
+
+/** Longest subject we keep; anything longer is truncated, never rejected. */
+const ASK_SUBJECT_MAX_LENGTH = 60;
+
+/**
+ * Fold a caller-supplied subject into the key adjacency is counted by.
+ * Case- and whitespace-insensitive so `Postgres`, `postgres ` and ` POSTGRES`
+ * are one subject. An absent or blank subject collapses to a single shared
+ * key, so an agent that declares nothing keeps the original run-wide guard.
+ */
+export function normaliseAskSubject(subject?: string): string {
+  const trimmed = (subject ?? '').trim().toLowerCase();
+  if (trimmed.length === 0) return ASK_SUBJECT_UNSPECIFIED;
+  return trimmed.slice(0, ASK_SUBJECT_MAX_LENGTH);
+}
+
+/**
+ * The `wizard_ask` `sensitive` field description, shared by both harness facades
+ * (the zod schema in `./mcp` and the typebox mirror in `harness/pi/tools.ts`) so
+ * the secret-handling guidance cannot drift between them — the same discipline
+ * `HANDOFF_FIELDS` applies to the handoff schema.
+ *
+ * The load-bearing part is the last two sentences: a vaulted `{secretRef}` is
+ * resolved only by wizard-tools that accept it, and the PostHog data-warehouse
+ * tools reject it. Without that, a pi agent collecting a credential it must hand
+ * to `external-data-sources-create` vaults it, gets a ref the create tool
+ * rejects, and dead-ends into the browser fallback — the exact loss the wizard's
+ * in-cli source setup is meant to avoid.
+ */
+export const WIZARD_ASK_SENSITIVE_DESCRIPTION =
+  "Only valid for kind='text'. When true, the user's answer is stored in the " +
+  "wizard's secret vault and returned to you as { secretRef: 'secret:...' } " +
+  'instead of the raw string. Use for API keys, tokens, and any other secret ' +
+  'the user types in. The secretRef is only resolved by wizard-tools that ' +
+  'accept it (e.g. set_env_values) — it is NOT resolved when passed to other ' +
+  'MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a ' +
+  'secret that must reach another tool, write it to the env with set_env_values ' +
+  "first, or use that tool's own credential-reference flow.";
+
+/**
+ * The `wizard_ask` `subject` field description, shared by both harness facades
+ * so the batching contract cannot drift between them.
+ *
+ * `subject` is what lets the runtime tell "three rapid prompts about one thing"
+ * (which the guard should stop) from "one prompt per item in a list" (which it
+ * must not). Without it the runtime saw only a call count, so a warehouse run
+ * with five detected sources tripped the nudge on its third source.
+ */
+export const WIZARD_ASK_SUBJECT_DESCRIPTION =
+  'Short, stable tag naming what this call collects — the data-warehouse ' +
+  'source kind (e.g. "Postgres", "Stripe"), the integration step, or the ' +
+  'decision at hand. The batching guard counts consecutive calls per subject, ' +
+  'so walking a list one call per item is never interrupted as long as each ' +
+  'call carries its own subject. Reuse the same subject only when you are ' +
+  'still collecting for the same thing (e.g. re-asking after a validation ' +
+  'failure). Omit it and every call counts as one shared subject.';
+
+/**
+ * The `wizard_ask` tool description, shared by both harness facades (the MCP
+ * server in `./mcp` and the pi-native mirror in `harness/pi/tools.ts`) so the
+ * batching and cancellation contract reads identically in both harnesses.
+ */
+export const WIZARD_ASK_TOOL_DESCRIPTION =
+  'Ask the user one or more structured questions and wait for their answers. ' +
+  'Use this whenever you would otherwise inline a question in your text output. ' +
+  'Batch every question about one subject into a single call (up to 8) rather ' +
+  'than asking one at a time, and tag the call with `subject`. Walking a list — ' +
+  'one call per data-warehouse source, one call per integration step — is ' +
+  'expected and is never blocked, because the batching guard counts consecutive ' +
+  'calls per subject. A fully cancelled or timed-out response does NOT count ' +
+  'against the per-run cap — treat it as "the user declined" and fall back ' +
+  'gracefully (e.g. hand over a deep link) without worrying about a wasted call.';
+
+export type AskCapDecision =
+  | { kind: 'ok' }
+  | {
+      kind: 'capped';
+      reason: 'max_questions' | 'adjacency';
+      message: string;
+      /** Normalised subject of the call that was capped — analytics dimension. */
+      subject: string;
+      /** Consecutive calls already sent for that subject. */
+      subjectRunLength: number;
+    };
+
+/** Everything the cap policy needs about the upcoming `wizard_ask` call. */
+export type AskCapInput = {
+  /** Calls already sent to the user in this run (cancelled ones are refunded). */
+  callCount: number;
+  /** Hard per-run ceiling on sent calls. */
+  maxQuestions: number;
+  /** Normalised subject of the upcoming call. */
+  subject: string;
+  /** Consecutive calls already sent for that same subject. */
+  subjectRunLength: number;
+  /** Whether the one-time adjacency nudge already fired in this run. */
+  adjacencyNudged?: boolean;
+};
+
+/**
+ * Pure decision function for the wizard_ask caps. Returns whether the
+ * upcoming call should proceed and, if not, the message to surface to the
+ * agent. Extracted so the policy can be unit-tested without spinning up an
+ * MCP server.
+ *
+ * The two capped reasons are surfaced differently: `max_questions` is a hard
+ * stop, but `adjacency` is a one-time nudge the caller must not present as a
+ * failure — an agent that reads it as a refusal abandons the source instead
+ * of re-asking with batched questions.
+ *
+ * Adjacency counts consecutive calls that share a `subject`, not calls in the
+ * run. A flow that walks a list — the warehouse task's one call per detected
+ * source — changes subject on every call, so its run length never grows and
+ * the nudge never fires. Only repeated prompting about the same thing trips
+ * it, which is what the guard was always for. An agent that declares no
+ * subject falls back to one shared key, so the original run-wide guard still
+ * applies to it.
+ *
+ * The adjacency nudge fires exactly once per run (the caller records it
+ * via `adjacencyNudged`) — flows that legitimately need several
+ * sequential, answer-dependent asks about one subject then proceed up to
+ * `maxQuestions`. Without the flag the rejected call would never advance the
+ * counter and every later call would be rejected, making caps above the
+ * threshold unreachable.
+ *
+ * `maxQuestions` is checked first and is never per-subject, so subjects can
+ * never widen the per-run budget.
+ */
+export function evaluateAskCap({
+  callCount,
+  maxQuestions,
+  subject,
+  subjectRunLength,
+  adjacencyNudged = false,
+}: AskCapInput): AskCapDecision {
+  if (callCount >= maxQuestions) {
+    return {
+      kind: 'capped',
+      reason: 'max_questions',
+      subject,
+      subjectRunLength,
+      message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
+    };
+  }
+  if (!adjacencyNudged && subjectRunLength >= ASK_BATCH_THRESHOLD) {
+    const subjectNote =
+      subject === ASK_SUBJECT_UNSPECIFIED
+        ? 'they all declared no `subject`, so they count as one subject'
+        : `they all used subject "${subject}"`;
+    return {
+      kind: 'capped',
+      reason: 'adjacency',
+      subject,
+      subjectRunLength,
+      message:
+        `Not an error — this ask was not sent (a one-time nudge). ` +
+        `You have sent ${subjectRunLength} wizard_ask calls in a row about the same subject (${subjectNote}). ` +
+        `Batch every question you still need for that subject into one call (up to 8 questions) and send wizard_ask again now. ` +
+        `If your next questions are about something else — another data-warehouse source, another integration step — ` +
+        `set a different \`subject\` on the call. Adjacency is counted per subject, so one call per source is never blocked, ` +
+        `and you must not try to squeeze several sources into one 8-question call. ` +
+        `Either way the next call is sent. Do not abandon the task, and do not fall back to browser setup because of this message.`,
+    };
+  }
+  return { kind: 'ok' };
+}
+
+/**
+ * Per-run `wizard_ask` call accounting: the total cap plus the per-subject
+ * adjacency run. Both harness facades drive one of these instead of holding
+ * their own counters, so the cap, the nudge and the cancellation refund
+ * cannot drift between the MCP server and the pi-native tools.
+ */
+export type AskAccounting = {
+  /**
+   * Decide whether the upcoming call may go through. Records the one-time
+   * adjacency nudge as a side effect, so a nudged call is never nudged twice.
+   */
+  evaluate(subject?: string): AskCapDecision;
+  /** Record a call that was sent to the user. */
+  record(subject?: string): void;
+  /**
+   * Refund a call that never produced an answer — cancelled, timed out, or
+   * failed in the bridge. Rolls back the total *and* the subject run, so a
+   * declined ask costs the agent nothing on either cap.
+   */
+  refund(subject?: string): void;
+  /** Current state, for analytics and tests. */
+  snapshot(): {
+    callCount: number;
+    subject: string;
+    subjectRunLength: number;
+    adjacencyNudged: boolean;
+  };
+};
+
+export function createAskAccounting(maxQuestions: number): AskAccounting {
+  let callCount = 0;
+  let currentSubject = ASK_SUBJECT_UNSPECIFIED;
+  let subjectRunLength = 0;
+  let adjacencyNudged = false;
+
+  return {
+    evaluate(subject) {
+      const key = normaliseAskSubject(subject);
+      const decision = evaluateAskCap({
+        callCount,
+        maxQuestions,
+        subject: key,
+        subjectRunLength: key === currentSubject ? subjectRunLength : 0,
+        adjacencyNudged,
+      });
+      if (decision.kind === 'capped' && decision.reason === 'adjacency') {
+        adjacencyNudged = true;
+      }
+      return decision;
+    },
+    record(subject) {
+      const key = normaliseAskSubject(subject);
+      callCount += 1;
+      subjectRunLength = key === currentSubject ? subjectRunLength + 1 : 1;
+      currentSubject = key;
+    },
+    refund(subject) {
+      const key = normaliseAskSubject(subject);
+      callCount = Math.max(0, callCount - 1);
+      if (key === currentSubject) {
+        subjectRunLength = Math.max(0, subjectRunLength - 1);
+      }
+    },
+    snapshot: () => ({
+      callCount,
+      subject: currentSubject,
+      subjectRunLength,
+      adjacencyNudged,
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Env file helpers
+// ---------------------------------------------------------------------------
+
+export const ENV_FILE_PATH_DESCRIPTION =
+  'Path to the .env file, relative to the wizard working directory. Pass ".env" for a file in that directory, or include the selected subproject path (for example, "packages/app/.env") for a nested project. Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
+/** Shared `check_env_keys` tool description — both facades declare the same contract. */
+export const CHECK_ENV_KEYS_DESCRIPTION =
+  'Check which environment variable keys the project already sets, and in which file. By default it scans the .env files in the project (including .env.local and nested ones such as apps/api/.env, but not ones inside dependency or hidden directories), so it agrees with the source detection the wizard reports. Returns, per key, { "status": "present" | "missing", "foundIn": [file paths] }. "present" means a real env file sets the key; a key found only in a committed template (.env.example, .env.sample, .env.template, .env.dist) is "missing", because a template documents a key rather than setting it — so "missing" with a non-empty "foundIn" means the project expects this key and you still need to collect it. A template listed in "foundIn" is NEVER a write target: it is committed to the repository, so writing a real credential there would publish it. Write to .env or .env.local instead. Key NAMES and file paths only — it never reads or reveals a value.';
+
+/**
+ * `filePath` on `check_env_keys` is optional — omitting it scans the whole
+ * project, which is what makes the tool agree with the wizard's own detector.
+ */
+export const CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION =
+  'Optional. Omit it to scan the project\'s .env files (the default, and what you want in a monorepo or when the keys may live in .env.local). Pass a single path, relative to the wizard working directory, only to restrict the check to that one file — for example ".env" or "packages/app/.env". Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
+/**
+ * Resolve filePath relative to workingDirectory, rejecting path traversal.
+ */
+export function resolveEnvPath(
+  workingDirectory: string,
+  filePath: string,
+): string {
+  const resolved = path.resolve(workingDirectory, filePath);
+  if (
+    !resolved.startsWith(workingDirectory + path.sep) &&
+    resolved !== workingDirectory
+  ) {
+    throw new Error(
+      `Path traversal rejected: "${filePath}" resolves outside working directory`,
+    );
+  }
+  return resolved;
+}
+
+/**
+ * Ensure the given env file basename is covered by .gitignore in the working directory.
+ * Creates .gitignore if it doesn't exist; appends the entry if missing.
+ */
+export function ensureGitignoreCoverage(
+  workingDirectory: string,
+  envFileName: string,
+): void {
+  const gitignorePath = path.join(workingDirectory, '.gitignore');
+
+  if (fs.existsSync(gitignorePath)) {
+    const content = fs.readFileSync(gitignorePath, 'utf8');
+    // Check if the file (or a glob covering it) is already listed
+    if (content.split('\n').some((line) => line.trim() === envFileName)) {
+      return;
+    }
+    const newContent = content.endsWith('\n')
+      ? `${content}${envFileName}\n`
+      : `${content}\n${envFileName}\n`;
+    fs.writeFileSync(gitignorePath, newContent, 'utf8');
+  } else {
+    fs.writeFileSync(gitignorePath, `${envFileName}\n`, 'utf8');
+  }
+}
+
+/**
+ * Parse a .env file's content and return the set of defined key NAMES.
+ * Delegates to the shared parser the warehouse detector uses, so the two
+ * cannot disagree about what counts as a key (the `export KEY=` form used to
+ * be a key to the detector and not to this tool).
+ */
+export function parseEnvKeys(content: string): Set<string> {
+  return new Set(parseEnvKeyNames(content));
+}
+
+// ---------------------------------------------------------------------------
+// check_env_keys
+// ---------------------------------------------------------------------------
+
+/** Whether a requested key is set, and which env files mention it. */
+export interface EnvKeyPresence {
+  /**
+   * `present` only when a real env file sets the key. A key declared solely in
+   * a committed template is `missing` — documented, not set.
+   */
+  status: 'present' | 'missing';
+  /**
+   * Project-relative paths of every `.env*` file that declares the key,
+   * templates included. `missing` with a non-empty `foundIn` is the useful
+   * case: the project expects this key and has not set it.
+   *
+   * A path here is evidence, not a write target. A template is committed, so
+   * writing a credential into one publishes it — `set_env_values` should be
+   * pointed at `.env`/`.env.local`.
+   */
+  foundIn: string[];
+}
+
+/**
+ * Answer "which of these env keys does the project already define, and where".
+ *
+ * Shared by both tool facades (MCP and pi) so the answer cannot drift between
+ * harnesses. Two modes:
+ *  - `filePath` omitted (preferred): scan every `.env*` file in the project,
+ *    within the same depth and size bounds the warehouse detector uses. This
+ *    is what stops the tool reporting "missing" for a key the detector found
+ *    in `apps/api/.env.local`.
+ *  - `filePath` given: check that one file only — the original behaviour,
+ *    kept for callers that already pass a path.
+ *
+ * In both modes `status` answers "is this key set?", which is not the same as
+ * "does some file mention it": a committed template declares keys without
+ * setting them, so it never makes a key `present`. `foundIn` still lists it.
+ *
+ * SECURITY: returns key NAMES and file paths only. A `.env` value is never
+ * read into the result and never logged.
+ */
+export function checkEnvKeys(
+  workingDirectory: string,
+  keys: string[],
+  filePath?: string,
+): Record<string, EnvKeyPresence> {
+  const locations =
+    filePath === undefined
+      ? collectProjectEnvKeys(workingDirectory)
+      : readSingleEnvFile(workingDirectory, filePath);
+
+  // Key names only — never the values, and never the file contents.
+  logToFile(
+    `check_env_keys: ${
+      filePath === undefined
+        ? `project scan of ${workingDirectory}`
+        : resolveEnvPath(workingDirectory, filePath)
+    }, keys: ${keys.join(', ')}`,
+  );
+
+  const results: Record<string, EnvKeyPresence> = {};
+  for (const key of keys) {
+    const definitions = locations.get(key) ?? [];
+    results[key] = {
+      // A template declares a key; it does not set one. Counting
+      // `.env.example` as "present" would tell the agent the credential is
+      // already configured and stop it collecting one — the same failure as
+      // the "missing" answer this tool was fixed to stop giving, inverted.
+      // Nearly every project has a template, so this is the common case.
+      status: definitions.some((d) => !d.template) ? 'present' : 'missing',
+      foundIn: definitions.map((d) => d.file),
+    };
+  }
+  return results;
+}
+
+/**
+ * The single-file arm of `checkEnvKeys`, shaped like the project scan so the
+ * caller handles one type. Reads through `readProjectFile`, which returns null
+ * for a missing file, an oversized file, or a `.env` that is a DIRECTORY —
+ * the last of which used to crash the tool with EISDIR.
+ */
+function readSingleEnvFile(
+  workingDirectory: string,
+  filePath: string,
+): EnvKeyLocations {
+  const resolved = resolveEnvPath(workingDirectory, filePath);
+  const content = readProjectFile(resolved);
+  const locations: EnvKeyLocations = new Map();
+  if (content === null) return locations;
+
+  const definition: EnvKeyDefinition = {
+    file: toPromptSafeRelativePath(workingDirectory, resolved),
+    // The template rule holds however the file was reached, so `status` means
+    // one thing in both modes. `foundIn` still names the file, so an explicit
+    // check of a template is answered rather than silently empty.
+    template: isTemplateEnvFileName(path.basename(resolved)),
+  };
+  for (const key of parseEnvKeyNames(content)) {
+    if (!locations.has(key)) locations.set(key, [definition]);
+  }
+  return locations;
+}
+
+/**
+ * `set_env_values`' refusal for a committed template file, or null when the
+ * path is an ordinary env file. Shared by both facades so the two cannot
+ * disagree about what is a legal destination.
+ *
+ * `check_env_keys` hands the agent file paths now, and a template is one of
+ * them — so the tool that resolves secret refs must not accept one as a
+ * target. A template is committed, so a credential written there is published,
+ * and the `ensureGitignoreCoverage` that follows the write does not save it:
+ * adding an already-tracked file to `.gitignore` changes nothing.
+ *
+ * Nothing legitimate is lost. No wizard code path writes a template, and the
+ * agent's Read/Write gate deliberately lets it edit one directly — so
+ * documenting a key name keeps its route, and this one stays for credentials.
+ */
+export function templateEnvWriteRefusal(resolvedPath: string): string | null {
+  const name = path.basename(resolvedPath);
+  if (!isTemplateEnvFileName(name)) return null;
+  return (
+    `Error: "${name}" is a committed template that documents key names, so it is not a valid target for set_env_values — ` +
+    `a credential written there would be published with the repository. ` +
+    `Write to .env or .env.local instead (it is created if missing). ` +
+    `If you only mean to document the key name, edit the template directly.`
+  );
+}
+
+/**
+ * Escape a key before it is interpolated into the match regex below. The key
+ * comes from the agent, and a stray metacharacter would otherwise build a
+ * pattern that matches an unrelated line — `A|B` turns `^(\s*A|B\s*=)` into
+ * "any line starting with A", whose value the merge would then overwrite.
+ */
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Merge key-value pairs into existing .env content.
+ * Updates existing keys in-place, appends new keys at the end.
+ */
+export function mergeEnvValues(
+  content: string,
+  values: Record<string, string>,
+): string {
+  let result = content;
+  const updatedKeys = new Set<string>();
+
+  for (const [key, value] of Object.entries(values)) {
+    // Preserve the existing `KEY=` prefix exactly; only swap the value.
+    //
+    // The `export ` form counts as the same declaration. `check_env_keys`
+    // reads it, so without this the reader reports a key present while the
+    // writer fails to find the line and appends a second definition below it
+    // — two declarations of one key, with the winner left to whichever dotenv
+    // loader the app happens to use. Capturing the prefix in $1 keeps the
+    // file's existing style on the way out.
+    const regex = new RegExp(
+      `^(\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=).*$`,
+      'm',
+    );
+    if (regex.test(result)) {
+      result = result.replace(regex, `$1${value}`);
+      updatedKeys.add(key);
+    }
+  }
+
+  const newKeys = Object.entries(values).filter(
+    ([key]) => !updatedKeys.has(key),
+  );
+  if (newKeys.length > 0) {
+    if (result.length > 0 && !result.endsWith('\n')) {
+      result += '\n';
+    }
+    for (const [key, value] of newKeys) {
+      result += `${key}=${value}\n`;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Secret-vault plumbing shared by the MCP server and the pi-native tools —
+// one implementation so the vault contract cannot drift between harnesses.
+// ---------------------------------------------------------------------------
+
+/**
+ * Swap sensitive text answers for opaque vault refs before they return to
+ * the agent — the raw value never enters the LLM conversation. Cancelled
+ * answers pass through as the sentinel, unvaulted.
+ */
+export function vaultSensitiveAnswers(
+  questions: readonly { id: string; prompt: string; sensitive?: boolean }[],
+  answers: Record<string, string | string[]>,
+  vault: SecretVault,
+): Record<string, string | string[] | { secretRef: string }> {
+  const sensitiveById = new Map(
+    questions.filter((q) => q.sensitive).map((q) => [q.id, q.prompt]),
+  );
+  const sanitised: Record<string, string | string[] | { secretRef: string }> =
+    {};
+  for (const [id, answer] of Object.entries(answers)) {
+    const label = sensitiveById.get(id);
+    if (
+      label !== undefined &&
+      typeof answer === 'string' &&
+      answer !== CANCELLED_SENTINEL
+    ) {
+      const ref = vault.put(answer, { label, source: 'wizard_ask' });
+      sanitised[id] = { secretRef: ref };
+      logToFile(`wizard_ask: vaulted answer for "${id}" as ${ref}`);
+    } else {
+      sanitised[id] = answer;
+    }
+  }
+  return sanitised;
+}
+
+/** Resolution of a values map that may carry `{secretRef}` entries. */
+export type ResolvedEnvValues =
+  | { ok: true; values: Record<string, string>; refKeys: string[] }
+  | { ok: false; key: string; secretRef: string };
+
+/**
+ * Resolve `{secretRef}` entries host-side, so the value is written but never
+ * returned to the agent. Callers format their own error envelope from the
+ * failing key/ref.
+ */
+export function resolveEnvSecretRefs(
+  values: Record<string, string | { secretRef: string }>,
+  vault: SecretVault,
+): ResolvedEnvValues {
+  const resolved: Record<string, string> = {};
+  const refKeys: string[] = [];
+  for (const [key, val] of Object.entries(values)) {
+    if (typeof val === 'string') {
+      resolved[key] = val;
+      continue;
+    }
+    const secret = vault.get(val.secretRef);
+    if (secret === undefined) {
+      return { ok: false, key, secretRef: val.secretRef };
+    }
+    resolved[key] = secret;
+    refKeys.push(key);
+  }
+  return { ok: true, values: resolved, refKeys };
+}
+
+// ---------------------------------------------------------------------------
+// Audit ledger helpers
+// ---------------------------------------------------------------------------
+
+export const AUDIT_STATUSES: readonly AuditStatus[] = [
+  'pending',
+  'pass',
+  'error',
+  'warning',
+  'suggestion',
+];
+
+/** Atomically write the audit ledger. Thin typed wrapper over writeJsonAtomic. */
+export function writeLedgerAtomic(
+  targetPath: string,
+  checks: AuditCheck[],
+): void {
+  writeJsonAtomic(targetPath, checks);
+}
+
+/**
+ * Apply a batch of patches to the ledger by id. Returns the new array and the
+ * list of update ids that didn't match any existing check.
+ */
+export function applyAuditUpdates(
+  current: AuditCheck[],
+  updates: Array<{
+    id: string;
+    status: AuditStatus;
+    file?: string;
+    details?: string;
+  }>,
+): { next: AuditCheck[]; unknown: string[] } {
+  const byId = new Map(current.map((c) => [c.id, c]));
+  const unknown: string[] = [];
+
+  for (const u of updates) {
+    const existing = byId.get(u.id);
+    if (!existing) {
+      unknown.push(u.id);
+      continue;
+    }
+    byId.set(u.id, {
+      ...existing,
+      status: u.status,
+      ...(u.file !== undefined ? { file: u.file } : {}),
+      ...(u.details !== undefined ? { details: u.details } : {}),
+    });
+  }
+
+  return {
+    next: current.map((c) => byId.get(c.id) ?? c),
+    unknown,
+  };
+}
+
+/**
+ * Append new checks to a seeded ledger. Duplicate ids are reported without
+ * mutating the current ledger, including duplicates inside the additions.
+ */
+function applyAuditAdditions(
+  current: AuditCheck[],
+  additions: AuditCheck[],
+): { next: AuditCheck[]; duplicates: string[] } {
+  const existingIds = new Set(current.map((c) => c.id));
+  const additionIds = new Set<string>();
+  const duplicates: string[] = [];
+
+  for (const check of additions) {
+    if (existingIds.has(check.id) || additionIds.has(check.id)) {
+      duplicates.push(check.id);
+      continue;
+    }
+    additionIds.add(check.id);
+  }
+
+  if (duplicates.length > 0) {
+    return { next: current, duplicates };
+  }
+
+  return { next: [...current, ...additions], duplicates: [] };
+}
+
+export function readLedger(targetPath: string): AuditCheck[] {
+  if (!fs.existsSync(targetPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+    return coerceAuditChecks(parsed);
+  } catch {
+    return [];
+  }
+}
+
+export type AppendAuditChecksResult =
+  | { ok: true; added: number }
+  | { ok: false; reason: 'missing-ledger' }
+  | { ok: false; reason: 'duplicate-ids'; ids: string[] };
+
+export function appendAuditChecksToLedger(
+  targetPath: string,
+  additions: AuditCheck[],
+): AppendAuditChecksResult {
+  if (!fs.existsSync(targetPath)) {
+    return { ok: false, reason: 'missing-ledger' };
+  }
+
+  const current = readLedger(targetPath);
+  const { next, duplicates } = applyAuditAdditions(current, additions);
+  if (duplicates.length > 0) {
+    return { ok: false, reason: 'duplicate-ids', ids: duplicates };
+  }
+
+  writeLedgerAtomic(targetPath, next);
+  return { ok: true, added: additions.length };
+}
+
+export const SERVER_NAME = 'wizard-tools';
+
+/** Tool names exposed by the wizard-tools server, keyed for selective use. */
+// SDK expects MCP tool names in allowedTools/disallowedTools to be the
+// fully-qualified `mcp__<server>__<tool>` form (sdk.d.ts: "Fully-qualified
+// MCP tool name, e.g. mcp__server__tool_name."). The colon form silently
+// fails to match, which made every program's `disallowedTools` entry a no-op.
+export const WIZARD_TOOL_NAMES = {
+  checkEnvKeys: `mcp__${SERVER_NAME}__check_env_keys`,
+  setEnvValues: `mcp__${SERVER_NAME}__set_env_values`,
+  detectPackageManager: `mcp__${SERVER_NAME}__detect_package_manager`,
+  loadSkillMenu: `mcp__${SERVER_NAME}__load_skill_menu`,
+  installSkill: `mcp__${SERVER_NAME}__install_skill`,
+  auditSeedChecks: `mcp__${SERVER_NAME}__audit_seed_checks`,
+  auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
+  auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
+  wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+  publishHandoff: `mcp__${SERVER_NAME}__publish_handoff`,
+  enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
+  completeTask: `mcp__${SERVER_NAME}__complete_task`,
+  readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Test-only exports
+// ---------------------------------------------------------------------------
+
+export const __test = {
+  extractZipArchive,
+  extractBundle,
+  fetchWithRetry,
+  downloadWithRetry,
+  writeLedgerAtomic,
+  readLedger,
+  applyAuditAdditions,
+  appendAuditChecksToLedger,
+  applyAuditUpdates,
+  makeMutex,
+  AUDIT_CHECKS_FILE,
+};

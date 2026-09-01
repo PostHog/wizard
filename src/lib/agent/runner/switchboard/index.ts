@@ -7,9 +7,16 @@
  * Model ids are gateway strings — add new ones as constants in `@lib/constants`.
  */
 
-import { DEFAULT_AGENT_MODEL, Harness, Sequence } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
+  SONNET_5_MODEL,
+  Harness,
+  Sequence,
+} from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
+import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -18,13 +25,23 @@ import { resolveSequence } from './sequence';
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
-  sequence?: 'cli' | 'pi-clamp' | 'flag' | 'binding';
+  sequence?:
+    | 'cli'
+    | 'composed'
+    | 'runtask-clamp'
+    | 'payload'
+    | 'flag'
+    | 'binding';
 }
 
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
   program: ProgramId;
+  /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
+  composed?: boolean;
   flags: Record<string, string>;
+  /** Flag payloads from the same snapshot (payload-carrying flags, e.g. self-driving pi). */
+  flagPayloads?: Record<string, unknown>;
   /** CLI override (`--harness`). Wins over `flags`. */
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
@@ -73,12 +90,16 @@ export interface HarnessPick {
   harness: Harness;
   /** Gateway model id (string). */
   model: string;
+  /** Reasoning-effort override. Absent → the model's table default. */
+  thinkingLevel?: EffortLevel;
 }
 
 export interface ProgramBinding {
   sequence: Sequence;
   harness: Harness;
   model: string;
+  /** Reasoning-effort override for the model. Absent → the model's table default. */
+  thinkingLevel?: EffortLevel;
   /**
    * Per-role overrides applied only in orchestrator mode — keys are
    * agent-prompt `type` values published by context-mill (`'seed'`,
@@ -103,7 +124,12 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'posthog-integration': DEFAULT_BINDING,
   'revenue-analytics-setup': DEFAULT_BINDING,
   'warehouse-source': DEFAULT_BINDING,
-  'error-tracking-upload-source-maps': DEFAULT_BINDING,
+  'error-tracking-upload-source-maps': {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
   audit: DEFAULT_BINDING,
   'events-audit': DEFAULT_BINDING,
   'posthog-doctor': DEFAULT_BINDING,
@@ -115,6 +141,24 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  // Orchestrator on pi. The binding routes only; every stage's model and
+  // effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
+  metrics: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
+  'replay-vision': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
+  'ai-observability': {
+    sequence: Sequence.linear,
+    harness: Harness.anthropic,
+    model: SONNET_5_MODEL,
+  },
   slack: DEFAULT_BINDING,
 };
 
@@ -127,8 +171,8 @@ export function resolveBinding(
 ): ProgramBinding {
   ctx.trace ??= {};
   const sequence = resolveSequence(ctx);
-  const { harness, model } = resolveHarness(ctx, role);
-  return { sequence, harness, model };
+  const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
+  return { sequence, harness, model, thinkingLevel };
 }
 
 // ── Unified re-export surface ───────────────────────────────────────────
@@ -137,6 +181,10 @@ export {
   SEQUENCE_OPTIONS,
   getSequence,
   resolveSequence,
-  isOrchestratorEnabled,
   type SequenceRunner,
 } from './sequence';
+export {
+  isOrchestratorEnabled,
+  areSeededTasksEnabled,
+  resolveStageOverrides,
+} from './flags';

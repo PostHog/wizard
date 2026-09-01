@@ -3,12 +3,12 @@
  * so the tools the wizard prompt depends on — skill discovery/install and
  * fenced `.env` edits — are exposed to pi as native `defineTool` tools backed
  * by the same helpers the claude-agent-sdk path uses (`fetchSkillMenu`,
- * `installSkillById`, `parseEnvKeys`, `mergeEnvValues`). Same tool names as the
- * MCP server so the shared prompt is unchanged.
- *
- * v1 covers the four tools a framework integration needs. `wizard_ask` is
- * interactive-only (disabled in CI) and the secret-vault `secretRef` path is a
- * follow-up — CI passes literal values.
+ * `installSkillById`, `checkEnvKeys`, `mergeEnvValues`). Same tool names as the
+ * MCP server so the shared prompt is unchanged. `wizard_ask` is wired here too
+ * (same schema, caps, and askBridge as the MCP tool) so interactive programs
+ * can interview the user on pi; without a bridge (CI) it errors on call.
+ * Sensitive answers are vaulted to `{secretRef}` and resolved host-side by
+ * set_env_values — the raw value never enters the model conversation.
  */
 
 import fs from 'fs';
@@ -16,14 +16,38 @@ import path from 'path';
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import {
+  CHECK_ENV_KEYS_DESCRIPTION,
+  CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
+  DEFAULT_ASK_MAX_QUESTIONS,
+  ENV_FILE_PATH_DESCRIPTION,
+  WIZARD_TOOL_NAMES,
+  checkEnvKeys as checkEnvKeysCore,
+  createAskAccounting,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
-  parseEnvKeys,
+  normaliseAskSubject,
   resolveEnvPath,
-} from '@lib/wizard-tools';
+  resolveEnvSecretRefs,
+  templateEnvWriteRefusal,
+  vaultSensitiveAnswers,
+  WIZARD_ASK_SENSITIVE_DESCRIPTION,
+  WIZARD_ASK_SUBJECT_DESCRIPTION,
+  WIZARD_ASK_TOOL_DESCRIPTION,
+} from '@lib/wizard-tools/tools';
+import type { LLMProvider } from '@posthog/warlock';
+import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  publishHandoff,
+} from '@lib/wizard-tools/handoff';
+import { createSecretVault } from '@lib/secret-vault';
+import { withMode } from './index';
 import {
   detectNodePackageManagers,
   type PackageManagerDetector,
@@ -41,12 +65,36 @@ export interface PiToolsContext {
   skillsBaseUrl: string;
   /** Framework's package-manager detector. Defaults to Node detection. */
   detectPackageManager?: PackageManagerDetector;
+  /** Drives the `wizard_ask` overlay. Omitted in CI → the tool errors on call. */
+  askBridge?: WizardAskBridge;
+  /** Per-run cap on wizard_ask calls. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}. */
+  maxQuestions?: number;
+  /** Overlay open/closed signal — the security gate blocks Write/Edit while open. */
+  onAskPendingChange?: (pending: boolean) => void;
+  /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
+  disallowedTools?: readonly string[];
+  /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
+  triageProvider?: LLMProvider;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
-  const { workingDirectory, skillsBaseUrl } = ctx;
+  const {
+    workingDirectory,
+    skillsBaseUrl,
+    askBridge,
+    onAskPendingChange,
+    triageProvider,
+  } = ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
+  const askMaxQuestions = ctx.maxQuestions ?? DEFAULT_ASK_MAX_QUESTIONS;
+  // Per-run wizard_ask accounting (total cap + one-time per-subject adjacency
+  // nudge). Same shared implementation the MCP server drives, so the two
+  // facades cannot diverge on the cap, the nudge or the refund.
+  const askAccounting = createAskAccounting(askMaxQuestions);
+  // Session-scoped secret vault, same contract as the MCP server: wizard_ask
+  // mints `{secretRef}` for sensitive answers, set_env_values resolves them.
+  const secretVault = createSecretVault();
 
   // Fetch the skill menu at most once per run — the agent calls load_skill_menu
   // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
@@ -92,6 +140,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         args.skillId,
         workingDirectory,
         skillsBaseUrl,
+        { triage: triageProvider },
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
@@ -109,26 +158,32 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   const checkEnvKeys = defineTool({
     name: 'check_env_keys',
     label: 'Check env keys',
-    description:
-      'Check which environment variable keys are present or missing in a .env file. Never reveals values.',
-    promptSnippet: 'check_env_keys(filePath, keys) — see which .env keys exist',
+    description: CHECK_ENV_KEYS_DESCRIPTION,
+    promptSnippet:
+      'check_env_keys(keys) — see which .env keys exist, and in which file',
     parameters: Type.Object({
-      filePath: Type.String({
-        description: 'Path to the .env file, relative to the project root',
-      }),
+      filePath: Type.Optional(
+        Type.String({
+          description: CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
+        }),
+      ),
       keys: Type.Array(Type.String(), {
         description: 'Environment variable key names to check',
       }),
     }),
+    // `async` with nothing to await, on purpose: it is what turns a thrown
+    // error into a rejection. `checkEnvKeys` throws on a filePath that escapes
+    // the working directory, and pi wraps `execute` in a plain (non-async)
+    // arrow, so without this the throw leaves the tool synchronously instead
+    // of arriving as a failed tool call. The scan replaced an awaited read,
+    // which is the only reason there is nothing left to await.
+    // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_id, args) {
-      const resolved = resolveEnvPath(workingDirectory, args.filePath);
-      const existing = fs.existsSync(resolved)
-        ? parseEnvKeys(await fs.promises.readFile(resolved, 'utf8'))
-        : new Set<string>();
-      const results: Record<string, 'present' | 'missing'> = {};
-      for (const key of args.keys) {
-        results[key] = existing.has(key) ? 'present' : 'missing';
-      }
+      const results = checkEnvKeysCore(
+        workingDirectory,
+        args.keys,
+        args.filePath,
+      );
       return text(JSON.stringify(results, null, 2));
     },
   });
@@ -137,16 +192,21 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     name: 'set_env_values',
     label: 'Set env values',
     description:
-      'Create or update environment variable keys in a .env file (creates the file if missing). Pass literal string values.',
+      'Create or update environment variable keys in a .env file (creates the file if missing). Each value is either a literal string or a secret reference `{ "secretRef": "secret:..." }` returned by wizard_ask — refs are resolved locally, so the actual value is written to the file but never returned to the agent.',
     promptSnippet:
       'set_env_values(filePath, values) — write .env keys (never hardcode secrets in source)',
     parameters: Type.Object({
       filePath: Type.String({
-        description: 'Path to the .env file, relative to the project root',
+        description: ENV_FILE_PATH_DESCRIPTION,
       }),
-      values: Type.Record(Type.String(), Type.String(), {
-        description: 'Key → literal value',
-      }),
+      values: Type.Record(
+        Type.String(),
+        Type.Union([Type.String(), Type.Object({ secretRef: Type.String() })]),
+        {
+          description:
+            'Key → (literal string OR { secretRef } pointing to a vaulted secret)',
+        },
+      ),
     }),
     async execute(_id, args) {
       const forbidden = Object.keys(args.values).find(
@@ -157,11 +217,26 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
         );
       }
+      // Resolve secret refs host-side; the value never reaches the agent.
+      const resolution = resolveEnvSecretRefs(args.values, secretVault);
+      if (!resolution.ok) {
+        return text(
+          `Error: secret reference "${resolution.secretRef}" for key "${resolution.key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+        );
+      }
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
+      const templateRefusal = templateEnvWriteRefusal(resolved);
+      if (templateRefusal) {
+        logToFile(`[pi] set_env_values: refused template target ${resolved}`);
+        analytics.wizardCapture('set_env_values template target refused', {
+          file_name: path.basename(resolved),
+        });
+        return text(templateRefusal);
+      }
       const existing = fs.existsSync(resolved)
         ? await fs.promises.readFile(resolved, 'utf8')
         : '';
-      const merged = mergeEnvValues(existing, args.values);
+      const merged = mergeEnvValues(existing, resolution.values);
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
@@ -194,5 +269,176 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  return [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm];
+  // Native mirror of the MCP `wizard_ask` tool: same name, schema, and
+  // askBridge, so the shared prompt is unchanged.
+  const wizardAsk = defineTool({
+    name: 'wizard_ask',
+    label: 'Ask the user',
+    description: WIZARD_ASK_TOOL_DESCRIPTION,
+    promptSnippet:
+      'wizard_ask(questions, subject) — ask the user structured questions and wait for answers; tag each call with the subject it collects for',
+    parameters: Type.Object({
+      questions: Type.Array(
+        Type.Object({
+          id: Type.String({
+            description: 'Stable key for the answer in the response map',
+          }),
+          prompt: Type.String({
+            description: 'Question text shown to the user',
+          }),
+          kind: Type.Union(
+            [
+              Type.Literal('single'),
+              Type.Literal('multi'),
+              Type.Literal('text'),
+            ],
+            {
+              description:
+                "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
+            },
+          ),
+          options: Type.Optional(
+            Type.Array(
+              Type.Object({
+                label: Type.String(),
+                value: Type.String(),
+                description: Type.Optional(Type.String()),
+              }),
+              {
+                description:
+                  'Required for kind=single|multi; ignored for kind=text',
+              },
+            ),
+          ),
+          required: Type.Optional(
+            Type.Boolean({ description: 'Defaults to true' }),
+          ),
+          sensitive: Type.Optional(
+            Type.Boolean({
+              description: WIZARD_ASK_SENSITIVE_DESCRIPTION,
+            }),
+          ),
+        }),
+        { minItems: 1, maxItems: 8 },
+      ),
+      subject: Type.Optional(
+        Type.String({ description: WIZARD_ASK_SUBJECT_DESCRIPTION }),
+      ),
+    }),
+    async execute(_id, args) {
+      if (!askBridge) {
+        return text(
+          'Error: wizard_ask is not available in this environment (CI / non-interactive). Proceed with sensible defaults or emit [ABORT] requirements-incomplete.',
+        );
+      }
+
+      const cap = askAccounting.evaluate(args.subject);
+      if (cap.kind === 'capped') {
+        const { callCount } = askAccounting.snapshot();
+        logToFile(
+          `[pi] wizard_ask capped: reason=${cap.reason} count=${callCount} subject=${cap.subject} run=${cap.subjectRunLength}`,
+        );
+        analytics.wizardCapture('wizard_ask capped', {
+          reason: cap.reason,
+          call_count: callCount,
+          max_questions: askMaxQuestions,
+          subject: cap.subject,
+          subject_run_length: cap.subjectRunLength,
+        });
+        return text(cap.message);
+      }
+
+      // The schema can't enforce per-kind requirements or unique ids.
+      const ids = new Set<string>();
+      for (const q of args.questions) {
+        if ((q.kind === 'single' || q.kind === 'multi') && !q.options?.length) {
+          return text(
+            `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
+          );
+        }
+        if (q.sensitive && q.kind !== 'text') {
+          return text(
+            `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be sensitive.`,
+          );
+        }
+        if (ids.has(q.id)) {
+          return text(
+            `Error: duplicate question id "${q.id}". Each question needs a unique id.`,
+          );
+        }
+        ids.add(q.id);
+      }
+
+      // Optimistically take the slot; refund it on a cancellation or a bridge
+      // error so a declined/failed ask doesn't burn the budget for later ones.
+      askAccounting.record(args.subject);
+      // Block Write/Edit for as long as the overlay is open, so the agent can't
+      // mutate files while it's waiting on the user's answer.
+      onAskPendingChange?.(true);
+      try {
+        const answers = await askBridge.request({
+          questions: args.questions,
+          subject: normaliseAskSubject(args.subject),
+        });
+        if (isFullyCancelled(answers)) askAccounting.refund(args.subject);
+        // Sensitive answers go to the vault; the agent sees an opaque ref
+        // (same contract as the MCP wizard_ask).
+        const sanitised = vaultSensitiveAnswers(
+          args.questions,
+          answers,
+          secretVault,
+        );
+        logToFile(
+          `[pi] wizard_ask: resolved ${
+            Object.keys(answers).length
+          } answer(s) for ${args.questions.length} question(s)`,
+        );
+        return text(JSON.stringify({ answers: sanitised }, null, 2));
+      } catch (err) {
+        askAccounting.refund(args.subject);
+        const message = err instanceof Error ? err.message : String(err);
+        logToFile(`[pi] wizard_ask: error: ${message}`);
+        return text(`Error: wizard_ask failed: ${message}`);
+      } finally {
+        onAskPendingChange?.(false);
+      }
+    },
+  });
+
+  // Native mirror of the MCP `publish_handoff` tool (shared description, so no drift).
+  const publishHandoffTool = defineTool({
+    name: PUBLISH_HANDOFF_TOOL_NAME,
+    label: 'Publish handoff',
+    description: PUBLISH_HANDOFF_DESCRIPTION,
+    promptSnippet:
+      'publish_handoff(content) — publish the full report markdown to the wizard session',
+    parameters: Type.Object({
+      content: Type.String({
+        description: PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+      }),
+    }),
+    execute(_id, args) {
+      const result = publishHandoff(args.content);
+      logToFile(`[pi] publish_handoff: ${result.message}`);
+      return Promise.resolve(text(result.message));
+    },
+  });
+
+  const tools = [
+    loadSkillMenu,
+    installSkill,
+    checkEnvKeys,
+    setEnvValues,
+    detectPm,
+    // Sequential: it mutates the store's handoff state.
+    withMode(publishHandoffTool, 'sequential'),
+  ];
+  // Register wizard_ask only when the program allows it. posthog-integration
+  // disallows it (runs without structured user input); self-driving keeps it.
+  // Sequential: the ask bridge holds a single in-flight question slot, so a
+  // batched turn must never dispatch two asks (or an ask + a write) at once.
+  const askDisallowed =
+    ctx.disallowedTools?.includes(WIZARD_TOOL_NAMES.wizardAsk) ?? false;
+  if (!askDisallowed) tools.push(withMode(wizardAsk, 'sequential'));
+  return tools;
 }

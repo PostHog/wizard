@@ -13,6 +13,7 @@ import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase, McpOutcome } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
@@ -20,6 +21,7 @@ import { ScreenId, Overlay } from '@ui/tui/router';
 import { Program } from '@lib/programs/program-registry';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(Program.PostHogIntegration);
@@ -72,7 +74,7 @@ describe('WizardCiDriver — full integration flow', () => {
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
-      host: 'https://us.posthog.com',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
       projectId: 42,
     });
 
@@ -112,7 +114,7 @@ describe('WizardCiDriver — full integration flow', () => {
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
-      host: 'https://us.posthog.com',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
       projectId: 7,
     });
     const state = driver.readState();
@@ -169,6 +171,154 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
     await expect(answersPromise).resolves.toEqual({ router: 'app' });
     // Overlay popped; back to the underlying screen.
     expect(driver.readState().currentScreen).not.toBe(Overlay.WizardAsk);
+  });
+});
+
+describe('WizardCiDriver — self-driving integration check', () => {
+  function selfDrivingStore(): WizardStore {
+    const store = new WizardStore(Program.SelfDriving);
+    setUI(new InkUI(store));
+    store.session = buildSession({ installDir: '/tmp/ci-driver-sd', ci: true });
+    return store;
+  }
+
+  it('exposes the integration check and commits set_integrate', () => {
+    const store = selfDrivingStore();
+    const driver = new WizardCiDriver(store);
+
+    // Intro → integration-check.
+    store.completeSetup();
+    const state = driver.readState();
+    expect(state.currentScreen).toBe(ScreenId.SelfDrivingIntegrationCheck);
+    expect(state.session.integrate).toBeNull();
+    expect(state.actions.map((a) => a.id)).toContain('set_integrate');
+
+    // Answer "no, set it up first" → integrate=true, advances off the screen.
+    const next = driver.performAction('set_integrate', { integrate: true });
+    expect(next.session.integrate).toBe(true);
+    expect(next.currentScreen).not.toBe(ScreenId.SelfDrivingIntegrationCheck);
+  });
+
+  it('skips the integration check when --integrate pre-resolved it', () => {
+    const store = selfDrivingStore();
+    store.session = buildSession({
+      installDir: '/tmp/ci-driver-sd',
+      integrate: true,
+    });
+    const driver = new WizardCiDriver(store);
+
+    store.completeSetup();
+    expect(driver.readState().currentScreen).not.toBe(
+      ScreenId.SelfDrivingIntegrationCheck,
+    );
+  });
+});
+
+describe('WizardCiDriver — source-maps project pick', () => {
+  function sourceMapsStore(): WizardStore {
+    const store = new WizardStore(Program.ErrorTrackingUploadSourceMaps);
+    setUI(new InkUI(store));
+    store.session = buildSession({ installDir: '/tmp/ci-driver-sm', ci: true });
+    return store;
+  }
+
+  function toDetectScreen(store: WizardStore): void {
+    // Intro → auth → detect.
+    store.completeSetup();
+    store.setCredentials({
+      accessToken: 'phx_x',
+      projectApiKey: 'phc_x',
+      host: 'https://us.posthog.com',
+      projectId: 1,
+    });
+  }
+
+  it('commits the pick the way the detect screen would and advances', () => {
+    const store = sourceMapsStore();
+    const driver = new WizardCiDriver(store);
+
+    toDetectScreen(store);
+    const state = driver.readState();
+    expect(state.currentScreen).toBe(ScreenId.SourceMapsDetect);
+    expect(state.actions.map((a) => a.id)).toContain(
+      'pick_source_maps_project',
+    );
+
+    const next = driver.performAction('pick_source_maps_project', {
+      variant: 'node',
+      path: '.',
+    });
+    const ctx = store.session.frameworkContext;
+    expect(ctx[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant]).toBe('node');
+    expect(ctx[SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName]).toBe('Node.js');
+    expect(ctx[SOURCE_MAPS_CONTEXT_KEYS.selectedPath]).toBe('.');
+    expect(next.currentScreen).toBe(ScreenId.Run);
+  });
+
+  it('requires the variant and path params', () => {
+    const store = sourceMapsStore();
+    const driver = new WizardCiDriver(store);
+
+    toDetectScreen(store);
+    expect(() =>
+      driver.performAction('pick_source_maps_project', { variant: 'node' }),
+    ).toThrow('requires param "path"');
+  });
+});
+
+describe('WizardCiDriver — task-notice overlay', () => {
+  const notice = {
+    title: 'Connect your data sources',
+    body: ['We detected some warehouse sources.'],
+    items: ['Postgres', 'Stripe'],
+    confirmLabel: 'Continue [Enter]',
+    cancelLabel: 'Skip [Esc]',
+    prompt: 'Connect these during setup?',
+  };
+
+  it('projects the notice into read_state and keeps the step', async () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+
+    const kept = store.showTaskNotice(notice);
+
+    const state = driver.readState();
+    expect(state.currentScreen).toBe(Overlay.TaskNotice);
+    expect(state.taskNotice).toEqual({
+      title: 'Connect your data sources',
+      items: ['Postgres', 'Stripe'],
+      prompt: 'Connect these during setup?',
+    });
+    expect(driver.listActions().map((a) => a.id)).toContain('resolve_notice');
+
+    driver.performAction('resolve_notice', { keep: true });
+
+    await expect(kept).resolves.toBe(true);
+    expect(driver.readState().taskNotice).toBeNull();
+    expect(driver.readState().currentScreen).not.toBe(Overlay.TaskNotice);
+  });
+
+  it('skips the step when keep is false', async () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+    const kept = store.showTaskNotice(notice);
+    driver.performAction('resolve_notice', { keep: false });
+    await expect(kept).resolves.toBe(false);
+  });
+
+  it('defaults to keeping the step when keep is omitted', async () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+    const kept = store.showTaskNotice(notice);
+    driver.performAction('resolve_notice');
+    await expect(kept).resolves.toBe(true);
+  });
+
+  it('projects an empty items list when the notice has none', () => {
+    const store = freshStore();
+    const driver = new WizardCiDriver(store);
+    void store.showTaskNotice({ ...notice, items: undefined });
+    expect(driver.readState().taskNotice?.items).toEqual([]);
   });
 });
 

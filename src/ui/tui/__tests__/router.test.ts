@@ -1,4 +1,10 @@
-import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
+import {
+  buildSession,
+  McpOutcome,
+  OutroKind,
+  RunPhase,
+} from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 import { Integration } from '@lib/constants';
@@ -25,7 +31,7 @@ describe('WizardRouter', () => {
       session.credentials = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       };
 
@@ -54,6 +60,31 @@ describe('WizardRouter', () => {
       expect(router.resolve(session)).toBe(ScreenId.Auth);
     });
 
+    // Every login failure path (OAuth denied, missing completion scope, no
+    // project access) calls wizardAbort, which renders the error outro and
+    // then waits for its dismissal. Credentials never arrive, so the auth
+    // step never completes — without the reroute the auth spinner stays up
+    // and that wait deadlocks.
+    it('routes a failed login to the error outro instead of parking on auth', () => {
+      const router = new WizardRouter(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      // An error phase alone (no outro yet) stays on auth.
+      session.runPhase = RunPhase.Error;
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      session.outroData = { kind: OutroKind.Error, message: 'login failed' };
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+    });
+
     it('returns the last flow screen when every entry is complete', () => {
       const router = new WizardRouter(Program.PostHogIntegration);
       const session = baseWizardSession();
@@ -67,7 +98,7 @@ describe('WizardRouter', () => {
       session.credentials = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       };
       session.runPhase = RunPhase.Completed;
@@ -227,7 +258,7 @@ describe('WizardRouter', () => {
       session.credentials = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       };
       return session;

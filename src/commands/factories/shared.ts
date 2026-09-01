@@ -1,14 +1,17 @@
 import type { Arguments, Options } from 'yargs';
 
-import { runWizard, runWizardCI } from '@lib/runners';
+import { runWizard, runWizardCI, runWizardHeadless } from '@lib/runners';
+import { isHeadless } from '@lib/headless-mode';
 import type { ProgramConfig } from '@lib/programs/program-step';
 
 import { skillProgramOptions } from '../skill-program-options';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 
 /**
  * Dispatch a parsed yargs invocation to the wizard runner. Applies the
- * program's `mapCliOptions` transform, then routes to `runWizard` or
- * `runWizardCI` based on the `--ci` flag.
+ * program's `mapCliOptions` transform, then routes to `runWizardHeadless`,
+ * `runWizardCI`, or `runWizard` based on the headless / `--ci` flags.
  *
  * Every command file used to inline this; the factories call it instead.
  */
@@ -26,16 +29,21 @@ export function runCommandHandler(work: () => void | Promise<void>): void {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`\n\x1b[1;91m✖ ${msg}\x1b[0m\n\n`);
+      emitWizardError({ code: ErrorCodes.InternalUnhandled, message: msg });
       process.exit(1);
     }
   })();
 }
 
 export function dispatchProgram(config: ProgramConfig, argv: Arguments): void {
-  const argvRecord = argv as unknown as Record<string, unknown>;
+  const argvRecord: Record<string, unknown> = { ...argv };
   const extras = config.mapCliOptions?.(argvRecord) ?? {};
   const options = { ...argvRecord, ...extras };
-  if (options.ci) {
+  if (isHeadless(options)) {
+    // Same non-interactive pipeline `--ci` uses; validation (api-key,
+    // install-dir, region) is owned by runNonInteractive.
+    runWizardHeadless(config, options);
+  } else if (options.ci) {
     runWizardCI(config, options);
   } else {
     runWizard(config, options);

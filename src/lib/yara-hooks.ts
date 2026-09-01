@@ -33,10 +33,17 @@ import type {
   Category,
 } from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
+import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
+import {
+  highestSeverityMatch,
+  publishBlockingMatch,
+  scanVerdict,
+} from './yara-policy';
+import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 // TODO(wizard#594): invert this dependency.
 // L2 infra (yara-hooks) imports product-specific filename constants from
@@ -113,12 +120,9 @@ export interface HookCallbackMatcher {
   timeout?: number;
 }
 
-/** Which content surface a warlock rule applies to (from rule `scan_context`). */
-export type ScanContext = 'command' | 'input' | 'output';
+export type { ScanAction, ScanContext } from './yara-policy';
 
 // ─── Scan Report Accumulator ─────────────────────────────────────
-
-export type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
 
 interface ScanReportEntry {
   rule: string;
@@ -342,6 +346,9 @@ const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
  * (~25K tokens), so triage always sees the chunk its matches came from.
  */
 const SCAN_CHUNK_SIZE = 100_000;
+
+// A skill file is read at most this far; the rest is head-scanned and logged.
+const SKILL_FILE_SCAN_BYTES = 10 * 1024 * 1024;
 /**
  * Overlap between adjacent chunks so a pattern straddling a chunk boundary
  * still lands whole inside at least one chunk. YARA rule strings are at most
@@ -531,23 +538,7 @@ export function repeatBlockReason(
 }
 
 // ─── Severity helpers ────────────────────────────────────────────
-
-const SEVERITY_RANK: Record<string, number> = {
-  critical: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-};
-
-/** Return the highest-severity match from a list of matches. */
-function highestSeverityMatch(matches: ScanMatch[]): ScanMatch {
-  return matches.reduce((worst, m) =>
-    (SEVERITY_RANK[m.metadata.severity ?? ''] ?? 0) >
-    (SEVERITY_RANK[worst.metadata.severity ?? ''] ?? 0)
-      ? m
-      : worst,
-  );
-}
+// Severity vocabulary and the terminate-or-warn decision live in yara-policy.
 
 // ─── Scan + triage core ──────────────────────────────────────────
 
@@ -723,15 +714,24 @@ export async function scanAndTriage(
 
 /**
  * Create PreToolUse hook matchers for YARA scanning.
- * Scans Bash commands before execution for exfiltration, destructive
- * operations, and supply chain violations ('command'-context rules).
+ * 1. Bash — scans commands before execution for exfiltration, destructive
+ *    operations, and supply chain violations ('command'-context rules).
+ * 2. publish_handoff — scans the report content with the same 'output'-context
+ *    rules + triage as the PostToolUse Write/Edit hook, but BEFORE the MCP
+ *    tool runs: the report is agent-authored and is persisted to a
+ *    host-designated file (POSTHOG_HANDOFF_OUTPUT_PATH) as well as pushed to
+ *    the task stream. Only a CRITICAL match refuses the publish; below that
+ *    the report goes out with the match recorded.
  */
 export function createPreToolUseYaraHooks(
-  // Accepted for API symmetry with createPostToolUseYaraHooks, but
-  // intentionally unused: PreToolUse Bash always blocks on any flagged
-  // command regardless of triage verdict, so the LLM call would be wasted.
-  // Future PreToolUse hooks that need triage can wire this through.
-  _llmProvider?: LLMProvider,
+  // Used only by the publish_handoff matcher below (output-context triage,
+  // same fail-closed semantics as Write/Edit). The Bash matcher still passes
+  // undefined — any flagged command blocks regardless of triage verdict, so
+  // the LLM call would be wasted.
+  llmProvider?: LLMProvider,
+  // Ends the run when a handoff scan errors — without it that path just blocks,
+  // which is the old behavior, so it stays optional.
+  onTerminate?: (reason: string) => void,
 ): HookCallbackMatcher[] {
   const repeatTracker = createRepeatBlockTracker();
   return [
@@ -775,6 +775,79 @@ export function createPreToolUseYaraHooks(
               decision: 'block',
               reason: '[YARA] Scanner error — command blocked as a precaution.',
             };
+          }
+        },
+      ],
+      timeout: HOOK_TIMEOUT_MS,
+    },
+    {
+      // ── publish_handoff content scanning ──
+      hooks: [
+        async (input: HookInput): Promise<HookOutput> => {
+          try {
+            const toolName = input.tool_name as string;
+            // The wizard's publish_handoff MCP tool, fully qualified by the
+            // SDK (e.g. mcp__wizard-tools__publish_handoff). Matched by
+            // suffix so a server rename can't silently reopen the gap — the
+            // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts),
+            // which this module can't import without a cycle (tools.ts
+            // imports scanInstalledSkill from here).
+            if (
+              typeof toolName !== 'string' ||
+              !toolName.endsWith('__publish_handoff')
+            ) {
+              return {};
+            }
+
+            const toolInput = input.tool_input as Record<string, unknown>;
+            const content =
+              typeof toolInput?.content === 'string' ? toolInput.content : '';
+
+            if (!content) return {};
+
+            recordScan();
+            // Same 'output'-context scan + triage as the Write/Edit hook:
+            // the report is agent-authored, quotes the user's code, and now
+            // reaches a second persisted consumer (the host file + the cloud
+            // worker's PR body) — so it must clear the bar of any other
+            // agent-driven write BEFORE the tool executes.
+            const matches = await scanAndTriage(content, 'output', llmProvider);
+            if (matches.length === 0) return {};
+
+            // Below critical: record it, don't cost the run its only report.
+            const match = publishBlockingMatch(matches);
+            if (!match) {
+              const worst = highestSeverityMatch(matches);
+              recordMatch('PreToolUse', 'publish_handoff', worst, 'warned');
+              logToFile(
+                `[YARA] publish_handoff allowed with a ${
+                  worst.metadata.severity ?? 'unknown'
+                } match (${worst.rule}) — below the critical publish bar`,
+              );
+              return {};
+            }
+
+            recordMatch('PreToolUse', 'publish_handoff', match, 'blocked');
+
+            const attempt = repeatTracker.attempt('publish_handoff', content);
+            return {
+              decision: 'block',
+              reason: repeatBlockReason(
+                attempt,
+                'publish_handoff',
+                `[YARA] ${match.rule}: ${
+                  match.metadata.description ?? 'security policy violation'
+                }. Handoff blocked for security — remove the flagged content from the report.`,
+              ),
+            };
+          } catch (error) {
+            logToFile('[YARA] PreToolUse publish_handoff hook error:', error);
+            // Fail closed, but end the run: a silent block would just leave
+            // the agent rewording a report that can never publish.
+            const reason =
+              '[YARA] Scanner error while scanning the handoff report — session terminated as a precaution.';
+            onTerminate?.(reason);
+            return { decision: 'block', reason };
           }
         },
       ],
@@ -923,18 +996,13 @@ export function createPostToolUseYaraHooks(
 
             recordScan();
             const matches = await scanAndTriage(content, 'input', llmProvider);
-            if (matches.length === 0) return {};
+            const verdict = scanVerdict(matches);
+            if (!verdict) return {};
 
-            const match = highestSeverityMatch(matches);
+            const { match } = verdict;
+            recordMatch('PostToolUse', toolName, match, verdict.action);
 
-            // Critical severity or a rule asking us to block => terminate; the
-            // agent's context may be poisoned by injected instructions.
-            const isTerminal =
-              match.metadata.severity === 'critical' ||
-              match.metadata.action === 'block';
-
-            if (isTerminal) {
-              recordMatch('PostToolUse', toolName, match, 'aborted');
+            if (verdict.terminal) {
               const reason =
                 `[YARA CRITICAL] ${match.rule}: Prompt injection detected in file content. ` +
                 `Agent context is potentially poisoned. Session terminated for safety.`;
@@ -942,7 +1010,6 @@ export function createPostToolUseYaraHooks(
               return { stopReason: reason };
             }
 
-            recordMatch('PostToolUse', toolName, match, 'warned');
             return {
               hookSpecificOutput: {
                 hookEventName: 'PostToolUse',
@@ -990,26 +1057,22 @@ export function createPostToolUseYaraHooks(
             recordScan();
             const matches = await scanSkillFiles(cwd, skillDir, llmProvider);
 
-            if (matches.length === 0) return {};
+            const verdict = scanVerdict(matches);
+            if (!verdict) return {};
 
-            // INTENTIONAL ASYMMETRY: skill-install terminates on ANY
-            // post-triage match, while Read/Grep only terminates on
-            // critical-or-block. Skills are downloaded code from an
-            // external source; any flagged content in them is treated as
-            // poisoned. Read/Grep, by contrast, may scan project files
-            // the user wrote themselves where a medium-severity match
-            // can warrant a warning instead of a terminate.
-            // TODO(wizard#593): document / lock in this contract with a test.
-            const match = highestSeverityMatch(matches);
             recordMatch(
               'PostToolUse',
               'Bash (skill install)',
-              match,
-              'aborted',
+              verdict.match,
+              verdict.action,
             );
+            // Same verdict as every other surface: critical terminates, the
+            // rest warn. These rules fire on first-party skill prose often
+            // enough that terminating costs more than it prevents.
+            if (!verdict.terminal) return {};
 
             const reason =
-              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule}. ` +
+              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${verdict.match.rule}. ` +
               `The downloaded skill contains potential prompt injection. Session terminated for safety.`;
             onTerminate(reason);
             return { stopReason: reason };
@@ -1029,6 +1092,47 @@ export function createPostToolUseYaraHooks(
 }
 
 // ─── Skill File Scanner ──────────────────────────────────────────
+
+/**
+ * Scan a freshly installed skill directory (any root — .claude/skills or the
+ * orchestrator's run cache) and return a terminate reason when it is poisoned,
+ * else null. The choke point for TS-path installs (downloadSkill); agent Bash
+ * installs are covered by the PostToolUse matcher above. Runs the same LLM
+ * triage as the tool-use scans; fail-closed to treating every match as real when
+ * no provider is configured, so a missing key never weakens the check.
+ * `llmProvider` is explicit — pi and the orchestrator never set the env fallback.
+ *
+ * Terminates on the same verdict as every other surface (critical only). A
+ * non-terminal match is recorded and the skill is kept: these rules fire on
+ * first-party skill prose, and deleting the skill leaves the agent working blind
+ * on the very content it needed.
+ */
+export async function scanInstalledSkill(
+  absoluteSkillDir: string,
+  llmProvider: LLMProvider | undefined,
+): Promise<string | null> {
+  recordScan();
+  const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
+  const verdict = scanVerdict(matches);
+  if (!verdict) return null;
+  recordMatch(
+    'skill-install',
+    'installSkillById',
+    verdict.match,
+    verdict.action,
+  );
+  if (!verdict.terminal) {
+    logToFile(
+      `[YARA] ${verdict.match.rule} (${
+        verdict.match.metadata.severity ?? 'unknown'
+      }) in ${absoluteSkillDir} — non-terminal, keeping the skill`,
+    );
+    return null;
+  }
+  return `Poisoned skill detected: ${verdict.match.rule} (${
+    verdict.match.metadata.severity ?? 'unknown'
+  }) in ${absoluteSkillDir}`;
+}
 
 /**
  * Read and scan all text files in a skill directory for prompt injection.
@@ -1053,30 +1157,38 @@ async function scanSkillFiles(
     absolute: true,
   });
 
-  const fileContents: string[] = [];
-  for (const filePath of files) {
-    try {
-      fileContents.push(fs.readFileSync(filePath, 'utf-8'));
-    } catch (err) {
-      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
-    }
-  }
-
-  if (fileContents.length === 0) {
+  if (files.length === 0) {
     logToFile(`[YARA] No text files found in skill directory: ${absoluteDir}`);
     return [];
   }
 
   logToFile(
-    `[YARA] Scanning ${fileContents.length} files in skill directory: ${skillDir}`,
+    `[YARA] Scanning ${files.length} files in skill directory: ${skillDir}`,
   );
 
-  // Pass 1 (sequential): scan each file through the chunk-aware path —
-  // full coverage even for oversized files, and every flagged chunk keeps a
-  // reference to the exact content its matches came from.
+  // Pass 1 (sequential): read and scan ONE file at a time through the
+  // chunk-aware path. Oversized files are scanned up to the cap and logged —
+  // never silently skipped. Flagged chunks keep a reference to the exact
+  // content their matches came from.
   const flagged: FlaggedChunk[] = [];
-  for (const content of fileContents) {
-    flagged.push(...(await scanForContext(content, 'input')));
+  for (const filePath of files) {
+    let content: string | null;
+    try {
+      if (fs.statSync(filePath).size > SKILL_FILE_SCAN_BYTES) {
+        logToFile(
+          `[YARA] Skill file over ${SKILL_FILE_SCAN_BYTES} bytes; scanning its head only: ${filePath}`,
+        );
+        content = readFileHead(filePath, SKILL_FILE_SCAN_BYTES);
+      } else {
+        content = fs.readFileSync(filePath, 'utf-8');
+      }
+    } catch (err) {
+      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
+      continue;
+    }
+    if (content) {
+      flagged.push(...(await scanForContext(content, 'input')));
+    }
   }
 
   // Pass 2 (parallel, inside triageFlagged): triage each flagged chunk

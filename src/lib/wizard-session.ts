@@ -10,17 +10,35 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
+import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
 import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser, ApiProject } from './api';
+import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
+  /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
+  expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   projectApiKey: string;
-  host: string;
+  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
+  host: HostResolution;
   projectId: number;
+  /**
+   * Requested OAuth scopes the grant came back without — deselected on the
+   * consent screen or clamped by the app's ceiling. Read when a run fails so
+   * the error can name the missing permission and the fix (re-run and grant
+   * it during the OAuth flow) instead of the generic report-a-bug line.
+   * Empty/absent on CI api-key runs, where there is no scope request to diff
+   * against.
+   */
+  missingScopes?: readonly string[];
 }
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
@@ -49,6 +67,13 @@ export enum DiscoveredFeature {
   LLM = 'llm',
 }
 
+/** Consent to report what local detection found (see `scanConsent` below). */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
+}
+
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
   LLM = 'llm',
@@ -56,12 +81,12 @@ export enum AdditionalFeature {
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'LLM analytics',
+  [AdditionalFeature.LLM]: 'AI observability',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
@@ -104,6 +129,10 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** Stable machine-readable error code from the error catalog (@lib/errors). */
+  errorCode?: import('@lib/errors').ErrorCode;
+  /** Structured context for the error code; safe for telemetry payloads. */
+  errorDetail?: Record<string, unknown>;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
@@ -139,6 +168,24 @@ export interface AskQuestion {
   sensitive?: boolean;
 }
 
+/**
+ * Copy for a modal shown before an optional step runs, so the user can decline
+ * it. The program that owns the step supplies the words; the runner and the
+ * screen only carry them.
+ */
+export interface TaskNotice {
+  title: string;
+  /** Paragraphs, in order. */
+  body: string[];
+  /** Optional highlighted list, e.g. what was detected. */
+  items?: string[];
+  docsLabel?: string;
+  docsUrl?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  prompt: string;
+}
+
 /** Map of question id → answer (string for single/text, string[] for multi). */
 export type AskAnswers = Record<string, string | string[]>;
 
@@ -146,6 +193,12 @@ export type AskAnswers = Record<string, string | string[]>;
 export interface PendingQuestion {
   id: string;
   questions: AskQuestion[];
+  /**
+   * UTC ISO 8601 timestamp of when the ask was created. Published on the
+   * task stream as `pending_input.asked_at` so the web app can age the
+   * prompt; stable across pushes for the lifetime of one ask.
+   */
+  askedAt?: string;
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
   /**
@@ -172,6 +225,25 @@ export interface WizardSession {
   installDir: string;
   ci: boolean;
   signup: boolean;
+  /**
+   * Harness-only escape hatch: keep the `wizard_ask` bridge wired in a `ci`
+   * session so an e2e run can answer the agent's questions.
+   *
+   * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
+   * flag, `bin.ts` never populates it, and nothing in a published build reads
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
+   *
+   * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
+   * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
+   * `POSTHOG_WIZARD_e2e_ask=true` set this field. `readEnvironment` drops it —
+   * see `NEVER_FROM_ENV`, and keep that list in step with this comment.
+   */
+  e2eAsk: boolean;
+  /**
+   * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
+   * from `getLocalDev()` — neither belongs here. This one stays because
+   * `mcp add|remove|tutorial --local` populate it from their own flag.
+   */
   localMcp: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
@@ -190,6 +262,14 @@ export interface WizardSession {
   projectId?: number;
   noTelemetry: boolean;
 
+  /**
+   * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
+   * into the authenticated project's AI Observability tab. Dev/test builds
+   * only — the flag is undeclared in published builds so this stays `false`
+   * there. See `src/lib/agent/aio-capture.ts`.
+   */
+  captureAio: boolean;
+
   /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
   harness?: Harness;
   /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
@@ -199,6 +279,14 @@ export interface WizardSession {
 
   // From detection + screens
   setupConfirmed: boolean;
+  /**
+   * Gates reporting only; local detection runs either way. Reporting treats
+   * 'undecided' as 'declined', so a path that reports before the user was
+   * asked sends nothing rather than everything.
+   */
+  scanConsent: ScanConsent;
+  /** Guards against reporting twice; consent resolves from two paths. */
+  warehouseSourcesReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -241,11 +329,11 @@ export interface WizardSession {
   apiUser: ApiUser | null;
 
   /**
-   * Cloud region and project payload resolved at authentication, kept so a
-   * second agent run in the same invocation (e.g. self-driving's integration
-   * phase) reuses the first login wholesale instead of re-authenticating.
+   * Project payload resolved at authentication, kept so a second agent run in
+   * the same invocation (e.g. self-driving's integration phase) reuses the
+   * first login wholesale instead of re-authenticating. The resolved region
+   * lives on `credentials.host.region`.
    */
-  cloudRegion: CloudRegion | null;
   apiProject: ApiProject | null;
 
   // Lifecycle
@@ -263,6 +351,8 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
+  mcpLoginCommands: string[];
   mcpSuggestedPromptsDismissed: boolean;
   /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
   slackStepDismissed: boolean;
@@ -278,11 +368,15 @@ export interface WizardSession {
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
-   * `null` until decided — the integration-check screen asks "do you already
-   * have PostHog?" and sets it (No → true, Yes → false). The `--integrate`
-   * flag pre-sets it to `true`, skipping the question. When `true`, the
-   * self-driving prompt has the agent set up the SDK before the Self-driving
-   * steps. Unused by other programs.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
    */
   integrate: boolean | null;
 
@@ -306,9 +400,13 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  /** Mirrors `AuthErrorDetail` in `@ui/wizard-ui` — keep the two in step. */
   authErrorDetail: {
     hasSettingsConflict: boolean;
     conflicts?: SettingsConflict[];
+    usingManagedLogin?: boolean;
+    credentialPlaces?: string[];
+    sessionExpired?: boolean;
     logFilePath: string;
   } | null;
   portConflictProcess: {
@@ -317,6 +415,8 @@ export interface WizardSession {
     port: number;
     user: string;
   } | null;
+  /** Copy for the task-notice modal, set while it is open. */
+  taskNotice: TaskNotice | null;
   outroData: OutroData | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
@@ -343,7 +443,11 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
+  e2eAsk?: boolean;
+  localDev?: boolean;
   localMcp?: boolean;
+  localPosthog?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
   email?: string;
@@ -358,27 +462,40 @@ export function buildSession(args: {
   sequence?: Sequence;
   model?: string;
   integrate?: boolean;
+  captureAio?: boolean;
 }): WizardSession {
+  const local = resolveLocalDev(args);
   return {
     debug: args.debug ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
-    localMcp: args.localMcp ?? false,
+    e2eAsk: args.e2eAsk ?? false,
+    localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
-    baseUrl: args.baseUrl,
+    // `--local-posthog` is sugar over `--base-url`, which every downstream URL
+    // helper already honours. An explicit `--base-url` is more specific, so it wins.
+    baseUrl:
+      args.baseUrl ?? (local.localPosthog ? POSTHOG_LOCAL_URL : undefined),
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    captureAio: args.captureAio ?? false,
     harness: args.harness,
     sequence: args.sequence,
     model: args.model,
 
     setupConfirmed: false,
+    // No screen can ask in a scripted CI run, so granting keeps CI's
+    // telemetry as it was. --signup alone still provisions a brand-new
+    // account headlessly, and that user has never seen the disclosure — a
+    // headless `--ci --signup` run stays covered by the ci branch above.
+    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
+    warehouseSourcesReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,
@@ -392,6 +509,7 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpLoginCommands: [],
     mcpSuggestedPromptsDismissed: false,
     slackStepDismissed: false,
     slackConnected: null,
@@ -407,7 +525,6 @@ export function buildSession(args: {
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
-    cloudRegion: null,
     apiProject: null,
     readinessResult: null,
     outageDismissed: false,
@@ -415,6 +532,7 @@ export function buildSession(args: {
     settingsConflicts: null,
     authErrorDetail: null,
     portConflictProcess: null,
+    taskNotice: null,
     outroData: null,
     dashboardUrl: null,
     notebookUrl: null,
@@ -424,4 +542,16 @@ export function buildSession(args: {
     frameworkConfig: null,
     pendingQuestion: null,
   };
+}
+
+/** One place to ask, so a new consent state does not need three edits. */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }

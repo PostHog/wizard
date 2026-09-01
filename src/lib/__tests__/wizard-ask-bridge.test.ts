@@ -116,6 +116,7 @@ describe('createWizardAskBridge', () => {
           { id: 'a', prompt: 'A', kind: 'text' },
           { id: 'b', prompt: 'B', kind: 'text' },
         ],
+        subject: 'postgres',
       });
       resolveAnswers({ a: 'x', b: 'y' });
       await p;
@@ -124,6 +125,7 @@ describe('createWizardAskBridge', () => {
         'wizard_ask answered',
         expect.objectContaining({
           source: 'product-tours',
+          subject: 'postgres',
           question_count: 2,
           duration_ms: expect.any(Number),
         }),
@@ -142,6 +144,7 @@ describe('createWizardAskBridge', () => {
           { id: 'a', prompt: 'A', kind: 'text' },
           { id: 'b', prompt: 'B', kind: 'text' },
         ],
+        subject: 'stripe',
       });
 
       const cancelledCall = wizardCaptureMock.mock.calls.find(
@@ -150,6 +153,7 @@ describe('createWizardAskBridge', () => {
       expect(cancelledCall).toBeDefined();
       expect(cancelledCall?.[1]).toMatchObject({
         source: 'product-tours',
+        subject: 'stripe',
         question_count: 2,
         timed_out: false,
       });
@@ -188,13 +192,15 @@ describe('createWizardAskBridge', () => {
   });
 
   describe('timeout', () => {
-    it('resolves every field with the cancelled sentinel when the user does not answer in time', async () => {
+    it('resolves every field with the cancelled sentinel and dismisses the host overlay when the user does not answer in time', async () => {
       vi.useFakeTimers();
       try {
         // showQuestion intentionally never resolves — the timeout has to win.
+        const cancelQuestion = vi.fn();
         const bridge = createWizardAskBridge({
           getSource: () => 'product-tours',
           showQuestion: () => new Promise<AskAnswers>(() => undefined),
+          cancelQuestion,
           timeoutMs: 1000,
         });
 
@@ -212,10 +218,37 @@ describe('createWizardAskBridge', () => {
           audience: CANCELLED_SENTINEL,
         });
 
+        // Without this, the host's pending-question state survives the
+        // timeout and every later wizard_ask in the run is rejected as a
+        // duplicate request.
+        expect(cancelQuestion).toHaveBeenCalledTimes(1);
+
         const cancelledCall = wizardCaptureMock.mock.calls.find(
           ([name]) => name === 'wizard_ask cancelled',
         );
         expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not dismiss the overlay when the user answers before the timeout', async () => {
+      vi.useFakeTimers();
+      try {
+        const cancelQuestion = vi.fn();
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: () => Promise.resolve({ goal: 'ship it' }),
+          cancelQuestion,
+          timeoutMs: 1000,
+        });
+
+        await bridge.request({
+          questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+        });
+
+        vi.advanceTimersByTime(1000);
+        expect(cancelQuestion).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }

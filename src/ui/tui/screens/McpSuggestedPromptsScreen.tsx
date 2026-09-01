@@ -43,6 +43,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
+import { Program } from '@lib/programs/program-registry';
 import { Colors, Icons } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import {
@@ -56,12 +57,18 @@ import {
   getRolePrompts,
   getRoleGreeting,
   getFollowUps,
-  getCrossSellPrompts,
+  getTutorialPicker,
+  getGeneratedQuests,
+  getSeedOfferGreeting,
   FOLLOW_UP_EXIT_SENTINEL,
-  PINNED_FIRST_PROMPT,
   type PromptOption,
   type RoleGreeting,
 } from '@lib/mcp-role-prompts';
+import {
+  degradedProfile,
+  isKnownCloudHost,
+  type ProjectDataProfile,
+} from '@lib/mcp-project-profile';
 import type { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -78,6 +85,15 @@ interface McpSuggestedPromptsScreenProps {
 enum Phase {
   Choose = 'choose',
   Authenticating = 'authenticating',
+  /** Cheap, best-effort scout of the project's data (event volume, real
+   *  event names, which products have data). Drives the data-aware picker
+   *  so the tutorial only ever offers playable moves. */
+  Scouting = 'scouting',
+  /** Empty-project fork: offer to send a small demo dataset so the read
+   *  quests have something to show. */
+  SeedOffer = 'seed-offer',
+  /** Sending the demo dataset, then re-deriving the profile. */
+  Seeding = 'seeding',
   Greeting = 'greeting',
   PromptPicker = 'prompt-picker',
   Running = 'running',
@@ -91,6 +107,11 @@ enum Phase {
 enum ChoiceValue {
   Login = 'login',
   Exit = 'exit',
+}
+
+enum SeedChoice {
+  Seed = 'seed',
+  Skip = 'skip',
 }
 
 // Cap how many prompts a single tutorial session can run, including
@@ -114,22 +135,52 @@ export const McpSuggestedPromptsScreen = ({
   );
 
   const session = store.session;
-  // Role + framework family drive the kit, greeting, and cross-sell
-  // prompts. All helpers fall back to neutral defaults when either
-  // input is missing, so these are always populated.
-  const kit = getRolePrompts(session.roleAtOrganization, session.integration);
-  const crossSell = useMemo(
-    () => getCrossSellPrompts(session.roleAtOrganization),
-    [session.roleAtOrganization],
+
+  // Events report under the tutorial, not whichever program hosts the screen.
+  // Sampled at mount so captures landing after dismissal still resolve here.
+  const programId = useMemo(() => store.analyticsProgramId, [store]);
+  const capture = useMemo(
+    () =>
+      (event: string, properties?: Record<string, unknown>): void => {
+        analytics.wizardCapture(event, {
+          program_id: programId,
+          ...properties,
+        });
+      },
+    [programId],
   );
+
+  // Phase.Choose is the tutorial's no-commitment entry: login fires only when
+  // the user picks 'Start tutorial' — explicit consent for the OAuth dance.
+  // After an install (`mcp add`), skip the pitch entirely: land on the
+  // all-set screen with the login commands, no surprise OAuth. The tutorial
+  // stays reachable via `wizard mcp tutorial`.
+  const [phase, setPhase] = useState<Phase>(
+    store.router.activeProgram === Program.McpTutorial
+      ? Phase.Choose
+      : Phase.Goodbye,
+  );
+  // The scout's read of the project, set in the Scouting phase. Drives the
+  // data-aware picker, greeting flavor, and Goodbye samples. Null until the
+  // probe completes (the picker treats null as legacy / data-unaware).
+  const [profile, setProfile] = useState<ProjectDataProfile | null>(null);
+
+  // Greeting copy is role-tuned (data-independent). The picker is fully
+  // profile-driven via getTutorialPicker: generated quests on real data,
+  // write-only + activation cross-sells when the project is empty.
   const greeting = useMemo(
     () => getRoleGreeting(session.roleAtOrganization),
     [session.roleAtOrganization],
   );
-
-  // Phase.Choose is the no-commitment entry. Login fires only when the
-  // user picks 'Start tutorial' — explicit consent for the OAuth dance.
-  const [phase, setPhase] = useState<Phase>(Phase.Choose);
+  const pickerCandidates = useMemo(
+    () =>
+      getTutorialPicker(
+        session.roleAtOrganization,
+        session.integration,
+        profile,
+      ),
+    [session.roleAtOrganization, session.integration, profile],
+  );
   const [loginError, setLoginError] = useState<string | null>(null);
   // Whether the user picked "Start MCP tutorial" — decides where a
   // successful login lands: Greeting for a started tutorial, Choose
@@ -152,6 +203,9 @@ export const McpSuggestedPromptsScreen = ({
   // context-aware follow-up suggestions in FollowUp. Cleared at the
   // start of each new run.
   const [lastToolName, setLastToolName] = useState<string | null>(null);
+  // CLI mode's exec command string for the last tool call — recovers the inner
+  // tool name so follow-ups stay context-aware under both server modes.
+  const [lastToolCommand, setLastToolCommand] = useState<string | null>(null);
   // Every prompt the user has picked this session — initial + follow-ups.
   // Used to filter out already-seen suggestions in getFollowUps().
   const [branchHistory, setBranchHistory] = useState<string[]>([]);
@@ -160,6 +214,11 @@ export const McpSuggestedPromptsScreen = ({
   // to a ref so [esc] / unmount can call abort() without the closure
   // needing to re-bind on every state change.
   const runAbortRef = useRef<AbortController | null>(null);
+
+  // Once-only guard for the Seeding phase. Seeding writes events to the
+  // user's real project, so it must fire exactly once even if a re-render
+  // re-runs the effect before the phase transition lands.
+  const seedStartedRef = useRef(false);
 
   // The Claude Agent SDK session ID of the most recent completed run.
   // Carried forward into follow-up runs via `resumeSessionId` so the
@@ -182,7 +241,10 @@ export const McpSuggestedPromptsScreen = ({
         store.setRoleAtOrganization(roleAtOrganization);
         store.setApiUser(user);
         store.setLoginUrl(null);
-        setPhase(startedTutorialRef.current ? Phase.Greeting : Phase.Choose);
+        // Only route into the scout when the user actually kicked off the
+        // tutorial. A pre-auth login (no committed start) lands back on
+        // Choose so the user still owns the "begin tutorial" decision.
+        setPhase(startedTutorialRef.current ? Phase.Scouting : Phase.Choose);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -197,6 +259,96 @@ export const McpSuggestedPromptsScreen = ({
       cancelled = true;
     };
   }, [phase, services, store]);
+
+  // Scout the project once auth completes. Best-effort: the probe never
+  // throws (returns a degraded profile on failure), but we still guard so
+  // a rejection can't strand the user on the spinner. Empty projects fork
+  // to the seed offer; everything else goes straight to the greeting.
+  useEffect(() => {
+    if (phase !== Phase.Scouting) return;
+    if (!session.credentials) return;
+    let cancelled = false;
+    const credentials = session.credentials;
+
+    void (async () => {
+      let probed: ProjectDataProfile;
+      try {
+        probed = await services.probeProjectData(credentials);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logToFile(`[McpSuggestedPromptsScreen] probe failed: ${message}`);
+        probed = degradedProfile();
+      }
+      if (cancelled) return;
+      setProfile(probed);
+      // Gate the seed offer on both an empty tier AND a known PostHog
+      // cloud host. Self-hosted / --base-url deployments never see the
+      // offer, because the seeder posts to `apiHost` verbatim — a
+      // customer who split app + ingestion onto different subdomains
+      // would silently 401, and PostHog events are immutable in
+      // ClickHouse (only the person mapping can be deleted), so a
+      // misroute or an unwanted write leaves a permanent trail.
+      const offerSeed =
+        probed.tier === 'empty' && isKnownCloudHost(credentials.host.apiHost);
+      capture('mcp suggested prompts scouted', {
+        tier: probed.tier,
+        totalEvents: probed.totalEvents,
+        distinctEvents: probed.distinctEventCount,
+        degraded: probed.degraded,
+        offerSeed,
+      });
+      setPhase(offerSeed ? Phase.SeedOffer : Phase.Greeting);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, services, session.credentials]);
+
+  // Send demo events to an empty project, then proceed with the seeded
+  // profile. On failure we keep the empty profile and still advance — the
+  // picker falls back to write-only + activation quests, so the user is
+  // never stranded.
+  useEffect(() => {
+    if (phase !== Phase.Seeding) return;
+    if (seedStartedRef.current) return;
+    if (!session.credentials || !profile) return;
+    seedStartedRef.current = true;
+    let cancelled = false;
+    const controller = new AbortController();
+    const credentials = session.credentials;
+    const baseProfile = profile;
+
+    void (async () => {
+      try {
+        const seeded = await services.seedDemoEvents({
+          credentials,
+          baseProfile,
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        setProfile(seeded);
+        capture('mcp suggested prompts seeded', {
+          totalEvents: seeded.totalEvents,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        logToFile(`[McpSuggestedPromptsScreen] seeding failed: ${message}`);
+        capture('mcp suggested prompts seed failed', {
+          error: message,
+        });
+        // Keep the empty profile; the picker handles the empty case.
+      }
+      if (cancelled) return;
+      setPhase(Phase.Greeting);
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [phase, services, session.credentials, profile]);
 
   // Stream the chosen prompt against the agent. On terminal chunks
   // ('done' or 'error') we schedule a short delay before swapping into
@@ -216,6 +368,7 @@ export const McpSuggestedPromptsScreen = ({
     setRunStartedAt(startedAt);
     setRunChunks([]);
     setLastToolName(null);
+    setLastToolCommand(null);
     setRunDurationSecs(null);
 
     const finishStream = (
@@ -226,12 +379,12 @@ export const McpSuggestedPromptsScreen = ({
       if (controller.signal.aborted) return;
       setRunDurationSecs(Math.round(durationMs / 1000));
       if (kind === 'done') {
-        analytics.wizardCapture('mcp suggested prompts run', {
+        capture('mcp suggested prompts run', {
           prompt: runningPrompt,
           durationMs,
         });
       } else {
-        analytics.wizardCapture('mcp suggested prompts run failed', {
+        capture('mcp suggested prompts run failed', {
           prompt: runningPrompt,
           error: errorText,
         });
@@ -262,6 +415,7 @@ export const McpSuggestedPromptsScreen = ({
           setRunChunks((prev) => [...prev, chunk]);
           if (chunk.kind === 'tool-call') {
             setLastToolName(chunk.toolName);
+            setLastToolCommand(chunk.command ?? null);
           }
           if (chunk.kind === 'done') {
             // Remember the SDK session id so the next follow-up can
@@ -313,18 +467,36 @@ export const McpSuggestedPromptsScreen = ({
     const choice = Array.isArray(value) ? value[0] : value;
     setLoginError(null);
     if (choice === ChoiceValue.Login) {
-      analytics.wizardCapture('mcp suggested prompts choose', {
+      capture('mcp suggested prompts choose', {
         choice: 'login',
       });
       startedTutorialRef.current = true;
       // Picking Start tutorial is the explicit OAuth consent moment.
-      // If we somehow already have credentials, skip straight to Greeting.
-      setPhase(session.credentials ? Phase.Greeting : Phase.Authenticating);
+      // If credentials already exist, skip auth and go straight to the
+      // scout — same landing as post-auth for a started tutorial.
+      setPhase(session.credentials ? Phase.Scouting : Phase.Authenticating);
     } else {
-      analytics.wizardCapture('mcp suggested prompts choose', {
+      capture('mcp suggested prompts choose', {
         choice: 'exit',
       });
       enterGoodbye();
+    }
+  };
+
+  // Empty-project fork: send demo events or skip straight to the
+  // (write-only + activation) picker.
+  const handleSeedChoice = (value: string | string[]): void => {
+    const choice = Array.isArray(value) ? value[0] : value;
+    if (choice === SeedChoice.Seed) {
+      capture('mcp suggested prompts seed offer', {
+        choice: 'seed',
+      });
+      setPhase(Phase.Seeding);
+    } else {
+      capture('mcp suggested prompts seed offer', {
+        choice: 'skip',
+      });
+      setPhase(Phase.Greeting);
     }
   };
 
@@ -345,14 +517,14 @@ export const McpSuggestedPromptsScreen = ({
   const handleFollowUpPick = (value: string | string[]): void => {
     const picked = Array.isArray(value) ? value[0] : value;
     if (picked === FOLLOW_UP_EXIT_SENTINEL) {
-      analytics.wizardCapture('mcp suggested prompts follow-up', {
+      capture('mcp suggested prompts follow-up', {
         choice: 'exit',
         depth: branchHistory.length,
       });
       enterGoodbye();
       return;
     }
-    analytics.wizardCapture('mcp suggested prompts follow-up', {
+    capture('mcp suggested prompts follow-up', {
       choice: 'continue',
       depth: branchHistory.length,
       lastToolName,
@@ -387,7 +559,10 @@ export const McpSuggestedPromptsScreen = ({
           phase === Phase.Running ||
           phase === Phase.PromptPicker ||
           phase === Phase.FollowUp ||
-          phase === Phase.Greeting
+          phase === Phase.Greeting ||
+          phase === Phase.Scouting ||
+          phase === Phase.SeedOffer ||
+          phase === Phase.Seeding
         ) {
           enterGoodbye();
         }
@@ -439,6 +614,14 @@ export const McpSuggestedPromptsScreen = ({
           <AuthenticatingPhase loginUrl={session.loginUrl} />
         )}
 
+        {phase === Phase.Scouting && <ScoutingPhase />}
+
+        {phase === Phase.SeedOffer && (
+          <SeedOfferPhase onSelect={handleSeedChoice} />
+        )}
+
+        {phase === Phase.Seeding && <SeedingPhase />}
+
         {phase === Phase.Greeting && (
           <GreetingPhase
             greeting={greeting}
@@ -449,8 +632,7 @@ export const McpSuggestedPromptsScreen = ({
 
         {phase === Phase.PromptPicker && (
           <PromptPickerPhase
-            promptKit={kit}
-            crossSell={crossSell}
+            candidates={pickerCandidates}
             onSelect={handlePromptPick}
           />
         )}
@@ -490,6 +672,7 @@ export const McpSuggestedPromptsScreen = ({
             <Box marginTop={1} flexShrink={0} flexDirection="column">
               <FollowUpPhase
                 lastToolName={lastToolName}
+                lastToolCommand={lastToolCommand}
                 lastPrompt={runningPrompt}
                 chunks={runChunks}
                 role={session.roleAtOrganization}
@@ -507,7 +690,9 @@ export const McpSuggestedPromptsScreen = ({
             installedClients={session.mcpInstalledClients}
             role={session.roleAtOrganization}
             integration={session.integration}
+            profile={profile}
             engaged={branchHistory.length > 0}
+            loginCommands={session.mcpLoginCommands}
             onClose={closeWizard}
           />
         )}
@@ -598,6 +783,87 @@ const AuthenticatingPhase = ({ loginUrl }: AuthenticatingPhaseProps) => (
   </Box>
 );
 
+// ── Scouting phase ─────────────────────────────────────────────────────
+// Cheap, best-effort probe of the project's data. Just a spinner — the
+// probe is time-boxed and forks to the seed offer (empty) or the greeting.
+
+const ScoutingPhase = () => (
+  <Box flexDirection="column">
+    <Box marginBottom={1}>
+      <Text bold color={Colors.accent}>
+        MCP tutorial
+      </Text>
+    </Box>
+    <LoadingBox message="Scouting your project for data…" />
+  </Box>
+);
+
+// ── Seed-offer phase ───────────────────────────────────────────────────
+// Empty-project fork: offer to send a small demo dataset so the read
+// quests have something real to show instead of dead-ending.
+
+interface SeedOfferPhaseProps {
+  onSelect: (value: string | string[]) => void;
+}
+
+const SeedOfferPhase = ({ onSelect }: SeedOfferPhaseProps) => {
+  const copy = getSeedOfferGreeting();
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold color={Colors.accent}>
+          {copy.headline}
+        </Text>
+      </Box>
+      <Box marginBottom={1} flexDirection="column">
+        {copy.bullets.map((bullet, i) => (
+          <Text key={i}>
+            <Text color={Colors.primary}>{Icons.diamond}</Text>{' '}
+            <Text dimColor>{bullet}</Text>
+          </Text>
+        ))}
+      </Box>
+      <Box marginBottom={1}>
+        <Text>{copy.outro}</Text>
+      </Box>
+      <PickerMenu
+        options={[
+          { label: 'Yes — send demo data', value: SeedChoice.Seed },
+          { label: 'No thanks, skip', value: SeedChoice.Skip },
+        ]}
+        onSelect={onSelect}
+      />
+      <Box marginTop={2}>
+        <Text>
+          <Text bold>[esc]</Text>
+          <Text> to exit</Text>
+        </Text>
+      </Box>
+    </Box>
+  );
+};
+
+// ── Seeding phase ──────────────────────────────────────────────────────
+// Sending the demo dataset. Events are backdated, so we say they'll light
+// up time-windowed charts right away rather than implying a wait.
+
+const SeedingPhase = () => (
+  <Box flexDirection="column">
+    <Box marginBottom={1}>
+      <Text bold color={Colors.accent}>
+        MCP tutorial
+      </Text>
+    </Box>
+    <LoadingBox message="Sending demo events to your project…" />
+    <Box marginTop={1}>
+      <Text dimColor>
+        Backdated across the last 7 days, so your funnels and trends light up
+        right away.
+      </Text>
+    </Box>
+  </Box>
+);
+
 // ── Greeting phase ─────────────────────────────────────────────────────
 
 interface GreetingPhaseProps {
@@ -676,24 +942,22 @@ const GreetingPhase = ({
 // ── Prompt picker phase ────────────────────────────────────────────────
 
 interface PromptPickerPhaseProps {
-  promptKit: PromptOption[];
-  crossSell: PromptOption[];
+  candidates: PromptOption[];
   onSelect: (value: string | string[]) => void;
 }
 
 const PromptPickerPhase = ({
-  promptKit,
-  crossSell,
+  candidates,
   onSelect,
 }: PromptPickerPhaseProps) => {
-  // PINNED_FIRST_PROMPT is the always-first option — a safe generic
-  // read ("Show me my top 5 events from the last 7 days") that works
-  // on any project regardless of role or setup. Cross-sells follow,
-  // then the role kit. Dedupe by prompt text so the pinned entry
-  // doesn't appear twice when the role kit also contains it. Cap at
-  // 4 options total so the picker fits without scrolling.
+  // `candidates` is the full ordered list from getTutorialPicker — already
+  // role + data aware (generated quests on real data, write-only +
+  // activation cross-sells on an empty project, legacy kit when degraded).
+  // Dedupe by prompt text and cap at 4 so the picker fits without
+  // scrolling. Entries with a `product` tag get the "Try {product} —"
+  // prefix so cross-sells stand out.
   const seenPrompts = new Set<string>();
-  const options = [PINNED_FIRST_PROMPT, ...crossSell, ...promptKit]
+  const options = candidates
     .filter((o) => {
       if (seenPrompts.has(o.prompt)) return false;
       seenPrompts.add(o.prompt);
@@ -924,6 +1188,7 @@ const ChunkLine = ({ chunk }: ChunkLineProps) => {
 
 interface FollowUpPhaseProps {
   lastToolName: string | null;
+  lastToolCommand: string | null;
   lastPrompt: string | null;
   chunks: AgentChunk[];
   role: string | null;
@@ -935,6 +1200,7 @@ interface FollowUpPhaseProps {
 
 const FollowUpPhase = ({
   lastToolName,
+  lastToolCommand,
   lastPrompt,
   chunks,
   role,
@@ -947,11 +1213,12 @@ const FollowUpPhase = ({
     () =>
       getFollowUps({
         lastToolName,
+        lastToolCommand,
         lastPrompt: lastPrompt || '',
         role,
         branchHistory,
       }),
-    [lastToolName, lastPrompt, role, branchHistory],
+    [lastToolName, lastToolCommand, lastPrompt, role, branchHistory],
   );
 
   // When the cap is reached, only the exit entry is available. Follow-up
@@ -984,8 +1251,12 @@ interface GoodbyePhaseProps {
   installedClients: string[];
   role: string | null;
   integration: Integration | null;
+  /** Scout profile, so the parting samples can reference real events. */
+  profile: ProjectDataProfile | null;
   /** True if the user actually ran at least one prompt this session. */
   engaged: boolean;
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`). */
+  loginCommands: string[];
   onClose: () => void;
 }
 
@@ -993,13 +1264,18 @@ const GoodbyePhase = ({
   installedClients,
   role,
   integration,
+  profile,
   engaged,
+  loginCommands,
   onClose,
 }: GoodbyePhaseProps) => {
-  // Take 3 starter prompts from the role-tailored kit. These act as
-  // "next time you open your IDE, try this" reminders.
-  const kit = getRolePrompts(role, integration);
-  const samples = kit.slice(0, 3);
+  // Three "next time you open your IDE, try this" reminders. Prefer quests
+  // generated from the project's real events when we have them; otherwise
+  // fall back to the role-tailored kit.
+  const generated = getGeneratedQuests(profile);
+  const samples = (
+    generated.length > 0 ? generated : getRolePrompts(role, integration)
+  ).slice(0, 3);
 
   const headline = engaged
     ? 'Nice work. You can keep talking to PostHog anytime.'
@@ -1031,6 +1307,22 @@ const GoodbyePhase = ({
 
       <Box marginBottom={1}>{introLine}</Box>
 
+      {loginCommands.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="green" bold>
+            {'\u2714'} Authenticate to finish (opens your browser):
+          </Text>
+          {loginCommands.map((command) => (
+            <Text key={command}>
+              {'  '}
+              <Text bold color="green">
+                {command}
+              </Text>
+            </Text>
+          ))}
+        </Box>
+      )}
+
       <Box marginBottom={1} flexDirection="column">
         {samples.map((p, i) => (
           <Box key={i}>
@@ -1040,6 +1332,17 @@ const GoodbyePhase = ({
           </Box>
         ))}
       </Box>
+
+      {profile?.seeded && (
+        <Box marginBottom={1}>
+          <Text dimColor>
+            Demo data is tagged <Text bold>wizard_seed:true</Text> and uses{' '}
+            <Text bold>wizard-demo-user-*</Text> distinct IDs — events are
+            immutable in PostHog, but you can filter these out of any query or
+            dashboard.
+          </Text>
+        </Box>
+      )}
 
       <Box marginBottom={1}>
         <Text dimColor>

@@ -4,13 +4,14 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import {
-  Harness,
-  Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
-} from '@lib/constants';
+import { Sequence } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { resolveHarness } from './harness';
+import {
+  isOrchestratorEnabled,
+  resolveFlagRoute,
+  resolveFlagSequence,
+} from './flags';
+import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
@@ -46,8 +47,8 @@ export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {
   },
   [Sequence.orchestrator]: {
     name: Sequence.orchestrator,
-    run: (session, _config, programConfig, boot, _composed) =>
-      runOrchestrator(session, programConfig, boot),
+    run: (session, config, programConfig, boot, _composed) =>
+      runOrchestrator(session, config, programConfig, boot),
   },
 };
 
@@ -61,12 +62,16 @@ export function getSequence(name: Sequence): SequenceRunner {
 
 // ── Middleware + resolver ───────────────────────────────────────────────
 
-/** The `wizard-orchestrator` flag is on. */
-export function isOrchestratorEnabled(
-  flags: Record<string, string> = {},
-): boolean {
-  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
-}
+/**
+ * A composed sub-run (integration inside self-driving) is structurally
+ * linear: the orchestrator owns the full run lifecycle (queue, outro) and
+ * cannot nest. Sits above every override, including CLI.
+ */
+const composedClampMw: Middleware<Sequence> = (ctx, next) => {
+  if (!ctx.composed) return next();
+  if (ctx.trace) ctx.trace.sequence = 'composed';
+  return Sequence.linear;
+};
 
 /** `--sequence` override. Dev/test only — the option is gated out of published builds. */
 const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
@@ -75,35 +80,49 @@ const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
   return ctx.cliSequence;
 };
 
-/** PostHog `wizard-orchestrator` flag → orchestrator. */
-const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
-  if (!isOrchestratorEnabled(ctx.flags)) return next();
+/** A program's own flag route may pin the sequence; wins over the global orchestrator flag. Traced as 'payload' to stay distinguishable from sequence experiments ('flag'). */
+const flagRouteSequenceMw: Middleware<Sequence> = (ctx, next) => {
+  const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
+  if (!route?.sequence) return next();
+  if (ctx.trace) ctx.trace.sequence = 'payload';
+  return route.sequence;
+};
+
+/** Sequence experiments (e.g. wizard-orchestrator), each inert outside its declared programs. */
+const sequenceExperimentMw: Middleware<Sequence> = (ctx, next) => {
+  const sequence = resolveFlagSequence(ctx.program, ctx.flags);
+  if (!sequence) return next();
   if (ctx.trace) ctx.trace.sequence = 'flag';
-  return Sequence.orchestrator;
+  return sequence;
 };
 
 /**
- * pi has no `runTask`, so a flag-driven orchestrator pick clamps to linear.
- * Sits below the CLI override so `--sequence orchestrator` still reproduces
- * the hard error in dev builds.
+ * The orchestrator drives harnesses through `runTask`; a harness that has not
+ * implemented it clamps the run to linear. A capability check, not a harness
+ * identity check — a harness gains orchestrator support by implementing the
+ * method, with no switchboard change. Sits below the CLI override so
+ * `--sequence orchestrator` still reproduces the hard error in dev builds.
  */
-const piLinearClampMw: Middleware<Sequence> = (ctx, next) => {
-  if (resolveHarness(ctx).harness !== Harness.pi) return next();
+const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
+  const pick = resolveHarness(ctx);
+  if (getHarness(pick.harness).runTask) return next();
   if (isOrchestratorEnabled(ctx.flags)) {
     logToFile(
-      '[switchboard] wizard-orchestrator ignored: pi has no runTask, clamping to linear',
+      `[switchboard] wizard-orchestrator ignored: ${pick.harness} has no runTask, clamping to linear`,
     );
   }
-  if (ctx.trace) ctx.trace.sequence = 'pi-clamp';
+  if (ctx.trace) ctx.trace.sequence = 'runtask-clamp';
   return Sequence.linear;
 };
 
-// Order = precedence: CLI > pi clamp > flag > binding default. The prod spread
-// collapses to [], dropping cliSequenceMw from the chain.
+// Order = precedence: CLI > capability clamp > flag > binding default. The
+// prod spread collapses to [], dropping cliSequenceMw from the chain.
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
+  composedClampMw,
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
-  piLinearClampMw,
-  orchestratorFeatureFlagMw,
+  runTaskCapabilityClampMw,
+  flagRouteSequenceMw,
+  sequenceExperimentMw,
 ];
 
 /** CLI wins over `wizard-orchestrator` flag wins over binding default. */

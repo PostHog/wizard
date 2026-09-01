@@ -9,9 +9,12 @@
 
 import React from 'react';
 import { render } from 'ink-testing-library';
+import { Box } from 'ink';
 import { AuthErrorScreen } from '@ui/tui/screens/AuthErrorScreen';
+import { ProgressList } from '@ui/tui/primitives/ProgressList';
 import { ManagedSettingsScreen } from '@ui/tui/screens/ManagedSettingsScreen';
 import { SettingsOverrideScreen } from '@ui/tui/screens/SettingsOverrideScreen';
+import { WizardAskScreen } from '@ui/tui/screens/WizardAskScreen';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
 
 function fakeStore(session: Record<string, unknown>): any {
@@ -139,6 +142,44 @@ check(
     store={fakeStore({ settingsConflicts: [projectConflict] })}
   />,
   [projectConflict.path, 'ANTHROPIC_BASE_URL', 'Backup & continue'],
+);
+
+check(
+  'ProgressList — not-needed tasks leave the list, long rows truncate',
+  <Box width={34}>
+    <ProgressList
+      items={[
+        {
+          label: 'Install the PostHog SDK and configure the environment keys',
+          status: 'completed',
+        },
+        { label: 'Add user identification', status: 'skipped' },
+        { label: 'Write the setup report', status: 'pending' },
+      ]}
+    />
+  </Box>,
+  [
+    'Install the PostHog SDK',
+    '…',
+    'Progress: 1/2 completed',
+    '(1 skipped as not required)',
+  ],
+  // The not-needed task is gone and counts against nothing.
+  ['Add user identification', 'not needed', '1/3'],
+);
+
+check(
+  'WizardAskScreen — surfaces the Esc-to-skip affordance',
+  <WizardAskScreen
+    store={fakeStore({
+      pendingQuestion: {
+        id: 'req-1',
+        source: 'postgres',
+        questions: [{ id: 'host', prompt: 'Database host?', kind: 'text' }],
+      },
+    })}
+  />,
+  ['Database host?', 'ESC', 'skip'],
 );
 
 if (failures > 0) {

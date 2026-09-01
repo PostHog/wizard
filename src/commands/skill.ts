@@ -7,6 +7,8 @@ import { analytics } from '@utils/analytics';
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
 import { runCommandHandler } from './factories/shared';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 import type { Command } from './command';
 
 /** Read the `<skill-name>` positional (yargs camelCases the hyphenated key). */
@@ -18,6 +20,44 @@ const BROWSABLE_ROLES: ReadonlySet<CliEntry['role']> = new Set([
   'command',
   'skill',
 ]);
+
+/**
+ * Reject an unknown skill id before the wizard authenticates.
+ *
+ * Without this, `readSkillName` accepts any non-empty string and the name is
+ * only validated far downstream, when the agent tries to download it — after
+ * the user has already logged in. A typo then costs a full auth round-trip
+ * (the concern raised in review). We resolve against the same set
+ * `downloadSkill` uses (`categories` flattened by `id`), so this never
+ * false-rejects a skill the download would have accepted.
+ *
+ * If the registry is unreachable we stay silent and defer to the download
+ * step's own `menu-fetch-failed` handling, rather than adding a second network
+ * dependency that could block an otherwise-valid run.
+ */
+async function assertSkillExists(skillName: string): Promise<void> {
+  const skillsBaseUrl = getSkillsBaseUrl();
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return; // registry down — let the download step surface it
+  const known = Object.values(menu.categories)
+    .flat()
+    .some((s) => s.id === skillName);
+  if (known) return;
+  analytics.wizardCapture('cli dispatch error', {
+    reason: 'unknown skill',
+    family: 'skill',
+    sub: skillName,
+    skillsBaseUrl,
+  });
+  try {
+    await analytics.flush();
+  } catch {
+    /* best-effort */
+  }
+  throw new Error(
+    `Unknown skill "${skillName}". Run \`wizard skill list\` to see available skills.`,
+  );
+}
 
 function formatEntry(entry: CliEntry): string {
   const path = entry.parentCommand
@@ -39,9 +79,9 @@ function formatEntry(entry: CliEntry): string {
 const listCommand: Command = {
   name: 'list',
   description: 'List every browsable skill in the catalog',
-  handler: (argv) => {
+  handler: () => {
     runCommandHandler(async () => {
-      const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+      const skillsBaseUrl = getSkillsBaseUrl();
       const menu = await fetchSkillMenu(skillsBaseUrl);
       if (!menu) {
         analytics.wizardCapture('cli dispatch error', {
@@ -59,6 +99,10 @@ const listCommand: Command = {
           `\n\x1b[1;91m✖ Couldn't reach the skill registry.\x1b[0m\n` +
             `  Check your network connection and try again.\n\n`,
         );
+        emitWizardError({
+          code: ErrorCodes.SkillMenuFetchFailed,
+          message: "Couldn't reach the skill registry.",
+        });
         process.exit(1);
       }
       const entries = (menu.cliEntries ?? []).filter((e) =>
@@ -96,8 +140,18 @@ export const skillCommand: Command = {
   options: {
     ...skillProgramOptions,
   },
-  // yargs already enforces the `<skill-name>` positional, but an
-  // explicitly-empty value (`wizard skill ""`) would otherwise slip
+  // Under `.strictOptions()` yargs rejects a positional declared only in the
+  // command string as an "Unknown argument" — it has to be registered via
+  // `.positional()` too (see the `positionals` note on the Command interface).
+  // Declare `skill-name` here so `wizard skill <id>` actually accepts its value.
+  positionals: {
+    'skill-name': {
+      type: 'string',
+      describe: 'Skill id to run (e.g. audit-events), or `list`',
+    },
+  },
+  // yargs already enforces the presence of the `<skill-name>` positional, but
+  // an explicitly-empty value (`wizard skill ""`) would otherwise slip
   // through to a broken run. Reject it with the same friendly message
   // the old --skill flag gave. When `wizard skill list` matched the
   // child instead, yargs leaves the positional unset — the `null` guard
@@ -112,7 +166,11 @@ export const skillCommand: Command = {
     return true;
   },
   handler: (argv) => {
-    // runSkillMode reads `argv.skill`; bridge the positional onto it.
-    runSkillMode({ ...argv, skill: readSkillName(argv) });
+    runCommandHandler(async () => {
+      const skillName = readSkillName(argv);
+      await assertSkillExists(skillName);
+      // runSkillMode reads `argv.skill`; bridge the positional onto it.
+      runSkillMode({ ...argv, skill: skillName });
+    });
   },
 };

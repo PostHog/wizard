@@ -24,15 +24,17 @@ import {
   detectRegion,
   resolveBaseUrl,
 } from '@utils/urls';
-import { runtimeEnv } from '@env';
+import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import { MCP_LOCAL_URL } from '@lib/local-dev';
 import type { CloudRegion } from '@utils/types';
 
-const LOCAL_MCP_URL = 'http://localhost:8787/mcp';
-const PROD_MCP_URL = 'https://mcp.posthog.com/mcp';
+// The wizard's client gets CLI mode (a single `exec` tool) by server default,
+// so no mode is pinned; the dev env override (see env.ts) is taken verbatim.
+const MCP_PROD_URL = 'https://mcp.posthog.com/mcp';
 
 /** Construction-time inputs that aren't implied by the region. */
 export interface HostResolutionOptions {
-  /** `--local-mcp`: point the agent's MCP url at the local dev server. */
+  /** `--local-mcp`: the MCP url only; skills follow `--local-context-mill`. */
   localMcp?: boolean;
   /** `--base-url`: pin every PostHog origin to one URL, bypassing region resolution. */
   baseUrl?: string;
@@ -58,9 +60,15 @@ function assetHostFromApiHost(apiHost: string): string {
   return apiHost;
 }
 
-function mcpUrlFor(localMcp: boolean): string {
-  if (localMcp) return LOCAL_MCP_URL;
-  return runtimeEnv('MCP_URL') || PROD_MCP_URL;
+/**
+ * Dev/CI only: the env override (see env.ts) wins even under --local-mcp;
+ * published builds strip the read. Don't name that env var in comments here —
+ * smoke-test.sh greps dist/*.js for it, and JSDoc survives bundling.
+ */
+export function mcpUrlFor(localMcp: boolean): string {
+  const override = IS_PRODUCTION_BUILD ? undefined : runtimeEnv('MCP_URL');
+  if (override) return override;
+  return localMcp ? MCP_LOCAL_URL : MCP_PROD_URL;
 }
 
 export class HostResolution {
@@ -85,7 +93,8 @@ export class HostResolution {
   /**
    * PostHog MCP server URL the agent connects to. Region-independent — the
    * server resolves the user's region from the bearer token — so this is driven
-   * only by `--local-mcp` and the `MCP_URL` override, not by region/base-url.
+   * only by `--local-mcp` / `--local-dev` and the dev env override, not by
+   * region/base-url.
    */
   readonly mcpUrl: string;
 

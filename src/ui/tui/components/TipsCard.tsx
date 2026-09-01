@@ -67,7 +67,9 @@ export const DEFAULT_TIPS: Tip[] = [
     id: 'stripe',
     title: 'You can track Stripe revenue with PostHog',
     description: 'Add Stripe as a data source while you wait:',
-    url: 'https://app.posthog.com/project/data-warehouse/new-source?kind=Stripe',
+    // No project segment: `/project/` without a team id matches no route and
+    // renders the 404 scene. Without it the app resolves the current project.
+    url: 'https://app.posthog.com/data-warehouse/new-source?kind=Stripe',
     visible: (store) =>
       store.session.discoveredFeatures.includes(DiscoveredFeature.Stripe),
   },
@@ -80,7 +82,7 @@ export const DEFAULT_TIPS: Tip[] = [
     toggle: {
       key: 'l',
       feature: AdditionalFeature.LLM,
-      enabledLabel: 'LLM analytics setup queued next',
+      enabledLabel: 'AI observability setup queued next',
       prompt: 'We detected LLM dependencies in your project.',
       isEnabled: (store) => store.session.llmOptIn,
     },

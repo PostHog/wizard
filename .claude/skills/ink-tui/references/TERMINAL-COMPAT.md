@@ -74,6 +74,25 @@ const supportsUnicode = process.env.TERM !== 'dumb'
   && process.platform !== 'win32';
 ```
 
+## Minimum viewport
+
+The wizard has a floor: below `MIN_VIEWPORT_COLUMNS`×`MIN_VIEWPORT_ROWS` (80×28,
+in `primitives/ViewportTooSmall.tsx`) `ScreenContainer` hides the whole screen
+tree and renders a red "make this terminal bigger" notice instead. Screens can
+therefore assume at least that much room — don't add a second, screen-local
+size check, and don't design a layout that only works below the floor. If a
+screen genuinely needs more room than that, raise the constants rather than
+inventing a per-screen threshold.
+
+The 28 is measured, not picked: the framework picker overprints its intro lines
+and drops options at 27 rows and below. Re-measure in a PTY (`captureTui`) if
+you change it.
+
+The tree is hidden with `display="none"`, not unmounted, so a half-typed input
+survives the resize that shrank the window. The gate is skipped entirely when
+stdout isn't a TTY — there are no real dimensions to read and no window to
+resize.
+
 ## Responsive layouts
 
 Adapt to terminal width:

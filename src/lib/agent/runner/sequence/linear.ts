@@ -10,7 +10,6 @@ import { OutroKind } from '../../../wizard-session';
 import { getUI } from '../../../../ui';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { restoreClaudeSettings } from '../../claude-settings';
-import { HostResolution } from '@lib/host-resolution';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
 import {
@@ -18,6 +17,7 @@ import {
   WizardError,
   registerCleanup,
 } from '../../../../utils/wizard-abort';
+import { ErrorCodes, AGENT_ERROR_CODE } from '@lib/errors';
 import { analytics } from '../../../../utils/analytics';
 import {
   formatScanReport,
@@ -40,16 +40,8 @@ export async function runLinearProgram(
   boot: BootstrapResult,
   composed = false,
 ): Promise<void> {
-  const {
-    skillsBaseUrl,
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    wizardFlags,
-    project,
-  } = boot;
+  const { skillsBaseUrl, credentials, wizardFlags, project } = boot;
+  const { projectApiKey, host, projectId } = credentials;
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -59,6 +51,7 @@ export async function runLinearProgram(
       config.skillId,
       session.installDir,
       skillsBaseUrl,
+      { triage: boot.triageProvider },
     );
     if (installResult.kind !== 'ok') {
       await abortOnInstallFailure(config.integrationLabel, installResult);
@@ -86,15 +79,18 @@ export async function runLinearProgram(
 
   getUI().startRun();
 
-  // wizard_ask is only available in interactive mode. CI/signup users have
-  // no way to answer; we omit the bridge so the tool returns an actionable
-  // error rather than hanging on a never-resolving prompt.
-  const askDisabled = shouldDisableAsk(session);
+  // wizard_ask needs an answerer. A human answers at the keyboard; the e2e
+  // snapshot/MCP host answers via its driver and sets WIZARD_ASK_AUTODRIVE.
+  // CI/signup with neither has no answerer, so we omit the bridge and the tool
+  // returns an actionable error rather than hanging on a never-resolving prompt.
+  const askDisabled =
+    shouldDisableAsk(session) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const askBridge = askDisabled
     ? undefined
     : createWizardAskBridge({
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
+        cancelQuestion: () => getUI().cancelPendingQuestion(),
         richLinks: config.richLinks ?? false,
         timeoutMs: config.askTimeoutMs,
       });
@@ -128,6 +124,7 @@ export async function runLinearProgram(
   const pick = resolveHarness({
     program: programConfig.id,
     flags: wizardFlags,
+    flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
     cliModel: session.model,
   });
@@ -142,24 +139,30 @@ export async function runLinearProgram(
     askBridge,
     middleware,
     model: pick.model,
+    thinkingLevel: pick.thinkingLevel,
   });
 
   // 9. Error handling (full set from both runners)
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
     const matched = config.abortCases?.find((c) => c.match.test(reason));
+    const abortCode = matched?.errorCode ?? ErrorCodes.AgentAbort;
     const outroData: WizardSession['outroData'] = matched
       ? {
           kind: OutroKind.Error,
           message: matched.message,
           body: matched.body,
           docsUrl: matched.docsUrl,
+          errorCode: abortCode,
+          errorDetail: { reason },
         }
       : {
           kind: OutroKind.Error,
           message: `${config.integrationLabel} aborted`,
           body: reason || 'The agent aborted the program.',
           docsUrl: config.docsUrl,
+          errorCode: abortCode,
+          errorDetail: { reason },
         };
     analytics.wizardCapture('agent aborted', {
       integration: config.integrationLabel,
@@ -168,50 +171,112 @@ export async function runLinearProgram(
     });
     await wizardAbort({
       outroData,
-      error: new WizardError(`Agent aborted: ${reason}`, {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.ABORT,
-        reason,
-      }),
+      code: abortCode,
+      error: new WizardError(
+        `Agent aborted: ${reason}`,
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.ABORT,
+          reason,
+        },
+        abortCode,
+      ),
     });
   }
 
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
       message:
         'Could not access the PostHog MCP server\n\n' +
         'The wizard was unable to connect to the PostHog MCP server.\n' +
         'This could be due to a network issue or a configuration problem.\n\n' +
         `Please try again, or check the documentation:\n${config.docsUrl}`,
-      error: new WizardError('Agent could not access PostHog MCP server', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.MCP_MISSING,
-        signal: AgentSignals.ERROR_MCP_MISSING,
-      }),
+      error: new WizardError(
+        'Agent could not access PostHog MCP server',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.MCP_MISSING,
+          signal: AgentSignals.ERROR_MCP_MISSING,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
+      ),
     });
   }
 
   if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
       message:
         'Could not access the setup resource\n\n' +
         'This may indicate a version mismatch or a temporary service issue.\n\n' +
         `Please try again, or check the documentation:\n${config.docsUrl}`,
-      error: new WizardError('Agent could not access setup resource', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.RESOURCE_MISSING,
-        signal: AgentSignals.ERROR_RESOURCE_MISSING,
-      }),
+      error: new WizardError(
+        'Agent could not access setup resource',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.RESOURCE_MISSING,
+          signal: AgentSignals.ERROR_RESOURCE_MISSING,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
+      ),
     });
   }
 
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
     await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
       message: formatYaraAbortMessage(),
-      error: new WizardError('YARA scanner terminated session', {
-        integration: config.integrationLabel,
-        error_type: AgentErrorType.YARA_VIOLATION,
-      }),
+      error: new WizardError(
+        'YARA scanner terminated session',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.YARA_VIOLATION,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
+      ),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.NO_PROGRESS) {
+    analytics.wizardCapture('agent no progress', {
+      integration: config.integrationLabel,
+      error_type: AgentErrorType.NO_PROGRESS,
+    });
+    await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
+      message:
+        'The Wizard exited without changing your project. Please contact the ' +
+        'PostHog team with wizard@posthog.com about this error.',
+      error: new WizardError(
+        'Agent made no progress',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.NO_PROGRESS,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
+      ),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.INCOMPLETE_TASKS) {
+    analytics.wizardCapture('agent incomplete tasks', {
+      integration: config.integrationLabel,
+      error_type: AgentErrorType.INCOMPLETE_TASKS,
+    });
+    await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
+      message:
+        'The Wizard exited without completing its planned tasks. Please contact ' +
+        'the PostHog team with wizard@posthog.com about this error.',
+      error: new WizardError(
+        'Agent left planned tasks incomplete',
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.INCOMPLETE_TASKS,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
+      ),
     });
   }
 
@@ -226,24 +291,24 @@ export async function runLinearProgram(
     });
 
     await wizardAbort({
+      code: AGENT_ERROR_CODE[agentResult.error],
       message: `API Error\n\n${
         agentResult.message || 'Unknown error'
       }\n\nPlease report this to: wizard@posthog.com`,
-      error: new WizardError(`API error: ${agentResult.message}`, {
-        integration: config.integrationLabel,
-        error_type: agentResult.error,
-      }),
+      error: new WizardError(
+        `API error: ${agentResult.message}`,
+        {
+          integration: config.integrationLabel,
+          error_type: agentResult.error,
+        },
+        AGENT_ERROR_CODE[agentResult.error],
+      ),
     });
   }
 
   // 10. Post-run hooks
   if (config.postRun) {
-    await config.postRun(session, {
-      accessToken,
-      projectApiKey,
-      host,
-      projectId,
-    });
+    await config.postRun(session, credentials);
   }
 
   // A composed sub-run (integration inside self-driving) skips the terminal
@@ -259,23 +324,14 @@ export async function runLinearProgram(
   // that the screen never reads. UI.setOutroData() goes through the store
   // and also merges in any post-snapshot URLs from the live session.
   const outroData = config.buildOutroData
-    ? config.buildOutroData(
-        session,
-        { accessToken, projectApiKey, host, projectId },
-        cloudRegion,
-      )
+    ? config.buildOutroData(session, credentials)
     : {
         kind: OutroKind.Success,
         message: config.successMessage,
         reportFile: config.reportFile,
         docsUrl: config.docsUrl,
-        // TODO: clean up in #755
         continueUrl: session.signup
-          ? `${
-              HostResolution.fromRegion(cloudRegion, {
-                baseUrl: session.baseUrl,
-              }).appHost
-            }/products?source=wizard`
+          ? `${host.appHost}/products?source=wizard`
           : undefined,
       };
   if (outroData) {

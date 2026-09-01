@@ -115,10 +115,15 @@ describe('CLI argument parsing', () => {
   // being picked up.
   const WIZARD_ENV_KEYS = [
     'POSTHOG_WIZARD_REGION',
-    'POSTHOG_WIZARD_DEFAULT',
     'POSTHOG_WIZARD_CI',
     'POSTHOG_WIZARD_API_KEY',
     'POSTHOG_WIZARD_INSTALL_DIR',
+    'POSTHOG_WIZARD_LOCAL_DEV',
+    'POSTHOG_WIZARD_LOCAL_CONTEXT_MILL',
+    'POSTHOG_WIZARD_LOCAL_MCP',
+    'POSTHOG_WIZARD_LOCAL_POSTHOG',
+    'POSTHOG_TASK_RUN_ID',
+    'POSTHOG_TASK_ID',
   ];
   const clearWizardEnv = () => {
     for (const key of WIZARD_ENV_KEYS) delete process.env[key];
@@ -202,9 +207,9 @@ describe('CLI argument parsing', () => {
     return calls[calls.length - 1][0];
   }
 
-  // Note: --region is a yargs option that doesn't flow through buildSession in
-  // the non-CI path, so it's tested indirectly (no errors) rather than by
-  // inspecting values.
+  // Note: --region flows through buildSession only on the non-interactive
+  // paths; interactively it's ignored (OAuth reads the region off the token
+  // response), so the non-CI cases just assert parsing succeeds.
 
   describe('--region flag', () => {
     test.each(['us', 'eu'])(
@@ -248,6 +253,69 @@ describe('CLI argument parsing', () => {
   });
 
   // MCP commands now launch TUI — tested via integration tests
+
+  describe('local dev flags', () => {
+    // The runners preflight every requested local server and abort if one is
+    // down, which would stop the run before buildSession. Stub the probe so
+    // these assert flag plumbing rather than whether a dev stack happens to be
+    // running on this machine. Reachability itself is covered in local-dev.test.
+    beforeEach(() => {
+      vi.stubGlobal('fetch', () =>
+        Promise.resolve(new Response(null, { status: 200 })),
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    // Skills resolve from the process-wide target the middleware sets, not
+    // from a buildSession arg — so assert the URL the run would actually fetch.
+    async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
+      const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
+        '../lib/constants'
+      );
+      return { actual: getSkillsBaseUrl(), local: LOCAL_SKILLS_BASE_URL };
+    }
+
+    test('forwards each --local-* target', async () => {
+      await runCLI(['--local-context-mill']);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+      // Absent flags must be undefined, not false — see resolveLocalDev.
+      const args = getLastBuildSessionArgs();
+      expect(args.localMcp).toBeUndefined();
+      expect(args.localPosthog).toBeUndefined();
+    });
+
+    test('forwards the --local-dev umbrella', async () => {
+      await runCLI(['--local-dev']);
+      expect(getLastBuildSessionArgs().localDev).toBe(true);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+    });
+
+    // The reviewer's bug, end to end: the intro screens used to read the MCP
+    // flag to pick a skills registry.
+    test('--local-mcp alone leaves skills on production', async () => {
+      await runCLI(['--local-mcp']);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).not.toBe(local);
+    });
+
+    test('resolves POSTHOG_WIZARD_LOCAL_CONTEXT_MILL from the environment', async () => {
+      process.env.POSTHOG_WIZARD_LOCAL_CONTEXT_MILL = 'true';
+      await runCLI([]);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+    });
+
+    // A global `local` would silently erase `--local` from
+    // `wizard mcp add --help`; a global's `hidden` beats a command-level one.
+    test('no global option is named `local`', async () => {
+      const { GLOBAL_OPTIONS } = await import('../wizard');
+      expect(Object.keys(GLOBAL_OPTIONS)).not.toContain('local');
+    });
+  });
 
   describe('--ci flag', () => {
     test('defaults to false when not specified', async () => {
@@ -309,6 +377,34 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_test_key');
+    });
+
+    test('passes --region through to buildSession', async () => {
+      await runCLI([
+        '--ci',
+        '--region',
+        'eu',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.region).toBe('eu');
+    });
+
+    test('leaves region unset when --region is not passed', async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.region).toBeUndefined();
     });
 
     test("tags the build as 'ci'", async () => {
@@ -449,6 +545,25 @@ describe('CLI argument parsing', () => {
       expect(args.apiKey).toBe('phx_env_key');
     });
 
+    test('accepts the task-run identity the sandbox exports', async () => {
+      // These two are read straight from the environment, never as CLI options,
+      // and their names must stay outside the POSTHOG_WIZARD_ prefix for that to
+      // hold: `.env('POSTHOG_WIZARD')` turns every prefixed variable into an
+      // option name and `.strictOptions()` fails the run on one it doesn't know,
+      // so renaming them under the prefix would exit every cloud run before the
+      // wizard does any work.
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+      process.env.POSTHOG_TASK_RUN_ID = 'task-run-uuid';
+      process.env.POSTHOG_TASK_ID = 'task-uuid';
+
+      await runCLI([]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
     test('CLI args override CI environment variables', async () => {
       process.env.POSTHOG_WIZARD_CI = 'true';
       process.env.POSTHOG_WIZARD_REGION = 'us';
@@ -466,6 +581,7 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_cli_key');
+      expect(args.region).toBe('eu');
     });
   });
 

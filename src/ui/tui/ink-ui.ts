@@ -18,8 +18,10 @@ import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 import { RunPhase, OutroKind } from '@lib/wizard-session';
 
@@ -81,13 +83,12 @@ export class InkUI implements WizardUI {
     });
   }
 
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(credentials: Credentials): void {
     this.store.setCredentials(credentials);
+  }
+
+  setAccessToken(credentials: Credentials): void {
+    this.store.setAccessToken(credentials);
   }
 
   setRoleAtOrganization(role: string | null): void {
@@ -156,6 +157,16 @@ export class InkUI implements WizardUI {
     return this.store.waitForManualAuthCode();
   }
 
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    return this.store.showTaskNotice(notice);
+  }
+
+  cancelTaskNotice(): void {
+    // Same path as pressing Skip: closes the overlay and resolves the pending
+    // showTaskNotice promise with false.
+    this.store.resolveTaskNotice(false);
+  }
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
@@ -173,6 +184,10 @@ export class InkUI implements WizardUI {
 
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
     return this.store.requestQuestion(question);
+  }
+
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
   }
 
   startRun(): void {
@@ -243,6 +258,10 @@ export class InkUI implements WizardUI {
 
   setNotebookUrl(url: string): void {
     this.store.setNotebookUrl(url);
+  }
+
+  setHandoffText(text: string): void {
+    this.store.setHandoffText(text);
   }
 
   addTokenUsage(delta: TokenUsageDelta): void {

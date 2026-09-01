@@ -7,7 +7,7 @@
  *   - task updates               debounced 250ms (trailing edge)
  *   - phase transitions          flush immediately, bypass debounce
  *   - RunPhase.Idle              skipped (no push)
- *   - enabled === false          attach is a no-op
+ *   - enabled === false          destination delivery is disabled
  *   - shutdown(timeoutMs)        cancel pending, flush terminal phase
  *                                with timeout, never throw
  *
@@ -18,15 +18,24 @@
 
 import type { WizardStore, TaskItem } from '@ui/tui/store';
 import { TaskStatus } from '@ui/wizard-ui';
-import { RunPhase, OutroKind, type OutroData } from '@lib/wizard-session';
+import {
+  RunPhase,
+  OutroKind,
+  type OutroData,
+  type PendingQuestion,
+} from '@lib/wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
   type StreamTask,
   type TaskStreamError,
+  type StreamPendingInput,
   StreamTaskStatus,
   StreamEvent,
 } from './types';
+import { EventPlanWatcher } from './event-plan-watcher';
+import { logToFile } from '@utils/debug';
+import { sanitizeErrorDetail } from '@lib/errors';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -72,16 +81,41 @@ function buildError(
   if (phase !== RunPhase.Error) return undefined;
   if (outroData?.kind === OutroKind.Error) {
     const message = outroData.message ?? outroData.body ?? 'Wizard run failed';
-    return { type: 'wizard_error', message };
+    const error: TaskStreamError = { type: 'wizard_error', message };
+    if (outroData.errorCode) error.code = outroData.errorCode;
+    const safeDetail = sanitizeErrorDetail(outroData.errorDetail);
+    if (safeDetail) error.detail = safeDetail;
+    return error;
   }
   return { type: 'wizard_error', message: 'Wizard run failed' };
+}
+
+/**
+ * Sensitive asks (secrets, API keys) publish only the fact that input is
+ * required — never the prompt text. The session row is team-visible and
+ * outlives the prompt.
+ */
+function buildPendingInput(
+  question: PendingQuestion | null | undefined,
+): StreamPendingInput | undefined {
+  if (!question) return undefined;
+  const sensitive = question.questions.some((q) => q.sensitive === true);
+  return {
+    id: question.id,
+    asked_at: question.askedAt ?? new Date().toISOString(),
+    question_count: question.questions.length,
+    sensitive,
+    prompts: sensitive ? undefined : question.questions.map((q) => q.prompt),
+  };
 }
 
 export interface TaskStreamPushOptions {
   store: WizardStore;
   programId: string;
   destinations: TaskStreamDestination[];
-  /** When false, `attach` is a no-op and no destination ever fires. */
+  /** Optional absolute event-plan path to load into the store once. */
+  eventPlanPath?: string;
+  /** When false, destination subscription/delivery remains disabled. */
   enabled?: boolean;
 }
 
@@ -91,10 +125,12 @@ export class TaskStreamPush {
   private readonly startedAt: string;
   private readonly programId: string;
   private readonly sessionId: string;
+  private readonly eventPlanWatcher: EventPlanWatcher | null;
 
   private enabled: boolean;
   private created = false;
   private lastPushedPhase: RunPhase | null = null;
+  private lastPushedQuestionId: string | null = null;
 
   private unsubscribe: (() => void) | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -107,7 +143,11 @@ export class TaskStreamPush {
     this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
-    this.startedAt = secondPrecisionIso(new Date());
+    const startedAt = new Date();
+    this.eventPlanWatcher = opts.eventPlanPath
+      ? new EventPlanWatcher(this.store, opts.eventPlanPath)
+      : null;
+    this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
     // program metadata is populated.
@@ -118,10 +158,12 @@ export class TaskStreamPush {
   }
 
   /**
-   * Subscribe to store changes. No-op when `enabled === false`.
-   * Idempotent — repeat calls are ignored.
+   * Load the event plan and subscribe to store changes. Destination delivery
+   * remains disabled when `enabled === false`, but the plan still populates the
+   * store for local and headless consumers.
    */
   attach(store?: WizardStore): void {
+    this.eventPlanWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;
     const target = store ?? this.store;
@@ -130,6 +172,7 @@ export class TaskStreamPush {
 
   /** Stop subscribing. Does not flush. */
   detach(): void {
+    this.eventPlanWatcher?.stop();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -149,6 +192,7 @@ export class TaskStreamPush {
     timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
     this.shuttingDown = true;
+    this.eventPlanWatcher?.refresh();
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -195,9 +239,14 @@ export class TaskStreamPush {
     }
 
     const phaseChanged = phase !== this.lastPushedPhase;
-    if (phaseChanged) {
+    const questionId = this.store.session.pendingQuestion?.id ?? null;
+    const questionChanged = questionId !== this.lastPushedQuestionId;
+    if (phaseChanged || questionChanged) {
       // Phase transitions bypass the debounce: the web app needs to
-      // see Running → Completed as soon as it lands.
+      // see Running → Completed as soon as it lands. A wizard_ask
+      // opening or closing is the same shape — the whole point of
+      // publishing it is that the user is looking at the web app, so
+      // a 250ms-stale "needs your input" defeats the purpose.
       if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);
         this.debounceTimer = null;
@@ -244,7 +293,7 @@ export class TaskStreamPush {
   }
 
   private async sendOnce(): Promise<void> {
-    const { session, tasks, eventPlan } = this.store;
+    const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
 
@@ -257,8 +306,17 @@ export class TaskStreamPush {
       tasks: buildTasks(tasks),
       event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
       error: buildError(phase, session.outroData),
+      pending_input: buildPendingInput(session.pendingQuestion),
+      // Included on every push once captured; the backend keeps it sticky, so
+      // pushes that raced the capture cannot un-set it.
+      handoff_text: handoffText ?? undefined,
       timestamp: new Date().toISOString(),
     };
+    logToFile(
+      `[task-stream-push] push phase=${phase} handoff_text=${
+        handoffText === null ? 'absent' : `${handoffText.length} chars`
+      }`,
+    );
 
     let event: StreamEvent;
     if (!this.created) {
@@ -273,6 +331,7 @@ export class TaskStreamPush {
     }
 
     this.lastPushedPhase = phase;
+    this.lastPushedQuestionId = payload.pending_input?.id ?? null;
 
     await Promise.all(
       this.destinations.map((d) =>

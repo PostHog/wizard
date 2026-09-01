@@ -1,11 +1,98 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`e2e flow snapshot — ai-observability > walks intro → health → auth → run → outro → skills 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "ai-observability",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "ai-observability-intro",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+    {
+      "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — metrics > walks intro → health → auth → run → outro → skills 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "metrics",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "metrics-intro",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+    {
+      "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
 exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup question) walks a stable path 1`] = `
 {
   "profile": {
     "ask": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
+    "notice": "keep",
     "setup": "first",
     "skills": "delete",
     "slack": "skip",
@@ -22,6 +109,10 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     },
     {
       "action": "choose",
+      "params": {
+        "key": "router",
+        "value": "app-router",
+      },
       "screen": "setup",
     },
     {
@@ -38,6 +129,9 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     },
     {
       "action": "set_mcp_outcome",
+      "params": {
+        "outcome": "skipped",
+      },
       "screen": "mcp",
     },
     {
@@ -46,6 +140,9 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     },
     {
       "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
       "screen": "keep-skills",
     },
   ],
@@ -78,6 +175,9 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
     },
     {
       "action": "set_mcp_outcome",
+      "params": {
+        "outcome": "skipped",
+      },
       "screen": "mcp",
     },
     {
@@ -86,6 +186,229 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
     },
     {
       "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — self-driving > already-integrated (skips SDK setup) walks a stable path 1`] = `
+{
+  "program": "self-driving",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "self-driving-intro",
+    },
+    {
+      "action": "set_integrate",
+      "params": {
+        "integrate": false,
+      },
+      "screen": "self-driving-integration-check",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — self-driving > integration-first (no existing PostHog) walks a stable path 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "integrate": true,
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "self-driving",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "self-driving-intro",
+    },
+    {
+      "action": "set_integrate",
+      "params": {
+        "integrate": true,
+      },
+      "screen": "self-driving-integration-check",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "self-driving-integration-detect",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "confirm_self_driving_handoff",
+      "screen": "self-driving-handoff",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — upload-source-maps > walks a stable path 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "error-tracking-upload-source-maps",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "source-maps-intro",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "source-maps-detect",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "source-maps-outro",
+    },
+    {
+      "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run → outro → skills 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "askAnswers": [
+      {
+        "match": "account[ _-]?id",
+        "value": "acct_e2efixture",
+      },
+      {
+        "match": "prefix",
+        "value": "\${E2E_SOURCE_PREFIX}",
+      },
+      {
+        "match": "connection[ _-]?string",
+        "value": "postgresql://\${E2E_PG_USER}:\${E2E_PG_PASSWORD}@\${E2E_PG_HOST}:\${E2E_PG_PORT}/\${E2E_PG_DATABASE}",
+      },
+      {
+        "match": "stripe",
+        "value": "\${E2E_STRIPE_API_KEY}",
+      },
+      {
+        "match": "host|hostname|server|endpoint",
+        "value": "\${E2E_PG_HOST}",
+      },
+      {
+        "match": "port",
+        "value": "\${E2E_PG_PORT}",
+      },
+      {
+        "match": "database|db_?name",
+        "value": "\${E2E_PG_DATABASE}",
+      },
+      {
+        "match": "password|passwd|pwd",
+        "value": "\${E2E_PG_PASSWORD}",
+      },
+      {
+        "match": "user|username|role|author",
+        "value": "\${E2E_PG_USER}",
+      },
+      {
+        "match": "schema",
+        "value": "public",
+      },
+      {
+        "match": "api[ _-]?key|api[ _-]?token|access[ _-]?token|auth[ _-]?token|^token$|secret|credential",
+        "value": "\${E2E_API_TOKEN}",
+      },
+    ],
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "notice": "keep",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "warehouse-source",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "warehouse-intro",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+    {
+      "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
       "screen": "keep-skills",
     },
   ],

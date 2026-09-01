@@ -21,6 +21,7 @@ import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
+import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
@@ -83,6 +84,11 @@ describe('top-level command shapes', () => {
   test('mcp-analytics is a flat skill command', () => {
     expect(mcpAnalyticsCommand.name).toBe('mcp-analytics');
     expect(mcpAnalyticsCommand.children).toBeUndefined();
+  });
+
+  test('replay-vision is a flat skill command', () => {
+    expect(replayVisionCommand.name).toBe('replay-vision');
+    expect(replayVisionCommand.children).toBeUndefined();
   });
 
   test('warehouse is a flat skill command', () => {
@@ -184,6 +190,12 @@ describe('flat skill commands', () => {
     expect(config.skillId).toBe('mcp-analytics');
   });
 
+  test('replay-vision dispatches with replay-vision-setup skillId', () => {
+    replayVisionCommand.handler!(makeArgv({ debug: true }));
+    const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
+    expect(config.skillId).toBe('replay-vision-setup');
+  });
+
   test('warehouse dispatches with data-warehouse-source-setup skillId', () => {
     warehouseCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
     const [config, opts] = mockRunWizard.mock.calls[0] as [
@@ -217,14 +229,14 @@ describe('yargs parsing for the audit family', () => {
   test('accepts upload-source-maps and legacy upload-sourcemaps alias', async () => {
     const canonical = await parseCommand(
       uploadSourcemapsCommand,
-      'upload-source-maps --region eu',
+      'upload-source-maps --debug',
     );
     const legacy = await parseCommand(
       uploadSourcemapsCommand,
-      'upload-sourcemaps --region eu',
+      'upload-sourcemaps --debug',
     );
-    expect(canonical.region).toBe('eu');
-    expect(legacy.region).toBe('eu');
+    expect(canonical.debug).toBe(true);
+    expect(legacy.debug).toBe(true);
   });
 });
 

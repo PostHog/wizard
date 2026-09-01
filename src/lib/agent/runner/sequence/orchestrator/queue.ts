@@ -21,11 +21,36 @@ export const TaskStatus = {
   Pending: 'pending',
   Running: 'running',
   Done: 'done',
-  Skipped: 'skipped',
+  Skipped: 'not needed',
   Failed: 'failed',
 } as const;
 
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+
+/**
+ * Why a task ended as skipped.
+ *
+ * A skip has several causes that look identical from outside: an agent finding
+ * the step does not apply, a user declining it, and an offer nobody answered.
+ * They mean opposite things — the first is a no-op, the last two are the user
+ * telling us something — and telling them apart needs the reason recorded at
+ * the moment of the skip, not inferred later from timings.
+ *
+ * Recorded on the task like `error` is on a failed one, so it reaches the
+ * skipped-task event and the run's queue.json alike.
+ */
+export const SkipReason = {
+  /** The user answered the step's notice with Skip. */
+  UserDeclined: 'user-declined',
+  /** The notice went unanswered until it timed out. */
+  NoticeTimeout: 'notice-timeout',
+  /** The notice could not be shown at all, so consent failed closed. */
+  NoticeError: 'notice-error',
+  /** The task agent reported `not needed`: the step did not apply here. */
+  AgentNotNeeded: 'agent-not-needed',
+} as const;
+
+export type SkipReason = (typeof SkipReason)[keyof typeof SkipReason];
 
 export interface QueuedTask {
   id: string;
@@ -35,9 +60,15 @@ export interface QueuedTask {
   status: TaskStatus;
   /**
    * Ids of tasks that must finish before this one runs. Ids are generated at
-   * enqueue and dependsOn is never mutated, so a task can only depend on tasks
-   * created before it — the graph is a DAG by construction, cycles cannot
-   * form. Unknown ids are rejected by the enqueue_task guard.
+   * enqueue, so a task can only depend on tasks created before it — the graph is
+   * a DAG by construction, cycles cannot form. Unknown ids are rejected by the
+   * enqueue_task guard.
+   *
+   * One sanctioned exception: {@link QueueStore.addDependencies} adds edges to a
+   * still-pending task, for a runner-seeded task that was queued before the
+   * planner ran and so could not name its dependencies then. It is additive,
+   * pending-only, and cycle-checked per edge, so the DAG property above still
+   * holds. Nothing else mutates this field.
    */
   dependsOn: string[];
   inputs: Record<string, unknown>;
@@ -48,10 +79,14 @@ export interface QueuedTask {
   handoff?: TaskHandoff;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
+  /** Wizard-seeded only: terminal failure unblocks dependents and never fails the run. */
+  optional?: boolean;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
   error?: { type: string; message: string };
+  /** Set when `status` is `not needed`: why. The failed-task `error` of a skip. */
+  skipReason?: SkipReason;
 }
 
 export interface QueueFile {
@@ -66,8 +101,14 @@ export interface TaskHandoff {
   did: string;
   forNextAgent: string;
   filesTouched?: string[];
+  /** How the agent knows it worked — what it ran or observed. */
+  evidence?: string;
+  /** What the agent assumed about the app and could not verify. */
+  assumptions?: string;
   /** A one-line summary of any unresolved conflict, surfaced in the outro. */
   conflict?: string;
+  /** A finished section for the run's report, written by the task that owns the subject. */
+  reportSection?: string;
 }
 
 export interface EnqueueInput {
@@ -78,6 +119,7 @@ export interface EnqueueInput {
   model?: string;
   maxAttempts?: number;
   enqueuedBy?: string;
+  optional?: boolean;
 }
 
 export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
@@ -148,11 +190,16 @@ export class QueueStore {
    * `skipped`). A skipped dependency does not block downstream work.
    */
   nextRunnable(): QueuedTask[] {
+    // A TERMINALLY failed optional dep satisfies like skipped; retryable failure still blocks.
     const doneIds = new Set(
       this.tasks
         .filter(
           (t) =>
-            t.status === TaskStatus.Done || t.status === TaskStatus.Skipped,
+            t.status === TaskStatus.Done ||
+            t.status === TaskStatus.Skipped ||
+            (t.status === TaskStatus.Failed &&
+              t.optional === true &&
+              t.attempts >= t.maxAttempts),
         )
         .map((t) => t.id),
     );
@@ -209,12 +256,55 @@ export class QueueStore {
       attempts: 0,
       maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
       enqueuedBy: input.enqueuedBy ?? 'orchestrator',
+      optional: input.optional,
       createdAt: nowIso(),
     };
     this.tasks.push(task);
     this.reflect();
     this.notify('enqueue', task);
     return task;
+  }
+
+  /**
+   * Add dependency edges to a pending task — the one sanctioned exception to
+   * `dependsOn` being immutable (see the field's doc).
+   *
+   * A runner-seeded task is enqueued before the planner runs, so the tasks it
+   * should wait for do not exist yet and it cannot name them. This closes that
+   * gap once, between planning and the drain.
+   *
+   * Three rules keep the graph a DAG: additive only (never removes an edge),
+   * pending only (a task that already started keeps the graph it ran under), and
+   * every edge cycle-checked — a dep that already reaches this task through its
+   * own chain is refused. Refusals come back in the result rather than throwing:
+   * one bad edge is a bug worth reporting, not a reason to end a run that is
+   * otherwise fine.
+   */
+  addDependencies(
+    id: string,
+    depIds: readonly string[],
+  ): { added: string[]; refused: string[] } {
+    const task = this.require(id);
+    if (task.status !== TaskStatus.Pending) {
+      return { added: [], refused: [...depIds] };
+    }
+
+    const added: string[] = [];
+    const refused: string[] = [];
+    for (const depId of depIds) {
+      // Already an edge, or a self-loop: nothing to do and nothing wrong.
+      if (depId === id || task.dependsOn.includes(depId)) continue;
+      // Checked against the graph as it stands, so two edges added in one call
+      // cannot together form a cycle the first check missed.
+      if (!this.get(depId) || this.reaches(depId, id)) {
+        refused.push(depId);
+        continue;
+      }
+      task.dependsOn.push(depId);
+      added.push(depId);
+    }
+    if (added.length > 0) this.reflect();
+    return { added, refused };
   }
 
   start(id: string): QueuedTask {
@@ -231,8 +321,16 @@ export class QueueStore {
     return this.finish(id, TaskStatus.Done, handoff);
   }
 
-  /** Terminal: the agent could not do the task. Not done, not failed. */
-  skip(id: string, handoff?: TaskHandoff): QueuedTask {
+  /**
+   * Terminal: the task was not done, and that is not a failure.
+   *
+   * The reason is required, and sits before the optional handoff for that
+   * reason. A skip carrying no reason is what let a five-minute auto-decline
+   * hide inside the same event as an agent deciding a step did not apply.
+   */
+  skip(id: string, reason: SkipReason, handoff?: TaskHandoff): QueuedTask {
+    const t = this.require(id);
+    t.skipReason = reason;
     return this.finish(id, TaskStatus.Skipped, handoff);
   }
 
@@ -261,7 +359,7 @@ export class QueueStore {
 
   private finish(
     id: string,
-    status: 'done' | 'skipped' | 'failed',
+    status: 'done' | 'not needed' | 'failed',
     handoff?: TaskHandoff,
   ): QueuedTask {
     const t = this.require(id);
@@ -299,6 +397,20 @@ export class QueueStore {
         { step: 'orchestrator_queue_listener', event },
       );
     }
+  }
+
+  /** Whether `fromId` reaches `targetId` by following dependsOn edges. */
+  private reaches(fromId: string, targetId: string): boolean {
+    const seen = new Set<string>();
+    const stack = [fromId];
+    while (stack.length > 0) {
+      const current = stack.pop() as string;
+      if (current === targetId) return true;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      stack.push(...(this.get(current)?.dependsOn ?? []));
+    }
+    return false;
   }
 
   private require(id: string): QueuedTask {

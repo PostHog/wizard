@@ -47,7 +47,7 @@ const OAUTH_CALLBACK_STYLES = `
   </style>
 `;
 
-const OAuthTokenResponseSchema = z.object({
+export const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),
   expires_in: z.number(),
   token_type: z.string(),
@@ -55,9 +55,46 @@ const OAuthTokenResponseSchema = z.object({
   refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
+  // Sent by PostHog Cloud (and passed through the oauth.posthog.com proxy); absent on
+  // self-hosted. `.catch(undefined)` so an unrecognized value degrades to the probe
+  // fallback instead of failing the whole login.
+  posthog_region: z.enum(['us', 'eu']).optional().catch(undefined),
+  posthog_base_url: z.string().optional().catch(undefined),
 });
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
+
+export const WIZARD_COMPLETION_SCOPE = 'event_definition:write';
+
+export function parseOAuthScopes(scope: string): string[] {
+  return scope.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Requested scopes the grant came back without.
+ *
+ * A token can legitimately carry fewer scopes than the wizard asked for: the
+ * consent screen lets the user deselect any scope the OAuth app doesn't mark
+ * required, and anything outside the app's ceiling is clamped server-side.
+ * Neither path is an error — `/oauth/token` just returns a narrower `scope`.
+ * Diff it at login, where the gap is fixable, rather than letting the run
+ * discover it as a permission failure on some API call minutes in.
+ */
+export function missingOAuthScopes(
+  requested: readonly string[],
+  grantedScope: string,
+): string[] {
+  const granted = new Set(parseOAuthScopes(grantedScope));
+  return requested.filter((scope) => !granted.has(scope));
+}
+
+export function assertWizardCompletionScope(scope: string): void {
+  if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
+
+  throw new Error(
+    `This run was authorized without the ${WIZARD_COMPLETION_SCOPE} permission, which the wizard needs to finish setup. Please try again, approving all permissions on the PostHog authorization screen. If that screen does not reappear, revoke the existing PostHog Wizard authorization in your PostHog settings first.`,
+  );
+}
 
 // Stable marker for the authorization-flow timeout. Detection keys off the exact
 // message rather than a loose substring — `.includes('timeout')` never matched
@@ -362,6 +399,7 @@ async function exchangeCodeForToken(
   const token = OAuthTokenResponseSchema.parse(response.data);
   logToFile(
     `[oauth] token exchange succeeded, granted scopes: ${token.scope}` +
+      `${token.posthog_region ? `, region: ${token.posthog_region}` : ''}` +
       `${
         token.scoped_teams
           ? `, scoped_teams: [${token.scoped_teams.join(', ')}]`
@@ -374,6 +412,85 @@ async function exchangeCodeForToken(
       }`,
   );
   return token;
+}
+
+// Refresh-token grant (RFC 6749 §6); the server rotates, so callers must store the returned refresh_token.
+export async function refreshAccessToken(
+  refreshToken: string,
+  baseUrl?: string,
+  clientId?: string,
+): Promise<OAuthTokenResponse> {
+  const oauthUrl = getOAuthUrl(baseUrl);
+  logToFile(`[oauth] refreshing access token at ${oauthUrl}/oauth/token`);
+  try {
+    const response = await axios.post(
+      `${oauthUrl}/oauth/token`,
+      {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        // The grant only refreshes under its minting app — provisioning signups pass their regional client.
+        client_id: clientId ?? getOAuthClientId(baseUrl),
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 30_000,
+      },
+    );
+    const token = OAuthTokenResponseSchema.parse(response.data);
+    logToFile('[oauth] access token refreshed');
+    return token;
+  } catch (e) {
+    logToFile(
+      '[oauth] token refresh failed:',
+      e instanceof Error ? e.message : e,
+    );
+    const refreshError = axios.isAxiosError(e)
+      ? oauthErrorFromTokenBody(e.response?.data)
+      : null;
+    throw refreshError ?? e;
+  }
+}
+
+/**
+ * Warn — at login, while the user is still watching — when the grant came back
+ * narrower than the request, and record the gap so narrowed runs are countable.
+ * Non-fatal by design: deselecting an optional scope is the user's call, and
+ * most flows survive it. The one scope the wizard cannot run without has its
+ * own hard check (`assertWizardCompletionScope`).
+ */
+function reportNarrowedGrant(
+  requestedScopes: readonly string[],
+  grantedScope: string,
+): void {
+  const missing = missingOAuthScopes(requestedScopes, grantedScope);
+  if (missing.length === 0) return;
+
+  logToFile(
+    `[oauth] grant narrower than request, missing: ${missing.join(' ')}`,
+  );
+  analytics.wizardCapture('oauth grant narrowed', {
+    requested_scopes: [...requestedScopes].sort().join(' '),
+    granted_scopes: parseOAuthScopes(grantedScope).sort().join(' '),
+    missing_scopes: missing.join(' '),
+    missing_scope_count: missing.length,
+  });
+  const plural = missing.length > 1;
+  getUI().log.warn(
+    `Your PostHog authorization is missing ${
+      plural ? `${missing.length} permissions` : 'a permission'
+    } the wizard asked for: ${missing.join(', ')}. ` +
+      `Setup will continue, but steps that need ${
+        plural ? 'them' : 'it'
+      } may fail. ` +
+      `To grant ${
+        plural ? 'them' : 'it'
+      }, re-run the wizard and approve all permissions on the ` +
+      'authorization screen. If that screen does not reappear, revoke the ' +
+      'existing PostHog Wizard authorization in your PostHog settings first.',
+  );
 }
 
 export async function performOAuthFlow(
@@ -488,6 +605,8 @@ export async function performOAuthFlow(
         getUI().setLoginUrl(null);
         getUI().setAuthorizeUrl(null);
         loginSpinner.stop('Authorization complete!');
+
+        reportNarrowedGrant(config.scopes, token.scope);
 
         return token;
       } catch (e) {

@@ -13,9 +13,9 @@ import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
-/** Per-task agent configuration the resolver produces from a task's type. */
+/** Per-task agent configuration the resolver produces from a task's type.
+ * The model is resolved separately (per-harness profile), not here. */
 export interface ResolvedTask {
-  model: string;
   allowedTools: readonly string[];
   disallowedTools: readonly string[];
   /** Mini-skills to install before the task runs (the HOW). */

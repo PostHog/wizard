@@ -7,6 +7,11 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
+  detectJavaPackageManagers,
+  cargoPackageManager,
+  mixPackageManager,
+  goModulesPackageManager,
+  pubPackageManager,
 } from '@lib/detection/package-manager';
 
 vi.mock('../../../utils/debug');
@@ -180,6 +185,33 @@ describe('detectPythonPackageManagers', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Java detection
+// ---------------------------------------------------------------------------
+
+describe('detectJavaPackageManagers', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  it('detects maven via pom.xml', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'pom.xml'), '<project></project>');
+    const result = await detectJavaPackageManagers(tmpDir);
+    expect(result.primary?.name).toBe('maven');
+    expect(result.primary?.installCommand).toBe('mvn install');
+    expect(result.recommendation).toContain('pom.xml');
+  });
+
+  it('falls back to gradle without a pom.xml', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'build.gradle'), '');
+    const result = await detectJavaPackageManagers(tmpDir);
+    expect(result.primary?.name).toBe('gradle');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Static helpers
 // ---------------------------------------------------------------------------
 
@@ -188,6 +220,10 @@ describe('static package manager helpers', () => {
     { fn: composerPackageManager, name: 'composer' },
     { fn: swiftPackageManager, name: 'spm' },
     { fn: gradlePackageManager, name: 'gradle' },
+    { fn: cargoPackageManager, name: 'cargo' },
+    { fn: mixPackageManager, name: 'mix' },
+    { fn: goModulesPackageManager, name: 'go' },
+    { fn: pubPackageManager, name: 'pub' },
   ])('$name returns valid PackageManagerInfo', async ({ fn }) => {
     const result = await fn();
     expect(result.detected).toHaveLength(1);

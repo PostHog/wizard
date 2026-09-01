@@ -8,13 +8,14 @@ import {
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
-import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
 } from '@lib/health-checks/readiness';
 import { buildSession } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 
@@ -176,6 +177,102 @@ describe('WizardStore', () => {
       expect(cb).toHaveBeenCalled();
     });
 
+    it('grantSharing sets scanConsent to granted and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.grantSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('declineSharing sets scanConsent to declined and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.declineSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('completeSetup marks the warehouse-scan report done after consent resolves', () => {
+      const store = createStore();
+
+      store.grantSharing();
+      expect(store.session.warehouseSourcesReported).toBe(false);
+
+      store.completeSetup();
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
+    it('sets the warehouse tags before it sends setup confirmed', () => {
+      const store = createStore();
+      // A granted run with a scan behind it, which is when tags get set.
+      store.session = {
+        ...store.session,
+        scanConsent: ScanConsent.Granted,
+        frameworkContext: {
+          warehouseScanState: 'ok',
+          detectedWarehouseSources: [
+            {
+              kind: 'Stripe',
+              label: 'Stripe',
+              mode: 'in-cli',
+              matchedSignal: 'x',
+            },
+          ],
+        },
+      };
+      (analytics.setTag as Mock).mockClear();
+      wizardCaptureMock.mockClear();
+
+      store.completeSetup();
+
+      // Analytics merges tags into an event as it is sent, so a tag set after
+      // the capture lands one event too late.
+      const taggedKinds = (analytics.setTag as Mock).mock.calls.findIndex(
+        ([key]) => key === 'warehouse_source_kinds',
+      );
+      expect(taggedKinds).toBeGreaterThanOrEqual(0);
+      const tagOrder = (analytics.setTag as Mock).mock.invocationCallOrder[
+        taggedKinds
+      ];
+      const captureOrder =
+        wizardCaptureMock.mock.invocationCallOrder[
+          wizardCaptureMock.mock.calls.findIndex(
+            ([event]) => event === 'setup confirmed',
+          )
+        ];
+      expect(tagOrder).toBeLessThan(captureOrder);
+    });
+
+    it('declineSharing leaves the report unclaimed while the choice can change', () => {
+      const store = createStore();
+
+      store.declineSharing();
+
+      // warehouseSourcesReported is a send-once latch: the reporter returns at
+      // its first line once set. The privacy panel's choice is reversible, so
+      // claiming it here would silence the report of a user who turns sharing
+      // off and then back on. completeSetup() owns the single report.
+      expect(store.session.warehouseSourcesReported).toBe(false);
+    });
+
+    it('still reports for a user who turns sharing off and on again', () => {
+      const store = createStore();
+
+      store.declineSharing();
+      store.grantSharing();
+      store.completeSetup();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
     it('setRunPhase updates session.runPhase', () => {
       const store = createStore();
       store.setRunPhase(RunPhase.Running);
@@ -187,7 +284,7 @@ describe('WizardStore', () => {
       const creds = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 42,
       };
       store.setCredentials(creds);
@@ -316,7 +413,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 42,
       });
       expect(wizardCaptureMock).toHaveBeenCalledWith('auth complete', {
@@ -330,6 +427,34 @@ describe('WizardStore', () => {
       expect(wizardCaptureMock).toHaveBeenCalledWith('feature enabled', {
         feature: AdditionalFeature.LLM,
       });
+    });
+
+    it('enableFeature tags additional_feature_kinds with the joined queue', () => {
+      const store = createStore();
+      store.enableFeature(AdditionalFeature.LLM);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'additional_feature_kinds',
+        'llm',
+      );
+    });
+
+    it('setRunPhase tags run_phase', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Running);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'run_phase',
+        RunPhase.Running,
+      );
+    });
+
+    it('completeRunStep resets the run_phase tag, not just the session', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Completed);
+      store.completeRunStep('integrate-run');
+      expect(analytics.setTag).toHaveBeenLastCalledWith(
+        'run_phase',
+        RunPhase.Idle,
+      );
     });
 
     it('setMcpComplete fires mcp complete event', () => {
@@ -412,7 +537,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -429,7 +554,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -447,7 +572,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -466,7 +591,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -1016,7 +1141,7 @@ describe('WizardStore', () => {
         // -> settings-override (overlay still on top)
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.popOverlay(); // -> health-check (readinessResult still null)
@@ -1161,7 +1286,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Error);
@@ -1216,7 +1341,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1265,7 +1390,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1303,7 +1428,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1417,7 +1542,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       wizardCaptureMock.mockClear();
@@ -1430,6 +1555,54 @@ describe('WizardStore', () => {
           ([event]) => typeof event === 'string' && event.startsWith('screen '),
         ),
       ).toBe(false);
+    });
+  });
+
+  // ── Program attribution for shared steps ────────────────────────────
+
+  describe('analyticsProgramId', () => {
+    it('reports the running program for a step that claims no override', () => {
+      const store = createStore(Program.McpAdd);
+
+      expect(store.currentScreen).toBe(ScreenId.McpAdd);
+      expect(store.analyticsProgramId).toBe(Program.McpAdd);
+    });
+
+    it('reports mcp-tutorial for the tutorial step hosted inside mcp-add', () => {
+      const store = createStore(Program.McpAdd);
+      const session = store.session;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+      store.session = session;
+
+      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+    });
+
+    it('reports mcp-tutorial for the same step run standalone', () => {
+      const store = createStore(Program.McpTutorial);
+
+      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+    });
+
+    it('stamps the tutorial program id on the screen transition event', () => {
+      const store = createStore(Program.McpAdd);
+      // Prime the transition detector: the first emit has no previous
+      // screen, so it records the starting one without firing an event.
+      store.emitChange();
+
+      const session = store.session;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+      store.session = session;
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        `screen ${ScreenId.McpSuggestedPrompts}`,
+        expect.objectContaining({ program_id: Program.McpTutorial }),
+      );
     });
   });
 
@@ -1482,6 +1655,31 @@ describe('WizardStore', () => {
 
     it('--integrate pre-resolves the decision to true', () => {
       expect(buildSession({ integrate: true }).integrate).toBe(true);
+    });
+  });
+
+  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
+    it('flips signup and records email + region, and integrates', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+
+      store.chooseProvisionAccount('dev@example.com', 'eu');
+
+      expect(store.session.signup).toBe(true);
+      expect(store.session.email).toBe('dev@example.com');
+      expect(store.session.region).toBe('eu');
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('emits exactly one change event', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.chooseProvisionAccount('dev@example.com', 'us');
+
+      expect(cb).toHaveBeenCalledTimes(1);
     });
   });
 });

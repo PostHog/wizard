@@ -4,11 +4,58 @@ import {
   getRoleGreeting,
   getFollowUps,
   getCrossSellPrompts,
+  getGeneratedQuests,
+  getActivationCrossSell,
+  getTutorialPicker,
   getSlackAppCard,
   FOLLOW_UP_EXIT_SENTINEL,
   TAILORED_ROLES,
 } from '@lib/mcp-role-prompts';
 import { Integration } from '@lib/constants';
+import {
+  degradedProfile,
+  type EventVolume,
+  type ProductPresence,
+  type ProjectDataProfile,
+} from '@lib/mcp-project-profile';
+
+// Build a profile fixture without the network. Defaults to a rich profile
+// with a clean SaaS funnel and every product absent (so activation
+// cross-sells are eligible); override per test.
+const ev = (name: string, count: number): EventVolume => ({ name, count });
+function makeProfile(
+  over: Partial<ProjectDataProfile> = {},
+): ProjectDataProfile {
+  const products: ProductPresence = {
+    webAnalytics: false,
+    errorTracking: false,
+    sessionReplay: false,
+    surveys: false,
+    featureFlags: false,
+    experiments: false,
+    dataWarehouse: false,
+    ...(over.products ?? {}),
+  };
+  const topCustomEvents = over.topCustomEvents ?? [
+    ev('feature_used', 21),
+    ev('signed_up', 10),
+    ev('activated', 7),
+    ev('upgraded_to_paid', 3),
+  ];
+  const base: ProjectDataProfile = {
+    tier: 'rich',
+    totalEvents: 200,
+    distinctEventCount: topCustomEvents.length + 1,
+    topEvents: [ev('$pageview', 100), ...topCustomEvents],
+    topCustomEvents,
+    products,
+    seeded: false,
+    degraded: false,
+  };
+  // Re-pin the resolved `products` / `topCustomEvents` after `over` so a
+  // partial override can't desync them from the derived fields.
+  return { ...base, ...over, products, topCustomEvents };
+}
 
 // The first entry of every role kit (and DEFAULT_KIT) is the dated
 // annotation prompt. Tests assert against its prompt text rather than
@@ -159,6 +206,57 @@ describe('getFollowUps', () => {
     expect(prefixed[0].label).toBe(direct[0].label);
   });
 
+  it('recovers the inner tool from a CLI-mode exec command', () => {
+    // CLI mode: every call is the single `exec` tool; the real tool is named
+    // in the command string. Follow-ups should match the tools-mode result.
+    const toolsMode = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+    });
+    const cliMode = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__exec',
+      lastToolCommand: 'call query-trends {"event":"signup"}',
+    });
+    expect(cliMode[0].label).toBe(toolsMode[0].label);
+  });
+
+  it('parses the inner tool past exec --flag options', () => {
+    const flagged = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'exec',
+      lastToolCommand: 'call --force query-trends {"event":"signup"}',
+    });
+    const plain = getFollowUps({ ...baseArgs, lastToolName: 'query-trends' });
+    expect(flagged[0].label).toBe(plain[0].label);
+  });
+
+  it('falls through to generics for non-call exec commands', () => {
+    for (const command of ['search dashboard', 'info query-trends', 'tools']) {
+      const fs = getFollowUps({
+        ...baseArgs,
+        lastToolName: 'mcp__posthog-wizard__exec',
+        lastToolCommand: command,
+      });
+      // No inner tool → generic pool, same as an unknown tool.
+      expect(fs[0].label).toMatch(
+        /deeper|angle|surprise|slice|compare|actionable/i,
+      );
+      expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+    }
+  });
+
+  it('falls through to generics for a bare exec with no command', () => {
+    const fs = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__exec',
+    });
+    expect(fs[0].label).toMatch(
+      /deeper|angle|surprise|slice|compare|actionable/i,
+    );
+    expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+  });
+
   it('falls back to generic follow-ups for unknown tool names', () => {
     const fs = getFollowUps({
       ...baseArgs,
@@ -279,6 +377,136 @@ describe('getCrossSellPrompts', () => {
       ),
     );
     expect(fingerprints.size).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('getGeneratedQuests', () => {
+  it('returns nothing for a missing or degraded profile', () => {
+    expect(getGeneratedQuests(null)).toEqual([]);
+    expect(getGeneratedQuests(degradedProfile())).toEqual([]);
+  });
+
+  it('returns nothing when there are no custom events', () => {
+    const p = makeProfile({ topCustomEvents: [] });
+    expect(getGeneratedQuests(p)).toEqual([]);
+  });
+
+  it('templates a funnel from the real event names', () => {
+    const quests = getGeneratedQuests(makeProfile());
+    const funnel = quests.find((q) => q.label === 'Funnel your real events');
+    expect(funnel).toBeDefined();
+    // Funnel lists the actual project events, capped at 4.
+    expect(funnel?.prompt).toContain('feature_used');
+    expect(funnel?.prompt).toContain('signed_up');
+    expect(funnel?.prompt).toContain('upgraded_to_paid');
+  });
+
+  it('templates trend + breakdown off the busiest custom event', () => {
+    const quests = getGeneratedQuests(makeProfile());
+    const trend = quests.find((q) => q.label?.startsWith('Trend'));
+    const breakdown = quests.find((q) => q.label?.startsWith('Break down'));
+    expect(trend?.prompt).toContain('feature_used');
+    expect(breakdown?.prompt).toContain('feature_used');
+    // No leftover placeholder tokens.
+    expect(trend?.prompt).not.toContain('{');
+  });
+
+  it('skips the funnel when only one custom event exists', () => {
+    const p = makeProfile({
+      topCustomEvents: [{ name: 'only_event', count: 99 }],
+    });
+    const quests = getGeneratedQuests(p);
+    expect(quests.some((q) => q.label === 'Funnel your real events')).toBe(
+      false,
+    );
+    expect(quests).toHaveLength(2); // trend + breakdown
+  });
+});
+
+describe('getActivationCrossSell', () => {
+  it('returns nothing for a missing or degraded profile', () => {
+    expect(getActivationCrossSell('engineering', null)).toEqual([]);
+    expect(getActivationCrossSell('engineering', degradedProfile())).toEqual(
+      [],
+    );
+  });
+
+  it('only surfaces products the scout found absent', () => {
+    const p = makeProfile({
+      products: {
+        webAnalytics: true,
+        errorTracking: true,
+        sessionReplay: false,
+        surveys: true,
+        featureFlags: true,
+        experiments: true,
+        dataWarehouse: true,
+      },
+    });
+    const sells = getActivationCrossSell('founder', p, 5);
+    expect(sells).toHaveLength(1);
+    expect(sells[0].product).toBe('Session Replay');
+  });
+
+  it('orders by role affinity (engineering leads with error tracking)', () => {
+    const sells = getActivationCrossSell('engineering', makeProfile(), 1);
+    expect(sells[0].product).toBe('Error Tracking');
+  });
+
+  it('respects the limit', () => {
+    expect(getActivationCrossSell('founder', makeProfile(), 2)).toHaveLength(2);
+  });
+});
+
+describe('getTutorialPicker', () => {
+  it('falls back to legacy composition for a degraded profile', () => {
+    const picker = getTutorialPicker(
+      'founder',
+      Integration.nextjs,
+      degradedProfile(),
+    );
+    // Legacy path leads with the pinned generic read.
+    expect(picker[0].prompt).toBe(
+      'Show me my top 5 events from the last 7 days',
+    );
+  });
+
+  it('offers only write quests + activation for an empty project', () => {
+    const empty = makeProfile({
+      tier: 'empty',
+      totalEvents: 0,
+      topCustomEvents: [],
+      topEvents: [],
+    });
+    const picker = getTutorialPicker('product', Integration.nextjs, empty);
+    // First two are the guaranteed-win writes.
+    expect(picker[0].prompt).toContain('Annotate today');
+    expect(picker[1].prompt).toContain('starter dashboard');
+    // The rest are activation cross-sells, never empty reads.
+    expect(picker.slice(2).every((o) => Boolean(o.product))).toBe(true);
+  });
+
+  it('leads with generated quests for a rich project', () => {
+    const picker = getTutorialPicker(
+      'product',
+      Integration.nextjs,
+      makeProfile(),
+    );
+    expect(picker[0].label).toBe('Funnel your real events');
+    // Generated quests reference the project's real events.
+    expect(picker[0].prompt).toContain('signed_up');
+  });
+
+  it('leads with a safe read for a sparse project', () => {
+    const sparse = makeProfile({
+      tier: 'sparse',
+      totalEvents: 12,
+      topCustomEvents: [{ name: 'clicked', count: 12 }],
+    });
+    const picker = getTutorialPicker('founder', Integration.nextjs, sparse);
+    expect(picker[0].prompt).toBe(
+      'Show me my top 5 events from the last 7 days',
+    );
   });
 });
 

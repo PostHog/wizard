@@ -18,6 +18,7 @@ import {
   initializeAgent,
   runAgent as executeAgent,
 } from '@lib/agent/agent-interface';
+import { createAioCapture } from '@lib/agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
@@ -43,28 +44,30 @@ export const anthropicBackend: AgentHarness = {
       middleware,
       model,
     } = inputs;
-    const {
-      skillsBaseUrl,
-      accessToken,
-      host,
-      mcpUrl,
-      wizardFlags,
-      wizardMetadata,
-    } = boot;
+    const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata } = boot;
+    const { accessToken, host, projectApiKey } = credentials;
+
+    const capture = createAioCapture({
+      enabled: session.captureAio,
+      projectApiKey,
+      apiHost: host.apiHost,
+      runTags: wizardMetadata,
+    });
 
     getUI().log.step('Initializing Claude agent...');
     const agent = await initializeAgent(
       {
         workingDirectory: session.installDir,
-        posthogMcpUrl: mcpUrl,
+        posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
-        posthogApiHost: host,
+        host,
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
         skillsBaseUrl,
         wizardFlags,
         wizardMetadata,
+        programId: boot.programId,
         integrationLabel: config.integrationLabel,
         askBridge,
         askMaxQuestions: config.maxQuestions,
@@ -72,6 +75,7 @@ export const anthropicBackend: AgentHarness = {
         disallowedTools: programConfig.disallowedTools,
         getPendingQuestion: () => session.pendingQuestion,
         modelOverride: model,
+        capture,
       },
       sessionToOptions(session),
     );
@@ -93,6 +97,8 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue: config.additionalFeatureQueue ?? [],
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
+        resolveStepKey: config.resolveStepKey,
+        triageProvider: boot.triageProvider,
       },
       middleware,
     );
@@ -108,6 +114,7 @@ export const anthropicBackend: AgentHarness = {
       model,
       allowedTools,
       disallowedTools,
+      askBridge,
       orchestrator,
       spinnerMessage,
       successMessage,
@@ -118,21 +125,33 @@ export const anthropicBackend: AgentHarness = {
     } = inputs;
     const options = sessionToOptions(session);
 
+    const capture = createAioCapture({
+      enabled: session.captureAio,
+      projectApiKey: boot.credentials.projectApiKey,
+      apiHost: boot.credentials.host.apiHost,
+      runTags: boot.wizardMetadata,
+    });
+
     // Per-task agent config — the wizard-tools MCP server is bound to the
     // orchestrator context (queue store + current task id) so complete_task /
     // enqueue_task attribute to the right agent when tasks run in parallel.
     const agent = await initializeAgent(
       {
         workingDirectory: session.installDir,
-        posthogMcpUrl: boot.mcpUrl,
-        posthogApiKey: boot.accessToken,
-        posthogApiHost: boot.host,
+        posthogMcpUrl: boot.credentials.host.mcpUrl,
+        posthogApiKey: boot.credentials.accessToken,
+        host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
+        programId: boot.programId,
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
         integrationLabel: programConfig.id,
+        // Only a task allowed to ask carries a bridge, so the Write/Edit pause
+        // that rides on a pending question stays inside that task's agent.
+        askBridge,
         orchestrator,
+        capture,
       },
       options,
     );

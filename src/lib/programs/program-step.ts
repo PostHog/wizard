@@ -1,4 +1,8 @@
-import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
+import type {
+  WizardSession,
+  DiscoveredFeature,
+  TaskNotice,
+} from '@lib/wizard-session';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { Integration } from '@lib/constants';
@@ -6,6 +10,9 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
 import type { Tip } from '@ui/tui/components/TipsCard';
+// Type-only — erased at compile time, so no runtime cycle with the
+// registry that imports `ProgramConfig` back from this module.
+import type { ProgramId } from './program-registry.js';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -126,6 +133,15 @@ export interface ProgramStep {
    * scanning the installDir for prerequisites. May be sync or async.
    */
   onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+
+  /**
+   * Report this step's analytics under a different program than its host, for
+   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
+   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
+   * sequences still follow the host. Matched by `screenId`, so headless steps
+   * are unaffected.
+   */
+  reportsAsProgramId?: ProgramId;
 }
 
 /**
@@ -197,6 +213,12 @@ export interface ProgramConfig {
   /** Unique program id — matches the Program enum value */
   id: string;
   /**
+   * Content-mill flow the orchestrator loads its agent prompts + step-skills
+   * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
+   * the content-mill flow name diverges from the program id.
+   */
+  agentFlow?: string;
+  /**
    * Whether this program's agent run requires third-party AI services.
    *
    * When true (the default), the wizard checks
@@ -227,6 +249,24 @@ export interface ProgramConfig {
    * detection) that the TUI performs via step onReady callbacks.
    */
   ciPreRun?: (session: WizardSession) => Promise<void>;
+  /**
+   * Tasks the orchestrator queues itself, before the planner runs, from what
+   * the wizard detected. Their types are marked `runnerSeeded: true` in the
+   * agent prompt, so the planner never sees them: whether such a task runs is
+   * decided here, in code, not by a model that could invent it or forget it.
+   * Return an empty list to queue none.
+   */
+  seedTasks?: (session: WizardSession) => Array<{
+    type: string;
+    label?: string;
+    inputs?: Record<string, unknown>;
+    /**
+     * Shown before the run starts, letting the user decline the task. The
+     * program owns the words — the runner and the modal only carry them. A
+     * task without one is queued silently.
+     */
+    notice?: TaskNotice;
+  }>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
@@ -235,6 +275,13 @@ export interface ProgramConfig {
    * read it synchronously without resolving a deferred `run` function.
    */
   reportFile?: string;
+  /**
+   * Agent-authored event-plan artifact to mirror into the wizard session.
+   * Relative to `session.installDir`. Programs that do not produce an event
+   * plan leave this unset, so generic runner machinery does not inspect a
+   * stale or unrelated `.posthog-events.json` file.
+   */
+  eventPlanFile?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.

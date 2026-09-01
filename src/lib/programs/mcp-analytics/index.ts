@@ -1,4 +1,5 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { ErrorCodes } from '@lib/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
@@ -8,14 +9,15 @@ const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
  * instrumented. Kept in sync with the stop conditions in the skill's
  * `description.md` (context-mill `context/skills/mcp-analytics`).
  */
-const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
+export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
   {
-    match: /^not a javascript mcp server$/i,
-    message: 'Not a JavaScript/TypeScript MCP server',
+    match: /^unsupported language for mcp analytics$/i,
+    errorCode: ErrorCodes.DetectUnsupportedPlatform,
+    message: 'Unsupported language for MCP analytics',
     body:
-      'MCP analytics is currently TypeScript/JavaScript-only — the `@posthog/mcp` ' +
-      'SDK is a Node package (a Python SDK is on the roadmap). This project ' +
-      "doesn't look like a JS/TS MCP server, so there's nothing to instrument. " +
+      'MCP analytics supports TypeScript/JavaScript (`@posthog/mcp`) and Python ' +
+      '(`posthog.mcp`, shipped inside the `posthog` package). This project ' +
+      "doesn't look like either, so there's nothing to instrument. " +
       'See https://posthog.com/docs/mcp-analytics for the supported setups.',
   },
   {
@@ -25,6 +27,16 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'This command instruments an existing MCP server with PostHog analytics, ' +
       'but no MCP server was found in this project. If you just want PostHog ' +
       'product analytics, run `npx @posthog/wizard` instead.',
+  },
+  {
+    match: /^could not locate the server entry point$/i,
+    message: 'Could not locate the MCP server entry point',
+    body:
+      "This project has MCP signals, but the agent couldn't find where the " +
+      "server is constructed or requests are dispatched, so there's nowhere " +
+      'safe to add instrumentation. See https://posthog.com/docs/mcp-analytics ' +
+      'for the supported server styles, or point the wizard at the package ' +
+      "that defines the server if it's in a monorepo subdirectory.",
   },
 ];
 

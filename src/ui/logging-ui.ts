@@ -21,8 +21,10 @@ import {
 } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
@@ -162,6 +164,14 @@ export class LoggingUI implements WizardUI {
     });
   }
 
+  showTaskNotice(_notice: TaskNotice): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  cancelTaskNotice(): void {
+    // Nothing to dismiss — showTaskNotice never opened anything.
+  }
+
   showSettingsOverride(
     _conflicts: SettingsConflict[],
     _backupAndFix: () => boolean,
@@ -176,6 +186,10 @@ export class LoggingUI implements WizardUI {
           'Re-run the wizard without --ci to answer interactively.',
       ),
     );
+  }
+
+  cancelPendingQuestion(): void {
+    // Nothing to dismiss — requestQuestion never opens an overlay here.
   }
 
   showAuthError(detail?: AuthErrorDetail): void {
@@ -217,13 +231,12 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
-  setCredentials(_credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(_credentials: Credentials): void {
     // No-op in CI mode — credentials are handled directly
+  }
+
+  setAccessToken(_credentials: Credentials): void {
+    // No-op in CI mode — CI runs on a non-expiring key and never refreshes
   }
 
   setRoleAtOrganization(_role: string | null): void {
@@ -267,6 +280,10 @@ export class LoggingUI implements WizardUI {
 
   setNotebookUrl(_url: string): void {
     // No-op in CI mode
+  }
+
+  setHandoffText(_text: string): void {
+    // No-op without a store — HeadlessUI overrides to feed the session sync
   }
 
   addTokenUsage(_delta: TokenUsageDelta): void {

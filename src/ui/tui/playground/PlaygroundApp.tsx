@@ -23,6 +23,8 @@ import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
 import { EndScreensDemo } from './demos/EndScreensDemo.js';
 import { AiOptInDemo } from './demos/AiOptInDemo.js';
+import { AskModalDemo } from './demos/AskModalDemo.js';
+import { ViewportGuardDemo } from './demos/ViewportGuardDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -32,6 +34,7 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
   const tabs = [
     { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
     { id: 'input', label: 'Input', component: <InputDemo /> },
+    { id: 'ask-modal', label: 'Ask modal', component: <AskModalDemo /> },
     { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
     { id: 'logs', label: 'Logs', component: <LogDemo /> },
     {
@@ -93,6 +96,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'ai-opt-in-nonadmin',
       label: 'AI opt-in (non-admin)',
       component: <AiOptInDemo variant="non-admin" />,
+    },
+    {
+      id: 'viewport-guard',
+      label: 'Viewport guard',
+      component: <ViewportGuardDemo />,
     },
   ];
 

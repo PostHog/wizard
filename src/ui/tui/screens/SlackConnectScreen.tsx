@@ -133,7 +133,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
       fetchSlackConnected(
         credentials.accessToken,
         credentials.projectId,
-        credentials.host,
+        credentials.host.apiHost,
         controller.signal,
       )
         .then((isConnected) => {

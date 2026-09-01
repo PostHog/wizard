@@ -9,32 +9,80 @@
  */
 
 import { Box, Text } from 'ink';
-import { spawnSync } from 'node:child_process';
 import type { ReactNode } from 'react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { Integration, WIZARD_TOOLS_MENU_FLAG_KEY } from '@lib/constants';
-import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
+import { Integration } from '@lib/constants';
+import {
+  PickerMenu,
+  LoadingBox,
+  type PickerOption,
+} from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
-import { releaseTerminal } from '@ui/tui/start-tui';
+import { ScanConsent } from '@lib/wizard-session';
+import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
+import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
 
-const TOOLS = [
-  { label: 'Troubleshoot Integration', command: 'doctor' },
-] as const;
+type View = 'default' | 'more-info';
 
-type View = 'default' | 'more-info' | 'privacy' | 'tools';
+/**
+ * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
+ * shared default (".env* file contents will not leave your machine") is true
+ * of values and false of variable names, which this screen reads and reports.
+ * Two lines carry the fact and name the screen that holds the detail, so the
+ * disclosure reaches people who never open it.
+ */
+const SUBTITLE = (
+  <>
+    <Text dimColor>
+      We'll use AI to analyze your project and complete work.
+    </Text>
+    <Text dimColor>Review what data is shared in "{PRIVACY_PANEL_LABEL}."</Text>
+    <Text dimColor>.env* values stay on your machine.</Text>
+  </>
+);
 
-function launchTool(command: string, installDir: string): never {
-  releaseTerminal();
-  const result = spawnSync(
-    process.execPath,
-    [process.argv[1], command, `--install-dir=${installDir}`],
-    { stdio: 'inherit' },
-  );
-  process.exit(result.status ?? 0);
+/**
+ * Exported so a test can measure every label against the menu's column.
+ * `Privacy & data` is not here: IntroScreenLayout appends it to every intro
+ * menu, so no screen carries its own copy.
+ */
+export const CONTINUE_MENU_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Continue', value: 'continue' },
+  { label: 'Change framework', value: 'framework' },
+  { label: 'More info', value: 'more-info' },
+  { label: 'Cancel', value: 'cancel' },
+];
+
+/**
+ * A blank, unselectable row. Navigation skips disabled options, so this is a
+ * margin the menu can hold rather than one the layout has to special-case.
+ */
+const MENU_SPACER: PickerOption<string> = {
+  label: '',
+  value: 'spacer',
+  disabled: true,
+};
+
+/**
+ * The sharing choice, as two explicit rows rather than one toggle. A toggle
+ * label has to describe either the current state or the next action, and a
+ * reader cannot tell which; two rows with the filled diamond on the live one
+ * say both at once. The trailing spacer separates them from the Back that
+ * IntroScreenLayout appends, since leaving the screen is a different kind of
+ * act from changing something on it.
+ */
+export function sharingOptions(sharing: boolean): PickerOption<string>[] {
+  const mark = (on: boolean) => ({
+    glyph: on ? Icons.diamond : Icons.diamondOpen,
+  });
+  return [
+    { label: 'Share tools', value: 'share', icon: mark(sharing) },
+    { label: "Don't share tools", value: 'no-share', icon: mark(!sharing) },
+    MENU_SPACER,
+  ];
 }
 
 /** Framework picker shown when auto-detection fails. */
@@ -84,27 +132,13 @@ export const PostHogIntegrationIntroScreen = ({
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
   const [view, setView] = useState<View>('default');
-  const [toolsEnabled, setToolsEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void analytics.getAllFlagsForWizard().then((flags) => {
-      const value = flags[WIZARD_TOOLS_MENU_FLAG_KEY];
-      if (!cancelled && value && value !== 'false') setToolsEnabled(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const { session } = store;
+  const sharing = session.scanConsent !== ScanConsent.Declined;
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
-  const { skillEntry, fetchFailed } = useSkillEntry(
-    session.skillId,
-    session.localMcp,
-  );
+  const { skillEntry, fetchFailed } = useSkillEntry(session.skillId);
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
@@ -118,12 +152,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Title ──────────────────────────────────────────────────────────
 
-  const title =
-    view === 'privacy'
-      ? 'Wizard privacy & usage'
-      : detecting
-      ? 'PostHog Wizard starting up'
-      : 'PostHog Wizard 🦔';
+  const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
 
   // ── Description ────────────────────────────────────────────────────
 
@@ -189,15 +218,11 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
-  } else if (view === 'privacy') {
-    body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
-      <>
-        <Box>
-          <Text>Let's do two hours of work in eight minutes.</Text>
-        </Box>
-      </>
+      <Box>
+        <Text>Let's do two hours of work in eight minutes.</Text>
+      </Box>
     );
   }
 
@@ -260,37 +285,17 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Menu ───────────────────────────────────────────────────────────
 
-  let menuOptions: { label: string; value: string }[] | null = null;
+  let menuOptions: PickerOption<string>[] | null = null;
 
-  if (view === 'tools') {
-    menuOptions = [
-      ...TOOLS.map((t) => ({ label: t.label, value: t.command })),
-      { label: 'Back', value: 'back' },
-    ];
-  } else if (view === 'more-info') {
-    menuOptions = [
-      { label: 'Back', value: 'back' },
-      { label: 'Privacy & data usage', value: 'privacy' },
-    ];
-  } else if (view === 'privacy') {
+  if (view === 'more-info') {
+    // No route to the panel from here: it has its own top-level menu item.
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
-    menuOptions = [
-      { label: 'Continue', value: 'continue' },
-      { label: 'Change framework', value: 'framework' },
-      ...(toolsEnabled ? [{ label: 'Tools', value: 'tools' }] : []),
-      { label: 'More info', value: 'more-info' },
-      { label: 'Cancel', value: 'cancel' },
-    ];
+    menuOptions = CONTINUE_MENU_OPTIONS;
   }
 
   const handleSelect = (value: string) => {
     analytics.wizardCapture('intro menu selected', { value, view });
-    if (view === 'tools') {
-      if (value === 'back') setView('default');
-      else launchTool(value, session.installDir);
-      return;
-    }
     if (value === 'cancel') {
       process.exit(0);
     } else if (value === 'framework') {
@@ -298,13 +303,16 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
-    } else if (value === 'privacy') {
-      setView('privacy');
-    } else if (value === 'tools') {
-      setView('tools');
     } else if (value === 'back') {
-      setView(view === 'privacy' ? 'more-info' : 'default');
-    } else {
+      setView('default');
+    } else if (value === 'share') {
+      store.grantSharing();
+    } else if (value === 'no-share') {
+      store.declineSharing();
+    } else if (value === 'continue') {
+      // Sharing is on by default, so consent nobody touched resolves to granted
+      // here. A choice already made in the panel stands.
+      if (session.scanConsent === ScanConsent.Undecided) store.grantSharing();
       store.completeSetup();
     }
   };
@@ -316,11 +324,14 @@ export const PostHogIntegrationIntroScreen = ({
       installDir={session.installDir}
       title={title}
       showSubtitle={view === 'default'}
+      subtitle={SUBTITLE}
       body={body}
       showDetection={showContinue}
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       menuAlign="center"
+      // The one program whose disclosure view can be acted on.
+      privacyOptions={sharingOptions(sharing)}
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}

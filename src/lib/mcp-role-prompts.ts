@@ -20,7 +20,14 @@
  */
 
 import type { Integration } from './constants';
+import type {
+  ProductPresence,
+  ProjectDataProfile,
+} from './mcp-project-profile';
 import copyData from './mcp-role-prompts.copy.json';
+
+/** Keys of `ProductPresence` — the products an activation cross-sell can target. */
+export type ProductKey = keyof ProductPresence;
 
 /**
  * Roles that ship from `role_at_organization` on the PostHog user object.
@@ -165,6 +172,19 @@ const SLACK_APP = copyData.slackApp as {
   capabilities: string[];
 };
 
+// Data-aware surfaces — templates + copy for the scout-driven picker.
+const GENERATED_QUESTS = copyData.generatedQuests as {
+  funnel: { label: string; prompt: string };
+  trend: { label: string; prompt: string };
+  breakdown: { label: string; prompt: string };
+};
+const WRITE_ONLY_QUESTS = copyData.writeOnlyQuests as PromptKit;
+const ACTIVATION_CROSS_SELL = copyData.activationCrossSell as Record<
+  ProductKey,
+  PromptOption
+>;
+const SEED_OFFER_GREETING = copyData.seedOfferGreeting as RoleGreeting;
+
 // ── Framework family map ───────────────────────────────────────────────
 // Stays in code (not JSON) because it's structural data tied to the
 // `Integration` enum, not user-facing copy.
@@ -217,6 +237,29 @@ function normalizeToolName(toolName: string | null): string | null {
   if (!toolName) return null;
   const idx = toolName.lastIndexOf('__');
   return idx >= 0 ? toolName.slice(idx + 2) : toolName;
+}
+
+/**
+ * CLI mode wraps every real tool in a single `exec` tool whose `command`
+ * string names the inner tool: `call query-trends {…}` → `query-trends`. The
+ * inner name is the first token after `call` (past any `--flag` options).
+ */
+const EXEC_INNER_TOOL = /^call\s+(?:--\w+\s+)*([a-z0-9-]+)/;
+
+/**
+ * Resolve the `TOOL_FOLLOW_UPS` lookup key from the last tool call, under both
+ * server modes. Tools mode passes the real tool name directly; CLI mode passes
+ * `exec` plus the command string, so we extract the inner tool from it. A
+ * non-`call` exec command (`search`, `info`) has no inner tool and yields null,
+ * so the lookup falls through to the generic pools.
+ */
+function resolveToolKey(
+  toolName: string | null,
+  toolCommand: string | null,
+): string | null {
+  const normalized = normalizeToolName(toolName);
+  if (normalized !== 'exec') return normalized;
+  return toolCommand?.match(EXEC_INNER_TOOL)?.[1] ?? null;
 }
 
 /** Pick `n` items from a pool starting at a rotation offset. */
@@ -300,12 +343,14 @@ export function getRoleGreeting(role: string | null | undefined): RoleGreeting {
  */
 export function getFollowUps(args: {
   lastToolName: string | null;
+  /** CLI mode's exec `command` string, used to recover the inner tool name. */
+  lastToolCommand?: string | null;
   lastPrompt: string;
   role: string | null | undefined;
   branchHistory: string[];
 }): PromptOption[] {
-  const { lastToolName, role, branchHistory } = args;
-  const normalized = normalizeToolName(lastToolName);
+  const { lastToolName, lastToolCommand, role, branchHistory } = args;
+  const normalized = resolveToolKey(lastToolName, lastToolCommand ?? null);
   const depth = branchHistory.length;
 
   // Build the candidate pool — order matters because dedup keeps the
@@ -345,6 +390,208 @@ export function getCrossSellPrompts(
 ): PromptOption[] {
   if (!isTailoredRole(role)) return NEUTRAL_CROSS_SELL;
   return CROSS_SELL_BY_ROLE[role];
+}
+
+// ── Data-aware picker (scout-driven) ───────────────────────────────────
+// Everything below consumes a ProjectDataProfile from the scout
+// (`probeProjectData`) so the tutorial only ever offers playable moves:
+// quests built from the project's real events when data exists, write-only
+// quests + product-activation cross-sells when it doesn't.
+
+/**
+ * Order in which to offer activation cross-sells per role — products most
+ * relevant to each audience first. Only products the scout found *absent*
+ * are surfaced; this just picks which absent ones to lead with.
+ */
+const ACTIVATION_PRIORITY: Record<TailoredRole, ProductKey[]> = {
+  founder: [
+    'sessionReplay',
+    'surveys',
+    'webAnalytics',
+    'experiments',
+    'dataWarehouse',
+    'errorTracking',
+    'featureFlags',
+  ],
+  product: [
+    'sessionReplay',
+    'experiments',
+    'surveys',
+    'featureFlags',
+    'webAnalytics',
+    'errorTracking',
+    'dataWarehouse',
+  ],
+  leadership: [
+    'surveys',
+    'dataWarehouse',
+    'sessionReplay',
+    'webAnalytics',
+    'experiments',
+    'errorTracking',
+    'featureFlags',
+  ],
+  marketing: [
+    'sessionReplay',
+    'webAnalytics',
+    'surveys',
+    'experiments',
+    'dataWarehouse',
+    'featureFlags',
+    'errorTracking',
+  ],
+  engineering: [
+    'errorTracking',
+    'sessionReplay',
+    'featureFlags',
+    'experiments',
+    'webAnalytics',
+    'dataWarehouse',
+    'surveys',
+  ],
+  data: [
+    'dataWarehouse',
+    'experiments',
+    'sessionReplay',
+    'webAnalytics',
+    'errorTracking',
+    'surveys',
+    'featureFlags',
+  ],
+};
+const NEUTRAL_ACTIVATION_PRIORITY: ProductKey[] = [
+  'sessionReplay',
+  'errorTracking',
+  'surveys',
+  'webAnalytics',
+  'experiments',
+  'featureFlags',
+  'dataWarehouse',
+];
+
+/** How many custom events to feed into a generated funnel prompt. */
+const FUNNEL_EVENT_LIMIT = 4;
+
+/** Fill `{placeholder}` tokens in a template; unknown tokens pass through. */
+function fillTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(
+    /\{(\w+)\}/g,
+    (_, key: string) => vars[key] ?? `{${key}}`,
+  );
+}
+
+export function getSeedOfferGreeting(): RoleGreeting {
+  return SEED_OFFER_GREETING;
+}
+
+/**
+ * Generate quests from the project's REAL event names (idea 9). Returns a
+ * funnel (when ≥2 custom events exist), a trend, and a breakdown — all
+ * templated off `topCustomEvents`. Empty when there's nothing usable to
+ * build from (no profile, degraded, or no custom events), so callers fall
+ * back to the static kit.
+ */
+export function getGeneratedQuests(
+  profile: ProjectDataProfile | null | undefined,
+): PromptOption[] {
+  if (!profile || profile.degraded) return [];
+  const custom = profile.topCustomEvents;
+  if (custom.length === 0) return [];
+
+  const out: PromptOption[] = [];
+  const top = custom[0].name;
+
+  if (custom.length >= 2) {
+    const events = custom
+      .slice(0, FUNNEL_EVENT_LIMIT)
+      .map((e) => e.name)
+      .join(', ');
+    out.push({
+      label: GENERATED_QUESTS.funnel.label,
+      prompt: fillTemplate(GENERATED_QUESTS.funnel.prompt, { events }),
+    });
+  }
+  out.push({
+    label: fillTemplate(GENERATED_QUESTS.trend.label, { event: top }),
+    prompt: fillTemplate(GENERATED_QUESTS.trend.prompt, { event: top }),
+  });
+  out.push({
+    label: fillTemplate(GENERATED_QUESTS.breakdown.label, { event: top }),
+    prompt: fillTemplate(GENERATED_QUESTS.breakdown.prompt, { event: top }),
+  });
+  return out;
+}
+
+/**
+ * Activation cross-sells (idea 4) for products the scout found NO data
+ * for — turning a data-less dead end into "here's how to turn this on".
+ * Ordered by role affinity, capped at `limit`. Empty when the profile is
+ * missing/degraded (we only nag when we're confident a product is absent).
+ */
+export function getActivationCrossSell(
+  role: string | null | undefined,
+  profile: ProjectDataProfile | null | undefined,
+  limit = 2,
+): PromptOption[] {
+  if (!profile || profile.degraded) return [];
+  const priority = isTailoredRole(role)
+    ? ACTIVATION_PRIORITY[role]
+    : NEUTRAL_ACTIVATION_PRIORITY;
+  return priority
+    .filter((key) => profile.products[key] === false)
+    .slice(0, limit)
+    .map((key) => ACTIVATION_CROSS_SELL[key])
+    .filter((o): o is PromptOption => Boolean(o));
+}
+
+/**
+ * The full, ordered candidate list for the tutorial picker, composed from
+ * the scout's profile. The screen dedupes by prompt text and slices to its
+ * display cap — this function owns *what* to offer and in what priority:
+ *
+ *   • no profile / degraded → legacy composition (pinned + cross-sell + kit)
+ *   • empty                 → write-only quests + activation cross-sells
+ *                             (no reads that would return nothing)
+ *   • rich (+ real events)   → generated quests first, one activation nudge,
+ *                             then role kit for flavor
+ *   • sparse                → a safe pinned read + one generated quest +
+ *                             role kit + one activation nudge
+ */
+export function getTutorialPicker(
+  role: string | null | undefined,
+  integration: Integration | null | undefined,
+  profile: ProjectDataProfile | null | undefined,
+): PromptOption[] {
+  if (!profile || profile.degraded) {
+    return [
+      PINNED_FIRST_PROMPT,
+      ...getCrossSellPrompts(role),
+      ...getRolePrompts(role, integration),
+    ];
+  }
+
+  if (profile.tier === 'empty') {
+    return [...WRITE_ONLY_QUESTS, ...getActivationCrossSell(role, profile, 2)];
+  }
+
+  const generated = getGeneratedQuests(profile);
+
+  if (profile.tier === 'rich' && generated.length > 0) {
+    return [
+      ...generated,
+      ...getActivationCrossSell(role, profile, 1),
+      ...getRolePrompts(role, integration),
+    ];
+  }
+
+  // sparse — real but thin data: lead with a safe read, add one generated
+  // quest if available, then role flavor and a single activation nudge.
+  return [
+    PINNED_FIRST_PROMPT,
+    ...generated.slice(0, 1),
+    ...getRolePrompts(role, integration),
+    ...getActivationCrossSell(role, profile, 1),
+  ];
 }
 
 /**

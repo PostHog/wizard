@@ -10,7 +10,7 @@ export const selfDrivingCommand: Command = {
     ...skillProgramOptions,
     integrate: {
       describe:
-        'Integrate the PostHog SDK first, then set up Self-driving — skips the "do you already have PostHog?" question. Use when the project isn\'t set up yet.',
+        'Integrate the PostHog SDK first, then set up Self-driving — skips the integration prompt and logs you in via OAuth (no "create an account?" question). Use when the project isn\'t set up yet but you already have a PostHog account.',
       type: 'boolean',
       default: false,
     },
@@ -23,9 +23,10 @@ export const selfDrivingCommand: Command = {
     // or a stalled `wizard_ask` with no bridge under --ci).
     if (argv.signup) {
       throw new Error(
-        '`self-driving` cannot run with --signup. It builds on an existing ' +
-          'PostHog integration — run the base `wizard` to create your account ' +
-          'and set up PostHog first, then run `wizard self-driving`.',
+        '`self-driving` cannot run with --signup. Just run `wizard ' +
+          'self-driving`: when your project has no PostHog, it asks whether ' +
+          'you already have an account and offers to create one for you ' +
+          '(no flag needed).',
       );
     }
     if (argv.ci) {

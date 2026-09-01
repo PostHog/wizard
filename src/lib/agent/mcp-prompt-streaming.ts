@@ -15,11 +15,12 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
-import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
-import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { gatewayAuth } from '@lib/gateway-session';
+import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
+import { createIsolatedAgentConfigDir } from '@lib/agent/stored-login';
+import { analytics } from '@utils/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -42,13 +43,6 @@ const MODEL = DEFAULT_AGENT_MODEL;
 // still capping runaway loops. Worth tuning down once we see real
 // telemetry on average turn counts per prompt.
 const MAX_TURNS = 30;
-
-// One MCP url for every region: the server resolves the user's region from
-// the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here.
-function resolveMcpUrl(): string {
-  return runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
-}
 
 /**
  * Extract a short, single-line summary from an arbitrary value. Used
@@ -93,10 +87,14 @@ function messageToChunks(message: any): AgentChunk[] {
         } else if (type === 'tool_use') {
           const name = (block as { name?: string }).name ?? 'tool';
           const input = (block as { input?: unknown }).input;
+          // CLI mode's exec tool takes a `command` string; keep it verbatim so
+          // the screen can recover the inner tool name for follow-ups.
+          const command = (input as { command?: unknown })?.command;
           chunks.push({
             kind: 'tool-call',
             toolName: name,
             detail: summarize(input),
+            command: typeof command === 'string' ? command : undefined,
           });
         }
       }
@@ -177,6 +175,26 @@ function buildTerminalFitPrompt(): string {
   ].join('\n');
 }
 
+/**
+ * Gateway trace tags for a tutorial prompt run — without them the gateway has
+ * nothing to attribute its `$ai_generation` events to. Returns `{}` when no
+ * program is supplied. Exported so the contract is testable without the SDK.
+ */
+export function buildTutorialRunTags(args: {
+  programId?: string;
+  integration?: string;
+}): Record<string, string> {
+  if (!args.programId) return {};
+  return buildRunTags({
+    programId: args.programId,
+    // The tutorial usually has no detected framework; fall back to the
+    // program so the axis is never an empty string.
+    integration: args.integration ?? args.programId,
+    runId: analytics.runId,
+    build: analytics.build,
+  });
+}
+
 export async function* runMcpPromptViaSdk(args: {
   prompt: string;
   credentials: Credentials;
@@ -185,8 +203,17 @@ export async function* runMcpPromptViaSdk(args: {
    *  context so the follow-up prompt can reference what the agent
    *  already showed. */
   resumeSessionId?: string;
+  /** Program this run's gateway spend attributes to. Omitting it fails the run
+   *  rather than going unattributed, so every caller must supply one. */
+  programId?: string;
+  /** Integration label for the trace tags; the tutorial usually has none. */
+  integration?: string;
 }): AsyncIterable<AgentChunk> {
   const { prompt, credentials, signal, resumeSessionId } = args;
+
+  // Assembled here rather than passed in so the TUI service layer doesn't
+  // have to import this module's dependencies.
+  const wizardMetadata = buildTutorialRunTags(args);
 
   // Route the SDK's LLM calls through the PostHog LLM gateway, authed
   // with the user's OAuth access token. Set BEFORE loading the SDK in
@@ -197,19 +224,22 @@ export async function* runMcpPromptViaSdk(args: {
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-  // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  // TODO: clean up in #755
-  const gatewayUrl = HostResolution.fromApiHost(credentials.host).gatewayUrl;
+  // The url, the bearer and the header edition are one unit: a run must take
+  // all three from the same resolved posture.
+  const auth = await gatewayAuth(
+    credentials.host,
+    credentials.accessToken,
+    args.programId,
+  );
+  const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
-  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  process.env.ANTHROPIC_AUTH_TOKEN = auth.token;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
 
   logToFile(
-    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
-      credentials.accessToken
-        ? credentials.accessToken.slice(0, 4) + '***'
-        : '(missing)'
-    }`,
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} edition=${
+      auth.edition
+    } tokenPrefix=${auth.token ? auth.token.slice(0, 4) + '***' : '(missing)'}`,
   );
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -223,7 +253,7 @@ export async function* runMcpPromptViaSdk(args: {
       once: true,
     });
 
-  const mcpUrl = resolveMcpUrl();
+  const mcpUrl = credentials.host.mcpUrl;
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'
@@ -309,9 +339,15 @@ export async function* runMcpPromptViaSdk(args: {
             type: 'http',
             url: mcpUrl,
             headers: {
-              Authorization: `Bearer ${credentials.accessToken}`,
+              // Env reference, not the token: the SDK puts this config on the
+              // spawned CLI's argv, where `ps` shows it to any local process.
+              Authorization: 'Bearer ${POSTHOG_MCP_TOKEN}',
               'User-Agent': WIZARD_USER_AGENT,
             },
+            // CLI mode's single `exec` tool carries the full command reference
+            // on its schema — keep it in context, never deferred behind tool
+            // search.
+            alwaysLoad: true,
           },
         },
         // Only let the agent use MCP tools — no shell, no file I/O,
@@ -325,26 +361,32 @@ export async function* runMcpPromptViaSdk(args: {
           // wizard's own gateway routing is injected fresh below. See
           // agent-env-isolation.ts.
           ...sanitizeAgentSubprocessEnv(process.env),
-          // Gateway routing — injected explicitly (set on process.env above;
-          // the strip removed them from the inherited copy, so re-add here).
-          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // Gateway routing from this run's own auth, not process.env: a
+          // concurrent run writes those globals too, and there is an await
+          // between the write above and this read.
+          ANTHROPIC_BASE_URL: auth.gatewayUrl,
+          ANTHROPIC_AUTH_TOKEN: auth.token,
+          CLAUDE_CODE_OAUTH_TOKEN: auth.token,
+          // Point the binary at an empty config dir so it cannot resolve a
+          // stored Claude login and send that to the gateway, which 401s it.
+          // See stored-login.ts.
+          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // posthog-wizard exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, which
-          // matters especially when follow-ups resume sessions.
-          ENABLE_TOOL_SEARCH: 'auto:0',
+          // The MCP config resolves this in the child; sending the value would
+          // put it on the CLI's argv.
+          POSTHOG_MCP_TOKEN: credentials.accessToken,
           // SDK 0.3.142+ connects MCP servers in the background by
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // Same Bedrock-fallback + telemetry-friendly headers as the
-          // main runner. No wizard metadata or flags for the tutorial
-          // — runs are distinguished downstream via posthog.capture
-          // calls (program_id + event names), not SDK headers.
-          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv({}, {}),
+          // Bedrock fallback plus this run's trace tags — the gateway reads
+          // these to attribute its `$ai_generation` events. Flags stay empty:
+          // the tutorial doesn't fork on any.
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            wizardMetadata ?? {},
+            {},
+            auth,
+          ),
         },
       },
     });

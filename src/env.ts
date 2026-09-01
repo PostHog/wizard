@@ -58,6 +58,15 @@ type RuntimeEnvKey =
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
   | 'POSTHOG_WIZARD_LOG_DIR'
   | 'POSTHOG_WIZARD_DEBUG'
+  // Identity of the PostHog task run whose sandbox launched this wizard. Set by
+  // the sandbox for every run it starts, agent or wizard. Deliberately NOT
+  // POSTHOG_WIZARD_-prefixed, for the same reason as the two keys above:
+  // yargs .env('POSTHOG_WIZARD') would claim them as CLI options and
+  // .strictOptions() would reject the run unless the wizard also declared them,
+  // which would tie every sandbox deploy to an npm release of this package.
+  | 'POSTHOG_TASK_RUN_ID'
+  | 'POSTHOG_TASK_ID'
+  | 'POSTHOG_HANDOFF_OUTPUT_PATH'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
@@ -74,9 +83,20 @@ type RuntimeEnvKey =
   | 'ConEmuTask'
   // Platform: paths
   | 'APPDATA'
+  | 'OPENCODE_CONFIG_DIR'
   | 'XDG_CONFIG_HOME';
 
 /** Read a runtime environment variable. Only allowlisted keys compile. */
 export function runtimeEnv(key: RuntimeEnvKey): string | undefined {
   return process.env[key];
 }
+
+/**
+ * The PostHog task run that launched this wizard, when one did. A cloud run's
+ * sandbox exports both ids into the wizard's environment; every local run
+ * leaves them undefined. Resolved once at launch, like RUN_SURFACE above.
+ */
+export const TASK_RUN_ID: string | undefined =
+  runtimeEnv('POSTHOG_TASK_RUN_ID') || undefined;
+export const TASK_ID: string | undefined =
+  runtimeEnv('POSTHOG_TASK_ID') || undefined;

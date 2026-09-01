@@ -27,10 +27,13 @@ import {
   type DiscoveredFeature,
   type PendingQuestion,
   type AskAnswers,
+  type CloudRegion,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
+  ScanConsent,
   buildSession,
+  type TaskNotice,
 } from '@lib/wizard-session';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import {
@@ -54,6 +57,7 @@ import type {
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
@@ -185,6 +189,7 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
@@ -217,6 +222,8 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Blocks the run until an optional step's notice is answered. */
+  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
@@ -386,6 +393,10 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get handoffText(): string | null {
+    return this.$handoffText.get();
+  }
+
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
   }
@@ -419,15 +430,57 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed. Gate resolves via _checkGates(). */
+  /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
+    // Reports first: analytics merges tags into an event as it is sent, so
+    // `setup confirmed` only carries the warehouse tags if they are already
+    // set. On main they were, because reporting happened back in detect.
+    this._markWarehouseSourcesReportedIfNeeded();
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
   }
 
+  /**
+   * Sharing is on: either the user turned it back on in the panel, or they
+   * pressed Continue without ever touching it. Both are reversible until
+   * completeSetup() resolves the intro gate and reports.
+   */
+  grantSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Granted);
+    this.emitChange();
+  }
+
+  /**
+   * Sharing is off. Suppresses reporting only — local detection still ran and
+   * the results stay in the session, so the outro suggestion and the warehouse
+   * task are unaffected; see `scanConsent` on `WizardSession`.
+   *
+   * Deliberately does not report. The panel's toggle can come back here, so
+   * marking the run reported would strand a user who turns sharing off and
+   * then on again. completeSetup() owns the single report.
+   */
+  declineSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Declined);
+    this.emitChange();
+  }
+
+  /**
+   * reportWarehouseSourcesDetected() is the single place scan results turn
+   * into telemetry; this just supplies its idempotency flag via the normal
+   * setter path (never mutate session directly). A no-op once
+   * `warehouseSourcesReported` is set, or for any program that never
+   * populated a warehouse-scan result in the first place.
+   */
+  private _markWarehouseSourcesReportedIfNeeded(): void {
+    if (reportWarehouseSourcesDetected(this.session)) {
+      this.$session.setKey('warehouseSourcesReported', true);
+    }
+  }
+
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -439,6 +492,12 @@ export class WizardStore {
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
+    this.emitChange();
+  }
+
+  /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
+  setAccessToken(credentials: WizardSession['credentials']): void {
+    this.$session.setKey('credentials', credentials);
     this.emitChange();
   }
 
@@ -564,6 +623,26 @@ export class WizardStore {
   }
 
   /**
+   * Show an optional step's notice and return whether to keep that step.
+   * Asked before the step runs, so nobody is surprised by a prompt mid-run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    this.$session.setKey('taskNotice', notice);
+    this.pushOverlay(Overlay.TaskNotice);
+    return new Promise((resolve) => {
+      this._resolveTaskNotice = resolve;
+    });
+  }
+
+  /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
+  resolveTaskNotice(keep: boolean): void {
+    this.$session.setKey('taskNotice', null);
+    this.popOverlay();
+    this._resolveTaskNotice?.(keep);
+    this._resolveTaskNotice = null;
+  }
+
+  /**
    * Return a promise that resolves when the user submits a manually-entered
    * OAuth code via the paste modal. The OAuth flow races this against the
    * local callback server — see `performOAuthFlow`.
@@ -686,6 +765,12 @@ export class WizardStore {
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
+      // Distinct key from `sessionProperties()`'s array-valued
+      // `additional_features` — see the note in posthog-integration/detect.ts.
+      analytics.setTag(
+        'additional_feature_kinds',
+        this.session.additionalFeatureQueue.join(','),
+      );
     }
     // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
@@ -699,10 +784,12 @@ export class WizardStore {
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
+    loginCommands: string[] = [],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    this.$session.setKey('mcpLoginCommands', loginCommands);
     const featuresPayload =
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }
@@ -760,6 +847,29 @@ export class WizardStore {
   }
 
   /**
+   * Self-driving "no PostHog account" branch of the integration check. The
+   * project has no SDK, so we always integrate (`integrate = true`); and since
+   * the user has no account, we flip `signup` and record the `email` / `region`
+   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
+   * the provisioning path (create account + email a login link) instead of
+   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
+   * leaves `signup` false so auth runs the normal OAuth login.
+   */
+  chooseProvisionAccount(email: string, region: CloudRegion): void {
+    this.$session.setKey('signup', true);
+    this.$session.setKey('email', email);
+    this.$session.setKey('region', region);
+    this.$session.setKey('integrate', true);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: true,
+      self_driving_has_account: false,
+      provision_region: region,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
    * Self-driving handoff confirmed — the user acknowledged the post-integration
    * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
    */
@@ -779,8 +889,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
   setOutroDismissed(): void {
@@ -873,6 +982,25 @@ export class WizardStore {
   }
 
   /**
+   * The program `screen` reports under — its step's `reportsAsProgramId` if it
+   * claims one, else the running program (also the fallback for overlays and
+   * screens with no owning step).
+   */
+  private _programIdForScreen(screen: ScreenName): ProgramId {
+    const program = this.router.activeProgram;
+    const step = getProgramConfig(program).steps.find(
+      (s) => s.screenId === screen,
+    );
+    return step?.reportsAsProgramId ?? program;
+  }
+
+  /** The program the visible screen reports under; screens stamp this on their
+   *  own events rather than relying on the run-level `program_id` tag. */
+  get analyticsProgramId(): ProgramId {
+    return this._programIdForScreen(this.router.resolve(this.session));
+  }
+
+  /**
    * Detect screen transitions, run enter-screen hooks, and fire analytics.
    * Called at the end of emitChange/pushOverlay/popOverlay.
    */
@@ -891,7 +1019,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        program_id: this.router.activeProgram,
+        program_id: this._programIdForScreen(next),
         ...sessionProperties(this.session),
       });
     }
@@ -982,6 +1110,14 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  /** No-op on identical text: an emit here means a network push downstream. */
+  setHandoffText(text: string): void {
+    if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
+    this.$handoffText.set(text);
     this.emitChange();
   }
 

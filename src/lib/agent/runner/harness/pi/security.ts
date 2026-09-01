@@ -17,6 +17,8 @@
  * extension installed (see subagent.ts), so a child cannot escape it.
  */
 
+import fs from 'fs';
+import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
@@ -26,13 +28,14 @@ import {
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-  type ScanContext,
 } from '@lib/yara-hooks';
 import {
-  createTriageLLMProvider,
-  type TriageGatewayAuth,
-} from '@lib/agent/triage-provider';
+  publishBlockingMatch,
+  scanVerdict,
+  type ScanContext,
+} from '@lib/yara-policy';
 import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 /** warlock ScanMatch → the report shape `recordExternalScan` expects. */
 function toReportViolation(m: ScanMatch) {
@@ -47,17 +50,56 @@ function toReportViolation(m: ScanMatch) {
 /** Runaway backstop: hard cap on tool calls per (sub)agent session. */
 export const MAX_TOOL_CALLS = 250;
 
+/**
+ * Passive telemetry for an unfixed upstream failure: gpt-5.x streaming with
+ * tools leaks its function-call grammar into string values, and the leak lands
+ * on disk (run 9704a73e shipped `…functions.complete_task (commentary…` plus a
+ * DEL byte inside a customer's global-error.tsx). Observe-only — never blocks.
+ * Prior art: https://github.com/BerriAI/litellm/issues/14260 (closed stale),
+ * https://community.openai.com/t/1386422 (gpt-5.6-luna, no fix).
+ */
+const TRANSPORT_LEAK_PATTERNS: readonly { pattern: RegExp; label: string }[] = [
+  // The litellm#14260 signature, scoped to the wizard's own tool names — a
+  // generic `functions.*` would false-positive on real code (Firebase).
+  {
+    pattern: /functions\.(?:complete_task|enqueue_task|read_handoffs)/,
+    label: 'leaked tool-call tokens',
+  },
+  {
+    pattern: /<\|(?:channel|constrain|message|call|end|start|return)\|>/,
+    label: 'leaked channel markers',
+  },
+  // C0 controls and DEL minus tab/newline/CR — never valid in source text.
+  // eslint-disable-next-line no-control-regex
+  { pattern: /[\0-\x08\x0B\f\x0E-\x1F\x7F]/, label: 'control characters' },
+];
+
+/** Capture one event per leaking write/edit: which pattern fired and where it sat — no matched text, ever. */
+export function observeTransportLeak(tool: string, content: string): void {
+  for (const { pattern, label } of TRANSPORT_LEAK_PATTERNS) {
+    const match = pattern.exec(content);
+    if (!match) continue;
+    analytics.wizardCapture('file content leak observed', {
+      tool,
+      leak: label,
+      leak_offset: match.index,
+      content_length: content.length,
+      // End-of-string leaks are the upstream decoder signature.
+      at_end: content.length - match.index < 80,
+    });
+    logToFile(
+      `[transport-leak] observed ${tool}: ${label} at ${match.index}/${content.length}`,
+    );
+    return;
+  }
+}
+
 export interface ToolGateContext {
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
-  /**
-   * Gateway auth for the LLM triage pass. pi auths the gateway
-   * programmatically and never sets ANTHROPIC_BASE_URL/AUTH_TOKEN on the env,
-   * so without this triage silently no-ops and every flagged match is acted
-   * on (fail-closed, but no false-positive filtering).
-   */
-  triageAuth?: TriageGatewayAuth;
+  /** Scan-triage classifier, resolved once in bootstrap. Absent → every flagged match is acted on. */
+  triageProvider?: LLMProvider;
   /**
    * Per-run tracker of YARA-blocked payloads. When the agent retries content
    * that was already blocked, the block reason escalates ("change the code,
@@ -66,14 +108,118 @@ export interface ToolGateContext {
    * a first attempt.
    */
   repeatTracker?: RepeatBlockTracker;
+  /** Project root; rm is only allowed for files resolving strictly inside it. */
+  workingDirectory?: string;
 }
 
 export interface GateDecision {
   block: boolean;
   reason?: string;
+  /** End the run, don't just refuse the call. Set when a blocked publish_handoff would otherwise leave no report. */
+  terminate?: boolean;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+// Shell metacharacters that chain, substitute, or redirect. A command carrying
+// any of these is more than one action, so we never treat it as a plain `rm`.
+const SHELL_OPERATORS = /[;&|`$(){}<>\n'"\\]/;
+
+/** True when a target resolves to a file strictly inside the project root. */
+function isDeletableProjectFile(
+  target: string,
+  root: string,
+  p: typeof path,
+): boolean {
+  if (target.startsWith('-')) return false; // a flag, not a file
+  if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
+  if (p.basename(target).startsWith('.env')) return false; // secrets
+
+  const resolved = p.resolve(root, target);
+  return resolved !== root && resolved.startsWith(root + p.sep);
+}
+
+/**
+ * A plain `rm [-f] <file...>` whose every target is a file inside the project
+ * root — the deletion shape the anthropic arm permits (there bash isn't
+ * allowlisted; the shared YARA destructive-delete rules catch the dangerous
+ * forms). pi rescues the same shape so the fall-through YARA scan can judge
+ * it, but refuses any shell operator so it can't smuggle a second command.
+ * Path checks run through the host's `path` (win32 on Windows, posix elsewhere);
+ * pi always executes commands via a POSIX bash, so targets use forward slashes.
+ */
+export function isScopedFileRemoval(
+  command: string,
+  rawRoot: string | undefined,
+  p: typeof path = path,
+): boolean {
+  if (!rawRoot) return false; // no root to contain against → never rescue
+  const root = p.resolve(rawRoot);
+  const trimmed = command.trim();
+  if (SHELL_OPERATORS.test(trimmed)) return false;
+
+  const [executable, ...args] = trimmed.split(/\s+/);
+  if (executable !== 'rm') return false;
+
+  if (args[0] === '-f') args.shift();
+  if (args.length === 0) return false;
+
+  return args.every((arg) => isDeletableProjectFile(arg, root, p));
+}
+
+/** A write that removes more than this fraction of an existing file's
+ * non-whitespace content reads as a destructive whole-file rewrite. */
+const OVERWRITE_SHRINK_LIMIT = 0.3;
+
+/** Existing files below this many non-whitespace chars are stubs; replacing one
+ * wholesale is legitimate, so the shrink guard leaves them alone. */
+const OVERWRITE_MIN_CHARS = 400;
+
+const nonWhitespaceLength = (s: string): number => s.replace(/\s+/g, '').length;
+
+/**
+ * Refuse a write that replaces an existing file with far less content than it
+ * held, steering the agent back to targeted edits. Prior art — the destructive
+ * whole-file rewrite is a known model failure that targeted-edit formats exist to
+ * prevent: Aider's search/replace and unified-diff, OpenAI's apply_patch,
+ * Anthropic's str_replace with replace_all; pi's edit tool has no replace_all, so
+ * a rejected scoped edit can fall back to a lossy full write. Additive by design:
+ * the wizard only adds instrumentation, so a large shrink is the rewrite, not intent.
+ */
+export function overwriteShrinkReason(
+  existing: string,
+  next: string,
+): string | undefined {
+  const before = nonWhitespaceLength(existing);
+  if (before < OVERWRITE_MIN_CHARS) return undefined;
+  const after = nonWhitespaceLength(next);
+  if (after >= before * (1 - OVERWRITE_SHRINK_LIMIT)) return undefined;
+  const removed = Math.round((1 - after / before) * 100);
+  return `This write replaces an existing file and removes ~${removed}% of its content. Make targeted edits instead of rewriting the whole file; only write a file in full when creating it.`;
+}
+
+/**
+ * Read the file a write would replace and flag a destructive shrink. A path that
+ * does not exist yet is a new file, so it never triggers; with no project root to
+ * resolve against (unit tests calling `evaluateToolCall` bare), it stays inert.
+ */
+async function overwriteShrinkBlock(
+  input: Record<string, unknown>,
+  workingDirectory: string | undefined,
+): Promise<string | undefined> {
+  const target = str(input.path);
+  if (!workingDirectory || !target) return undefined;
+  let existing: string;
+  try {
+    existing = await fs.promises.readFile(
+      path.resolve(workingDirectory, target),
+      'utf8',
+    );
+  } catch {
+    return undefined; // new file (ENOENT) or unreadable — nothing to preserve
+  }
+  return overwriteShrinkReason(existing, str(input.content));
+}
 
 /**
  * Translate a pi tool name to the claude-cased name + input the shared policy
@@ -125,6 +271,8 @@ function blockMessage(m: ScanMatch): string {
  *   hardcoded keys, PII), WITH triage, and with the same wizard-doc
  *   `posthog_pii` suppression the anthropic path uses so the agent's own
  *   event-plan files aren't blocked.
+ * - publish_handoff → scan the report ('output'-context rules) with triage,
+ *   but only a CRITICAL match refuses the publish — it's the only channel.
  * Returns a block reason, or undefined to allow. Read/grep are post-scanned on
  * their output (in the tool_result hook), not here.
  */
@@ -171,20 +319,41 @@ async function preExecutionYaraBlock(
       phase = 'PostToolUse';
       tool = 'Edit';
       break;
+    case 'publish_handoff':
+      // Agent-authored content persisted to the task stream and the host file.
+      // Own labels, not Write's — the block bar differs (critical only).
+      content = str(input.content);
+      ctx = 'output';
+      triage = llmProvider;
+      phase = 'PreToolUse';
+      tool = 'publish_handoff';
+      break;
     default:
       return undefined;
   }
   if (!content) return undefined;
+  if (ctx === 'output') observeTransportLeak(tool, content);
 
   let matches = await scanAndTriage(content, ctx, triage);
   if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
     matches = matches.filter((m) => m.metadata.category !== 'posthog_pii');
   }
-  recordExternalScan(phase, tool, matches.map(toReportViolation), 'blocked');
-  if (matches.length === 0) return undefined;
+  // Any match blocks — except publish_handoff, critical only.
+  const blocking =
+    toolName === 'publish_handoff'
+      ? publishBlockingMatch(matches)
+      : matches[0] ?? null;
+
+  recordExternalScan(
+    phase,
+    tool,
+    matches.map(toReportViolation),
+    blocking ? 'blocked' : 'warned',
+  );
+  if (!blocking) return undefined;
 
   const attempt = repeatTracker?.attempt(toolName, content) ?? 1;
-  return repeatBlockReason(attempt, toolName, blockMessage(matches[0]));
+  return repeatBlockReason(attempt, toolName, blockMessage(blocking));
 }
 
 /**
@@ -204,7 +373,14 @@ export async function evaluateToolCall(
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
     });
-    if (decision.behavior === 'deny') {
+    // The allowlist is a pi-only restriction; the anthropic arm runs bash
+    // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
+    // project files through to that same scan so pi matches that behavior.
+    const allowedLikeAnthropic =
+      toolName === 'bash' &&
+      isScopedFileRemoval(str(input.command), ctx.workingDirectory);
+
+    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
       return { block: true, reason: decision.message };
     }
 
@@ -216,12 +392,23 @@ export async function evaluateToolCall(
     );
     if (yaraReason) return { block: true, reason: yaraReason };
 
+    if (toolName === 'write') {
+      const shrinkReason = await overwriteShrinkBlock(
+        input,
+        ctx.workingDirectory,
+      );
+      if (shrinkReason) return { block: true, reason: shrinkReason };
+    }
+
     return { block: false };
   } catch (err) {
     logToFile('[pi-security] gate error — failing closed:', err);
+    // A publish_handoff the gate can't clear leaves the run with no report at
+    // all, so end it visibly instead of letting the agent reword and retry.
     return {
       block: true,
       reason: 'Security check failed; tool blocked (fail-closed).',
+      terminate: toolName === 'publish_handoff',
     };
   }
 }
@@ -255,7 +442,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
 
   // One triage provider per extension. Undefined (no gateway auth) means
   // triage is skipped and every flagged match is acted on — fail closed.
-  const llmProvider = createTriageLLMProvider(ctx.triageAuth);
+  const llmProvider = ctx.triageProvider;
 
   // One tracker per extension = per (sub)agent session, so an identical
   // payload retried after a block gets the escalating reason.
@@ -288,6 +475,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       );
       if (decision.block) {
         state.blockedCount += 1;
+        if (decision.terminate) state.criticalViolation = true;
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
         return { block: true, reason: decision.reason };
       }
@@ -304,16 +492,25 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // 'input'-context rules (prompt injection in read content), with
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
+        const verdict = scanVerdict(matches);
+        // Count the scan even when clean, like the anthropic hooks do.
         recordExternalScan(
           'PostToolUse',
           event.toolName === 'read' ? 'Read' : 'Bash',
           matches.map(toReportViolation),
-          'aborted',
+          verdict?.action ?? 'warned',
         );
-        if (matches.length > 0) {
+        if (!verdict) return {};
+        if (verdict.terminal) {
           state.criticalViolation = true;
           logToFile(
-            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${matches[0].rule}`,
+            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${verdict.match.rule}`,
+          );
+        } else {
+          logToFile(
+            `[pi-security] POST-SCAN WARNING ${event.toolName}: ${
+              verdict.match.rule
+            } (severity: ${verdict.match.metadata.severity ?? 'unknown'})`,
           );
         }
       } catch (err) {

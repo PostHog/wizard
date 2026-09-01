@@ -12,7 +12,7 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
-/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+/** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
 
 /**
@@ -21,28 +21,19 @@ export const SONNET_5_MODEL = 'claude-sonnet-5';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
+export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
+
 /**
  * Larger model for planning / hard work. Named the switchboard could route to
  * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
  */
 export const OPUS_MODEL = 'claude-opus-4-8';
 
-/**
- * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
- * completions. Enables cross-provider A/B without a wizard release.
- */
-export const GPT5_MODEL = 'openai/gpt-5';
-
-/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
-export const GPT5_4_MODEL = 'openai/gpt-5.4';
-
-/**
- * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
- * this (a reasoning model follows the integration skill; the mini tier keeps a
- * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
- * is set per-model in the switchboard capability matrix.
- */
-export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
+// The only openai models the wizard runs.
+export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
+export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
+export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
 
 // ── Agent runner routing axes ────────────────────────────────────────
 
@@ -66,6 +57,20 @@ export enum Sequence {
   orchestrator = 'orchestrator',
 }
 
+/**
+ * What kind of call produced a gateway generation — the `call_type` trace tag.
+ * Splits a program's LLM spend by workload. Every member is sent explicitly so
+ * an absent value means "old build", not "agent".
+ */
+export enum CallType {
+  /** The agent doing the work the user asked for. */
+  agent = 'agent',
+  /** Warlock's classifier deciding whether a YARA match is a true positive. */
+  yaraTriage = 'yara-triage',
+  /** The cheap repo scan that classifies which projects a program acts on. */
+  detection = 'detection',
+}
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
@@ -87,15 +92,22 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   sveltekit = 'sveltekit',
+  flutter = 'flutter',
+  kmp = 'kmp',
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  elixir = 'elixir',
+  go = 'go',
+  rust = 'rust',
+  // Must stay after kmp/swift/android: those claim gradle projects first.
+  java = 'java',
 
-  // Language fallbacks
+  // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
   ruby = 'ruby',
-  javascriptNode = 'javascript_node',
   javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
 }
 
 export interface Args {
@@ -106,13 +118,18 @@ export interface Args {
 // ── Environment ──────────────────────────────────────────────────────
 
 import { IS_DEV } from '@env';
+import {
+  CONTEXT_MILL_LOCAL_URL,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from './local-dev';
 export { IS_DEV };
 export const DEBUG = false;
 
 // ── URLs ─────────────────────────────────────────────────────────────
 
 export const DEFAULT_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://us.posthog.com';
 /**
  * Region-agnostic PostHog app URL. Resolves to us.posthog.com or
@@ -121,10 +138,10 @@ export const DEFAULT_URL = IS_DEV
  * land on the right region without us needing to know it client-side.
  */
 export const POSTHOG_APP_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://app.posthog.com';
 export const DEFAULT_HOST_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
 /** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
@@ -150,15 +167,17 @@ export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
 /** Remote base URL for fetching the skill menu + downloading skills. */
 export const REMOTE_SKILLS_BASE_URL =
   'https://github.com/PostHog/context-mill/releases/latest/download';
-/** Local base URL when `--local-mcp` is set (served by context-mill dev server). */
-export const LOCAL_SKILLS_BASE_URL = 'http://localhost:8765';
+/** Alias of `@lib/local-dev`'s constant, kept for existing importers. */
+export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 
 /**
- * Pick the skills base URL based on the session's localMcp flag.
- * Single source of truth — do not inline this ternary anywhere.
+ * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
+ * both). Takes no argument on purpose: callers can't pass the wrong flag.
  */
-export function getSkillsBaseUrl(localMcp: boolean): string {
-  return localMcp ? LOCAL_SKILLS_BASE_URL : REMOTE_SKILLS_BASE_URL;
+export function getSkillsBaseUrl(): string {
+  return getLocalDev().localContextMill
+    ? LOCAL_SKILLS_BASE_URL
+    : REMOTE_SKILLS_BASE_URL;
 }
 
 // ── Analytics (internal) ──────────────────────────────────────────────
@@ -191,6 +210,9 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - notebook:write    upload the events-audit report as a PostHog notebook
  *                     in step 6 of the events-audit skill (notebooks-create
  *                     MCP tool requires this scope)
+ * - event_definition:write
+ *                     create event definitions from the completed wizard
+ *                     session's event plan
  *
  * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
  * `ee/api/agentic_provisioning/views.py` on the backend.
@@ -203,6 +225,7 @@ export const WIZARD_PROVISIONING_SCOPES = [
   'insight:write',
   'query:read',
   'notebook:write',
+  'event_definition:write',
 ] as const;
 
 /**
@@ -212,16 +235,24 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * - health_issue:read     used by `wizard doctor`
  * - wizard_session:read   list / retrieve / stream sessions
  * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
+ * - event_definition:write
+ *                          create event definitions when a session completes
  * - organization:read     read `organization.is_ai_data_processing_approved`
  *                         from /api/users/@me/ for the AI opt-in gate
  *
  * NOTE: every scope here must be within the wizard OAuth application's
  * server-side scope ceiling (`OAuthApplication.scopes` in posthog, set
- * via Django admin on BOTH prod regions) — requesting anything outside
- * it fails the WHOLE authorize request with `error=invalid_scope`
- * before the consent screen renders. Procedure: the
- * "scope-ceiling-invalid-scope" runbook in PostHog/runbooks. Keep the
- * runbook's worked example in sync when this list changes.
+ * via Django admin on BOTH prod regions). A scope outside the ceiling
+ * does NOT fail the authorize request — the server silently clamps the
+ * request to the ceiling (`clamp_scopes_to_ceiling` in posthog) and the
+ * token comes back without it. Separately, the consent screen lets the
+ * user deselect any scope the app doesn't mark required. Both paths
+ * yield a granted `scope` narrower than requested, with no error, so
+ * never assume the token carries this list — the token response's
+ * `scope` field is the truth, and `missingOAuthScopes` (utils/oauth.ts)
+ * diffs it at login. Ceiling procedure: the "scope-ceiling-invalid-scope"
+ * runbook in PostHog/runbooks. Keep its worked example in sync when this
+ * list changes.
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
@@ -237,16 +268,41 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
-/** Boolean flag: on → pi harness + the pi model pairing; off/missing → binding default. */
-export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
-/** Multivariate flag: pi's model. Variant keys map to gateway ids in `PI_MODEL_FLAG_VARIANTS`. */
-export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
-/** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
-export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
-/** Feature flag key that gates the intro-screen "Tools" menu. */
-export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
+/** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
+export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
+  'wizard-orchestrator-override';
+/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = a `MODEL_FLAG_VARIANTS` key); missing/invalid payload keeps the non-flagged default. */
+export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
+  'wizard-self-driving-use-pi-harness';
+/** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
+export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
+  'wizard-basic-integration-agentic-detection';
+/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
+export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
+  'wizard-orchestrator-seeded-tasks';
+// Reading a flag enters this run into that flag's experiment, so a closed set — not a
+// `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
+export const WIZARD_FLAG_KEYS = [
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
+
+/**
+ * User-Agent for a specific program's MCP calls, tagged with `program: <id>` so the
+ * backend can attribute work per program (e.g. the `self-driving` program's warehouse
+ * sources are recorded as `created_via=self_driving` rather than plain `wizard`). The
+ * base `posthog/wizard` token is preserved, so anything keying only on that still matches.
+ */
+export function wizardUserAgentForProgram(programId?: string): string {
+  return programId
+    ? `${WIZARD_USER_AGENT}; program: ${programId}`
+    : WIZARD_USER_AGENT;
+}
 
 // ── HTTP headers ─────────────────────────────────────────────────────
 
@@ -260,13 +316,16 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 /** Timeout for framework / project detection probes (ms). */
 export const DETECTION_TIMEOUT_MS = 10_000;
 
+/** Timeout for the agentic project scan (ms); past it the run falls back to root detection. */
+export const AGENTIC_DETECTION_TIMEOUT_MS = 60_000;
+
 /**
  * Timeout for the OAuth authorization flow (ms).
  *
- * Mirrors the server-side authorization-code expiry
- * (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes). Once the code expires the
- * callback is dead and the token exchange can no longer succeed, so we stop
- * waiting at the same moment and prompt the user to re-run rather than letting
- * them complete a login that would fail.
+ * How long the user has to complete the browser login. The authorization
+ * code is minted at approval and exchanged immediately on callback, so the
+ * server-side code expiry (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes)
+ * bounds only the approval→exchange gap — manual-paste users have 5 minutes
+ * from approval to submit the code — not how long this window may stay open.
  */
-export const OAUTH_TIMEOUT_MS = 300_000;
+export const OAUTH_TIMEOUT_MS = 1_800_000;

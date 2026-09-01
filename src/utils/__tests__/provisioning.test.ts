@@ -1,7 +1,24 @@
 import axios from 'axios';
-import { provisionNewAccount } from '@utils/provisioning';
+import {
+  ProvisionedAccountUnreadableError,
+  provisionNewAccount,
+} from '@utils/provisioning';
+import { analytics } from '../analytics';
+// Fixtures live outside `__tests__` on purpose: every `.ts` in there is collected as a
+// test suite.
+import {
+  ACCOUNT_REQUEST_RESPONSE,
+  RESOURCE_READBACK_RESPONSE,
+  RESOURCE_RESPONSE,
+  TOKEN_RESPONSE,
+} from '../__fixtures__/provisioning';
 
 vi.mock('axios');
+// Return the override verbatim so region-based prod routing applies (no IS_DEV
+// localhost); undefined means no override.
+vi.mock('../urls', () => ({
+  resolveBaseUrl: (baseUrl?: string) => baseUrl,
+}));
 vi.mock('../debug', () => ({ logToFile: vi.fn() }));
 vi.mock('../analytics', () => ({
   analytics: { captureException: vi.fn() },
@@ -14,43 +31,16 @@ describe('provisionNewAccount', () => {
     vi.clearAllMocks();
   });
 
-  it('completes the full PKCE flow and returns credentials', async () => {
-    // Step 1: account_requests
-    mockedAxios.post.mockResolvedValueOnce({
-      data: {
-        id: 'req_1',
-        type: 'oauth',
-        oauth: { code: 'test_code_123' },
-      },
-    });
+  // Recorded responses, not hand-written ones: the flow has to pass against what the
+  // API actually sends today.
+  it('completes the full PKCE flow against the recorded API responses', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({ data: ACCOUNT_REQUEST_RESPONSE })
+      .mockResolvedValueOnce({ data: TOKEN_RESPONSE })
+      .mockResolvedValueOnce({ data: RESOURCE_RESPONSE });
 
-    // Step 2: oauth/token
-    mockedAxios.post.mockResolvedValueOnce({
-      data: {
-        token_type: 'bearer',
-        access_token: 'pha_test_access',
-        refresh_token: 'phr_test_refresh',
-        expires_in: 3600,
-        account: { id: 'org_123' },
-      },
-    });
-
-    // Step 3: resources
-    mockedAxios.post.mockResolvedValueOnce({
-      data: {
-        status: 'complete',
-        id: '42',
-        service_id: 'analytics',
-        complete: {
-          access_configuration: {
-            api_key: 'phc_test_key',
-            host: 'https://us.posthog.com',
-            personal_api_key: 'phx_test_pat',
-          },
-        },
-      },
-    });
-
+    // Frozen clock: `expiresAt` is derived from Date.now() + expires_in.
+    vi.useFakeTimers();
     const result = await provisionNewAccount(
       'user@example.com',
       'Test User',
@@ -60,15 +50,19 @@ describe('provisionNewAccount', () => {
         projectName: 'my-app',
       },
     );
+    const expiresAt = Date.now() + TOKEN_RESPONSE.expires_in * 1000;
+    vi.useRealTimers();
 
     expect(result).toEqual({
-      accessToken: 'pha_test_access',
-      refreshToken: 'phr_test_refresh',
-      projectApiKey: 'phc_test_key',
+      accessToken: 'pha_recorded_access',
+      refreshToken: 'phr_recorded_refresh',
+      expiresAt,
+      oauthClientId: expect.any(String),
+      projectApiKey: 'phc_recorded',
       host: 'https://us.posthog.com',
-      personalApiKey: 'phx_test_pat',
-      projectId: '42',
-      accountId: 'org_123',
+      personalApiKey: 'phx_recorded',
+      projectId: '4242',
+      accountId: 'org_recorded',
     });
 
     expect(mockedAxios.post).toHaveBeenCalledTimes(3);
@@ -97,6 +91,7 @@ describe('provisionNewAccount', () => {
       'insight:write',
       'query:read',
       'notebook:write',
+      'event_definition:write',
     ]);
 
     // Verify token exchange includes code_verifier
@@ -108,13 +103,120 @@ describe('provisionNewAccount', () => {
     // Verify resources call uses bearer token and project name
     const resourceCall = mockedAxios.post.mock.calls[2];
     expect(resourceCall[0]).toContain('/resources');
-    expect(resourceCall[1]).toMatchObject({
-      service_id: 'analytics',
+    expect(resourceCall[1]).toEqual({
       configuration: { project_name: 'my-app' },
     });
     expect(resourceCall[2]?.headers?.Authorization).toBe(
-      'Bearer pha_test_access',
+      'Bearer pha_recorded_access',
     );
+  });
+
+  // Forward compatibility: the API is free to add fields. Only a field the wizard reads
+  // may ever fail the flow.
+  it('ignores unknown fields the API adds to its responses', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { ...ACCOUNT_REQUEST_RESPONSE, future_field: 'whatever' },
+      })
+      .mockResolvedValueOnce({
+        data: { ...TOKEN_RESPONSE, scope: 'a b c', issued_at: 123 },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          ...RESOURCE_RESPONSE,
+          service_id: 'analytics',
+          billing: { plan: 'free' },
+        },
+      });
+
+    await expect(
+      provisionNewAccount('forward@example.com', ''),
+    ).resolves.toMatchObject({ projectApiKey: 'phc_recorded' });
+  });
+
+  it('reads the resource back when the create response is unreadable', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({ data: ACCOUNT_REQUEST_RESPONSE })
+      .mockResolvedValueOnce({ data: TOKEN_RESPONSE })
+      // Drift in a field the wizard does consume. The project exists regardless, so the
+      // flow must recover from it rather than abandon a provisioned account.
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '4242',
+          complete: {
+            access_configuration: { host: 'https://us.posthog.com' },
+          },
+        },
+      });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: RESOURCE_READBACK_RESPONSE,
+    });
+
+    const result = await provisionNewAccount('readback@example.com', '');
+
+    expect(result).toMatchObject({
+      projectApiKey: 'phc_recorded',
+      projectId: '4242',
+      // The detail endpoint never mints a PAT, so recovery legitimately loses it.
+      personalApiKey: undefined,
+    });
+
+    const readbackCall = mockedAxios.get.mock.calls[0];
+    expect(readbackCall[0]).toContain('/provisioning/resources/4242');
+    expect(readbackCall[1]?.headers?.Authorization).toBe(
+      'Bearer pha_recorded_access',
+    );
+
+    // The drift is reported even though the flow recovered — otherwise the next one is
+    // invisible until someone reads the code.
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        step: 'provisioning_resources',
+        issue_paths: ['complete.access_configuration.api_key'],
+      }),
+    );
+  });
+
+  it('reports the rejected paths when the resource cannot be read at all', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({ data: ACCOUNT_REQUEST_RESPONSE })
+      .mockResolvedValueOnce({ data: TOKEN_RESPONSE })
+      .mockResolvedValueOnce({ data: { status: 'complete' } });
+    mockedAxios.get.mockRejectedValueOnce(new Error('500'));
+
+    const error = await provisionNewAccount('unreadable@example.com', '').catch(
+      (e: unknown) => e,
+    );
+
+    // The account exists — the error has to say so, or the caller sends the user off to
+    // sign up a second time.
+    expect(error).toBeInstanceOf(ProvisionedAccountUnreadableError);
+    expect((error as ProvisionedAccountUnreadableError).accountCreated).toBe(
+      true,
+    );
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        step: 'provisioning_resources',
+        issue_paths: ['id'],
+      }),
+    );
+  });
+
+  it('throws the controlled error when provisioning reports it is not complete', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({ data: ACCOUNT_REQUEST_RESPONSE })
+      .mockResolvedValueOnce({ data: TOKEN_RESPONSE })
+      // A readable response that simply isn't done — distinct from drift, and not
+      // something a read-back would fix.
+      .mockResolvedValueOnce({ data: { status: 'error', id: '4242' } });
+
+    await expect(
+      provisionNewAccount('incomplete@example.com', ''),
+    ).rejects.toThrow('did not complete');
+    expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 
   it('throws when account already exists', async () => {
@@ -159,7 +261,7 @@ describe('provisionNewAccount', () => {
         },
       })
       .mockResolvedValueOnce({
-        data: { status: 'error', id: '0', service_id: 'analytics' },
+        data: { status: 'error', id: '0' },
       });
 
     await expect(provisionNewAccount('fail@example.com', '')).rejects.toThrow(
@@ -184,7 +286,6 @@ describe('provisionNewAccount', () => {
         data: {
           status: 'complete',
           id: '99',
-          service_id: 'analytics',
           complete: {
             access_configuration: {
               api_key: 'phc_eu',
@@ -201,6 +302,52 @@ describe('provisionNewAccount', () => {
       region: 'EU',
     });
     expect(result.host).toBe('https://eu.posthog.com');
+
+    // EU provisioning must target the EU host with the EU client, and every
+    // follow-up call (token exchange, resources) stays on the EU host.
+    for (const call of mockedAxios.post.mock.calls) {
+      expect(call[0]).toContain('https://eu.posthog.com');
+    }
+    expect((accountCall[1] as Record<string, unknown>).client_id).toBe(
+      'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy',
+    );
+  });
+
+  it('routes US provisioning to the US host and client', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_us', type: 'oauth', oauth: { code: 'code_us' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_us',
+          refresh_token: 'phr_us',
+          expires_in: 3600,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '7',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_us',
+              host: 'https://us.posthog.com',
+            },
+          },
+        },
+      });
+
+    await provisionNewAccount('us@example.com', '', 'US');
+
+    for (const call of mockedAxios.post.mock.calls) {
+      expect(call[0]).toContain('https://us.posthog.com');
+    }
+    const accountCall = mockedAxios.post.mock.calls[0];
+    expect((accountCall[1] as Record<string, unknown>).client_id).toBe(
+      'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM',
+    );
   });
 
   it('sends project name in resources configuration', async () => {
@@ -220,7 +367,6 @@ describe('provisionNewAccount', () => {
         data: {
           status: 'complete',
           id: '50',
-          service_id: 'analytics',
           complete: {
             access_configuration: {
               api_key: 'phc_p',
@@ -235,8 +381,7 @@ describe('provisionNewAccount', () => {
     });
 
     const resourceCall = mockedAxios.post.mock.calls[2];
-    expect(resourceCall[1]).toMatchObject({
-      service_id: 'analytics',
+    expect(resourceCall[1]).toEqual({
       configuration: { project_name: 'my-cool-app' },
     });
   });
@@ -258,7 +403,6 @@ describe('provisionNewAccount', () => {
         data: {
           status: 'complete',
           id: '51',
-          service_id: 'analytics',
           complete: {
             access_configuration: {
               api_key: 'phc_np',
@@ -271,7 +415,7 @@ describe('provisionNewAccount', () => {
     await provisionNewAccount('noproj@example.com', '');
 
     const resourceCall = mockedAxios.post.mock.calls[2];
-    expect(resourceCall[1]).toEqual({ service_id: 'analytics' });
+    expect(resourceCall[1]).toEqual({});
   });
 
   it('includes timeouts on all requests', async () => {
@@ -291,7 +435,6 @@ describe('provisionNewAccount', () => {
         data: {
           status: 'complete',
           id: '1',
-          service_id: 'analytics',
           complete: {
             access_configuration: {
               api_key: 'phc_t',

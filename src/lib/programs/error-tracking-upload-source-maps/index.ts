@@ -10,14 +10,45 @@ import {
 import {
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
+  VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
-import { getUiHostFromHost } from '@utils/urls';
 import { getUI } from '@ui';
+import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import { analytics } from '@utils/analytics';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
+
+let postHogCliInstallAttempted = false;
+
+/**
+ * Pre-install posthog-cli for variants that need a machine-global copy
+ * (`VARIANTS_REQUIRING_POSTHOG_CLI`). The agent can't — warlock blocks
+ * `npm install -g` — so the wizard does it in-process. Warn, don't fail.
+ */
+function ensurePostHogCli(variant: SkillVariant): void {
+  if (postHogCliInstallAttempted) return;
+  postHogCliInstallAttempted = true;
+
+  const result = installOrUpdatePostHogCli();
+  if (!result.success) {
+    analytics.wizardCapture('source maps posthog-cli preinstall failed', {
+      variant,
+      error: String(result.error).slice(0, 500),
+    });
+    analytics.captureException(
+      result.errorObject ??
+        new Error(`posthog-cli pre-install failed: ${result.error}`),
+      { source: 'source_maps_cli_preinstall', variant },
+    );
+    getUI().log.warn(
+      `Could not pre-install posthog-cli (${result.error}). Your release build ` +
+        `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
+    );
+  }
+}
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   command: 'upload-source-maps',
@@ -75,7 +106,10 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           return SOURCE_MAPS_DETECTION_FAILED_PROMPT;
         }
 
-        const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+        if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
+          ensurePostHogCli(variant);
+
+        const uiHost = ctx.host.appHost.replace(/\/$/, '');
 
         return buildSourceMapsUploadPrompt({
           displayName,
@@ -83,9 +117,10 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           skillId,
           projectPath,
           projectId: ctx.projectId,
-          host: ctx.host,
+          host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
+          reportFile: REPORT_FILE,
         });
       },
 
@@ -118,6 +153,7 @@ export {
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
+  MANUAL_SDK_VARIANTS,
   type SkillVariant,
   type SourceMapsDetectError,
 } from './detect.js';
