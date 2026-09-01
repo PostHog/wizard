@@ -82,6 +82,26 @@ describe('getLaunchablePrograms', () => {
     expect(ids()).toContain('metrics');
   });
 
+  // The intro copy names auditing, source maps and self-drive, and the list
+  // sits directly under that sentence. Registry order alone would put whatever
+  // was appended most recently in front of them.
+  it('leads with the three the intro copy names', () => {
+    expect(ids().slice(0, 3)).toEqual([
+      'web-analytics-doctor',
+      'error-tracking-upload-source-maps',
+      'self-driving',
+    ]);
+  });
+
+  it('leaves everything else in registry order', () => {
+    const rest = ids().slice(3);
+    const registryOrder = getSubcommandPrograms()
+      .map((config) => config.id)
+      .filter((id) => rest.includes(id));
+
+    expect(rest).toEqual(registryOrder);
+  });
+
   // Derived from who claims whom as a parent, so the next family drops out on
   // its own instead of waiting for someone to remember this list.
   it('drops nothing but parents', () => {
