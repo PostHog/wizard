@@ -235,6 +235,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode — credentials are handled directly
   }
 
+  setAccessToken(_credentials: Credentials): void {
+    // No-op in CI mode — CI runs on a non-expiring key and never refreshes
+  }
+
   setRoleAtOrganization(_role: string | null): void {
     // No-op in CI mode — there's no TUI to render role-tailored prompts
   }

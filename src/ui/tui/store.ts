@@ -495,6 +495,12 @@ export class WizardStore {
     this.emitChange();
   }
 
+  /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
+  setAccessToken(credentials: WizardSession['credentials']): void {
+    this.$session.setKey('credentials', credentials);
+    this.emitChange();
+  }
+
   setRoleAtOrganization(role: string | null): void {
     this.$session.setKey('roleAtOrganization', role);
     this.emitChange();
