@@ -7,8 +7,10 @@ import {
   isWarlockDisabled,
   buildAuthErrorContext,
   buildAgentEnv,
+  reportMcpSetup,
 } from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { analytics } from '@utils/analytics';
 import { Sequence } from '@lib/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -704,5 +706,88 @@ describe('auth error context', () => {
     const ctx = buildAuthErrorContext('/test/dir', url);
     expect(ctx.gatewayUrl).toBe(url);
     expect(ctx.region).toBe(region);
+  });
+});
+
+describe('mcp setup reporting', () => {
+  const PH = 'posthog-wizard';
+  const TOOL = `mcp__${PH}__exec`;
+
+  beforeEach(() => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+  });
+
+  const captures = () =>
+    vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.filter(([name]) => name === 'mcp setup failed');
+
+  /** Properties of the one capture the case expects, narrowed for the asserts. */
+  const firstCaptureProps = (): Record<string, unknown> => {
+    const [call] = captures();
+    if (!call) throw new Error('expected an "mcp setup failed" capture');
+    return call[1] ?? {};
+  };
+
+  it('says nothing when the server connected and gave us its tool', () => {
+    reportMcpSetup({
+      mcp_servers: [{ name: PH, status: 'connected' }],
+      tools: ['Read', 'Bash', TOOL],
+    });
+    expect(captures()).toHaveLength(0);
+  });
+
+  /**
+   * The whole point. The SDK drops a server it cannot reach and the run carries
+   * on without the tool — so the only signal is this init report, and before
+   * this it went to a log file nobody reads. A warehouse run that created
+   * nothing looked identical to one that chose not to.
+   */
+  it.each([
+    ['failed', [{ name: PH, status: 'failed' }], [], /server status: failed/],
+    [
+      'pending',
+      [{ name: PH, status: 'pending' }],
+      [],
+      /server status: pending/,
+    ],
+    [
+      'absent from the report',
+      [{ name: 'wizard-tools', status: 'connected' }],
+      ['mcp__wizard-tools__exec'],
+      /missing from the SDK init report/,
+    ],
+    [
+      'connected but registering no tool',
+      [{ name: PH, status: 'connected' }],
+      ['Read', 'Bash'],
+      /registered no tool/,
+    ],
+  ])(
+    'captures a PostHog MCP server that is %s',
+    (_label, servers, tools, reason) => {
+      reportMcpSetup({ mcp_servers: servers, tools });
+      const props = firstCaptureProps();
+      expect(props).toMatchObject({ harness: 'anthropic', scope: 'run' });
+      expect(props.error).toMatch(reason);
+    },
+  );
+
+  it('carries the whole server roster so one event explains the run', () => {
+    reportMcpSetup({
+      mcp_servers: [
+        { name: PH, status: 'failed' },
+        { name: 'wizard-tools', status: 'connected' },
+      ],
+      tools: [],
+    });
+    expect(firstCaptureProps().mcp_servers).toBe(
+      `${PH}:failed,wizard-tools:connected`,
+    );
+  });
+
+  it('treats an init message with no server list as a failure', () => {
+    reportMcpSetup({});
+    expect(captures()).toHaveLength(1);
   });
 });

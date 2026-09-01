@@ -20,6 +20,12 @@ import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
+  /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
+  expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   projectApiKey: string;
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
@@ -394,9 +400,13 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  /** Mirrors `AuthErrorDetail` in `@ui/wizard-ui` — keep the two in step. */
   authErrorDetail: {
     hasSettingsConflict: boolean;
     conflicts?: SettingsConflict[];
+    usingManagedLogin?: boolean;
+    credentialPlaces?: string[];
+    sessionExpired?: boolean;
     logFilePath: string;
   } | null;
   portConflictProcess: {

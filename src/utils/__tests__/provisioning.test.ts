@@ -39,6 +39,8 @@ describe('provisionNewAccount', () => {
       .mockResolvedValueOnce({ data: TOKEN_RESPONSE })
       .mockResolvedValueOnce({ data: RESOURCE_RESPONSE });
 
+    // Frozen clock: `expiresAt` is derived from Date.now() + expires_in.
+    vi.useFakeTimers();
     const result = await provisionNewAccount(
       'user@example.com',
       'Test User',
@@ -48,10 +50,14 @@ describe('provisionNewAccount', () => {
         projectName: 'my-app',
       },
     );
+    const expiresAt = Date.now() + TOKEN_RESPONSE.expires_in * 1000;
+    vi.useRealTimers();
 
     expect(result).toEqual({
       accessToken: 'pha_recorded_access',
       refreshToken: 'phr_recorded_refresh',
+      expiresAt,
+      oauthClientId: expect.any(String),
       projectApiKey: 'phc_recorded',
       host: 'https://us.posthog.com',
       personalApiKey: 'phx_recorded',

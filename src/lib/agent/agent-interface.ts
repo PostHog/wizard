@@ -49,6 +49,7 @@ import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { classifyAuthFailure } from '@lib/errors';
+import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -65,6 +66,7 @@ import {
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,
   claudeConfigDir,
+  createIsolatedAgentConfigDir,
 } from './stored-login';
 import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
@@ -588,16 +590,17 @@ export async function initializeAgent(
         : '(missing)',
     );
 
-    // A pre-existing Claude login (the SDK's "/login managed key") can outrank
-    // the gateway token we just set and get sent to the PostHog gateway, which
-    // 401s it. The settings-conflict scan can't see it, so detect + report it
-    // here — this is the leading suspect behind the gateway auth_failed reports.
+    // A pre-existing Claude login (the SDK's "/login managed key") could outrank
+    // the gateway token and 401 the run. The subprocess now gets an isolated,
+    // empty CLAUDE_CONFIG_DIR at the spawn site (see below), so a stored login
+    // in `~/.claude` can no longer reach the gateway. Still detect + log it to
+    // measure how often the isolation saves a run.
     const storedLogin = detectStoredClaudeLogin();
     if (hasStoredClaudeLogin(storedLogin)) {
       logToFile(
         `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
-          `keychain=${storedLogin.keychain}). It can outrank the wizard's gateway token ` +
-          `and cause a 401 — 'claude auth logout' clears it.`,
+          `keychain=${storedLogin.keychain}). The isolated CLAUDE_CONFIG_DIR keeps it out of ` +
+          `the agent run, so it no longer outranks the wizard's gateway token.`,
       );
       analytics.wizardCapture('claude stored login detected', {
         credentials_file: storedLogin.credentialsFile,
@@ -617,7 +620,7 @@ export async function initializeAgent(
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
-      'posthog-wizard': {
+      [POSTHOG_MCP_SERVER_NAME]: {
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
@@ -1030,6 +1033,11 @@ export async function runAgent(
           ANTHROPIC_BASE_URL: agentConfig.gatewayAuth.gatewayUrl,
           ANTHROPIC_AUTH_TOKEN: agentConfig.gatewayAuth.token,
           CLAUDE_CODE_OAUTH_TOKEN: agentConfig.gatewayAuth.token,
+          // Point the binary at an empty config dir so it cannot resolve a
+          // stored Claude login (a `~/.claude/.credentials.json`) and send that
+          // to the gateway, which 401s it. The env token above is then the only
+          // credential it can find. See stored-login.ts.
+          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.
@@ -1196,19 +1204,28 @@ export async function runAgent(
           os.homedir(),
           signals.apiKeySource,
         );
+        // A refresh that already failed on a dead grant explains this 401
+        // outright; without it the screen falls through to generic key-type
+        // and scope advice that cannot apply.
+        const sessionExpired = isGrantRevoked();
         const authCode = classifyAuthFailure({
           hasSettingsConflict: authError.hasSettingsConflict,
           usingManagedLogin: authError.usingManagedLogin,
+          sessionExpired,
           apiKey: options.apiKey,
           gatewayRegion: authError.region,
           sessionRegion: options.cloudRegion,
         });
-        logToFile('Agent error: 401, showing auth error screen', authError);
+        logToFile('Agent error: 401, showing auth error screen', {
+          ...authError,
+          sessionExpired,
+        });
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
           conflicts: authError.conflicts,
           usingManagedLogin: authError.usingManagedLogin,
           credentialPlaces: authError.credentialPlaces,
+          sessionExpired,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
@@ -1391,6 +1408,13 @@ export enum TaskTool {
  * `'Agent'` to opt into subagent dispatch). Skills and PostHog MCP tools
  * are enabled separately (skills option / mcpServers).
  */
+/**
+ * The PostHog MCP server's name in `mcpServers`, and so the prefix of the tool
+ * the agent calls it by (`mcp__posthog-wizard__exec`). Named once because the
+ * init handler has to recognise this server in the SDK's status report.
+ */
+export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
+
 export const BASE_ALLOWED_TOOLS: readonly string[] = [
   'Read',
   'Write',
@@ -1603,6 +1627,55 @@ function extractTokenUsageDelta(message: SDKMessage): TokenUsageDelta | null {
   };
 }
 
+/** A server entry in the SDK's `system/init` report. */
+type McpServerStatus = { name: string; status: string };
+
+/**
+ * Report what the SDK did with our MCP servers, and capture it when the PostHog
+ * one did not come up.
+ *
+ * The SDK connects `mcpServers` itself and drops a server it cannot reach — the
+ * run continues, the tool is simply absent, and the agent finds out only by not
+ * having it. What that looks like from outside is a run that collects every
+ * credential and then tells the user to do the work by hand.
+ *
+ * The pi harness has captured `mcp setup failed` for a while (`harness/pi`), so
+ * a pi run that lost the tool says so. The anthropic harness never did, even
+ * though the SDK hands it a per-server verdict on the init message and this
+ * code already had it in hand — it went to the log file and no further. A
+ * warehouse run with zero creates therefore cost three investigations to
+ * explain. The same event name and property shape as pi's, so one query covers
+ * both harnesses.
+ */
+export function reportMcpSetup(message: {
+  mcp_servers?: McpServerStatus[];
+  tools?: string[];
+}): void {
+  const servers = message.mcp_servers ?? [];
+  const posthog = servers.find((s) => s.name === POSTHOG_MCP_SERVER_NAME);
+  const toolPrefix = `mcp__${POSTHOG_MCP_SERVER_NAME}__`;
+  const hasTool = (message.tools ?? []).some((t) => t.startsWith(toolPrefix));
+
+  // Connected and the tool is there — nothing to say.
+  if (posthog?.status === 'connected' && hasTool) return;
+
+  const reason = !posthog
+    ? 'server missing from the SDK init report'
+    : posthog.status !== 'connected'
+    ? `server status: ${posthog.status}`
+    : 'server connected but registered no tool';
+
+  logToFile(`[anthropic] PostHog MCP unavailable — ${reason}`);
+  analytics.wizardCapture('mcp setup failed', {
+    harness: 'anthropic',
+    scope: 'run',
+    error: reason,
+    // The whole roster, so a run that lost several servers is one event and
+    // the PostHog one can still be told apart.
+    mcp_servers: servers.map((s) => `${s.name}:${s.status}`).join(','),
+  });
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
@@ -1807,6 +1880,7 @@ function handleSDKMessage(
           mcpServers: message.mcp_servers,
           apiKeySource: message.apiKeySource,
         });
+        reportMcpSetup(message);
       }
       break;
     }
