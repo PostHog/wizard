@@ -1,4 +1,4 @@
-import { fetchSignupLoginUrl } from '@ui/tui/hooks/useGithubConnection';
+import { fetchLoginUrl } from '@ui/tui/hooks/useGithubConnection';
 import { requestDeepLink } from '@utils/provisioning';
 import type { WizardSession, Credentials } from '@lib/wizard-session';
 import type { HostResolution } from '@lib/host-resolution';
@@ -17,37 +17,54 @@ function sessionWith(over: Partial<WizardSession>): WizardSession {
   } as WizardSession;
 }
 
-describe('fetchSignupLoginUrl', () => {
+describe('fetchLoginUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('skips non-signup sessions, whose browser already holds a login', async () => {
-    await expect(fetchSignupLoginUrl(sessionWith({}))).resolves.toBeNull();
+    await expect(fetchLoginUrl(sessionWith({}))).resolves.toBeNull();
     expect(mockedDeepLink).not.toHaveBeenCalled();
   });
 
   it('skips a session without credentials', async () => {
     await expect(
-      fetchSignupLoginUrl(sessionWith({ signup: true, credentials: null })),
+      fetchLoginUrl(sessionWith({ signup: true, credentials: null })),
     ).resolves.toBeNull();
     expect(mockedDeepLink).not.toHaveBeenCalled();
   });
 
-  it('returns a one-time login link for a provisioning signup', async () => {
+  it('prefers a one-time deep link when the partner tier grants one', async () => {
     mockedDeepLink.mockResolvedValueOnce('https://us.posthog.com/login/once');
 
-    await expect(
-      fetchSignupLoginUrl(sessionWith({ signup: true })),
-    ).resolves.toBe('https://us.posthog.com/login/once');
+    await expect(fetchLoginUrl(sessionWith({ signup: true }))).resolves.toBe(
+      'https://us.posthog.com/login/once',
+    );
     expect(mockedDeepLink).toHaveBeenCalledWith('pha_x', host);
   });
 
-  it('returns null when the deep link request fails', async () => {
+  // deep_links is partner-tier gated (403 today), so signups must still get a working link.
+  it('falls back to the login page when the deep link is refused', async () => {
+    mockedDeepLink.mockResolvedValueOnce(null);
+
+    await expect(fetchLoginUrl(sessionWith({ signup: true }))).resolves.toBe(
+      'https://us.posthog.com/login',
+    );
+  });
+
+  it('keeps the fallback on the credential host, so EU accounts land on EU login', async () => {
     mockedDeepLink.mockResolvedValueOnce(null);
 
     await expect(
-      fetchSignupLoginUrl(sessionWith({ signup: true })),
-    ).resolves.toBeNull();
+      fetchLoginUrl(
+        sessionWith({
+          signup: true,
+          credentials: {
+            accessToken: 'pha_x',
+            host: { appHost: 'https://eu.posthog.com' } as HostResolution,
+          } as Credentials,
+        }),
+      ),
+    ).resolves.toBe('https://eu.posthog.com/login');
   });
 });

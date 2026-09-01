@@ -25,7 +25,7 @@ import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import {
   useGithubConnection,
-  fetchSignupLoginUrl,
+  fetchLoginUrl,
 } from '@ui/tui/hooks/useGithubConnection';
 import { OutroKind } from '@lib/wizard-session';
 import {
@@ -71,13 +71,13 @@ export const SelfDrivingGitHubScreen = ({
   // is confusing — the poll flips the screen on its own when the install lands.
   const [installOpened, setInstallOpened] = useState(false);
 
-  // One-time login link for provisioning signups, whose browser holds no session for the install link.
+  // One-time login link for browsers without a PostHog session (fresh provisioned accounts).
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const loginUrlRequested = useRef(false);
   useEffect(() => {
     if (loginUrlRequested.current) return;
     loginUrlRequested.current = true;
-    void fetchSignupLoginUrl(store.session).then(setLoginUrl);
+    void fetchLoginUrl(store.session).then(setLoginUrl);
   }, [store]);
 
   // Impression fires once the connected state is known, so `already_connected`

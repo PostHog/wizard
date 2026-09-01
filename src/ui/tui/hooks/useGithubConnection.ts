@@ -17,15 +17,16 @@ import { analytics } from '@utils/analytics';
 
 const POLL_INTERVAL_MS = 3000;
 
-// Provisioning signups have no browser login, so the install link alone strands them on a login wall.
-export async function fetchSignupLoginUrl(
+// Provisioned signups have no browser session for the install link; deep link when the partner tier grants one, else the login page.
+export async function fetchLoginUrl(
   session: WizardSession,
 ): Promise<string | null> {
   if (!session.signup || !session.credentials) return null;
-  return requestDeepLink(
+  const deepLink = await requestDeepLink(
     session.credentials.accessToken,
     session.credentials.host,
   );
+  return deepLink ?? `${session.credentials.host.appHost}/login`;
 }
 
 export function useGithubConnection(store: WizardStore): void {
