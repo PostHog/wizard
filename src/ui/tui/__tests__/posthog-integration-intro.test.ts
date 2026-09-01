@@ -110,10 +110,17 @@ describe('introMenuOptions', () => {
   });
 
   describe('the sub-views', () => {
-    it('gives the tricks view a way back', () => {
-      expect(valuesFor({ view: 'commands', posthogSdkDetected: true })).toEqual(
-        ['back'],
-      );
+    // Nothing scopes arrow keys to one picker. The command list is a picker in
+    // the body slot, so a menu here would move both cursors at once — the bug
+    // this replaced. The screen binds Esc for that view instead.
+    it('renders no menu under the command list', () => {
+      expect(
+        introMenuOptions({
+          view: 'commands',
+          showContinue: true,
+          posthogSdkDetected: true,
+        }),
+      ).toBeNull();
     });
 
     // IntroScreenLayout appends the disclosure row to every intro menu, so

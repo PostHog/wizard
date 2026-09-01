@@ -25,6 +25,7 @@ import {
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { ScanConsent } from '@lib/wizard-session';
+import { KeyMatch, useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
 import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
@@ -145,6 +146,23 @@ export const PostHogIntegrationIntroScreen = ({
     view === 'default' &&
     !unsupported;
 
+  // The command list is the only view whose body is itself a picker, so it
+  // renders without a menu beneath it and needs its own way out. Empty
+  // bindings elsewhere keep the hint off every view that has a Back row.
+  useKeyBindings(
+    'posthog-integration-intro',
+    view === 'commands'
+      ? [
+          {
+            match: KeyMatch.Escape,
+            label: 'esc',
+            action: 'back',
+            handler: () => setView('default'),
+          },
+        ]
+      : [],
+  );
+
   // ── Title ──────────────────────────────────────────────────────────
 
   const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
@@ -223,6 +241,9 @@ export const PostHogIntegrationIntroScreen = ({
         }))}
         onSelect={(value) => {
           const id = Array.isArray(value) ? value[0] : value;
+          // Same event as the menu rows: which trick a re-run user picks is
+          // the measure of whether offering them beat re-integrating.
+          analytics.wizardCapture('intro menu selected', { value: id, view });
           store.switchProgram(id);
         }}
       />

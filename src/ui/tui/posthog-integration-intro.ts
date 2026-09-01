@@ -30,9 +30,15 @@ export function introMenuOptions({
   showContinue: boolean;
   posthogSdkDetected: boolean;
 }): PickerOption<string>[] | null {
-  // No route to the disclosure panel from either sub-view: it has its own
-  // top-level row, which IntroScreenLayout appends to every intro menu.
-  if (view === 'more-info' || view === 'commands') {
+  // Nothing scopes arrow keys to one picker, so a menu under the command list
+  // would move both cursors at once. That view puts a picker in the body slot
+  // and owns the interaction; Esc is its way back. Same shape as the framework
+  // picker, which clears the menu while it's up.
+  if (view === 'commands') return null;
+
+  // No route to the disclosure panel from here: it has its own top-level row,
+  // which IntroScreenLayout appends to every intro menu.
+  if (view === 'more-info') {
     return [{ label: 'Back', value: 'back' }];
   }
 
