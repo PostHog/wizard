@@ -64,6 +64,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       if (program === 'error-tracking-upload-source-maps') continue; // pinned below
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
+      if (program === 'feature-flags') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -87,6 +88,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
         sequence: Sequence.linear,
         harness: Harness.pi,
         model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds feature-flags to pi + terra medium',
+      ctx: { program: 'feature-flags', flags: {} },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: GPT5_6_TERRA_MODEL,
         thinkingLevel: 'medium',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
@@ -230,6 +242,13 @@ describe('switchboard composed clamp', () => {
               ...DEFAULT_RESOLVED,
               harness: Harness.pi,
               model: GPT5_6_SOL_MODEL,
+              thinkingLevel: 'medium',
+            }
+          : program === 'feature-flags'
+          ? {
+              ...DEFAULT_RESOLVED,
+              harness: Harness.pi,
+              model: GPT5_6_TERRA_MODEL,
               thinkingLevel: 'medium',
             }
           : program === 'metrics'

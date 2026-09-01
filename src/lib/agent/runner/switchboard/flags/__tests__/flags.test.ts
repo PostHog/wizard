@@ -292,6 +292,14 @@ describe('isolation — everything on at once', () => {
           model: GPT5_6_SOL_MODEL,
           thinkingLevel: 'medium',
         });
+      } else if (program === 'feature-flags') {
+        // Pi + terra medium from its OWN binding, not the flag.
+        expect(resolved).toEqual({
+          sequence: Sequence.linear,
+          harness: Harness.pi,
+          model: GPT5_6_TERRA_MODEL,
+          thinkingLevel: 'medium',
+        });
       } else if (program === 'replay-vision') {
         // Orchestrator from its OWN binding, not the flag — the
         // wizard-orchestrator experiment does not cover this program, so it
