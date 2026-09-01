@@ -258,6 +258,12 @@ async function fetchIntegrationConnected(
           'User-Agent': WIZARD_USER_AGENT,
         },
         signal,
+        // Bound the request so one stalled socket can't wedge the poll. The
+        // Self-driving GitHub gate can't be skipped, so a hang here would
+        // strand the user the same way a rejected token does. A timeout raises
+        // ECONNABORTED with no response, which the poll reads as a non-auth
+        // blip and retries.
+        timeout: 10_000,
       },
     );
     const parsed = IntegrationsResponseSchema.safeParse(response.data);
