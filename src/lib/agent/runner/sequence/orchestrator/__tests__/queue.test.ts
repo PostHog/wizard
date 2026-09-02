@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  isNotNeededReason,
+  NotNeededReason,
   QueueStore,
   QUEUE_DIR_NAME,
   SkipReason,
@@ -470,5 +472,84 @@ describe('skip reasons', () => {
     expect(file.tasks.find((t2) => t2.id === t.id)?.skipReason).toBe(
       'user-declined',
     );
+  });
+});
+
+/**
+ * The second dimension of an agent-reported skip.
+ *
+ * `agent-not-needed` names the agent as the decider, not what it decided, and
+ * `complete_task` offers `not needed` both for "the step does not apply" and
+ * for "you cannot do it". On the one step that stops to ask for credentials
+ * those are opposite outcomes, so the agent's own answer is recorded next to
+ * the reason rather than folded into it.
+ */
+describe('not-needed reasons', () => {
+  let dir: string;
+  let q: QueueStore;
+
+  beforeEach(() => {
+    dir = tmpDir();
+    q = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it.each([
+    NotNeededReason.NotApplicable,
+    NotNeededReason.UserDeclined,
+    NotNeededReason.Blocked,
+  ])('records %s alongside the skip reason', (reason) => {
+    const t = q.enqueue({ type: 'warehouse' });
+    q.start(t.id);
+    q.skip(t.id, SkipReason.AgentNotNeeded, undefined, reason);
+
+    expect(q.get(t.id)?.skipReason).toBe(SkipReason.AgentNotNeeded);
+    expect(q.get(t.id)?.notNeededReason).toBe(reason);
+  });
+
+  it('stays unset on a skip that declares none', () => {
+    const t = q.enqueue({ type: 'warehouse' });
+    q.start(t.id);
+    q.skip(t.id, SkipReason.UserDeclined);
+
+    expect(q.get(t.id)?.skipReason).toBe(SkipReason.UserDeclined);
+    expect(q.get(t.id)?.notNeededReason).toBeUndefined();
+  });
+
+  it('hands it to the transition listener, so the skip event carries it', () => {
+    const seen: { reason?: string; notNeeded?: string }[] = [];
+    const listened = new QueueStore(dir, 'run-1', {
+      onTransition: (event: TransitionEvent, task: QueuedTask) => {
+        if (event === 'skip') {
+          seen.push({
+            reason: task.skipReason,
+            notNeeded: task.notNeededReason,
+          });
+        }
+      },
+    });
+
+    const t = listened.enqueue({ type: 'warehouse' });
+    listened.start(t.id);
+    listened.skip(
+      t.id,
+      SkipReason.AgentNotNeeded,
+      undefined,
+      NotNeededReason.UserDeclined,
+    );
+
+    expect(seen.at(-1)).toEqual({
+      reason: 'agent-not-needed',
+      notNeeded: 'user-declined',
+    });
+  });
+
+  it('only names outcomes the type declares', () => {
+    expect(isNotNeededReason('user-declined')).toBe(true);
+    expect(isNotNeededReason('the user cancelled the postgres prompt')).toBe(
+      false,
+    );
+    expect(isNotNeededReason(undefined)).toBe(false);
   });
 });

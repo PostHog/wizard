@@ -476,6 +476,11 @@ export async function runOrchestrator(
             // did not apply were one number — which is how a regression that
             // halved the warehouse completion rate stayed invisible for a week.
             reason: task.skipReason,
+            // Also additive, and only ever set alongside `agent-not-needed`:
+            // that reason names the agent as the decider without saying what it
+            // decided, so a step the user withheld a credential for counted as
+            // a step that did not apply to the project.
+            not_needed_reason: task.notNeededReason,
           });
           break;
         case 'fail':

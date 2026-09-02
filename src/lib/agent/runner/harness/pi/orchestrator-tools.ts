@@ -19,11 +19,13 @@ import {
   applyEnqueue,
   applyReadHandoffs,
   HANDOFF_FIELDS,
+  NOT_NEEDED_REASON_ASK,
   REMARK_ASK,
+  type CompleteArgs,
   type EnqueueArgs,
   type OrchestratorToolsContext,
 } from '../../sequence/orchestrator/queue-tools';
-import type { TaskHandoff } from '../../sequence/orchestrator/queue';
+import { NotNeededReason } from '../../sequence/orchestrator/queue';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];
@@ -57,6 +59,32 @@ const HANDOFF_PARAMS = Type.Object({
 /** Exported so the parity test can compare both harnesses' field sets. */
 export const PI_HANDOFF_PARAM_KEYS: readonly string[] = Object.keys(
   HANDOFF_PARAMS.properties,
+);
+
+/** Mirrors the zod `COMPLETE_SHAPE`; ctx-independent, so it lives out here. */
+const COMPLETE_PARAMS = Type.Object({
+  status: Type.Union([
+    Type.Literal('done'),
+    Type.Literal('failed'),
+    Type.Literal('not needed'),
+  ]),
+  handoff: HANDOFF_PARAMS,
+  remark: Type.Optional(Type.String({ description: REMARK_ASK })),
+  notNeededReason: Type.Optional(
+    Type.Union(
+      [
+        Type.Literal(NotNeededReason.NotApplicable),
+        Type.Literal(NotNeededReason.UserDeclined),
+        Type.Literal(NotNeededReason.Blocked),
+      ],
+      { description: NOT_NEEDED_REASON_ASK },
+    ),
+  ),
+});
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const PI_COMPLETE_PARAM_KEYS: readonly string[] = Object.keys(
+  COMPLETE_PARAMS.properties,
 );
 
 /** The three queue tools bound to one agent's orchestrator context. */
@@ -111,24 +139,9 @@ export function createPiOrchestratorTools(
       "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
     promptSnippet:
       'complete_task(status, handoff) — report your outcome exactly once when done',
-    parameters: Type.Object({
-      status: Type.Union([
-        Type.Literal('done'),
-        Type.Literal('failed'),
-        Type.Literal('not needed'),
-      ]),
-      handoff: HANDOFF_PARAMS,
-      remark: Type.Optional(Type.String({ description: REMARK_ASK })),
-    }),
+    parameters: COMPLETE_PARAMS,
     execute(_id, args) {
-      const res = applyComplete(
-        ctx,
-        args as {
-          status: 'done' | 'failed' | 'not needed';
-          handoff: TaskHandoff;
-          remark?: string;
-        },
-      );
+      const res = applyComplete(ctx, args as CompleteArgs);
       if (!res.ok) return Promise.resolve(text(`Error: ${res.message}`));
       return Promise.resolve(text('ok'));
     },
