@@ -10,6 +10,7 @@ describe('FEATURE_FLAGS_ABORT_CASES', () => {
   // to `AbortCase.match`.
   const reasons = [
     'unsupported stack for feature flags',
+    'posthog not initialized',
     'no posthog project credentials',
     'could not create the feature flag',
   ];
@@ -43,7 +44,7 @@ describe('featureFlagsConfig', () => {
     expect(run.abortCases).toBe(FEATURE_FLAGS_ABORT_CASES);
   });
 
-  it('does not require the default integration — the skill installs packages itself', () => {
-    expect(featureFlagsConfig.requires).toBeUndefined();
+  it('requires the default integration — this skill extends it, it does not reinstall it', () => {
+    expect(featureFlagsConfig.requires).toEqual(['posthog-integration']);
   });
 });

@@ -105,19 +105,20 @@ new audits appear without a wizard release (`web-analytics` is wizard-native).
 
 ### Feature flags
 
-Add PostHog feature flags to a Next.js App Router app: evaluate once per request
-on the server, bootstrap those values into the client, and disable `/flags`
-polling in CI. After one confirm, optionally create one boolean flag at **0%
-rollout** and gate one additive UI path. Skip is the default — no new flag and
-no UI change. Production users keep current behavior until someone raises
-rollout in PostHog.
+Add the cheap feature-flags path to an existing PostHog install on Next.js App
+Router 15.3+: evaluate once per request on the server, bootstrap those values
+into the client, and disable `/flags` polling in CI. After one confirm,
+optionally create one boolean flag at **0% rollout** and gate one additive UI
+path. Skip is the default — no new flag and no UI change. Production users keep
+current behavior until someone raises rollout in PostHog.
 
 ```bash
 npx @posthog/wizard feature-flags
 ```
 
-Next.js App Router only. Distinct from `wizard audit feature-flags`, which
-audits existing flag usage and cost and does not install anything.
+Requires an existing PostHog install (`npx @posthog/wizard`). Next.js App Router
+15.3+ only. Distinct from `wizard audit feature-flags`, which audits existing
+flag usage and cost and does not install anything.
 
 ### Revenue Analytics
 

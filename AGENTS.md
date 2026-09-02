@@ -73,7 +73,8 @@ command names.** Old names mostly no longer exist — only some are kept as alia
 
 `wizard feature-flags` is a **flat skill command** (same shape as
 `revenue-analytics` / `mcp-analytics`). It runs the `feature-flags-setup`
-context-mill skill: Next.js App Router only, server `evaluateFlags()` + client
+context-mill skill: Next.js App Router 15.3+, extends an existing PostHog
+install (aborts if not initialized), server `evaluateFlags()` + client
 bootstrap, skip-first, optional 0% boolean flag + additive UI path after
 confirm. Distinct from `wizard audit feature-flags`, which is read-only.
 

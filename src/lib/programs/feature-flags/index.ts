@@ -15,12 +15,21 @@ export const FEATURE_FLAGS_ABORT_CASES: AbortCase[] = [
     errorCode: ErrorCodes.DetectUnsupportedPlatform,
     message: 'Unsupported stack for wizard feature-flags',
     body:
-      'This program instruments Next.js App Router apps only (`app/` directory + ' +
-      'the `next` package). Other frameworks, Pages Router, and backend-only ' +
-      'packages are out of scope — stack detection is deliberately narrow. ' +
-      'See https://posthog.com/docs/libraries/next-js and ' +
-      'https://posthog.com/docs/feature-flags/bootstrapping for the pattern, ' +
-      'or run `npx @posthog/wizard` for a general PostHog install.',
+      'This program instruments Next.js App Router 15.3+ only (`app/` directory + ' +
+      'the `next` package at 15.3.0 or newer). Pages Router, older Next, other ' +
+      'frameworks, and backend-only packages are out of scope — stack detection ' +
+      'is deliberately narrow. See https://posthog.com/docs/libraries/next-js and ' +
+      'https://posthog.com/docs/feature-flags/bootstrapping. ' +
+      'For a general PostHog install, run `npx @posthog/wizard`.',
+  },
+  {
+    match: /^posthog not initialized$/i,
+    message: 'PostHog is not initialized',
+    body:
+      'This program adds the cheap flags pattern (server evaluateFlags + ' +
+      'client bootstrap) to an existing PostHog install. It does not replace ' +
+      'the default wizard. Run `npx @posthog/wizard` first, then re-run ' +
+      '`npx @posthog/wizard feature-flags`.',
   },
   {
     match: /^no posthog project credentials$/i,
@@ -44,11 +53,11 @@ export const FEATURE_FLAGS_ABORT_CASES: AbortCase[] = [
 /**
  * `wizard feature-flags` — flat skill command.
  *
- * Next.js App Router flags install: server-side `evaluateFlags()`
- * bootstrapped into the client. Optional 0% boolean flag + additive
- * UI path after one confirm. Skip is first: no new flag, no UI change.
- * Distinct from `wizard audit feature-flags` (read-only, post-hoc) and
- * from the default `wizard` install (product analytics).
+ * Next.js App Router 15.3+ flags layer on an existing PostHog install:
+ * server-side `evaluateFlags()` bootstrapped into the client. Optional 0%
+ * boolean flag + additive UI path after one confirm. Skip is first: no new
+ * flag, no UI change. Distinct from `wizard audit feature-flags` (read-only,
+ * post-hoc) and from the default `wizard` install (product analytics).
  *
  * Flat while install-and-instrument is the only action. A second leaf
  * (e.g. local-eval, experiments) would restructure into a family later —
@@ -62,7 +71,7 @@ export const featureFlagsConfig = createSkillProgram({
   command: 'feature-flags',
   id: 'feature-flags',
   description:
-    'Add PostHog feature flags (Next.js App Router: server eval + client bootstrap)',
+    'Add PostHog feature flags (Next.js App Router 15.3+: server eval + client bootstrap)',
   integrationLabel: 'feature-flags',
   customPrompt:
     'Run the `feature-flags-setup` skill end-to-end. Do not contradict it. ' +
@@ -72,5 +81,6 @@ export const featureFlagsConfig = createSkillProgram({
   docsUrl: 'https://posthog.com/docs/feature-flags/start-here',
   spinnerMessage: 'Setting up feature flags...',
   estimatedDurationMinutes: 6,
+  requires: ['posthog-integration'],
   abortCases: FEATURE_FLAGS_ABORT_CASES,
 });
