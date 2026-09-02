@@ -300,7 +300,7 @@ export interface WizardSession {
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
 
-  /** Existing PostHog detected in the project (set during detect). Signal, not proof. Currently a dependency-level check */
+  /** PostHog found in the project's dependencies. A signal, not a verified install. */
   posthogSdkDetected: boolean;
 
   /** True once framework detection has run (whether it found something or not) */

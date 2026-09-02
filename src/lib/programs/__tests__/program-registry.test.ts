@@ -43,9 +43,7 @@ describe('getSubcommandPrograms', () => {
   });
 });
 
-// What a user types to reach the program. A nested program's own `command` is
-// only half of that, so anything telling a user how to run one has to join it
-// to the parent.
+// A nested program is only reachable through its parent's word.
 describe('getCommandPath', () => {
   const subcommand = (id: string) =>
     getSubcommandPrograms().find((config) => config.id === id)!;

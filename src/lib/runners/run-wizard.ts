@@ -189,8 +189,7 @@ export function runWizard(
 
       for (;;) {
         await activeTui.store.runReadyHooks();
-        // Settle the pre-run screens. `integration-check` is a no-op gate for
-        // programs without it.
+        // Settle the pre-run screens; `integration-check` is a no-op gate here.
         await activeTui.store.getGate('intro');
 
         const active = activeTui.store.router.activeProgram;

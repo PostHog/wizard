@@ -254,11 +254,7 @@ export function reportWarehouseSourcesDetected(
   return true;
 }
 
-/**
- * Scan for existing PostHog SDKs in the project. Dependency-level signal only,
- * not a verified (or complete) install. Best-effort: scan failure reports
- * false rather than breaking the detection step.
- */
+/** Dependency-level signal, not a verified install. A failed scan reports false. */
 export function detectExistingPostHog(
   ctx: Pick<ProgramReadyContext, 'setPosthogSdkDetected'>,
   installDir: string,

@@ -98,10 +98,7 @@ interface IntroScreenLayoutProps {
   errorView?: ReactNode;
 }
 
-/**
- * Pads to the widest label a screen actually passes, so the ticks land in one
- * column. Exported pure: this has silently misaligned twice.
- */
+/** Pads to the widest label passed, so every tick lands in one column. */
 export function detectionLabelWidth(rows?: DetectionRow[]): number {
   return Math.max(
     'Directory'.length,

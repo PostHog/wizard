@@ -18,8 +18,7 @@ const MAX_MENU_LABEL_LENGTH = MENU_BOX_WIDTH - ICON_ROW_PREFIX_WIDTH;
 const menuFor = (view: 'default' | 'more-info', posthogSdkDetected: boolean) =>
   introMenuOptions({ view, showContinue: true, posthogSdkDetected }) ?? [];
 
-// Both detection states: only one offers the spell book row and the hedged
-// Continue label.
+// Both detection states: only one offers the spell book and hedged Continue.
 const EVERY_LABEL = [
   ...menuFor('default', false),
   ...menuFor('default', true),

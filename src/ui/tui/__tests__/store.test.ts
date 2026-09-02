@@ -95,11 +95,7 @@ describe('WizardStore', () => {
       expect(store.getSnapshot()).toBe(0);
     });
 
-    // Picking one of the wizard's other commands from the intro runs it in
-    // this session instead of making the user quit and type it. Nothing has
-    // happened yet at that point — no auth, no agent, no files touched — so
-    // the switch only has to repoint the router and start the new program's
-    // journey from its own first screen.
+    // Runs another command in this session; nothing has happened yet to unwind.
     describe('switchProgram', () => {
       it('makes the chosen program the active one', () => {
         const store = createStore();
@@ -113,9 +109,7 @@ describe('WizardStore', () => {
         expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
       });
 
-      // The old intro is behind us, but every program gates its intro on the
-      // same `setupConfirmed` flag — leaving it set marks the new program's
-      // intro complete before the user has seen it.
+      // Every program gates its intro on the same flag, so a stale one skips it.
       it('does not carry the old confirmation into the new intro', () => {
         const store = createStore();
         store.completeSetup();
@@ -127,8 +121,7 @@ describe('WizardStore', () => {
         expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
       });
 
-      // bin.ts parks on these gates. They resolved for the program we left, so
-      // reusing them would run the new program past its own screens.
+      // Already resolved for the program we left, so reusing them skips screens.
       it('reopens the gates for the new program', async () => {
         const store = createStore();
         const before = store.getGate('intro');
@@ -144,9 +137,7 @@ describe('WizardStore', () => {
         ).resolves.toBe('pending');
       });
 
-      // The runner is parked on the old program's intro gate at the moment of
-      // the switch. Dropping that promise without resolving it strands the
-      // runner — no error, no new program, just a wizard that stops.
+      // Dropping the promise the runner is parked on strands it, silently.
       it('releases callers parked on the old gates', async () => {
         const store = createStore();
         const parked = store.getGate('intro');
@@ -171,8 +162,7 @@ describe('WizardStore', () => {
         );
       });
 
-      // Selecting the program already running should cost the user nothing —
-      // in particular it must not throw away a confirmation they just gave.
+      // Re-selecting the running program must not discard a fresh confirmation.
       it('leaves the session alone when the program is unchanged', () => {
         const store = createStore();
         store.completeSetup();

@@ -1,15 +1,3 @@
-/**
- * Intro-screen copy and menu decisions, extracted from
- * PostHogIntegrationIntroScreen so they can be asserted without a render —
- * vitest aliases `ink` to no-op stubs suite-wide (vitest.config.ts), so the
- * screen itself draws nothing here.
- *
- * These assert the wiring, not the wording: which headline each detection state
- * resolves to, and what order the menu offers. Copy edits land in one place and
- * don't drag the test with them — menu order is pinned on `value` (stable
- * identifiers), and the only label asserted is the one that actually branches.
- */
-
 import {
   CONTINUE_ANYWAY_LABEL,
   CONTINUE_LABEL,
@@ -41,8 +29,7 @@ describe('introHeadline', () => {
     expect(introHeadline(false)).toEqual([DEFAULT_HEADLINE]);
   });
 
-  // Without literals on either side, both assertions above pass vacuously if
-  // the two headlines ever collapse to the same copy.
+  // Both assertions above pass vacuously if the two ever collapse.
   it('resolves the two states to different copy', () => {
     expect(DETECTED_HEADLINE).not.toEqual([DEFAULT_HEADLINE]);
   });
@@ -50,8 +37,7 @@ describe('introHeadline', () => {
 
 describe('introMenuOptions', () => {
   describe('an install we already detected', () => {
-    // The ask: exploring the other commands outranks re-running an
-    // integration the project may not need.
+    // Exploring outranks re-running an integration the project may not need.
     it('offers the tricks before continuing', () => {
       expect(valuesFor({ posthogSdkDetected: true })).toEqual([
         'commands',
@@ -96,8 +82,7 @@ describe('introMenuOptions', () => {
     });
   });
 
-  // Same reasoning as the headline pair: with neither side a literal, both
-  // label assertions pass vacuously if the two ever collapse.
+  // Same vacuous-pass risk as the headline pair.
   it('distinguishes the two continue labels', () => {
     expect(CONTINUE_ANYWAY_LABEL).not.toBe(CONTINUE_LABEL);
   });
@@ -114,15 +99,13 @@ describe('introMenuOptions', () => {
       ).toBeNull();
     });
 
-    // IntroScreenLayout appends the disclosure row to every intro menu, so
-    // neither sub-view carries its own route to it.
+    // IntroScreenLayout appends the disclosure row, so no view carries one.
     it('gives the more-info view a way back and nothing else', () => {
       expect(valuesFor({ view: 'more-info' })).toEqual(['back']);
     });
   });
 
-  // Detecting, picking a framework, and the unsupported-version prompt all
-  // clear showContinue — the screen owns the interaction, so no menu renders.
+  // Detecting, framework-picking and unsupported all clear showContinue.
   it('renders no menu when there is nothing to continue to', () => {
     expect(
       introMenuOptions({

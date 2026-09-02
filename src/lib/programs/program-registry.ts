@@ -143,11 +143,7 @@ export function getCommandPath(config: SubcommandProgram): string {
     : config.command;
 }
 
-/**
- * What the intro offers a project that already has PostHog, in the order it
- * lists them. Curated, not derived: a program earns a row by being worth a
- * re-run user's time, which no field on the config can tell us.
- */
+/** What the intro offers, in order. Curated: no config field ranks these. */
 const INTRO_PROGRAMS = [
   'self-driving',
   'error-tracking-upload-source-maps',
