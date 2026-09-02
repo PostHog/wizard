@@ -17,6 +17,7 @@ vi.mock('@lib/wizard-session', () => ({
   // suite's assertions, stubbed only so the mocked module still satisfies
   // the real module's exports.
   reportableDiscoveredFeatures: () => undefined,
+  reportablePosthogSdkDetected: () => undefined,
 }));
 vi.mock('@ui/tui/start-tui', () => ({
   startTUI: mockStartTUIMcp,

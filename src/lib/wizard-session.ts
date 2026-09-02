@@ -583,3 +583,10 @@ export function reportableDiscoveredFeatures(
 ): DiscoveredFeature[] | undefined {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }
+
+/** Also a scan result, so it travels under the same consent as the rest. */
+export function reportablePosthogSdkDetected(
+  session: WizardSession,
+): boolean | undefined {
+  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
+}

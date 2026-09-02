@@ -639,12 +639,29 @@ describe('Analytics', () => {
   });
 
   describe('sessionProperties', () => {
-    it('includes the posthog_sdk_detected verdict', () => {
+    it('includes the posthog_sdk_detected verdict once sharing is granted', () => {
       const session = buildSession({});
+      session.scanConsent = ScanConsent.Granted;
       expect(sessionProperties(session).posthog_sdk_detected).toBe(false);
 
       session.posthogSdkDetected = true;
       expect(sessionProperties(session).posthog_sdk_detected).toBe(true);
+    });
+
+    // It is a package.json scan result, so it waits on the same consent.
+    it('omits the verdict while consent is undecided or declined', () => {
+      const session = buildSession({});
+      session.posthogSdkDetected = true;
+
+      expect(session.scanConsent).toBe(ScanConsent.Undecided);
+      expect(sessionProperties(session)).not.toHaveProperty(
+        'posthog_sdk_detected',
+      );
+
+      session.scanConsent = ScanConsent.Declined;
+      expect(sessionProperties(session)).not.toHaveProperty(
+        'posthog_sdk_detected',
+      );
     });
   });
 

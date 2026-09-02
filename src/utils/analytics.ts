@@ -7,6 +7,7 @@ import {
 } from '@lib/constants';
 import {
   reportableDiscoveredFeatures,
+  reportablePosthogSdkDetected,
   type WizardSession,
 } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
@@ -46,6 +47,7 @@ export function sessionProperties(
   // might be absent. An absent key is unambiguous, while an empty array
   // would read as "we looked and found nothing" instead of "not reported".
   const discoveredFeatures = reportableDiscoveredFeatures(session);
+  const posthogSdkDetected = reportablePosthogSdkDetected(session);
 
   return {
     integration: session.integration,
@@ -58,7 +60,9 @@ export function sessionProperties(
     scan_consent: session.scanConsent,
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
-    posthog_sdk_detected: session.posthogSdkDetected,
+    ...(posthogSdkDetected !== undefined
+      ? { posthog_sdk_detected: posthogSdkDetected }
+      : {}),
   };
 }
 
