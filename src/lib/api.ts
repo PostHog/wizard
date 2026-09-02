@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { isTlsTrustError, TLS_TRUST_HINT } from '@utils/network-errors';
 import { WIZARD_USER_AGENT } from './constants';
 
 /**
@@ -289,6 +290,17 @@ export async function fetchGithubConnected(
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {
+  // Before the axios branches: a certificate rejection is an AxiosError with
+  // no `response`, so it would otherwise fall through to a bare
+  // "Failed to <operation>" and strip the one detail the user can act on.
+  if (isTlsTrustError(error)) {
+    return new ApiError(
+      `Could not verify the HTTPS certificate while trying to ${operation}. ${TLS_TRUST_HINT}`,
+      undefined,
+      axios.isAxiosError(error) ? error.config?.url : undefined,
+    );
+  }
+
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;

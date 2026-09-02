@@ -15,6 +15,7 @@ import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
 import { VERSION } from '@lib/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
+import { isBenignNetworkError } from './network-errors';
 
 /**
  * The invocation, reduced to flag-safe strings: the command word (first
@@ -343,10 +344,17 @@ export class Analytics {
       }
     } catch (error) {
       debug('Failed to get all feature flags:', error);
-      this.captureException(
-        error instanceof Error ? error : new Error(String(error)),
-        { step: 'get_all_flags' },
-      );
+      // Same reasoning as the Slack connectivity poll: an unreachable network
+      // or an intercepting TLS proxy is the user's environment, and the run
+      // already continues on defaults, so it isn't worth an exception.
+      if (isBenignNetworkError(error)) {
+        logToFile('[flags] evaluation skipped (network):', String(error));
+      } else {
+        this.captureException(
+          error instanceof Error ? error : new Error(String(error)),
+          { step: 'get_all_flags' },
+        );
+      }
     }
     // Outside the fetch guard on purpose: a malformed CI override must fail
     // the run loudly, and a valid one applies even when the fetch failed —
