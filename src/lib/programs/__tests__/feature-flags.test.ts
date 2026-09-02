@@ -10,7 +10,6 @@ describe('FEATURE_FLAGS_ABORT_CASES', () => {
   // to `AbortCase.match`.
   const reasons = [
     'unsupported stack for feature flags',
-    'could not locate a UI surface to gate',
     'no posthog project credentials',
     'could not create the feature flag',
   ];
@@ -22,6 +21,13 @@ describe('FEATURE_FLAGS_ABORT_CASES', () => {
     expect(matched).toHaveLength(1);
     expect(matched[0].message).toBeTruthy();
     expect(matched[0].body).toBeTruthy();
+  });
+
+  it('does not abort when no UI surface is available to gate', () => {
+    const matched = FEATURE_FLAGS_ABORT_CASES.filter((c) =>
+      c.match.test('could not locate a UI surface to gate'),
+    );
+    expect(matched).toHaveLength(0);
   });
 });
 

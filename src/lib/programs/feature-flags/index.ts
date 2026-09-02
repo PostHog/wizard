@@ -23,15 +23,6 @@ export const FEATURE_FLAGS_ABORT_CASES: AbortCase[] = [
       'or run `npx @posthog/wizard` for a general PostHog install.',
   },
   {
-    match: /^could not locate a UI surface to gate$/i,
-    message: 'No UI surface to gate',
-    body:
-      'The agent could not find a page or component that is safe to add an ' +
-      'additive, flag-gated element to. Wrapping auth, checkout, or ' +
-      'data-mutation paths is out of scope. Point the wizard at an app with ' +
-      'a visible UI, or skip gating and keep the SDK install.',
-  },
-  {
     match: /^no posthog project credentials$/i,
     message: 'No PostHog project credentials',
     body:
