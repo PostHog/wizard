@@ -153,6 +153,17 @@ describe('WizardStore', () => {
         expect(store.analyticsProgramId).toBe(Program.Metrics);
       });
 
+      // The run-level tag is stamped once at launch, so events after the
+      // switch would otherwise still carry the program the run started as.
+      it('retags the run with the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(analytics.setTag).toHaveBeenCalledWith(
+          'program_id',
+          Program.Metrics,
+        );
+      });
+
       it('follows the new program for label and skill', () => {
         const store = createStore();
         store.switchProgram(Program.Metrics);

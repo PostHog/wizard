@@ -951,6 +951,9 @@ export class WizardStore {
 
     this.router.setProgram(program);
     this._initFromProgram(program);
+    // start-tui stamps this once at launch; without it here every event
+    // after the switch still reports under the program the run started as.
+    analytics.setTag('program_id', program);
 
     const config = getProgramConfig(program);
     this.$session.setKey('setupConfirmed', false);
