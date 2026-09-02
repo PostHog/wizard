@@ -97,6 +97,10 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
       // The 5-minute default cancels the question mid-task and the agent
       // wraps up to the outro, so give these answers half an hour.
       askTimeoutMs: 30 * 60 * 1000,
+      // STEP 1 hands the user the personal-API-key settings URL inside the ask
+      // prompt. Render it as an OSC 8 hyperlink and copy it to the clipboard,
+      // so the user can reach the page the answer depends on.
+      richLinks: true,
 
       customPrompt: (ctx) => {
         const { variant, displayName, projectPath, skillId } = readSelection();
