@@ -1,6 +1,9 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { ErrorCodes } from '@lib/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import { getContentBlocks } from './content/index.js';
+import { getTips } from './content/tips.js';
 
 const FEATURE_FLAGS_REPORT_FILE = 'posthog-feature-flags-report.md';
 
@@ -66,21 +69,25 @@ export const FEATURE_FLAGS_ABORT_CASES: AbortCase[] = [
  * The mill skill is the source of truth for steps. This prompt only points
  * at it — do not restate the playbook here.
  */
-export const featureFlagsConfig = createSkillProgram({
-  skillId: 'feature-flags-setup',
-  command: 'feature-flags',
-  id: 'feature-flags',
-  description:
-    'Add PostHog feature flags (Next.js App Router 15.3+: server eval + client bootstrap)',
-  integrationLabel: 'feature-flags',
-  customPrompt:
-    'Run the `feature-flags-setup` skill end-to-end. Do not contradict it. ' +
-    `The final report is written to ./${FEATURE_FLAGS_REPORT_FILE}.`,
-  successMessage: `Feature flags configured! View the report at ./${FEATURE_FLAGS_REPORT_FILE}`,
-  reportFile: FEATURE_FLAGS_REPORT_FILE,
-  docsUrl: 'https://posthog.com/docs/feature-flags/start-here',
-  spinnerMessage: 'Setting up feature flags...',
-  estimatedDurationMinutes: 6,
-  requires: ['posthog-integration'],
-  abortCases: FEATURE_FLAGS_ABORT_CASES,
-});
+export const featureFlagsConfig: ProgramConfig = {
+  ...createSkillProgram({
+    skillId: 'feature-flags-setup',
+    command: 'feature-flags',
+    id: 'feature-flags',
+    description:
+      'Add PostHog feature flags (Next.js App Router 15.3+: server eval + client bootstrap)',
+    integrationLabel: 'feature-flags',
+    customPrompt:
+      'Run the `feature-flags-setup` skill end-to-end. Do not contradict it. ' +
+      `The final report is written to ./${FEATURE_FLAGS_REPORT_FILE}.`,
+    successMessage: `Feature flags configured! View the report at ./${FEATURE_FLAGS_REPORT_FILE}`,
+    reportFile: FEATURE_FLAGS_REPORT_FILE,
+    docsUrl: 'https://posthog.com/docs/feature-flags/installation/ai-wizard',
+    spinnerMessage: 'Setting up feature flags...',
+    estimatedDurationMinutes: 6,
+    requires: ['posthog-integration'],
+    abortCases: FEATURE_FLAGS_ABORT_CASES,
+  }),
+  getContentBlocks,
+  getTips,
+};
