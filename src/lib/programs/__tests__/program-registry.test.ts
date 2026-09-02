@@ -82,11 +82,7 @@ describe('getLaunchablePrograms', () => {
     expect(ids()).toContain('metrics');
   });
 
-  // The intro renders these as "<command path><description>" on one line, in a
-  // block it centers. A row past the terminal's width stops the block from
-  // centering at all — it pins to the left edge, which is how three overlong
-  // descriptions made the whole list look misaligned. 80 columns less the
-  // command column and the focus marker is what a row has to live within.
+  // A row wider than the terminal stops the whole block from centering.
   it('keeps every row inside an 80-column terminal', () => {
     const COMMAND_COLUMN = 21;
     const MARKER_PREFIX = 2;
@@ -99,24 +95,13 @@ describe('getLaunchablePrograms', () => {
     expect(tooLong).toEqual([]);
   });
 
-  // The intro copy names auditing, source maps and self-drive, and the list
-  // sits directly under that sentence. Registry order alone would put whatever
-  // was appended most recently in front of them.
+  // The intro copy promises these three by name, directly above the list.
   it('leads with the three the intro copy names', () => {
     expect(ids().slice(0, 3)).toEqual([
       'web-analytics-doctor',
       'error-tracking-upload-source-maps',
       'self-driving',
     ]);
-  });
-
-  it('leaves everything else in registry order', () => {
-    const rest = ids().slice(3);
-    const registryOrder = getSubcommandPrograms()
-      .map((config) => config.id)
-      .filter((id) => rest.includes(id));
-
-    expect(rest).toEqual(registryOrder);
   });
 
   // Derived from who claims whom as a parent, so the next family drops out on

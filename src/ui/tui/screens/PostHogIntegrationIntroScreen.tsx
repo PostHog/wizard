@@ -146,9 +146,7 @@ export const PostHogIntegrationIntroScreen = ({
     view === 'default' &&
     !unsupported;
 
-  // The command list is the only view whose body is itself a picker, so it
-  // renders without a menu beneath it and needs its own way out. Empty
-  // bindings elsewhere keep the hint off every view that has a Back row.
+  // The only view with no menu to carry a Back row, so Esc is its way out.
   useKeyBindings(
     'posthog-integration-intro',
     view === 'commands'
@@ -241,8 +239,6 @@ export const PostHogIntegrationIntroScreen = ({
         }))}
         onSelect={(value) => {
           const id = Array.isArray(value) ? value[0] : value;
-          // Same event as the menu rows: which trick a re-run user picks is
-          // the measure of whether offering them beat re-integrating.
           analytics.wizardCapture('intro menu selected', { value: id, view });
           store.switchProgram(id);
         }}
@@ -255,8 +251,7 @@ export const PostHogIntegrationIntroScreen = ({
         flexDirection="column"
         width={64}
         flexShrink={0}
-        // One line stays centered as it always was. A wrapped block reads as
-        // ragged centered, so it aligns left inside the same width.
+        // A wrapped block reads as ragged centered; one line always centered.
         alignItems={paragraphs.length > 1 ? undefined : 'center'}
       >
         {paragraphs.map((paragraph, i) => (
@@ -287,9 +282,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   if (session.posthogSdkDetected) {
     detectionRows.push({
-      // Padded to the width the layout hardcodes for its own rows, so the
-      // ticks line up in one column.
-      label: 'PostHog  ',
+      label: 'PostHog',
       value: 'detected in package.json',
     });
   }

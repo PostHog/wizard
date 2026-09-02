@@ -98,6 +98,32 @@ interface IntroScreenLayoutProps {
   errorView?: ReactNode;
 }
 
+/**
+ * Pads to the widest label a screen actually passes, so the ticks land in one
+ * column. Exported pure: this has silently misaligned twice.
+ */
+export function detectionLabelWidth(rows?: DetectionRow[]): number {
+  return Math.max(
+    'Directory'.length,
+    ...(rows ?? []).map((row) => row.label.length),
+  );
+}
+
+const DetectionLine = ({
+  label,
+  width,
+  children,
+}: {
+  label: string;
+  width: number;
+  children: ReactNode;
+}) => (
+  <Text>
+    {label.padEnd(width)} <Text color="green">{'✔'}</Text>{' '}
+    <Text>{children}</Text>
+  </Text>
+);
+
 const WizardTitle = ({ title }: { title: string }) => (
   <Text bold>
     <Text color="#1D4AFF">{'\u2588'}</Text>
@@ -191,6 +217,8 @@ export const IntroScreenLayout = ({
     privacyOptions,
   });
 
+  const labelWidth = detectionLabelWidth(detectionRows);
+
   const handleSelect = (value: string) => {
     if (value === 'privacy') return setShowingPrivacy(true);
     if (value === 'privacy-back') return setShowingPrivacy(false);
@@ -249,40 +277,32 @@ export const IntroScreenLayout = ({
 
         {showDetection && !showingPrivacy && (
           <Box flexDirection="column" marginTop={1}>
-            <Text>
-              <Text>
-                Directory <Text color="green">{'\u2714'}</Text>{' '}
-              </Text>
-              <Text>
-                {'/'}
-                {path.basename(installDir)}
-              </Text>
-            </Text>
+            <DetectionLine label="Directory" width={labelWidth}>
+              {'/'}
+              {path.basename(installDir)}
+            </DetectionLine>
 
             {detectionRows?.map((row) => (
-              <Text key={row.label}>
-                <Text>
-                  {row.label} <Text color="green">{'\u2714'}</Text>{' '}
-                </Text>
-                <Text>
-                  {row.value}
-                  {row.suffix ? ` ${row.suffix}` : ''}
-                </Text>
-              </Text>
+              <DetectionLine
+                key={row.label}
+                label={row.label}
+                width={labelWidth}
+              >
+                {row.value}
+                {row.suffix ? ` ${row.suffix}` : ''}
+              </DetectionLine>
             ))}
 
             {programLabel && (
-              <Text>
-                Program{'  '}
-                <Text color="green">{'\u2714'}</Text> {programLabel}
-              </Text>
+              <DetectionLine label="Program" width={labelWidth}>
+                {programLabel}
+              </DetectionLine>
             )}
 
             {programLabel === 'agent-skill' && skillId && (
-              <Text>
-                Skill{'     '}
-                <Text color="green">{'\u2714'}</Text> {skillId}
-              </Text>
+              <DetectionLine label="Skill" width={labelWidth}>
+                {skillId}
+              </DetectionLine>
             )}
           </Box>
         )}

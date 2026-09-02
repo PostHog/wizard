@@ -294,8 +294,7 @@ const FilterRow = ({
   shown: number;
   total: number;
 }) => (
-  // Indented to sit under PromptLabel, which carries a leading space of its
-  // own. Flush left, this row hangs one column left of the message above it.
+  // Indented to sit under PromptLabel, which carries a leading space.
   <Box paddingLeft={1} marginY={1}>
     <Text dimColor>
       {filter

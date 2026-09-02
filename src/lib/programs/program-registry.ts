@@ -143,10 +143,7 @@ export function getCommandPath(config: SubcommandProgram): string {
     : config.command;
 }
 
-/**
- * Leads the intro's list, because the intro copy names these three. A new
- * program lands at the bottom rather than displacing what the copy promised.
- */
+/** Leads the intro's list, in this order, because the intro copy names them. */
 const FEATURED_LAUNCHABLE_PROGRAMS = [
   'web-analytics-doctor',
   'error-tracking-upload-source-maps',
@@ -158,11 +155,13 @@ export function getLaunchablePrograms(): SubcommandProgram[] {
   const all = getSubcommandPrograms();
   const parents = new Set(all.map((config) => config.parentCommand));
   const launchable = all.filter((config) => !parents.has(config.command));
+  const featured = (config: SubcommandProgram) =>
+    FEATURED_LAUNCHABLE_PROGRAMS.includes(config.id);
 
-  const rank = (config: SubcommandProgram): number => {
-    const i = FEATURED_LAUNCHABLE_PROGRAMS.indexOf(config.id);
-    return i === -1 ? FEATURED_LAUNCHABLE_PROGRAMS.length : i;
-  };
-  // Sort is stable, so everything unfeatured keeps registry order behind them.
-  return launchable.slice().sort((a, b) => rank(a) - rank(b));
+  return [
+    ...FEATURED_LAUNCHABLE_PROGRAMS.map((id) =>
+      launchable.find((config) => config.id === id),
+    ).filter((config) => config != null),
+    ...launchable.filter((config) => !featured(config)),
+  ];
 }

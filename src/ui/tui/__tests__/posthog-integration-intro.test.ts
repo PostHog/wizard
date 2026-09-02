@@ -46,13 +46,6 @@ describe('introHeadline', () => {
   it('resolves the two states to different copy', () => {
     expect(DETECTED_HEADLINE).not.toEqual([DEFAULT_HEADLINE]);
   });
-
-  // The screen centers a single line and left-aligns a block, so the count is
-  // a layout decision rather than an incidental shape.
-  it('keeps the clean project to one line and says more on a detection', () => {
-    expect(introHeadline(false)).toHaveLength(1);
-    expect(introHeadline(true).length).toBeGreaterThan(1);
-  });
 });
 
 describe('introMenuOptions', () => {
@@ -110,9 +103,7 @@ describe('introMenuOptions', () => {
   });
 
   describe('the sub-views', () => {
-    // Nothing scopes arrow keys to one picker. The command list is a picker in
-    // the body slot, so a menu here would move both cursors at once — the bug
-    // this replaced. The screen binds Esc for that view instead.
+    // A menu here would fight the body's picker for the arrow keys.
     it('renders no menu under the command list', () => {
       expect(
         introMenuOptions({

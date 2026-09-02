@@ -15,18 +15,15 @@ const MENU_BOX_WIDTH = 24;
 const ICON_ROW_PREFIX_WIDTH = 4;
 const MAX_MENU_LABEL_LENGTH = MENU_BOX_WIDTH - ICON_ROW_PREFIX_WIDTH;
 
-const menuFor = (
-  view: 'default' | 'more-info' | 'commands',
-  posthogSdkDetected: boolean,
-) => introMenuOptions({ view, showContinue: true, posthogSdkDetected }) ?? [];
+const menuFor = (view: 'default' | 'more-info', posthogSdkDetected: boolean) =>
+  introMenuOptions({ view, showContinue: true, posthogSdkDetected }) ?? [];
 
-// Both detection states, because only one of them offers the spell book row
-// and the label that hedges Continue.
+// Both detection states: only one offers the spell book row and the hedged
+// Continue label.
 const EVERY_LABEL = [
   ...menuFor('default', false),
   ...menuFor('default', true),
   ...menuFor('more-info', true),
-  ...menuFor('commands', true),
   ...sharingOptions(true),
 ].map((o) => o.label);
 
@@ -41,7 +38,7 @@ describe('PostHogIntegrationIntroScreen menu labels', () => {
   it('leaves the disclosure row to the layout', () => {
     // IntroScreenLayout appends it to every intro menu — see its own test.
     // A copy here would drift, which is how the panel got five names.
-    for (const view of ['default', 'more-info', 'commands'] as const) {
+    for (const view of ['default', 'more-info'] as const) {
       expect(menuFor(view, true).map((o) => o.value)).not.toContain('privacy');
     }
   });
