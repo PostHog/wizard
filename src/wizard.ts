@@ -3,6 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@lib/constants';
+import { regionOption } from '@lib/headless-mode';
 import { initLocalDev, localMcpSkillsNotice } from '@lib/local-dev';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@lib/errors';
@@ -90,13 +91,13 @@ export class Wizard {
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
-    // flag — declared per-command on basic integration + audit via
-    // `headlessOption` (see @lib/headless-mode), not globally, so no other
-    // command accepts it. --ci and headless are kept as separate flags so they
-    // can diverge — see basic-integration's dispatch. headless is deliberately
-    // not advertised.
+    // flag, declared per-command on basic integration + audit via
+    // `headlessOption` (see @lib/headless-mode), so no other command accepts
+    // it. CI needs `region` globally because the workbench passes it to every
+    // command. --ci and headless stay separate so their behavior can diverge.
     if (!IS_PRODUCTION_BUILD) {
       cli = cli
+        .options(regionOption)
         .option('ci', {
           default: false,
           describe:

@@ -29,6 +29,7 @@ import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import {
   detectPostHogIntegration,
+  maybeStampAiSdkDetected,
   reportWarehouseSourcesDetected,
 } from '@lib/programs/posthog-integration/detect';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
@@ -427,7 +428,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -446,7 +447,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -464,7 +465,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -475,7 +476,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -487,7 +488,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -498,9 +499,37 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     session.scanConsent = ScanConsent.Granted;
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
+  });
+
+  // Reproduces the original dead-code bug: the intro screen resolves consent
+  // before the user has authenticated, so a stamp fired from that path would
+  // always see a null apiUser and silently no-op forever (the ordering
+  // `reportWarehouseSourcesDetected` alone cannot fix, since it only knows
+  // about consent, not login state).
+  it('stamps once authenticate() completes, not when consent resolves first', async () => {
+    withDeps({ openai: '^4.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    await detectPostHogIntegration(makeCtx(session));
+
+    // Consent resolves on the intro screen, before login — same order as
+    // production. reportWarehouseSourcesDetected runs but apiUser is still null.
+    session.scanConsent = ScanConsent.Granted;
+    reportWarehouseSourcesDetected(session);
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+
+    // authenticate() sets apiUser; the post-auth hook runs right after it.
+    withOrgUser(session);
+    maybeStampAiSdkDetected(session);
+
+    expect(analytics.groupIdentify).toHaveBeenCalledTimes(1);
+    expect(analytics.groupIdentify).toHaveBeenCalledWith(
+      'organization',
+      'org-1',
+      { wizard_ai_sdk_detected: true },
+    );
   });
 });
 

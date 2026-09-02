@@ -3,6 +3,7 @@ import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
@@ -51,6 +52,7 @@ async function advanceStep(
 ): Promise<void> {
   if (step.screenId === 'auth') {
     await authenticate(store.session, config.id);
+    maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
     await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);

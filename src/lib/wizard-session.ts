@@ -287,6 +287,12 @@ export interface WizardSession {
   scanConsent: ScanConsent;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
+  /**
+   * Guards `maybeStampAiSdkDetected` against running twice: it is called from
+   * both run-wizard.ts's auth step and bootstrap.ts, since either can be the
+   * first real `authenticate()` to complete depending on the program.
+   */
+  aiSdkStampReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -514,6 +520,7 @@ export function buildSession(args: {
     // headless `--ci --signup` run stays covered by the ci branch above.
     scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
+    aiSdkStampReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,

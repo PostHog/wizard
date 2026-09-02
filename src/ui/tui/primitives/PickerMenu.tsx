@@ -296,7 +296,7 @@ const FilterRow = ({
 }) => (
   // Indented to sit under PromptLabel, which carries a leading space of its
   // own. Flush left, this row hangs one column left of the message above it.
-  <Box paddingLeft={1}>
+  <Box paddingLeft={1} marginY={1}>
     <Text dimColor>
       {filter
         ? `Filter: ${filter} (${shown} of ${total})`

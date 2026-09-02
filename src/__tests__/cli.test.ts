@@ -318,6 +318,21 @@ describe('CLI argument parsing', () => {
   });
 
   describe('--ci flag', () => {
+    test('accepts --region for a flat program command', async () => {
+      await runCLI([
+        'mcp-analytics',
+        '--ci',
+        '--region',
+        'us',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
     test('defaults to false when not specified', async () => {
       await runCLI([]);
 
