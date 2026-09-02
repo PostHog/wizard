@@ -6,7 +6,7 @@ import { getContentBlocks } from './content/index.js';
 
 export const revenueAnalyticsConfig: ProgramConfig = {
   command: 'revenue-analytics',
-  description: 'Set up PostHog revenue analytics',
+  description: 'Set up PostHog for Revenue Analytics',
   id: 'revenue-analytics-setup',
   skillId: 'revenue-analytics-setup',
   steps: REVENUE_ANALYTICS_PROGRAM,

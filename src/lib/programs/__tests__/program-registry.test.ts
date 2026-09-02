@@ -63,23 +63,21 @@ describe('getCommandPath', () => {
   });
 });
 
-// The programs the intro can hand off to in-session. A family parent isn't one
-// of them — typing `wizard audit` opens a picker rather than running anything,
-// so there's nothing to hand off to. Its leaves are still fair game.
 describe('getLaunchablePrograms', () => {
-  const ids = () => getLaunchablePrograms().map((config) => config.id);
-
-  it('skips a family parent', () => {
-    expect(ids()).not.toContain('audit');
-  });
-
-  it('keeps the leaves under that family', () => {
-    expect(ids()).toContain('web-analytics-doctor');
-  });
-
-  it('keeps the flat programs', () => {
-    expect(ids()).toContain('revenue-analytics-setup');
-    expect(ids()).toContain('metrics');
+  // The list is curated, so an id that stops matching drops its row in silence.
+  it("offers the intro's programs, in order, all resolving", () => {
+    expect(getLaunchablePrograms().map((config) => config.id)).toEqual([
+      'self-driving',
+      'error-tracking-upload-source-maps',
+      'warehouse-source',
+      'audit',
+      'posthog-doctor',
+      'mcp-analytics',
+      'replay-vision',
+      'ai-observability',
+      'metrics',
+      'revenue-analytics-setup',
+    ]);
   });
 
   // A row wider than the terminal stops the whole block from centering.
@@ -93,29 +91,6 @@ describe('getLaunchablePrograms', () => {
       .map((config) => `${config.id} (${config.description.length})`);
 
     expect(tooLong).toEqual([]);
-  });
-
-  // The intro copy promises these three by name, directly above the list.
-  it('leads with the three the intro copy names', () => {
-    expect(ids().slice(0, 3)).toEqual([
-      'web-analytics-doctor',
-      'error-tracking-upload-source-maps',
-      'self-driving',
-    ]);
-  });
-
-  // Derived from who claims whom as a parent, so the next family drops out on
-  // its own instead of waiting for someone to remember this list.
-  it('drops nothing but parents', () => {
-    const parents = new Set(
-      getSubcommandPrograms().map((config) => config.parentCommand),
-    );
-    const dropped = getSubcommandPrograms()
-      .filter((config) => !ids().includes(config.id))
-      .map((config) => config.command);
-
-    expect(dropped).not.toEqual([]);
-    expect(dropped.every((command) => parents.has(command))).toBe(true);
   });
 });
 

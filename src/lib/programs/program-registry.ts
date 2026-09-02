@@ -143,25 +143,28 @@ export function getCommandPath(config: SubcommandProgram): string {
     : config.command;
 }
 
-/** Leads the intro's list, in this order, because the intro copy names them. */
-const FEATURED_LAUNCHABLE_PROGRAMS = [
-  'web-analytics-doctor',
-  'error-tracking-upload-source-maps',
+/**
+ * What the intro offers a project that already has PostHog, in the order it
+ * lists them. Curated, not derived: a program earns a row by being worth a
+ * re-run user's time, which no field on the config can tell us.
+ */
+const INTRO_PROGRAMS = [
   'self-driving',
+  'error-tracking-upload-source-maps',
+  'warehouse-source',
+  'audit',
+  'posthog-doctor',
+  'mcp-analytics',
+  'replay-vision',
+  'ai-observability',
+  'metrics',
+  'revenue-analytics-setup',
 ];
 
-/** Programs the intro can launch, Family parents open a picker instead. */
+/** The programs the intro can hand off to, in the order it lists them. */
 export function getLaunchablePrograms(): SubcommandProgram[] {
-  const all = getSubcommandPrograms();
-  const parents = new Set(all.map((config) => config.parentCommand));
-  const launchable = all.filter((config) => !parents.has(config.command));
-  const featured = (config: SubcommandProgram) =>
-    FEATURED_LAUNCHABLE_PROGRAMS.includes(config.id);
-
-  return [
-    ...FEATURED_LAUNCHABLE_PROGRAMS.map((id) =>
-      launchable.find((config) => config.id === id),
-    ).filter((config) => config != null),
-    ...launchable.filter((config) => !featured(config)),
-  ];
+  const byId = new Map(getSubcommandPrograms().map((c) => [c.id, c]));
+  return INTRO_PROGRAMS.map((id) => byId.get(id)).filter(
+    (config): config is SubcommandProgram => config != null,
+  );
 }

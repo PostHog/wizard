@@ -42,7 +42,7 @@ function buildPrompt(session: WizardSession): string {
 
 export const warehouseSourceConfig: ProgramConfig = {
   command: 'warehouse',
-  description: 'Detect and connect a data warehouse source',
+  description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
   steps: WAREHOUSE_SOURCE_PROGRAM,

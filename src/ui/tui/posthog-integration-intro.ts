@@ -10,7 +10,7 @@ export const DETECTED_HEADLINE = [
   'It looks like PostHog is already installed. The Wizard has many tricks ' +
     'up its sleeve, like auditing, uploading source maps, or making your ' +
     'product self-drive.',
-  'You can still rerun the command, but it might overwrite some of your work.',
+  'You can still rerun the installation, but it might overwrite some of your work.',
 ];
 
 export function introHeadline(posthogSdkDetected: boolean): string[] {
