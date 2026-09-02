@@ -19,6 +19,12 @@ export { SETUP_REPORT_FILE };
 
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
+/**
+ * No CLI word of its own since the audit family took over: `wizard audit
+ * events` is the live path, and it resolves to the context-mill `audit-events`
+ * skill (whose id AuditRunScreen keys its slides on), not to this config.
+ * Registered so its id stays resolvable; nothing dispatches to it today.
+ */
 export const eventsAuditConfig: ProgramConfig = {
   description: 'Audit PostHog event tracking in this project',
   id: 'events-audit',

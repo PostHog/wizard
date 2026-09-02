@@ -138,27 +138,11 @@ export function runWizard(
 
       activeTui.store.session = session;
 
-      const taskStreamEnabled = !session.noTelemetry;
-      taskStream = new TaskStreamPush({
-        store: activeTui.store,
-        programId: config.id,
-        destinations: [
-          new PostHogDestination({
-            getCredentials: () => activeTui.store.session.credentials,
-            onError: (err) => logToFile('[task-stream-push]', err.message),
-          }),
-        ],
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
-        enabled: taskStreamEnabled,
-      });
-      const activeStream = taskStream;
-      activeStream.attach();
-
       // Flush a terminal-phase push on Ctrl-C so the web app sees the
       // run ended in error rather than hanging on the last "running"
-      // snapshot.
+      // snapshot. Registered before the stream exists: Ctrl-C on the intro
+      // must still restore the terminal and run the cleanups, and there is
+      // no run to report yet.
       let signalled = false;
       onSignal = (): void => {
         if (signalled || exitInProgress) return;
@@ -170,19 +154,25 @@ export function runWizard(
         if (activeTui.store.session.runPhase === RunPhase.Running) {
           activeTui.store.setRunPhase(RunPhase.Error);
         }
-        void activeStream
+        const teardown = (): void => {
+          try {
+            activeTui.unmount();
+          } catch {
+            // terminal may already be torn down
+          }
+          process.exit(130);
+        };
+        const stream = taskStream;
+        if (!stream) {
+          teardown();
+          return;
+        }
+        void stream
           .shutdown(2000)
           .catch((e) =>
             logToFile('[run-wizard] task stream shutdown error on signal:', e),
           )
-          .finally(() => {
-            try {
-              activeTui.unmount();
-            } catch {
-              // terminal may already be torn down
-            }
-            process.exit(130);
-          });
+          .finally(teardown);
       };
       process.on('SIGINT', onSignal);
       process.on('SIGTERM', onSignal);
@@ -196,6 +186,30 @@ export function runWizard(
         if (active === config.id) break;
         config = getProgramConfig(active);
       }
+
+      // After the switch loop, not before: the stream bakes its program id,
+      // session id, and event-plan path in at construction, so a stream built
+      // for the launch program would report the whole run under a program the
+      // user left on the intro screen. Nothing before this point produces a
+      // task to push.
+      const taskStreamEnabled = !session.noTelemetry;
+      const activeStream = new TaskStreamPush({
+        store: activeTui.store,
+        programId: config.id,
+        destinations: [
+          new PostHogDestination({
+            getCredentials: () => activeTui.store.session.credentials,
+            onError: (err) => logToFile('[task-stream-push]', err.message),
+          }),
+        ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
+        enabled: taskStreamEnabled,
+      });
+      taskStream = activeStream;
+      activeStream.attach();
+
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
 
