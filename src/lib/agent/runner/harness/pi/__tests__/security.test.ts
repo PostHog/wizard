@@ -2,6 +2,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
+import { registerWizardDocPaths } from '@lib/doc-paths-registry';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
 import {
   evaluateToolCall,
   createSecurityExtension,
@@ -21,6 +23,11 @@ vi.mock('@utils/analytics', () => ({
 // load under the CJS test runner). Default: scan matches nothing; tests
 // override per-case with mockResolvedValueOnce.
 const mockedScan = vi.mocked(scan);
+
+// In production the program registry populates the doc-paths registry as a
+// module side effect. This file tests the extension in isolation, so
+// register the one doc path the suppression test writes to.
+registerWizardDocPaths([EVENT_PLAN_FILE]);
 
 const piiMatch: ScanMatch = {
   rule: 'posthog_pii_in_capture_call',

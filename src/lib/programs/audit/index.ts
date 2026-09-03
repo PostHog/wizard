@@ -97,6 +97,7 @@ export const auditConfig: ProgramConfig = {
   ...baseConfig,
   steps: auditSteps,
   run: auditRun,
+  docPaths: [AUDIT_REPORT_FILE],
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   // The experimental headless flag — declared on `audit` (and basic

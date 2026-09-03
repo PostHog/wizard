@@ -9,6 +9,8 @@ import {
   recordExternalScan,
   resetScanReport,
 } from '@lib/yara-hooks';
+import { registerWizardDocPaths } from '@lib/doc-paths-registry';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
 import { scan, triageMatches } from '@posthog/warlock';
 import fs from 'fs';
 import fg from 'fast-glob';
@@ -38,6 +40,11 @@ const mockScan = scan as Mock;
 const mockTriage = triageMatches as Mock;
 
 const dummySignal = new AbortController().signal;
+
+// In production the program registry populates the doc-paths registry as a
+// module side effect. This file tests the hooks in isolation, so register
+// the one doc path the suppression tests write to.
+registerWizardDocPaths([EVENT_PLAN_FILE]);
 
 // A provider that, when passed, routes matches through triageMatches.
 const dummyProvider = () => Promise.resolve('[]');
