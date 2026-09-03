@@ -13,12 +13,26 @@ import {
   VALID_MODELS,
 } from '@lib/agent/runner/switchboard/models';
 import {
+  isNotNeededReason,
+  NotNeededReason,
   SkipReason,
   TaskStatus,
   type QueueStore,
   type QueuedTask,
   type TaskHandoff,
 } from './queue';
+
+/**
+ * The `complete_task` `notNeededReason` description, shared by both harnesses'
+ * schemas so the ask cannot drift between them.
+ *
+ * Named per value rather than left to prose: the distinction the flow needs is
+ * "the user did not hand over a credential" against "there was nothing here to
+ * connect", and an agent asked for that in free text writes it into the handoff
+ * — where {@link applyComplete} deliberately cannot forward it, because handoff
+ * prose on this step reaches live database passwords.
+ */
+export const NOT_NEEDED_REASON_ASK = `Required when status is 'not needed': which of these ended the task. '${NotNeededReason.NotApplicable}' — the step genuinely does not apply to this project. '${NotNeededReason.UserDeclined}' — you asked the user and they declined, cancelled, or never answered. '${NotNeededReason.Blocked}' — something outside your and the user's control stopped you (a credential the project does not have, a plan or permission it lacks, an endpoint you could not reach). Ignored for any other status.`;
 
 /**
  * The `enqueue_task` `model` description, shared by both harnesses' schemas.
@@ -288,13 +302,16 @@ export function applyEnqueue(
 
 export type CompleteResult = { ok: true } | { ok: false; message: string };
 
+export type CompleteArgs = {
+  status: 'done' | 'failed' | 'not needed';
+  handoff: TaskHandoff;
+  remark?: string;
+  notNeededReason?: NotNeededReason;
+};
+
 export function applyComplete(
   ctx: OrchestratorToolsContext,
-  args: {
-    status: 'done' | 'failed' | 'not needed';
-    handoff: TaskHandoff;
-    remark?: string;
-  },
+  args: CompleteArgs,
 ): CompleteResult {
   const id = ctx.currentTaskId;
   if (!id) {
@@ -318,9 +335,17 @@ export function applyComplete(
   } else if (args.status === TaskStatus.Skipped) {
     // The agent's own words stay in the handoff and out of telemetry. This flow
     // reaches live database and API credentials, and the repo has no redaction
-    // pass for handoff prose, so the event carries the reason and the task type
-    // only — enough to separate an agent no-op from a user decline.
-    ctx.store.skip(id, SkipReason.AgentNotNeeded, args.handoff);
+    // pass for handoff prose, so the event carries the task type, the reason,
+    // and the closed set of `notNeededReason` values — enough to separate an
+    // agent no-op from a user decline from a blocked step, with no free text.
+    ctx.store.skip(
+      id,
+      SkipReason.AgentNotNeeded,
+      args.handoff,
+      isNotNeededReason(args.notNeededReason)
+        ? args.notNeededReason
+        : undefined,
+    );
   } else {
     ctx.store.complete(id, args.handoff);
   }
@@ -408,6 +433,29 @@ const HANDOFF_SHAPE = {
 /** Exported so the parity test can compare both harnesses' field sets. */
 export const HANDOFF_SHAPE_KEYS: readonly string[] = Object.keys(HANDOFF_SHAPE);
 
+/**
+ * `complete_task`'s own arguments, held level with the pi mirror by the same
+ * parity test that guards the handoff — a top-level field can go missing on the
+ * harness that runs just as easily as a nested one.
+ */
+const COMPLETE_SHAPE = {
+  status: z.enum(['done', 'failed', 'not needed']),
+  handoff: z.object(HANDOFF_SHAPE),
+  remark: z.string().optional().describe(REMARK_ASK),
+  notNeededReason: z
+    .enum([
+      NotNeededReason.NotApplicable,
+      NotNeededReason.UserDeclined,
+      NotNeededReason.Blocked,
+    ])
+    .optional()
+    .describe(NOT_NEEDED_REASON_ASK),
+};
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const COMPLETE_SHAPE_KEYS: readonly string[] =
+  Object.keys(COMPLETE_SHAPE);
+
 type SdkTool = (
   name: string,
   description: string,
@@ -465,16 +513,8 @@ export function buildOrchestratorTools(
   const completeTask = tool(
     'complete_task',
     "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
-    {
-      status: z.enum(['done', 'failed', 'not needed']),
-      handoff: z.object(HANDOFF_SHAPE),
-      remark: z.string().optional().describe(REMARK_ASK),
-    },
-    ((args: {
-      status: 'done' | 'failed' | 'not needed';
-      handoff: TaskHandoff;
-      remark?: string;
-    }) => {
+    COMPLETE_SHAPE,
+    ((args: CompleteArgs) => {
       const res = applyComplete(ctx, args);
       if (!res.ok) return textResult(res.message, true);
       return textResult('ok');

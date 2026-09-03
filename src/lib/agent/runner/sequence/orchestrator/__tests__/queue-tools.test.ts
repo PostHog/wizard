@@ -3,7 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
-import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
+import {
+  NotNeededReason,
+  QueueStore,
+  SkipReason,
+} from '@lib/agent/runner/sequence/orchestrator/queue';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
@@ -14,9 +18,12 @@ import {
   applyReadHandoffs,
   buildOrchestratorTools,
   checkEnqueueGuards,
+  COMPLETE_SHAPE_KEYS,
   ENQUEUE_MODEL_DESCRIPTION,
+  NOT_NEEDED_REASON_ASK,
   type OrchestratorToolsContext,
 } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
+import { PI_COMPLETE_PARAM_KEYS } from '@lib/agent/runner/harness/pi/orchestrator-tools';
 import {
   isValidModel,
   VALID_MODELS,
@@ -227,6 +234,76 @@ describe('apply functions', () => {
     const handoffs = applyReadHandoffs(ctx, {});
     expect(handoffs).toHaveLength(1);
     expect(handoffs[0].did).toBe('installed');
+  });
+});
+
+/**
+ * `complete_task`'s `notNeededReason`. The handoff carries the agent's prose
+ * and this carries the machine-readable outcome, because the handoff on this
+ * step reaches live credentials and never reaches telemetry.
+ */
+describe('complete_task not-needed reasons', () => {
+  let dir: string;
+  let store: QueueStore;
+  let ctx: OrchestratorToolsContext;
+  const HANDOFF = { goals: 'g', did: 'd', forNextAgent: 'n' };
+
+  beforeEach(() => {
+    dir = tmpDir();
+    store = new QueueStore(dir, 'run-1');
+    ctx = { store, validTypes: VALID };
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  function skipWith(notNeededReason?: unknown) {
+    const t = store.enqueue({ type: 'install' });
+    store.start(t.id);
+    ctx.currentTaskId = t.id;
+    applyComplete(ctx, {
+      status: 'not needed',
+      handoff: HANDOFF,
+      notNeededReason,
+    } as never);
+    return store.get(t.id);
+  }
+
+  it.each([
+    NotNeededReason.NotApplicable,
+    NotNeededReason.UserDeclined,
+    NotNeededReason.Blocked,
+  ])('forwards %s onto the task', (reason) => {
+    const t = skipWith(reason);
+    expect(t?.skipReason).toBe(SkipReason.AgentNotNeeded);
+    expect(t?.notNeededReason).toBe(reason);
+  });
+
+  // The pi harness hands tool arguments over unvalidated, and an agent asked
+  // for a reason readily writes a sentence. A sentence about this step can name
+  // a database or a key, so it must not become an analytics dimension.
+  it('drops a value that is not one of the declared reasons', () => {
+    const t = skipWith('the user cancelled the credential prompt');
+    expect(t?.skipReason).toBe(SkipReason.AgentNotNeeded);
+    expect(t?.notNeededReason).toBeUndefined();
+  });
+
+  it('skips as before when the agent declares no reason', () => {
+    const t = skipWith(undefined);
+    expect(t?.skipReason).toBe(SkipReason.AgentNotNeeded);
+    expect(t?.notNeededReason).toBeUndefined();
+  });
+
+  it('asks for every reason the type declares', () => {
+    for (const reason of Object.values(NotNeededReason)) {
+      expect(NOT_NEEDED_REASON_ASK).toContain(reason);
+    }
+  });
+
+  it('offers the field on both harnesses, and pi is the one that runs', () => {
+    expect(PI_COMPLETE_PARAM_KEYS).toContain('notNeededReason');
+    expect(PI_COMPLETE_PARAM_KEYS.slice().sort()).toEqual(
+      COMPLETE_SHAPE_KEYS.slice().sort(),
+    );
   });
 });
 
