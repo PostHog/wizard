@@ -25,7 +25,7 @@ import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
 import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
-import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
+import { GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {
@@ -145,7 +145,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   const handleDownloadAndExit = async () => {
     if (downloading) return;
     setDownloading(true);
-    const menu = await fetchSkillMenu(REMOTE_SKILLS_BASE_URL);
+    const menu = await fetchSkillMenu(GITHUB_SKILLS_BASE_URL);
     if (menu) {
       const prefix = `integration-${integration}`;
       const skills = (menu.categories['integration'] ?? []).filter((s) =>

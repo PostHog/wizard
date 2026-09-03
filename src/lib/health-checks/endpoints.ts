@@ -1,4 +1,4 @@
-import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
+import { GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
@@ -144,4 +144,4 @@ export const checkMcpHealth = (): Promise<BaseHealthResult> =>
   );
 
 export const checkGithubReleasesHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth(`${REMOTE_SKILLS_BASE_URL}/skill-menu.json`);
+  fetchEndpointHealth(`${GITHUB_SKILLS_BASE_URL}/skill-menu.json`);

@@ -14,7 +14,7 @@ import {
 } from '@lib/local-dev';
 import {
   getSkillsBaseUrl,
-  REMOTE_SKILLS_BASE_URL,
+  GITHUB_SKILLS_BASE_URL,
   LOCAL_SKILLS_BASE_URL,
 } from '@lib/constants';
 
@@ -119,7 +119,7 @@ describe('getSkillsBaseUrl', () => {
   // argument precisely so no caller can hand it the MCP flag.
   it('follows the context-mill flag, not the MCP flag', () => {
     initLocalDev({ localMcp: true });
-    expect(getSkillsBaseUrl()).toBe(REMOTE_SKILLS_BASE_URL);
+    expect(getSkillsBaseUrl()).toBe(GITHUB_SKILLS_BASE_URL);
 
     initLocalDev({ localContextMill: true });
     expect(getSkillsBaseUrl()).toBe(LOCAL_SKILLS_BASE_URL);
@@ -132,11 +132,11 @@ describe('getSkillsBaseUrl', () => {
 
   it('honours --local-dev --no-local-context-mill', () => {
     initLocalDev({ localDev: true, localContextMill: false });
-    expect(getSkillsBaseUrl()).toBe(REMOTE_SKILLS_BASE_URL);
+    expect(getSkillsBaseUrl()).toBe(GITHUB_SKILLS_BASE_URL);
   });
 
   it('defaults to production when no CLI parse ran', () => {
-    expect(getSkillsBaseUrl()).toBe(REMOTE_SKILLS_BASE_URL);
+    expect(getSkillsBaseUrl()).toBe(GITHUB_SKILLS_BASE_URL);
   });
 
   it('serves local skills from the context-mill dev server', () => {
