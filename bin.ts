@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
+import { Agent, setGlobalDispatcher } from 'undici';
 import { ErrorCodes } from './src/lib/errors/codes.js';
 import { emitWizardError } from './src/lib/errors/emit.js';
 
@@ -8,6 +9,19 @@ import { emitWizardError } from './src/lib/errors/emit.js';
 // runtime and a cryptic dependency crash (e.g. undici's markAsUncloneable
 // TypeError on Node < 22.10).
 const NODE_VERSION_RANGE = '>=22.22.0';
+
+/*
+ * TODO(#1198): remove when fetch over HTTP/2 is safe on Node 26. Remove when all
+ * of these are true:
+ *  - nodejs/node no longer creates an orphan ClientHttp2Stream when a client
+ *    session gets HEADERS for a stream id it already reset. Repro: abort a fetch
+ *    before its response headers, then idle 4s on Node 26. Fixed when the
+ *    process survives.
+ *  - modelcontextprotocol/typescript-sdk#2526 is closed.
+ *  - pi-coding-agent's CLI drops `allowH2: false` from its http-dispatcher.
+ * Same workaround as pi's CLI and typescript-sdk#2526: HTTP/1.1 only.
+ */
+setGlobalDispatcher(new Agent({ allowH2: false }));
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
