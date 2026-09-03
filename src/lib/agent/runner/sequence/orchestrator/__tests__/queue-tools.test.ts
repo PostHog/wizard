@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import {
   NotNeededReason,
@@ -15,12 +16,18 @@ import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
+  buildOrchestratorTools,
   checkEnqueueGuards,
   COMPLETE_SHAPE_KEYS,
+  ENQUEUE_MODEL_DESCRIPTION,
   NOT_NEEDED_REASON_ASK,
   type OrchestratorToolsContext,
 } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
 import { PI_COMPLETE_PARAM_KEYS } from '@lib/agent/runner/harness/pi/orchestrator-tools';
+import {
+  isValidModel,
+  VALID_MODELS,
+} from '@lib/agent/runner/switchboard/models';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'queue-tools-test-'));
@@ -297,5 +304,37 @@ describe('complete_task not-needed reasons', () => {
     expect(PI_COMPLETE_PARAM_KEYS.slice().sort()).toEqual(
       COMPLETE_SHAPE_KEYS.slice().sort(),
     );
+  });
+});
+
+/**
+ * The `invalid-model` guard rejects any model outside the allow-list, so an
+ * agent that cannot see the list has to trip the guard to learn it. The
+ * description is the only place it can read the list before it picks.
+ */
+describe('enqueue_task model description', () => {
+  it('lists exactly the models the guard accepts', () => {
+    const listed = ENQUEUE_MODEL_DESCRIPTION.split('one of: ')[1]
+      .replace(/\.$/, '')
+      .split(', ');
+    expect(listed.every(isValidModel)).toBe(true);
+    expect(listed.sort()).toEqual([...VALID_MODELS].sort());
+  });
+
+  it('is carried by the model field of the MCP schema', () => {
+    const dir = tmpDir();
+    try {
+      const schemas: Record<string, z.ZodTypeAny>[] = [];
+      buildOrchestratorTools(
+        (_name, _description, schema) => {
+          schemas.push(schema);
+          return null;
+        },
+        { store: new QueueStore(dir, 'run-1'), validTypes: VALID },
+      );
+      expect(schemas[0].model.description).toBe(ENQUEUE_MODEL_DESCRIPTION);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
