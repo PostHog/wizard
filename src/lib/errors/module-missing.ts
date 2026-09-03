@@ -19,10 +19,20 @@ export function isModuleNotFoundError(err: unknown): boolean {
 /**
  * The exact download to delete, taken from the path Node names in the failure
  * (`.../_npx/<hash>/node_modules/...`). Falls back to the whole npx cache when
- * the message carries no such path.
+ * the message carries no absolute path of that shape.
  */
 function npxCacheDir(message: string): string {
-  const match = /([^\s'"]*[/\\]_npx[/\\][^/\\'"]+)/.exec(message);
+  // The part before `_npx` has to tolerate spaces — a Windows profile is
+  // routinely `C:\Users\John Smith` — so it is fenced by the quotes Node puts
+  // around a specifier rather than by whitespace, and it has to start at a real
+  // root (`/`, a drive, or a UNC share). Half a path is worse than none: a
+  // relative `rm -rf` matches nothing and exits 0, so the user believes the
+  // cache is clear and hits the same failure. No match instead sends them to
+  // the whole-cache fallback below, which does unstick them.
+  const match =
+    /(?:^|[\s'"])((?:[A-Za-z]:[/\\]|\\\\|\/)[^'"]*?[/\\]_npx[/\\][^\s/\\'"]+)/.exec(
+      message,
+    );
   if (match) return match[1];
   return process.platform === 'win32'
     ? path.join(

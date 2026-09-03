@@ -48,6 +48,37 @@ describe('formatModuleMissingMessage', () => {
     expect(message).toContain('rm -rf "/Users/a/.npm/_npx/9f2"');
   });
 
+  // A Windows profile is routinely `C:\Users\John Smith`, and a POSIX home can
+  // hold a space too. Capturing from the last space left a relative path, and
+  // `rm -rf` on a relative path matches nothing and exits 0 — the user believes
+  // the cache is clear, reruns, and hits the identical failure.
+  it('keeps a POSIX cache path that contains a space whole', () => {
+    expect(
+      formatModuleMissingMessage(
+        "Cannot find package 'chalk' imported from /Users/First Last/.npm/_npx/9f2abc1234567890/node_modules/pi/dist/index.js",
+      ),
+    ).toContain('rm -rf "/Users/First Last/.npm/_npx/9f2abc1234567890"');
+  });
+
+  it('keeps a Windows cache path that contains a space whole', () => {
+    expect(
+      formatModuleMissingMessage(
+        "Cannot find package 'chalk' imported from C:\\Users\\John Smith\\AppData\\Local\\npm-cache\\_npx\\abc1234567890def\\node_modules\\x.js",
+      ),
+    ).toContain(
+      'rm -rf "C:\\Users\\John Smith\\AppData\\Local\\npm-cache\\_npx\\abc1234567890def"',
+    );
+  });
+
+  // Half a path is worse than none, so a fragment with no root is not printed.
+  it('falls back rather than naming a path it cannot root', () => {
+    const message = formatModuleMissingMessage(
+      "Cannot find module 'foo/_npx/9f2/node_modules/x'",
+    );
+    expect(message).not.toContain('rm -rf "foo/_npx/9f2"');
+    expect(message).toMatch(/rm -rf "\/[^"]*_npx"/);
+  });
+
   // Every wizard command reaches this message, so it must not name one.
   it('asks for the same command again rather than the default flow', () => {
     const message = formatModuleMissingMessage('Cannot find module x');
