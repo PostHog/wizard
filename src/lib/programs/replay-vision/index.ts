@@ -68,6 +68,19 @@ async function abortUnsupportedPlatform(
   });
 }
 
+async function abortNoFrameworkDetected(): Promise<void> {
+  await wizardAbort({
+    code: ErrorCodes.DetectNoFramework,
+    message:
+      "Replay vision couldn't detect a framework here, so it has nothing " +
+      'to scope its scanners to.\n\n' +
+      "Make sure you're running this from your app's root directory " +
+      '(where its package.json or framework-equivalent lives), not an ' +
+      'empty or unrelated folder. See what replay supports at:\n' +
+      '  https://posthog.com/docs/session-replay',
+  });
+}
+
 /**
  * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
  * Kept in sync with the stop conditions in the skill's `description.md`
@@ -103,14 +116,12 @@ const DETECT_STEP: ProgramStep = {
   onReady: async (ctx: ProgramReadyContext) => {
     const integration = await detectFramework(ctx.session.installDir);
     if (!integration) {
-      // Mirrors ciPreRun below: with nothing to key off of, the orchestrator's
-      // preflight can't resolve any task's mini-skill variants and would
-      // otherwise abort later with a misleading "failed to download" error.
-      // Fail here instead, with a message that names the actual problem.
-      await wizardAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      // Same early-abort ciPreRun does below: with nothing to key off of,
+      // the orchestrator's preflight can't resolve any task's mini-skill
+      // variants and would otherwise abort later with a misleading "failed
+      // to download" error. Fail here instead, with a message that names
+      // the actual problem and what to do about it.
+      await abortNoFrameworkDetected();
       return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
