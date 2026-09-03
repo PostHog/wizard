@@ -102,7 +102,18 @@ const DETECT_STEP: ProgramStep = {
   // be the stale pre-copy object (see the warning in detect.ts).
   onReady: async (ctx: ProgramReadyContext) => {
     const integration = await detectFramework(ctx.session.installDir);
-    if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
+    if (!integration) {
+      // Mirrors ciPreRun below: with nothing to key off of, the orchestrator's
+      // preflight can't resolve any task's mini-skill variants and would
+      // otherwise abort later with a misleading "failed to download" error.
+      // Fail here instead, with a message that names the actual problem.
+      await wizardAbort({
+        code: ErrorCodes.DetectNoFramework,
+        message: 'Could not auto-detect your framework for this project.',
+      });
+      return;
+    }
+    if (!REPLAY_VISION_SUPPORTED.has(integration)) {
       await abortUnsupportedPlatform(integration);
       return;
     }
