@@ -69,6 +69,19 @@ import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
+import { analytics } from './src/utils/analytics';
+import { logToFile } from './src/utils/debug';
+import { installWizardUncaughtExceptionHandler } from './src/utils/uncaught-exception';
+
+// posthog-node installs its autocapture listener while analytics is imported.
+// Register after it so the SDK records unexpected errors first, while the
+// wizard decides whether this one known Node transport error is actually fatal.
+installWizardUncaughtExceptionHandler({
+  runtime: process,
+  flush: (timeoutMs) => analytics.flush(timeoutMs),
+  log: logToFile,
+  print: (error) => process.stderr.write(`${error.stack ?? String(error)}\n`),
+});
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and

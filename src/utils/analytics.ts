@@ -308,8 +308,8 @@ export class Analytics {
    * starts — `shutdown()` would inflate the run count with a "finished" event
    * for a parse error that never actually ran the wizard.
    */
-  async flush(): Promise<void> {
-    await this.client.shutdown();
+  async flush(timeoutMs?: number): Promise<void> {
+    await this.client.shutdown(timeoutMs);
   }
 
   /**

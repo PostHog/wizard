@@ -557,6 +557,12 @@ describe('Analytics', () => {
   });
 
   describe('shutdown', () => {
+    it('passes a flush deadline through to the PostHog client', async () => {
+      await analytics.flush(2_000);
+
+      expect(mockPostHogInstance.shutdown).toHaveBeenCalledWith(2_000);
+    });
+
     it('emits the terminal event once — the first status wins over the interrupt fallback', async () => {
       analytics.setTag('program_id', 'warehouse-source');
 
