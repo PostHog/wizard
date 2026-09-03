@@ -43,6 +43,8 @@ import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
+import { formatModuleMissingMessage } from '@lib/errors/module-missing';
+import { AgentErrorType } from '../../../agent-interface';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult, ProgramRun } from '../../shared/types';
 import {
@@ -760,6 +762,10 @@ export async function runOrchestrator(
   // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
+  // A half-written npx download breaks the same import in every agent, so the
+  // first path that reports it — seed or task — stands for the whole run. The
+  // executor discards task results, so the value is collected here.
+  let moduleMissing: string | undefined;
   const seedPick = resolveHarness(switchboardCtx, 'seed');
   const seedHarness = requireTaskHarness(seedPick);
   const seedModel = promptModelFor(seedPrompt, seedPick.harness);
@@ -785,6 +791,9 @@ export async function runOrchestrator(
         seedResult.message ?? ''
       }`,
     );
+    if (seedResult.error === AgentErrorType.MODULE_MISSING) {
+      moduleMissing ??= seedResult.message ?? '';
+    }
   }
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
@@ -998,7 +1007,7 @@ export async function runOrchestrator(
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
-      await taskHarness.runTask({
+      const taskResult = await taskHarness.runTask({
         session,
         programConfig,
         boot,
@@ -1020,6 +1029,9 @@ export async function runOrchestrator(
           harness: taskPick.harness,
         },
       });
+      if (taskResult.error === AgentErrorType.MODULE_MISSING) {
+        moduleMissing ??= taskResult.message ?? '';
+      }
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1117,6 +1129,35 @@ export async function runOrchestrator(
   // A failed optional task is exempt: reported per-task, never run-failing.
   const verdict = drainVerdict(store.list());
   const blocked = verdict.blocked;
+
+  // A run that failed because a wizard dependency never loaded gets the cache
+  // repair command instead of the generic "report this to us" text — no retry
+  // heals a corrupt extraction. A run that finished anyway keeps its result.
+  if (
+    moduleMissing !== undefined &&
+    (verdict.requiredFailedTypes.length > 0 ||
+      blocked > 0 ||
+      summary.total === 0)
+  ) {
+    analytics.wizardCapture('agent module missing', {
+      integration: programConfig.id,
+      error_type: AgentErrorType.MODULE_MISSING,
+      error_message: moduleMissing,
+    });
+    await wizardAbort({
+      code: ErrorCodes.AgentModuleMissing,
+      message: formatModuleMissingMessage(moduleMissing),
+      error: new WizardError(
+        `Dependency missing from the npx download: ${moduleMissing}`,
+        {
+          integration: programConfig.id,
+          error_type: AgentErrorType.MODULE_MISSING,
+        },
+        ErrorCodes.AgentModuleMissing,
+      ),
+    });
+  }
+
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
     const failedTypes = verdict.requiredFailedTypes.join(', ');
     const whatFailed = failedTypes
