@@ -160,6 +160,9 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     model: SONNET_5_MODEL,
   },
   slack: DEFAULT_BINDING,
+  // Fixed skillId, single variant — no self-selection reasoning needed, so
+  // the plain default binding (unlike ai-observability).
+  shakespeare: DEFAULT_BINDING,
 };
 
 // ── Unified resolver ────────────────────────────────────────────────────

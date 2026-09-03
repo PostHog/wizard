@@ -58,6 +58,7 @@ import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
 import { replayVisionCommand } from './src/commands/replay-vision';
 import { aiObservabilityCommand } from './src/commands/ai-observability';
 import { metricsCommand } from './src/commands/metrics';
+import { shakespeareCommand } from './src/commands/shakespeare';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
@@ -91,6 +92,7 @@ Wizard.use(basicIntegrationCommand)
   .use(replayVisionCommand)
   .use(aiObservabilityCommand)
   .use(metricsCommand)
+  .use(shakespeareCommand)
   .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)
