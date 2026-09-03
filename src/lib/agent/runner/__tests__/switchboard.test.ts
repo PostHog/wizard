@@ -61,6 +61,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'ai-observability') continue; // pinned below
+      if (program === 'feature-flags') continue; // pinned below
       if (program === 'error-tracking-upload-source-maps') continue; // pinned below
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
@@ -72,6 +73,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
     {
       name: 'binds ai-observability to anthropic + sonnet 5',
       ctx: { program: 'ai-observability', flags: {} },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.anthropic,
+        model: SONNET_5_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds feature-flags to anthropic + sonnet 5',
+      ctx: { program: 'feature-flags', flags: {} },
       binding: {
         sequence: Sequence.linear,
         harness: Harness.anthropic,
@@ -223,7 +235,7 @@ describe('switchboard composed clamp', () => {
       expect(resolveBinding(ctx)).toEqual(
         program === 'posthog-integration'
           ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
-          : program === 'ai-observability'
+          : program === 'ai-observability' || program === 'feature-flags'
           ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
           : program === 'error-tracking-upload-source-maps'
           ? {

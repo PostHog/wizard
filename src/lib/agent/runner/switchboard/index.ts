@@ -160,6 +160,13 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     model: SONNET_5_MODEL,
   },
   slack: DEFAULT_BINDING,
+  // Same shape as ai-observability: no pre-installed skill, the agent
+  // self-selects the language/framework variant via load_skill_menu.
+  'feature-flags': {
+    sequence: Sequence.linear,
+    harness: Harness.anthropic,
+    model: SONNET_5_MODEL,
+  },
 };
 
 // ── Unified resolver ────────────────────────────────────────────────────

@@ -273,7 +273,10 @@ describe('isolation — everything on at once', () => {
           model: GPT5_6_TERRA_MODEL,
           thinkingLevel: 'high',
         });
-      } else if (program === 'ai-observability') {
+      } else if (
+        program === 'ai-observability' ||
+        program === 'feature-flags'
+      ) {
         expect(resolved).toEqual({
           ...LINEAR_ANTHROPIC_DEFAULT,
           model: SONNET_5_MODEL,
