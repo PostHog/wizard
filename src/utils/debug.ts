@@ -1,9 +1,15 @@
-import { appendFileSync, mkdirSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { inspect } from 'node:util';
 import { getUI } from '@ui';
 import { IS_DEV, runtimeEnv } from '@env';
 import { WIZARD_LOG_FILE } from './paths';
+
+/** Soft ceiling for a single `logToFile` write (UTF-8 bytes). */
+export const MAX_LOG_LINE_BYTES = 8 * 1024;
+
+/** Soft ceiling for the whole wizard log file (UTF-8 bytes on disk). */
+export const MAX_LOG_FILE_BYTES = 10 * 1024 * 1024;
 
 // Dev builds may redirect the log so concurrent runs don't interleave one file.
 let logFilePath =
@@ -27,6 +33,33 @@ function renderLine(args: readonly unknown[]): string {
   return args.map(stringify).join(' ');
 }
 
+/**
+ * Truncate `text` so its UTF-8 byte length is at most `maxBytes`.
+ * Exported for unit tests.
+ */
+export function capLogLine(
+  text: string,
+  maxBytes: number = MAX_LOG_LINE_BYTES,
+): string {
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) return text;
+  const marker = `… [truncated, ${Buffer.byteLength(
+    text,
+    'utf8',
+  )} bytes total]`;
+  const markerBytes = Buffer.byteLength(marker, 'utf8');
+  if (markerBytes >= maxBytes) {
+    // Pathological tiny cap — return a hard slice of the marker.
+    return Buffer.from(marker, 'utf8').subarray(0, maxBytes).toString('utf8');
+  }
+  const budget = maxBytes - markerBytes;
+  // Walk back from a char-index estimate until we fit the byte budget.
+  let end = Math.min(text.length, budget);
+  while (end > 0 && Buffer.byteLength(text.slice(0, end), 'utf8') > budget) {
+    end -= 1;
+  }
+  return `${text.slice(0, end)}${marker}`;
+}
+
 export function getLogFilePath(): string {
   return logFilePath;
 }
@@ -38,12 +71,14 @@ export function configureLogFile(opts: {
   if (opts.path !== undefined) {
     logFilePath = opts.path;
     ensuredLogDir = false;
+    logFileCapReached = false;
   }
   if (opts.enabled !== undefined) fileLoggingEnabled = opts.enabled;
 }
 
 let ensuredLogDir = false;
 let reportedLogFailure = false;
+let logFileCapReached = false;
 
 // Failed log writes go to error tracking, once per process. Dynamic import:
 // analytics logs through this module, so a static import would be a cycle.
@@ -69,8 +104,23 @@ function reportLogFailureOnce(err: unknown): void {
 // The log's directory isn't guaranteed to exist (Windows %TEMP%,
 // POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
 function appendLine(text: string): void {
+  if (logFileCapReached) return;
+
+  let toWrite = text;
   try {
-    appendFileSync(logFilePath, text);
+    if (existsSync(logFilePath)) {
+      const size = statSync(logFilePath).size;
+      if (size >= MAX_LOG_FILE_BYTES) {
+        logFileCapReached = true;
+        return;
+      }
+      const writeBytes = Buffer.byteLength(toWrite, 'utf8');
+      if (size + writeBytes > MAX_LOG_FILE_BYTES) {
+        toWrite = capLogLine(toWrite, Math.max(0, MAX_LOG_FILE_BYTES - size));
+        logFileCapReached = true;
+      }
+    }
+    appendFileSync(logFilePath, toWrite);
   } catch (err) {
     if (ensuredLogDir) {
       reportLogFailureOnce(err);
@@ -79,7 +129,7 @@ function appendLine(text: string): void {
     ensuredLogDir = true;
     try {
       mkdirSync(path.dirname(logFilePath), { recursive: true });
-      appendFileSync(logFilePath, text);
+      appendFileSync(logFilePath, toWrite);
     } catch (retryErr) {
       reportLogFailureOnce(retryErr);
     }
@@ -104,7 +154,8 @@ export function initLogFile(): void {
 export function logToFile(...args: unknown[]): void {
   if (!fileLoggingEnabled) return;
   const ts = new Date().toISOString();
-  appendLine(`[${ts}] ${renderLine(args)}\n`);
+  const line = capLogLine(`[${ts}] ${renderLine(args)}\n`);
+  appendLine(line);
 }
 
 export function debug(...args: unknown[]): void {
