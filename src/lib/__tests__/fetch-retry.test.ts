@@ -12,6 +12,9 @@ const GH_PINNED =
   'https://github.com/PostHog/context-mill/releases/download/v1.50.0';
 const AWS = 'https://context-mill.posthog.com';
 
+/** Host equality, not substring: `evil.com/?u=github.com` is not GitHub. */
+const isGitHub = (url: string) => new URL(url).hostname === 'github.com';
+
 const ok = (body = 'BODY') =>
   new Response(body, { status: 200, statusText: 'OK' });
 const status = (code: number) =>
@@ -83,12 +86,12 @@ describe('fetchWithRetry', () => {
     });
     expect(resp.status).toBe(200);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain('github.com');
+    expect(isGitHub(calls[0])).toBe(true);
   });
 
   it('retries GitHub with backoff before failing over to AWS', async () => {
     const { impl, calls } = makeFetch((url) =>
-      url.includes('github.com') ? new Error('ECONNREFUSED') : ok(),
+      isGitHub(url) ? new Error('ECONNREFUSED') : ok(),
     );
     const resp = await fetchWithRetry(`${GH_LATEST}/skill-menu.json`, {
       ...base,
@@ -96,13 +99,13 @@ describe('fetchWithRetry', () => {
     });
     expect(resp.status).toBe(200);
     // Three attempts at GitHub, then one at AWS.
-    expect(calls.filter((u) => u.includes('github.com'))).toHaveLength(3);
+    expect(calls.filter(isGitHub)).toHaveLength(3);
     expect(calls.at(-1)).toBe(`${AWS}/latest/skill-menu.json`);
   });
 
   it.each([500, 502, 503, 429, 408])('fails over on HTTP %i', async (code) => {
     const { impl, calls } = makeFetch((url) =>
-      url.includes('github.com') ? status(code) : ok(),
+      isGitHub(url) ? status(code) : ok(),
     );
     const resp = await fetchWithRetry(`${GH_PINNED}/audit-events.zip`, {
       ...base,
@@ -124,7 +127,7 @@ describe('fetchWithRetry', () => {
       ).rejects.toThrow(`HTTP ${code}`);
       // One attempt, one origin: no retry budget spent, AWS never probed.
       expect(calls).toHaveLength(1);
-      expect(calls.every((u) => u.includes('github.com'))).toBe(true);
+      expect(calls.every(isGitHub)).toBe(true);
     },
   );
 
@@ -141,7 +144,7 @@ describe('fetchWithRetry', () => {
 
   it('is sticky: later fetches go straight to AWS', async () => {
     const { impl, calls } = makeFetch((url) =>
-      url.includes('github.com') ? new Error('ECONNREFUSED') : ok(),
+      isGitHub(url) ? new Error('ECONNREFUSED') : ok(),
     );
     const opts = { ...base, fetchImpl: impl };
     await fetchWithRetry(`${GH_LATEST}/skill-menu.json`, opts);
@@ -157,7 +160,7 @@ describe('fetchWithRetry', () => {
     let awsAlive = true;
     let githubAlive = false;
     const { impl } = makeFetch((url) => {
-      if (url.includes('github.com')) {
+      if (isGitHub(url)) {
         return githubAlive ? ok() : new Error('down');
       }
       return awsAlive ? ok() : new Error('aws down');
@@ -180,7 +183,7 @@ describe('fetchWithRetry', () => {
         failover: false,
       }),
     ).rejects.toThrow();
-    expect(calls.every((u) => u.includes('github.com'))).toBe(true);
+    expect(calls.every(isGitHub)).toBe(true);
   });
 
   it('does not fail over a URL that has no AWS equivalent', async () => {
@@ -196,7 +199,7 @@ describe('fetchWithRetry', () => {
 
   it('reports the origin transition once, not per fetch', async () => {
     const { impl } = makeFetch((url) =>
-      url.includes('github.com') ? new Error('ECONNREFUSED') : ok(),
+      isGitHub(url) ? new Error('ECONNREFUSED') : ok(),
     );
     const opts = { ...capturing, fetchImpl: impl };
     await fetchWithRetry(`${GH_LATEST}/skill-menu.json`, opts);
