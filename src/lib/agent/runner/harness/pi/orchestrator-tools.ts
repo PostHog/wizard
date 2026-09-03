@@ -18,6 +18,7 @@ import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
+  ENQUEUE_MODEL_DESCRIPTION,
   HANDOFF_FIELDS,
   REMARK_ASK,
   type EnqueueArgs,
@@ -86,7 +87,9 @@ export function createPiOrchestratorTools(
           description: 'Task ids that must be done before this task runs.',
         }),
       ),
-      model: Type.Optional(Type.String()),
+      model: Type.Optional(
+        Type.String({ description: ENQUEUE_MODEL_DESCRIPTION }),
+      ),
       reason: Type.String({
         description: 'One line on why this task is needed.',
       }),

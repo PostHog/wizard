@@ -20,6 +20,20 @@ import {
   type TaskHandoff,
 } from './queue';
 
+/**
+ * The `enqueue_task` `model` description, shared by both harnesses' schemas.
+ *
+ * The field was declared as a bare optional string while
+ * {@link checkEnqueueGuards} rejects anything outside {@link VALID_MODELS}, so
+ * the allow-list existed only in the rejection message — an agent had to guess
+ * a gateway model id, trip the `invalid-model` guard, and spend a turn reading
+ * the list back before it could enqueue. Naming the list where the agent picks
+ * the value costs nothing and makes the guess unnecessary.
+ */
+export const ENQUEUE_MODEL_DESCRIPTION = `Optional model override for this task. Omit it to use the task's default, which is almost always right. If you do set it, it must be one of: ${[
+  ...VALID_MODELS,
+].join(', ')}.`;
+
 /** The per-task remark ask, shared by both harnesses' complete_task schemas. */
 export const REMARK_ASK =
   'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
@@ -432,7 +446,7 @@ export function buildOrchestratorTools(
         .array(z.string())
         .optional()
         .describe('Task ids that must be done before this task runs.'),
-      model: z.string().optional(),
+      model: z.string().optional().describe(ENQUEUE_MODEL_DESCRIPTION),
       reason: z.string().describe('One line on why this task is needed.'),
     },
     ((args: EnqueueArgs) => {
