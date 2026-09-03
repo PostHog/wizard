@@ -45,10 +45,17 @@ function npxCacheDir(message: string): string {
 
 export function formatModuleMissingMessage(message: string): string {
   const dir = npxCacheDir(message);
+  // `process.platform` names the OS, not the shell. A Windows user may be at a
+  // PowerShell or a Command Prompt, and `Remove-Item` is only a command in the
+  // first, so a single unlabelled line errors out for half of them. Both are
+  // printed, labelled, and the user picks the one their prompt understands.
   const remove =
     process.platform === 'win32'
-      ? `Remove-Item -Recurse -Force "${dir}"`
-      : `rm -rf "${dir}"`;
+      ? [
+          `PowerShell:      Remove-Item -Recurse -Force "${dir}"`,
+          `Command Prompt:  rmdir /s /q "${dir}"`,
+        ]
+      : [`rm -rf "${dir}"`];
   return [
     'Broken npx download',
     '',
@@ -57,7 +64,7 @@ export function formatModuleMissingMessage(message: string): string {
     '',
     'Delete the cached download:',
     '',
-    `  ${remove}`,
+    ...remove.map((line) => `  ${line}`),
     '',
     // Not a literal rerun command: every wizard command reaches this message,
     // so naming the default flow would send an `audit` user into an install.

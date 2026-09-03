@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   formatModuleMissingMessage,
   isModuleNotFoundError,
@@ -90,5 +90,37 @@ describe('formatModuleMissingMessage', () => {
     expect(formatModuleMissingMessage('Cannot find module x')).toContain(
       '_npx',
     );
+  });
+
+  // `process.platform` is the OS, not the shell: a Windows user may be at a
+  // Command Prompt, where `Remove-Item` is not a command at all.
+  describe('on Windows', () => {
+    const originalPlatform = process.platform;
+
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        writable: true,
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        writable: true,
+      });
+    });
+
+    it('labels a removal command for each shell', () => {
+      const dir =
+        'C:\\Users\\John Smith\\AppData\\Local\\npm-cache\\_npx\\abc1234567890def';
+      const message = formatModuleMissingMessage(
+        `Cannot find package 'chalk' imported from ${dir}\\node_modules\\x.js`,
+      );
+      expect(message).toContain(
+        `PowerShell:      Remove-Item -Recurse -Force "${dir}"`,
+      );
+      expect(message).toContain(`Command Prompt:  rmdir /s /q "${dir}"`);
+    });
   });
 });
