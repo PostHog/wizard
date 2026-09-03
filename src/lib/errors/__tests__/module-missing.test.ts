@@ -46,7 +46,13 @@ describe('formatModuleMissingMessage', () => {
       "Cannot find package '/Users/a/.npm/_npx/9f2/node_modules/chalk/index.js'",
     );
     expect(message).toContain('rm -rf "/Users/a/.npm/_npx/9f2"');
-    expect(message).toContain('npx @posthog/wizard@latest');
+  });
+
+  // Every wizard command reaches this message, so it must not name one.
+  it('asks for the same command again rather than the default flow', () => {
+    const message = formatModuleMissingMessage('Cannot find module x');
+    expect(message).toContain('run the same wizard command again');
+    expect(message).not.toContain('npx @posthog/wizard@latest');
   });
 
   it('falls back to the whole npx cache', () => {
