@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.72.0](https://github.com/PostHog/wizard/compare/v2.71.0...v2.72.0) (2026-09-03)
+
+
+### Features
+
+* **self-driving:** show a one-time login link on the GitHub gate for provisioning signups ([#1186](https://github.com/PostHog/wizard/issues/1186)) ([8f4d523](https://github.com/PostHog/wizard/commit/8f4d523f2050056977144d1a42f3f91aa01b62e1))
+
+
+### Bug Fixes
+
+* keep fetch on HTTP/1.1 so Node 26 does not exit the wizard mid-run ([#1203](https://github.com/PostHog/wizard/issues/1203)) ([b75540b](https://github.com/PostHog/wizard/commit/b75540b174565ebec586f658233fe0f69f1e8b66))
+* **mcp-analytics:** accept CI region option ([#1187](https://github.com/PostHog/wizard/issues/1187)) ([fa4d1c4](https://github.com/PostHog/wizard/commit/fa4d1c4c43d42d950420d5875ae0ff8747c141ee))
+* **orchestrator:** name the model allow-list where enqueue_task picks it ([#1194](https://github.com/PostHog/wizard/issues/1194)) ([e62eb38](https://github.com/PostHog/wizard/commit/e62eb386ad3d9d03d94fc5b9b2c8db180e6f09a4))
+* **orchestrator:** record why an agent reported a task 'not needed' ([#1195](https://github.com/PostHog/wizard/issues/1195)) ([821023a](https://github.com/PostHog/wizard/commit/821023a8387747716117d304fc4438298b0e41f7))
+* **privacy:** stamp wizard_ai_sdk_detected after auth instead of at consent time ([#1184](https://github.com/PostHog/wizard/issues/1184)) ([41a9a55](https://github.com/PostHog/wizard/commit/41a9a552e150c39d84005aa525913fe81190a3a7))
+
 ## [2.71.0](https://github.com/PostHog/wizard/compare/v2.70.1...v2.71.0) (2026-09-01)
 
 
