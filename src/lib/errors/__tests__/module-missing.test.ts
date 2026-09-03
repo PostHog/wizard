@@ -26,6 +26,18 @@ describe('isModuleNotFoundError', () => {
   it('leaves an ordinary API failure alone', () => {
     expect(isModuleNotFoundError(new Error('502 Bad Gateway'))).toBe(false);
   });
+
+  // An npx cache hash is 16 hex characters, so it can contain "429" — which the
+  // harness's rate-limit substring test would otherwise claim first.
+  it('recognises a cache hash that looks like a rate limit', () => {
+    expect(
+      isModuleNotFoundError(
+        new Error(
+          "Cannot find package '/Users/a/.npm/_npx/429abc0d15e7f318/node_modules/chalk/index.js'",
+        ),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('formatModuleMissingMessage', () => {

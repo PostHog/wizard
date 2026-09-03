@@ -640,11 +640,11 @@ export const piBackend: AgentHarness = {
       captureAborted();
 
       const lower = message.toLowerCase();
-      if (lower.includes('rate limit') || lower.includes('429')) {
-        return { error: AgentErrorType.RATE_LIMIT, message };
-      }
       if (isModuleNotFoundError(err)) {
         return { error: AgentErrorType.MODULE_MISSING, message };
+      }
+      if (lower.includes('rate limit') || lower.includes('429')) {
+        return { error: AgentErrorType.RATE_LIMIT, message };
       }
       return { error: AgentErrorType.API_ERROR, message };
     }
