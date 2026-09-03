@@ -66,6 +66,8 @@ export enum AgentErrorType {
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
+  /** A wizard dependency is absent — a half-written npx download */
+  MODULE_MISSING = 'WIZARD_MODULE_MISSING',
   /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
   /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */

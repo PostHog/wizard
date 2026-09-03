@@ -24,6 +24,7 @@ import {
 } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
+import { isModuleNotFoundError } from '@lib/errors/module-missing';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -641,6 +642,9 @@ export const piBackend: AgentHarness = {
       const lower = message.toLowerCase();
       if (lower.includes('rate limit') || lower.includes('429')) {
         return { error: AgentErrorType.RATE_LIMIT, message };
+      }
+      if (isModuleNotFoundError(err)) {
+        return { error: AgentErrorType.MODULE_MISSING, message };
       }
       return { error: AgentErrorType.API_ERROR, message };
     }
