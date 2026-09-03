@@ -485,13 +485,24 @@ export class WizardStore {
   }
 
   setCredentials(credentials: WizardSession['credentials']): void {
+    const previous = this.session.credentials;
     this.$session.setKey('credentials', credentials);
     if (credentials?.projectId) {
       analytics.setTag('project_id', credentials.projectId);
     }
-    analytics.wizardCapture('auth complete', {
-      project_id: credentials?.projectId,
-    });
+    // One run writes credentials up to four times (auth, MCP prompts, Slack
+    // connect, run-wizard). Capture `auth complete` only when real credentials
+    // first arrive or the project/host actually changes, so the metric counts
+    // completed auths instead of setter calls.
+    const changed =
+      credentials != null &&
+      (previous?.projectId !== credentials.projectId ||
+        previous?.host.apiHost !== credentials.host.apiHost);
+    if (changed) {
+      analytics.wizardCapture('auth complete', {
+        project_id: credentials.projectId,
+      });
+    }
     this.emitChange();
   }
 
