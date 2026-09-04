@@ -83,6 +83,44 @@ import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
+import { releaseTerminal } from './src/ui/tui/terminal';
+import { runCleanups } from './src/utils/wizard-abort';
+import { logToFile, getLogFilePath } from './src/utils/debug';
+
+// Last-resort net for any error no local handler caught. A TUI command may
+// already own the alt screen, so leave it, print a readable line, and exit —
+// otherwise the user is stranded on a blank screen with the real error lost in
+// the discarded alt buffer. Node already terminates on these events; this only
+// makes the exit clean.
+function handleFatal(err: unknown): void {
+  // Preserve the full stack in the wizard log first, as the runner's fatal
+  // path does — the readable line below carries only err.message, and the
+  // crash this net exists to catch ("Cannot read properties of undefined
+  // (reading 'S')") names no module without its stack. logToFile needs no
+  // init and never throws, so it is safe this early and inside the handler.
+  logToFile('[bin] FATAL:', err);
+  releaseTerminal();
+  const message = err instanceof Error ? err.message : String(err);
+  // eslint-disable-next-line no-console
+  console.error(
+    `\n\x1b[1;91m✖ The PostHog wizard crashed: ${message}\x1b[0m\n` +
+      `Full logs: ${getLogFilePath()}\n`,
+  );
+  emitWizardError({ code: ErrorCodes.InternalUnhandled, message });
+  // Run registered cleanups before exiting, same as wizardAbort() and the
+  // runner catch/signal paths — a fatal event otherwise skips them, leaving
+  // state a cleanup owns unrestored (e.g. the backed-up .claude/settings.json
+  // that backupAndFixClaudeSettings deletes and registers a restore for).
+  runCleanups();
+  process.exit(1);
+}
+// Skip under test: the CLI suites import bin.ts and mock process.exit to throw,
+// so a global handler would turn every mocked exit into a worker crash. Prod
+// builds inline NODE_ENV as 'production', so the net is always live for users.
+if (process.env.NODE_ENV !== 'test') {
+  process.on('unhandledRejection', handleFatal);
+  process.on('uncaughtException', handleFatal);
+}
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and
