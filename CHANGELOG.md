@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.73.0](https://github.com/PostHog/wizard/compare/v2.72.0...v2.73.0) (2026-09-04)
+
+
+### Features
+
+* fallback to aws after github retries for context mill downloads ([#1206](https://github.com/PostHog/wizard/issues/1206)) ([4f0ad4f](https://github.com/PostHog/wizard/commit/4f0ad4fc829274aec6d6efcbbdc9bc61f18a30b8))
+
+
+### Bug Fixes
+
+* **skills:** don't retry non-retryable download statuses ([#829](https://github.com/PostHog/wizard/issues/829)) ([14338c1](https://github.com/PostHog/wizard/commit/14338c1f4f8ae14f3bb9f4f1de7284f018914e19))
+
 ## [2.72.0](https://github.com/PostHog/wizard/compare/v2.71.0...v2.72.0) (2026-09-03)
 
 
