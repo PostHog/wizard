@@ -1,5 +1,6 @@
 import * as path from 'path';
 import type { ProgramRun } from '@lib/agent/agent-runner';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { resolveSkillVariantId } from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
 import { getSkillsBaseUrl, Integration } from '@lib/constants';
 import { detectFramework } from '@lib/detection/index';
@@ -12,6 +13,7 @@ import {
   coerceAuditChecks,
 } from '@lib/programs/audit/types';
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import type { ProgramId } from '@lib/programs/program-registry';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { WizardSession } from '@lib/wizard-session';
 import { fetchSkillMenu } from '@lib/wizard-tools';
@@ -30,6 +32,7 @@ import { listUncommittedPaths } from './working-tree.js';
 export const CULL_FEATURE_FLAGS_REPORT_FILE =
   'posthog-feature-flag-cull-report.md';
 const CULL_SKILL_GROUP = 'cull-feature-flags';
+const PROGRAM_ID: ProgramId = 'cull-feature-flags';
 const DOCS_URL = 'https://posthog.com/docs/feature-flags/best-practices';
 
 /** Frameworks the scanner has patterns for; one context-mill variant each. */
@@ -50,7 +53,7 @@ const cullSteps: ProgramStep[] = AGENT_SKILL_STEPS.map((step) => {
 const base = createSkillProgram({
   skillId: `${CULL_SKILL_GROUP}-nextjs`,
   command: 'cull-feature-flags',
-  id: 'cull-feature-flags',
+  id: PROGRAM_ID,
   description:
     'Find stale PostHog feature flags in this project and remove the ones you pick',
   integrationLabel: 'cull-feature-flags',
@@ -101,22 +104,39 @@ async function resolveVariantSkillId(framework: Integration): Promise<string> {
   );
 }
 
-async function fetchFlagsOrEmpty(
+async function abortFlagFetchFailed(error: unknown): Promise<void> {
+  await wizardAbort({
+    code: ErrorCodes.AuthProjectFetchFailed,
+    message:
+      "Could not read this project's feature flags from PostHog, so there is " +
+      'nothing deterministic to propose. Check the token carries ' +
+      'feature_flag:read and try again.',
+    error: error instanceof Error ? error : new Error(String(error)),
+  });
+}
+
+// Headless and CI paths resolve `run` before the runner's own auth step, so
+// take the same path early; it is a no-op once credentials exist.
+async function fetchFlagsOrAbort(
   session: WizardSession,
-): Promise<{ flags: FeatureFlag[]; failed: boolean }> {
+): Promise<FeatureFlag[]> {
+  await authenticate(session, PROGRAM_ID);
   const credentials = session.credentials;
-  if (!credentials) return { flags: [], failed: true };
+  if (!credentials) {
+    await abortFlagFetchFailed(new Error('no credentials after authenticate'));
+    return [];
+  }
   try {
-    const flags = await fetchFeatureFlags(
+    return await fetchFeatureFlags(
       credentials.accessToken,
       credentials.host.apiHost,
       credentials.projectId,
     );
-    return { flags, failed: false };
   } catch (error) {
     logToFile(`[cull-feature-flags] flag fetch failed: ${String(error)}`);
     analytics.wizardCapture('cull feature flags fetch failed');
-    return { flags: [], failed: true };
+    await abortFlagFetchFailed(error);
+    return [];
   }
 }
 
@@ -141,7 +161,7 @@ const cullRun = async (session: WizardSession): Promise<ProgramRun> => {
   }
   const skillId = await resolveVariantSkillId(framework as Integration);
 
-  const { flags, failed } = await fetchFlagsOrEmpty(session);
+  const flags = await fetchFlagsOrAbort(session);
   const scan = await scanFlagCallSites(
     installDir,
     flags.map((flag) => flag.key),
@@ -161,7 +181,6 @@ const cullRun = async (session: WizardSession): Promise<ProgramRun> => {
     stale: candidates.filter((c) => c.verdict === 'stale').length,
     files_scanned: scan.filesScanned,
     truncated: scan.truncated,
-    fetch_failed: failed,
   });
 
   const baseRun =
@@ -176,7 +195,6 @@ const cullRun = async (session: WizardSession): Promise<ProgramRun> => {
         ledgerFile: AUDIT_CHECKS_FILE,
         candidates,
         scan,
-        postHogFetchFailed: failed,
       }),
     buildOutroData: (sess, credentials) =>
       buildCullOutro({

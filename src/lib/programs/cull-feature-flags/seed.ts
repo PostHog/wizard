@@ -38,7 +38,6 @@ export interface CullPromptInput {
   ledgerFile: string;
   candidates: readonly CullCandidate[];
   scan: FlagScanResult;
-  postHogFetchFailed: boolean;
 }
 
 function countByBucket(candidates: readonly CullCandidate[]): string[] {
@@ -77,11 +76,6 @@ export function buildCullPrompt(input: CullPromptInput): string {
   if (input.scan.truncated) {
     lines.push(
       'The scan hit its file limit, so "unreferenced" is not proven. Treat every unreferenced row as verify-first.',
-    );
-  }
-  if (input.postHogFetchFailed) {
-    lines.push(
-      'The PostHog flag fetch failed, so only code-side buckets are seeded. Propose nothing, write the report and say so.',
     );
   }
   return lines.join('\n');

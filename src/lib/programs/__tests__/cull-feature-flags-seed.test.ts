@@ -91,7 +91,6 @@ describe('buildCullPrompt', () => {
       ledgerFile: '.posthog-audit-checks.json',
       candidates: [STALE, HEALTHY, ORPHAN],
       scan: scan(),
-      postHogFetchFailed: false,
     });
     expect(prompt).toContain('./.posthog-audit-checks.json');
     expect(prompt).toContain('- fully-rolled-out: 1');
@@ -101,7 +100,7 @@ describe('buildCullPrompt', () => {
     expect(prompt).not.toContain('getAllFlags');
   });
 
-  test('adds the bulk, dynamic, truncation and fetch-failure caveats when they apply', () => {
+  test('adds the bulk, dynamic and truncation caveats when they apply', () => {
     const prompt = buildCullPrompt({
       ledgerFile: '.posthog-audit-checks.json',
       candidates: [ORPHAN],
@@ -112,12 +111,10 @@ describe('buildCullPrompt', () => {
         ],
         truncated: true,
       }),
-      postHogFetchFailed: true,
     });
     expect(prompt).toContain('calls getAllFlags');
     expect(prompt).toContain('src/lib/flags.ts:4 (isFeatureEnabled)');
     expect(prompt).toContain('hit its file limit');
-    expect(prompt).toContain('flag fetch failed');
   });
 });
 
