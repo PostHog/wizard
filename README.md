@@ -640,7 +640,9 @@ degradedBlocksRun: ['anthropic'],
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail
 over between them (`src/lib/fetch-retry.ts`). Both are probed in parallel, so
 the key only reports **Down** when neither origin answers — a GitHub Releases
-outage on its own doesn't block a run.
+outage on its own doesn't block a run, including a 403 or 404, which is as
+often about the origin (expired asset redirect, blocked region, a publish that
+reached one origin and not the other) as about the asset.
 
 ## Smoke test helper (`scripts/smoke-test-ci.sh`)
 

@@ -125,7 +125,10 @@ async function fetchEndpointHealth(
 
   const result =
     lastHttpStatus !== null
-      ? downResult(`HTTP ${lastHttpStatus} (attempts=${attempts})`)
+      ? downResult(
+          `HTTP ${lastHttpStatus} (attempts=${attempts})`,
+          lastHttpStatus,
+        )
       : noConnectionResult(lastError, attempts);
   logToFile(
     `[health-checks] GET ${url} -> ${result.status}` +
@@ -161,22 +164,25 @@ export const checkSkillsOriginHealth = async (): Promise<BaseHealthResult> => {
 };
 
 /**
- * Healthy when either origin serves. When neither does, one HTTP response
- * anywhere is enough server-side evidence for `Down`; otherwise both probes
- * only saw network errors, which is `NoConnection`.
+ * Mirrors `fetchWithRetry`: a download tries GitHub, then AWS, so the run is
+ * only blocked when neither origin answers. Whichever failure the probes saw,
+ * one origin serving means skills are reachable.
  */
 function combineOriginHealth(
   github: BaseHealthResult,
   aws: BaseHealthResult,
 ): BaseHealthResult {
-  const githubUp = github.status === ServiceHealthStatus.Healthy;
-  const awsUp = aws.status === ServiceHealthStatus.Healthy;
+  if (github.status === ServiceHealthStatus.Healthy) {
+    // Naming the dead origin makes a one-sided outage legible in the log and
+    // in the readiness reasons, where the status alone reads as "fine".
+    return aws.status === ServiceHealthStatus.Healthy
+      ? github
+      : withIndicatorSuffix(github, 'aws unavailable');
+  }
 
-  if (githubUp && awsUp) return github;
-  // Naming the surviving origin makes a one-sided outage legible in the log
-  // and in the readiness reasons, where the status alone reads as "fine".
-  if (githubUp) return withIndicatorSuffix(github, 'aws unavailable');
-  if (awsUp) return withIndicatorSuffix(aws, 'via aws, github unavailable');
+  if (aws.status === ServiceHealthStatus.Healthy) {
+    return withIndicatorSuffix(aws, 'via aws, github unavailable');
+  }
 
   const error = `github: ${github.error ?? 'unknown'} | aws: ${
     aws.error ?? 'unknown'

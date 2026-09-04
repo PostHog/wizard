@@ -116,7 +116,7 @@ describe('fetchWithRetry', () => {
   });
 
   it.each([404, 403, 401, 400])(
-    'does NOT fail over or retry on HTTP %i — the asset, not the origin',
+    'retries HTTP %i at each origin, same as any other failure',
     async (code) => {
       const { impl, calls } = makeFetch(() => status(code));
       await expect(
@@ -125,9 +125,35 @@ describe('fetchWithRetry', () => {
           fetchImpl: impl,
         }),
       ).rejects.toThrow(`HTTP ${code}`);
-      // One attempt, one origin: no retry budget spent, AWS never probed.
-      expect(calls).toHaveLength(1);
-      expect(calls.every(isGitHub)).toBe(true);
+      expect(calls.filter(isGitHub)).toHaveLength(3);
+      expect(calls).toHaveLength(6);
+      expect(calls.at(-1)).toBe(`${AWS}/v1.50.0/missing.zip`);
+    },
+  );
+
+  it('collapses identical attempt failures into one message', async () => {
+    const { impl } = makeFetch(() => status(404));
+    await expect(
+      fetchWithRetry(`${GH_PINNED}/missing.zip`, { ...base, fetchImpl: impl }),
+    ).rejects.toThrow(
+      /github: HTTP 404 404 \(x3\) \| aws: HTTP 404 404 \(x3\)/,
+    );
+  });
+
+  it.each([404, 403])(
+    'recovers when GitHub %is but AWS has the asset',
+    async (code) => {
+      const { impl, calls } = makeFetch((url) =>
+        isGitHub(url) ? status(code) : ok(),
+      );
+      const resp = await fetchWithRetry(`${GH_PINNED}/audit-events.zip`, {
+        ...base,
+        fetchImpl: impl,
+      });
+      expect(resp.status).toBe(200);
+      // GitHub 403s expired asset redirects and blocked regions; the asset is
+      // there, just not for us.
+      expect(calls.at(-1)).toBe(`${AWS}/v1.50.0/audit-events.zip`);
     },
   );
 

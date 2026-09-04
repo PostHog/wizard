@@ -1,6 +1,10 @@
 /**
  * One retry + failover policy for every critical-path fetch. GitHub is primary,
- * AWS is the fallback; 404/403 never fail over — that is the asset, not the origin.
+ * AWS is the fallback. Every failure is treated the same — retry the origin,
+ * then try the other one — because the statuses that look deterministic aren't:
+ * GitHub 403s expired asset redirects (a retry mints a fresh one) and blocked
+ * regions, and a 404 can be an edge that hasn't caught up with the release.
+ * Guessing which failures are worth another request saves less than it costs.
  */
 
 import { logToFile } from '@utils/debug';
@@ -59,22 +63,19 @@ export interface RetryOpts {
   onEvent?: (event: string, props: Record<string, unknown>) => void;
 }
 
-class FatalHttpError extends Error {
-  constructor(readonly status: number) {
-    super(`HTTP ${status}`);
-  }
-}
-
-/** 5xx, 429 and 408 say "this origin"; other 4xx say "this asset". */
-function isTransientStatus(status: number): boolean {
-  return status >= 500 || status === 429 || status === 408;
-}
-
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Try one origin to exhaustion. Throws FatalHttpError when failover would be pointless. */
+/** Every attempt failing identically is the common case; say it once. */
+function summarize(failures: string[]): string {
+  const unique = [...new Set(failures)];
+  return unique.length === 1
+    ? `${unique[0]}${failures.length > 1 ? ` (x${failures.length})` : ''}`
+    : failures.map((f, i) => `attempt ${i + 1}: ${f}`).join('; ');
+}
+
+/** Try one origin to exhaustion. */
 async function fetchOrigin(
   url: string,
   opts: Required<Pick<RetryOpts, 'timeoutMs' | 'maxAttempts' | 'backoffMs'>> & {
@@ -89,23 +90,19 @@ async function fetchOrigin(
         signal: AbortSignal.timeout(opts.timeoutMs),
       });
       if (resp.ok) return resp;
-      if (!isTransientStatus(resp.status))
-        throw new FatalHttpError(resp.status);
-      throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+      throw new Error(`HTTP ${resp.status} ${resp.statusText}`.trim());
     } catch (err) {
-      if (err instanceof FatalHttpError) throw err;
-      failures.push(`attempt ${attempt}: ${messageOf(err)}`);
+      failures.push(messageOf(err));
       if (attempt < opts.maxAttempts) {
         await opts.sleepImpl(opts.backoffMs * 2 ** (attempt - 1));
       }
     }
   }
-  throw new Error(failures.join('; '));
+  throw new Error(summarize(failures));
 }
 
 /**
- * Retry with backoff, then fail over. Throws once every origin is exhausted, or
- * immediately on a 4xx that is about the asset rather than the origin.
+ * Retry with backoff, then fail over. Throws once every origin is exhausted.
  */
 export async function fetchWithRetry(
   url: string,
@@ -158,10 +155,6 @@ export async function fetchWithRetry(
       }
       return resp;
     } catch (err) {
-      // The other origin serves the same filename and would answer the same way.
-      if (err instanceof FatalHttpError) {
-        throw new Error(`fetch ${url} failed — HTTP ${err.status}`);
-      }
       failures.push(`${candidate.origin}: ${messageOf(err)}`);
       if (index === order.length - 1) {
         onEvent('skills fetch failed', { url, failures: failures.length });

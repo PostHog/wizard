@@ -988,6 +988,30 @@ describe('health-checks', () => {
       expect(calledUrls).toContain(URLS.awsSkillMenu);
     });
 
+    it('stays healthy when GitHub 5xxs but AWS serves the menu', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
+            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('github unavailable');
+    });
+
+    it('stays healthy when GitHub is unreachable but AWS serves the menu', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
+            Promise.reject(new Error('ENOTFOUND github.com')),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('github unavailable');
+    });
+
     it('stays healthy when GitHub 404s but AWS serves the menu', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
@@ -1040,11 +1064,11 @@ describe('health-checks', () => {
       expect(result.error).toContain('ECONNRESET');
     });
 
-    it('reports down when one origin 404s and the other is unreachable', async () => {
+    it('reports down when GitHub 5xxs and AWS is unreachable', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.githubSkillMenu]: () =>
-            Promise.resolve(new Response('Not Found', { status: 404 })),
+            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
           [URLS.awsSkillMenu]: () => Promise.reject(new Error('ECONNRESET')),
         }),
       );
