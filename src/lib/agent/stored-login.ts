@@ -16,7 +16,7 @@
  * is ever exposed. The locations checked mirror the SDK's own resolution
  * (npmjs.com/package/@anthropic-ai/claude-agent-sdk → sdk.mjs): a
  * `.credentials.json` under `CLAUDE_CONFIG_DIR` / `~/.claude`, and the macOS
- * keychain item below.
+ * keychain item below. {@link isolatedAgentCredentialEnv} closes both.
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -49,19 +49,46 @@ export const claudeConfigDir = (homeDir: string = os.homedir()): string =>
 
 /**
  * Create a fresh, empty config dir for the agent subprocess and return its path.
- * The spawn site sets it as `CLAUDE_CONFIG_DIR`, so the SDK's `claude` binary
- * resolves credentials from this empty dir — never the user's `~/.claude`. With
- * no `.credentials.json` to find, the binary cannot outrank the wizard's gateway
- * token (see {@link detectStoredClaudeLogin}), so a stored login can no longer
- * reach the PostHog gateway and 401.
  *
  * `mkdtempSync` gives each run its own dir, so concurrent runs never share one.
  * `/tmp` on macOS/Linux matches the agent sandbox's writable roots; Windows has
  * no `/tmp`, so fall back to the OS temp dir there.
  */
-export function createIsolatedAgentConfigDir(): string {
+function createIsolatedAgentConfigDir(): string {
   const base = process.platform === 'win32' ? os.tmpdir() : '/tmp';
   return fs.mkdtempSync(path.join(base, 'posthog-wizard-claude-'));
+}
+
+/**
+ * The credential-isolation env the spawn sites hand the `claude` binary. Both
+ * vars point at one fresh, empty dir, which cuts the binary off from BOTH halves
+ * of a stored login:
+ *
+ * - `CLAUDE_CONFIG_DIR` is where the binary reads `.credentials.json` and
+ *   `.claude.json` from. An empty dir has neither.
+ * - `CLAUDE_SECURESTORAGE_CONFIG_DIR` is where it reads the *secure* store from.
+ *   On macOS that store is the keychain, and the binary derives the keychain
+ *   service name from this dir — `Claude Code-credentials` for the default dir,
+ *   `Claude Code-credentials-<hash of the dir>` otherwise. A per-run temp dir
+ *   therefore names an item that does not exist, so the lookup finds nothing.
+ *
+ * Setting the second var explicitly matters twice over. It is outside the
+ * `ANTHROPIC_*` / `CLAUDE_CODE_*` namespace that `sanitizeAgentSubprocessEnv`
+ * strips, so a value in the user's shell would otherwise survive and point the
+ * keychain lookup back at the real `Claude Code-credentials` item. And it pins
+ * the keychain namespace directly instead of leaving it to the binary's
+ * undocumented fallback to `CLAUDE_CONFIG_DIR`.
+ *
+ * The gateway token alone is not enough: a stored login travels as an
+ * `x-api-key` header, which the binary resolves separately from — and does not
+ * suppress with — the `ANTHROPIC_AUTH_TOKEN` the wizard injects.
+ */
+export function isolatedAgentCredentialEnv(): {
+  CLAUDE_CONFIG_DIR: string;
+  CLAUDE_SECURESTORAGE_CONFIG_DIR: string;
+} {
+  const dir = createIsolatedAgentConfigDir();
+  return { CLAUDE_CONFIG_DIR: dir, CLAUDE_SECURESTORAGE_CONFIG_DIR: dir };
 }
 
 /**
