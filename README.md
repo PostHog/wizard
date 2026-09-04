@@ -614,7 +614,7 @@ point is `evaluateWizardReadiness()`, which returns one of three values:
 | --- | --- |
 | `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
 | `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for LLM Gateway (`/_liveness`) and MCP (`/`) |
+| `endpoints.ts` | Direct endpoint checks for LLM Gateway (`/_liveness`), MCP (`/`), and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
 | `index.ts` | Barrel re-export |
 | `testme.md` | Test running instructions and endpoint reference |
@@ -632,9 +632,17 @@ two arrays:
 ### Current defaults
 
 ```ts
-downBlocksRun: ['anthropic', 'posthogOverall', 'npmOverall', 'llmGateway', 'mcp'],
+downBlocksRun: ['anthropic', 'npmOverall', 'llmGateway', 'mcp', 'skillsOrigin'],
 degradedBlocksRun: ['anthropic'],
 ```
+
+`skillsOrigin` is one entry covering two origins: skills are published to
+GitHub Releases and an AWS mirror under the same filenames, and downloads fail
+over between them (`src/lib/fetch-retry.ts`). Both are probed in parallel, so
+the key only reports **Down** when neither origin answers — a GitHub Releases
+outage on its own doesn't block a run, including a 403 or 404, which is as
+often about the origin (expired asset redirect, blocked region, a publish that
+reached one origin and not the other) as about the asset.
 
 ## Smoke test helper (`scripts/smoke-test-ci.sh`)
 

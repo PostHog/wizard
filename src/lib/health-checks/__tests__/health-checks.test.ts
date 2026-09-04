@@ -22,7 +22,7 @@ import {
   checkCloudflareComponentHealth,
   checkCloudflareOverallHealth,
   checkGithubHealth,
-  checkGithubReleasesHealth,
+  checkSkillsOriginHealth,
   checkLlmGatewayHealth,
   checkMcpHealth,
   checkNpmComponentHealth,
@@ -212,8 +212,9 @@ const URLS = {
   cloudflareSummary: 'https://www.cloudflarestatus.com/api/v2/summary.json',
   llmGatewayLiveness: 'https://gateway.us.posthog.com/_liveness',
   mcpLanding: 'https://mcp.posthog.com/',
-  githubReleasesSkillMenu:
+  githubSkillMenu:
     'https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json',
+  awsSkillMenu: 'https://context-mill.posthog.com/latest/skill-menu.json',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -258,7 +259,11 @@ const HEALTHY_RESPONSES: Record<string, { body: string; contentType: string }> =
       body: MCP_LANDING_HTML,
       contentType: 'text/html; charset=utf-8',
     },
-    [URLS.githubReleasesSkillMenu]: {
+    [URLS.githubSkillMenu]: {
+      body: JSON.stringify({ categories: { integration: [] } }),
+      contentType: 'application/json',
+    },
+    [URLS.awsSkillMenu]: {
       body: JSON.stringify({ categories: { integration: [] } }),
       contentType: 'application/json',
     },
@@ -960,30 +965,115 @@ describe('health-checks', () => {
   });
 
   // -----------------------------------------------------------------------
-  // GitHub Releases (fetchEndpointHealth – skill-menu.json)
+  // Skills origins (fetchEndpointHealth – skill-menu.json on both origins)
   // -----------------------------------------------------------------------
 
-  describe('checkGithubReleasesHealth', () => {
+  describe('checkSkillsOriginHealth', () => {
     it('returns healthy on a final 200 and follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
-      const result = await checkGithubReleasesHealth();
+      const result = await checkSkillsOriginHealth();
       expect(result.status).toBe(ServiceHealthStatus.Healthy);
       expect(result.rawIndicator).toBe('HTTP 200');
       expect(global.fetch).toHaveBeenCalledWith(
-        URLS.githubReleasesSkillMenu,
+        URLS.githubSkillMenu,
         expect.objectContaining({ redirect: 'follow' }),
       );
     });
 
-    it('returns down on 404 (release published without the asset)', async () => {
+    it('probes both origins', async () => {
+      await checkSkillsOriginHealth();
+      const calledUrls = (global.fetch as Mock).mock.calls.map(
+        (c: unknown[]) => c[0],
+      );
+      expect(calledUrls).toContain(URLS.githubSkillMenu);
+      expect(calledUrls).toContain(URLS.awsSkillMenu);
+    });
+
+    it('stays healthy when GitHub 5xxs but AWS serves the menu', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.githubReleasesSkillMenu]: () =>
+          [URLS.githubSkillMenu]: () =>
+            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('github unavailable');
+    });
+
+    it('stays healthy when GitHub is unreachable but AWS serves the menu', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
+            Promise.reject(new Error('ENOTFOUND github.com')),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('github unavailable');
+    });
+
+    it('stays healthy when GitHub 404s but AWS serves the menu', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
             Promise.resolve(new Response('Not Found', { status: 404 })),
         }),
       );
-      const result = await checkGithubReleasesHealth();
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('github unavailable');
+    });
+
+    it('stays healthy when AWS is unreachable but GitHub serves the menu', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.awsSkillMenu]: () => Promise.reject(new Error('fetch failed')),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('aws unavailable');
+    });
+
+    it('returns down only when both origins 404 (release published without the asset)', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
+            Promise.resolve(new Response('Not Found', { status: 404 })),
+          [URLS.awsSkillMenu]: () =>
+            Promise.resolve(new Response('Not Found', { status: 404 })),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 404');
+      expect(result.error).toContain('github: HTTP 404');
+      expect(result.error).toContain('aws: HTTP 404');
+    });
+
+    it('returns no-connection when both origins fail at the network layer', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
+            Promise.reject(new Error('ENOTFOUND github.com')),
+          [URLS.awsSkillMenu]: () => Promise.reject(new Error('ECONNRESET')),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
+      expect(result.error).toContain('ENOTFOUND github.com');
+      expect(result.error).toContain('ECONNRESET');
+    });
+
+    it('reports down when GitHub 5xxs and AWS is unreachable', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubSkillMenu]: () =>
+            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
+          [URLS.awsSkillMenu]: () => Promise.reject(new Error('ECONNRESET')),
+        }),
+      );
+      const result = await checkSkillsOriginHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
     });
   });
 
@@ -1007,7 +1097,7 @@ describe('health-checks', () => {
           'cloudflareComponents',
           'llmGateway',
           'mcp',
-          'githubReleases',
+          'skillsOrigin',
         ]),
       );
       expect(keys).toHaveLength(11);
@@ -1097,11 +1187,12 @@ describe('health-checks', () => {
         typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
       );
       // PostHog uses a single incident.io endpoint for both overall + components
-      expect(calledUrls).toHaveLength(10);
+      expect(calledUrls).toHaveLength(11);
       expect(calledUrls).toContain(URLS.posthogIncidentIo);
       expect(calledUrls).toContain(URLS.llmGatewayLiveness);
       expect(calledUrls).toContain(URLS.mcpLanding);
-      expect(calledUrls).toContain(URLS.githubReleasesSkillMenu);
+      expect(calledUrls).toContain(URLS.githubSkillMenu);
+      expect(calledUrls).toContain(URLS.awsSkillMenu);
     });
   });
 

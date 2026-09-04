@@ -192,7 +192,7 @@ export type AgentConfig = {
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
-  /** Base URL for the skills server (context-mill dev or GitHub releases) */
+  /** Primary skills origin (context-mill dev or GitHub Releases; downloads fail over to the AWS mirror) */
   skillsBaseUrl: string;
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;

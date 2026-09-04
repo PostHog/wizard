@@ -20,7 +20,7 @@ import {
 import {
   checkLlmGatewayHealth,
   checkMcpHealth,
-  checkGithubReleasesHealth,
+  checkSkillsOriginHealth,
 } from './endpoints';
 import { logToFile } from '@utils/debug';
 
@@ -39,7 +39,7 @@ export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   cloudflareComponents: 'Cloudflare (components)',
   llmGateway: 'LLM Gateway',
   mcp: 'MCP',
-  githubReleases: 'GitHub Releases',
+  skillsOrigin: 'Skills download',
 };
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
     'npmOverall',
     'llmGateway',
     'mcp',
-    'githubReleases',
+    'skillsOrigin',
   ],
   degradedBlocksRun: ['anthropic'],
 };
@@ -72,7 +72,7 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
  * Reduced readiness config for --signup provisioning flows.
  *
  * Provisioning only needs PostHog and the LLM Gateway - it doesn't
- * use Anthropic directly, npm, GitHub Releases, or MCP.
+ * use Anthropic directly, npm, the skills origins, or MCP.
  */
 export const SIGNUP_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   downBlocksRun: ['posthogOverall', 'llmGateway'],
@@ -94,7 +94,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     cloudflareComponents,
     llmGateway,
     mcp,
-    githubReleases,
+    skillsOrigin,
   ] = await Promise.all([
     checkAnthropicHealth(),
     checkPosthogOverallHealth(),
@@ -106,7 +106,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     checkCloudflareComponentHealth(),
     checkLlmGatewayHealth(),
     checkMcpHealth(),
-    checkGithubReleasesHealth(),
+    checkSkillsOriginHealth(),
   ]);
 
   const health: AllServicesHealth = {
@@ -120,7 +120,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     cloudflareComponents,
     llmGateway,
     mcp,
-    githubReleases,
+    skillsOrigin,
   };
   return reconcilePosthogReachability(health);
 }
@@ -348,6 +348,6 @@ function allUnknown(error: string): AllServicesHealth {
     cloudflareComponents: { ...base },
     llmGateway: base,
     mcp: base,
-    githubReleases: base,
+    skillsOrigin: base,
   };
 }

@@ -164,9 +164,13 @@ export const POSTHOG_ORG_AI_SETTINGS_URL =
   'https://app.posthog.com/settings/organization-details#setting=organization-ai-consent';
 export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
 
-/** Remote base URL for fetching the skill menu + downloading skills. */
-export const REMOTE_SKILLS_BASE_URL =
+/**
+ * Two origins for the same release, same filenames. Interchangeable bases, so
+ * making AWS primary is a `getSkillsBaseUrl` change, not a code change.
+ */
+export const GITHUB_SKILLS_BASE_URL =
   'https://github.com/PostHog/context-mill/releases/latest/download';
+export const AWS_SKILLS_BASE_URL = 'https://context-mill.posthog.com/latest';
 /** Alias of `@lib/local-dev`'s constant, kept for existing importers. */
 export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 
@@ -177,7 +181,7 @@ export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 export function getSkillsBaseUrl(): string {
   return getLocalDev().localContextMill
     ? LOCAL_SKILLS_BASE_URL
-    : REMOTE_SKILLS_BASE_URL;
+    : GITHUB_SKILLS_BASE_URL;
 }
 
 // ── Analytics (internal) ──────────────────────────────────────────────
