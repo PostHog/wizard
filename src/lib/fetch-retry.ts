@@ -13,6 +13,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A response status that retrying can't fix; propagates immediately. */
+class NonRetryableFetchError extends Error {}
+
+/**
+ * 5xx are transient; 408 (request timeout) and 429 (rate limit) explicitly ask
+ * to retry. Every other 4xx is a client error a retry won't heal (404 missing
+ * skill, 403 bad token) — retrying only burns the backoff before failing.
+ */
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429;
+}
+
 export interface RetryOpts {
   fetchImpl?: typeof fetch;
   sleepImpl?: (ms: number) => Promise<void>;
@@ -40,9 +52,14 @@ export async function fetchWithRetry(
       const resp = await fetchImpl(url, {
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
-      return resp;
+      if (resp.ok) return resp;
+      const msg = `HTTP ${resp.status} ${resp.statusText}`;
+      if (!isRetryableStatus(resp.status)) {
+        throw new NonRetryableFetchError(`fetch ${url} failed — ${msg}`);
+      }
+      throw new Error(msg);
     } catch (err: any) {
+      if (err instanceof NonRetryableFetchError) throw err;
       failures.push(`attempt ${attempt}: ${err.message}`);
       if (attempt < maxAttempts) {
         await sleepImpl(backoffMs * 2 ** (attempt - 1));
