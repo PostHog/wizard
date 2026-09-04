@@ -133,10 +133,10 @@ describe('cullFeatureFlagsConfig.run', () => {
       fs.readFileSync(path.join(installDir, AUDIT_CHECKS_FILE), 'utf8'),
     ) as { id: string; area: string; status: string }[];
     expect(ledger.map((row) => [row.id, row.area, row.status])).toEqual([
-      ['new-checkout', 'fully-rolled-out', 'pending'],
-      ['orphan', 'unreferenced', 'pending'],
+      ['new-checkout', 'Rolled out', 'pending'],
+      ['orphan', 'Unreferenced', 'pending'],
     ]);
-    expect(run.customPrompt?.({} as never)).toContain('- fully-rolled-out: 1');
+    expect(run.customPrompt?.({} as never)).toContain('- Rolled out: 1');
   });
 
   test('aborts on a dirty working tree before touching PostHog', async () => {

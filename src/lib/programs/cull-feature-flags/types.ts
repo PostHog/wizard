@@ -53,6 +53,8 @@ export type CullVerdict = 'stale' | 'warning' | 'healthy';
 export interface CullCandidate {
   key: string;
   bucket: CullBucket;
+  /** Display name of the bucket, the ledger row's `area`. */
+  area: string;
   verdict: CullVerdict;
   /** One line the ledger label shows next to the key. */
   proposedAction: string;

@@ -10,10 +10,10 @@ import { OutroKind } from '@lib/wizard-session';
 const STALE: CullCandidate = {
   key: 'new-checkout',
   bucket: 'fully-rolled-out',
+  area: 'Rolled out',
   verdict: 'stale',
-  proposedAction:
-    'remove the check, keep the true branch, then disable the flag',
-  reason: 'rollout 100%, posthog status ACTIVE',
+  proposedAction: 'keep on path, drop check, disable flag',
+  reason: 'rollout 100%, ACTIVE',
   flagId: 42,
   flagName: 'New checkout',
   callSites: [
@@ -29,9 +29,10 @@ const STALE: CullCandidate = {
 const HEALTHY: CullCandidate = {
   key: 'dark-mode',
   bucket: 'healthy',
+  area: 'Healthy',
   verdict: 'healthy',
   proposedAction: 'keep',
-  reason: 'rollout 30%, posthog status ACTIVE',
+  reason: 'rollout 30%, ACTIVE',
   flagId: 7,
   callSites: [
     { file: 'src/lib/flags.ts', line: 6, api: 'useFeatureFlagEnabled' },
@@ -41,9 +42,10 @@ const HEALTHY: CullCandidate = {
 const ORPHAN: CullCandidate = {
   key: 'pricing-v2-experiment',
   bucket: 'unreferenced',
+  area: 'Unreferenced',
   verdict: 'stale',
   proposedAction: 'disable the flag',
-  reason: 'rollout 50%, posthog status STALE',
+  reason: 'rollout 50%, STALE',
   flagId: 9,
   callSites: [],
 };
@@ -65,13 +67,11 @@ describe('candidateToCheck', () => {
   test('stale candidate becomes a pending row keyed by flag with bucket as area', () => {
     expect(candidateToCheck(STALE)).toEqual({
       id: 'new-checkout',
-      area: 'fully-rolled-out',
-      label:
-        'new-checkout: remove the check, keep the true branch, then disable the flag',
+      area: 'Rolled out',
+      label: 'new-checkout: keep on path, drop check, disable flag',
       status: 'pending',
       file: 'src/app/dashboard/page.tsx:20',
-      details:
-        'rollout 100%, posthog status ACTIVE; sites: src/app/dashboard/page.tsx:20 (useFeatureFlagEnabled), src/lib/checkout.ts:3 (isFeatureEnabled)',
+      details: 'rollout 100%, ACTIVE; also src/lib/checkout.ts:3',
     });
   });
 
@@ -79,9 +79,7 @@ describe('candidateToCheck', () => {
     expect(candidateToCheck(HEALTHY).status).toBe('pass');
     const orphan = candidateToCheck(ORPHAN);
     expect(orphan.file).toBeUndefined();
-    expect(orphan.details).toBe(
-      'rollout 50%, posthog status STALE; no call sites',
-    );
+    expect(orphan.details).toBe('rollout 50%, STALE; no call sites');
   });
 });
 
@@ -93,9 +91,9 @@ describe('buildCullPrompt', () => {
       scan: scan(),
     });
     expect(prompt).toContain('./.posthog-audit-checks.json');
-    expect(prompt).toContain('- fully-rolled-out: 1');
-    expect(prompt).toContain('- healthy: 1');
-    expect(prompt).toContain('- unreferenced: 1');
+    expect(prompt).toContain('- Rolled out: 1');
+    expect(prompt).toContain('- Healthy: 1');
+    expect(prompt).toContain('- Unreferenced: 1');
     expect(prompt).toContain('never delete or archive');
     expect(prompt).not.toContain('getAllFlags');
   });

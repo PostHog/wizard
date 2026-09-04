@@ -12,53 +12,53 @@ const slide = (area: string, intro: string[]): AreaSlide => ({
   docsUrl: DOCS_URL,
 });
 
-// One slide per ledger `area`, which the wizard seeds with the bucket name.
+// One slide per ledger `area`; keys match AREA_BY_BUCKET in the program's classify.ts.
 export const CULL_AREA_SLIDES: AreaSlide[] = [
-  slide('fully-rolled-out', [
+  slide('Rolled out', [
     'This flag is at 100% for everyone with no conditions. Culling keeps the on branch and removes the check.',
     CONSENT,
     DISABLE_ONLY,
   ]),
-  slide('never-enabled', [
+  slide('Never enabled', [
     'This flag is at 0% for everyone. Culling keeps the off branch and removes the check.',
     CONSENT,
     DISABLE_ONLY,
   ]),
-  slide('archived-still-referenced', [
+  slide('Archived in PostHog', [
     'PostHog already archived this flag, but the code still checks it. Culling keeps the off branch and removes the check.',
     CONSENT,
     'Nothing changes in PostHog for this one; the flag stays archived.',
   ]),
-  slide('disabled-but-referenced', [
+  slide('Disabled in PostHog', [
     'This flag is switched off in PostHog, but the code still checks it. Culling keeps the off branch and removes the check.',
     CONSENT,
     'Nothing changes in PostHog for this one; the flag stays off.',
   ]),
-  slide('unreferenced', [
+  slide('Unreferenced', [
     'PostHog has this flag, but nothing in this project evaluates it. Culling only disables the flag.',
     'If the project reads flags in bulk or by a computed key, the agent verifies that first.',
     DISABLE_ONLY,
   ]),
-  slide('unreferenced-comment-only', [
+  slide('Comment only', [
     'The only place this key shows up is a comment or config string, never an evaluation. Culling disables the flag and cleans up the mention.',
     CONSENT,
     DISABLE_ONLY,
   ]),
-  slide('dead-code-reference', [
+  slide('Dead code', [
     'The only file that checks this flag is not imported anywhere and is not a Next.js route. Culling deletes that file.',
     CONSENT,
     DISABLE_ONLY,
   ]),
-  slide('deleted-still-referenced', [
+  slide('Deleted in PostHog', [
     'The code checks a key PostHog no longer has, so it always resolves to off. Culling keeps the off branch and removes the check.',
     'The agent first checks the key is not a typo of a live flag.',
     CONSENT,
   ]),
-  slide('multi-callsite-no-wrapper', [
+  slide('Many call sites', [
     'Three or more files evaluate this flag directly. That is a suggestion, not a removal: the report recommends one hook or helper.',
     'Nothing is edited or disabled for this flag.',
   ]),
-  slide('healthy', [
+  slide('Healthy', [
     'This flag is live, partially rolled out or multivariate, and the code still needs it. Nothing to do.',
   ]),
 ];

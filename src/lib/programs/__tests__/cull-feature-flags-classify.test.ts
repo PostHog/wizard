@@ -242,9 +242,8 @@ describe('classifyFlags', () => {
     const candidates = classifyFlags(flags, result);
     expect(candidates.map((c) => c.key)).toEqual(['new-checkout']);
     expect(candidates[0]).toMatchObject({
-      proposedAction:
-        'remove the check, keep the true branch, then disable the flag',
-      reason: 'rollout 100%, posthog status ACTIVE',
+      proposedAction: 'keep on path, drop check, disable flag',
+      reason: 'rollout 100%, ACTIVE',
       flagName: 'New checkout',
       callSites: [
         { file: 'src/app/page.tsx', line: 20, api: 'useFeatureFlagEnabled' },

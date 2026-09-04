@@ -4,18 +4,30 @@ import type { CullBucket, CullCandidate, FeatureFlag } from './types.js';
 const MULTI_CALLSITE_FILE_THRESHOLD = 3;
 
 const PROPOSED_ACTION_BY_BUCKET: Record<CullBucket, string> = {
-  'dead-code-reference': 'delete the unreachable module, then disable the flag',
-  'archived-still-referenced': 'remove the check, keep the false branch',
-  'disabled-but-referenced': 'remove the check, keep the false branch',
-  'unreferenced-comment-only': 'disable the flag, clean up the comment',
-  unreferenced: 'disable the flag',
-  'fully-rolled-out':
-    'remove the check, keep the true branch, then disable the flag',
-  'never-enabled':
-    'remove the check, keep the false branch, then disable the flag',
-  'deleted-still-referenced': 'remove the check, keep the false branch',
-  'multi-callsite-no-wrapper': 'wrap the flag in one hook or helper',
+  'dead-code-reference': 'delete dead module, disable flag',
+  'archived-still-referenced': 'keep off path, drop check',
+  'disabled-but-referenced': 'keep off path, drop check',
+  'unreferenced-comment-only': 'disable flag, drop comment',
+  unreferenced: 'disable flag',
+  'fully-rolled-out': 'keep on path, drop check, disable flag',
+  'never-enabled': 'keep off path, drop check, disable flag',
+  'deleted-still-referenced': 'keep off path, drop check',
+  'multi-callsite-no-wrapper': 'suggest one wrapper hook',
   healthy: 'keep',
+};
+
+/** What the ledger and the run screen show as the row's area. Keys the cull slides too. */
+export const AREA_BY_BUCKET: Record<CullBucket, string> = {
+  'dead-code-reference': 'Dead code',
+  'archived-still-referenced': 'Archived in PostHog',
+  'disabled-but-referenced': 'Disabled in PostHog',
+  'unreferenced-comment-only': 'Comment only',
+  unreferenced: 'Unreferenced',
+  'fully-rolled-out': 'Rolled out',
+  'never-enabled': 'Never enabled',
+  'deleted-still-referenced': 'Deleted in PostHog',
+  'multi-callsite-no-wrapper': 'Many call sites',
+  healthy: 'Healthy',
 };
 
 const VERDICT_BY_BUCKET: Record<CullBucket, CullCandidate['verdict']> = {
@@ -71,7 +83,7 @@ function rolloutSummary(flag: FeatureFlag): string {
     parts.push('multivariate');
   if (flag.archived) parts.push('archived');
   if (!flag.active) parts.push('inactive');
-  if (flag.status) parts.push(`posthog status ${flag.status}`);
+  if (flag.status) parts.push(flag.status);
   return parts.join(', ');
 }
 
@@ -105,6 +117,7 @@ function candidate(
   return {
     key,
     bucket,
+    area: AREA_BY_BUCKET[bucket],
     verdict: VERDICT_BY_BUCKET[bucket],
     proposedAction: PROPOSED_ACTION_BY_BUCKET[bucket],
     reason,

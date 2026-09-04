@@ -15,6 +15,7 @@ import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { CULL_AREA_SLIDES } from './slides/cull/index.js';
+import { cullStageCopy } from './slides/cull/stage.js';
 import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -58,6 +59,10 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
   const slides = slidesFor(store.router.activeProgram, store.session.skillId);
+  const wrapUp =
+    store.router.activeProgram === 'cull-feature-flags'
+      ? cullStageCopy(checks, reportPath)
+      : undefined;
   const areaPane = (
     <AuditAreaPane
       checks={checks}
@@ -65,6 +70,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       slides={slides}
       dashboardUrl={store.session.dashboardUrl}
       notebookUrl={store.session.notebookUrl}
+      wrapUp={wrapUp}
     />
   );
 
