@@ -61,6 +61,11 @@ import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integratio
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
+import {
+  INITIAL_CULL_PROGRESS,
+  reduceCullProgress,
+  type CullProgress,
+} from '@lib/programs/cull-feature-flags/phase';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -188,6 +193,7 @@ export class WizardStore {
   private $statusMessages = atom<string[]>([]);
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
+  private $cullProgress = atom<CullProgress>(INITIAL_CULL_PROGRESS);
   private $eventPlan = atom<PlannedEvent[]>([]);
   private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
@@ -387,6 +393,10 @@ export class WizardStore {
 
   get tasks(): TaskItem[] {
     return this.$tasks.get();
+  }
+
+  get cullProgress(): CullProgress {
+    return this.$cullProgress.get();
   }
 
   get eventPlan(): PlannedEvent[] {
@@ -905,6 +915,7 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
+    this.$cullProgress.set(INITIAL_CULL_PROGRESS);
     this.setRunPhase(RunPhase.Idle);
   }
 
@@ -1048,6 +1059,11 @@ export class WizardStore {
     const msgs = this.$statusMessages.get();
     // Skip consecutive duplicate messages (no allocation on the hot path)
     if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
+    const cullProgress = this.$cullProgress.get();
+    const nextCullProgress = reduceCullProgress(cullProgress, message);
+    if (nextCullProgress !== cullProgress) {
+      this.$cullProgress.set(nextCullProgress);
+    }
     // Nanostore detects change by reference equality, so a new array is
     // required. At the cap, allocate exactly once at the final size (dropping
     // the oldest entry) rather than push-then-truncate.

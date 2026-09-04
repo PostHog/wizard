@@ -17,6 +17,7 @@ import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
+import { initLocalDev } from '@lib/local-dev';
 import { VERSION } from '@lib/version';
 import {
   Program,
@@ -194,6 +195,15 @@ async function main() {
   // auth). Without it, ask-driven flows like self-driving abort with
   // requires-interactive-mode the moment they need to ask a question.
   process.env.WIZARD_ASK_AUTODRIVE = '1';
+
+  // The session flags below only describe the run; `getSkillsBaseUrl` reads
+  // the process-wide targets that the CLI middleware normally sets from argv.
+  initLocalDev({
+    localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
+    localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
+    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
+    localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
+  });
 
   const { store } = startTUI(VERSION, programId);
   store.session = buildSession({

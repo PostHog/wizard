@@ -15,6 +15,7 @@
 
 import { Fragment } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { spawn } from 'node:child_process';
 import { Colors } from '@ui/tui/styles';
 import { type AuditCheck } from '@lib/programs/audit/types';
@@ -61,6 +62,16 @@ interface AuditAreaPaneProps {
   /** Notebook URL once the agent emits `[NOTEBOOK_URL]`. Same sticky-footer
    * treatment as the dashboard URL. */
   notebookUrl?: string | null;
+  /** Replaces the report wrap-up once no check is pending; programs with
+   * stages after verification (consent, apply) pass their own copy. */
+  wrapUp?: WrapUpCopy;
+}
+
+export interface WrapUpCopy {
+  title: string;
+  paragraphs: string[];
+  /** The agent is mid-turn behind this copy; show a spinner so a long wait reads as work, not a hang. */
+  isWorking?: boolean;
 }
 
 export const AuditAreaPane = ({
@@ -69,6 +80,7 @@ export const AuditAreaPane = ({
   slides = AUDIT_AREA_SLIDES,
   dashboardUrl,
   notebookUrl,
+  wrapUp,
 }: AuditAreaPaneProps) => {
   const pendingChecks = checks.filter((c) => c.status === 'pending');
   const activeArea = pendingChecks[0]?.area;
@@ -108,11 +120,36 @@ export const AuditAreaPane = ({
   // Every check is resolved and the agent is composing the report.
   return (
     <Box flexDirection="column">
-      <WritingReport reportPath={reportPath} />
+      {wrapUp ? (
+        <StageCopy copy={wrapUp} />
+      ) : (
+        <WritingReport reportPath={reportPath} />
+      )}
       {urlsFooter}
     </Box>
   );
 };
+
+const StageCopy = ({ copy }: { copy: WrapUpCopy }) => (
+  <Box flexDirection="column" paddingX={1}>
+    <Box>
+      {copy.isWorking ? (
+        <Box marginRight={1}>
+          <Spinner />
+        </Box>
+      ) : null}
+      <Text bold color={Colors.accent}>
+        {copy.title}
+      </Text>
+    </Box>
+    {copy.paragraphs.map((paragraph, i) => (
+      <Fragment key={i}>
+        <Box height={1} />
+        <Text>{paragraph}</Text>
+      </Fragment>
+    ))}
+  </Box>
+);
 
 // ── States ───────────────────────────────────────────────────────────
 

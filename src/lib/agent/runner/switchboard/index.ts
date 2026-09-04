@@ -134,6 +134,7 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'events-audit': DEFAULT_BINDING,
   'posthog-doctor': DEFAULT_BINDING,
   'web-analytics-doctor': DEFAULT_BINDING,
+  'cull-feature-flags': DEFAULT_BINDING,
   migration: DEFAULT_BINDING,
   'self-driving': DEFAULT_BINDING,
   'agent-skill': DEFAULT_BINDING,
