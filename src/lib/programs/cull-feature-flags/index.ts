@@ -27,7 +27,10 @@ import { buildCullOutro } from './outro.js';
 import { scanFlagCallSites } from './scan.js';
 import { buildCullPrompt, seedCullLedger } from './seed.js';
 import type { FeatureFlag } from './types.js';
-import { listUncommittedPaths } from './working-tree.js';
+import {
+  listModifiedTrackedPaths,
+  listUncommittedPaths,
+} from './working-tree.js';
 
 export const CULL_FEATURE_FLAGS_REPORT_FILE =
   'posthog-feature-flag-cull-report.md';
@@ -196,12 +199,10 @@ const cullRun = async (session: WizardSession): Promise<ProgramRun> => {
         candidates,
         scan,
       }),
-    buildOutroData: (sess, credentials) =>
+    buildOutroData: (sess) =>
       buildCullOutro({
         checks: readLedger(sess.installDir),
-        touchedFiles: listUncommittedPaths(sess.installDir),
-        appHost: credentials.host.appHost,
-        projectId: credentials.projectId,
+        touchedFiles: listModifiedTrackedPaths(sess.installDir),
         flagIdByKey,
         reportFile: CULL_FEATURE_FLAGS_REPORT_FILE,
         docsUrl: DOCS_URL,

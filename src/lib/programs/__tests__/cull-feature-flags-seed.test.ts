@@ -118,8 +118,6 @@ describe('buildCullPrompt', () => {
 
 describe('buildCullOutro', () => {
   const common = {
-    appHost: 'https://us.posthog.com',
-    projectId: 590630,
     flagIdByKey: new Map([['new-checkout', 42]]),
     reportFile: 'posthog-feature-flag-cull-report.md',
     docsUrl: 'https://posthog.com/docs/feature-flags/best-practices',
@@ -143,7 +141,7 @@ describe('buildCullOutro', () => {
     expect(outro.nextSteps).toBeUndefined();
   });
 
-  test('applied rows produce the git revert and the flag page per disabled flag', () => {
+  test('applied rows produce the git revert and a one-line PostHog undo', () => {
     const outro = buildCullOutro({
       ...common,
       checks: [
@@ -157,7 +155,7 @@ describe('buildCullOutro', () => {
       heading: 'Undo, if you want it back:',
       items: [
         'Code: git checkout -- src/app/dashboard/page.tsx src/lib/checkout.ts (or git diff to review first)',
-        'Re-enable new-checkout: https://us.posthog.com/project/590630/feature_flags/42',
+        'PostHog: 1 flag disabled, one toggle each to re-enable; the report links every flag page.',
       ],
     });
   });

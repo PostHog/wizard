@@ -5,8 +5,6 @@ import { APPLIED_MARKER } from './seed.js';
 export interface CullOutroInput {
   checks: readonly AuditCheck[];
   touchedFiles: readonly string[];
-  appHost: string;
-  projectId: number;
   flagIdByKey: ReadonlyMap<string, number>;
   reportFile: string;
   docsUrl: string;
@@ -26,11 +24,14 @@ export function buildCullOutro(input: CullOutroInput): OutroData {
       )} (or git diff to review first)`,
     );
   }
-  for (const check of applied) {
-    const flagId = input.flagIdByKey.get(check.id);
-    if (flagId === undefined) continue;
+  const disabledCount = applied.filter((check) =>
+    input.flagIdByKey.has(check.id),
+  ).length;
+  if (disabledCount > 0) {
     undoItems.push(
-      `Re-enable ${check.id}: ${input.appHost}/project/${input.projectId}/feature_flags/${flagId}`,
+      `PostHog: ${disabledCount} flag${
+        disabledCount === 1 ? '' : 's'
+      } disabled, one toggle each to re-enable; the report links every flag page.`,
     );
   }
   const message =
