@@ -149,11 +149,11 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
     const allNoConnection =
       blockingStatuses.length > 0 &&
       blockingStatuses.every((s) => s === ServiceHealthStatus.NoConnection);
-    const onlyGithubReleases =
-      blockingKeys.length === 1 && blockingKeys[0] === 'githubReleases';
+    const onlySkillsOrigin =
+      blockingKeys.length === 1 && blockingKeys[0] === 'skillsOrigin';
 
-    const decision = onlyGithubReleases
-      ? 'github-releases-down'
+    const decision = onlySkillsOrigin
+      ? 'skills-origin-down'
       : allNoConnection
       ? 'no-connection'
       : 'confirmed-outage';
@@ -161,7 +161,7 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
     const posthogStatus = health.posthogOverall?.status;
     const retriesUsed = Math.max(
       0,
-      ...(['llmGateway', 'mcp', 'githubReleases'] as const).map((k) => {
+      ...(['llmGateway', 'mcp', 'skillsOrigin'] as const).map((k) => {
         const ind = health[k]?.rawIndicator ?? '';
         const m = ind.match(/attempts=(\d+)/);
         return m ? Number(m[1]) - 1 : 0;

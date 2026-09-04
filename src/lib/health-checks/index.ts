@@ -25,7 +25,7 @@ export {
 export {
   checkLlmGatewayHealth,
   checkMcpHealth,
-  checkGithubReleasesHealth,
+  checkSkillsOriginHealth,
 } from './endpoints';
 
 export {

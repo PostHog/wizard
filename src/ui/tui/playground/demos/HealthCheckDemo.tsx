@@ -46,7 +46,7 @@ const MOCK_CONFIRMED_OUTAGE: AllServicesHealth = {
   cloudflareComponents: { status: ServiceHealthStatus.Healthy },
   llmGateway: HEALTHY,
   mcp: HEALTHY,
-  githubReleases: HEALTHY,
+  skillsOrigin: HEALTHY,
 };
 
 const MOCK_NO_CONNECTION: AllServicesHealth = {
@@ -66,7 +66,7 @@ const MOCK_NO_CONNECTION: AllServicesHealth = {
     status: ServiceHealthStatus.NoConnection,
     error: 'fetch failed',
   },
-  githubReleases: HEALTHY,
+  skillsOrigin: HEALTHY,
 };
 
 type Phase = 'checking' | 'confirmed' | 'no-connection';

@@ -1,4 +1,4 @@
-import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
+import { AWS_SKILLS_BASE_URL, GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
@@ -20,6 +20,9 @@ import { ServiceHealthStatus, type BaseHealthResult } from './types';
 // MCP – Cloudflare Worker
 //   Source: posthog/services/mcp/src/index.ts
 //   GET / → 302 to posthog.com docs. The redirect proves the worker is up.
+//
+// Skills download – context-mill releases
+//   GET <origin>/skill-menu.json on both origins; see checkSkillsOriginHealth.
 // ---------------------------------------------------------------------------
 
 function noConnectionResult(error: string, attempts: number): BaseHealthResult {
@@ -122,7 +125,10 @@ async function fetchEndpointHealth(
 
   const result =
     lastHttpStatus !== null
-      ? downResult(`HTTP ${lastHttpStatus} (attempts=${attempts})`)
+      ? downResult(
+          `HTTP ${lastHttpStatus} (attempts=${attempts})`,
+          lastHttpStatus,
+        )
       : noConnectionResult(lastError, attempts);
   logToFile(
     `[health-checks] GET ${url} -> ${result.status}` +
@@ -143,5 +149,65 @@ export const checkMcpHealth = (): Promise<BaseHealthResult> =>
     'manual',
   );
 
-export const checkGithubReleasesHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth(`${REMOTE_SKILLS_BASE_URL}/skill-menu.json`);
+/**
+ * Skills are published to two origins under the same filenames and
+ * `fetchWithRetry` fails over between them, so the run is only blocked when
+ * neither answers. Probed in parallel — sequential probes would double the
+ * worst case past `READINESS_TIMEOUT_MS`.
+ */
+export const checkSkillsOriginHealth = async (): Promise<BaseHealthResult> => {
+  const [github, aws] = await Promise.all([
+    fetchEndpointHealth(`${GITHUB_SKILLS_BASE_URL}/skill-menu.json`),
+    fetchEndpointHealth(`${AWS_SKILLS_BASE_URL}/skill-menu.json`),
+  ]);
+  return combineOriginHealth(github, aws);
+};
+
+/**
+ * Mirrors `fetchWithRetry`: a download tries GitHub, then AWS, so the run is
+ * only blocked when neither origin answers. Whichever failure the probes saw,
+ * one origin serving means skills are reachable.
+ */
+function combineOriginHealth(
+  github: BaseHealthResult,
+  aws: BaseHealthResult,
+): BaseHealthResult {
+  if (github.status === ServiceHealthStatus.Healthy) {
+    // Naming the dead origin makes a one-sided outage legible in the log and
+    // in the readiness reasons, where the status alone reads as "fine".
+    return aws.status === ServiceHealthStatus.Healthy
+      ? github
+      : withIndicatorSuffix(github, 'aws unavailable');
+  }
+
+  if (aws.status === ServiceHealthStatus.Healthy) {
+    return withIndicatorSuffix(aws, 'via aws, github unavailable');
+  }
+
+  const error = `github: ${github.error ?? 'unknown'} | aws: ${
+    aws.error ?? 'unknown'
+  }`;
+  const confirmedDown =
+    github.status === ServiceHealthStatus.Down ||
+    aws.status === ServiceHealthStatus.Down;
+  return {
+    status: confirmedDown
+      ? ServiceHealthStatus.Down
+      : ServiceHealthStatus.NoConnection,
+    error,
+    // Keeps the `attempts=N` the blocked-readiness analytics parses.
+    rawIndicator: github.rawIndicator ?? aws.rawIndicator,
+  };
+}
+
+function withIndicatorSuffix(
+  result: BaseHealthResult,
+  suffix: string,
+): BaseHealthResult {
+  return {
+    ...result,
+    rawIndicator: result.rawIndicator
+      ? `${result.rawIndicator} (${suffix})`
+      : suffix,
+  };
+}

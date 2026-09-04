@@ -1136,10 +1136,12 @@ describe('downloadWithRetry', () => {
     expect(attempts).toBe(2);
   });
 
-  it('reports every attempt when all retries fail', async () => {
+  it('lists each attempt when they fail differently', async () => {
+    const errors = ['ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT'];
+    let i = 0;
     await expect(
       __test.downloadWithRetry(url, {
-        fetchImpl: (() => Promise.reject(new Error('network down'))) as any,
+        fetchImpl: (() => Promise.reject(new Error(errors[i++]))) as any,
         sleepImpl: noSleep,
         maxAttempts: 3,
       }),
