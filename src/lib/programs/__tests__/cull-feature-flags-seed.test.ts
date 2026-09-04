@@ -119,6 +119,7 @@ describe('buildCullPrompt', () => {
 describe('buildCullOutro', () => {
   const common = {
     flagIdByKey: new Map([['new-checkout', 42]]),
+    installDir: '/srv/app',
     reportFile: 'posthog-feature-flag-cull-report.md',
     docsUrl: 'https://posthog.com/docs/feature-flags/best-practices',
   };
@@ -137,6 +138,9 @@ describe('buildCullOutro', () => {
     });
     expect(outro.kind).toBe(OutroKind.Success);
     expect(outro.message).toContain('Nothing was changed');
+    expect(outro.message).toContain(
+      '/srv/app/posthog-feature-flag-cull-report.md',
+    );
     expect(outro.changes).toEqual([]);
     expect(outro.nextSteps).toBeUndefined();
   });
@@ -150,6 +154,9 @@ describe('buildCullOutro', () => {
       touchedFiles: ['src/app/dashboard/page.tsx', 'src/lib/checkout.ts'],
     });
     expect(outro.message).toContain('Culled 1 feature flag.');
+    expect(outro.message).toContain(
+      'Report: /srv/app/posthog-feature-flag-cull-report.md',
+    );
     expect(outro.changes).toEqual([candidateToCheck(STALE).label]);
     expect(outro.nextSteps).toEqual({
       heading: 'Undo, if you want it back:',

@@ -1,3 +1,4 @@
+import * as path from 'path';
 import type { AuditCheck } from '@lib/programs/audit/types';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import { APPLIED_MARKER } from './seed.js';
@@ -6,6 +7,7 @@ export interface CullOutroInput {
   checks: readonly AuditCheck[];
   touchedFiles: readonly string[];
   flagIdByKey: ReadonlyMap<string, number>;
+  installDir: string;
   reportFile: string;
   docsUrl: string;
 }
@@ -34,12 +36,13 @@ export function buildCullOutro(input: CullOutroInput): OutroData {
       } disabled, one toggle each to re-enable; the report links every flag page.`,
     );
   }
+  const reportPath = path.join(input.installDir, input.reportFile);
   const message =
     applied.length === 0
-      ? 'Nothing was changed. The report lists what you can cull by hand.'
+      ? `Nothing was changed. The report at ${reportPath} lists what you can cull by hand.`
       : `Culled ${applied.length} feature flag${
           applied.length === 1 ? '' : 's'
-        }. Flags were disabled, never deleted.`;
+        }. Flags were disabled, never deleted. Report: ${reportPath}`;
   return {
     kind: OutroKind.Success,
     message,

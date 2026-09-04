@@ -204,6 +204,7 @@ const cullRun = async (session: WizardSession): Promise<ProgramRun> => {
         checks: readLedger(sess.installDir),
         touchedFiles: listModifiedTrackedPaths(sess.installDir),
         flagIdByKey,
+        installDir: sess.installDir,
         reportFile: CULL_FEATURE_FLAGS_REPORT_FILE,
         docsUrl: DOCS_URL,
       }),
