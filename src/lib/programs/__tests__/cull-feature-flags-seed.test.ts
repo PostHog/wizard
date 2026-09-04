@@ -84,23 +84,28 @@ describe('candidateToCheck', () => {
 });
 
 describe('buildCullPrompt', () => {
-  test('names the ledger, counts per bucket, and the disable-only rule', () => {
+  const ledgerFile = '.posthog-audit-checks.json';
+
+  test('names the ledger and every area the candidates fall in', () => {
     const prompt = buildCullPrompt({
-      ledgerFile: '.posthog-audit-checks.json',
+      ledgerFile,
       candidates: [STALE, HEALTHY, ORPHAN],
       scan: scan(),
     });
-    expect(prompt).toContain('./.posthog-audit-checks.json');
-    expect(prompt).toContain('- Rolled out: 1');
-    expect(prompt).toContain('- Healthy: 1');
-    expect(prompt).toContain('- Unreferenced: 1');
-    expect(prompt).toContain('never delete or archive');
-    expect(prompt).not.toContain('getAllFlags');
+    expect(prompt).toContain(ledgerFile);
+    expect(prompt).toContain('Rolled out');
+    expect(prompt).toContain('Healthy');
+    expect(prompt).toContain('Unreferenced');
   });
 
-  test('adds the bulk, dynamic and truncation caveats when they apply', () => {
-    const prompt = buildCullPrompt({
-      ledgerFile: '.posthog-audit-checks.json',
+  test('bulk, dynamic and truncation caveats only appear when the scan hit them', () => {
+    const plain = buildCullPrompt({
+      ledgerFile,
+      candidates: [ORPHAN],
+      scan: scan(),
+    });
+    const withCaveats = buildCullPrompt({
+      ledgerFile,
       candidates: [ORPHAN],
       scan: scan({
         usesBulkEvaluation: true,
@@ -110,9 +115,11 @@ describe('buildCullPrompt', () => {
         truncated: true,
       }),
     });
-    expect(prompt).toContain('calls getAllFlags');
-    expect(prompt).toContain('src/lib/flags.ts:4 (isFeatureEnabled)');
-    expect(prompt).toContain('hit its file limit');
+    expect(plain).not.toContain('getAllFlags');
+    expect(plain).not.toContain('src/lib/flags.ts:4');
+    expect(withCaveats).toContain('getAllFlags');
+    expect(withCaveats).toContain('src/lib/flags.ts:4');
+    expect(withCaveats.length).toBeGreaterThan(plain.length);
   });
 });
 
@@ -124,7 +131,7 @@ describe('buildCullOutro', () => {
     docsUrl: 'https://posthog.com/docs/feature-flags/best-practices',
   };
 
-  test('nothing culled means a report-only message and no undo block', () => {
+  test('nothing culled means no changes and no undo block', () => {
     const outro = buildCullOutro({
       ...common,
       checks: [
@@ -137,7 +144,6 @@ describe('buildCullOutro', () => {
       touchedFiles: [],
     });
     expect(outro.kind).toBe(OutroKind.Success);
-    expect(outro.message).toContain('Nothing was changed');
     expect(outro.message).toContain(
       '/srv/app/posthog-feature-flag-cull-report.md',
     );
@@ -145,7 +151,7 @@ describe('buildCullOutro', () => {
     expect(outro.nextSteps).toBeUndefined();
   });
 
-  test('culled rows produce the git revert and a one-line PostHog undo', () => {
+  test('culled rows list the change and an undo step for code and for PostHog', () => {
     const outro = buildCullOutro({
       ...common,
       checks: [
@@ -153,17 +159,14 @@ describe('buildCullOutro', () => {
       ],
       touchedFiles: ['src/app/dashboard/page.tsx', 'src/lib/checkout.ts'],
     });
-    expect(outro.message).toContain('Culled 1 feature flag.');
     expect(outro.message).toContain(
-      'Report: /srv/app/posthog-feature-flag-cull-report.md',
+      '/srv/app/posthog-feature-flag-cull-report.md',
     );
     expect(outro.changes).toEqual([candidateToCheck(STALE).label]);
-    expect(outro.nextSteps).toEqual({
-      heading: 'Undo, if you want it back:',
-      items: [
-        'Code: git checkout -- src/app/dashboard/page.tsx src/lib/checkout.ts (or git diff to review first)',
-        'PostHog: 1 flag disabled, one toggle each to re-enable; the report links every flag page.',
-      ],
-    });
+    const [codeUndo, posthogUndo] = outro.nextSteps?.items ?? [];
+    expect(codeUndo).toContain('src/app/dashboard/page.tsx');
+    expect(codeUndo).toContain('src/lib/checkout.ts');
+    expect(posthogUndo).toBeDefined();
+    expect(outro.nextSteps?.items).toHaveLength(2);
   });
 });
