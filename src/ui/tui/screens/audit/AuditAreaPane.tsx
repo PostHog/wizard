@@ -15,6 +15,7 @@
 
 import { Fragment } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { spawn } from 'node:child_process';
 import { Colors } from '@ui/tui/styles';
 import { type AuditCheck } from '@lib/programs/audit/types';
@@ -69,6 +70,8 @@ interface AuditAreaPaneProps {
 export interface WrapUpCopy {
   title: string;
   paragraphs: string[];
+  /** The agent is mid-turn behind this copy; show a spinner so a long wait reads as work, not a hang. */
+  isWorking?: boolean;
 }
 
 export const AuditAreaPane = ({
@@ -129,9 +132,16 @@ export const AuditAreaPane = ({
 
 const StageCopy = ({ copy }: { copy: WrapUpCopy }) => (
   <Box flexDirection="column" paddingX={1}>
-    <Text bold color={Colors.accent}>
-      {copy.title}
-    </Text>
+    <Box>
+      {copy.isWorking ? (
+        <Box marginRight={1}>
+          <Spinner />
+        </Box>
+      ) : null}
+      <Text bold color={Colors.accent}>
+        {copy.title}
+      </Text>
+    </Box>
     {copy.paragraphs.map((paragraph, i) => (
       <Fragment key={i}>
         <Box height={1} />

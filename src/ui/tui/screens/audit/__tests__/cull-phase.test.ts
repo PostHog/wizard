@@ -122,6 +122,7 @@ describe('cullPhase', () => {
     expect(phase.copy).toEqual({
       title: 'Your pick list is on its way',
       paragraphs: expect.any(Array),
+      isWorking: true,
     });
   });
 

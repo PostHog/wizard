@@ -82,7 +82,7 @@ function buildCullCopy(
   }
   paragraphs.push(CULL_SAFETY_COPY);
 
-  return { title: titleByPass[progress.pass], paragraphs };
+  return { title: titleByPass[progress.pass], paragraphs, isWorking: true };
 }
 
 export function cullPhase(
@@ -109,9 +109,10 @@ export function cullPhase(
         title: 'Your pick list is on its way',
         paragraphs: [
           `Every flag is verified at its call site. ${proposals.length} look done and are up for culling; the healthy ones stay.`,
-          'The agent is writing the prompt now, one question per group with the plan for each flag. It opens here in a moment.',
+          'The agent is writing the prompt now, one question per group with the plan for each flag. It opens here when ready, usually within a minute or two.',
           'Nothing changes until you confirm in that prompt. Each pick gets its check removed from code and the flag disabled in PostHog, never deleted.',
         ],
+        isWorking: true,
       },
     };
   }
