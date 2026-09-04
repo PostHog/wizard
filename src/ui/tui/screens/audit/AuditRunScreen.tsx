@@ -14,6 +14,7 @@ import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
+import { CULL_AREA_SLIDES } from './slides/cull/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -28,6 +29,12 @@ import { WIZARD_LOG_FILE } from '@utils/paths';
 interface AuditRunScreenProps {
   store: WizardStore;
 }
+
+const slidesFor = (activeProgram: string, skillId: string | null) => {
+  if (activeProgram === 'cull-feature-flags') return CULL_AREA_SLIDES;
+  if (skillId === 'audit-events') return EVENTS_AUDIT_AREA_SLIDES;
+  return AUDIT_AREA_SLIDES;
+};
 
 export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   useSyncExternalStore(
@@ -50,10 +57,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
-  const slides =
-    store.session.skillId === 'audit-events'
-      ? EVENTS_AUDIT_AREA_SLIDES
-      : AUDIT_AREA_SLIDES;
+  const slides = slidesFor(store.router.activeProgram, store.session.skillId);
   const areaPane = (
     <AuditAreaPane
       checks={checks}

@@ -38,6 +38,7 @@ export const CULL_FEATURE_FLAGS_SUPPORTED: ReadonlySet<Integration> = new Set([
 ]);
 
 const SCREEN_BY_STEP: Record<string, string> = {
+  intro: 'cull-intro',
   run: 'audit-run',
 };
 
