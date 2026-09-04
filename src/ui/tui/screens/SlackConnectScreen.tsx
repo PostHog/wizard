@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { fetchSlackConnected, ApiError } from '@lib/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
@@ -155,13 +155,19 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // Capture once and stop polling — repeating a failing call
-          // every tick would spam error tracking. The nudge copy is
-          // the fallback either way; a failed check counts as not
-          // connected so the screen doesn't sit on the loading state.
+          // Stop polling — repeating a failing call every tick would spam
+          // error tracking. The nudge copy is the fallback either way; a
+          // failed check counts as not connected so the screen doesn't sit
+          // on the loading state.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
           }
+          // Skip capturing transient connectivity blips (connect timeout,
+          // refused, DNS hiccup): this path already degrades gracefully, so
+          // a messageless network error is unactionable noise. Genuine
+          // auth/permission failures still carry a real message and are
+          // captured once.
+          if (err instanceof ApiError && err.isTransient) return;
           analytics.captureException(
             err instanceof Error ? err : new Error(String(err)),
             { step: 'slack_connected_check' },
