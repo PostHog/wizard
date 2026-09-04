@@ -65,9 +65,9 @@ const DYNAMIC_JSX_RE = /<PostHogFeature\b[^>]*?\bflag=\{\s*(?!['"])[^}\s]/g;
 const BULK_RE = /\b(getAllFlags|getAllFlagsAndPayloads)\s*\(/;
 const PREFILTER = /FeatureFlag|isFeatureEnabled|PostHogFeature|getAllFlags/;
 const IMPORT_SPECIFIER_RE =
-  /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]/g;
+  /(?:from\s*|import\s*\(\s*|require\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
 const NEXT_ENTRY_FILE_RE =
-  /(?:^|\/)(?:app\/.*\/?(?:page|layout|route|loading|error|not-found|template|default|global-error)|pages\/.*|middleware|proxy|instrumentation(?:-client)?|next\.config)\.(?:tsx?|[mc]?jsx?)$/;
+  /(?:^|\/)(?:app\/.*\/?(?:page|layout|route|loading|error|not-found|template|default|global-error|sitemap|robots|manifest|opengraph-image|twitter-image|icon|apple-icon)|pages\/.*|middleware|proxy|instrumentation(?:-client)?|next\.config)\.(?:tsx?|[mc]?jsx?)$/;
 
 function stripComments(lines: string[]): string[] {
   let isInsideBlockComment = false;

@@ -2,6 +2,7 @@ import { seedAuditLedger } from '@lib/programs/audit/seed';
 import type { AuditCheck } from '@lib/programs/audit/types';
 import type { FlagScanResult } from './scan.js';
 import type { CullCandidate } from './types.js';
+import { BUCKET_ORDER } from './classify.js';
 
 export const CULLED_MARKER = '; culled';
 
@@ -33,7 +34,12 @@ export function seedCullLedger(
   installDir: string,
   candidates: readonly CullCandidate[],
 ): AuditCheck[] {
-  const checks = candidates.map(candidateToCheck);
+  const checks = [...candidates]
+    .sort(
+      (left, right) =>
+        BUCKET_ORDER.indexOf(left.bucket) - BUCKET_ORDER.indexOf(right.bucket),
+    )
+    .map(candidateToCheck);
   seedAuditLedger(installDir, checks);
   return checks;
 }

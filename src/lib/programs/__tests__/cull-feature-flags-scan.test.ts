@@ -234,6 +234,40 @@ describe('scanFlagCallSites', () => {
     ]);
   });
 
+  test('metadata routes and side-effect imports remain reachable', async () => {
+    writeFile(
+      tmpDir,
+      'src/app/sitemap.ts',
+      'export default function sitemap() {}',
+    );
+    writeFile(
+      tmpDir,
+      'src/app/robots.ts',
+      'export default function robots() {}',
+    );
+    writeFile(
+      tmpDir,
+      'src/app/opengraph-image.tsx',
+      'export default function Image() {}',
+    );
+    writeFile(tmpDir, 'src/app/layout.tsx', 'import "../lib/register";');
+    writeFile(
+      tmpDir,
+      'src/lib/register.ts',
+      'posthog.isFeatureEnabled("boot-flag");',
+    );
+
+    const result = await scanFlagCallSites(tmpDir);
+
+    expect(result.reachableFiles).toEqual([
+      'src/app/layout.tsx',
+      'src/app/opengraph-image.tsx',
+      'src/app/robots.ts',
+      'src/app/sitemap.ts',
+      'src/lib/register.ts',
+    ]);
+  });
+
   test('skips node_modules and build output', async () => {
     writeFile(
       tmpDir,

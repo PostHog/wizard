@@ -67,7 +67,7 @@ describe('classifyFlags', () => {
     expect(bucketOf(flags, result, 'k')).toEqual(['fully-rolled-out', 'stale']);
   });
 
-  test('never enabled flag with a call site is stale', () => {
+  test('flag at 0% everywhere is stale but flagged as a possible rollback', () => {
     const flags = [flag({ key: 'beta-dashboard', filters: rollout(0) })];
     const result = scan({
       callSites: [site('beta-dashboard', 'src/app/page.tsx')],
@@ -76,6 +76,9 @@ describe('classifyFlags', () => {
       'never-enabled',
       'stale',
     ]);
+    const [candidate] = classifyFlags(flags, result);
+    expect(candidate.area).toBe('Off for everyone');
+    expect(candidate.reason).toContain('may be a rollback');
   });
 
   test('archived flag still referenced is stale, archived and unreferenced is skipped', () => {

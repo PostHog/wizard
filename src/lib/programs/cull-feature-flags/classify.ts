@@ -24,11 +24,24 @@ export const AREA_BY_BUCKET: Record<CullBucket, string> = {
   'unreferenced-comment-only': 'Comment only',
   unreferenced: 'Unreferenced',
   'fully-rolled-out': 'Rolled out',
-  'never-enabled': 'Never enabled',
+  'never-enabled': 'Off for everyone',
   'deleted-still-referenced': 'Deleted in PostHog',
   'multi-callsite-no-wrapper': 'Many call sites',
   healthy: 'Healthy',
 };
+
+export const BUCKET_ORDER: readonly CullBucket[] = [
+  'unreferenced',
+  'unreferenced-comment-only',
+  'dead-code-reference',
+  'archived-still-referenced',
+  'disabled-but-referenced',
+  'fully-rolled-out',
+  'never-enabled',
+  'deleted-still-referenced',
+  'multi-callsite-no-wrapper',
+  'healthy',
+];
 
 const VERDICT_BY_BUCKET: Record<CullBucket, CullCandidate['verdict']> = {
   'dead-code-reference': 'stale',
@@ -85,6 +98,11 @@ function rolloutSummary(flag: FeatureFlag): string {
   if (!flag.active) parts.push('inactive');
   if (flag.status) parts.push(flag.status);
   return parts.join(', ');
+}
+
+function reasonForBucket(bucket: CullBucket, summary: string): string {
+  if (bucket !== 'never-enabled') return summary;
+  return `${summary}; may be a rollback, verify before culling`;
 }
 
 function bucketForFlag(
@@ -163,7 +181,8 @@ export function classifyFlags(
       mentionedKeys.has(flag.key),
       reachableFiles,
     );
-    candidates.push(candidate(flag.key, bucket, summary, sites, flag));
+    const reason = reasonForBucket(bucket, summary);
+    candidates.push(candidate(flag.key, bucket, reason, sites, flag));
   }
 
   for (const [key, sites] of sitesByKey) {
