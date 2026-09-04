@@ -1,7 +1,7 @@
 import type { AuditCheck } from '@lib/programs/audit/types';
 import type { WrapUpCopy } from '../../AuditAreaPane.js';
 
-const APPLIED_MARKER = '; applied';
+const CULLED_MARKER = '; culled';
 const DECLINED_MARKER = '; declined by user';
 
 /** Left-pane copy for the cull stages after verification: consent, apply, report. */
@@ -11,9 +11,9 @@ export function cullStageCopy(
 ): WrapUpCopy | undefined {
   if (checks.some((check) => check.status === 'pending')) return undefined;
   const proposed = checks.filter((check) => check.status === 'warning');
-  const applied = checks.filter(
+  const culled = checks.filter(
     (check) =>
-      check.status === 'pass' && (check.details ?? '').includes(APPLIED_MARKER),
+      check.status === 'pass' && (check.details ?? '').includes(CULLED_MARKER),
   );
   const declined = checks.filter(
     (check) =>
@@ -21,7 +21,7 @@ export function cullStageCopy(
       (check.details ?? '').includes(DECLINED_MARKER),
   );
   const failed = checks.filter((check) => check.status === 'error');
-  const isDecided = applied.length + declined.length + failed.length > 0;
+  const isDecided = culled.length + declined.length + failed.length > 0;
 
   if (proposed.length > 0 && !isDecided) {
     return {
@@ -36,7 +36,7 @@ export function cullStageCopy(
     return {
       title: `Culling ${proposed.length} more`,
       paragraphs: [
-        `${applied.length} done so far${
+        `${culled.length} done so far${
           failed.length > 0 ? `, ${failed.length} failed` : ''
         }. Code edit first, then the PostHog disable, one flag at a time.`,
         'Every edit is an ordinary git diff; every disabled flag is one toggle from back on.',
@@ -46,7 +46,7 @@ export function cullStageCopy(
   return {
     title: 'Writing the cull report',
     paragraphs: [
-      `${applied.length} culled, ${declined.length} left for you, ${failed.length} failed. The report at ${reportPath} lists all of them with the undo recipe.`,
+      `${culled.length} culled, ${declined.length} left for you, ${failed.length} failed. The report at ${reportPath} lists all of them with the undo recipe.`,
       'Hang tight!',
     ],
   };

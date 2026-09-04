@@ -124,7 +124,7 @@ describe('buildCullOutro', () => {
     docsUrl: 'https://posthog.com/docs/feature-flags/best-practices',
   };
 
-  test('nothing applied means a report-only message and no undo block', () => {
+  test('nothing culled means a report-only message and no undo block', () => {
     const outro = buildCullOutro({
       ...common,
       checks: [
@@ -145,11 +145,11 @@ describe('buildCullOutro', () => {
     expect(outro.nextSteps).toBeUndefined();
   });
 
-  test('applied rows produce the git revert and a one-line PostHog undo', () => {
+  test('culled rows produce the git revert and a one-line PostHog undo', () => {
     const outro = buildCullOutro({
       ...common,
       checks: [
-        { ...candidateToCheck(STALE), status: 'pass', details: 'x; applied' },
+        { ...candidateToCheck(STALE), status: 'pass', details: 'x; culled' },
       ],
       touchedFiles: ['src/app/dashboard/page.tsx', 'src/lib/checkout.ts'],
     });

@@ -3,7 +3,7 @@ import type { AuditCheck } from '@lib/programs/audit/types';
 import type { FlagScanResult } from './scan.js';
 import type { CullCandidate } from './types.js';
 
-export const APPLIED_MARKER = '; applied';
+export const CULLED_MARKER = '; culled';
 
 // The row's `file` already names the first site, so details only add the rest.
 function describeSites(candidate: CullCandidate): string | undefined {
