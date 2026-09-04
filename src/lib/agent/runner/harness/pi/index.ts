@@ -607,9 +607,10 @@ export const piBackend: AgentHarness = {
         });
       }
 
-      // The skill plans events into .posthog-events.json then asks to remove it
-      // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
-      // up host-side rather than leave a stale (often empty) artifact (#15).
+      // The skill asks the agent to remove .posthog-events.json on completion.
+      // Scoped project-file `rm` is allowed in pi, but keep this host-side
+      // cleanup as a best-effort backstop so skipped cleanup does not leave a
+      // stale artifact.
       try {
         const planFile = path.join(session.installDir, '.posthog-events.json');
         if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
