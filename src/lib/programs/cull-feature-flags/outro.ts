@@ -1,7 +1,16 @@
 import * as path from 'path';
 import type { AuditCheck } from '@lib/programs/audit/types';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
-import { CULLED_MARKER } from './seed.js';
+import { AREA_BY_BUCKET } from './classify.js';
+import { CULLED_MARKER, DECLINED_MARKER } from './seed.js';
+
+const DISABLING_AREAS = new Set([
+  AREA_BY_BUCKET['dead-code-reference'],
+  AREA_BY_BUCKET['unreferenced-comment-only'],
+  AREA_BY_BUCKET.unreferenced,
+  AREA_BY_BUCKET['fully-rolled-out'],
+  AREA_BY_BUCKET['never-enabled'],
+]);
 
 export interface CullOutroInput {
   checks: readonly AuditCheck[];
@@ -18,22 +27,27 @@ export function buildCullOutro(input: CullOutroInput): OutroData {
     (check) =>
       check.status === 'pass' && (check.details ?? '').includes(CULLED_MARKER),
   );
+  const failed = input.checks.filter((check) => check.status === 'error');
+  const leftForYou = input.checks.filter((check) =>
+    (check.details ?? '').includes(DECLINED_MARKER),
+  ).length;
   const undoItems: string[] = [];
   if (input.touchedFiles.length > 0) {
     undoItems.push(
       `Code: git checkout -- ${input.touchedFiles.join(
         ' ',
-      )} (or git diff to review first)`,
+      )} (or git diff to review first). The tree was clean when this run started, so every change git diff shows is the wizard's. Each flag was its own unit: a failed row left its flag untouched, and earlier culls stand.`,
     );
   }
-  const disabledCount = culled.filter((check) =>
-    input.flagIdByKey.has(check.id),
+  const disabledCount = culled.filter(
+    (check) =>
+      DISABLING_AREAS.has(check.area) && input.flagIdByKey.has(check.id),
   ).length;
   if (disabledCount > 0) {
     undoItems.push(
       `PostHog: ${disabledCount} flag${
         disabledCount === 1 ? '' : 's'
-      } disabled, one toggle each to re-enable; the report links every flag page.`,
+      } disabled, never deleted; one toggle each to re-enable. Disabling kept the flag's rollout conditions, variants, and payloads, so re-enabling restores exactly what was there. The report links every flag page.`,
     );
   }
   const reportPath = path.join(input.installDir, input.reportFile);
@@ -42,7 +56,9 @@ export function buildCullOutro(input: CullOutroInput): OutroData {
       ? `Nothing was changed. The report at ${reportPath} lists what you can cull by hand.`
       : `Culled ${culled.length} feature flag${
           culled.length === 1 ? '' : 's'
-        }. Flags were disabled, never deleted. Report: ${reportPath}`;
+        }.${failed.length > 0 ? ` ${failed.length} failed.` : ''}${
+          leftForYou > 0 ? ` ${leftForYou} left for you.` : ''
+        } Flags were disabled, never deleted. Report: ${reportPath}`;
   return {
     kind: OutroKind.Success,
     message,

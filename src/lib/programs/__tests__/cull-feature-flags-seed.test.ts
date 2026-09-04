@@ -166,4 +166,50 @@ describe('buildCullOutro', () => {
     expect(posthogUndo).toBeDefined();
     expect(outro.nextSteps?.items).toHaveLength(2);
   });
+
+  test('counts only culls that disabled a PostHog flag', () => {
+    const outro = buildCullOutro({
+      ...common,
+      flagIdByKey: new Map([
+        ['new-checkout', 42],
+        ['archived-flag', 43],
+      ]),
+      checks: [
+        { ...candidateToCheck(STALE), status: 'pass', details: 'x; culled' },
+        {
+          ...candidateToCheck(STALE),
+          id: 'archived-flag',
+          area: 'Archived in PostHog',
+          status: 'pass',
+          details: 'x; culled',
+        },
+        {
+          ...candidateToCheck(STALE),
+          id: 'deleted-flag',
+          area: 'Deleted in PostHog',
+          status: 'pass',
+          details: 'x; culled',
+        },
+        {
+          ...candidateToCheck(STALE),
+          id: 'failed-flag',
+          status: 'error',
+          details: 'x; failed',
+        },
+        {
+          ...candidateToCheck(STALE),
+          id: 'declined-flag',
+          status: 'pass',
+          details: 'x; declined by user',
+        },
+      ],
+      touchedFiles: ['src/app/dashboard/page.tsx'],
+    });
+
+    expect(outro.message).toContain('Culled 3 feature flags');
+    expect(outro.message).toContain('1 failed');
+    expect(outro.message).toContain('1 left for you');
+    expect(outro.nextSteps?.items).toHaveLength(2);
+    expect(outro.nextSteps?.items[1]).toContain('1 flag');
+  });
 });

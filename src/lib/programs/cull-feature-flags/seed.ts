@@ -5,6 +5,7 @@ import type { CullCandidate } from './types.js';
 import { BUCKET_ORDER } from './classify.js';
 
 export const CULLED_MARKER = '; culled';
+export const DECLINED_MARKER = '; declined by user';
 
 // The row's `file` already names the first site, so details only add the rest.
 function describeSites(candidate: CullCandidate): string | undefined {
