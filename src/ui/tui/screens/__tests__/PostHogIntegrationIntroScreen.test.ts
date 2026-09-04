@@ -6,10 +6,8 @@
  * one character too long.
  */
 
-import {
-  CONTINUE_MENU_OPTIONS,
-  sharingOptions,
-} from '@ui/tui/screens/PostHogIntegrationIntroScreen';
+import { sharingOptions } from '@ui/tui/screens/PostHogIntegrationIntroScreen';
+import { introMenuOptions } from '@ui/tui/posthog-integration-intro';
 
 // IntroScreenLayout renders a centered menu in a 24-column box. A row with an
 // icon spends four columns before the label: focus marker, gap, glyph, gap.
@@ -17,13 +15,19 @@ const MENU_BOX_WIDTH = 24;
 const ICON_ROW_PREFIX_WIDTH = 4;
 const MAX_MENU_LABEL_LENGTH = MENU_BOX_WIDTH - ICON_ROW_PREFIX_WIDTH;
 
+const menuFor = (view: 'default' | 'more-info', posthogSdkDetected: boolean) =>
+  introMenuOptions({ view, showContinue: true, posthogSdkDetected }) ?? [];
+
+// Both detection states: only one offers the spell book and hedged Continue.
 const EVERY_LABEL = [
-  ...CONTINUE_MENU_OPTIONS.map((o) => o.label),
-  ...sharingOptions(true).map((o) => o.label),
-];
+  ...menuFor('default', false),
+  ...menuFor('default', true),
+  ...menuFor('more-info', true),
+  ...sharingOptions(true),
+].map((o) => o.label);
 
 describe('PostHogIntegrationIntroScreen menu labels', () => {
-  it.each(EVERY_LABEL.filter(Boolean))(
+  it.each([...new Set(EVERY_LABEL.filter(Boolean))])(
     '"%s" fits the intro menu column',
     (label) => {
       expect(label.length).toBeLessThanOrEqual(MAX_MENU_LABEL_LENGTH);
@@ -33,13 +37,15 @@ describe('PostHogIntegrationIntroScreen menu labels', () => {
   it('leaves the disclosure row to the layout', () => {
     // IntroScreenLayout appends it to every intro menu — see its own test.
     // A copy here would drift, which is how the panel got five names.
-    expect(CONTINUE_MENU_OPTIONS.map((o) => o.value)).not.toContain('privacy');
+    for (const view of ['default', 'more-info'] as const) {
+      expect(menuFor(view, true).map((o) => o.value)).not.toContain('privacy');
+    }
   });
 
   it('does not ask the user to decide about sharing to continue', () => {
     // The choice lives in the panel. A decline option next to Continue makes
     // the first decision be about data rather than about the wizard.
-    const values = CONTINUE_MENU_OPTIONS.map((o) => o.value);
+    const values = menuFor('default', false).map((o) => o.value);
     expect(values).not.toContain('continue-no-scan');
   });
 });

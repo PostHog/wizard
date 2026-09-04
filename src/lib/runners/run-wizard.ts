@@ -2,6 +2,7 @@ import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { getProgramConfig } from '@lib/programs/program-registry';
 import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
@@ -137,8 +138,62 @@ export function runWizard(
 
       activeTui.store.session = session;
 
+      // Flush a terminal-phase push on Ctrl-C so the web app sees the
+      // run ended in error rather than hanging on the last "running"
+      // snapshot. Registered before the stream exists: Ctrl-C on the intro
+      // must still restore the terminal and run the cleanups, and there is
+      // no run to report yet.
+      let signalled = false;
+      onSignal = (): void => {
+        if (signalled || exitInProgress) return;
+        signalled = true;
+        logToFile('[run-wizard] signal received, flushing task stream');
+        // Run cleanups synchronously first — settings restore is sync fs work
+        // and must complete even if the stream shutdown below times out.
+        runCleanups();
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        const teardown = (): void => {
+          try {
+            activeTui.unmount();
+          } catch {
+            // terminal may already be torn down
+          }
+          process.exit(130);
+        };
+        const stream = taskStream;
+        if (!stream) {
+          teardown();
+          return;
+        }
+        void stream
+          .shutdown(2000)
+          .catch((e) =>
+            logToFile('[run-wizard] task stream shutdown error on signal:', e),
+          )
+          .finally(teardown);
+      };
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
+
+      for (;;) {
+        await activeTui.store.runReadyHooks();
+        // Settle the pre-run screens; `integration-check` is a no-op gate here.
+        await activeTui.store.getGate('intro');
+
+        const active = activeTui.store.router.activeProgram;
+        if (active === config.id) break;
+        config = getProgramConfig(active);
+      }
+
+      // After the switch loop, not before: the stream bakes its program id,
+      // session id, and event-plan path in at construction, so a stream built
+      // for the launch program would report the whole run under a program the
+      // user left on the intro screen. Nothing before this point produces a
+      // task to push.
       const taskStreamEnabled = !session.noTelemetry;
-      taskStream = new TaskStreamPush({
+      const activeStream = new TaskStreamPush({
         store: activeTui.store,
         programId: config.id,
         destinations: [
@@ -152,44 +207,9 @@ export function runWizard(
           : undefined,
         enabled: taskStreamEnabled,
       });
-      const activeStream = taskStream;
+      taskStream = activeStream;
       activeStream.attach();
 
-      // Flush a terminal-phase push on Ctrl-C so the web app sees the
-      // run ended in error rather than hanging on the last "running"
-      // snapshot.
-      let signalled = false;
-      onSignal = (): void => {
-        if (signalled || exitInProgress) return;
-        signalled = true;
-        logToFile('[run-wizard] signal received, flushing task stream');
-        // Run cleanups synchronously first — settings restore is sync fs work
-        // and must complete even if the stream shutdown below times out.
-        runCleanups();
-        if (activeTui.store.session.runPhase === RunPhase.Running) {
-          activeTui.store.setRunPhase(RunPhase.Error);
-        }
-        void activeStream
-          .shutdown(2000)
-          .catch((e) =>
-            logToFile('[run-wizard] task stream shutdown error on signal:', e),
-          )
-          .finally(() => {
-            try {
-              activeTui.unmount();
-            } catch {
-              // terminal may already be torn down
-            }
-            process.exit(130);
-          });
-      };
-      process.on('SIGINT', onSignal);
-      process.on('SIGTERM', onSignal);
-
-      await activeTui.store.runReadyHooks();
-      // Settle the pre-run screens. `integration-check` is a no-op gate for
-      // programs without it.
-      await activeTui.store.getGate('intro');
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
 

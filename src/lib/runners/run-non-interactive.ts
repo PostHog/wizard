@@ -236,6 +236,9 @@ export function runNonInteractive(
           },
           addDiscoveredFeature: () => undefined,
           setDetectionComplete: () => undefined,
+          setPosthogSdkDetected: (detected: boolean) => {
+            session.posthogSdkDetected = detected;
+          },
         };
         for (const step of config.steps) {
           if (step.onReady) {

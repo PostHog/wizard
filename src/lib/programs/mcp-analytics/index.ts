@@ -58,7 +58,7 @@ export const mcpAnalyticsConfig = createSkillProgram({
   skillId: 'mcp-analytics',
   command: 'mcp-analytics',
   id: 'mcp-analytics',
-  description: 'Add PostHog MCP analytics to your MCP server',
+  description: 'Add PostHog MCP Analytics to your MCP server',
   integrationLabel: 'mcp-analytics',
   customPrompt:
     "Instrument this project's MCP server with PostHog MCP analytics. Run the " +

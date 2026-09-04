@@ -5,7 +5,10 @@
  * nesting under More info.
  */
 
-import { buildIntroMenu } from '@ui/tui/screens/IntroScreenLayout';
+import {
+  buildIntroMenu,
+  detectionLabelWidth,
+} from '@ui/tui/screens/IntroScreenLayout';
 import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
 
 const values = (options: ReturnType<typeof buildIntroMenu>) =>
@@ -88,5 +91,20 @@ describe('buildIntroMenu', () => {
 
     expect(withGlyphs?.at(-1)?.icon?.glyph).toBe(' ');
     expect(plain?.at(-1)?.icon).toBeUndefined();
+  });
+});
+
+// Ticks used to sit in whatever column each label happened to end at.
+describe('detectionLabelWidth', () => {
+  it('holds the Directory column when rows are shorter', () => {
+    expect(detectionLabelWidth([{ label: 'PostHog', value: 'yes' }])).toBe(
+      'Directory'.length,
+    );
+  });
+
+  it('widens for a row label longer than any the layout owns', () => {
+    expect(detectionLabelWidth([{ label: 'PostHog SDK', value: 'x' }])).toBe(
+      'PostHog SDK'.length,
+    );
   });
 });

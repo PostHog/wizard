@@ -119,7 +119,7 @@ const base = createSkillProgram({
   skillId: 'replay-vision-setup',
   command: 'replay-vision',
   id: 'replay-vision',
-  description: 'Set up PostHog Replay vision scanners for your product',
+  description: 'Set up PostHog Replay Vision scanners for your product',
   integrationLabel: 'replay-vision',
   customPrompt:
     'Set up PostHog Replay vision. Run the `replay-vision` skill end-to-end: ' +
