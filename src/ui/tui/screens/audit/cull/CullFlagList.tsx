@@ -191,7 +191,9 @@ function foldedFooter(counts: FoldedCounts): string | undefined {
       : null,
   ].filter((part): part is string => part !== null);
   if (parts.length === 0) return undefined;
-  return `${parts.join(', ')}, nothing to do`;
+  const hasReportItems = counts.kept > 0 || counts.suggestions > 0;
+  const tail = hasReportItems ? 'details in the report' : 'nothing to do';
+  return `${parts.join(', ')}, ${tail}`;
 }
 
 export function toLaneGroups(

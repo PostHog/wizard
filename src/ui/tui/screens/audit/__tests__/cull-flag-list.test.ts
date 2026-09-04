@@ -57,7 +57,7 @@ describe('toLaneGroups', () => {
 
     expect(nothingToCull).toMatchObject({
       rows: [],
-      footer: '2 healthy, 1 suggestion, nothing to do',
+      footer: '2 healthy, 1 suggestion, details in the report',
     });
   });
 
