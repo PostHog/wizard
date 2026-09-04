@@ -10,6 +10,7 @@ import {
 } from '@ui/tui/primitives/index';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
+import { LearnCard } from '@ui/tui/components/LearnCard';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
@@ -58,12 +59,13 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
-  const slides = slidesFor(store.router.activeProgram, store.session.skillId);
-  const wrapUp =
-    store.router.activeProgram === 'cull-feature-flags'
-      ? cullStageCopy(checks, reportPath)
-      : undefined;
-  const areaPane = (
+  const activeProgram = store.router.activeProgram;
+  const isCull = activeProgram === 'cull-feature-flags';
+  const slides = slidesFor(activeProgram, store.session.skillId);
+  const wrapUp = isCull ? cullStageCopy(checks, reportPath) : undefined;
+  const learnBlocks = getProgramConfig(activeProgram).getContentBlocks;
+  const showLearnDeck = isCull && !store.learnCardComplete && !!learnBlocks;
+  let leftPane = (
     <AuditAreaPane
       checks={checks}
       reportPath={reportPath}
@@ -73,6 +75,15 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       wrapUp={wrapUp}
     />
   );
+  if (showLearnDeck && learnBlocks) {
+    leftPane = (
+      <LearnCard
+        store={store}
+        blocks={learnBlocks(store)}
+        onComplete={() => store.setLearnCardComplete()}
+      />
+    );
+  }
 
   // Narrow terminals: drop the area pane.
   const statusComponent =
@@ -81,7 +92,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
         {pendingChecksList}
       </Box>
     ) : (
-      <SplitView left={areaPane} right={pendingChecksList} />
+      <SplitView left={leftPane} right={pendingChecksList} />
     );
 
   const tabs = [

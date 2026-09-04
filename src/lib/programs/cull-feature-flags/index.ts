@@ -22,6 +22,7 @@ import { readProjectFile } from '@utils/bounded-fs';
 import { logToFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { classifyFlags } from './classify.js';
+import { getContentBlocks } from './content/index.js';
 import { fetchFeatureFlags } from './fetch.js';
 import { buildCullOutro } from './outro.js';
 import { scanFlagCallSites } from './scan.js';
@@ -215,4 +216,5 @@ export const cullFeatureFlagsConfig: ProgramConfig = {
   ...base,
   steps: cullSteps,
   run: cullRun,
+  getContentBlocks,
 };
