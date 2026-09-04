@@ -1,10 +1,6 @@
 import type { AreaSlide } from '../shared.js';
 
 const DOCS_URL = 'https://posthog.com/docs/feature-flags/best-practices';
-const CONSENT =
-  "You'll confirm before any edit, and git diff shows exactly what moved.";
-const DISABLE_ONLY =
-  'The flag gets disabled in PostHog, never deleted, so re-enabling is one toggle on the flag page.';
 
 const slide = (area: string, intro: string[]): AreaSlide => ({
   area,
@@ -12,54 +8,48 @@ const slide = (area: string, intro: string[]): AreaSlide => ({
   docsUrl: DOCS_URL,
 });
 
-// One slide per ledger `area`; keys match AREA_BY_BUCKET in the program's classify.ts.
 export const CULL_AREA_SLIDES: AreaSlide[] = [
   slide('Rolled out', [
-    'This flag is at 100% for everyone with no conditions. Culling keeps the on branch and removes the check.',
-    CONSENT,
-    DISABLE_ONLY,
+    'This flag is at 100% for everyone, so culling preserves the on path and removes the check.',
+    'The wizard checked that no rollout conditions remain; the agent confirms the call site is a plain on/off check.',
   ]),
   slide('Off for everyone', [
-    'This flag is at 0% for everyone. Culling keeps the off branch and removes the check.',
+    'This flag is at 0% for everyone, so culling preserves the off path and removes the check.',
     'A flag rolled back after an incident looks the same; if it reads like a kill switch, keep it.',
-    CONSENT,
-    DISABLE_ONLY,
   ]),
   slide('Archived in PostHog', [
-    'PostHog already archived this flag, but the code still checks it. Culling keeps the off branch and removes the check.',
-    CONSENT,
-    'Nothing changes in PostHog for this one; the flag stays archived.',
+    'PostHog archived this flag, but the code still checks it, so culling preserves the off path and removes the check.',
+    'The flag stays archived.',
   ]),
   slide('Disabled in PostHog', [
-    'This flag is switched off in PostHog, but the code still checks it. Culling keeps the off branch and removes the check.',
-    CONSENT,
-    'Nothing changes in PostHog for this one; the flag stays off.',
+    'PostHog switched this flag off, but the code still checks it, so culling preserves the off path and removes the check.',
+    'The flag stays off in PostHog.',
   ]),
   slide('Unreferenced', [
-    'PostHog has this flag, but nothing in this project evaluates it. Culling only disables the flag.',
-    'If the project reads flags in bulk or by a computed key, the agent verifies that first.',
-    DISABLE_ONLY,
+    'PostHog has this flag, but nothing in this repository evaluates it.',
+    'Only this repository was scanned, so a flag read by another service or app can look unreferenced here.',
+    'The agent checks bulk and computed-key reads before suggesting it.',
   ]),
   slide('Comment only', [
-    'The only place this key shows up is a comment or config string, never an evaluation. Culling disables the flag and cleans up the mention.',
-    CONSENT,
-    DISABLE_ONLY,
+    'This key appears only in a comment or config string, not an evaluation.',
+    'Only this repository was scanned, so a flag read by another service or app can look unreferenced here.',
+    'The agent confirms that no executable evaluation exists before removing the mention.',
   ]),
   slide('Dead code', [
-    'The only file that checks this flag is not imported anywhere and is not a Next.js route. Culling deletes that file.',
-    CONSENT,
-    DISABLE_ONLY,
+    'The only file checking this flag is not imported and is not a Next.js route.',
+    'Only this repository was scanned, so a flag read by another service or app can look unreferenced here.',
+    'The agent verifies that the file is unreachable before deleting it.',
   ]),
   slide('Deleted in PostHog', [
-    'The code checks a key PostHog no longer has, so it always resolves to off. Culling keeps the off branch and removes the check.',
-    'The agent first checks the key is not a typo of a live flag.',
-    CONSENT,
+    'The code checks a key PostHog no longer has, so culling preserves the off path and removes the check.',
+    'The agent confirms that the key is not a typo of a live flag.',
   ]),
   slide('Many call sites', [
-    'Three or more files evaluate this flag directly. That is a suggestion, not a removal: the report recommends one hook or helper.',
+    'Three or more files evaluate this flag directly, so the report suggests one hook or helper.',
     'Nothing is edited or disabled for this flag.',
   ]),
   slide('Healthy', [
-    'This flag is live, partially rolled out or multivariate, and the code still needs it. Nothing to do.',
+    'This flag is live, partially rolled out or multivariate, and the code still needs it.',
+    'It is kept unchanged.',
   ]),
 ];
