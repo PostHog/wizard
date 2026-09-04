@@ -98,7 +98,7 @@ describe('buildCullPrompt', () => {
     expect(prompt).toContain('Unreferenced');
   });
 
-  test('bulk, dynamic and truncation caveats only appear when the scan hit them', () => {
+  test('dynamic key sites appear only when the scan found them', () => {
     const plain = buildCullPrompt({
       ledgerFile,
       candidates: [ORPHAN],
@@ -115,11 +115,8 @@ describe('buildCullPrompt', () => {
         truncated: true,
       }),
     });
-    expect(plain).not.toContain('getAllFlags');
     expect(plain).not.toContain('src/lib/flags.ts:4');
-    expect(withCaveats).toContain('getAllFlags');
     expect(withCaveats).toContain('src/lib/flags.ts:4');
-    expect(withCaveats.length).toBeGreaterThan(plain.length);
   });
 });
 

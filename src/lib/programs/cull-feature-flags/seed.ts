@@ -55,32 +55,19 @@ function countByBucket(candidates: readonly CullCandidate[]): string[] {
 }
 
 export function buildCullPrompt(input: CullPromptInput): string {
-  const lines = [
-    'Run the cull-feature-flags skill end-to-end. The wizard already scanned this project and fetched its PostHog flags; the ledger at',
-    `./${input.ledgerFile} is ground truth, one row per flag, grouped by area:`,
+  const yesNo = (value: boolean): string => (value ? 'yes' : 'no');
+  const dynamicSites = input.scan.dynamicSites.map(
+    (site) => `${site.file}:${site.line} (${site.api})`,
+  );
+  return [
+    `Run the cull-feature-flags skill end-to-end. The ledger at ./${input.ledgerFile} is ground truth, one row per flag, grouped by area:`,
     ...countByBucket(input.candidates),
     '',
-    'Never grep for flags or re-classify a row. Resolve rows only through audit_resolve_checks. Ask exactly once which rows to apply, decline option first. Disable flags only, never delete or archive. Code edits land before the PostHog disable.',
-  ];
-  if (input.scan.usesBulkEvaluation) {
-    lines.push(
-      'This project calls getAllFlags, so a flag with no literal call site may still be read out of that result. Verify every unreferenced row at the bulk call site before proposing it.',
-    );
-  }
-  if (input.scan.dynamicSites.length > 0) {
-    const sites = input.scan.dynamicSites.map(
-      (site) => `${site.file}:${site.line} (${site.api})`,
-    );
-    lines.push(
-      `Flag keys are also evaluated dynamically at ${sites.join(
-        ', ',
-      )}. Verify every unreferenced row against those sites before proposing it.`,
-    );
-  }
-  if (input.scan.truncated) {
-    lines.push(
-      'The scan hit its file limit, so "unreferenced" is not proven. Treat every unreferenced row as verify-first.',
-    );
-  }
-  return lines.join('\n');
+    "Scan facts (deterministic, from the wizard's scan of this project):",
+    `- Bulk evaluation (getAllFlags): ${yesNo(input.scan.usesBulkEvaluation)}`,
+    `- Dynamic flag keys: ${
+      dynamicSites.length > 0 ? dynamicSites.join(', ') : 'none'
+    }`,
+    `- Scan truncated at the file limit: ${yesNo(input.scan.truncated)}`,
+  ].join('\n');
 }
