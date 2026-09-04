@@ -111,8 +111,11 @@ export async function fetchSkillMenu(
   const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
   try {
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
-    const resp = await fetchWithRetry(menuUrl, opts);
-    const data = (await resp.json()) as SkillMenu;
+    const data = (await fetchWithRetry(
+      menuUrl,
+      (resp) => resp.json(),
+      opts,
+    )) as SkillMenu;
     for (const [category, entries] of Object.entries(data.categories)) {
       data.categories[category] = entries.flatMap(expandBundleEntry);
     }
@@ -179,13 +182,23 @@ function extractBundle(
   return written;
 }
 
+/**
+ * Per-attempt budget for a skill download. Skill bundles are multi-megabyte, so
+ * a slow connection needs longer to stream the body than the default menu/prompt
+ * budget allows.
+ */
+const DOWNLOAD_TIMEOUT_MS = 120000;
+
 /** Download a URL to a buffer, retrying transient failures with backoff. */
 async function downloadWithRetry(
   url: string,
   opts: RetryOpts = {},
 ): Promise<Uint8Array> {
-  const resp = await fetchWithRetry(url, opts);
-  return new Uint8Array(await resp.arrayBuffer());
+  return fetchWithRetry(
+    url,
+    async (resp) => new Uint8Array(await resp.arrayBuffer()),
+    { timeoutMs: DOWNLOAD_TIMEOUT_MS, ...opts },
+  );
 }
 
 /** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
