@@ -1,34 +1,197 @@
+import * as path from 'path';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import { resolveSkillVariantId } from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
+import { getSkillsBaseUrl, Integration } from '@lib/constants';
+import { detectFramework } from '@lib/detection/index';
+import { ErrorCodes } from '@lib/errors';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
+import {
+  AUDIT_CHECKS_FILE,
+  AUDIT_CHECKS_KEY,
+  coerceAuditChecks,
+} from '@lib/programs/audit/types';
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import type { WizardSession } from '@lib/wizard-session';
+import { fetchSkillMenu } from '@lib/wizard-tools';
+import { analytics } from '@utils/analytics';
+import { readProjectFile } from '@utils/bounded-fs';
+import { logToFile } from '@utils/debug';
+import { wizardAbort } from '@utils/wizard-abort';
+import { classifyFlags } from './classify.js';
+import { fetchFeatureFlags } from './fetch.js';
+import { buildCullOutro } from './outro.js';
+import { scanFlagCallSites } from './scan.js';
+import { buildCullPrompt, seedCullLedger } from './seed.js';
+import type { FeatureFlag } from './types.js';
+import { listUncommittedPaths } from './working-tree.js';
 
 export const CULL_FEATURE_FLAGS_REPORT_FILE =
   'posthog-feature-flag-cull-report.md';
+const CULL_SKILL_GROUP = 'cull-feature-flags';
+const DOCS_URL = 'https://posthog.com/docs/feature-flags/best-practices';
 
-// The skill resolves rows through audit_resolve_checks, so the audit run
-// screen renders the ledger live instead of a bare spinner.
-const withAuditRunScreen = (steps: ProgramStep[]): ProgramStep[] =>
-  steps.map((step) =>
-    step.id === 'run' ? { ...step, screenId: 'audit-run' } : step,
+/** Frameworks the scanner has patterns for; one context-mill variant each. */
+export const CULL_FEATURE_FLAGS_SUPPORTED: ReadonlySet<Integration> = new Set([
+  Integration.nextjs,
+]);
+
+const SCREEN_BY_STEP: Record<string, string> = {
+  run: 'audit-run',
+};
+
+const cullSteps: ProgramStep[] = AGENT_SKILL_STEPS.map((step) => {
+  const override = SCREEN_BY_STEP[step.id];
+  return override ? { ...step, screenId: override } : step;
+});
+
+const base = createSkillProgram({
+  skillId: `${CULL_SKILL_GROUP}-nextjs`,
+  command: 'cull-feature-flags',
+  id: 'cull-feature-flags',
+  description:
+    'Find stale PostHog feature flags in this project and remove the ones you pick',
+  integrationLabel: 'cull-feature-flags',
+  successMessage: `Feature flag cull complete! View the report at ./${CULL_FEATURE_FLAGS_REPORT_FILE}`,
+  reportFile: CULL_FEATURE_FLAGS_REPORT_FILE,
+  docsUrl: DOCS_URL,
+  spinnerMessage: 'Culling stale feature flags...',
+  estimatedDurationMinutes: 5,
+});
+
+async function abortDirtyWorkingTree(paths: string[]): Promise<void> {
+  const shown = paths.slice(0, 10).map((p) => `  ${p}`);
+  const more = paths.length > 10 ? `  ...and ${paths.length - 10} more` : '';
+  await wizardAbort({
+    code: ErrorCodes.DetectDirtyWorkingTree,
+    message:
+      'This project has uncommitted changes. Culling edits files, and the undo is a plain git revert, ' +
+      'which only works when the tree starts clean.\n\n' +
+      'Commit or stash these first, then run the command again:\n' +
+      [...shown, more].filter(Boolean).join('\n'),
+    error: new Error('cull-feature-flags: dirty working tree'),
+  });
+}
+
+async function abortUnsupportedPlatform(
+  integration: Integration | undefined,
+): Promise<void> {
+  const name = integration
+    ? FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration
+    : 'this';
+  await wizardAbort({
+    code: ErrorCodes.DetectUnsupportedPlatform,
+    message:
+      `Feature flag culling has no scanner for ${name} projects yet. ` +
+      'Supported today: Next.js.',
+    error: new Error(
+      `cull-feature-flags unsupported platform: ${integration ?? 'unknown'}`,
+    ),
+  });
+}
+
+async function resolveVariantSkillId(framework: Integration): Promise<string> {
+  const menu = await fetchSkillMenu(getSkillsBaseUrl());
+  const entries = menu ? Object.values(menu.categories).flat() : [];
+  return (
+    resolveSkillVariantId(entries, CULL_SKILL_GROUP, framework) ??
+    `${CULL_SKILL_GROUP}-${framework}`
   );
+}
+
+async function fetchFlagsOrEmpty(
+  session: WizardSession,
+): Promise<{ flags: FeatureFlag[]; failed: boolean }> {
+  const credentials = session.credentials;
+  if (!credentials) return { flags: [], failed: true };
+  try {
+    const flags = await fetchFeatureFlags(
+      credentials.accessToken,
+      credentials.host.apiHost,
+      credentials.projectId,
+    );
+    return { flags, failed: false };
+  } catch (error) {
+    logToFile(`[cull-feature-flags] flag fetch failed: ${String(error)}`);
+    analytics.wizardCapture('cull feature flags fetch failed');
+    return { flags: [], failed: true };
+  }
+}
+
+function readLedger(installDir: string) {
+  const raw = readProjectFile(path.join(installDir, AUDIT_CHECKS_FILE));
+  if (raw === null) return [];
+  try {
+    return coerceAuditChecks(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+const cullRun = async (session: WizardSession): Promise<ProgramRun> => {
+  const { installDir } = session;
+  const uncommitted = listUncommittedPaths(installDir);
+  if (uncommitted.length > 0) await abortDirtyWorkingTree(uncommitted);
+
+  const framework = await detectFramework(installDir);
+  if (!framework || !CULL_FEATURE_FLAGS_SUPPORTED.has(framework)) {
+    await abortUnsupportedPlatform(framework);
+  }
+  const skillId = await resolveVariantSkillId(framework as Integration);
+
+  const { flags, failed } = await fetchFlagsOrEmpty(session);
+  const scan = await scanFlagCallSites(
+    installDir,
+    flags.map((flag) => flag.key),
+  );
+  const candidates = classifyFlags(flags, scan);
+  const checks = seedCullLedger(installDir, candidates);
+  session.frameworkContext[AUDIT_CHECKS_KEY] = checks;
+  const flagIdByKey = new Map(
+    candidates
+      .filter((candidate) => candidate.flagId !== undefined)
+      .map((candidate) => [candidate.key, candidate.flagId as number]),
+  );
+  analytics.wizardCapture('cull feature flags seeded', {
+    framework,
+    flags: flags.length,
+    candidates: candidates.length,
+    stale: candidates.filter((c) => c.verdict === 'stale').length,
+    files_scanned: scan.filesScanned,
+    truncated: scan.truncated,
+    fetch_failed: failed,
+  });
+
+  const baseRun =
+    typeof base.run === 'function' ? await base.run(session) : base.run;
+  if (!baseRun) throw new Error('cull-feature-flags has no run configuration');
+
+  return {
+    ...baseRun,
+    skillId,
+    customPrompt: () =>
+      buildCullPrompt({
+        ledgerFile: AUDIT_CHECKS_FILE,
+        candidates,
+        scan,
+        postHogFetchFailed: failed,
+      }),
+    buildOutroData: (sess, credentials) =>
+      buildCullOutro({
+        checks: readLedger(sess.installDir),
+        touchedFiles: listUncommittedPaths(sess.installDir),
+        appHost: credentials.host.appHost,
+        projectId: credentials.projectId,
+        flagIdByKey,
+        reportFile: CULL_FEATURE_FLAGS_REPORT_FILE,
+        docsUrl: DOCS_URL,
+      }),
+  };
+};
 
 export const cullFeatureFlagsConfig: ProgramConfig = {
-  ...createSkillProgram({
-    skillId: 'cull-feature-flags-nextjs',
-    command: 'cull-feature-flags',
-    id: 'cull-feature-flags',
-    description:
-      'Find stale PostHog feature flags in this project and remove the ones you pick',
-    integrationLabel: 'cull-feature-flags',
-    customPrompt:
-      'Run the cull-feature-flags skill end-to-end: verify each seeded ledger ' +
-      'row at its call site, ask once which flags to remove, apply only those, ' +
-      `then write ./${CULL_FEATURE_FLAGS_REPORT_FILE}.`,
-    successMessage: `Feature flag cull complete! View the report at ./${CULL_FEATURE_FLAGS_REPORT_FILE}`,
-    reportFile: CULL_FEATURE_FLAGS_REPORT_FILE,
-    docsUrl: 'https://posthog.com/docs/feature-flags/best-practices',
-    spinnerMessage: 'Culling stale feature flags...',
-    estimatedDurationMinutes: 5,
-  }),
-  steps: withAuditRunScreen(AGENT_SKILL_STEPS),
+  ...base,
+  steps: cullSteps,
+  run: cullRun,
 };
