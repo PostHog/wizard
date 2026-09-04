@@ -120,7 +120,7 @@ describe('cullPhase', () => {
 
     expect(phase.phase).toBe('pick');
     expect(phase.copy).toEqual({
-      title: 'Waiting for your pick',
+      title: 'Your pick list is on its way',
       paragraphs: expect.any(Array),
     });
   });

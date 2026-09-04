@@ -106,10 +106,11 @@ export function cullPhase(
     return {
       phase: 'pick',
       copy: {
-        title: 'Waiting for your pick',
+        title: 'Your pick list is on its way',
         paragraphs: [
           `Every flag is verified at its call site. ${proposals.length} look done and are up for culling; the healthy ones stay.`,
-          'Nothing changes until you confirm in the prompt. Each pick gets its check removed from code and the flag disabled in PostHog, never deleted.',
+          'The agent is writing the prompt now, one question per group with the plan for each flag. It opens here in a moment.',
+          'Nothing changes until you confirm in that prompt. Each pick gets its check removed from code and the flag disabled in PostHog, never deleted.',
         ],
       },
     };
