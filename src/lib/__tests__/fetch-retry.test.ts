@@ -116,7 +116,7 @@ describe('fetchWithRetry', () => {
   });
 
   it.each([404, 403, 401, 400])(
-    'retries HTTP %i at each origin, same as any other failure',
+    'spends no retry budget on HTTP %i, but still asks the other origin',
     async (code) => {
       const { impl, calls } = makeFetch(() => status(code));
       await expect(
@@ -125,19 +125,19 @@ describe('fetchWithRetry', () => {
           fetchImpl: impl,
         }),
       ).rejects.toThrow(`HTTP ${code}`);
-      expect(calls.filter(isGitHub)).toHaveLength(3);
-      expect(calls).toHaveLength(6);
-      expect(calls.at(-1)).toBe(`${AWS}/v1.50.0/missing.zip`);
+      // One attempt per origin: no backoff burned, but AWS still gets asked.
+      expect(calls).toEqual([
+        `${GH_PINNED}/missing.zip`,
+        `${AWS}/v1.50.0/missing.zip`,
+      ]);
     },
   );
 
-  it('collapses identical attempt failures into one message', async () => {
+  it('names both origins when a non-retryable status exhausts them', async () => {
     const { impl } = makeFetch(() => status(404));
     await expect(
       fetchWithRetry(`${GH_PINNED}/missing.zip`, { ...base, fetchImpl: impl }),
-    ).rejects.toThrow(
-      /github: HTTP 404 404 \(x3\) \| aws: HTTP 404 404 \(x3\)/,
-    );
+    ).rejects.toThrow(/github: HTTP 404.*\| aws: HTTP 404/s);
   });
 
   it.each([404, 403])(

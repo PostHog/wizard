@@ -1,10 +1,9 @@
 /**
  * One retry + failover policy for every critical-path fetch. GitHub is primary,
- * AWS is the fallback. Every failure is treated the same — retry the origin,
- * then try the other one — because the statuses that look deterministic aren't:
- * GitHub 403s expired asset redirects (a retry mints a fresh one) and blocked
- * regions, and a 404 can be an edge that hasn't caught up with the release.
- * Guessing which failures are worth another request saves less than it costs.
+ * AWS is the fallback. A status a retry can't heal (404, 403) spends no retry
+ * budget at the origin that returned it — but it still costs the other origin
+ * one try, because the two are published separately and GitHub 403s expired
+ * asset redirects and blocked regions where the asset is present.
  */
 
 import { logToFile } from '@utils/debug';
@@ -51,6 +50,18 @@ export function resetOriginPreference(): void {
   preferredOrigin = 'github';
 }
 
+/** A response status that retrying can't fix; propagates past the retry loop. */
+class NonRetryableFetchError extends Error {}
+
+/**
+ * 5xx are transient; 408 (request timeout) and 429 (rate limit) explicitly ask
+ * to retry. Every other 4xx is a client error a retry won't heal (404 missing
+ * skill, 403 bad token) — retrying only burns the backoff before failing.
+ */
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429;
+}
+
 export interface RetryOpts {
   fetchImpl?: typeof fetch;
   sleepImpl?: (ms: number) => Promise<void>;
@@ -65,14 +76,6 @@ export interface RetryOpts {
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-/** Every attempt failing identically is the common case; say it once. */
-function summarize(failures: string[]): string {
-  const unique = [...new Set(failures)];
-  return unique.length === 1
-    ? `${unique[0]}${failures.length > 1 ? ` (x${failures.length})` : ''}`
-    : failures.map((f, i) => `attempt ${i + 1}: ${f}`).join('; ');
 }
 
 /** Try one origin to exhaustion. */
@@ -90,15 +93,19 @@ async function fetchOrigin(
         signal: AbortSignal.timeout(opts.timeoutMs),
       });
       if (resp.ok) return resp;
-      throw new Error(`HTTP ${resp.status} ${resp.statusText}`.trim());
+      const msg = `HTTP ${resp.status} ${resp.statusText}`.trim();
+      if (!isRetryableStatus(resp.status))
+        throw new NonRetryableFetchError(msg);
+      throw new Error(msg);
     } catch (err) {
-      failures.push(messageOf(err));
+      if (err instanceof NonRetryableFetchError) throw err;
+      failures.push(`attempt ${attempt}: ${messageOf(err)}`);
       if (attempt < opts.maxAttempts) {
         await opts.sleepImpl(opts.backoffMs * 2 ** (attempt - 1));
       }
     }
   }
-  throw new Error(summarize(failures));
+  throw new Error(failures.join('; '));
 }
 
 /**
@@ -126,7 +133,13 @@ export async function fetchWithRetry(
   };
 
   const awsUrl = failover ? awsUrlFor(url) : null;
-  if (!awsUrl) return fetchOrigin(url, originOpts);
+  if (!awsUrl) {
+    try {
+      return await fetchOrigin(url, originOpts);
+    } catch (err) {
+      throw new Error(`fetch ${url} failed — ${messageOf(err)}`);
+    }
+  }
 
   // Sticky: whichever origin last worked is tried first for the rest of the run.
   const order: Array<{ origin: SkillsOrigin; target: string }> =
@@ -155,6 +168,8 @@ export async function fetchWithRetry(
       }
       return resp;
     } catch (err) {
+      // Non-retryable here still means "ask the other origin" — they are
+      // published separately, and a 403 is as often about us as the asset.
       failures.push(`${candidate.origin}: ${messageOf(err)}`);
       if (index === order.length - 1) {
         onEvent('skills fetch failed', { url, failures: failures.length });
