@@ -1,16 +1,8 @@
 import * as path from 'path';
 import type { AuditCheck } from '@lib/programs/audit/types';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
-import { AREA_BY_BUCKET } from './classify.js';
+import { DISABLING_AREAS } from './classify.js';
 import { CULLED_MARKER, DECLINED_MARKER } from './seed.js';
-
-const DISABLING_AREAS = new Set([
-  AREA_BY_BUCKET['dead-code-reference'],
-  AREA_BY_BUCKET['unreferenced-comment-only'],
-  AREA_BY_BUCKET.unreferenced,
-  AREA_BY_BUCKET['fully-rolled-out'],
-  AREA_BY_BUCKET['never-enabled'],
-]);
 
 export interface CullOutroInput {
   checks: readonly AuditCheck[];

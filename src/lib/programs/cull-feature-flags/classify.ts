@@ -70,6 +70,19 @@ export const LANE_BY_AREA: Record<string, CullLane> = Object.fromEntries(
   ]),
 );
 
+/** Areas whose cull disables the flag in PostHog; the other areas leave PostHog untouched. */
+export const DISABLING_AREAS: ReadonlySet<string> = new Set(
+  (
+    [
+      'fully-rolled-out',
+      'never-enabled',
+      'unreferenced',
+      'unreferenced-comment-only',
+      'dead-code-reference',
+    ] as CullBucket[]
+  ).map((bucket) => AREA_BY_BUCKET[bucket]),
+);
+
 export const BUCKET_ORDER: readonly CullBucket[] = [
   'fully-rolled-out',
   'never-enabled',

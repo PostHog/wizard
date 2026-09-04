@@ -1,5 +1,6 @@
 import type { AuditCheck } from '@lib/programs/audit/types';
 import type { CullProgress } from '@lib/programs/cull-feature-flags/phase';
+import { DISABLING_AREAS } from '@lib/programs/cull-feature-flags/classify';
 import {
   CULLED_MARKER,
   DECLINED_MARKER,
@@ -19,6 +20,36 @@ export type CullPhase = 'verify' | 'pick' | 'cull' | 'report';
 
 function hasMarker(check: AuditCheck, marker: string): boolean {
   return (check.details ?? '').includes(marker);
+}
+
+const MARKER_PREFIXES = [
+  'also ',
+  'winning branch:',
+  'kept:',
+  'culled',
+  'failed:',
+  'declined by user',
+];
+
+function whyCulled(check: AuditCheck): string {
+  const clauses = (check.details ?? '')
+    .split(';')
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 0)
+    .filter(
+      (clause) => !MARKER_PREFIXES.some((prefix) => clause.startsWith(prefix)),
+    );
+  const branch = (check.details ?? '').includes('winning branch: false')
+    ? 'Keeps the off branch and drops the check.'
+    : (check.details ?? '').includes('winning branch: true')
+    ? 'Keeps the code that runs today and drops the check.'
+    : '';
+  const posthog = DISABLING_AREAS.has(check.area)
+    ? 'Then the flag is disabled in PostHog, never deleted.'
+    : 'PostHog is left untouched for this one.';
+  return [`Why: ${check.area}, ${clauses.join(', ')}.`, branch, posthog]
+    .filter((sentence) => sentence.length > 0)
+    .join(' ');
 }
 
 function buildCullCopy(
@@ -45,6 +76,7 @@ function buildCullCopy(
     failed.length > 0 ? `${failed.length} failed` : null,
   ].filter((count): count is string => count !== null);
   const paragraphs = [firstParagraph];
+  if (activeCheck) paragraphs.push(whyCulled(activeCheck));
   if (completedCounts.length > 0) {
     paragraphs.push(`${completedCounts.join(', ')} so far.`);
   }

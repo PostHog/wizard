@@ -136,6 +136,12 @@ describe('cullPhase', () => {
       paragraphs: expect.any(Array),
     });
     expect(phase.copy?.paragraphs.join(' ')).toContain('checkout-redesign');
+    const why = phase.copy?.paragraphs.find((paragraph) =>
+      paragraph.startsWith('Why: '),
+    );
+    expect(why).toContain('Rolled out');
+    expect(why).toContain('Keeps the code that runs today');
+    expect(why).toContain('disabled in PostHog');
   });
 
   it.each([
