@@ -30,15 +30,55 @@ export const AREA_BY_BUCKET: Record<CullBucket, string> = {
   healthy: 'Healthy',
 };
 
+export type CullLane =
+  | 'decided'
+  | 'off-in-posthog'
+  | 'not-in-code'
+  | 'nothing-to-cull';
+
+export const LANE_ORDER: readonly CullLane[] = [
+  'decided',
+  'off-in-posthog',
+  'not-in-code',
+  'nothing-to-cull',
+];
+
+export const LANE_LABEL: Record<CullLane, string> = {
+  decided: 'Decided in PostHog',
+  'off-in-posthog': 'Off in PostHog, still in code',
+  'not-in-code': 'In PostHog, not in code',
+  'nothing-to-cull': 'Nothing to cull',
+};
+
+const LANE_BY_BUCKET: Record<CullBucket, CullLane> = {
+  'dead-code-reference': 'not-in-code',
+  'archived-still-referenced': 'off-in-posthog',
+  'disabled-but-referenced': 'off-in-posthog',
+  'unreferenced-comment-only': 'not-in-code',
+  unreferenced: 'not-in-code',
+  'fully-rolled-out': 'decided',
+  'never-enabled': 'decided',
+  'deleted-still-referenced': 'off-in-posthog',
+  'multi-callsite-no-wrapper': 'nothing-to-cull',
+  healthy: 'nothing-to-cull',
+};
+
+export const LANE_BY_AREA: Record<string, CullLane> = Object.fromEntries(
+  (Object.keys(AREA_BY_BUCKET) as CullBucket[]).map((bucket) => [
+    AREA_BY_BUCKET[bucket],
+    LANE_BY_BUCKET[bucket],
+  ]),
+);
+
 export const BUCKET_ORDER: readonly CullBucket[] = [
+  'fully-rolled-out',
+  'never-enabled',
+  'archived-still-referenced',
+  'disabled-but-referenced',
+  'deleted-still-referenced',
   'unreferenced',
   'unreferenced-comment-only',
   'dead-code-reference',
-  'archived-still-referenced',
-  'disabled-but-referenced',
-  'fully-rolled-out',
-  'never-enabled',
-  'deleted-still-referenced',
   'multi-callsite-no-wrapper',
   'healthy',
 ];

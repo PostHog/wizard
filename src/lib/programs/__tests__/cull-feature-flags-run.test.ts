@@ -133,8 +133,8 @@ describe('cullFeatureFlagsConfig.run', () => {
       fs.readFileSync(path.join(installDir, AUDIT_CHECKS_FILE), 'utf8'),
     ) as { id: string; area: string; status: string }[];
     expect(ledger.map((row) => [row.id, row.area, row.status])).toEqual([
-      ['orphan', 'Unreferenced', 'pending'],
       ['new-checkout', 'Rolled out', 'pending'],
+      ['orphan', 'Unreferenced', 'pending'],
     ]);
     expect(run.customPrompt?.({} as never)).toContain('- Rolled out: 1');
   });
