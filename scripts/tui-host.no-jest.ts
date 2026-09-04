@@ -223,6 +223,9 @@ async function main() {
     localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
     localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
+    // Mirror the dev-only --capture-aio flag so a headless run's LLM calls
+    // and tool calls land in the project's AI Observability tab.
+    captureAio: envFlag('POSTHOG_WIZARD_CAPTURE_AIO') ?? false,
     // Switchboard variation overrides (see e2e.json `variations`), threaded by
     // the snapshot driver as one run per variation. Empty ⇒ resolved default.
     harness: (process.env.SNAP_HARNESS || undefined) as Harness | undefined,
