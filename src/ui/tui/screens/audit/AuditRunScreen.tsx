@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
@@ -16,8 +16,9 @@ import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { CULL_AREA_SLIDES } from './slides/cull/index.js';
-import { cullStageCopy } from './slides/cull/stage.js';
+import { cullPhase } from './slides/cull/phase.js';
 import { PendingChecksList } from './PendingChecksList.js';
+import { CullFlagList, PhaseStepper } from './cull/CullFlagList.js';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_CHECKS_KEY,
@@ -58,13 +59,18 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     getProgramConfig(store.router.activeProgram).reportFile ??
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
-  const pendingChecksList = <PendingChecksList checks={checks} />;
   const activeProgram = store.router.activeProgram;
   const isCull = activeProgram === 'cull-feature-flags';
   const slides = slidesFor(activeProgram, store.session.skillId);
-  const wrapUp = isCull ? cullStageCopy(checks, reportPath) : undefined;
-  const learnBlocks = getProgramConfig(activeProgram).getContentBlocks;
-  const showLearnDeck = isCull && !store.learnCardComplete && !!learnBlocks;
+  const { phase, copy } = isCull
+    ? cullPhase(checks, store.cullProgress, reportPath)
+    : { phase: undefined, copy: undefined };
+  const learnBlocks = useMemo(() => {
+    if (activeProgram !== 'cull-feature-flags') return undefined;
+    return getProgramConfig(activeProgram).getContentBlocks?.(store);
+  }, [activeProgram, store]);
+  const showLearnDeck =
+    isCull && phase === 'verify' && !store.learnCardComplete && !!learnBlocks;
   let leftPane = (
     <AuditAreaPane
       checks={checks}
@@ -72,27 +78,42 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       slides={slides}
       dashboardUrl={store.session.dashboardUrl}
       notebookUrl={store.session.notebookUrl}
-      wrapUp={wrapUp}
+      wrapUp={copy}
     />
   );
-  if (showLearnDeck && learnBlocks) {
+  if (showLearnDeck) {
     leftPane = (
       <LearnCard
         store={store}
-        blocks={learnBlocks(store)}
+        blocks={learnBlocks}
         onComplete={() => store.setLearnCardComplete()}
       />
     );
   }
 
+  const pendingChecksList = <PendingChecksList checks={checks} />;
+  const cullFlagList = phase ? (
+    <CullFlagList checks={checks} progress={store.cullProgress} phase={phase} />
+  ) : null;
+  const rightPane = isCull ? cullFlagList : pendingChecksList;
+
   // Narrow terminals: drop the area pane.
-  const statusComponent =
+  const statusLayout =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
-        {pendingChecksList}
+        {rightPane}
       </Box>
     ) : (
-      <SplitView left={leftPane} right={pendingChecksList} />
+      <SplitView left={leftPane} right={rightPane} />
+    );
+  const statusComponent =
+    isCull && phase ? (
+      <Box flexDirection="column" flexGrow={1}>
+        <PhaseStepper phase={phase} />
+        {statusLayout}
+      </Box>
+    ) : (
+      statusLayout
     );
 
   const tabs = [
