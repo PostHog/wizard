@@ -79,6 +79,12 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     status: 'pending',
   },
   {
+    id: 'capture-fires-on-success',
+    area: 'Event Capture',
+    label: 'Completion events fire on success, not intent',
+    status: 'pending',
+  },
+  {
     id: 'live-data-findings',
     // Area is capped at COL_AREA_WIDTH (18) in the checks viewer and never
     // flexes, so it has to fit. Labels get the flexed column.
