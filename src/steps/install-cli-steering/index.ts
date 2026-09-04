@@ -73,6 +73,12 @@ export interface CliInstallResult {
    * false.
    */
   errorObject?: Error;
+  /**
+   * Sanitized npm output for callers to attach as an exception property. Keeps
+   * the HTTP status and CLI version out of the grouping message while the
+   * message itself stays stable. Truncated and free of personal data.
+   */
+  detail?: string;
 }
 
 const spawnOptions = {
@@ -81,6 +87,31 @@ const spawnOptions = {
   // resolves them through a shell.
   shell: process.platform === 'win32',
 };
+
+/** Stable message so npm install failures group into one error-tracking issue. */
+const NPM_INSTALL_FAILED_MESSAGE =
+  'npm install --global @posthog/cli@latest failed';
+
+/** Cap on the sanitized npm output stored as an exception property. */
+const NPM_FAILURE_DETAIL_LIMIT = 1000;
+
+/**
+ * Strip personal data from npm's output before it reaches error tracking. npm
+ * prints `npm error path <dir>` and `npm error command <cmd>` lines that carry
+ * the user's name and home directory, so drop those lines and redact any home
+ * directory that remains.
+ */
+function sanitizeNpmFailure(raw: string): string {
+  const home = os.homedir();
+  const cleaned = raw
+    .split('\n')
+    .filter((line) => {
+      const normalized = line.trim().toLowerCase();
+      return !/^npm (error|err!) (path|command)\b/.test(normalized);
+    })
+    .join('\n');
+  return (home ? cleaned.split(home).join('~') : cleaned).trim();
+}
 
 /**
  * Install or update the PostHog CLI in the user's environment. `npm install
@@ -101,16 +132,22 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
     };
   }
   if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').trim();
-    const message =
-      detail ||
-      `npm install --global @posthog/cli@latest exited with status ${
-        result.status ?? 'unknown'
-      }`;
+    const detail = sanitizeNpmFailure(result.stderr || result.stdout || '');
+    // A quieted npm (e.g. `--loglevel=silent` from .npmrc) can exit non-zero
+    // with no output. The exit status or terminating signal is then the only
+    // diagnostic left, so fall back to it instead of a bare constant. Neither
+    // is personal data, and the stable `errorObject` message still groups these
+    // failures into one issue regardless of the fallback text.
+    const exitDetail = result.signal
+      ? `npm install --global @posthog/cli@latest terminated by signal ${result.signal}`
+      : `npm install --global @posthog/cli@latest exited with status ${
+          result.status ?? 'unknown'
+        }`;
     return {
       success: false,
-      error: message,
-      errorObject: new Error(message),
+      error: detail || exitDetail,
+      errorObject: new Error(NPM_INSTALL_FAILED_MESSAGE),
+      detail: detail.slice(0, NPM_FAILURE_DETAIL_LIMIT) || exitDetail,
     };
   }
   return { success: true };
