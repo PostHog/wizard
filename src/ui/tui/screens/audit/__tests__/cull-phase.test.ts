@@ -32,7 +32,13 @@ describe('reduceCullProgress', () => {
     );
     expect(waiting).toBe(INITIAL_CULL_PROGRESS);
 
-    const firstFlag = reduceCullProgress(waiting, 'Culling checkout-redesign');
+    const spinner = reduceCullProgress(
+      waiting,
+      'Culling stale feature flags...',
+    );
+    expect(spinner).toBe(INITIAL_CULL_PROGRESS);
+
+    const firstFlag = reduceCullProgress(spinner, 'Culling checkout-redesign');
     expect(firstFlag).toEqual({
       pass: 'edit',
       activeKey: 'checkout-redesign',

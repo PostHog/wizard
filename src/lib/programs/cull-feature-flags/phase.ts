@@ -16,7 +16,7 @@ export function reduceCullProgress(
   state: CullProgress,
   message: string,
 ): CullProgress {
-  const cullingMatch = message.match(/^Culling (.+)$/);
+  const cullingMatch = message.match(/^Culling (\S+)$/);
   if (cullingMatch) {
     const edited = state.activeKey
       ? [...state.edited, state.activeKey]
