@@ -70,9 +70,8 @@ export function frameworkRowSuffix({
 }): string | undefined {
   const suffixParts: string[] = [];
   if (!manuallySelected) suffixParts.push('(detected)');
-  // Dead path today — every framework went GA. Kept for re-activation
-  // when the next beta framework lands (set `beta: true` on its config).
-  if (beta) suffixParts.push('[BETA]');
+  // Some frameworks may be marked as beta/early-access in their config.
+  // If so, show a [BETA] tag to set expectations for users.
   return suffixParts.join(' ') || undefined;
 }
 
