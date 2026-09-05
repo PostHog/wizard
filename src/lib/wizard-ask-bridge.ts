@@ -76,6 +76,22 @@ export const CANCELLED_SENTINEL = '__cancelled__';
 /** Default per-question timeout (5 minutes). */
 export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Per-question timeout for a flow that collects source credentials.
+ *
+ * These questions wait on a person, not on a model: opening a database
+ * console, finding a host and port, minting a restricted API key. The default
+ * above is sized for a question the user can answer from memory and expires
+ * long before that errand is done.
+ *
+ * Shared rather than inlined because the same credential prompts are reached
+ * two ways — as the orchestrator's seeded warehouse task and as the standalone
+ * `wizard warehouse` command the outro points declines at — and the two giving
+ * the user different allowances for identical questions is the bug, not a
+ * setting.
+ */
+export const CREDENTIAL_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};
   for (const q of questions) {
