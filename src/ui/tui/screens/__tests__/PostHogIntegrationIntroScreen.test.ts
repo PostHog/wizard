@@ -8,6 +8,7 @@
 
 import {
   CONTINUE_MENU_OPTIONS,
+  frameworkRowSuffix,
   sharingOptions,
 } from '@ui/tui/screens/PostHogIntegrationIntroScreen';
 
@@ -70,5 +71,26 @@ describe('the sharing choice', () => {
 
     expect(spacer?.disabled).toBe(true);
     expect(spacer?.label).toBe('');
+  });
+});
+
+describe('frameworkRowSuffix', () => {
+  it('shows (detected) after auto-detection', () => {
+    expect(frameworkRowSuffix({ manuallySelected: false })).toBe('(detected)');
+  });
+
+  it('omits (detected) after a manual pick', () => {
+    // Fallback picker after failed detection, or Change framework — both set
+    // manuallySelected so the intro does not claim detection succeeded (#944).
+    expect(frameworkRowSuffix({ manuallySelected: true })).toBeUndefined();
+  });
+
+  it('keeps [BETA] when present, with or without (detected)', () => {
+    expect(frameworkRowSuffix({ manuallySelected: false, beta: true })).toBe(
+      '(detected) [BETA]',
+    );
+    expect(frameworkRowSuffix({ manuallySelected: true, beta: true })).toBe(
+      '[BETA]',
+    );
   });
 });
