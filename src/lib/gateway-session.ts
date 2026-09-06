@@ -50,6 +50,8 @@ const LEGACY_RETRY_MS = 10 * 60 * 1000;
 // Exceeds the backend's own 10s gateway timeout: a slow mint that lands after the
 // CLI hangs up spends a daily mint and orphans a live token.
 const MINT_TIMEOUT_MS = 20_000;
+/** Longer than any refusal the mint writes; a body past this is not a message. */
+const MAX_REFUSAL_DETAIL_LENGTH = 500;
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
@@ -218,7 +220,25 @@ function isMintRefusal(status: number): boolean {
   return status === 400 || status === 403 || status === 429;
 }
 
-function mintRefusalMessage(status: number): string {
+/**
+ * The server's own reason for a refusal, when it sent one. DRF answers every
+ * refusal as `{"detail": "..."}`; the blocklist's detail names the contact
+ * address, which the fixed messages below cannot.
+ */
+async function readRefusalDetail(resp: Response): Promise<string | undefined> {
+  try {
+    const body = (await resp.json()) as { detail?: unknown };
+    const detail = typeof body?.detail === 'string' ? body.detail.trim() : '';
+    return detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
+      ? detail
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function mintRefusalMessage(status: number, detail?: string): string {
+  if (detail) return detail;
   switch (status) {
     case 429:
       return 'This wizard program has used its daily run limit. Try again tomorrow.';
@@ -255,7 +275,7 @@ async function mintGatewayToken(
         );
         throw new GatewayMintRefused(
           resp.status,
-          mintRefusalMessage(resp.status),
+          mintRefusalMessage(resp.status, await readRefusalDetail(resp)),
         );
       }
       if (resp.status === 404 || resp.status === 401) {
