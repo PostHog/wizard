@@ -221,6 +221,37 @@ describe('gatewayAuth', () => {
     },
   );
 
+  it('shows the server detail on a refusal when it sends one', async () => {
+    // The blocklist's 403 names the contact address; the fixed message would
+    // tell a banned user to re-authenticate instead.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          detail: 'This account is blocked. Contact wizard@posthog.com.',
+        }),
+    });
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      'Contact wizard@posthog.com',
+    );
+  });
+
+  it.each([
+    ['not an object', () => Promise.resolve('nope')],
+    ['an empty detail', () => Promise.resolve({ detail: '   ' })],
+    ['an unparseable body', () => Promise.reject(new SyntaxError('bad json'))],
+    ['an oversized detail', () => Promise.resolve({ detail: 'x'.repeat(501) })],
+  ])(
+    'keeps the fixed message when the refusal body is %s',
+    async (_label, json) => {
+      fetchMock.mockResolvedValue({ ok: false, status: 403, json });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toThrow(/access to this project/i);
+    },
+  );
+
   it.each([404, 401])(
     'stays on the existing gateway on HTTP %i',
     async (status) => {
