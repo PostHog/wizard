@@ -261,6 +261,53 @@ export function consentSkipReason(consent: SeededConsent): SkipReason {
 }
 
 /**
+ * Apply the seed-time answers to the queue, before the drain starts.
+ *
+ * A declined task is skipped rather than dropped, so the graph the planner saw
+ * is the graph that ran — the sink already depends on this task, and
+ * `nextRunnable` treats a skipped dependency as satisfied, so the report still
+ * runs and can say the step was declined. The decline also stays in the funnel,
+ * arriving as a `skipped` event carrying the reason that caused it rather than
+ * as a task that silently never existed.
+ *
+ * It happens here rather than inside `runTask` because the executor marks a
+ * task running — and fires `orchestrator task started` — before it hands the
+ * task over. A decline applied on the far side of that emitted a start for a
+ * task no agent ever ran, so every rate measured against starts counted the
+ * declines twice: once in the denominator as a task that began, and again in
+ * the numerator as a task that was skipped. Nothing upstream of the drain reads
+ * task status, so applying the answers here changes only what the drain sees.
+ *
+ * Returns how many tasks were skipped, so the caller can redraw once.
+ */
+export function skipDeclinedSeededTasks(
+  store: Pick<QueueStore, 'get' | 'skip'>,
+  consentByTaskId: ReadonlyMap<string, SeededConsent>,
+  labelFor: (task: { type: string; label?: string }) => string,
+): number {
+  let skipped = 0;
+  for (const [taskId, consent] of consentByTaskId) {
+    if (consent.keep) continue;
+    const task = store.get(taskId);
+    if (!task) continue;
+    const reason = consentSkipReason(consent);
+    logToFile(`[orchestrator] runner-seeded ${task.type} skipped: ${reason}`);
+    const declinedByUser = reason === SkipReason.UserDeclined;
+    store.skip(taskId, reason, {
+      goals: labelFor(task),
+      did: declinedByUser
+        ? 'Nothing — the user chose to skip this step when offered it.'
+        : 'Nothing — the step was offered at the start of the run and never accepted.',
+      forNextAgent: declinedByUser
+        ? 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.'
+        : 'This step was offered and never accepted, so it did no work. Report it as not set up, and point the user at how to do it later.',
+    });
+    skipped += 1;
+  }
+  return skipped;
+}
+
+/**
  * Ask for one seeded task's consent, and record how the answer came about.
  *
  * Consent and execution are separate concerns, and this is the consent half.
@@ -910,37 +957,6 @@ export async function runOrchestrator(
   const runTask: RunTask = async (task) => {
     renderQueue();
 
-    // A task that stops for the user is offered, not imposed. The offer was
-    // made at seed time; this applies the answer, now that the drain has
-    // reached the task.
-    //
-    // A declined task is skipped here rather than dropped at seed time, for two
-    // reasons. The graph the planner saw is then the graph that ran — the sink
-    // already depends on this task, and `nextRunnable` treats a skipped
-    // dependency as satisfied, so the report still runs and can say the step was
-    // declined. And the decline stays in the funnel: it arrives as a `skipped`
-    // event carrying the reason that caused it, rather than as a task that
-    // silently never existed. `orchestrator task skipped` is only readable that
-    // way because it now carries `reason`; without it, declines and timeouts and
-    // agent no-ops were one indistinguishable number.
-    const consent = seededConsent.get(task.id);
-    if (consent && !consent.keep) {
-      const reason = consentSkipReason(consent);
-      logToFile(`[orchestrator] runner-seeded ${task.type} skipped: ${reason}`);
-      const declinedByUser = reason === SkipReason.UserDeclined;
-      store.skip(task.id, reason, {
-        goals: labelFor(task),
-        did: declinedByUser
-          ? 'Nothing — the user chose to skip this step when offered it.'
-          : 'Nothing — the step was offered at the start of the run and never accepted.',
-        forNextAgent: declinedByUser
-          ? 'This step was offered and declined, so it did no work. Report it as skipped at the user’s request, not as failed.'
-          : 'This step was offered and never accepted, so it did no work. Report it as not set up, and point the user at how to do it later.',
-      });
-      renderQueue();
-      return;
-    }
-
     try {
       const resolved = resolveTask(registry, task, store);
       // Task instructions are one-run scaffolding, not durable skills, so they
@@ -1036,6 +1052,13 @@ export async function runOrchestrator(
       renderQueue();
     }
   };
+  // A task that stops for the user is offered, not imposed, and the answer was
+  // taken at seed time. Apply it before the drain begins, so the drain only
+  // ever starts tasks that are going to run.
+  if (skipDeclinedSeededTasks(store, seededConsent, labelFor) > 0) {
+    renderQueue();
+  }
+
   try {
     await drainQueue(store, runTask);
   } finally {
