@@ -332,7 +332,10 @@ export function buildWizardPropertiesBlob(
   wizardFlags: Record<string, string>,
   teamId?: number,
 ): string {
-  const props: Record<string, string | number> = {};
+  // The gateway pins `$ai_product` to `wizard:<program>`, and rejects a legacy
+  // product override on a scoped token, so the unprefixed key every cost and
+  // error consumer reads is only present if this blob declares it.
+  const props: Record<string, string | number> = { ai_product: 'wizard' };
   if (teamId !== undefined) props.team_id = teamId;
   for (const [key, value] of Object.entries(wizardMetadata)) {
     props[stripPropertyPrefix(key)] = value;

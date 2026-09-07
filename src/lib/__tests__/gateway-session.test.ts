@@ -466,6 +466,7 @@ describe('buildWizardPropertiesBlob', () => {
       ),
     );
     expect(blob).toEqual({
+      ai_product: 'wizard',
       team_id: 42,
       run_id: 'r1',
       integration: 'nextjs',
