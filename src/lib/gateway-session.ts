@@ -213,8 +213,9 @@ async function readRefusalDetail(resp: Response): Promise<string | undefined> {
   try {
     const body = (await resp.json()) as { detail?: unknown };
     const raw = typeof body?.detail === 'string' ? body.detail : '';
-    // Server text printed straight to a terminal: strip C0/C1 and the escapes
-    // an ANSI sequence is built from before anything renders it.
+    // Not because the server sends escapes, but because this string is printed
+    // straight to a terminal: sanitizing at the boundary means no later message
+    // can move the cursor or repaint the screen.
     // eslint-disable-next-line no-control-regex
     const detail = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
     return detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
