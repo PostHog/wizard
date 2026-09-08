@@ -243,9 +243,9 @@ async function readRefusal(resp: Response): Promise<MintRefusal> {
     };
     const detail = cleanRefusalText(body?.detail);
     // The DRF handler flattens a dict detail, so the outcome rides as `code`.
-    const outcome = cleanRefusalText(
-      typeof body?.code === 'string' ? body.code : body?.outcome,
-    );
+    // A `code` that cleans to nothing does not shadow a usable `outcome`.
+    const outcome =
+      cleanRefusalText(body?.code) || cleanRefusalText(body?.outcome);
     return {
       detail:
         detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
