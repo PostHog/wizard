@@ -256,9 +256,9 @@ async function mintGatewayToken(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      // This build no longer falls back to the legacy gateway, so the server
-      // may answer a refusal with its reason rather than the 404 that used to
-      // mean "fall back". An older build omits the flag and still gets the 404.
+      // The flag tells the server this build reads a refusal, so it may answer
+      // with the reason. A build that omits it gets a 404, which is its signal
+      // to fall back to the legacy gateway.
       body: JSON.stringify({ program, reads_refusal_reason: true }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
