@@ -263,8 +263,8 @@ describe('gatewayAuth', () => {
     async (status, message) => {
       fetchMock.mockResolvedValue({ ok: false, status });
       // Neither status has a fallback: 401 is a credential the mint does not
-      // accept, 404 an instance without the mint endpoint. Both used to put the
-      // run on the legacy gateway, which enforced none of the mint's limits.
+      // accept, 404 an instance without the mint endpoint. A run that proceeded
+      // past either would be on a path enforcing none of the mint's limits.
       const err: unknown = await gatewayAuth(
         host,
         'pha_oauth',
