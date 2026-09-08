@@ -215,8 +215,8 @@ export async function* runMcpPromptViaSdk(args: {
   // have to import this module's dependencies.
   const wizardMetadata = buildTutorialRunTags(args);
 
-  // Route the SDK's LLM calls through the PostHog LLM gateway, authed
-  // with the user's OAuth access token. Set BEFORE loading the SDK in
+  // Route the SDK's LLM calls through the PostHog AI gateway, authed
+  // with the run's minted token. Set BEFORE loading the SDK in
   // case any in-process code reads env at module init (cached base
   // URLs, OAuth setup, etc.) — same reason `initializeAgent` does this
   // before its query() call. Without these the SDK tries to
@@ -224,8 +224,8 @@ export async function* runMcpPromptViaSdk(args: {
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-  // The url, the bearer and the header edition are one unit: a run must take
-  // all three from the same resolved posture.
+  // The url and the bearer are one unit: a run must take both from the same
+  // mint.
   const auth = await gatewayAuth(
     credentials.host,
     credentials.accessToken,
@@ -237,9 +237,9 @@ export async function* runMcpPromptViaSdk(args: {
   process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
 
   logToFile(
-    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} edition=${
-      auth.edition
-    } tokenPrefix=${auth.token ? auth.token.slice(0, 4) + '***' : '(missing)'}`,
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
+      auth.token ? auth.token.slice(0, 4) + '***' : '(missing)'
+    }`,
   );
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -379,13 +379,13 @@ export async function* runMcpPromptViaSdk(args: {
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // Bedrock fallback plus this run's trace tags — the gateway reads
-          // these to attribute its `$ai_generation` events. Flags stay empty:
-          // the tutorial doesn't fork on any.
+          // This run's trace tags, which the gateway reads to attribute its
+          // `$ai_generation` events. Flags stay empty: the tutorial doesn't
+          // fork on any.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             wizardMetadata ?? {},
             {},
-            auth,
+            auth.teamId,
           ),
         },
       },

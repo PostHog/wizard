@@ -8,12 +8,7 @@ import {
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
-import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-
-vi.mock('@utils/analytics', () => ({
-  analytics: { setTag: vi.fn(), captureException: vi.fn() },
-}));
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
@@ -34,10 +29,7 @@ const renderArg = (a: unknown): string => {
 const loggedLines = () =>
   vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
-const host = {
-  apiHost: 'https://us.posthog.com',
-  gatewayUrl: 'https://gateway.us.posthog.com/wizard',
-} as unknown as HostResolution;
+const host = { apiHost: 'https://us.posthog.com' } as unknown as HostResolution;
 
 describe('gatewayAuth', () => {
   const fetchMock = vi.fn();
@@ -45,7 +37,6 @@ describe('gatewayAuth', () => {
   beforeEach(() => {
     resetGatewaySession();
     fetchMock.mockReset();
-    vi.mocked(analytics.setTag).mockClear();
     vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -54,7 +45,7 @@ describe('gatewayAuth', () => {
     vi.unstubAllGlobals();
   });
 
-  it('resolves the v2 posture from a mint response and caches it', async () => {
+  it('resolves auth from a mint response and caches it', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
@@ -70,10 +61,8 @@ describe('gatewayAuth', () => {
     expect(auth).toEqual({
       gatewayUrl: 'https://gateway.us.posthog.com',
       token: 'phe_minted',
-      edition: 'v2',
       teamId: 42,
     });
-    expect(analytics.setTag).toHaveBeenCalledWith('gateway_edition', 'v2');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://us.posthog.com/api/wizard/gateway_token/',
       expect.objectContaining({
@@ -155,14 +144,6 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('caches the legacy fallback instead of re-minting per caller', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 404 });
-
-    await gatewayAuth(host, 'pha_oauth', 'integration');
-    await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
   // Every field except the one under test is valid, so the named guard is the
   // sole reason the call fails. Filling the others with junk (an unparseable
   // expiry, say) makes the TTL guard throw first and every case pass for the
@@ -209,17 +190,14 @@ describe('gatewayAuth', () => {
     [429, 'daily run limit'],
     [400, 'exactly one project'],
     [403, 'access to this project'],
-  ])(
-    'refuses rather than falling back on HTTP %i',
-    async (status, fragment) => {
-      fetchMock.mockResolvedValue({ ok: false, status });
-      // Falling back would put the run on the legacy gateway, which enforces none
-      // of the limits these statuses represent.
-      await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
-      ).rejects.toThrow(new RegExp(String(fragment), 'i'));
-    },
-  );
+  ])('refuses the run on HTTP %i', async (status, fragment) => {
+    fetchMock.mockResolvedValue({ ok: false, status });
+    // A refusal is the mint enforcing a limit; the run must not proceed
+    // without it.
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      new RegExp(String(fragment), 'i'),
+    );
+  });
 
   it('shows the server detail on a refusal when it sends one', async () => {
     // The blocklist's 403 names the contact address; the fixed message would
@@ -252,19 +230,24 @@ describe('gatewayAuth', () => {
     },
   );
 
-  it.each([404, 401])(
-    'stays on the existing gateway on HTTP %i',
-    async (status) => {
+  it.each([
+    [401, /re-authenticate with `npx @posthog\/wizard@latest`/i],
+    [404, /does not issue gateway tokens/i],
+  ])(
+    'refuses with a status-specific message on HTTP %i',
+    async (status, message) => {
       fetchMock.mockResolvedValue({ ok: false, status });
-      // 404 is the staged-rollout switch, so removing it would make the flip
-      // all-or-nothing. 401 covers a credential the mint cannot authenticate,
-      // such as the API key CI runs with.
-      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-      expect(auth.edition).toBe('legacy');
-      expect(analytics.setTag).toHaveBeenCalledWith(
-        'gateway_edition',
-        'legacy',
-      );
+      // Neither status has a fallback: 401 is a credential the mint does not
+      // accept, 404 an instance without the mint endpoint. Both used to put the
+      // run on the legacy gateway, which enforced none of the mint's limits.
+      const err: unknown = await gatewayAuth(
+        host,
+        'pha_oauth',
+        'integration',
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(GatewayMintRefused);
+      expect((err as GatewayMintRefused).status).toBe(status);
+      expect((err as GatewayMintRefused).message).toMatch(message);
     },
   );
 
@@ -454,17 +437,6 @@ describe('gatewayAuth', () => {
     await expect(
       gatewayAuth(host, 'pha_oauth', 'integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
-  });
-
-  it('falls back to the legacy posture when the backend does not mint', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 404 });
-
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth).toEqual({
-      gatewayUrl: host.gatewayUrl,
-      token: 'pha_oauth',
-      edition: 'legacy',
-    });
   });
 
   it('fails the run on a transport failure', async () => {
