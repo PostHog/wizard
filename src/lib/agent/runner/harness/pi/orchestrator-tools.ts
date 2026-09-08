@@ -18,6 +18,7 @@ import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
+  COMPLETE_TASK_DESCRIPTION,
   ENQUEUE_MODEL_DESCRIPTION,
   HANDOFF_FIELDS,
   NOT_NEEDED_REASON_ASK,
@@ -138,10 +139,9 @@ export function createPiOrchestratorTools(
   const completeTask = defineTool({
     name: 'complete_task',
     label: 'Complete task',
-    description:
-      "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
+    description: COMPLETE_TASK_DESCRIPTION,
     promptSnippet:
-      'complete_task(status, handoff) — report your outcome exactly once when done',
+      'complete_task(status, handoff) — report your outcome exactly once when done, with goals/did/forNextAgent nested inside handoff',
     parameters: COMPLETE_PARAMS,
     execute(_id, args) {
       const res = applyComplete(ctx, args as CompleteArgs);
