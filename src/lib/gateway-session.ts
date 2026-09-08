@@ -225,13 +225,8 @@ async function readRefusalDetail(resp: Response): Promise<string | undefined> {
   }
 }
 
-// 401 and 404 come from layers with no wizard-specific message, so their
-// detail is DRF's stock "Invalid token." or "Not found.", which says less than
-// the copy below. Every other refusal the mint itself writes.
-const STOCK_DETAIL_STATUSES = new Set([401, 404]);
-
 function mintRefusalMessage(status: number, detail?: string): string {
-  if (detail && !STOCK_DETAIL_STATUSES.has(status)) return detail;
+  if (detail) return detail;
   switch (status) {
     case 429:
       return 'This wizard program has used its daily run limit. Try again tomorrow.';
