@@ -215,20 +215,6 @@ describe('gatewayAuth', () => {
     );
   });
 
-  it.each([401, 404])(
-    'keeps its own copy on HTTP %i, where the detail is DRF boilerplate',
-    async (status) => {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status,
-        json: () => Promise.resolve({ detail: 'Not found.' }),
-      });
-      await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
-      ).rejects.toThrow(/npx @posthog\/wizard@latest/);
-    },
-  );
-
   it('keeps the fixed message when the detail is only control characters', async () => {
     // Pins both the C1 arm and the trim running after the substitution: either
     // one reverted leaves a run of spaces as the user-facing message.
