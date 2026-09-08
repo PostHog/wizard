@@ -140,13 +140,31 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   return { provider, api, caps, gatewayUrl, baseUrl: model.baseUrl };
 }
 
+/** The part of a pi assistant turn that says why it failed. */
+export interface GatewayTurnError {
+  errorMessage?: string;
+  diagnostics?: { error?: { name?: string; code?: string | number } }[];
+}
+
 /**
- * Whether a turn's error is the gateway rejecting the bearer. pi-ai keeps the
- * HTTP status in its error text; Anthropic's SDK also names the error type.
+ * Whether a turn's error is the gateway rejecting the bearer. pi attaches the
+ * SDK's own error to `diagnostics`, so its code decides when one is present.
+ * The message match is the fallback for a turn that failed before pi built a
+ * diagnostic, where the status survives only as prose.
  */
 export function isGatewayAuthRejection(
-  errorMessage: string | undefined,
+  turn: GatewayTurnError | string | undefined,
 ): boolean {
+  const { errorMessage, diagnostics } =
+    typeof turn === 'string'
+      ? { errorMessage: turn, diagnostics: undefined }
+      : turn ?? {};
+  for (const diagnostic of diagnostics ?? []) {
+    const code = diagnostic.error?.code;
+    if (code === 401 || code === '401') return true;
+    if (/^authentication_?error$/i.test(diagnostic.error?.name ?? ''))
+      return true;
+  }
   return /\b401\b|authentication_error|unauthorized/i.test(errorMessage ?? '');
 }
 
@@ -179,11 +197,9 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
   return {
     noteAssistantTurn(message) {
       const turn = message as
-        | { stopReason?: string; errorMessage?: string }
+        | ({ stopReason?: string } & GatewayTurnError)
         | undefined;
-      rejected =
-        turn?.stopReason === 'error' &&
-        isGatewayAuthRejection(turn.errorMessage);
+      rejected = turn?.stopReason === 'error' && isGatewayAuthRejection(turn);
     },
     async prompt(text) {
       rejected = false;
