@@ -44,7 +44,6 @@ const MOCK_CONFIRMED_OUTAGE: AllServicesHealth = {
   },
   cloudflareOverall: HEALTHY,
   cloudflareComponents: { status: ServiceHealthStatus.Healthy },
-  llmGateway: HEALTHY,
   mcp: HEALTHY,
   skillsOrigin: HEALTHY,
 };
@@ -58,10 +57,6 @@ const MOCK_NO_CONNECTION: AllServicesHealth = {
   npmComponents: { status: ServiceHealthStatus.Healthy },
   cloudflareOverall: HEALTHY,
   cloudflareComponents: { status: ServiceHealthStatus.Healthy },
-  llmGateway: {
-    status: ServiceHealthStatus.NoConnection,
-    error: 'getaddrinfo ENOTFOUND gateway.us.posthog.com',
-  },
   mcp: {
     status: ServiceHealthStatus.NoConnection,
     error: 'fetch failed',
