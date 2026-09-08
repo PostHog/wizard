@@ -101,6 +101,30 @@ describe('isGatewayAuthRejection', () => {
   ])('ignores %s', (message) => {
     expect(isGatewayAuthRejection(message)).toBe(false);
   });
+
+  it("reads pi's diagnostic code rather than the message text", () => {
+    expect(
+      isGatewayAuthRejection({
+        errorMessage: 'the model is unhappy',
+        diagnostics: [{ error: { code: 401 } }],
+      }),
+    ).toBe(true);
+    expect(
+      isGatewayAuthRejection({
+        errorMessage: 'the model is unhappy',
+        diagnostics: [{ error: { name: 'AuthenticationError' } }],
+      }),
+    ).toBe(true);
+  });
+
+  it('does not re-mint on a diagnostic that is not an auth rejection', () => {
+    expect(
+      isGatewayAuthRejection({
+        errorMessage: 'rate limited',
+        diagnostics: [{ error: { code: 429, name: 'RateLimitError' } }],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('withGatewayRemint', () => {
