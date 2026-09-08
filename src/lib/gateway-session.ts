@@ -220,9 +220,10 @@ interface MintRefusal {
 
 /**
  * The server's own reason for a refusal, when it sent one. DRF answers every
- * refusal as `{"detail": "..."}`; the blocklist's detail names the contact
- * address, which the fixed messages below cannot. `outcome` is the backend's
- * own label for the refusal and rides the client event.
+ * refusal as `{"detail": "...", "code": "<outcome>"}`; the blocklist's detail
+ * names the contact address, which the fixed messages below cannot. `code` is
+ * the backend's own label for the refusal (`outcome` on older backends) and
+ * rides the client event.
  */
 function cleanRefusalText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -235,9 +236,16 @@ function cleanRefusalText(value: unknown): string {
 
 async function readRefusal(resp: Response): Promise<MintRefusal> {
   try {
-    const body = (await resp.json()) as { detail?: unknown; outcome?: unknown };
+    const body = (await resp.json()) as {
+      detail?: unknown;
+      code?: unknown;
+      outcome?: unknown;
+    };
     const detail = cleanRefusalText(body?.detail);
-    const outcome = cleanRefusalText(body?.outcome);
+    // The DRF handler flattens a dict detail, so the outcome rides as `code`.
+    const outcome = cleanRefusalText(
+      typeof body?.code === 'string' ? body.code : body?.outcome,
+    );
     return {
       detail:
         detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
