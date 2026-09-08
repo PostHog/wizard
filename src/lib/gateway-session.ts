@@ -212,7 +212,11 @@ function isMintRefusal(status: number): boolean {
 async function readRefusalDetail(resp: Response): Promise<string | undefined> {
   try {
     const body = (await resp.json()) as { detail?: unknown };
-    const detail = typeof body?.detail === 'string' ? body.detail.trim() : '';
+    const raw = typeof body?.detail === 'string' ? body.detail : '';
+    // Server text printed straight to a terminal: strip C0/C1 and the escapes
+    // an ANSI sequence is built from before anything renders it.
+    // eslint-disable-next-line no-control-regex
+    const detail = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
     return detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
       ? detail
       : undefined;
@@ -252,7 +256,10 @@ async function mintGatewayToken(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ program }),
+      // This build no longer falls back to the legacy gateway, so the server
+      // may answer a refusal with its reason rather than the 404 that used to
+      // mean "fall back". An older build omits the flag and still gets the 404.
+      body: JSON.stringify({ program, reads_refusal_reason: true }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {

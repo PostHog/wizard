@@ -215,6 +215,18 @@ describe('gatewayAuth', () => {
     );
   });
 
+  it('strips control characters before the detail reaches the terminal', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({ detail: 'Upgrade\u001b[2J\u0007 the wizard.' }),
+    });
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      'Upgrade [2J  the wizard.',
+    );
+  });
+
   it.each([
     ['not an object', () => Promise.resolve('nope')],
     ['an empty detail', () => Promise.resolve({ detail: '   ' })],
@@ -286,10 +298,13 @@ describe('gatewayAuth', () => {
     await gatewayAuth(host, 'pha_oauth', 'audit');
 
     // The backend pins `wizard:<program>` from this field; without it the mint
-    // has nothing to attribute the run to and refuses.
+    // has nothing to attribute the run to and refuses. The flag is what tells
+    // it this build reads a refusal rather than falling back on a 404.
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ body: JSON.stringify({ program: 'audit' }) }),
+      expect.objectContaining({
+        body: JSON.stringify({ program: 'audit', reads_refusal_reason: true }),
+      }),
     );
   });
 
