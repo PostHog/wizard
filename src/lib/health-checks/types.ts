@@ -37,7 +37,6 @@ export interface AllServicesHealth {
   npmComponents: ComponentHealthResult;
   cloudflareOverall: BaseHealthResult;
   cloudflareComponents: ComponentHealthResult;
-  llmGateway: BaseHealthResult;
   mcp: BaseHealthResult;
   skillsOrigin: BaseHealthResult;
 }

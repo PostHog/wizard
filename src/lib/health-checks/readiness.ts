@@ -17,11 +17,7 @@ import {
   checkPosthogOverallHealth,
   checkPosthogComponentHealth,
 } from './incidentio';
-import {
-  checkLlmGatewayHealth,
-  checkMcpHealth,
-  checkSkillsOriginHealth,
-} from './endpoints';
+import { checkMcpHealth, checkSkillsOriginHealth } from './endpoints';
 import { logToFile } from '@utils/debug';
 
 // ---------------------------------------------------------------------------
@@ -37,7 +33,6 @@ export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   npmComponents: 'npm (components)',
   cloudflareOverall: 'Cloudflare',
   cloudflareComponents: 'Cloudflare (components)',
-  llmGateway: 'LLM Gateway',
   mcp: 'MCP',
   skillsOrigin: 'Skills download',
 };
@@ -56,26 +51,24 @@ export interface WizardReadinessConfig {
 /**
  * See README section "Health checks" for the full rationale.
  * Adjust these arrays to change what blocks a wizard run.
+ *
+ * The AI gateway is not probed: its URL is only known from the run's token
+ * mint, and a failed mint already stops the run at bootstrap with the
+ * server's reason.
  */
 export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
-  downBlocksRun: [
-    'anthropic',
-    'npmOverall',
-    'llmGateway',
-    'mcp',
-    'skillsOrigin',
-  ],
+  downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
   degradedBlocksRun: ['anthropic'],
 };
 
 /**
  * Reduced readiness config for --signup provisioning flows.
  *
- * Provisioning only needs PostHog and the LLM Gateway - it doesn't
- * use Anthropic directly, npm, the skills origins, or MCP.
+ * Provisioning only needs PostHog - it doesn't use Anthropic directly, npm,
+ * the skills origins, or MCP.
  */
 export const SIGNUP_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
-  downBlocksRun: ['posthogOverall', 'llmGateway'],
+  downBlocksRun: ['posthogOverall'],
 };
 
 // ---------------------------------------------------------------------------
@@ -92,7 +85,6 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     npmComponents,
     cloudflareOverall,
     cloudflareComponents,
-    llmGateway,
     mcp,
     skillsOrigin,
   ] = await Promise.all([
@@ -104,7 +96,6 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     checkNpmComponentHealth(),
     checkCloudflareOverallHealth(),
     checkCloudflareComponentHealth(),
-    checkLlmGatewayHealth(),
     checkMcpHealth(),
     checkSkillsOriginHealth(),
   ]);
@@ -118,7 +109,6 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     npmComponents,
     cloudflareOverall,
     cloudflareComponents,
-    llmGateway,
     mcp,
     skillsOrigin,
   };
@@ -131,7 +121,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
  * official status page (`posthogstatus.com`):
  *
  *   - Status page says PostHog is `Down` / `Degraded` → upgrade
- *     llmGateway / mcp to `Down`. The status page corroborates.
+ *     mcp to `Down`. The status page corroborates.
  *   - Status page is `Healthy` → keep `NoConnection`. The status page
  *     contradicts; this is probably the user's network.
  *   - Status page is also `NoConnection` → keep `NoConnection`. User
@@ -145,11 +135,11 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
  * when incident.io's API parsed successfully and reported a real
  * `partial_outage` or `degraded_performance` for some component. That's
  * PostHog acknowledging an issue, even if narrower than a full outage.
- * If our gateway probe is also failing, those two signals together
+ * If our MCP probe is also failing, those two signals together
  * justify pointing at PostHog rather than the user.
  *
  * A narrower variant — only corroborate when the affected component is
- * gateway-related (LLM, US/EU Cloud, app) — would be more precise. We
+ * MCP-related (US/EU Cloud, app) — would be more precise. We
  * have the data in `posthogComponents` but don't use it here. If the
  * analytics show false positives concentrated in this case, it's a
  * cheap follow-up.
@@ -179,7 +169,6 @@ export function reconcilePosthogReachability(
 
   return {
     ...health,
-    llmGateway: upgrade(health.llmGateway),
     mcp: upgrade(health.mcp),
   };
 }
@@ -346,7 +335,6 @@ function allUnknown(error: string): AllServicesHealth {
     npmComponents: { ...base },
     cloudflareOverall: base,
     cloudflareComponents: { ...base },
-    llmGateway: base,
     mcp: base,
     skillsOrigin: base,
   };
