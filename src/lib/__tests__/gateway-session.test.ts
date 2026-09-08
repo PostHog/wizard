@@ -296,6 +296,33 @@ describe('gatewayAuth', () => {
     },
   );
 
+  it('reads the outcome from the DRF body code and shows its detail', async () => {
+    // The exact shape the backend's exception handler writes for a refusal.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          type: 'permission_denied',
+          code: 'blocked',
+          detail: 'This account is blocked. Contact wizard@posthog.com.',
+          attr: null,
+        }),
+    });
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'audit').catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(GatewayMintRefused);
+    expect((err as GatewayMintRefused).outcome).toBe('blocked');
+    expect((err as GatewayMintRefused).message).toContain(
+      'Contact wizard@posthog.com',
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint refused',
+      { status: 403, outcome: 'blocked', program: 'audit' },
+    );
+  });
+
   it('captures a refusal with its status, outcome and program', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -322,6 +349,7 @@ describe('gatewayAuth', () => {
   it.each([
     ['absent', () => Promise.resolve({ detail: 'Limit reached.' })],
     ['not a string', () => Promise.resolve({ outcome: 429 })],
+    ['a non-string code', () => Promise.resolve({ code: 403 })],
     ['oversized', () => Promise.resolve({ outcome: 'x'.repeat(65) })],
     ['unparseable', () => Promise.reject(new SyntaxError('bad json'))],
   ])(
