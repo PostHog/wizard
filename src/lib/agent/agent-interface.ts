@@ -21,6 +21,7 @@ import {
   WIZARD_REMARK_EVENT_NAME,
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
+  AWS_SKILLS_BASE_URL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -1011,6 +1012,10 @@ export async function runAgent(
                 'raw.githubusercontent.com',
                 'release-assets.githubusercontent.com',
                 'objects.githubusercontent.com',
+                // The AWS mirror GitHub downloads fail over to
+                // (fetch-retry.ts); without it the failover dies in the
+                // sandbox exactly when GitHub is down.
+                new URL(AWS_SKILLS_BASE_URL).hostname,
               ],
             },
           },
