@@ -32,6 +32,7 @@ import type { HostResolution } from '@lib/host-resolution';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
+  isPastRefresh,
   type GatewayAuth,
 } from '@lib/gateway-session';
 import { evaluateBashCommand } from './bash-fence';
@@ -46,7 +47,12 @@ import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
+import {
+  AgentSignals,
+  AgentErrorType,
+  REMARK_INSTRUCTION,
+  RESUME_INSTRUCTION,
+} from './signals';
 import { classifyAuthFailure } from '@lib/errors';
 import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
@@ -337,6 +343,12 @@ type AgentRunConfig = {
   triageProvider: LLMProvider;
   /** The run's minted gateway auth: base url, bearer and team for the subprocess. */
   gatewayAuth: GatewayAuth;
+  /**
+   * Resolve the run's gateway auth again: the cached token while it is fresh,
+   * a new mint once it is past its refresh instant. Recovers a 401 on an aged
+   * bearer.
+   */
+  refreshGatewayAuth?: () => Promise<GatewayAuth>;
   /** Program id, for the program-axis commandments. */
   program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
@@ -525,11 +537,9 @@ export async function initializeAgent(
     // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const auth = await gatewayAuth(
-      config.host,
-      config.posthogApiKey,
-      config.programId,
-    );
+    const currentGatewayAuth = () =>
+      gatewayAuth(config.host, config.posthogApiKey, config.programId);
+    const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = auth.token;
@@ -537,23 +547,24 @@ export async function initializeAgent(
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
 
-    // Same values the env vars above carry, handed over explicitly so triage
-    // never has to read them back out of the environment. The run tags ride
-    // along so scan spend bills to this program, with `call_type` keeping it
-    // separable from the agent's own calls.
-    const triageProvider = createTriageLLMProvider(
-      {
-        baseURL: gatewayUrl,
-        authToken: auth.token,
-        teamId: auth.teamId,
-        wizardMetadata: {
-          ...(config.wizardMetadata ?? {}),
-          call_type: CallType.yaraTriage,
-        },
+    // Handed over explicitly so triage never reads the environment, and
+    // re-read per call so a long run's scans follow a re-mint. The run tags
+    // ride along so scan spend bills to this program, with `call_type`
+    // keeping it separable from the agent's own calls.
+    const triageMetadata = {
+      ...(config.wizardMetadata ?? {}),
+      call_type: CallType.yaraTriage,
+    };
+    const triageProvider = createTriageLLMProvider(async () => {
+      const current = await currentGatewayAuth();
+      return {
+        baseURL: current.gatewayUrl,
+        authToken: current.token,
+        teamId: current.teamId,
+        wizardMetadata: triageMetadata,
         wizardFlags: config.wizardFlags ?? {},
-      },
-      Harness.anthropic,
-    );
+      };
+    }, Harness.anthropic);
 
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
@@ -645,6 +656,7 @@ export async function initializeAgent(
       capture: config.capture,
       triageProvider,
       gatewayAuth: auth,
+      refreshGatewayAuth: currentGatewayAuth,
       program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
@@ -765,19 +777,22 @@ export async function runAgent(
   // the result is received, keeping the stdin stream alive for permission responses.
   // See: https://github.com/anthropics/claude-code/issues/4775
   // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
-  let signalDone: () => void;
-  const resultReceived = new Promise<void>((resolve) => {
-    signalDone = resolve;
-  });
-
-  const createPromptStream = async function* () {
-    yield {
-      type: 'user',
-      session_id: '',
-      message: { role: 'user', content: prompt },
-      parent_tool_use_id: null,
-    };
-    await resultReceived;
+  // One stream and one done-promise per query(): a session resumed after a
+  // re-mint needs its own. A no-op until the first stream installs its own.
+  let signalDone: () => void = () => undefined;
+  const createPromptStream = (text: string) => {
+    const resultReceived = new Promise<void>((resolve) => {
+      signalDone = resolve;
+    });
+    return (async function* () {
+      yield {
+        type: 'user',
+        session_id: '',
+        message: { role: 'user', content: text },
+        parent_tool_use_id: null,
+      };
+      await resultReceived;
+    })();
   };
 
   // Helper to handle successful completion (used in normal path and race condition recovery)
@@ -852,12 +867,18 @@ export async function runAgent(
   // Abort controller — lets us force-kill the SDK query when we detect an
   // [ABORT] signal in the agent's output. Also stashes the reason so the
   // runner can surface it via outroData after we unwind.
-  const abortController = new AbortController();
+  let abortController = new AbortController();
   let abortReason: string | null = null;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
   let yaraViolationReason: string | null = null;
+  // Re-mint state: the SDK session to resume, one re-mint per run, and the
+  // config dir a resumed subprocess must share to find the transcript.
+  let sessionId: string | undefined;
+  let reminted = false;
+  let remintRequested = false;
+  const agentConfigDir = createIsolatedAgentConfigDir();
 
   try {
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
@@ -887,7 +908,7 @@ export async function runAgent(
       yaraViolationReason = reason;
       logToFile(`[YARA] terminating run: ${reason}`);
       abortController.abort();
-      signalDone!();
+      signalDone();
     };
 
     // Local/CI escape hatch for Warlock/YARA scanning (off by default — see
@@ -905,337 +926,394 @@ export async function runAgent(
     // capture is disabled.
     agentConfig.capture?.setInitialPrompt(prompt);
 
-    const response = query({
-      prompt: createPromptStream(),
-      options: {
-        abortController,
-        model: agentConfig.model,
-        cwd: agentConfig.workingDirectory,
-        permissionMode: 'acceptEdits',
-        betas: ['context-1m-2025-08-07'],
-        mcpServers: agentConfig.mcpServers,
-        agents: {
-          'general-purpose': {
-            description:
-              "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
-            prompt:
-              'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
-            mcpServers: inheritedMcpServerNames,
-            // SDK does not propagate the parent's disallowedTools to subagents
-            // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
-            // `tools: undefined` means "inherit all"). Without this, a program
-            // that disallows wizard_ask still leaks it to dispatched subagents.
-            disallowedTools: agentConfig.disallowedTools
-              ? [...agentConfig.disallowedTools]
-              : undefined,
-          },
-        },
-        // Load skills from project's .claude/skills/ directory
-        settingSources: ['project'],
-        // Enable all discovered skills. Omitting this is NOT "skills off" —
-        // it just means no SDK auto-config — so we set 'all' explicitly to
-        // preserve the prior behavior where 'Skill' in allowedTools exposed
-        // everything under .claude/skills/. (SDK ≥0.2.133 deprecates passing
-        // 'Skill' in allowedTools in favor of this option.)
-        skills: 'all',
-        allowedTools,
-        sandbox: {
-          enabled: true,
-          // SDK 0.2.91 made failIfUnavailable default to true when enabled is
-          // set, which would abort wizard runs on hosts that lack sandbox
-          // dependencies (e.g. Linux without bubblewrap). Wizard targets a
-          // broad set of user machines, so prefer graceful degradation —
-          // commands still respect allowUnsandboxedCommands below.
-          failIfUnavailable: false,
-          allowUnsandboxedCommands: false,
-          filesystem: {
-            allowWrite: [
-              '/' + agentConfig.workingDirectory,
-              '/' + agentConfig.workingDirectory + '/**',
-              '//tmp',
-              '//tmp/**',
-              '//private/tmp',
-              '//private/tmp/**',
-              // Package manager stores and toolchain installs — allow writes
-              // so pnpm/npm/yarn/bun and version managers (corepack, volta)
-              // can install packages and self-update without breaking the
-              // user's existing setup.
-              '~/Library/pnpm/**', // pnpm root (macOS) — store + .tools/ for packageManager pinning
-              '~/.local/share/pnpm/**', // pnpm root (Linux)
-              '~/.pnpm-store/**', // pnpm alternate store
-              '~/.npm/**', // npm cache (covers _npx too)
-              '~/.yarn/**', // yarn classic + berry cache
-              '~/.bun/install/**', // bun cache + global installs
-              '~/.cache/node/corepack/**', // corepack version downloads (Linux/macOS)
-              '~/Library/Caches/node/corepack/**', // corepack on older macOS layouts
-              '~/.volta/**', // Volta toolchain (referenced by workbench package.json)
-              // Python — used by django/flask/fastapi wizards
-              '~/.cache/pip/**',
-              '~/Library/Caches/pip/**',
-              '~/.cache/uv/**',
-              '~/Library/Caches/uv/**',
-              '~/.cache/pypoetry/**',
-              '~/Library/Caches/pypoetry/**',
-              // Ruby — used by rails wizard
-              '~/.bundle/**',
-              '~/.gem/**',
-            ],
-          },
-          network: {
-            allowedDomains: [
-              'github.com',
-              'api.github.com',
-              'raw.githubusercontent.com',
-              'release-assets.githubusercontent.com',
-              'objects.githubusercontent.com',
-            ],
-          },
-        },
-        env: {
-          // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
-          // inherited env so no shell/settings value can leak into or outrank
-          // the agent's routing; the wizard's own gateway routing is injected
-          // fresh below. See agent-env-isolation.ts.
-          ...sanitizeAgentSubprocessEnv(process.env),
-          // Gateway routing — injected explicitly (initializeAgent set these on
-          // process.env for in-process readers; the strip above removed them
-          // from the inherited copy, so re-add the wizard's own values here).
-          // From this run's resolved auth, not process.env: concurrent task
-          // runs each write those globals, so re-reading them here would hand
-          // a subprocess whichever run initialized last.
-          ANTHROPIC_BASE_URL: agentConfig.gatewayAuth.gatewayUrl,
-          ANTHROPIC_AUTH_TOKEN: agentConfig.gatewayAuth.token,
-          CLAUDE_CODE_OAUTH_TOKEN: agentConfig.gatewayAuth.token,
-          // Point the binary at an empty config dir so it cannot resolve a
-          // stored Claude login (a `~/.claude/.credentials.json`) and send that
-          // to the gateway, which 401s it. The env token above is then the only
-          // credential it can find. See stored-login.ts.
-          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
-          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // The MCP config resolves this in the child; sending the value would
-          // put it on the CLI's argv.
-          POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
-          // SDK 0.3.142 made MCP servers connect in the background by default;
-          // the agent may start its first turn before posthog-wizard is ready
-          // (audit programs call audit_seed_checks on turn 1, integration
-          // programs call load_skill_menu / install_skill). Restore the prior
-          // blocking behavior so the SDK waits up to 5s for MCP connect before
-          // turn 1.
-          MCP_CONNECTION_NONBLOCKING: '0',
-          // PostHog gateway headers: this run's properties blob.
-          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
-            agentConfig.wizardMetadata ?? {},
-            agentConfig.wizardFlags ?? {},
-            agentConfig.gatewayAuth.teamId,
-          ),
-        },
-        canUseTool: (toolName: string, input: unknown) => {
-          logToFile('canUseTool called:', { toolName, input });
-          const result = wizardCanUseTool(
-            toolName,
-            input as Record<string, unknown>,
-            {
-              wizardAskPending: agentConfig.getPendingQuestion?.() != null,
-              disallowedTools: agentConfig.disallowedTools,
+    const runQuery = async (resume?: string): Promise<'done' | 'remint'> => {
+      const response = query({
+        prompt: createPromptStream(resume ? RESUME_INSTRUCTION : prompt),
+        options: {
+          abortController,
+          resume,
+          model: agentConfig.model,
+          cwd: agentConfig.workingDirectory,
+          permissionMode: 'acceptEdits',
+          betas: ['context-1m-2025-08-07'],
+          mcpServers: agentConfig.mcpServers,
+          agents: {
+            'general-purpose': {
+              description:
+                "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
+              prompt:
+                'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
+              mcpServers: inheritedMcpServerNames,
+              // SDK does not propagate the parent's disallowedTools to subagents
+              // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
+              // `tools: undefined` means "inherit all"). Without this, a program
+              // that disallows wizard_ask still leaks it to dispatched subagents.
+              disallowedTools: agentConfig.disallowedTools
+                ? [...agentConfig.disallowedTools]
+                : undefined,
             },
-          );
-          logToFile('canUseTool result:', result);
-          return Promise.resolve(result);
-        },
-        systemPrompt: {
-          type: 'preset',
-          preset: 'claude_code',
-          // Append the run's commandments rather than replacing the preset so
-          // we keep default Claude Code behaviors. An orchestrator context is
-          // present only on a task run — that is what picks the sequence.
-          append: assembleCommandments({
-            program: agentConfig.program,
-            sequence: agentConfig.sequence,
-            harness: Harness.anthropic,
-          }),
-        },
-        tools: { type: 'preset', preset: 'claude_code' },
-        // Capture stderr from CLI subprocess for debugging
-        stderr: (data: string) => {
-          logToFile('CLI stderr:', data);
-          if (options.debug) {
-            debug('CLI stderr:', data);
-          }
-        },
-        // Stop hook: drain additional feature queue, then collect remark, then allow stop
-        hooks: {
-          PreToolUse: warlockDisabled
-            ? []
-            : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
-          PostToolUse: warlockDisabled
-            ? []
-            : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
-          Stop: [
-            {
-              hooks: [
-                createStopHook(
-                  config?.additionalFeatureQueue ?? [],
-                  signals,
-                  config?.requestRemark ?? true,
-                ),
+          },
+          // Load skills from project's .claude/skills/ directory
+          settingSources: ['project'],
+          // Enable all discovered skills. Omitting this is NOT "skills off" —
+          // it just means no SDK auto-config — so we set 'all' explicitly to
+          // preserve the prior behavior where 'Skill' in allowedTools exposed
+          // everything under .claude/skills/. (SDK ≥0.2.133 deprecates passing
+          // 'Skill' in allowedTools in favor of this option.)
+          skills: 'all',
+          allowedTools,
+          sandbox: {
+            enabled: true,
+            // SDK 0.2.91 made failIfUnavailable default to true when enabled is
+            // set, which would abort wizard runs on hosts that lack sandbox
+            // dependencies (e.g. Linux without bubblewrap). Wizard targets a
+            // broad set of user machines, so prefer graceful degradation —
+            // commands still respect allowUnsandboxedCommands below.
+            failIfUnavailable: false,
+            allowUnsandboxedCommands: false,
+            filesystem: {
+              allowWrite: [
+                '/' + agentConfig.workingDirectory,
+                '/' + agentConfig.workingDirectory + '/**',
+                '//tmp',
+                '//tmp/**',
+                '//private/tmp',
+                '//private/tmp/**',
+                // Package manager stores and toolchain installs — allow writes
+                // so pnpm/npm/yarn/bun and version managers (corepack, volta)
+                // can install packages and self-update without breaking the
+                // user's existing setup.
+                '~/Library/pnpm/**', // pnpm root (macOS) — store + .tools/ for packageManager pinning
+                '~/.local/share/pnpm/**', // pnpm root (Linux)
+                '~/.pnpm-store/**', // pnpm alternate store
+                '~/.npm/**', // npm cache (covers _npx too)
+                '~/.yarn/**', // yarn classic + berry cache
+                '~/.bun/install/**', // bun cache + global installs
+                '~/.cache/node/corepack/**', // corepack version downloads (Linux/macOS)
+                '~/Library/Caches/node/corepack/**', // corepack on older macOS layouts
+                '~/.volta/**', // Volta toolchain (referenced by workbench package.json)
+                // Python — used by django/flask/fastapi wizards
+                '~/.cache/pip/**',
+                '~/Library/Caches/pip/**',
+                '~/.cache/uv/**',
+                '~/Library/Caches/uv/**',
+                '~/.cache/pypoetry/**',
+                '~/Library/Caches/pypoetry/**',
+                // Ruby — used by rails wizard
+                '~/.bundle/**',
+                '~/.gem/**',
               ],
-              timeout: 30,
             },
-          ],
-        },
-      },
-    });
-
-    // Process the async generator
-    for await (const message of response) {
-      // Log initial context size on the first assistant response so we can
-      // detect sudden shifts in starting context (e.g. MCP schema bloat).
-      if (!loggedInitialContext && message.type === 'assistant') {
-        const usage = message.message?.usage as
-          | {
-              input_tokens?: number;
-              cache_creation_input_tokens?: number;
-              cache_read_input_tokens?: number;
+            network: {
+              allowedDomains: [
+                'github.com',
+                'api.github.com',
+                'raw.githubusercontent.com',
+                'release-assets.githubusercontent.com',
+                'objects.githubusercontent.com',
+              ],
+            },
+          },
+          env: {
+            // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
+            // inherited env so no shell/settings value can leak into or outrank
+            // the agent's routing; the wizard's own gateway routing is injected
+            // fresh below. See agent-env-isolation.ts.
+            ...sanitizeAgentSubprocessEnv(process.env),
+            // Gateway routing — injected explicitly (initializeAgent set these on
+            // process.env for in-process readers; the strip above removed them
+            // from the inherited copy, so re-add the wizard's own values here).
+            // From this run's resolved auth, not process.env: concurrent task
+            // runs each write those globals, so re-reading them here would hand
+            // a subprocess whichever run initialized last.
+            ANTHROPIC_BASE_URL: agentConfig.gatewayAuth.gatewayUrl,
+            ANTHROPIC_AUTH_TOKEN: agentConfig.gatewayAuth.token,
+            CLAUDE_CODE_OAUTH_TOKEN: agentConfig.gatewayAuth.token,
+            // Point the binary at an empty config dir so it cannot resolve a
+            // stored Claude login (a `~/.claude/.credentials.json`) and send that
+            // to the gateway, which 401s it. The env token above is then the only
+            // credential it can find. See stored-login.ts. Shared by a resumed
+            // query so it finds the transcript.
+            CLAUDE_CONFIG_DIR: agentConfigDir,
+            CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+            // The MCP config resolves this in the child; sending the value would
+            // put it on the CLI's argv.
+            POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
+            // SDK 0.3.142 made MCP servers connect in the background by default;
+            // the agent may start its first turn before posthog-wizard is ready
+            // (audit programs call audit_seed_checks on turn 1, integration
+            // programs call load_skill_menu / install_skill). Restore the prior
+            // blocking behavior so the SDK waits up to 5s for MCP connect before
+            // turn 1.
+            MCP_CONNECTION_NONBLOCKING: '0',
+            // PostHog gateway headers: this run's properties blob.
+            ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+              agentConfig.wizardMetadata ?? {},
+              agentConfig.wizardFlags ?? {},
+              agentConfig.gatewayAuth.teamId,
+            ),
+          },
+          canUseTool: (toolName: string, input: unknown) => {
+            logToFile('canUseTool called:', { toolName, input });
+            const result = wizardCanUseTool(
+              toolName,
+              input as Record<string, unknown>,
+              {
+                wizardAskPending: agentConfig.getPendingQuestion?.() != null,
+                disallowedTools: agentConfig.disallowedTools,
+              },
+            );
+            logToFile('canUseTool result:', result);
+            return Promise.resolve(result);
+          },
+          systemPrompt: {
+            type: 'preset',
+            preset: 'claude_code',
+            // Append the run's commandments rather than replacing the preset so
+            // we keep default Claude Code behaviors. An orchestrator context is
+            // present only on a task run — that is what picks the sequence.
+            append: assembleCommandments({
+              program: agentConfig.program,
+              sequence: agentConfig.sequence,
+              harness: Harness.anthropic,
+            }),
+          },
+          tools: { type: 'preset', preset: 'claude_code' },
+          // Capture stderr from CLI subprocess for debugging
+          stderr: (data: string) => {
+            logToFile('CLI stderr:', data);
+            if (options.debug) {
+              debug('CLI stderr:', data);
             }
-          | undefined;
-        if (usage) {
-          const input = usage.input_tokens ?? 0;
-          const cacheCreation = usage.cache_creation_input_tokens ?? 0;
-          const cacheRead = usage.cache_read_input_tokens ?? 0;
-          const initialTokens = input + cacheCreation + cacheRead;
-          logToFile(
-            `Initial context: ${initialTokens} tokens (input=${input}, cache_creation=${cacheCreation}, cache_read=${cacheRead})`,
+          },
+          // Stop hook: drain additional feature queue, then collect remark, then allow stop
+          hooks: {
+            PreToolUse: warlockDisabled
+              ? []
+              : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
+            PostToolUse: warlockDisabled
+              ? []
+              : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
+            Stop: [
+              {
+                hooks: [
+                  createStopHook(
+                    config?.additionalFeatureQueue ?? [],
+                    signals,
+                    config?.requestRemark ?? true,
+                  ),
+                ],
+                timeout: 30,
+              },
+            ],
+          },
+        },
+      });
+
+      // Process the async generator
+      try {
+        for await (const message of response) {
+          if (typeof message.session_id === 'string' && message.session_id) {
+            sessionId = message.session_id;
+          }
+          // Log initial context size on the first assistant response so we can
+          // detect sudden shifts in starting context (e.g. MCP schema bloat).
+          if (!loggedInitialContext && message.type === 'assistant') {
+            const usage = message.message?.usage as
+              | {
+                  input_tokens?: number;
+                  cache_creation_input_tokens?: number;
+                  cache_read_input_tokens?: number;
+                }
+              | undefined;
+            if (usage) {
+              const input = usage.input_tokens ?? 0;
+              const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+              const cacheRead = usage.cache_read_input_tokens ?? 0;
+              const initialTokens = input + cacheCreation + cacheRead;
+              logToFile(
+                `Initial context: ${initialTokens} tokens (input=${input}, cache_creation=${cacheCreation}, cache_read=${cacheRead})`,
+              );
+              analytics.wizardCapture('agent initial context', {
+                initial_tokens: initialTokens,
+                input_tokens: input,
+                cache_creation_input_tokens: cacheCreation,
+                cache_read_input_tokens: cacheRead,
+              });
+            }
+            loggedInitialContext = true;
+          }
+
+          // Mirror the assistant turn into the authenticated project's AIO tab.
+          // No-op when `--capture-aio` is off (dev/test builds only). Fire-and-
+          // forget: failures are debug-logged inside the module and never touch
+          // the stream loop.
+          agentConfig.capture?.captureFromAnthropicSDKMessage(message);
+
+          // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
+          // output for post-success cleanup errors while still logging them to file
+          handleSDKMessage(
+            message,
+            options,
+            spinner,
+            signals,
+            receivedSuccessResult,
+            tasks,
+            agentConfig.suppressTaskRender ?? false,
+            emitStepEvents,
+            resolveStepKey,
           );
-          analytics.wizardCapture('agent initial context', {
-            initial_tokens: initialTokens,
-            input_tokens: input,
-            cache_creation_input_tokens: cacheCreation,
-            cache_read_input_tokens: cacheRead,
-          });
-        }
-        loggedInitialContext = true;
-      }
 
-      // Mirror the assistant turn into the authenticated project's AIO tab.
-      // No-op when `--capture-aio` is off (dev/test builds only). Fire-and-
-      // forget: failures are debug-logged inside the module and never touch
-      // the stream loop.
-      agentConfig.capture?.captureFromAnthropicSDKMessage(message);
-
-      // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
-      // output for post-success cleanup errors while still logging them to file
-      handleSDKMessage(
-        message,
-        options,
-        spinner,
-        signals,
-        receivedSuccessResult,
-        tasks,
-        agentConfig.suppressTaskRender ?? false,
-        emitStepEvents,
-        resolveStepKey,
-      );
-
-      // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
-      // cannot complete the program. Kill the SDK query immediately —
-      // the prompt doesn't need to cooperate with "and exit" because the
-      // abort is enforced here. The reason is surfaced via the returned
-      // AgentErrorType.ABORT so the runner can render a custom screen.
-      if (
-        abortCases.length > 0 &&
-        !abortReason &&
-        message.type === 'assistant'
-      ) {
-        const content = message.message?.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text' && typeof block.text === 'string') {
-              const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
-              if (match) {
-                abortReason = match[1].trim();
-                logToFile(`Agent emitted [ABORT]: ${abortReason}`);
-                abortController.abort();
-                signalDone!();
-                break;
+          // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
+          // cannot complete the program. Kill the SDK query immediately —
+          // the prompt doesn't need to cooperate with "and exit" because the
+          // abort is enforced here. The reason is surfaced via the returned
+          // AgentErrorType.ABORT so the runner can render a custom screen.
+          if (
+            abortCases.length > 0 &&
+            !abortReason &&
+            message.type === 'assistant'
+          ) {
+            const content = message.message?.content;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === 'text' && typeof block.text === 'string') {
+                  const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
+                  if (match) {
+                    abortReason = match[1].trim();
+                    logToFile(`Agent emitted [ABORT]: ${abortReason}`);
+                    abortController.abort();
+                    signalDone();
+                    break;
+                  }
+                }
               }
             }
           }
-        }
-      }
 
-      // 401: show auth error screen and exit immediately
-      if (message.type === 'assistant' && signals.hasApiErrorStatus(401)) {
-        signalDone!();
-        spinner.stop('Authentication failed');
-        // Re-check at error time: a settings conflict can be the *real* cause
-        // of a 401, distinct from bad PAT / wrong region / expired key.
-        // Only the conflict case warrants telling the user to log out of
-        // Claude Code.
-        const authError = buildAuthErrorContext(
-          options.installDir,
-          agentConfig.gatewayAuth.gatewayUrl,
-          os.homedir(),
-          signals.apiKeySource,
-        );
-        // A refresh that already failed on a dead grant explains this 401
-        // outright; without it the screen falls through to generic key-type
-        // and scope advice that cannot apply.
-        const sessionExpired = isGrantRevoked();
-        const authCode = classifyAuthFailure({
-          hasSettingsConflict: authError.hasSettingsConflict,
-          usingManagedLogin: authError.usingManagedLogin,
-          sessionExpired,
-          apiKey: options.apiKey,
-          gatewayRegion: authError.region,
-          sessionRegion: options.cloudRegion,
-        });
-        logToFile('Agent error: 401, showing auth error screen', {
-          ...authError,
-          sessionExpired,
-        });
-        getUI().showAuthError({
-          hasSettingsConflict: authError.hasSettingsConflict,
-          conflicts: authError.conflicts,
-          usingManagedLogin: authError.usingManagedLogin,
-          credentialPlaces: authError.credentialPlaces,
-          sessionExpired,
-          logFilePath: getLogFilePath(),
-        });
-        await wizardAbort({
-          code: authCode,
-          message: 'Authentication failed (401)',
-          error: new WizardError(
-            'Authentication failed',
-            {
+          // 401 on a bearer past its refresh instant: it aged out, so re-mint
+          // once and resume. Any other 401 is a bad credential: show the auth
+          // error screen and exit.
+          if (message.type === 'assistant' && signals.hasApiErrorStatus(401)) {
+            signalDone();
+            if (
+              agentConfig.refreshGatewayAuth &&
+              !reminted &&
+              isPastRefresh(agentConfig.gatewayAuth)
+            ) {
+              logToFile(
+                'Agent error: 401 on an aged gateway bearer; re-minting',
+              );
+              remintRequested = true;
+              abortController.abort();
+              break;
+            }
+            spinner.stop('Authentication failed');
+            // Re-check at error time: a settings conflict can be the *real* cause
+            // of a 401, distinct from bad PAT / wrong region / expired key.
+            // Only the conflict case warrants telling the user to log out of
+            // Claude Code.
+            const authError = buildAuthErrorContext(
+              options.installDir,
+              agentConfig.gatewayAuth.gatewayUrl,
+              os.homedir(),
+              signals.apiKeySource,
+            );
+            // A refresh that already failed on a dead grant explains this 401
+            // outright; without it the screen falls through to generic key-type
+            // and scope advice that cannot apply.
+            const sessionExpired = isGrantRevoked();
+            const authCode = classifyAuthFailure({
               hasSettingsConflict: authError.hasSettingsConflict,
-              conflictSources: authError.conflictSources,
-              conflictKeys: authError.conflictKeys,
-              gatewayUrl: authError.gatewayUrl,
-              region: authError.region,
               usingManagedLogin: authError.usingManagedLogin,
-              apiKeySource: authError.apiKeySource,
-            },
-            authCode,
-          ),
-        });
-      }
+              sessionExpired,
+              apiKey: options.apiKey,
+              gatewayRegion: authError.region,
+              sessionRegion: options.cloudRegion,
+            });
+            logToFile('Agent error: 401, showing auth error screen', {
+              ...authError,
+              sessionExpired,
+            });
+            getUI().showAuthError({
+              hasSettingsConflict: authError.hasSettingsConflict,
+              conflicts: authError.conflicts,
+              usingManagedLogin: authError.usingManagedLogin,
+              credentialPlaces: authError.credentialPlaces,
+              sessionExpired,
+              logFilePath: getLogFilePath(),
+            });
+            await wizardAbort({
+              code: authCode,
+              message: 'Authentication failed (401)',
+              error: new WizardError(
+                'Authentication failed',
+                {
+                  hasSettingsConflict: authError.hasSettingsConflict,
+                  conflictSources: authError.conflictSources,
+                  conflictKeys: authError.conflictKeys,
+                  gatewayUrl: authError.gatewayUrl,
+                  region: authError.region,
+                  usingManagedLogin: authError.usingManagedLogin,
+                  apiKeySource: authError.apiKeySource,
+                },
+                authCode,
+              ),
+            });
+          }
 
-      try {
-        middleware?.onMessage(message);
-      } catch (e) {
-        logToFile(`${AgentSignals.BENCHMARK} Middleware onMessage error:`, e);
-      }
+          try {
+            middleware?.onMessage(message);
+          } catch (e) {
+            logToFile(
+              `${AgentSignals.BENCHMARK} Middleware onMessage error:`,
+              e,
+            );
+          }
 
-      // Signal completion when result received
-      if (message.type === 'result') {
-        // Track successful results before any potential cleanup errors
-        // The SDK may emit a second error result during cleanup due to a race condition
-        if (message.subtype === 'success' && !message.is_error) {
-          receivedSuccessResult = true;
-          lastResultMessage = message;
+          // Signal completion when result received
+          if (message.type === 'result') {
+            // Track successful results before any potential cleanup errors
+            // The SDK may emit a second error result during cleanup due to a race condition
+            if (message.subtype === 'success' && !message.is_error) {
+              receivedSuccessResult = true;
+              lastResultMessage = message;
+            }
+            signalDone();
+          }
         }
-        signalDone!();
+      } catch (error) {
+        // The abort we asked for; anything else belongs to the outer catch.
+        if (remintRequested) return 'remint';
+        throw error;
       }
+      return remintRequested ? 'remint' : 'done';
+    };
+
+    const refreshGatewayAuth = agentConfig.refreshGatewayAuth;
+    if ((await runQuery()) === 'remint' && refreshGatewayAuth) {
+      // The subprocess froze the dead bearer in its env at spawn, so it cannot
+      // be handed a new one: mint, then resume the session in a new one.
+      reminted = true;
+      remintRequested = false;
+      abortController = new AbortController();
+      signals.forgetApiErrors();
+      spinner.message('Renewing the gateway token...');
+      const stale = agentConfig.gatewayAuth;
+      // A refusal or failure here ends the run with its own message.
+      agentConfig.gatewayAuth = await refreshGatewayAuth();
+      logToFile(
+        `Gateway token renewed after a 401 (${Math.round(
+          (Date.now() - stale.refreshAtMs) / 1000,
+        )}s past refresh); resuming session ${
+          sessionId ?? '(none: fresh session)'
+        }`,
+      );
+      analytics.wizardCapture('gateway token reminted', {
+        resumed: sessionId !== undefined,
+      });
+      spinner.message(spinnerMessage);
+      await runQuery(sessionId);
     }
 
     // A YARA hook detected a terminal violation and aborted the run.
@@ -1294,7 +1372,7 @@ export async function runAgent(
     return completeWithSuccess();
   } catch (error) {
     // Signal done to unblock the async generator
-    signalDone!();
+    signalDone();
 
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
