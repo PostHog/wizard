@@ -323,6 +323,39 @@ describe('gatewayAuth', () => {
     );
   });
 
+  it.each([
+    [
+      'code wins over outcome',
+      { code: 'blocked', outcome: 'throttled' },
+      'blocked',
+    ],
+    [
+      'outcome carries it when code is absent',
+      { outcome: 'throttled' },
+      'throttled',
+    ],
+    [
+      'an empty code does not shadow outcome',
+      { code: '  ', outcome: 'throttled' },
+      'throttled',
+    ],
+    [
+      'a control-only code does not shadow outcome',
+      { code: '\u0007', outcome: 'throttled' },
+      'throttled',
+    ],
+  ])('resolves the outcome when %s', async (_label, body, want) => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve(body),
+    });
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'audit').catch(
+      (e: unknown) => e,
+    );
+    expect((err as GatewayMintRefused).outcome).toBe(want);
+  });
+
   it('captures a refusal with its status, outcome and program', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
