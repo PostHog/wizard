@@ -60,6 +60,18 @@ describe('AgentOutputSignals', () => {
     expect(signals.remark()).toBeUndefined();
   });
 
+  it('forgets API error lines after a re-mint but keeps every other signal', () => {
+    const signals = new AgentOutputSignals();
+    signals.push('API Error: 401 token expired');
+    signals.push('[ERROR-MCP-MISSING] could not reach MCP');
+
+    signals.forgetApiErrors();
+
+    expect(signals.hasApiError()).toBe(false);
+    expect(signals.hasApiErrorStatus(401)).toBe(false);
+    expect(signals.has('MCP_MISSING')).toBe(true);
+  });
+
   it('treats the API error status as a parameter, not a fixed marker', () => {
     const signals = new AgentOutputSignals();
     signals.push('API Error: 503 service unavailable');

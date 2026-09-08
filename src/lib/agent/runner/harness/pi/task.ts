@@ -36,8 +36,12 @@ import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import { gatewayAuth } from '@lib/gateway-session';
-import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';
+import {
+  buildGatewayProvider,
+  GATEWAY_PROVIDER,
+  withGatewayRemint,
+} from './gateway';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
@@ -215,15 +219,17 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const auth = await gatewayAuth(
-      boot.credentials.host,
-      boot.credentials.accessToken,
-      boot.programId,
-    );
-    const { provider, caps } = buildGatewayProvider({
-      gatewayUrl: auth.gatewayUrl,
-      accessToken: auth.token,
-      teamId: auth.teamId,
+    const refreshAuth = () =>
+      gatewayAuth(
+        boot.credentials.host,
+        boot.credentials.accessToken,
+        boot.programId,
+      );
+    const auth = await refreshAuth();
+    const providerInputs = (current: GatewayAuth) => ({
+      gatewayUrl: current.gatewayUrl,
+      accessToken: current.token,
+      teamId: current.teamId,
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
       modelId,
@@ -231,6 +237,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       // back to the model table.
       effort,
     });
+    const { provider, caps } = buildGatewayProvider(providerInputs(auth));
     const registry = ModelRegistry.inMemory(AuthStorage.create());
     registry.registerProvider(GATEWAY_PROVIDER, provider as never);
     const model = registry.find(GATEWAY_PROVIDER, modelId);
@@ -369,6 +376,22 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     });
     await agentSession.bindExtensions({});
 
+    // A turn that ends on a 401 from an aged bearer re-mints once and
+    // continues with the nudge the task would get anyway.
+    const turns = withGatewayRemint({
+      session: agentSession,
+      registry,
+      auth,
+      refreshAuth,
+      providerInputs,
+      continueText: () =>
+        orchestrator.currentTaskId ? TASK_NUDGE : SEED_NUDGE,
+      onRemint: () => {
+        logToFile('[pi-task] gateway token renewed after a 401; continuing');
+        analytics.wizardCapture('gateway token reminted', { harness: 'pi' });
+      },
+    });
+
     // The one complete list: exactly the tools registered on this session, in
     // the names the agent will call them by. posthog_exec binds as an extension.
     const toolNames = [
@@ -390,6 +413,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
             break;
           }
           assistantTurns += 1;
+          turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
@@ -429,7 +453,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     capture.setInitialPrompt(taskPrompt);
 
     try {
-      await agentSession.prompt(taskPrompt);
+      await turns.prompt(taskPrompt);
 
       // pi's prompt() resolves the moment a turn carries no tool call — which
       // an agent mid-plan does emit. While the work has not reached its
@@ -444,7 +468,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         logToFile(
           `[pi-task] completion guard: not settled, nudge ${nudges}/${MAX_TASK_NUDGES}`,
         );
-        await agentSession.prompt(
+        await turns.prompt(
           orchestrator.currentTaskId ? TASK_NUDGE : SEED_NUDGE,
         );
       }

@@ -54,6 +54,13 @@ export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 export const REMARK_INSTRUCTION = `Reply with a single line that starts with ${AgentSignals.WIZARD_REMARK} and no other lines. In that line, state briefly what information or guidance would have been useful to have in the integration prompt or documentation for this run — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.`;
 
 /**
+ * First prompt of a session resumed after a mid-run re-mint. The transcript
+ * carries the work so far; the model only needs to pick it up.
+ */
+export const RESUME_INSTRUCTION =
+  'Your previous request failed with a transient gateway authentication error that has since been fixed. Continue the task from where you left off.';
+
+/**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
  */

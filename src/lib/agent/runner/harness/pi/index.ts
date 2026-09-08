@@ -27,8 +27,12 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
-import { gatewayAuth } from '@lib/gateway-session';
-import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';
+import {
+  buildGatewayProvider,
+  GATEWAY_PROVIDER,
+  withGatewayRemint,
+} from './gateway';
 import { createAioCapture } from '@lib/agent/aio-capture';
 import type {
   AgentResult,
@@ -248,20 +252,23 @@ export const piBackend: AgentHarness = {
       // the claude-agent-sdk path. The provider spec is shared with the
       // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
       // run's scoped token.
-      const auth = await gatewayAuth(
-        boot.credentials.host,
-        boot.credentials.accessToken,
-        boot.programId,
-      );
-      const { provider, caps } = buildGatewayProvider({
-        gatewayUrl: auth.gatewayUrl,
-        accessToken: auth.token,
-        teamId: auth.teamId,
+      const refreshAuth = () =>
+        gatewayAuth(
+          boot.credentials.host,
+          boot.credentials.accessToken,
+          boot.programId,
+        );
+      const auth = await refreshAuth();
+      const providerInputs = (current: GatewayAuth) => ({
+        gatewayUrl: current.gatewayUrl,
+        accessToken: current.token,
+        teamId: current.teamId,
         wizardMetadata: boot.wizardMetadata,
         wizardFlags: boot.wizardFlags,
         modelId,
         effort: inputs.thinkingLevel,
       });
+      const { provider, caps } = buildGatewayProvider(providerInputs(auth));
       const registry = ModelRegistry.inMemory(AuthStorage.create());
       registry.registerProvider(GATEWAY_PROVIDER, provider as never);
 
@@ -454,6 +461,22 @@ export const piBackend: AgentHarness = {
       // event; without this its tools report "MCP not initialized".
       await agentSession.bindExtensions({});
 
+      // A turn that ends on a 401 from an aged bearer re-mints once and
+      // continues; pi resolves the provider's apiKey per request, so
+      // re-registering is enough.
+      const turns = withGatewayRemint({
+        session: agentSession,
+        registry,
+        auth,
+        refreshAuth,
+        providerInputs,
+        continueText: CONTINUE_INSTRUCTION,
+        onRemint: () => {
+          logToFile('[pi] gateway token renewed after a 401; continuing');
+          analytics.wizardCapture('gateway token reminted', { harness: 'pi' });
+        },
+      });
+
       // Map pi events onto the run spinner + the log file, mirroring the
       // anthropic path's log shape (assistant turns + tool I/O) and driving the
       // single run spinner with one stable status at a time (no overlap).
@@ -470,6 +493,7 @@ export const piBackend: AgentHarness = {
               break;
             }
             assistantTurns += 1;
+            turns.noteAssistantTurn(event.message);
             const assistant = extractText(event.message).trim();
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
@@ -526,7 +550,7 @@ export const piBackend: AgentHarness = {
       try {
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
-        await agentSession.prompt(prompt);
+        await turns.prompt(prompt);
 
         // Completion guard: pi's prompt() resolves the moment the model returns
         // a turn with no tool call (e.g. a lone [STATUS] line), even mid-plan.
@@ -541,7 +565,7 @@ export const piBackend: AgentHarness = {
           logToFile(
             `[pi] completion guard: tasks still open, nudge ${continueNudges}/${MAX_CONTINUE_NUDGES}`,
           );
-          await agentSession.prompt(CONTINUE_INSTRUCTION);
+          await turns.prompt(CONTINUE_INSTRUCTION);
         }
 
         // Best-effort remark ask — a failed turn never fails a successful run.
