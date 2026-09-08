@@ -223,7 +223,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { provider, caps } = buildGatewayProvider({
       gatewayUrl: auth.gatewayUrl,
       accessToken: auth.token,
-      edition: auth.edition,
       teamId: auth.teamId,
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
