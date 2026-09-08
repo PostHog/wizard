@@ -636,10 +636,6 @@ downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
 degradedBlocksRun: ['anthropic'],
 ```
 
-The AI gateway is deliberately absent: its URL is only known from the run's
-token mint at bootstrap, so there is nothing static to probe — and a failed
-mint already stops the run with the server's reason.
-
 `skillsOrigin` is one entry covering two origins: skills are published to
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail
 over between them (`src/lib/fetch-retry.ts`). Both are probed in parallel, so
