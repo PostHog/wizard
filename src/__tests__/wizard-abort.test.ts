@@ -7,6 +7,7 @@ import {
   runCleanups,
 } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
+import { ErrorCodes } from '@lib/errors';
 import { getUI } from '../ui';
 
 vi.mock('../utils/analytics');
@@ -129,6 +130,23 @@ describe('wizardAbort', () => {
     expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
       integration: 'nextjs',
       error_type: 'MCP_MISSING',
+    });
+  });
+
+  it('resolves the code from a coded WizardError when the caller passes none', async () => {
+    // A mint refusal reaches wizardAbort as the error alone; its code must
+    // still land on the captured exception.
+    const error = new WizardError(
+      'refused',
+      { status: 403 },
+      ErrorCodes.GatewayMintRefused,
+    );
+
+    await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
+
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
+      status: 403,
+      error_code: ErrorCodes.GatewayMintRefused,
     });
   });
 

@@ -7,6 +7,9 @@
  */
 
 import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { WizardError } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
 
 export interface GatewayAuth {
@@ -44,6 +47,8 @@ const REFRESH_AT_FRACTION = 0.8;
 const MINT_TIMEOUT_MS = 20_000;
 /** Longer than any refusal the mint writes; a body past this is not a message. */
 const MAX_REFUSAL_DETAIL_LENGTH = 500;
+/** Outcomes are short snake_case labels; anything longer is not one. */
+const MAX_REFUSAL_OUTCOME_LENGTH = 64;
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
@@ -165,15 +170,19 @@ interface MintedToken {
 /**
  * A deliberate refusal from the mint endpoint, as opposed to the mint being
  * unavailable. Thrown so the run stops instead of proceeding without the
- * controls the refusal was enforcing.
+ * controls the refusal was enforcing. A WizardError, so the runners print its
+ * message as-is and `wizardAbort` resolves its code.
  */
-export class GatewayMintRefused extends Error {
+export class GatewayMintRefused extends WizardError {
   readonly status: number;
+  /** The backend's refusal outcome (`blocked`, `throttled`, ...), when it sent one. */
+  readonly outcome?: string;
 
-  constructor(status: number, message: string) {
-    super(message);
+  constructor(status: number, message: string, outcome?: string) {
+    super(message, { status, outcome }, ErrorCodes.GatewayMintRefused);
     this.name = 'GatewayMintRefused';
     this.status = status;
+    this.outcome = outcome;
   }
 }
 
@@ -181,9 +190,9 @@ export class GatewayMintRefused extends Error {
  * The mint could not produce a usable credential: unreachable, a 5xx, or a
  * response the client cannot use.
  */
-export class GatewayMintFailed extends Error {
+export class GatewayMintFailed extends WizardError {
   constructor(message: string) {
-    super(message);
+    super(message, undefined, ErrorCodes.GatewayMintFailed);
     this.name = 'GatewayMintFailed';
   }
 }
@@ -204,25 +213,43 @@ function isMintRefusal(status: number): boolean {
   );
 }
 
+interface MintRefusal {
+  detail?: string;
+  outcome?: string;
+}
+
 /**
  * The server's own reason for a refusal, when it sent one. DRF answers every
  * refusal as `{"detail": "..."}`; the blocklist's detail names the contact
- * address, which the fixed messages below cannot.
+ * address, which the fixed messages below cannot. `outcome` is the backend's
+ * own label for the refusal and rides the client event.
  */
-async function readRefusalDetail(resp: Response): Promise<string | undefined> {
+function cleanRefusalText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  // Not because the server sends escapes, but because this string is printed
+  // straight to a terminal: sanitizing at the boundary means no later message
+  // can move the cursor or repaint the screen.
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
+}
+
+async function readRefusal(resp: Response): Promise<MintRefusal> {
   try {
-    const body = (await resp.json()) as { detail?: unknown };
-    const raw = typeof body?.detail === 'string' ? body.detail : '';
-    // Not because the server sends escapes, but because this string is printed
-    // straight to a terminal: sanitizing at the boundary means no later message
-    // can move the cursor or repaint the screen.
-    // eslint-disable-next-line no-control-regex
-    const detail = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
-    return detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
-      ? detail
-      : undefined;
+    const body = (await resp.json()) as { detail?: unknown; outcome?: unknown };
+    const detail = cleanRefusalText(body?.detail);
+    const outcome = cleanRefusalText(body?.outcome);
+    return {
+      detail:
+        detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
+          ? detail
+          : undefined,
+      outcome:
+        outcome.length > 0 && outcome.length <= MAX_REFUSAL_OUTCOME_LENGTH
+          ? outcome
+          : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -265,12 +292,23 @@ async function mintGatewayToken(
     });
     if (!resp.ok) {
       if (isMintRefusal(resp.status)) {
+        const refusal = await readRefusal(resp);
         logToFile(
-          `[gateway] mint refused with HTTP ${resp.status}; failing the run`,
+          `[gateway] mint refused with HTTP ${resp.status} (${
+            refusal.outcome ?? 'no outcome'
+          }); failing the run`,
         );
+        // The terminal denial event for this run. The backend's own event has
+        // no run id, so this is what joins a refusal to the session.
+        analytics.wizardCapture('gateway mint refused', {
+          status: resp.status,
+          outcome: refusal.outcome,
+          program,
+        });
         throw new GatewayMintRefused(
           resp.status,
-          mintRefusalMessage(resp.status, await readRefusalDetail(resp)),
+          mintRefusalMessage(resp.status, refusal.detail),
+          refusal.outcome,
         );
       }
       logToFile(

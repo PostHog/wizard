@@ -8,7 +8,14 @@ import {
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
+import { ErrorCodes } from '@lib/errors';
+import { WizardError } from '@utils/wizard-abort';
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
+}));
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
@@ -37,6 +44,7 @@ describe('gatewayAuth', () => {
   beforeEach(() => {
     resetGatewaySession();
     fetchMock.mockReset();
+    vi.mocked(analytics.wizardCapture).mockClear();
     vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -287,6 +295,86 @@ describe('gatewayAuth', () => {
       ).rejects.toBeInstanceOf(GatewayMintFailed);
     },
   );
+
+  it('captures a refusal with its status, outcome and program', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          detail: 'This account is blocked.',
+          outcome: 'blocked',
+        }),
+    });
+    // The backend's own denial event has no run id, so this client event is
+    // what joins a refusal to the session.
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'audit').catch(
+      (e: unknown) => e,
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint refused',
+      { status: 403, outcome: 'blocked', program: 'audit' },
+    );
+    expect((err as GatewayMintRefused).outcome).toBe('blocked');
+  });
+
+  it.each([
+    ['absent', () => Promise.resolve({ detail: 'Limit reached.' })],
+    ['not a string', () => Promise.resolve({ outcome: 429 })],
+    ['oversized', () => Promise.resolve({ outcome: 'x'.repeat(65) })],
+    ['unparseable', () => Promise.reject(new SyntaxError('bad json'))],
+  ])(
+    'captures a refusal with no outcome when the body has one that is %s',
+    async (_label, json) => {
+      fetchMock.mockResolvedValue({ ok: false, status: 429, json });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintRefused);
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'gateway mint refused',
+        { status: 429, outcome: undefined, program: 'integration' },
+      );
+    },
+  );
+
+  it('does not capture a mint failure as a refusal', async () => {
+    // A 5xx is the mint being unavailable, not a decision about this run.
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+  });
+
+  it('throws coded WizardErrors so the runners can name the failure', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ outcome: 'blocked' }),
+    });
+    const refused: unknown = await gatewayAuth(
+      host,
+      'pha_oauth',
+      'integration',
+    ).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(WizardError);
+    expect((refused as WizardError).code).toBe(ErrorCodes.GatewayMintRefused);
+    // The context is what wizardAbort attaches to the captured exception.
+    expect((refused as WizardError).context).toEqual({
+      status: 403,
+      outcome: 'blocked',
+    });
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
+    const failed: unknown = await gatewayAuth(
+      host,
+      'pha_oauth',
+      'integration',
+    ).catch((e: unknown) => e);
+    expect(failed).toBeInstanceOf(WizardError);
+    expect((failed as WizardError).code).toBe(ErrorCodes.GatewayMintFailed);
+  });
 
   it('surfaces a refusal through the transport catch', async () => {
     // The refusal is thrown from inside the try that wraps fetch, so a catch that
