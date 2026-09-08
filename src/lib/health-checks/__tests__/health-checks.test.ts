@@ -8,9 +8,7 @@
  * summary.json – same rollup plus component list; component statuses:
  *   operational | degraded_performance | partial_outage | major_outage | under_maintenance
  *   https://support.atlassian.com/statuspage/docs/show-service-status-with-components
- *
- * LLM Gateway – FastAPI service, GET /_liveness returns {"status":"alive"} (200)
- *   Source: posthog/services/llm-gateway/src/llm_gateway/api/health.py
+
  *
  * MCP – Cloudflare Worker, GET / returns an HTML landing page (200)
  *   Source: posthog/services/mcp/src/index.ts
@@ -23,7 +21,6 @@ import {
   checkCloudflareOverallHealth,
   checkGithubHealth,
   checkSkillsOriginHealth,
-  checkLlmGatewayHealth,
   checkMcpHealth,
   checkNpmComponentHealth,
   checkNpmOverallHealth,
@@ -35,6 +32,7 @@ import {
   ServiceHealthStatus,
   WizardReadiness,
 } from '@lib/health-checks/index';
+import { fetchEndpointHealth } from '@lib/health-checks/endpoints';
 
 // ---------------------------------------------------------------------------
 // Real-world Statuspage.io v2 response factories
@@ -191,9 +189,6 @@ const POSTHOG_INCIDENTIO_HEALTHY = {
   scheduled_maintenances: [],
 };
 
-// LLM Gateway /_liveness response (from posthog/services/llm-gateway/src/llm_gateway/api/health.py)
-const LLM_GATEWAY_LIVENESS_BODY = JSON.stringify({ status: 'alive' });
-
 // MCP / landing page (from posthog/services/mcp/src/index.ts + src/static/landing.html)
 const MCP_LANDING_HTML =
   '<!doctype html><html lang="en"><head><title>PostHog MCP Server</title></head><body></body></html>';
@@ -210,7 +205,6 @@ const URLS = {
   npmSummary: 'https://status.npmjs.org/api/v2/summary.json',
   cloudflareStatus: 'https://www.cloudflarestatus.com/api/v2/status.json',
   cloudflareSummary: 'https://www.cloudflarestatus.com/api/v2/summary.json',
-  llmGatewayLiveness: 'https://gateway.us.posthog.com/_liveness',
   mcpLanding: 'https://mcp.posthog.com/',
   githubSkillMenu:
     'https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json',
@@ -249,10 +243,6 @@ const HEALTHY_RESPONSES: Record<string, { body: string; contentType: string }> =
     },
     [URLS.cloudflareSummary]: {
       body: JSON.stringify(CLOUDFLARE_SUMMARY_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.llmGatewayLiveness]: {
-      body: LLM_GATEWAY_LIVENESS_BODY,
       contentType: 'application/json',
     },
     [URLS.mcpLanding]: {
@@ -722,54 +712,64 @@ describe('health-checks', () => {
   });
 
   // -----------------------------------------------------------------------
-  // LLM Gateway (fetchEndpointHealth – /_liveness)
+  // fetchEndpointHealth (retry + status-taxonomy machinery, probed directly
+  // against a synthetic URL — no production probe uses the strict defaults
+  // any more, but every endpoint check shares this loop)
   // -----------------------------------------------------------------------
 
-  describe('checkLlmGatewayHealth', () => {
-    it('returns healthy when gateway responds 200 with {"status":"alive"}', async () => {
-      const result = await checkLlmGatewayHealth();
+  describe('fetchEndpointHealth', () => {
+    const PROBE_URL = 'https://probe.posthog.test/_liveness';
+
+    it('returns healthy on a 200', async () => {
+      (global.fetch as Mock).mockImplementation(
+        overrideFetch({
+          [PROBE_URL]: () =>
+            Promise.resolve(new Response('ok', { status: 200 })),
+        }),
+      );
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Healthy);
       expect(result.rawIndicator).toBe('HTTP 200');
       expect(global.fetch).toHaveBeenCalledWith(
-        URLS.llmGatewayLiveness,
+        PROBE_URL,
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 
-    it('returns down on 302 — the gateway probe stays strict, redirects are not OK here', async () => {
+    it('returns down on 302 — the default predicate stays strict, redirects are not OK', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () =>
+          [PROBE_URL]: () =>
             Promise.resolve(new Response(null, { status: 302 })),
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toContain('HTTP 302');
     });
 
-    it('returns down when gateway responds 503 (e.g. deploying)', async () => {
+    it('returns down when the endpoint responds 503 (e.g. deploying)', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () =>
+          [PROBE_URL]: () =>
             Promise.resolve(
               new Response('Service Unavailable', { status: 503 }),
             ),
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toContain('HTTP 503');
     });
 
-    it('returns down when gateway responds 502 (bad gateway)', async () => {
+    it('returns down when the endpoint responds 502 (bad gateway)', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () =>
+          [PROBE_URL]: () =>
             Promise.resolve(new Response('Bad Gateway', { status: 502 })),
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toContain('HTTP 502');
     });
@@ -777,15 +777,15 @@ describe('health-checks', () => {
     it('returns no-connection on DNS resolution failure (no status-page corroboration)', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () =>
+          [PROBE_URL]: () =>
             Promise.reject(
-              new Error('getaddrinfo ENOTFOUND gateway.us.posthog.com'),
+              new Error('getaddrinfo ENOTFOUND probe.posthog.test'),
             ),
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-      expect(result.error).toBe('getaddrinfo ENOTFOUND gateway.us.posthog.com');
+      expect(result.error).toBe('getaddrinfo ENOTFOUND probe.posthog.test');
     });
 
     it('returns no-connection on timeout (AbortError)', async () => {
@@ -793,10 +793,10 @@ describe('health-checks', () => {
       abortError.name = 'AbortError';
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () => Promise.reject(abortError),
+          [PROBE_URL]: () => Promise.reject(abortError),
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.NoConnection);
       expect(result.error).toBe('Request timed out after 5000ms');
     });
@@ -805,18 +805,16 @@ describe('health-checks', () => {
       let calls = 0;
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () => {
+          [PROBE_URL]: () => {
             calls++;
             if (calls < 3) {
               return Promise.reject(new Error('ECONNRESET'));
             }
-            return Promise.resolve(
-              new Response(LLM_GATEWAY_LIVENESS_BODY, { status: 200 }),
-            );
+            return Promise.resolve(new Response('ok', { status: 200 }));
           },
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Healthy);
       expect(result.rawIndicator).toContain('attempts=3');
       expect(calls).toBe(3);
@@ -826,7 +824,7 @@ describe('health-checks', () => {
       let calls = 0;
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () => {
+          [PROBE_URL]: () => {
             calls++;
             return Promise.resolve(
               new Response('Service Unavailable', { status: 503 }),
@@ -834,7 +832,7 @@ describe('health-checks', () => {
           },
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(calls).toBe(3);
       expect(result.error).toContain('HTTP 503');
@@ -845,20 +843,18 @@ describe('health-checks', () => {
       let calls = 0;
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () => {
+          [PROBE_URL]: () => {
             calls++;
             if (calls < 3) {
               return Promise.resolve(
                 new Response('Bad Gateway', { status: 502 }),
               );
             }
-            return Promise.resolve(
-              new Response(LLM_GATEWAY_LIVENESS_BODY, { status: 200 }),
-            );
+            return Promise.resolve(new Response('ok', { status: 200 }));
           },
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Healthy);
       expect(result.rawIndicator).toContain('attempts=3');
       expect(calls).toBe(3);
@@ -868,7 +864,7 @@ describe('health-checks', () => {
       let calls = 0;
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () => {
+          [PROBE_URL]: () => {
             calls++;
             if (calls < 3) return Promise.reject(new Error('ECONNRESET'));
             return Promise.resolve(
@@ -877,7 +873,7 @@ describe('health-checks', () => {
           },
         }),
       );
-      const result = await checkLlmGatewayHealth();
+      const result = await fetchEndpointHealth(PROBE_URL);
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toContain('HTTP 502');
     });
@@ -1082,7 +1078,7 @@ describe('health-checks', () => {
   // -----------------------------------------------------------------------
 
   describe('checkAllExternalServices', () => {
-    it('returns all 11 service keys when everything is healthy', async () => {
+    it('returns all 10 service keys when everything is healthy', async () => {
       const health = await checkAllExternalServices();
       const keys = Object.keys(health);
       expect(keys).toEqual(
@@ -1095,18 +1091,17 @@ describe('health-checks', () => {
           'npmComponents',
           'cloudflareOverall',
           'cloudflareComponents',
-          'llmGateway',
           'mcp',
           'skillsOrigin',
         ]),
       );
-      expect(keys).toHaveLength(11);
+      expect(keys).toHaveLength(10);
       for (const val of Object.values(health)) {
         expect(val.status).toBe(ServiceHealthStatus.Healthy);
       }
     });
 
-    it('upgrades NoConnection llmGateway/mcp to Down when status page reports an outage', async () => {
+    it('upgrades NoConnection mcp to Down when status page reports an outage', async () => {
       const incidentBody = {
         ...POSTHOG_INCIDENTIO_HEALTHY,
         ongoing_incidents: [
@@ -1128,20 +1123,17 @@ describe('health-checks', () => {
             Promise.resolve(
               new Response(JSON.stringify(incidentBody), { status: 200 }),
             ),
-          [URLS.llmGatewayLiveness]: () =>
-            Promise.reject(new Error('ECONNRESET')),
           [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
         }),
       );
 
       const health = await checkAllExternalServices();
       expect(health.posthogOverall.status).toBe(ServiceHealthStatus.Down);
-      expect(health.llmGateway.status).toBe(ServiceHealthStatus.Down);
-      expect(health.llmGateway.error).toContain('corroborated by status page');
       expect(health.mcp.status).toBe(ServiceHealthStatus.Down);
+      expect(health.mcp.error).toContain('corroborated by status page');
     });
 
-    it('keeps llmGateway/mcp as NoConnection when posthogstatus.com itself is unreachable (the bug-fix scenario)', async () => {
+    it('keeps mcp as NoConnection when posthogstatus.com itself is unreachable (the bug-fix scenario)', async () => {
       // User on flaky wifi: every PostHog-owned URL fetch fails at the
       // network layer, including posthogstatus.com. Previously
       // incidentio.ts returned Degraded for fetch failures, which
@@ -1152,8 +1144,6 @@ describe('health-checks', () => {
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.reject(new Error('ECONNRESET')),
-          [URLS.llmGatewayLiveness]: () =>
-            Promise.reject(new Error('ECONNRESET')),
           [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
         }),
       );
@@ -1162,22 +1152,18 @@ describe('health-checks', () => {
       expect(health.posthogOverall.status).toBe(
         ServiceHealthStatus.NoConnection,
       );
-      expect(health.llmGateway.status).toBe(ServiceHealthStatus.NoConnection);
       expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
     });
 
-    it('keeps llmGateway/mcp as NoConnection when status page reports no incident', async () => {
+    it('keeps mcp as NoConnection when status page reports no incident', async () => {
       (global.fetch as Mock).mockImplementation(
         overrideFetch({
-          [URLS.llmGatewayLiveness]: () =>
-            Promise.reject(new Error('ETIMEDOUT')),
           [URLS.mcpLanding]: () => Promise.reject(new Error('ETIMEDOUT')),
         }),
       );
 
       const health = await checkAllExternalServices();
       expect(health.posthogOverall.status).toBe(ServiceHealthStatus.Healthy);
-      expect(health.llmGateway.status).toBe(ServiceHealthStatus.NoConnection);
       expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
     });
 
@@ -1187,9 +1173,8 @@ describe('health-checks', () => {
         typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
       );
       // PostHog uses a single incident.io endpoint for both overall + components
-      expect(calledUrls).toHaveLength(11);
+      expect(calledUrls).toHaveLength(10);
       expect(calledUrls).toContain(URLS.posthogIncidentIo);
-      expect(calledUrls).toContain(URLS.llmGatewayLiveness);
       expect(calledUrls).toContain(URLS.mcpLanding);
       expect(calledUrls).toContain(URLS.githubSkillMenu);
       expect(calledUrls).toContain(URLS.awsSkillMenu);
@@ -1229,22 +1214,6 @@ describe('health-checks', () => {
       );
       expect(result.decision).toBe(WizardReadiness.No);
       expect(result.health.anthropic.status).toBe(ServiceHealthStatus.Degraded);
-    });
-
-    it('returns No when LLM Gateway is down (downBlocksRun)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.llmGatewayLiveness]: () =>
-            Promise.resolve(
-              new Response('Service Unavailable', { status: 503 }),
-            ),
-        }),
-      );
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.decision).toBe(WizardReadiness.No);
-      expect(result.health.llmGateway.status).toBe(ServiceHealthStatus.Down);
     });
 
     it('returns No when MCP is down (downBlocksRun)', async () => {
@@ -1316,7 +1285,6 @@ describe('health-checks', () => {
       expect(result.reasons.some((r) => r.includes('GitHub'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('npm'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('Cloudflare'))).toBe(true);
-      expect(result.reasons.some((r) => r.includes('LLM Gateway'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('MCP'))).toBe(true);
     });
   });

@@ -614,7 +614,7 @@ point is `evaluateWizardReadiness()`, which returns one of three values:
 | --- | --- |
 | `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
 | `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for LLM Gateway (`/_liveness`), MCP (`/`), and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
+| `endpoints.ts` | Direct endpoint checks for MCP (`/`) and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
 | `index.ts` | Barrel re-export |
 | `testme.md` | Test running instructions and endpoint reference |
@@ -632,9 +632,13 @@ two arrays:
 ### Current defaults
 
 ```ts
-downBlocksRun: ['anthropic', 'npmOverall', 'llmGateway', 'mcp', 'skillsOrigin'],
+downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
 degradedBlocksRun: ['anthropic'],
 ```
+
+The AI gateway is deliberately absent: its URL is only known from the run's
+token mint at bootstrap, so there is nothing static to probe — and a failed
+mint already stops the run with the server's reason.
 
 `skillsOrigin` is one entry covering two origins: skills are published to
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail
