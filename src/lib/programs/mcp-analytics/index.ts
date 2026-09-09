@@ -1,6 +1,17 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { relative } from 'path';
 import { ErrorCodes } from '@lib/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
+import type { McpTarget } from './detect';
+import {
+  MCP_SCAN_KEY,
+  MCP_SCAN_ERROR_KEY,
+  MCP_TARGET_KEY,
+  scanMcpAnalyticsProject,
+} from './setup';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 
@@ -54,7 +65,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * 'mcp-analytics'` from context-mill — a deliberate breaking change, done then,
  * not pre-emptively.
  */
-export const mcpAnalyticsConfig = createSkillProgram({
+const baseConfig = createSkillProgram({
   skillId: 'mcp-analytics',
   command: 'mcp-analytics',
   id: 'mcp-analytics',
@@ -63,14 +74,90 @@ export const mcpAnalyticsConfig = createSkillProgram({
   customPrompt:
     "Instrument this project's MCP server with PostHog MCP analytics. Run the " +
     '`mcp-analytics` skill end-to-end: detect the server style, install ' +
-    '`@posthog/mcp` and `posthog-node`, wrap the server (or use `PostHogMCP` ' +
-    'for a custom dispatcher), wire the project API key and host, and verify. ' +
+    'the appropriate SDK (`@posthog/mcp` and `posthog-node` for JavaScript/' +
+    'TypeScript, or `posthog.mcp` from the `posthog` package for Python), ' +
+    'instrument the server using its supported integration, wire the project ' +
+    'API key and host, and verify. ' +
     'Make only additive changes — do not alter tool behavior. The final report ' +
     `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
-  successMessage: `MCP analytics configured! View the report at ./${MCP_ANALYTICS_REPORT_FILE}`,
+  successMessage: 'MCP analytics installed. Send your first tool call next.',
   reportFile: MCP_ANALYTICS_REPORT_FILE,
   docsUrl: 'https://posthog.com/docs/mcp-analytics',
   spinnerMessage: 'Setting up MCP analytics...',
   estimatedDurationMinutes: 5,
   abortCases: MCP_ANALYTICS_ABORT_CASES,
+  buildOutroData: (_session, credentials) => ({
+    kind: OutroKind.Success,
+    message: 'MCP analytics installed. Send your first tool call next.',
+    reportFile: MCP_ANALYTICS_REPORT_FILE,
+    primaryLink: {
+      label: 'Open MCP analytics',
+      url: `${credentials.host.appHost.replace(/\/$/, '')}/project/${
+        credentials.projectId
+      }/mcp-analytics`,
+    },
+    nextSteps: {
+      heading: 'Get your first data',
+      items: [
+        'Set the environment variables listed in the setup report, then start or redeploy your server.',
+        'Connect your agent and invoke a tool that is safe to run.',
+        'Open MCP analytics in the selected project to check that the tool call arrived.',
+      ],
+    },
+    docsUrl: 'https://posthog.com/docs/mcp-analytics/installation',
+  }),
 });
+
+async function buildRun(session: WizardSession): Promise<ProgramRun> {
+  if (!baseConfig.run)
+    throw new Error('Missing MCP analytics run configuration');
+  const run =
+    typeof baseConfig.run === 'function'
+      ? await baseConfig.run(session)
+      : baseConfig.run;
+  const target = session.frameworkContext[MCP_TARGET_KEY] as
+    | McpTarget
+    | undefined;
+  return {
+    ...run,
+    customPrompt: (ctx) =>
+      [
+        run.customPrompt?.(ctx),
+        target?.entryPoint
+          ? `The user selected this server entry point: ${JSON.stringify(
+              relative(session.installDir, target.entryPoint),
+            )}. Verify it and instrument this server.`
+          : undefined,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+  };
+}
+
+export const mcpAnalyticsConfig: ProgramConfig = {
+  ...baseConfig,
+  steps: baseConfig.steps.map((step) =>
+    step.id === 'intro'
+      ? {
+          ...step,
+          screenId: 'mcp-analytics-intro',
+          onReady: async (ctx) => {
+            try {
+              ctx.setFrameworkContext(
+                MCP_SCAN_KEY,
+                await scanMcpAnalyticsProject(ctx.session.installDir),
+              );
+            } catch (error) {
+              ctx.setFrameworkContext(
+                MCP_SCAN_ERROR_KEY,
+                error instanceof Error
+                  ? error.message
+                  : 'Could not read this directory.',
+              );
+            }
+          },
+        }
+      : step,
+  ),
+  run: buildRun,
+};

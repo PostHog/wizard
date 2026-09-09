@@ -24,6 +24,7 @@ export enum ScreenId {
   SourceMapsOutro = 'source-maps-outro',
   MigrationIntro = 'migration-intro',
   AgentSkillIntro = 'agent-skill-intro',
+  McpAnalyticsIntro = 'mcp-analytics-intro',
   AiObservabilityIntro = 'ai-observability-intro',
   MetricsIntro = 'metrics-intro',
   SelfDrivingIntro = 'self-driving-intro',

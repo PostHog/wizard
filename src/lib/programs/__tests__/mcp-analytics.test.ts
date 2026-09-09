@@ -2,6 +2,29 @@ import {
   MCP_ANALYTICS_ABORT_CASES,
   mcpAnalyticsConfig,
 } from '@lib/programs/mcp-analytics/index';
+import {
+  buildSession,
+  OutroKind,
+  type WizardSession,
+} from '@lib/wizard-session';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import { HostResolution } from '@lib/host-resolution';
+import { MCP_TARGET_KEY } from '@lib/programs/mcp-analytics/setup';
+
+const credentials = {
+  projectId: 42,
+  projectApiKey: 'phc_example',
+  accessToken: 'example',
+  host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+};
+
+async function runConfig(
+  session: WizardSession = buildSession({}),
+): Promise<ProgramRun> {
+  const run = mcpAnalyticsConfig.run;
+  if (!run) throw new Error('Expected an MCP analytics run');
+  return typeof run === 'function' ? run(session) : run;
+}
 
 describe('MCP_ANALYTICS_ABORT_CASES', () => {
   // These are the exact `[ABORT] <reason>` strings the mcp-analytics skill
@@ -38,13 +61,42 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
 });
 
 describe('mcpAnalyticsConfig', () => {
-  it('wires the mcp-analytics abort cases into the run config', () => {
-    // `run` is statically a defined object for this program (createSkillProgram
-    // always sets it, and never uses the session-derived function form).
-    const run = mcpAnalyticsConfig.run;
-    if (!run || typeof run === 'function') {
-      throw new Error('expected a static run object');
-    }
+  it('wires the mcp-analytics abort cases into the run config', async () => {
+    const run = await runConfig();
     expect(run.abortCases).toBe(MCP_ANALYTICS_ABORT_CASES);
+  });
+
+  it('asks the agent to verify the selected server relative to its project', async () => {
+    const session = buildSession({ installDir: '/example/server' });
+    session.frameworkContext[MCP_TARGET_KEY] = {
+      directory: '/example/server',
+      entryPoint: '/example/server/src/tools.ts',
+    };
+    const run = await runConfig(session);
+    const prompt = run.customPrompt?.(credentials);
+    expect(prompt).toContain('"src/tools.ts"');
+    expect(prompt).toContain('Verify it and instrument this server');
+    expect(prompt).toContain('Make only additive changes');
+  });
+
+  it('keeps agent discovery available without a selected entry point', async () => {
+    const run = await runConfig();
+    const prompt = run.customPrompt?.(credentials);
+    expect(prompt).toContain('detect the server style');
+    expect(prompt).not.toContain('The user selected');
+  });
+
+  it('links completion to the authenticated project and explains how to send data', async () => {
+    const session = buildSession({});
+    const run = await runConfig(session);
+    const outro = run.buildOutroData?.(session, credentials);
+    expect(outro?.kind).toBe(OutroKind.Success);
+    expect(outro?.primaryLink?.url).toBe(
+      'https://eu.posthog.com/project/42/mcp-analytics',
+    );
+    expect(outro?.nextSteps?.items.join(' ')).toContain('start or redeploy');
+    expect(outro?.nextSteps?.items.join(' ')).toContain(
+      'check that the tool call arrived',
+    );
   });
 });
