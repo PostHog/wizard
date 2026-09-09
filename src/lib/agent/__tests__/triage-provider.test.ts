@@ -117,6 +117,24 @@ describe('createTriageLLMProvider', () => {
     });
   });
 
+  it('re-reads auth on every call instead of closing over the first token', async () => {
+    // A run that re-mints mid-way must scan with the current bearer.
+    complete.mockResolvedValue(reply('false_positive'));
+    const tokens = ['tok-1', 'tok-2'];
+    const provider = createTriageLLMProvider(
+      () => Promise.resolve({ ...AUTH, authToken: tokens.shift() ?? 'tok-3' }),
+      Harness.anthropic,
+    );
+
+    await provider('first?');
+    await provider('second?');
+
+    expect(complete.mock.calls.map((c) => c[2]?.apiKey)).toEqual([
+      'tok-1',
+      'tok-2',
+    ]);
+  });
+
   it('keeps only text blocks in the verdict', async () => {
     complete.mockResolvedValue({
       content: [

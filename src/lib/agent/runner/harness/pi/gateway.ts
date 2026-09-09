@@ -6,7 +6,11 @@
  * (lazily imported, properly typed) pi ModelRegistry.
  */
 
-import { buildWizardPropertiesBlob } from '@lib/gateway-session';
+import {
+  buildWizardPropertiesBlob,
+  isPastRefresh,
+  type GatewayAuth,
+} from '@lib/gateway-session';
 import {
   modelCapabilities,
   type ThinkingLevel,
@@ -134,4 +138,83 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
     models: [model],
   };
   return { provider, api, caps, gatewayUrl, baseUrl: model.baseUrl };
+}
+
+/** The part of a pi assistant turn that says why it failed. */
+export interface GatewayTurnError {
+  errorMessage?: string;
+  diagnostics?: { error?: { name?: string; code?: string | number } }[];
+}
+
+/**
+ * Whether a turn's error is the gateway rejecting the bearer. pi attaches the
+ * SDK's own error to `diagnostics`, so its code decides when one is present.
+ * The message match is the fallback for a turn that failed before pi built a
+ * diagnostic, where the status survives only as prose.
+ */
+export function isGatewayAuthRejection(
+  turn: GatewayTurnError | string | undefined,
+): boolean {
+  const { errorMessage, diagnostics } =
+    typeof turn === 'string'
+      ? { errorMessage: turn, diagnostics: undefined }
+      : turn ?? {};
+  for (const diagnostic of diagnostics ?? []) {
+    const code = diagnostic.error?.code;
+    if (code === 401 || code === '401') return true;
+    if (/^authentication_?error$/i.test(diagnostic.error?.name ?? ''))
+      return true;
+  }
+  return /\b401\b|authentication_error|unauthorized/i.test(errorMessage ?? '');
+}
+
+export interface GatewayRemintOptions {
+  session: { prompt(text: string): Promise<void> };
+  registry: { registerProvider(providerName: string, config: never): void };
+  auth: GatewayAuth;
+  /** The cache: the same token while fresh, a new mint past the refresh point. */
+  refreshAuth: () => Promise<GatewayAuth>;
+  providerInputs: (auth: GatewayAuth) => GatewayProviderInputs;
+  /** The prompt that resumes the work after a re-mint. */
+  continueText: string | (() => string);
+  onRemint?: () => void;
+}
+
+/**
+ * Wraps a pi session's prompt(): when a turn ends on a 401 from a bearer past
+ * its refresh instant, mint once, re-register the provider with the new
+ * bearer (pi resolves the apiKey per request), and continue. A 401 on a fresh
+ * bearer, or a second one, is left to the harness's normal failure path.
+ */
+export function withGatewayRemint(opts: GatewayRemintOptions): {
+  prompt(text: string): Promise<void>;
+  /** Feed every assistant `message_end`; the last turn decides. */
+  noteAssistantTurn(message: unknown): void;
+} {
+  let auth = opts.auth;
+  let rejected = false;
+  let reminted = false;
+  return {
+    noteAssistantTurn(message) {
+      const turn = message as
+        | ({ stopReason?: string } & GatewayTurnError)
+        | undefined;
+      rejected = turn?.stopReason === 'error' && isGatewayAuthRejection(turn);
+    },
+    async prompt(text) {
+      rejected = false;
+      await opts.session.prompt(text);
+      if (!rejected || reminted || !isPastRefresh(auth)) return;
+      reminted = true;
+      auth = await opts.refreshAuth();
+      opts.registry.registerProvider(
+        GATEWAY_PROVIDER,
+        buildGatewayProvider(opts.providerInputs(auth)).provider as never,
+      );
+      opts.onRemint?.();
+      rejected = false;
+      const next = opts.continueText;
+      await opts.session.prompt(typeof next === 'function' ? next() : next);
+    },
+  };
 }

@@ -6,7 +6,6 @@
  */
 import { z } from 'zod';
 import {
-  DEFAULT_AGENT_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
@@ -25,7 +24,8 @@ const MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
   'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
   'gpt-5-6-sol': GPT5_6_SOL_MODEL,
-  'sonnet-4-6': DEFAULT_AGENT_MODEL,
+  // Existing flag payloads keep working while dispatching the supported Sonnet.
+  'sonnet-4-6': SONNET_5_MODEL,
   'sonnet-5': SONNET_5_MODEL,
 };
 

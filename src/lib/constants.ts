@@ -6,29 +6,17 @@ import { VERSION } from './version';
 
 // ── Models ──────────────────────────────────────────────────────────
 
-/**
- * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
- * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
- */
-export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
-
-/** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
+/** Bare model IDs let the gateway match its provider routing aliases. */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
+export const DEFAULT_AGENT_MODEL = SONNET_5_MODEL;
 
 /**
  * Cheaper, faster model for mechanical agent work (e.g. repo classification
  * during source-map detection). Passed via AgentConfig.modelOverride.
  */
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const HAIKU_MODEL = 'claude-haiku-4-5';
 
-/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
-export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
-
-/**
- * Larger model for planning / hard work. Named the switchboard could route to
- * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
- */
-export const OPUS_MODEL = 'claude-opus-4-8';
+export const HAIKU_TRIAGE_MODEL = HAIKU_MODEL;
 
 // The only openai models the wizard runs.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';

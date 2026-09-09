@@ -4,6 +4,7 @@ import {
   GatewayMintRefused,
   buildWizardPropertiesBlob,
   gatewayAuth,
+  isPastRefresh,
   isTrustedGatewayUrl,
   resetGatewaySession,
 } from '@lib/gateway-session';
@@ -70,6 +71,7 @@ describe('gatewayAuth', () => {
       gatewayUrl: 'https://gateway.us.posthog.com',
       token: 'phe_minted',
       teamId: 42,
+      refreshAtMs: expect.any(Number),
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://us.posthog.com/api/wizard/gateway_token/',
@@ -561,6 +563,31 @@ describe('gatewayAuth', () => {
       vi.setSystemTime(Date.now() + ttlMs * 0.05);
       await gatewayAuth(host, 'pha_oauth', 'integration');
       expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sets the refresh instant at the refresh fraction of the token life', async () => {
+    vi.useFakeTimers();
+    try {
+      const ttlMs = 60 * 60 * 1000;
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + ttlMs).toISOString(),
+            gateway_url: 'https://gateway.us.posthog.com',
+          }),
+      });
+      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(auth.refreshAtMs).toBe(Date.now() + ttlMs * 0.8);
+      // A 401 before this instant is a bad credential; after it, an aged
+      // bearer that one re-mint recovers.
+      expect(isPastRefresh(auth)).toBe(false);
+      vi.setSystemTime(Date.now() + ttlMs * 0.8);
+      expect(isPastRefresh(auth)).toBe(true);
     } finally {
       vi.useRealTimers();
     }

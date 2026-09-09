@@ -19,6 +19,12 @@ export interface GatewayAuth {
   token: string;
   /** The team the mint verified; rides the blob so dashboards keep a breakdown. */
   teamId?: number;
+  /**
+   * Instant past which a 401 on this bearer is age rather than a bad
+   * credential: the cache re-mints past it, and a session still holding the
+   * old bearer may re-mint once. Before it the mint has to be trusted.
+   */
+  refreshAtMs: number;
 }
 
 interface CachedAuth {
@@ -36,8 +42,8 @@ let cached: CachedAuth | null = null;
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
 
 /**
- * Adoption floor. The anthropic subprocess holds its credential for the whole
- * session, so a token below this 401s mid-run.
+ * Adoption floor. The anthropic subprocess holds its credential until a 401
+ * forces a re-mint, so a token below this would churn mints.
  */
 const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 /** Re-resolve at this fraction of the token's life, leaving a usable remainder. */
@@ -111,6 +117,7 @@ async function resolveGatewayAuth(
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
     teamId: minted.teamId,
+    refreshAtMs: staleAtMs,
   };
   cached = { key, auth, staleAtMs };
   return auth;
@@ -120,6 +127,11 @@ async function resolveGatewayAuth(
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
+}
+
+/** Whether a 401 on this bearer may be age (past its refresh instant) rather than a bad credential. */
+export function isPastRefresh(auth: GatewayAuth, now = Date.now()): boolean {
+  return now >= auth.refreshAtMs;
 }
 
 /**
