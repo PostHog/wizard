@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.74.0](https://github.com/PostHog/wizard/compare/v2.73.2...v2.74.0) (2026-09-09)
+
+
+### Features
+
+* **ci:** accept a wizard-app gateway token under --ci ([#1225](https://github.com/PostHog/wizard/issues/1225)) ([251aabb](https://github.com/PostHog/wizard/commit/251aabb3b87a26d061bc2ede7b7aa212e528cfef))
+* **gateway:** code and report a refused mint ([#1222](https://github.com/PostHog/wizard/issues/1222)) ([0929ab5](https://github.com/PostHog/wizard/commit/0929ab5ff06be1ddec7c5b9a85da344a12ffcddf))
+* **gateway:** re-mint once and resume on a 401 from an aged bearer ([#1224](https://github.com/PostHog/wizard/issues/1224)) ([fd710c0](https://github.com/PostHog/wizard/commit/fd710c00c95b2fd5a39ed4dfdfefcb8276a38c0e))
+* **gateway:** stop falling back to the legacy gateway ([#1221](https://github.com/PostHog/wizard/issues/1221)) ([44410f3](https://github.com/PostHog/wizard/commit/44410f3c9353657f813fa837fa4ec4f09b1db39d))
+
+
+### Bug Fixes
+
+* **ci:** fall back to the legacy gateway under --ci ([#1241](https://github.com/PostHog/wizard/issues/1241)) ([90d3e97](https://github.com/PostHog/wizard/commit/90d3e972eefc7946f1d6563f9f497a9e9fa37615))
+* **models:** follow the gateway's mint allowlist ([#1228](https://github.com/PostHog/wizard/issues/1228)) ([5b91786](https://github.com/PostHog/wizard/commit/5b91786c98d59c00d1e313012fb0c61d800cd828))
+
 ## [2.73.2](https://github.com/PostHog/wizard/compare/v2.73.1...v2.73.2) (2026-09-09)
 
 
