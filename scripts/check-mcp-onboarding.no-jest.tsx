@@ -24,6 +24,10 @@ import {
   MCP_TARGET_KEY,
 } from '@lib/programs/mcp-analytics/setup';
 import { analytics } from '@utils/analytics';
+import {
+  McpDiscoveryHint,
+  type McpPackageSuggestions,
+} from '@lib/programs/mcp-analytics/packages';
 
 export async function checkMcpOnboarding(): Promise<void> {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'mcp-onboarding-')));
@@ -113,11 +117,13 @@ export async function checkMcpOnboarding(): Promise<void> {
     const reset = async (
       key: string,
       candidates: string[] = [],
+      extras: Partial<McpPackageSuggestions> = {},
     ): Promise<void> => {
       store.session = buildSession({ installDir: root });
       store.setFrameworkContext(MCP_SCAN_KEY, {
         directory: root,
         candidates,
+        ...extras,
       });
       screen.rerender(
         <McpAnalyticsIntroScreen
@@ -145,6 +151,31 @@ export async function checkMcpOnboarding(): Promise<void> {
     assert.equal(store.session.setupConfirmed, false);
     await press('\r');
     assert.equal(store.session.setupConfirmed, true);
+
+    await reset('application-package', ['server'], {
+      packageNames: { server: 'example-tools' },
+    });
+    shows('example-tools (server)');
+    await press('\r');
+    assert.deepEqual(store.session.frameworkContext[MCP_TARGET_KEY], {
+      directory: server,
+    });
+    assert.equal(store.session.setupConfirmed, true);
+
+    await reset('launcher', [], { discoveryHint: McpDiscoveryHint.Launcher });
+    shows('This looks like an MCP launcher');
+    shows('Find server source and set up analytics');
+    await press('\r');
+    assert.equal(store.session.setupConfirmed, true);
+    assert.equal(store.session.installDir, root);
+
+    await reset('shared-library', [], {
+      discoveryHint: McpDiscoveryHint.SharedLibrary,
+    });
+    shows('Found shared MCP code');
+    await press('\r');
+    assert.equal(store.session.setupConfirmed, true);
+    assert.equal(store.session.installDir, root);
 
     await reset('manual-file');
     await press('\u001b[B');

@@ -5,7 +5,8 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { relative } from 'path';
 import { ErrorCodes } from '@lib/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
-import type { McpTarget } from './detect';
+import type { McpTarget, McpServerScan } from './detect';
+import { McpDiscoveryHint } from './packages';
 import {
   MCP_SCAN_KEY,
   MCP_SCAN_ERROR_KEY,
@@ -118,6 +119,9 @@ async function buildRun(session: WizardSession): Promise<ProgramRun> {
   const target = session.frameworkContext[MCP_TARGET_KEY] as
     | McpTarget
     | undefined;
+  const scan = session.frameworkContext[MCP_SCAN_KEY] as
+    | McpServerScan
+    | undefined;
   return {
     ...run,
     customPrompt: (ctx) =>
@@ -127,6 +131,15 @@ async function buildRun(session: WizardSession): Promise<ProgramRun> {
           ? `The user selected this server entry point: ${JSON.stringify(
               relative(session.installDir, target.entryPoint),
             )}. Verify it and instrument this server.`
+          : target
+          ? 'The user selected this application directory. Resolve its launch and deployment entry points and follow local workspace imports. Keep instrumentation scoped to this application; do not instrument every consumer of a shared factory.'
+          : undefined,
+        !target?.entryPoint && scan?.discoveryHint === McpDiscoveryHint.Launcher
+          ? 'This project appears to be an MCP launcher. Trace its imports and package metadata to locate the implementation source. Do not edit node_modules or generated dependency code. If the implementation is outside this checkout, explain where its source lives and what is needed to instrument it; do not report that no MCP server exists merely because this checkout delegates to a dependency.'
+          : undefined,
+        !target?.entryPoint &&
+        scan?.discoveryHint === McpDiscoveryHint.SharedLibrary
+          ? 'The quick scan found shared MCP library code, not an unambiguous server application. Find the runnable consumer before choosing where to instrument. Do not treat the shared constructor as consent to instrument all consumers.'
           : undefined,
       ]
         .filter(Boolean)

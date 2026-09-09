@@ -19,6 +19,7 @@ import {
   MCP_TARGET_KEY,
 } from '@lib/programs/mcp-analytics/setup';
 import { analytics } from '@utils/analytics';
+import { McpDiscoveryHint } from '@lib/programs/mcp-analytics/packages';
 import { IntroScreenLayout } from './IntroScreenLayout';
 
 enum View {
@@ -138,7 +139,11 @@ export function McpAnalyticsIntroScreen({
 
   const waiting = !scan && !scanError;
   const candidates = scan?.candidates ?? [];
-  const suggestedFile = candidates.length === 1 ? candidates[0] : undefined;
+  const suggestedPath = candidates.length === 1 ? candidates[0] : undefined;
+  const candidateLabel = (path: string): string => {
+    const name = scan?.packageNames?.[path];
+    return name ? (path === '.' ? name : `${name} (${path})`) : path;
+  };
   const menuOptions =
     busy || waiting || view === View.Path
       ? null
@@ -150,16 +155,19 @@ export function McpAnalyticsIntroScreen({
       : view === View.Connect
       ? [{ label: 'Back', value: 'back' }]
       : [
-          ...(suggestedFile
+          ...(suggestedPath
             ? [{ label: 'Set up MCP analytics', value: 'start' }]
             : candidates.map((file) => ({
-                label: file,
-                value: `file:${file}`,
+                label: candidateLabel(file),
+                value: `target:${file}`,
               }))),
-          ...(!scanError && !suggestedFile
+          ...(!scanError && !suggestedPath
             ? [
                 {
-                  label: 'Find my server and set up analytics',
+                  label:
+                    scan?.discoveryHint === McpDiscoveryHint.Launcher
+                      ? 'Find server source and set up analytics'
+                      : 'Find my server and set up analytics',
                   value: 'search',
                 },
               ]
@@ -179,10 +187,10 @@ export function McpAnalyticsIntroScreen({
       menuAlign="left"
       menuOptions={menuOptions}
       onSelect={(value) => {
-        if (value === 'start' && suggestedFile)
-          void selectPath(suggestedFile, 'suggested', true);
-        else if (value.startsWith('file:'))
-          void selectPath(value.slice(5), 'suggested');
+        if (value === 'start' && suggestedPath)
+          void selectPath(suggestedPath, 'suggested', true);
+        else if (value.startsWith('target:'))
+          void selectPath(value.slice(7), 'suggested');
         else if (value === 'path') {
           setError(null);
           setView(View.Path);
@@ -212,7 +220,7 @@ export function McpAnalyticsIntroScreen({
                 Server:{' '}
                 {target.entryPoint
                   ? relative(target.directory, target.entryPoint)
-                  : 'The agent will find the entry point'}
+                  : 'The agent will resolve this app’s entry points'}
               </Text>
               <Text dimColor>
                 The agent will verify this server before changing its code.
@@ -243,8 +251,18 @@ export function McpAnalyticsIntroScreen({
                 <Text>Looking for MCP server entry points...</Text>
               ) : scanError ? (
                 <Text color="yellow">{scanError}</Text>
-              ) : suggestedFile ? (
-                <Text>Server: {suggestedFile}</Text>
+              ) : scan?.discoveryHint === McpDiscoveryHint.Launcher ? (
+                <Text>
+                  This looks like an MCP launcher. The agent will trace the
+                  server’s source before choosing where to install analytics.
+                </Text>
+              ) : scan?.discoveryHint === McpDiscoveryHint.SharedLibrary ? (
+                <Text>
+                  Found shared MCP code. The agent will find the app that uses
+                  it before choosing where to install analytics.
+                </Text>
+              ) : suggestedPath ? (
+                <Text>Server: {candidateLabel(suggestedPath)}</Text>
               ) : candidates.length ? (
                 <Text>
                   Found several possible servers. Choose one to set up:

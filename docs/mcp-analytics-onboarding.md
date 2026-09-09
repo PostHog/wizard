@@ -24,6 +24,23 @@ monorepos. Application packages sort before examples and templates. Test
 fixtures and comment-only examples do not become suggested servers. Aliases,
 deeper trees, and files beyond these bounds can still require agent discovery.
 
+The wizard also reads up to 500 package/deployment metadata paths. For
+JavaScript workspaces, it groups related server files into one application
+suggestion using `package.json` executable/start metadata or a Wrangler config,
+server/factory usage, and runtime package dependencies. Development-only
+dependencies and client-only consumers do not establish server applications.
+Package names are shown beside their locations; choosing an application lets the
+agent resolve its entry points and follow workspace imports while keeping
+changes scoped to that application. Python entry-point suggestions remain
+file-based.
+
+Shared libraries help identify their consumers rather than becoming the default
+installation target. If only shared code is found, agent discovery finds the
+runnable app first. An MCP launcher with no local implementation gets a source
+tracing path: the agent checks imports and package metadata, avoids editing
+installed dependencies, and explains the source location when it is outside the
+checkout. These hints are local heuristics, not proof of runtime support.
+
 Entering a directory scans that location again. Selecting a file uses its
 closest ancestor project directory and asks the agent to verify the selected
 entry point. Manually selected files and ambiguous matches get a review before

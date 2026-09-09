@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, extname, join, resolve } from 'path';
 import { boundedGlob, readFileHead } from '@utils/bounded-fs';
+import { suggestMcpPackages, type McpPackageSuggestions } from './packages';
 
 const SOURCE_EXTENSIONS = new Set([
   '.ts',
@@ -23,7 +24,7 @@ const PROJECT_MARKERS = [
 ];
 
 export type McpTarget = { directory: string; entryPoint?: string };
-export type McpServerScan = { directory: string; candidates: string[] };
+export type McpServerScan = { directory: string } & McpPackageSuggestions;
 
 export function resolveMcpTarget(
   baseDirectory: string,
@@ -73,8 +74,7 @@ export function resolveMcpTarget(
 
 // These are suggestions, not an eligibility check: custom dispatchers and
 // aliased constructors still have the explicit-path and agent-search routes.
-function hasServerSignals(contents: string): boolean {
-  const source = contents.replace(/^\s*(?:\/[/*]|\*|#).*$/gm, '');
+function hasServerSignals(source: string): boolean {
   return (
     (/\bnew\s+(?:McpServer|Server)\s*(?:<[^;]+?>\s*)?\(/.test(source) &&
       /@modelcontextprotocol\/(?:sdk\/server|server)/.test(source)) ||
@@ -120,17 +120,31 @@ export async function findMcpServers(
     boundedGlob(`**/*.${sourceExtensions}`, options),
   ]);
   const files = [...new Set([...likelyFiles, ...otherFiles])];
-  const candidates = files
-    .filter((file) => {
-      const source = readFileHead(join(target.directory, file), 64 * 1024);
-      return source !== null && hasServerSignals(source);
-    })
-    .sort((left, right) => {
-      const examplePath = /(?:^|\/)(?:examples?|templates?|demos?)(?:\/|$)/;
-      return (
-        Number(examplePath.test(left)) - Number(examplePath.test(right)) ||
-        left.localeCompare(right)
-      );
-    });
-  return { directory: target.directory, candidates };
+  const sourceCandidates: string[] = [];
+  const factoryFiles: string[] = [];
+  for (const file of files) {
+    const contents = readFileHead(join(target.directory, file), 64 * 1024);
+    if (contents === null) continue;
+    const source = contents.replace(/^\s*(?:\/[/*]|\*|#).*$/gm, '');
+    if (hasServerSignals(source)) sourceCandidates.push(file);
+    if (
+      /\bcreate\w*(?:Mcp|MCP)(?:Server|App|Handler)\s*(?:<[^;]+?>\s*)?\(/.test(
+        source,
+      )
+    )
+      factoryFiles.push(file);
+  }
+  const suggestions = await suggestMcpPackages(
+    sourceCandidates,
+    factoryFiles,
+    options,
+  );
+  const candidates = suggestions.candidates.sort((left, right) => {
+    const examplePath = /(?:^|\/)(?:examples?|templates?|demos?)(?:\/|$)/;
+    return (
+      Number(examplePath.test(left)) - Number(examplePath.test(right)) ||
+      left.localeCompare(right)
+    );
+  });
+  return { ...suggestions, directory: target.directory, candidates };
 }

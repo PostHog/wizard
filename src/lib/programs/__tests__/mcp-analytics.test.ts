@@ -9,7 +9,10 @@ import {
 } from '@lib/wizard-session';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { HostResolution } from '@lib/host-resolution';
-import { MCP_TARGET_KEY } from '@lib/programs/mcp-analytics/setup';
+import {
+  MCP_TARGET_KEY,
+  MCP_SCAN_KEY,
+} from '@lib/programs/mcp-analytics/setup';
 
 const credentials = {
   projectId: 42,
@@ -85,6 +88,45 @@ describe('mcpAnalyticsConfig', () => {
     expect(prompt).toContain('detect the server style');
     expect(prompt).not.toContain('The user selected');
   });
+
+  it('keeps a selected application scoped while following workspace imports', async () => {
+    const session = buildSession({ installDir: '/example/apps/search' });
+    session.frameworkContext[MCP_TARGET_KEY] = {
+      directory: '/example/apps/search',
+    };
+    const prompt = (await runConfig(session)).customPrompt?.(credentials);
+    expect(prompt).toContain('follow local workspace imports');
+    expect(prompt).toContain('do not instrument every consumer');
+  });
+
+  it.each([
+    [
+      'launcher',
+      'Trace its imports and package metadata',
+      'Do not edit node_modules',
+    ],
+    [
+      'shared_library',
+      'Find the runnable consumer',
+      'Do not treat the shared constructor',
+    ],
+  ])(
+    'passes %s discovery guidance to the agent',
+    async (discoveryHint, expected, guard) => {
+      const session = buildSession({ installDir: '/example/server' });
+      session.frameworkContext[MCP_SCAN_KEY] = {
+        directory: '/example/server',
+        candidates: [],
+        discoveryHint,
+      };
+      session.frameworkContext[MCP_TARGET_KEY] = {
+        directory: '/example/server',
+      };
+      const prompt = (await runConfig(session)).customPrompt?.(credentials);
+      expect(prompt).toContain(expected);
+      expect(prompt).toContain(guard);
+    },
+  );
 
   it('links completion to the authenticated project and explains how to send data', async () => {
     const session = buildSession({});
