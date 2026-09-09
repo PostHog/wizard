@@ -38,7 +38,10 @@ const renderArg = (a: unknown): string => {
 const loggedLines = () =>
   vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
-const host = { apiHost: 'https://us.posthog.com' } as unknown as HostResolution;
+const host = {
+  region: 'us',
+  apiHost: 'https://us.posthog.com',
+} as unknown as HostResolution;
 
 describe('gatewayAuth', () => {
   const fetchMock = vi.fn();
@@ -469,6 +472,24 @@ describe('gatewayAuth', () => {
         legacy: true,
       });
       expect(isPastRefresh(auth)).toBe(false);
+    });
+
+    it('picks the legacy gateway for the region, or the local one for a dev host', async () => {
+      fetchMock.mockResolvedValue(refused(401));
+      const urlFor = async (region: string, apiHost: string) => {
+        resetGatewaySession();
+        const h = { region, apiHost } as unknown as HostResolution;
+        return (await gatewayAuth(h, 'phx_personal', 'integration')).gatewayUrl;
+      };
+      expect(await urlFor('eu', 'https://eu.i.posthog.com')).toBe(
+        'https://gateway.eu.posthog.com/wizard',
+      );
+      expect(await urlFor('us', 'http://localhost:8010')).toBe(
+        'http://localhost:3308/wizard',
+      );
+      expect(await urlFor('us', 'http://host.docker.internal:8010')).toBe(
+        'http://host.docker.internal:3308/wizard',
+      );
     });
 
     it('stays on the legacy gateway when the instance has no mint', async () => {

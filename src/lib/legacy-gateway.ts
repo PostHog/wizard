@@ -18,7 +18,7 @@ export function legacyGatewayAuth(
 ): GatewayAuth | undefined {
   if (!enabled || (mintStatus !== 401 && mintStatus !== 404)) return undefined;
   return {
-    gatewayUrl: legacyGatewayUrl(host.apiHost),
+    gatewayUrl: legacyGatewayUrl(host),
     token: accessToken,
     legacy: true,
     // Nothing re-mints this bearer, so a 401 on it is always a bad credential.
@@ -26,18 +26,15 @@ export function legacyGatewayAuth(
   };
 }
 
-function legacyGatewayUrl(apiHost: string): string {
-  if (apiHost.includes('host.docker.internal')) {
+function legacyGatewayUrl(host: HostResolution): string {
+  const { hostname } = new URL(host.apiHost);
+  if (hostname === 'host.docker.internal') {
     return 'http://host.docker.internal:3308/wizard';
   }
-  if (apiHost.includes('localhost')) return 'http://localhost:3308/wizard';
-  if (
-    apiHost.includes('eu.posthog.com') ||
-    apiHost.includes('eu.i.posthog.com')
-  ) {
-    return 'https://gateway.eu.posthog.com/wizard';
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:3308/wizard';
   }
-  return 'https://gateway.us.posthog.com/wizard';
+  return `https://gateway.${host.region}.posthog.com/wizard`;
 }
 
 /** The legacy gateway reads per-key metadata and flag headers and needs an explicit Bedrock opt-in. */
