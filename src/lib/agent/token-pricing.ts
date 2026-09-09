@@ -64,11 +64,9 @@ function pricingFromInput(input: number, output: number): PricePerMtok {
 /**
  * Exact-match price table, keyed by the *undated* model id prefix —
  * `pricePerMtokForModel` strips a dated suffix before falling back to this
- * table, so e.g. `HAIKU_MODEL` (`claude-haiku-4-5-20251001`) resolves via
- * the `'claude-haiku-4-5'` entry without needing its own duplicate key.
- * `DEFAULT_AGENT_MODEL` (`claude-sonnet-4-6`) has no date suffix, so it's
- * keyed directly. The rest are additional real Anthropic model ids kept
- * priced correctly in case a subagent or a future default ever reports one
+ * table. Historical dated Haiku ids resolve via the `'claude-haiku-4-5'`
+ * entry without needing duplicate keys. Historical model ids stay priced
+ * correctly in case a resumed session or subagent reports one
  * (a turn on an id NOT in this table contributes $0 to the live estimate
  * rather than guessing — see `pricePerMtokForModel`).
  *
@@ -77,8 +75,8 @@ function pricingFromInput(input: number, output: number): PricePerMtok {
  * `pricePerMtokForModel` via `SONNET_5_PRICE`.
  */
 const PRICE_TABLE: Record<string, PricePerMtok> = {
-  [DEFAULT_AGENT_MODEL]: pricingFromInput(3, 15),
-  'claude-haiku-4-5': pricingFromInput(1, 5), // HAIKU_MODEL + a date suffix
+  'claude-sonnet-4-6': pricingFromInput(3, 15),
+  'claude-haiku-4-5': pricingFromInput(1, 5),
   'claude-opus-4-5': pricingFromInput(5, 25),
 };
 
@@ -88,7 +86,7 @@ const PRICE_TABLE: Record<string, PricePerMtok> = {
  * — not a coincidence, Anthropic prices it identically to 4.6 once the
  * promo ends. Re-verify against https://models.dev/api.json if this ever
  * looks off, and delete this special case once the promo window has
- * passed (its `PRICE_TABLE[DEFAULT_AGENT_MODEL]` price is the same anyway).
+ * passed.
  */
 const SONNET_5_PROMO_ENDS_UTC = new Date('2026-09-01T00:00:00Z');
 
@@ -123,10 +121,10 @@ export function pricePerMtokForModel(
   model?: string,
   now: Date = new Date(),
 ): PricePerMtok | undefined {
-  if (!model) return PRICE_TABLE[DEFAULT_AGENT_MODEL];
-  const undated = stripDateSuffix(model);
+  const resolvedModel = model || DEFAULT_AGENT_MODEL;
+  const undated = stripDateSuffix(resolvedModel);
   if (undated === 'claude-sonnet-5') return sonnet5Price(now);
-  return PRICE_TABLE[model] ?? PRICE_TABLE[undated];
+  return PRICE_TABLE[resolvedModel] ?? PRICE_TABLE[undated];
 }
 
 /**

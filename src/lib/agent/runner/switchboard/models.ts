@@ -10,9 +10,7 @@
  * are silent when wrong, so they live here as one configurable table.
  */
 import {
-  DEFAULT_AGENT_MODEL,
   SONNET_5_MODEL,
-  OPUS_MODEL,
   HAIKU_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
@@ -52,9 +50,7 @@ export interface ModelCapabilities {
 
 /** Explicit per-model traits. Anything absent falls back to `defaultCaps`. */
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
-  [DEFAULT_AGENT_MODEL]: { reasoning: true }, // claude-sonnet-4-6
   [SONNET_5_MODEL]: { reasoning: true },
-  [OPUS_MODEL]: { reasoning: true },
   [HAIKU_MODEL]: { reasoning: true },
   // The openai 5.6 line; all reasoning models, so they must opt in past the
   // openai-completions default (reasoning off). Luna stays low for cheap,
@@ -100,8 +96,7 @@ function defaultCaps(modelId: string): ModelCapabilities {
 /**
  * Scan-triage classifier per harness: the cheapest tier of the line that harness
  * already speaks. Undated ids on purpose — triage is a boolean classifier, so it
- * should follow the current release rather than pin one, and these are not
- * dispatchable agent models (absent from MODEL_CAPABILITIES by design).
+ * should follow the current release rather than pin one.
  */
 export const TRIAGE_MODELS: Record<Harness, string> = {
   [Harness.anthropic]: HAIKU_TRIAGE_MODEL,
