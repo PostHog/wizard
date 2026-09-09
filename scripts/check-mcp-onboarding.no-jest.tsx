@@ -74,7 +74,8 @@ export async function checkMcpOnboarding(): Promise<void> {
   };
   try {
     await delay(60);
-    shows('No recognized entry point');
+    shows('The quick scan didn’t find a server');
+    await press('\u001b[B');
     await press('\r');
     shows('Enter your server directory');
     await press('missing');
@@ -82,6 +83,7 @@ export async function checkMcpOnboarding(): Promise<void> {
     shows('This path could not be opened');
     assert.equal(store.session.setupConfirmed, false);
     await press('\u001b');
+    await press('\u001b[B');
     await press('\r');
     await press('server');
     screen.stdin.write('\r');
@@ -90,9 +92,11 @@ export async function checkMcpOnboarding(): Promise<void> {
     assert.equal(scans, 1, 'Repeated Enter must not duplicate a scan');
     shows('src/index.ts');
     await press('\r');
-    shows('Instrument this server');
-    assert.equal(store.session.setupConfirmed, false);
-    await press('\r');
+    assert.equal(
+      store.session.setupConfirmed,
+      true,
+      'A single suggestion starts setup with one Enter',
+    );
     assert.equal(store.session.installDir, server);
     assert.deepEqual(store.session.frameworkContext[MCP_TARGET_KEY], {
       directory: server,
@@ -106,11 +110,14 @@ export async function checkMcpOnboarding(): Promise<void> {
         .length,
       1,
     );
-    const reset = async (key: string): Promise<void> => {
+    const reset = async (
+      key: string,
+      candidates: string[] = [],
+    ): Promise<void> => {
       store.session = buildSession({ installDir: root });
       store.setFrameworkContext(MCP_SCAN_KEY, {
         directory: root,
-        candidates: [],
+        candidates,
       });
       screen.rerender(
         <McpAnalyticsIntroScreen
@@ -124,7 +131,23 @@ export async function checkMcpOnboarding(): Promise<void> {
       );
       await delay(60);
     };
+    await reset('single-suggestion', ['server/src/index.ts']);
+    shows('Server: server/src/index.ts');
+    assert.equal(store.session.setupConfirmed, false);
+    await press('\r');
+    assert.equal(store.session.setupConfirmed, true);
+    assert.equal(store.session.installDir, server);
+
+    await reset('multiple-suggestions', ['server/src/index.ts', 'another.ts']);
+    shows('Found several possible servers');
+    await press('\r');
+    shows('Instrument this server');
+    assert.equal(store.session.setupConfirmed, false);
+    await press('\r');
+    assert.equal(store.session.setupConfirmed, true);
+
     await reset('manual-file');
+    await press('\u001b[B');
     await press('\r');
     await press('server/src/index.ts');
     await press('\r');
@@ -145,11 +168,13 @@ export async function checkMcpOnboarding(): Promise<void> {
     shows('npx @posthog/wizard@latest mcp add');
     assert.equal(store.session.setupConfirmed, false);
     await press('\r');
-    shows('No recognized entry point');
-    await press('\u001b[B');
+    shows('The quick scan didn’t find a server');
     await press('\r');
-    shows('The agent will find the entry point');
-    await press('\r');
+    assert.equal(
+      store.session.setupConfirmed,
+      true,
+      'An inconclusive scan defaults to agent discovery',
+    );
     assert.equal(store.session.installDir, root);
     assert.deepEqual(store.session.frameworkContext[MCP_TARGET_KEY], {
       directory: root,

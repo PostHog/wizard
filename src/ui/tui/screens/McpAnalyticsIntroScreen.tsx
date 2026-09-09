@@ -66,9 +66,25 @@ export function McpAnalyticsIntroScreen({
     }
   });
 
+  const completeTarget = (
+    selected: McpTarget,
+    selectionSource: SelectionSource,
+  ): void => {
+    if (store.session.setupConfirmed) return;
+    store.setInstallDir(selected.directory);
+    store.setFrameworkContext(MCP_TARGET_KEY, selected);
+    analytics.wizardCapture('mcp analytics target selected', {
+      selection_source: selectionSource,
+      target_kind: selected.entryPoint ? 'file' : 'directory',
+      candidate_count: scan?.candidates.length ?? 0,
+    });
+    store.completeSetup();
+  };
+
   const selectPath = async (
     input: string,
     selectionSource: SelectionSource,
+    startSetup = false,
   ): Promise<void> => {
     if (submitting.current) return;
     submitting.current = true;
@@ -83,6 +99,8 @@ export function McpAnalyticsIntroScreen({
         );
         store.setFrameworkContext(MCP_SCAN_ERROR_KEY, undefined);
         setView(View.Select);
+      } else if (startSetup) {
+        completeTarget(resolved, selectionSource);
       } else {
         setTarget(resolved);
         setSource(selectionSource);
@@ -103,14 +121,7 @@ export function McpAnalyticsIntroScreen({
 
   const confirm = (): void => {
     if (!target || submitting.current || store.session.setupConfirmed) return;
-    store.setInstallDir(target.directory);
-    store.setFrameworkContext(MCP_TARGET_KEY, target);
-    analytics.wizardCapture('mcp analytics target selected', {
-      selection_source: source,
-      target_kind: target.entryPoint ? 'file' : 'directory',
-      candidate_count: scan?.candidates.length ?? 0,
-    });
-    store.completeSetup();
+    completeTarget(target, source);
   };
 
   const cancel = async (): Promise<void> => {
@@ -126,6 +137,8 @@ export function McpAnalyticsIntroScreen({
   };
 
   const waiting = !scan && !scanError;
+  const candidates = scan?.candidates ?? [];
+  const suggestedFile = candidates.length === 1 ? candidates[0] : undefined;
   const menuOptions =
     busy || waiting || view === View.Path
       ? null
@@ -137,19 +150,21 @@ export function McpAnalyticsIntroScreen({
       : view === View.Connect
       ? [{ label: 'Back', value: 'back' }]
       : [
-          ...(scan?.candidates ?? []).map((file) => ({
-            label: file,
-            value: `file:${file}`,
-          })),
-          { label: 'Enter a directory or server file', value: 'path' },
-          ...(!scanError
+          ...(suggestedFile
+            ? [{ label: 'Set up MCP analytics', value: 'start' }]
+            : candidates.map((file) => ({
+                label: file,
+                value: `file:${file}`,
+              }))),
+          ...(!scanError && !suggestedFile
             ? [
                 {
-                  label: 'Let the agent search this directory',
+                  label: 'Find my server and set up analytics',
                   value: 'search',
                 },
               ]
             : []),
+          { label: 'Choose another location', value: 'path' },
           { label: 'I want to connect PostHog to my agent', value: 'connect' },
           { label: 'Cancel', value: 'cancel' },
         ];
@@ -164,12 +179,15 @@ export function McpAnalyticsIntroScreen({
       menuAlign="left"
       menuOptions={menuOptions}
       onSelect={(value) => {
-        if (value.startsWith('file:'))
+        if (value === 'start' && suggestedFile)
+          void selectPath(suggestedFile, 'suggested', true);
+        else if (value.startsWith('file:'))
           void selectPath(value.slice(5), 'suggested');
         else if (value === 'path') {
           setError(null);
           setView(View.Path);
-        } else if (value === 'search') void selectPath('.', 'agent_search');
+        } else if (value === 'search')
+          void selectPath('.', 'agent_search', true);
         else if (value === 'connect') setView(View.Connect);
         else if (value === 'back') {
           setError(null);
@@ -217,18 +235,24 @@ export function McpAnalyticsIntroScreen({
           ) : (
             <>
               <Text>Add analytics to an existing MCP server you build.</Text>
-              <Text dimColor>Choose its location before signing in.</Text>
+              <Text dimColor>
+                We’ll find the integration and configure it for you.
+              </Text>
               <Text>Directory: {directory}</Text>
               {waiting ? (
                 <Text>Looking for MCP server entry points...</Text>
               ) : scanError ? (
                 <Text color="yellow">{scanError}</Text>
-              ) : scan?.candidates.length ? (
-                <Text>Possible server entry points:</Text>
+              ) : suggestedFile ? (
+                <Text>Server: {suggestedFile}</Text>
+              ) : candidates.length ? (
+                <Text>
+                  Found several possible servers. Choose one to set up:
+                </Text>
               ) : (
                 <Text>
-                  No recognized entry point found in this quick scan. Choose
-                  another location or let the agent search your custom setup.
+                  The quick scan didn’t find a server. The agent will search
+                  this directory and verify your setup before changing code.
                 </Text>
               )}
             </>

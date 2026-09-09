@@ -77,7 +77,7 @@ function hasServerSignals(source: string): boolean {
   return (
     (/\bnew\s+(?:McpServer|Server)\s*\(/.test(source) &&
       /@modelcontextprotocol\/(?:sdk\/server|server)/.test(source)) ||
-    (/\b(?:FastMCP|Server)\s*\(/.test(source) &&
+    (/\b(?:FastMCP|MCPServer|Server)\s*\(/.test(source) &&
       /\bfrom\s+(?:mcp\.server(?:\.[\w.]+)?|fastmcp)\s+import\b/.test(
         source,
       )) ||

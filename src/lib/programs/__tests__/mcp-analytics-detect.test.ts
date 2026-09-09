@@ -45,6 +45,10 @@ describe('findMcpServers', () => {
     ],
     ['python/main.py', 'from fastmcp import FastMCP\nmcp = FastMCP("example")'],
     [
+      'python/v2.py',
+      'from mcp.server.mcpserver import MCPServer\nmcp = MCPServer("example")',
+    ],
+    [
       'edge/server.ts',
       'const handlers = { "tools/call": callTool, "tools/list": listTools };',
     ],
