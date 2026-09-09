@@ -1,9 +1,12 @@
 /**
  * Leaf-level constants for the events-audit program.
  *
- * Kept separate from `index.ts` so files like `yara-hooks.ts` can import
- * the filename constants without dragging in `index.ts`'s heavier imports
- * (agent-runner, audit/seed, etc.) — which can create import cycles.
+ * Kept separate from `index.ts` so leaf consumers can import the filename
+ * constants without dragging in `index.ts`'s heavier imports (agent-runner,
+ * audit/seed, etc.) — which can create import cycles. The security hooks no
+ * longer import these directly: `index.ts` declares them as
+ * `ProgramConfig.docPaths` and the shared doc-paths registry carries them
+ * to L2 (wizard#594).
  */
 
 export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';

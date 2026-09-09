@@ -80,6 +80,13 @@ export async function runProgram(
   programConfig: ProgramConfig,
   options: { composed?: boolean } = {},
 ): Promise<void> {
+  // Loading the program registry pushes every program's `docPaths`
+  // declaration into the shared doc-paths registry as a module side effect
+  // (wizard#594). Import it lazily: some entry paths (headless installs
+  // import their config directly) never load the registry otherwise, and a
+  // static import would cycle — program modules import this runner.
+  await import('@lib/programs/program-registry');
+
   const boot = await bootstrapProgram(session, config, programConfig);
 
   // Flush the warlock scan report once, at this single seam, on every

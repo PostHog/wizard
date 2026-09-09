@@ -14,7 +14,11 @@ import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 // imports from `@lib/programs/events-audit`. EVENT_INVENTORY_FILE and
 // EVENT_INVENTORY_PART_PATTERN are only used by yara-hooks, which imports
 // them directly from `./constants` — no re-export needed.
-import { SETUP_REPORT_FILE } from './constants.js';
+import {
+  SETUP_REPORT_FILE,
+  EVENT_INVENTORY_FILE,
+  EVENT_INVENTORY_PART_PATTERN,
+} from './constants.js';
 export { SETUP_REPORT_FILE };
 
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
@@ -28,6 +32,11 @@ export const eventsAuditConfig: ProgramConfig = {
   // Top-level reportFile so AuditRunScreen can resolve the report path
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
+  docPaths: [
+    SETUP_REPORT_FILE,
+    EVENT_INVENTORY_FILE,
+    EVENT_INVENTORY_PART_PATTERN,
+  ],
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 

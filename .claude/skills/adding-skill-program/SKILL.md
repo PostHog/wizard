@@ -61,6 +61,19 @@ The `audit` program (`src/lib/programs/audit/`) is the cleanest example of this 
 
 For more complex post-agent work (env var upload, dashboard creation, anything that needs to run after the agent completes but before the outro), drop the factory and build the `ProgramConfig` directly so you can set `ProgramRun.postRun`. See `posthog-integration` for that pattern.
 
+## Report files and the security scanner
+
+If your program writes documentation files — a report, an event plan, an inventory — declare their basenames on the config's `docPaths` field:
+
+```ts
+export const yourConfig: ProgramConfig = {
+  ...baseConfig,
+  docPaths: ['posthog-your-report.md'],
+};
+```
+
+The security hooks suppress `posthog_pii` matches on these paths only; every other rule still fires on them. Without the declaration, the agent quoting an existing `posthog.capture('event', { email })` call into your report gets blocked as a PII violation. Declarations flow into the shared doc-paths registry when the program registry loads (`src/lib/doc-paths-registry.ts`) — the scanner never learns your program exists, so there is nothing to add on the security side. Entries are exact basenames or RegExps tested against the basename; `events-audit` declares both (its per-part inventory files use a pattern).
+
 ## Dynamic run configuration
 
 If your program needs to inspect the session before building the run config (read framework context, seed state on disk, set per-session prompt fragments), pass an async function as the program's `run`:
