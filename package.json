@@ -139,9 +139,6 @@
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "vitest",
     "prepare": "husky",
-    "coherence": "bash tools/coherence.sh",
-    "coherence:install": "bash tools/coherence.sh install",
-    "coherence:check": "pnpm coherence verify --fast",
     "screens:check": "tsx scripts/check-screens.tsx",
     "wizard-ci-explore": "tsx scripts/wizard-ci-explore.no-jest.ts",
     "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts"

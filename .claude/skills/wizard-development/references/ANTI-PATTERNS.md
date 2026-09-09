@@ -56,10 +56,3 @@ consume excessive context. For large artifacts, write a bounded skeleton and
 fill sections in separate tool calls, preserving progress on disk. This does not
 guarantee a particular timeout or make the final upload unbounded. A small
 configuration or short report is clearer as one write.
-
-## Generating maintenance work to satisfy a tool
-
-Coherence's undocumented-symbol suggestions are advisory, not a request to add
-comments everywhere. Reuse meaningful existing tests and inspect skipped claims;
-do not add tests for prose or TypeScript-enforced shapes. Keep new code comments
-to one line and link longer explanations from the relevant contributor guide.

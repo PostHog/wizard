@@ -686,4 +686,3 @@ The script will:
 ## Contributing
 
 Start with [AGENTS.md](AGENTS.md) for the development skills and execution policy.
-[Coherence](docs/coherence.md) provides optional local architecture checks.

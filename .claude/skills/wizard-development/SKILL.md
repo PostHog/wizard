@@ -128,9 +128,7 @@ the change affects bundling or runtime behavior. `pnpm test` already builds.
 Avoid repository-wide `pnpm fix` for a scoped edit. Keep new code comments to
 one line.
 
-[Coherence](../../../docs/coherence.md) anchors selected contracts to source and
-existing tests. Its fast check does not execute tests or certify arbitrary
-prose. Keep desired design policy distinguishable from current runtime behavior.
+Keep desired design policy distinguishable from current runtime behavior.
 
 Read references as needed:
 

@@ -9,12 +9,6 @@
       "options": {
         "proseWrap": "preserve"
       }
-    },
-    {
-      "files": "**/*.spec.md",
-      "options": {
-        "proseWrap": "never"
-      }
     }
   ]
 }

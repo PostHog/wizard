@@ -36,14 +36,9 @@ someone following a skill is also a reason to revisit it.
 
 Check local links and any embedded commands or snippets. Use existing focused
 checks for behavior; avoid tests that assert documentation wording or mirror the
-implementation. [Coherence](../../../../docs/coherence.md) checks only declared
-contracts. Inspect skipped claims, and run the relevant existing tests when a
-contract's behavior changes. A green fast check cannot certify skill prose or
-remote gateway allowlists.
-
-If verification is later automated, its trigger must include skills, specs,
-Markdown, TSX, configuration, and their implementation sources. A source-only
-pre-commit pattern misses documentation drift.
+implementation. Run the relevant existing tests when behavior changes. Review
+skill prose and external gateway policy separately; local tests do not establish
+that either is current.
 
 ## Keep the corpus small
 

@@ -76,14 +76,6 @@ See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
 for the gateway allowlists, required system prompt, and composition constraints.
 
-## Coherence
-
-[Local Coherence setup](docs/coherence.md) verifies a small set of declared
-architecture contracts using source and existing tests. Run
-`pnpm coherence:check` after changing its specs or their implementation. It
-supplements review of the skills; it does not prove their prose or deployed
-gateway policy is current.
-
 ## CLI command surface
 
 The CLI was overhauled to a smaller, extensible command surface. **Use the new
