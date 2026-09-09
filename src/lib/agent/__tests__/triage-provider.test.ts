@@ -43,10 +43,11 @@ describe('createTriageLLMProvider', () => {
   });
 
   it('triages a pi run on luna at the table effort, over openai-responses', async () => {
-    complete.mockResolvedValue(reply('true_positive'));
+    const verdict = '[{"index":0,"verdict":"true_positive","reason":"Attack"}]';
+    complete.mockResolvedValue(reply(verdict));
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
-    await expect(provider('verdict?')).resolves.toBe('true_positive');
+    await expect(provider('verdict?')).resolves.toBe(verdict);
 
     const [model, context, options] = complete.mock.calls[0];
     expect(model.id).toBe(GPT5_6_LUNA_MODEL);
@@ -54,6 +55,7 @@ describe('createTriageLLMProvider', () => {
     expect(model.baseUrl).toBe('https://gw.posthog.test/v1');
     // Luna rejects the request without an effort it recognises.
     expect(options?.reasoning).toBe('low');
+    expect(context.systemPrompt).toBe('PostHog Wizard security triage v1');
     expect(context.messages[0].content).toBe('verdict?');
   });
 
@@ -63,10 +65,21 @@ describe('createTriageLLMProvider', () => {
 
     await expect(provider('verdict?')).resolves.toBe('false_positive');
 
-    const [model] = complete.mock.calls[0];
+    const [model, context] = complete.mock.calls[0];
     expect(model.id).toBe(HAIKU_TRIAGE_MODEL);
     expect(model.api).toBe('anthropic-messages');
     expect(model.baseUrl).toBe('https://gw.posthog.test');
+    expect(context.systemPrompt).toBe('PostHog Wizard security triage v1');
+  });
+
+  it('unwraps the gateway verdict envelope for Warlock', async () => {
+    const verdicts = [
+      { index: 0, verdict: 'false_positive', reason: 'UI copy' },
+    ];
+    complete.mockResolvedValue(reply(JSON.stringify({ verdicts })));
+    const provider = createTriageLLMProvider(AUTH, Harness.pi);
+
+    await expect(provider('verdict?')).resolves.toBe(JSON.stringify(verdicts));
   });
 
   it('carries the same gateway properties blob as every other model call', async () => {
