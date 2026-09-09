@@ -19,7 +19,7 @@ import { logToFile } from '@utils/debug';
 import { gatewayAuth } from '@lib/gateway-session';
 import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
-import { createIsolatedAgentConfigDir } from '@lib/agent/stored-login';
+import { isolatedAgentCredentialEnv } from '@lib/agent/stored-login';
 import { analytics } from '@utils/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
@@ -367,10 +367,9 @@ export async function* runMcpPromptViaSdk(args: {
           ANTHROPIC_BASE_URL: auth.gatewayUrl,
           ANTHROPIC_AUTH_TOKEN: auth.token,
           CLAUDE_CODE_OAUTH_TOKEN: auth.token,
-          // Point the binary at an empty config dir so it cannot resolve a
-          // stored Claude login and send that to the gateway, which 401s it.
-          // See stored-login.ts.
-          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
+          // Per-run empty config + secure-storage dirs, so no stored Claude
+          // login reaches the gateway and 401s the run. See stored-login.ts.
+          ...isolatedAgentCredentialEnv(),
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.

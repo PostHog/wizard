@@ -3,10 +3,11 @@ import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
 import {
-  createIsolatedAgentConfigDir,
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,
+  isolatedAgentCredentialEnv,
 } from '../stored-login';
+import { isBlockedAgentEnvKey } from '../agent-env-isolation';
 
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
 vi.mock('@utils/analytics', () => ({
@@ -87,8 +88,14 @@ describe('detectStoredClaudeLogin', () => {
   });
 });
 
-describe('createIsolatedAgentConfigDir', () => {
+describe('isolatedAgentCredentialEnv', () => {
   const created: string[] = [];
+
+  const take = () => {
+    const env = isolatedAgentCredentialEnv();
+    created.push(env.CLAUDE_CONFIG_DIR);
+    return env;
+  };
 
   afterEach(() => {
     for (const dir of created.splice(0)) {
@@ -101,19 +108,25 @@ describe('createIsolatedAgentConfigDir', () => {
   });
 
   it('creates a fresh, empty directory that holds no stored login', () => {
-    const dir = createIsolatedAgentConfigDir();
-    created.push(dir);
+    const dir = take().CLAUDE_CONFIG_DIR;
 
     // Empty: no `.credentials.json` for the SDK to resolve a stored login from.
     expect(fs.existsSync(dir)).toBe(true);
     expect(fs.readdirSync(dir)).toEqual([]);
   });
 
-  it('returns a distinct directory on each call so concurrent runs never share', () => {
-    const a = createIsolatedAgentConfigDir();
-    const b = createIsolatedAgentConfigDir();
-    created.push(a, b);
+  it('isolates the secure store too, so the macOS keychain lookup misses', () => {
+    const env = take();
 
-    expect(a).not.toBe(b);
+    // The binary names the keychain item after this dir, so pointing it at the
+    // throwaway dir is what keeps `Claude Code-credentials` out of reach.
+    expect(env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(env.CLAUDE_CONFIG_DIR);
+    // Outside the ANTHROPIC_*/CLAUDE_CODE_* strip, so it must be set, not merely
+    // inherited — a shell value would otherwise undo the isolation.
+    expect(isBlockedAgentEnvKey('CLAUDE_SECURESTORAGE_CONFIG_DIR')).toBe(false);
+  });
+
+  it('returns a distinct directory on each call so concurrent runs never share', () => {
+    expect(take().CLAUDE_CONFIG_DIR).not.toBe(take().CLAUDE_CONFIG_DIR);
   });
 });
