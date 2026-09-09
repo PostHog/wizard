@@ -4,19 +4,7 @@ import {
   type BaseHealthResult,
   type HealthCheckKey,
 } from './types';
-import {
-  checkAnthropicHealth,
-  checkGithubHealth,
-  checkNpmOverallHealth,
-  checkNpmComponentHealth,
-  checkCloudflareOverallHealth,
-  checkCloudflareComponentHealth,
-} from './statuspage';
-import {
-  checkPosthogOverallHealth,
-  checkPosthogComponentHealth,
-} from './incidentio';
-import { checkMcpHealth, checkSkillsOriginHealth } from './endpoints';
+import { checkSkillsOriginHealth } from './endpoints';
 import { logToFile } from '@utils/debug';
 
 // ---------------------------------------------------------------------------
@@ -24,15 +12,6 @@ import { logToFile } from '@utils/debug';
 // ---------------------------------------------------------------------------
 
 export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
-  anthropic: 'Anthropic',
-  posthogOverall: 'PostHog',
-  posthogComponents: 'PostHog (components)',
-  github: 'GitHub',
-  npmOverall: 'npm',
-  npmComponents: 'npm (components)',
-  cloudflareOverall: 'Cloudflare',
-  cloudflareComponents: 'Cloudflare (components)',
-  mcp: 'MCP',
   skillsOrigin: 'Skills download',
 };
 
@@ -59,101 +38,7 @@ export const SIGNUP_WIZARD_READINESS_CONFIG = DEFAULT_WIZARD_READINESS_CONFIG;
 // ---------------------------------------------------------------------------
 
 export async function checkAllExternalServices(): Promise<AllServicesHealth> {
-  const [
-    anthropic,
-    posthogOverall,
-    posthogComponents,
-    github,
-    npmOverall,
-    npmComponents,
-    cloudflareOverall,
-    cloudflareComponents,
-    mcp,
-    skillsOrigin,
-  ] = await Promise.all([
-    checkAnthropicHealth(),
-    checkPosthogOverallHealth(),
-    checkPosthogComponentHealth(),
-    checkGithubHealth(),
-    checkNpmOverallHealth(),
-    checkNpmComponentHealth(),
-    checkCloudflareOverallHealth(),
-    checkCloudflareComponentHealth(),
-    checkMcpHealth(),
-    checkSkillsOriginHealth(),
-  ]);
-
-  const health: AllServicesHealth = {
-    anthropic,
-    posthogOverall,
-    posthogComponents,
-    github,
-    npmOverall,
-    npmComponents,
-    cloudflareOverall,
-    cloudflareComponents,
-    mcp,
-    skillsOrigin,
-  };
-  return reconcilePosthogReachability(health);
-}
-
-/**
- * When a PostHog-owned endpoint probe returns `NoConnection`, decide
- * whether it's a real outage or a likely-local issue by checking the
- * official status page (`posthogstatus.com`):
- *
- *   - Status page says PostHog is `Down` / `Degraded` → upgrade
- *     mcp to `Down`. The status page corroborates.
- *   - Status page is `Healthy` → keep `NoConnection`. The status page
- *     contradicts; this is probably the user's network.
- *   - Status page is also `NoConnection` → keep `NoConnection`. User
- *     can't reach two independent PostHog properties; almost
- *     certainly their network. (This case relies on incidentio.ts
- *     correctly emitting `NoConnection` for fetch failures rather
- *     than the previous `Degraded`, which used to silently flip the
- *     reconciliation into a false positive.)
- *
- * Why `Degraded` corroborates: a `Degraded` reading here only fires
- * when incident.io's API parsed successfully and reported a real
- * `partial_outage` or `degraded_performance` for some component. That's
- * PostHog acknowledging an issue, even if narrower than a full outage.
- * If our MCP probe is also failing, those two signals together
- * justify pointing at PostHog rather than the user.
- *
- * A narrower variant — only corroborate when the affected component is
- * MCP-related (US/EU Cloud, app) — would be more precise. We
- * have the data in `posthogComponents` but don't use it here. If the
- * analytics show false positives concentrated in this case, it's a
- * cheap follow-up.
- *
- * Mutates a copy of `health` and returns it.
- */
-export function reconcilePosthogReachability(
-  health: AllServicesHealth,
-): AllServicesHealth {
-  const posthogStatus = health.posthogOverall.status;
-  const corroboratesOutage =
-    posthogStatus === ServiceHealthStatus.Down ||
-    posthogStatus === ServiceHealthStatus.Degraded;
-
-  if (!corroboratesOutage) return health;
-
-  const upgrade = (r: BaseHealthResult): BaseHealthResult =>
-    r.status === ServiceHealthStatus.NoConnection
-      ? {
-          ...r,
-          status: ServiceHealthStatus.Down,
-          error: r.error
-            ? `${r.error} (corroborated by status page)`
-            : 'corroborated by status page',
-        }
-      : r;
-
-  return {
-    ...health,
-    mcp: upgrade(health.mcp),
-  };
+  return { skillsOrigin: await checkSkillsOriginHealth() };
 }
 
 // ---------------------------------------------------------------------------
@@ -230,27 +115,12 @@ export async function evaluateWizardReadiness(
 // Blocking service detection
 // ---------------------------------------------------------------------------
 
-/** Keys that are component-level detail, not top-level services. */
-const COMPONENT_KEYS: HealthCheckKey[] = [
-  'posthogComponents',
-  'npmComponents',
-  'cloudflareComponents',
-];
-
-/**
- * Get the keys of services that would block a wizard run per the given config.
- *
- * `NoConnection` blocks the same services as `Down` — the wizard genuinely
- * can't continue if it can't reach the gateway. The screen shows softer
- * framing in that case (HealthCheckScreen) so we don't falsely accuse
- * PostHog of an outage when the user's network is the likely cause.
- */
+// Report only dependencies that prevent this run from starting.
 export function getBlockingServiceKeys(
   health: AllServicesHealth,
   config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
 ): HealthCheckKey[] {
   return (Object.keys(health) as HealthCheckKey[]).filter((key) => {
-    if (COMPONENT_KEYS.includes(key)) return false;
     const result = health[key];
     if (
       config.downBlocksRun.includes(key) &&
@@ -275,16 +145,5 @@ function allUnknown(error: string): AllServicesHealth {
     status: ServiceHealthStatus.Degraded,
     error,
   };
-  return {
-    anthropic: base,
-    posthogOverall: base,
-    posthogComponents: { ...base },
-    github: base,
-    npmOverall: base,
-    npmComponents: { ...base },
-    cloudflareOverall: base,
-    cloudflareComponents: { ...base },
-    mcp: base,
-    skillsOrigin: base,
-  };
+  return { skillsOrigin: base };
 }

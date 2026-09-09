@@ -598,9 +598,8 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/lib/health-checks/` checks external status pages and PostHog-owned
-services before the wizard runs to decide whether it can proceed. The entry
-point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
+`src/lib/health-checks/` checks skills download origins before the wizard runs.
+The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
 
 | Decision            | Meaning                                                         |
 | ------------------- | --------------------------------------------------------------- |
@@ -612,8 +611,7 @@ point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
 | File | Responsibility |
 | --- | --- |
 | `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
-| `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for MCP (`/`) and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
+| `endpoints.ts` | Direct gateway (`/readyz`) and skills origin (`skill-menu.json`) checks |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
 | `index.ts` | Barrel re-export |
 | `testme.md` | Test running instructions and endpoint reference |
@@ -634,8 +632,8 @@ two arrays:
 downBlocksRun: ['skillsOrigin'],
 ```
 
-The same policy applies during signup. Other status-page results do not warn or
-block. After minting a token, `gateway-session.ts` checks `/readyz` on the returned
+The same policy applies during signup. Third-party status pages are not queried.
+After minting a token, `gateway-session.ts` checks `/readyz` on the returned
 gateway URL and reports an unavailable gateway through the existing error path.
 
 `skillsOrigin` is one entry covering two origins: skills are published to
