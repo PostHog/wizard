@@ -18,6 +18,7 @@ import {
 import type { LLMProvider } from '@posthog/warlock';
 
 const TRIAGE_MAX_TOKENS = 16_384;
+const TRIAGE_SYSTEM_PROMPT = 'PostHog Wizard security triage v1';
 // Shorter than the hook timeout so a hung triage fails inside the hook's
 // try/catch (→ fail-closed) rather than tripping the SDK hook timeout.
 const TRIAGE_TIMEOUT_MS = 20_000;
@@ -77,6 +78,7 @@ export function createTriageLLMProvider(
       const message = await completeSimple(
         model,
         {
+          systemPrompt: TRIAGE_SYSTEM_PROMPT,
           messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
         },
         {
@@ -103,6 +105,14 @@ export function createTriageLLMProvider(
             message.errorMessage ?? 'unknown'
           } — every flagged match will be acted on`,
         );
+      }
+      try {
+        const envelope = JSON.parse(text) as { verdicts?: unknown } | null;
+        if (Array.isArray(envelope?.verdicts)) {
+          return JSON.stringify(envelope.verdicts);
+        }
+      } catch {
+        // Warlock treats malformed replies as true positives.
       }
       return text;
     } finally {
