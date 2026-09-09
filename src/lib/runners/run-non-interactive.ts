@@ -36,6 +36,10 @@ function modeLabel(mode: NonInteractiveMode): string {
   return mode === 'headless' ? 'Headless' : 'CI';
 }
 
+/** The credentials every non-interactive mode accepts, for error messages. */
+export const API_KEY_HINT =
+  'personal API key phx_xxx or wizard-app OAuth access token pha_xxx';
+
 /**
  * The single non-interactive validation layer: requires api-key and
  * install-dir. Every non-interactive entry point routes through
@@ -47,16 +51,12 @@ export function validateNonInteractiveOptions(
   mode: NonInteractiveMode,
 ): void {
   const label = modeLabel(mode);
-  const keyHint =
-    mode === 'headless'
-      ? 'personal API key phx_xxx or pha_ OAuth access token'
-      : 'personal API key phx_xxx';
   if (!options.apiKey) {
     getUI().intro('PostHog Wizard');
-    getUI().log.error(`${label} mode requires --api-key (${keyHint})`);
+    getUI().log.error(`${label} mode requires --api-key (${API_KEY_HINT})`);
     emitWizardError({
       code: ErrorCodes.ArgsMissingApiKey,
-      message: `${label} mode requires --api-key (${keyHint})`,
+      message: `${label} mode requires --api-key (${API_KEY_HINT})`,
     });
     process.exit(1);
   }
