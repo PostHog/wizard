@@ -307,8 +307,7 @@ export async function bootstrapProgram(
   // set them — so downstream readers get a non-null type without asserting.
   const credentials = session.credentials!;
 
-  // Resolve the gateway posture once for the boot: v2 scoped token when the
-  // backend mints, legacy OAuth otherwise.
+  // Mint the run's scoped gateway token once for the boot.
   const auth = await gatewayAuth(
     credentials.host,
     credentials.accessToken,
@@ -331,7 +330,6 @@ export async function bootstrapProgram(
       {
         baseURL: auth.gatewayUrl,
         authToken: auth.token,
-        edition: auth.edition,
         teamId: auth.teamId,
         // `call_type` splits scan spend out of the program's agent cost —
         // same tag the in-run triage provider carries.

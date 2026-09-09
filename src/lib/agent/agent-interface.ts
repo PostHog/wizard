@@ -19,7 +19,6 @@ import {
   CallType,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
-  POSTHOG_PROPERTY_HEADER_PREFIX,
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
@@ -336,10 +335,7 @@ type AgentRunConfig = {
   capture?: AioCapture;
   /** Scan-triage classifier, built from this run's gateway auth. */
   triageProvider: LLMProvider;
-  /**
-   * Resolved gateway posture for this run (v2 scoped token or legacy OAuth);
-   * selects the ANTHROPIC_CUSTOM_HEADERS shape for the SDK subprocess.
-   */
+  /** The run's minted gateway auth: base url, bearer and team for the subprocess. */
   gatewayAuth: GatewayAuth;
   /** Program id, for the program-axis commandments. */
   program?: string;
@@ -349,10 +345,10 @@ type AgentRunConfig = {
 
 /**
  * Global identifiers attached to every LLM gateway trace for a run. They ride on
- * each `$ai_generation` the gateway emits (as `X-POSTHOG-PROPERTY-*` headers via
- * `buildAgentEnv`), so traces are filterable by program, framework, run, and build
- * type for cost attribution and dashboards. `skill_id` is omitted when the run has
- * none.
+ * each `$ai_generation` the gateway emits (in the `X-PostHog-Properties` blob
+ * `buildAgentEnv` builds), so traces are filterable by program, framework, run,
+ * and build type for cost attribution and dashboards. `skill_id` is omitted when
+ * the run has none.
  */
 export function buildRunTags(args: {
   programId: string;
@@ -385,39 +381,20 @@ export function isWarlockDisabled(): boolean {
 }
 
 /**
- * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS.
- * The header shape follows the gateway edition. Legacy (Python gateway):
- * per-key `X-POSTHOG-PROPERTY-*`/`X-POSTHOG-FLAG-*` plus the explicit
- * `x-posthog-use-bedrock-fallback` opt-in. v2 (Go ai-gateway): one
- * `X-PostHog-Properties` JSON blob. Bedrock fallback is native there, and
- * per-key metadata headers are not read.
+ * Build ANTHROPIC_CUSTOM_HEADERS for the SDK subprocess: the run's metadata and
+ * flags as one `X-PostHog-Properties` JSON blob. Bedrock fallback is native to
+ * the gateway, so there is no opt-in header.
  */
 export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
-  auth?: GatewayAuth,
+  teamId?: number,
 ): string {
   const headers = createCustomHeaders();
-  if (auth?.edition === 'v2') {
-    headers.add(
-      'X-PostHog-Properties',
-      buildWizardPropertiesBlob(wizardMetadata, wizardFlags, auth.teamId),
-    );
-  } else {
-    headers.add('x-posthog-use-bedrock-fallback', 'true');
-    for (const [key, value] of Object.entries(wizardMetadata)) {
-      headers.add(
-        key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
-          ? key
-          : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`,
-        value,
-      );
-    }
-    for (const [flagKey, variant] of Object.entries(wizardFlags)) {
-      if (!flagKey.toLowerCase().startsWith('wizard')) continue;
-      headers.addFlag(flagKey, variant);
-    }
-  }
+  headers.add(
+    'X-PostHog-Properties',
+    buildWizardPropertiesBlob(wizardMetadata, wizardFlags, teamId),
+  );
   const encoded = headers.encode();
   logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
   return encoded;
@@ -544,10 +521,8 @@ export async function initializeAgent(
 
   try {
     // Configure model routing (inherited by the SDK subprocess). All model
-    // calls route through the PostHog LLM gateway. gatewayAuth resolves the
-    // v2 posture (a server-minted scoped token + the Go gateway URL) and
-    // falls back to the legacy posture (the user's OAuth token + the Python
-    // gateway) when the backend doesn't mint.
+    // calls route through the PostHog AI gateway with the scoped token
+    // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
     const auth = await gatewayAuth(
@@ -561,7 +536,6 @@ export async function initializeAgent(
 
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
-    logToFile('Gateway edition:', auth.edition);
 
     // Same values the env vars above carry, handed over explicitly so triage
     // never has to read them back out of the environment. The run tags ride
@@ -571,7 +545,6 @@ export async function initializeAgent(
       {
         baseURL: gatewayUrl,
         authToken: auth.token,
-        edition: auth.edition,
         teamId: auth.teamId,
         wizardMetadata: {
           ...(config.wizardMetadata ?? {}),
@@ -1049,11 +1022,11 @@ export async function runAgent(
           // blocking behavior so the SDK waits up to 5s for MCP connect before
           // turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // PostHog gateway headers, shaped for the run's gateway edition.
+          // PostHog gateway headers: this run's properties blob.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             agentConfig.wizardMetadata ?? {},
             agentConfig.wizardFlags ?? {},
-            agentConfig.gatewayAuth,
+            agentConfig.gatewayAuth.teamId,
           ),
         },
         canUseTool: (toolName: string, input: unknown) => {

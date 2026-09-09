@@ -2,24 +2,18 @@
  * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
  * pinned attribution, a spend cap and an expiry.
  *
- * A 404 resolves to the legacy posture (OAuth token, Python gateway); every
- * other failure throws, because the legacy path enforces none of those, so a
- * silent downgrade spends unattributed money to hide an outage.
+ * Every mint failure throws. There is no other gateway to fall back to, and a
+ * silent downgrade would spend uncapped, unattributed money to hide an outage.
  */
 
 import { logToFile } from '@utils/debug';
-import { analytics } from '@utils/analytics';
 import type { HostResolution } from '@lib/host-resolution';
-
-export type GatewayEdition = 'legacy' | 'v2';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
   gatewayUrl: string;
-  /** Bearer for the gateway: a minted `phe_` (v2) or the OAuth token (legacy). */
+  /** Bearer for the gateway: the minted `phe_`. */
   token: string;
-  /** Selects the header shape: one properties blob (v2) or per-key headers. */
-  edition: GatewayEdition;
   /** The team the mint verified; rides the blob so dashboards keep a breakdown. */
   teamId?: number;
 }
@@ -45,11 +39,11 @@ let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
 const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 /** Re-resolve at this fraction of the token's life, leaving a usable remainder. */
 const REFRESH_AT_FRACTION = 0.8;
-/** How long a legacy fallback sticks before the mint endpoint is retried. */
-const LEGACY_RETRY_MS = 10 * 60 * 1000;
 // Exceeds the backend's own 10s gateway timeout: a slow mint that lands after the
 // CLI hangs up spends a daily mint and orphans a live token.
 const MINT_TIMEOUT_MS = 20_000;
+/** Longer than any refusal the mint writes; a body past this is not a message. */
+const MAX_REFUSAL_DETAIL_LENGTH = 500;
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
@@ -88,13 +82,6 @@ async function resolveGatewayAuth(
     );
   }
   const minted = await mintGatewayToken(host, accessToken, program);
-  if (!minted) {
-    // The mint is not enabled here, or does not recognise this credential.
-    analytics.setTag('gateway_edition', 'legacy');
-    const auth = legacyAuth(host, accessToken);
-    cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
-    return auth;
-  }
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
   if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {
@@ -108,7 +95,6 @@ async function resolveGatewayAuth(
     );
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
-  analytics.setTag('gateway_edition', 'v2');
   // Only failures and fallbacks are logged otherwise, so a successful run leaves no
   // local trace. Never log the token itself.
   logToFile(
@@ -119,16 +105,10 @@ async function resolveGatewayAuth(
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
-    edition: 'v2',
     teamId: minted.teamId,
   };
   cached = { key, auth, staleAtMs };
   return auth;
-}
-
-/** The legacy posture: the user's OAuth token against the Python gateway. */
-function legacyAuth(host: HostResolution, accessToken: string): GatewayAuth {
-  return { gatewayUrl: host.gatewayUrl, token: accessToken, edition: 'legacy' };
 }
 
 /** Test hook: drop the cached auth so the next call re-resolves. */
@@ -184,8 +164,8 @@ interface MintedToken {
 
 /**
  * A deliberate refusal from the mint endpoint, as opposed to the mint being
- * unavailable. Thrown rather than folded into the legacy fallback, so the run
- * stops instead of proceeding without the controls the refusal was enforcing.
+ * unavailable. Thrown so the run stops instead of proceeding without the
+ * controls the refusal was enforcing.
  */
 export class GatewayMintRefused extends Error {
   readonly status: number;
@@ -210,24 +190,56 @@ export class GatewayMintFailed extends Error {
 
 /**
  * Whether a mint status means "refused this run" rather than "not available".
- * These are the statuses the endpoint returns after it has authenticated the
- * caller: 429 the daily run limit, 403 revoked project access, 400 a login
- * covering more than one project. 404 and 401 fall back instead.
+ * 429 the daily run limit, 403 revoked project access, 400 a login covering
+ * more than one project, 401 a credential the mint does not accept, 404 an
+ * instance without the mint endpoint.
  */
 function isMintRefusal(status: number): boolean {
-  return status === 400 || status === 403 || status === 429;
+  return (
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 429
+  );
 }
 
-function mintRefusalMessage(status: number): string {
+/**
+ * The server's own reason for a refusal, when it sent one. DRF answers every
+ * refusal as `{"detail": "..."}`; the blocklist's detail names the contact
+ * address, which the fixed messages below cannot.
+ */
+async function readRefusalDetail(resp: Response): Promise<string | undefined> {
+  try {
+    const body = (await resp.json()) as { detail?: unknown };
+    const raw = typeof body?.detail === 'string' ? body.detail : '';
+    // Not because the server sends escapes, but because this string is printed
+    // straight to a terminal: sanitizing at the boundary means no later message
+    // can move the cursor or repaint the screen.
+    // eslint-disable-next-line no-control-regex
+    const detail = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
+    return detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
+      ? detail
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function mintRefusalMessage(status: number, detail?: string): string {
+  if (detail) return detail;
   switch (status) {
     case 429:
       return 'This wizard program has used its daily run limit. Try again tomorrow.';
     case 403:
       return 'Your access to this project has changed. Re-authenticate and try again.';
     case 400:
-      // The only 400 the mint answers is the exactly-one-project check; an
-      // unrecognised program is a 404 and falls back instead.
+      // The only 400 the mint answers is the exactly-one-project check.
       return 'Your PostHog login must cover exactly one project. Re-authenticate and try again.';
+    case 401:
+      return 'PostHog did not accept this login. Re-authenticate with `npx @posthog/wizard@latest`.';
+    case 404:
+      return 'This PostHog instance does not issue gateway tokens. Upgrade with `npx @posthog/wizard@latest` and try again.';
     default:
       return 'The PostHog gateway refused this run.';
   }
@@ -237,7 +249,7 @@ async function mintGatewayToken(
   host: HostResolution,
   accessToken: string,
   program: string,
-): Promise<MintedToken | null> {
+): Promise<MintedToken> {
   try {
     const resp = await fetch(`${host.apiHost}/api/wizard/gateway_token/`, {
       method: 'POST',
@@ -245,7 +257,10 @@ async function mintGatewayToken(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ program }),
+      // The flag tells the server this build reads a refusal, so it may answer
+      // with the reason. A build that omits it gets a 404, which is its signal
+      // to fall back to the legacy gateway.
+      body: JSON.stringify({ program, reads_refusal_reason: true }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {
@@ -255,17 +270,8 @@ async function mintGatewayToken(
         );
         throw new GatewayMintRefused(
           resp.status,
-          mintRefusalMessage(resp.status),
+          mintRefusalMessage(resp.status, await readRefusalDetail(resp)),
         );
-      }
-      if (resp.status === 404 || resp.status === 401) {
-        // 404 is the rollout switch. 401 is a credential the mint does not
-        // recognise, an API key rather than an OAuth login; the legacy gateway
-        // authenticates it separately, so falling back grants nothing.
-        logToFile(
-          `[gateway] mint unavailable for this credential (HTTP ${resp.status}); staying on the existing gateway`,
-        );
-        return null;
       }
       logToFile(
         `[gateway] mint failed with HTTP ${resp.status}; failing the run`,
@@ -308,7 +314,7 @@ async function mintGatewayToken(
     };
   } catch (e) {
     // Decisions and failures both pass through: this catch exists for transport
-    // errors, and folding the others into it would restore the downgrade.
+    // errors, and folding the others into it would lose the reason.
     if (e instanceof GatewayMintRefused || e instanceof GatewayMintFailed)
       throw e;
     logToFile(

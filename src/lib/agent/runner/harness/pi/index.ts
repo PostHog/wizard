@@ -246,9 +246,8 @@ export const piBackend: AgentHarness = {
       } = await import('@earendil-works/pi-coding-agent');
 
       // the claude-agent-sdk path. The provider spec is shared with the
-      // orchestrator's per-task sessions (gateway.ts). gatewayAuth resolves
-      // the v2 scoped-token posture, or the legacy OAuth posture when the
-      // backend doesn't mint.
+      // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
+      // run's scoped token.
       const auth = await gatewayAuth(
         boot.credentials.host,
         boot.credentials.accessToken,
@@ -257,7 +256,6 @@ export const piBackend: AgentHarness = {
       const { provider, caps } = buildGatewayProvider({
         gatewayUrl: auth.gatewayUrl,
         accessToken: auth.token,
-        edition: auth.edition,
         teamId: auth.teamId,
         wizardMetadata: boot.wizardMetadata,
         wizardFlags: boot.wizardFlags,

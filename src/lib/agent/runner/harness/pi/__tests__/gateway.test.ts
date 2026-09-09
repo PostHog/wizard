@@ -32,16 +32,49 @@ describe('buildGatewayProvider effort', () => {
   });
 });
 
-describe('buildGatewayHeaders', () => {
-  it('carries one blob and no bedrock opt-in for v2', () => {
-    const headers = buildGatewayHeaders({ run_id: 'r1' }, {}, 'v2', 42);
-    expect(headers['X-PostHog-Properties']).toContain('run_id');
-    expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
+describe('buildGatewayProvider transport', () => {
+  const base = {
+    gatewayUrl: 'https://ai-gateway.us.posthog.com',
+    accessToken: 'phe_x',
+    wizardMetadata: {},
+    wizardFlags: {},
+  };
+
+  it('routes openai models over the Responses API', () => {
+    // Chat completions rejects function tools combined with reasoning_effort,
+    // and every task sends both.
+    const { api, baseUrl } = buildGatewayProvider({
+      ...base,
+      modelId: 'openai/gpt-5.6-terra',
+    });
+    expect(api).toBe('openai-responses');
+    expect(baseUrl).toBe('https://ai-gateway.us.posthog.com/v1');
   });
 
-  it('carries per-key headers for legacy', () => {
-    const headers = buildGatewayHeaders({ run_id: 'r1' }, {}, 'legacy');
-    expect(headers['X-POSTHOG-PROPERTY-run_id']).toBe('r1');
-    expect(headers['x-posthog-use-bedrock-fallback']).toBe('true');
+  it('routes anthropic models over anthropic-messages without /v1', () => {
+    const { api, baseUrl } = buildGatewayProvider({
+      ...base,
+      modelId: 'claude-sonnet-4-6',
+    });
+    expect(api).toBe('anthropic-messages');
+    expect(baseUrl).toBe('https://ai-gateway.us.posthog.com');
+  });
+});
+
+describe('buildGatewayHeaders', () => {
+  it('carries one properties blob and no per-key or bedrock headers', () => {
+    const headers = buildGatewayHeaders(
+      { run_id: 'r1' },
+      { 'wizard-orchestrator': 'test' },
+      42,
+    );
+    expect(JSON.parse(headers['X-PostHog-Properties'])).toEqual({
+      ai_product: 'wizard',
+      team_id: 42,
+      run_id: 'r1',
+      'wizard_flag_wizard-orchestrator': 'test',
+    });
+    expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
+    expect(headers['X-POSTHOG-PROPERTY-run_id']).toBeUndefined();
   });
 });

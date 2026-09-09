@@ -13,10 +13,6 @@ import { ServiceHealthStatus, type BaseHealthResult } from './types';
 // NoConnection means we don't know whose fault it is; readiness reconciles
 // against the status page before deciding how to surface it to the user.
 //
-// LLM Gateway – FastAPI service
-//   Source: posthog/services/llm-gateway/src/llm_gateway/api/health.py
-//   GET /_liveness → 200 {"status":"alive"}
-//
 // MCP – Cloudflare Worker
 //   Source: posthog/services/mcp/src/index.ts
 //   GET / → 302 to posthog.com docs. The redirect proves the worker is up.
@@ -65,7 +61,8 @@ async function attemptFetch(
   }
 }
 
-async function fetchEndpointHealth(
+// Exported so tests can pin the retry/taxonomy machinery directly.
+export async function fetchEndpointHealth(
   url: string,
   timeoutMs = 5000,
   isExpectedStatus: (status: number) => boolean = (s) => s === 200,
@@ -136,9 +133,6 @@ async function fetchEndpointHealth(
   );
   return result;
 }
-
-export const checkLlmGatewayHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth('https://gateway.us.posthog.com/_liveness');
 
 export const checkMcpHealth = (): Promise<BaseHealthResult> =>
   fetchEndpointHealth(

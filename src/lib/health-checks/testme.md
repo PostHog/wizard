@@ -40,7 +40,6 @@ responses captured from production endpoints on 2026-03-05.
 | npm (components)        | `https://status.npmjs.org/api/v2/summary.json`         | Adds `components[]` array             |
 | Cloudflare              | `https://www.cloudflarestatus.com/api/v2/status.json`  | Same shape                            |
 | Cloudflare (components) | `https://www.cloudflarestatus.com/api/v2/summary.json` | Adds `components[]` array             |
-| LLM Gateway             | `https://gateway.us.posthog.com/_liveness`             | `{"status":"alive"}` (HTTP 200)       |
 | MCP                     | `https://mcp.posthog.com/`                             | HTML landing page (HTTP 200)          |
 
 ### Statuspage.io API v2 reference
@@ -53,13 +52,6 @@ responses captured from production endpoints on 2026-03-05.
   `under_maintenance`
 - Component docs:
   <https://support.atlassian.com/statuspage/docs/show-service-status-with-components>
-
-### LLM Gateway
-
-- Source: `posthog/services/llm-gateway/src/llm_gateway/api/health.py`
-- `GET /` → `{"service":"llm-gateway","status":"running"}`
-- `GET /_liveness` → `{"status":"alive"}` (no DB dependency)
-- `GET /_readiness` → `{"status":"ready"}` (checks Postgres with `SELECT 1`)
 
 ### MCP
 

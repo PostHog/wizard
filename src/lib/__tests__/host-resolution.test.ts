@@ -14,7 +14,6 @@ describe('HostResolution.fromApiHost', () => {
     expect(h.apiHost).toBe('https://us.i.posthog.com');
     expect(h.appHost).toBe('https://us.posthog.com');
     expect(h.assetHost).toBe('https://us-assets.i.posthog.com');
-    expect(h.gatewayUrl).toBe('https://gateway.us.posthog.com/wizard');
   });
 
   it('derives the full EU host family from the EU ingestion host', () => {
@@ -23,7 +22,6 @@ describe('HostResolution.fromApiHost', () => {
     expect(h.apiHost).toBe('https://eu.i.posthog.com');
     expect(h.appHost).toBe('https://eu.posthog.com');
     expect(h.assetHost).toBe('https://eu-assets.i.posthog.com');
-    expect(h.gatewayUrl).toBe('https://gateway.eu.posthog.com/wizard');
   });
 
   it('preserves the given apiHost verbatim (provisioning may return a non-canonical host)', () => {
@@ -38,7 +36,6 @@ describe('HostResolution.fromApiHost', () => {
     expect(h.region).toBe('us');
     expect(h.apiHost).toBe('http://localhost:8010');
     expect(h.appHost).toBe('http://localhost:8010');
-    expect(h.gatewayUrl).toBe('http://localhost:3308/wizard');
   });
 });
 

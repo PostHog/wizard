@@ -614,7 +614,7 @@ point is `evaluateWizardReadiness()`, which returns one of three values:
 | --- | --- |
 | `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
 | `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for LLM Gateway (`/_liveness`), MCP (`/`), and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
+| `endpoints.ts` | Direct endpoint checks for MCP (`/`) and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
 | `index.ts` | Barrel re-export |
 | `testme.md` | Test running instructions and endpoint reference |
@@ -632,7 +632,7 @@ two arrays:
 ### Current defaults
 
 ```ts
-downBlocksRun: ['anthropic', 'npmOverall', 'llmGateway', 'mcp', 'skillsOrigin'],
+downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
 degradedBlocksRun: ['anthropic'],
 ```
 

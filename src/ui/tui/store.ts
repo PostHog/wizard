@@ -156,7 +156,7 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
     const posthogStatus = health.posthogOverall?.status;
     const retriesUsed = Math.max(
       0,
-      ...(['llmGateway', 'mcp', 'skillsOrigin'] as const).map((k) => {
+      ...(['mcp', 'skillsOrigin'] as const).map((k) => {
         const ind = health[k]?.rawIndicator ?? '';
         const m = ind.match(/attempts=(\d+)/);
         return m ? Number(m[1]) - 1 : 0;

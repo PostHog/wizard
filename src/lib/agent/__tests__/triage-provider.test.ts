@@ -42,7 +42,7 @@ describe('createTriageLLMProvider', () => {
     });
   });
 
-  it('triages a legacy pi run on luna at the table effort, over openai-completions', async () => {
+  it('triages a pi run on luna at the table effort, over openai-responses', async () => {
     complete.mockResolvedValue(reply('true_positive'));
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
@@ -50,25 +50,11 @@ describe('createTriageLLMProvider', () => {
 
     const [model, context, options] = complete.mock.calls[0];
     expect(model.id).toBe(GPT5_6_LUNA_MODEL);
-    expect(model.api).toBe('openai-completions');
+    expect(model.api).toBe('openai-responses');
     expect(model.baseUrl).toBe('https://gw.posthog.test/v1');
     // Luna rejects the request without an effort it recognises.
     expect(options?.reasoning).toBe('low');
     expect(context.messages[0].content).toBe('verdict?');
-  });
-
-  it('triages a v2 pi run over openai-responses', async () => {
-    complete.mockResolvedValue(reply('true_positive'));
-    const provider = createTriageLLMProvider(
-      { ...AUTH, edition: 'v2' as const },
-      Harness.pi,
-    );
-
-    await expect(provider('verdict?')).resolves.toBe('true_positive');
-
-    const [model] = complete.mock.calls[0];
-    expect(model.api).toBe('openai-responses');
-    expect(model.baseUrl).toBe('https://gw.posthog.test/v1');
   });
 
   it('triages an anthropic run on haiku over anthropic-messages', async () => {
@@ -83,11 +69,12 @@ describe('createTriageLLMProvider', () => {
     expect(model.baseUrl).toBe('https://gw.posthog.test');
   });
 
-  it('carries the same gateway trace headers as every other model call', async () => {
+  it('carries the same gateway properties blob as every other model call', async () => {
     complete.mockResolvedValue(reply(''));
     const provider = createTriageLLMProvider(
       {
         ...AUTH,
+        teamId: 42,
         wizardMetadata: { run_id: 'r1' },
         wizardFlags: { 'wizard-orchestrator': 'true' },
       },
@@ -96,11 +83,14 @@ describe('createTriageLLMProvider', () => {
 
     await provider('verdict?');
 
-    expect(complete.mock.calls[0][0].headers).toMatchObject({
-      'x-posthog-use-bedrock-fallback': 'true',
-      'X-POSTHOG-PROPERTY-run_id': 'r1',
-      'X-POSTHOG-FLAG-WIZARD-ORCHESTRATOR': 'true',
+    const headers = complete.mock.calls[0][0].headers ?? {};
+    expect(JSON.parse(headers['X-PostHog-Properties'])).toEqual({
+      ai_product: 'wizard',
+      team_id: 42,
+      run_id: 'r1',
+      'wizard_flag_wizard-orchestrator': 'true',
     });
+    expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
   });
 
   it('attributes its spend to the program that triggered the scan', async () => {
@@ -120,9 +110,10 @@ describe('createTriageLLMProvider', () => {
 
     await provider('verdict?');
 
-    expect(complete.mock.calls[0][0].headers).toMatchObject({
-      'X-POSTHOG-PROPERTY-program_id': 'posthog-integration',
-      'X-POSTHOG-PROPERTY-call_type': 'yara-triage',
+    const headers = complete.mock.calls[0][0].headers ?? {};
+    expect(JSON.parse(headers['X-PostHog-Properties'])).toMatchObject({
+      program_id: 'posthog-integration',
+      call_type: 'yara-triage',
     });
   });
 

@@ -23,13 +23,11 @@ Entry points:
 
 ## Core characteristics
 
-- **Model transport:** the PostHog LLM gateway is registered as an
+- **Model transport:** the PostHog AI gateway is registered as an
   `anthropic-messages` provider on pi's in-memory `ModelRegistry`, authed
-  bearer-style with the user's OAuth token. Same Bedrock fallback +
-  wizard-flag/metadata headers as the anthropic path. OpenAI-class models (e.g.
-  `GPT5_6_TERRA_MODEL`) route to `/v1/responses` via `openai-responses` on
-  the v2 gateway, and to `/v1/chat/completions` via `openai-completions` on legacy
-  shape automatically.
+  bearer-style with the run's minted scoped token. Same wizard properties
+  header as the anthropic path. OpenAI-class models (e.g. `GPT5_6_TERRA_MODEL`)
+  route to `/v1/responses` via `openai-responses` automatically.
 - **Context window:** 1M-context beta enabled
   (`anthropic-beta: context-1m-2025-08-07`) — otherwise runs at 200k and
   compaction fails on larger projects.

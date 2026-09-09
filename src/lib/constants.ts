@@ -308,13 +308,6 @@ export function wizardUserAgentForProgram(programId?: string): string {
     : WIZARD_USER_AGENT;
 }
 
-// ── HTTP headers ─────────────────────────────────────────────────────
-
-/** Header prefix for PostHog properties (e.g. X-POSTHOG-PROPERTY-VARIANT). */
-export const POSTHOG_PROPERTY_HEADER_PREFIX = 'X-POSTHOG-PROPERTY-';
-/** Header prefix for PostHog feature flags. */
-export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
-
 // ── Timeouts ─────────────────────────────────────────────────────────
 
 /** Timeout for framework / project detection probes (ms). */

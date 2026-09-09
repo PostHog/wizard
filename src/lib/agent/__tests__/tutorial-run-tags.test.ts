@@ -2,9 +2,9 @@
  * Cost-attribution contract for the MCP tutorial.
  *
  * The gateway builds each `$ai_generation`'s `program_id` from the
- * `X-POSTHOG-PROPERTY-*` headers on the request. The tutorial shipped without
- * them, so every generation it produced landed in the unattributed bucket —
- * these tests pin the tags so that can't silently return.
+ * `X-PostHog-Properties` header on the request. The tutorial shipped without
+ * it, so every generation it produced landed in the unattributed bucket. These
+ * tests pin the tags so that can't silently return.
  */
 
 import { buildTutorialRunTags } from '@lib/agent/mcp-prompt-streaming';
@@ -42,21 +42,21 @@ describe('buildTutorialRunTags', () => {
     expect(buildTutorialRunTags({})).toEqual({});
   });
 
-  it('reaches the gateway as property headers, not just an object', () => {
-    // The object is only useful if buildAgentEnv actually encodes it — that
+  it('reaches the gateway in the properties header, not just an object', () => {
+    // The object is only useful if buildAgentEnv actually encodes it; that
     // join is the part that was missing in production.
     const encoded = buildAgentEnv(
       buildTutorialRunTags({ programId: 'mcp-tutorial' }),
       {},
     );
 
-    expect(encoded).toContain('X-POSTHOG-PROPERTY-program_id: mcp-tutorial');
-    expect(encoded).toContain('x-posthog-use-bedrock-fallback: true');
+    expect(encoded).toContain('X-PostHog-Properties: ');
+    expect(encoded).toContain('"program_id":"mcp-tutorial"');
   });
 
-  it('sends only the bedrock header when there is no program — the pre-fix shape', () => {
+  it('sends only product attribution when there is no program', () => {
     const encoded = buildAgentEnv(buildTutorialRunTags({}), {});
 
-    expect(encoded).not.toContain('X-POSTHOG-PROPERTY');
+    expect(encoded).toBe('X-PostHog-Properties: {"ai_product":"wizard"}');
   });
 });

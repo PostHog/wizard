@@ -22,11 +22,7 @@ export {
   resetPosthogHealthCache,
 } from './incidentio';
 
-export {
-  checkLlmGatewayHealth,
-  checkMcpHealth,
-  checkSkillsOriginHealth,
-} from './endpoints';
+export { checkMcpHealth, checkSkillsOriginHealth } from './endpoints';
 
 export {
   type WizardReadinessConfig,
