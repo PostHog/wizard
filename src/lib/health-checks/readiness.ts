@@ -4,35 +4,161 @@ import {
   type BaseHealthResult,
   type HealthCheckKey,
 } from './types';
-import { checkLlmGatewayHealth, checkSkillsOriginHealth } from './endpoints';
+import {
+  checkAnthropicHealth,
+  checkGithubHealth,
+  checkNpmOverallHealth,
+  checkNpmComponentHealth,
+  checkCloudflareOverallHealth,
+  checkCloudflareComponentHealth,
+} from './statuspage';
+import {
+  checkPosthogOverallHealth,
+  checkPosthogComponentHealth,
+} from './incidentio';
+import { checkMcpHealth, checkSkillsOriginHealth } from './endpoints';
 import { logToFile } from '@utils/debug';
 
+// ---------------------------------------------------------------------------
+// Service labels (used in human-readable reason strings)
+// ---------------------------------------------------------------------------
+
 export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
-  llmGateway: 'LLM gateway',
+  anthropic: 'Anthropic',
+  posthogOverall: 'PostHog',
+  posthogComponents: 'PostHog (components)',
+  github: 'GitHub',
+  npmOverall: 'npm',
+  npmComponents: 'npm (components)',
+  cloudflareOverall: 'Cloudflare',
+  cloudflareComponents: 'Cloudflare (components)',
+  mcp: 'MCP',
   skillsOrigin: 'Skills download',
 };
 
-const HEALTH_CHECK_KEYS: HealthCheckKey[] = ['llmGateway', 'skillsOrigin'];
+// ---------------------------------------------------------------------------
+// Readiness config
+// ---------------------------------------------------------------------------
 
-export interface HealthCheckOptions {
-  /** Only the gateway URL returned by this run's token mint; never guessed. */
-  gatewayUrl?: string;
-  /** Defaults to the same release or local server used by skill downloads. */
-  skillsBaseUrl?: string;
-  /** Reuse the pre-auth skills check when checking the gateway after mint. */
-  skillsHealth?: BaseHealthResult;
+export interface WizardReadinessConfig {
+  /** Services where status=Down blocks the run (readiness=No). */
+  downBlocksRun: HealthCheckKey[];
+  /** Services where status=Degraded (or worse) blocks the run (readiness=No). */
+  degradedBlocksRun?: HealthCheckKey[];
 }
 
-/** Direct checks of the dependencies this run uses, without status pages. */
-export async function checkAllExternalServices(
-  options: HealthCheckOptions = {},
-): Promise<AllServicesHealth> {
-  const [llmGateway, skillsOrigin] = await Promise.all([
-    options.gatewayUrl ? checkLlmGatewayHealth(options.gatewayUrl) : undefined,
-    options.skillsHealth ?? checkSkillsOriginHealth(options.skillsBaseUrl),
+// Skills gate startup; gateway readiness is checked against the minted URL.
+export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
+  downBlocksRun: ['skillsOrigin'],
+};
+
+export const SIGNUP_WIZARD_READINESS_CONFIG = DEFAULT_WIZARD_READINESS_CONFIG;
+
+// ---------------------------------------------------------------------------
+// Aggregate check
+// ---------------------------------------------------------------------------
+
+export async function checkAllExternalServices(): Promise<AllServicesHealth> {
+  const [
+    anthropic,
+    posthogOverall,
+    posthogComponents,
+    github,
+    npmOverall,
+    npmComponents,
+    cloudflareOverall,
+    cloudflareComponents,
+    mcp,
+    skillsOrigin,
+  ] = await Promise.all([
+    checkAnthropicHealth(),
+    checkPosthogOverallHealth(),
+    checkPosthogComponentHealth(),
+    checkGithubHealth(),
+    checkNpmOverallHealth(),
+    checkNpmComponentHealth(),
+    checkCloudflareOverallHealth(),
+    checkCloudflareComponentHealth(),
+    checkMcpHealth(),
+    checkSkillsOriginHealth(),
   ]);
-  return { ...(llmGateway ? { llmGateway } : {}), skillsOrigin };
+
+  const health: AllServicesHealth = {
+    anthropic,
+    posthogOverall,
+    posthogComponents,
+    github,
+    npmOverall,
+    npmComponents,
+    cloudflareOverall,
+    cloudflareComponents,
+    mcp,
+    skillsOrigin,
+  };
+  return reconcilePosthogReachability(health);
 }
+
+/**
+ * When a PostHog-owned endpoint probe returns `NoConnection`, decide
+ * whether it's a real outage or a likely-local issue by checking the
+ * official status page (`posthogstatus.com`):
+ *
+ *   - Status page says PostHog is `Down` / `Degraded` → upgrade
+ *     mcp to `Down`. The status page corroborates.
+ *   - Status page is `Healthy` → keep `NoConnection`. The status page
+ *     contradicts; this is probably the user's network.
+ *   - Status page is also `NoConnection` → keep `NoConnection`. User
+ *     can't reach two independent PostHog properties; almost
+ *     certainly their network. (This case relies on incidentio.ts
+ *     correctly emitting `NoConnection` for fetch failures rather
+ *     than the previous `Degraded`, which used to silently flip the
+ *     reconciliation into a false positive.)
+ *
+ * Why `Degraded` corroborates: a `Degraded` reading here only fires
+ * when incident.io's API parsed successfully and reported a real
+ * `partial_outage` or `degraded_performance` for some component. That's
+ * PostHog acknowledging an issue, even if narrower than a full outage.
+ * If our MCP probe is also failing, those two signals together
+ * justify pointing at PostHog rather than the user.
+ *
+ * A narrower variant — only corroborate when the affected component is
+ * MCP-related (US/EU Cloud, app) — would be more precise. We
+ * have the data in `posthogComponents` but don't use it here. If the
+ * analytics show false positives concentrated in this case, it's a
+ * cheap follow-up.
+ *
+ * Mutates a copy of `health` and returns it.
+ */
+export function reconcilePosthogReachability(
+  health: AllServicesHealth,
+): AllServicesHealth {
+  const posthogStatus = health.posthogOverall.status;
+  const corroboratesOutage =
+    posthogStatus === ServiceHealthStatus.Down ||
+    posthogStatus === ServiceHealthStatus.Degraded;
+
+  if (!corroboratesOutage) return health;
+
+  const upgrade = (r: BaseHealthResult): BaseHealthResult =>
+    r.status === ServiceHealthStatus.NoConnection
+      ? {
+          ...r,
+          status: ServiceHealthStatus.Down,
+          error: r.error
+            ? `${r.error} (corroborated by status page)`
+            : 'corroborated by status page',
+        }
+      : r;
+
+  return {
+    ...health,
+    mcp: upgrade(health.mcp),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Wizard readiness evaluation
+// ---------------------------------------------------------------------------
 
 export enum WizardReadiness {
   Yes = 'yes',
@@ -46,66 +172,119 @@ export interface WizardReadinessResult {
   reasons: string[];
 }
 
-/**
- * A gateway failure or the failure of every skills origin interrupts the run.
- * An unprobed gateway and an inconclusive check do not produce outage warnings.
- */
-export function getBlockingServiceKeys(
-  health: AllServicesHealth,
-): HealthCheckKey[] {
-  return HEALTH_CHECK_KEYS.filter((key) => {
-    const status = health[key]?.status;
-    return (
-      status === ServiceHealthStatus.Down ||
-      status === ServiceHealthStatus.NoConnection
-    );
-  });
+function describeResult(label: string, h: BaseHealthResult): string {
+  const parts = [`${label}: ${h.status}`];
+  if (h.rawIndicator) parts.push(`indicator=${h.rawIndicator}`);
+  if (h.error) parts.push(h.error);
+  return parts.join(' — ');
 }
 
-// Endpoint probes retry within 17.5s; run them in parallel with a final ceiling.
+// Each probe can take up to one base timeout + two retries with the
+// 500ms / 2000ms backoffs in endpoints.ts (worst case ~17.5s for a
+// network failure that exhausts retries). Probes run in parallel so
+// the aggregate ceiling is one probe, not the sum.
 const READINESS_TIMEOUT_MS = 20_000;
 
 export async function evaluateWizardReadiness(
-  options: HealthCheckOptions = {},
+  config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
 ): Promise<WizardReadinessResult> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const health = await Promise.race([
-      checkAllExternalServices(options),
-      new Promise<never>((_, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error('Health check timed out')),
+      checkAllExternalServices(),
+      new Promise<AllServicesHealth>((resolve) =>
+        setTimeout(
+          () => resolve(allUnknown('Health check timed out')),
           READINESS_TIMEOUT_MS,
-        );
-      }),
+        ),
+      ),
     ]);
-    const blockingKeys = getBlockingServiceKeys(health);
-    const reasons = blockingKeys.flatMap((key) => {
-      const result = health[key];
-      return result ? [`${SERVICE_LABELS[key]}: ${result.status}`] : [];
-    });
+
+    const blockingKeys = getBlockingServiceKeys(health, config);
+    const reasons = blockingKeys.map((key) =>
+      describeResult(SERVICE_LABELS[key], health[key]),
+    );
     if (blockingKeys.length > 0) {
-      logToFile(`[health-checks] blocked by: ${reasons.join(', ')}`);
+      const blockingDetails = blockingKeys.map((key) => {
+        const h = health[key];
+        return `${key} (${h.status}${h.error ? ` — ${h.error}` : ''})`;
+      });
+      logToFile(`[health-checks] blocked by: ${blockingDetails.join(', ')}`);
+      return { decision: WizardReadiness.No, health, reasons };
     }
-    return {
-      decision:
-        blockingKeys.length > 0 ? WizardReadiness.No : WizardReadiness.Yes,
-      health,
-      reasons,
-    };
+
+    return { decision: WizardReadiness.Yes, health, reasons };
   } catch (err) {
-    logToFile('[health-checks] check inconclusive, proceeding:', err);
+    logToFile(
+      `[health-checks] error: ${err instanceof Error ? err.message : err}`,
+    );
+    // Health checks must never block the wizard run
     return {
       decision: WizardReadiness.Yes,
-      health: {
-        skillsOrigin: options.skillsHealth ?? {
-          status: ServiceHealthStatus.Degraded,
-          error: 'Health check did not complete',
-        },
-      },
+      health: allUnknown('Unexpected error'),
       reasons: [],
     };
-  } finally {
-    clearTimeout(timeout);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Blocking service detection
+// ---------------------------------------------------------------------------
+
+/** Keys that are component-level detail, not top-level services. */
+const COMPONENT_KEYS: HealthCheckKey[] = [
+  'posthogComponents',
+  'npmComponents',
+  'cloudflareComponents',
+];
+
+/**
+ * Get the keys of services that would block a wizard run per the given config.
+ *
+ * `NoConnection` blocks the same services as `Down` — the wizard genuinely
+ * can't continue if it can't reach the gateway. The screen shows softer
+ * framing in that case (HealthCheckScreen) so we don't falsely accuse
+ * PostHog of an outage when the user's network is the likely cause.
+ */
+export function getBlockingServiceKeys(
+  health: AllServicesHealth,
+  config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
+): HealthCheckKey[] {
+  return (Object.keys(health) as HealthCheckKey[]).filter((key) => {
+    if (COMPONENT_KEYS.includes(key)) return false;
+    const result = health[key];
+    if (
+      config.downBlocksRun.includes(key) &&
+      (result.status === ServiceHealthStatus.Down ||
+        result.status === ServiceHealthStatus.NoConnection)
+    ) {
+      return true;
+    }
+    if (
+      (config.degradedBlocksRun ?? []).includes(key) &&
+      result.status !== ServiceHealthStatus.Healthy
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/** Build an AllServicesHealth where every service is Degraded with the given error. */
+function allUnknown(error: string): AllServicesHealth {
+  const base: BaseHealthResult = {
+    status: ServiceHealthStatus.Degraded,
+    error,
+  };
+  return {
+    anthropic: base,
+    posthogOverall: base,
+    posthogComponents: { ...base },
+    github: base,
+    npmOverall: base,
+    npmComponents: { ...base },
+    cloudflareOverall: base,
+    cloudflareComponents: { ...base },
+    mcp: base,
+    skillsOrigin: base,
+  };
 }

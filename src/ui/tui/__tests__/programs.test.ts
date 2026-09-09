@@ -1,7 +1,5 @@
 import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
 import { WizardReadiness } from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
-import { healthCheckReady } from '@lib/programs/shared/health-check-step';
 import { PROGRAM_SEQUENCES, ScreenId } from '@ui/tui/screen-sequences';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 
@@ -64,44 +62,6 @@ describe('PROGRAM_SEQUENCES', () => {
   });
 
   describe('Wizard health-check predicate', () => {
-    it.each([false, true])(
-      'applies the same dependency policy with signup=%s',
-      (signup) => {
-        const session = buildSession({ signup });
-        session.readinessResult = {
-          decision: WizardReadiness.No,
-          health: {
-            skillsOrigin: { status: ServiceHealthStatus.Healthy },
-            llmGateway: { status: ServiceHealthStatus.Down },
-          },
-          reasons: ['LLM gateway: down'],
-        };
-        const check = getEntry(
-          Program.PostHogIntegration,
-          ScreenId.HealthCheck,
-        );
-        expect(check.isComplete?.(session)).toBe(false);
-        session.outageDismissed = true;
-        expect(check.isComplete?.(session)).toBe(true);
-      },
-    );
-
-    it('does not release the runnable health gate on a terminal error', () => {
-      const session = buildSession({});
-      session.readinessResult = {
-        decision: WizardReadiness.No,
-        health: { skillsOrigin: { status: ServiceHealthStatus.Down } },
-        reasons: ['Skills download: down'],
-      };
-      session.runPhase = RunPhase.Error;
-      expect(
-        getEntry(Program.PostHogIntegration, ScreenId.HealthCheck).isComplete?.(
-          session,
-        ),
-      ).toBe(false);
-      expect(session.outageDismissed).toBe(false);
-      expect(healthCheckReady(session)).toBe(false);
-    });
     it('stays incomplete before readiness exists', () => {
       const session = buildSession({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.HealthCheck);
@@ -116,7 +76,7 @@ describe('PROGRAM_SEQUENCES', () => {
       session.readinessResult = {
         decision: WizardReadiness.No,
         health: {} as never,
-        reasons: ['LLM gateway: down'],
+        reasons: ['Anthropic: down'],
       };
 
       expect(entry.isComplete?.(session)).toBe(false);

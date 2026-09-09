@@ -17,12 +17,15 @@ import {
 } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import { ServiceHealthList } from '@ui/tui/components/ServiceHealthList';
-import { getBlockingServiceKeys } from '@lib/health-checks/readiness';
+import {
+  getBlockingServiceKeys,
+  SIGNUP_WIZARD_READINESS_CONFIG,
+} from '@lib/health-checks/readiness';
 import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
 import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
-import { getSkillsBaseUrl } from '@lib/constants';
+import { GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {
@@ -65,7 +68,6 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   const [downloaded, setDownloaded] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const result = store.session.readinessResult;
 
@@ -82,78 +84,87 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         alignItems="center"
         justifyContent="center"
       >
-        <LoadingBox message="Checking skill downloads..." />
+        <LoadingBox message="Checking service status..." />
       </Box>
     );
   }
 
-  const blockingKeys = getBlockingServiceKeys(result.health);
-  if (blockingKeys.length === 0) return null;
+  const isSignup = store.session.signup;
+  const blockingKeys = getBlockingServiceKeys(
+    result.health,
+    isSignup ? SIGNUP_WIZARD_READINESS_CONFIG : undefined,
+  );
 
-  const isSkillsOriginDown = blockingKeys.includes('skillsOrigin');
+  // Signup has a narrower block list (only posthog + llm-gateway), so
+  // services like Anthropic can be degraded without blocking. Surface
+  // those as dismissable warnings instead of silently proceeding.
+  const warningKeys = isSignup
+    ? getBlockingServiceKeys(result.health).filter(
+        (k) => !blockingKeys.includes(k),
+      )
+    : [];
+
+  const hasHardBlock = blockingKeys.length > 0;
+  const displayKeys = hasHardBlock ? blockingKeys : warningKeys;
+  if (displayKeys.length === 0) return null;
+
+  const isSkillsOriginDown =
+    hasHardBlock && blockingKeys.includes('skillsOrigin');
   const canDownloadSkills =
     result.health.skillsOrigin.status === ServiceHealthStatus.Healthy;
   const integration = store.session.integration;
-  const canOfferDownload = canDownloadSkills && Boolean(integration);
-  const allNoConnection = blockingKeys.every(
-    (key) => result.health[key]?.status === ServiceHealthStatus.NoConnection,
-  );
-  const title = allNoConnection
-    ? isSkillsOriginDown
-      ? 'Could not connect to skill downloads'
-      : 'Could not connect to the AI gateway'
-    : isSkillsOriginDown
-    ? 'Skill downloads unavailable'
-    : 'AI gateway unavailable';
+
+  // If every blocking row is `NoConnection` (probe failed, no status-page
+  // corroboration), reframe the screen to point at the user's network
+  // instead of accusing PostHog of an outage. Mixed Down + NoConnection
+  // falls through to the confirmed-outage framing because there's still
+  // a real incident underneath.
+  const allBlockingHaveNoConnection =
+    hasHardBlock &&
+    displayKeys.every(
+      (k) => result.health[k].status === ServiceHealthStatus.NoConnection,
+    );
+
+  const title = isSkillsOriginDown
+    ? 'Ongoing service disruptions'
+    : allBlockingHaveNoConnection
+    ? "Couldn't reach PostHog"
+    : hasHardBlock
+    ? 'Ongoing service disruptions'
+    : 'Service disruption detected';
 
   const docsUrl = store.session.frameworkConfig?.metadata.docsUrl;
   const description = isSkillsOriginDown
-    ? 'The Wizard could not download the skills it needs from any configured source. Check your connection and try again.'
-    : allNoConnection
-    ? 'The Wizard could not connect to the PostHog AI gateway from this machine. Check your connection and try again.'
-    : 'The PostHog AI gateway is currently unavailable. You can try continuing, or exit and try again later.';
+    ? "The Wizard can't download the skills it needs — neither GitHub Releases nor PostHog's mirror is reachable right now."
+    : allBlockingHaveNoConnection
+    ? "We couldn't reach these services from this machine. PostHog's status page shows no incidents, so this is most likely a network issue — VPN, firewall, captive portal, or flaky Wi-Fi."
+    : hasHardBlock
+    ? 'The Wizard cannot start while these services are down.'
+    : 'Some services are degraded. You can continue, but parts of the wizard may not work reliably.';
 
   const handleDownloadAndExit = async () => {
-    if (downloading || !integration) return;
+    if (downloading) return;
     setDownloading(true);
-    setDownloadError(null);
-    try {
-      // Use the same source as the run; release downloads fail over themselves.
-      const menu = await fetchSkillMenu(getSkillsBaseUrl());
-      if (!menu) throw new Error('Could not load the integration skills.');
+    // Primary origin — fetchSkillMenu/downloadSkill fail over to AWS themselves.
+    const menu = await fetchSkillMenu(GITHUB_SKILLS_BASE_URL);
+    if (menu) {
       const prefix = `integration-${integration}`;
       const skills = (menu.categories['integration'] ?? []).filter((s) =>
         s.id.startsWith(prefix),
       );
-      if (skills.length === 0) {
-        throw new Error('No integration skills were found for this project.');
-      }
       for (const skill of skills) {
-        // The gateway is unavailable, so a flagged skill must fail closed.
-        const installed = await downloadSkill(skill, store.session.installDir, {
+        // Pre-auth outage cache: no gateway, so a flagged skill fails closed.
+        await downloadSkill(skill, store.session.installDir, {
           skillsRoot: '.posthog/skills',
           triage: undefined,
         });
-        if (!installed.success) {
-          throw new Error(
-            'The integration skills could not be downloaded safely.',
-          );
-        }
       }
-      setDownloaded(true);
-    } catch (error) {
-      setDownloadError(
-        error instanceof Error
-          ? error.message
-          : 'Could not download the integration skills.',
-      );
-    } finally {
-      setDownloading(false);
     }
+    setDownloaded(true);
   };
 
   const handleCancel =
-    canOfferDownload && !isSkillsOriginDown && !downloadError
+    canDownloadSkills && !isSkillsOriginDown
       ? () => void handleDownloadAndExit()
       : () =>
           void wizardAbort({
@@ -162,7 +173,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
           });
 
   const cancelLabel =
-    canOfferDownload && !isSkillsOriginDown && !downloadError
+    canDownloadSkills && !isSkillsOriginDown
       ? downloading
         ? 'Downloading...'
         : 'Download skills & Exit [Esc]'
@@ -170,7 +181,9 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   return (
     <ModalOverlay
-      borderColor={allNoConnection ? 'yellow' : 'red'}
+      borderColor={
+        hasHardBlock && !allBlockingHaveNoConnection ? 'red' : 'yellow'
+      }
       title={title}
       width={72}
       footer={
@@ -204,9 +217,20 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
       }
     >
       <Box flexDirection="column" marginBottom={1}>
+        <Box marginBottom={1}>
+          <Text>
+            <Text color="red">{Icons.squareFilled}</Text>
+            <Text dimColor> Down </Text>
+            <Text color="#DC9300">{Icons.squareFilled}</Text>
+            <Text dimColor> Degraded </Text>
+            <Text color="gray">{Icons.squareFilled}</Text>
+            <Text dimColor> No connection</Text>
+          </Text>
+        </Box>
+
         <ServiceHealthList
           health={result.health}
-          filterKeys={blockingKeys}
+          filterKeys={displayKeys}
           showHealthy={false}
         />
       </Box>
@@ -221,13 +245,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         </Box>
       )}
 
-      {downloadError && (
-        <Box marginTop={1}>
-          <Text color="red">{downloadError}</Text>
-        </Box>
-      )}
-
-      {canOfferDownload && !isSkillsOriginDown && !downloadError && (
+      {canDownloadSkills && !isSkillsOriginDown && (
         <Box marginTop={1}>
           <Text>
             You can still download the PostHog integration skills and continue

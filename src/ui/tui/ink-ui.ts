@@ -134,10 +134,10 @@ export class InkUI implements WizardUI {
   }
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
-    // A gateway check can fail after the pre-auth health gate resolved.
-    // Wait for this outage's dismissal, not the already-latched gate.
+    // In the TUI, the HealthCheckScreen handles outage display.
+    // This is only called from agent-runner for the CI fallback path.
     this.store.setReadinessResult(result);
-    return this.store.waitUntil((session) => session.outageDismissed);
+    return Promise.resolve();
   }
 
   setReadinessWarnings(result: WizardReadinessResult): void {

@@ -13,6 +13,12 @@ import { ErrorCodes } from '@lib/errors';
 import { WizardError } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+
+vi.mock('@lib/health-checks/endpoints', () => ({
+  checkLlmGatewayHealth: vi.fn(),
+}));
 
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
@@ -45,6 +51,9 @@ describe('gatewayAuth', () => {
   beforeEach(() => {
     resetGatewaySession();
     fetchMock.mockReset();
+    vi.mocked(checkLlmGatewayHealth)
+      .mockReset()
+      .mockResolvedValue({ status: ServiceHealthStatus.Healthy });
     vi.mocked(analytics.wizardCapture).mockClear();
     vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
@@ -86,7 +95,40 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache, so no second mint.
     await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(
+      'https://gateway.us.posthog.com',
+    );
   });
+
+  it.each([ServiceHealthStatus.Down, ServiceHealthStatus.NoConnection])(
+    'reports gateway %s without exposing diagnostics or caching auth',
+    async (status) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'https://ai-gateway.us.posthog.com',
+          }),
+      });
+      vi.mocked(checkLlmGatewayHealth).mockResolvedValueOnce({
+        status,
+        error: 'private dependency details',
+      });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toMatchObject({
+        name: 'WizardError',
+        code: ErrorCodes.EnvServiceOutage,
+        message:
+          'The PostHog AI gateway is unavailable. Please try again later.',
+      });
+      await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(checkLlmGatewayHealth).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('records a successful mint without ever logging the token', async () => {
     fetchMock.mockResolvedValue({

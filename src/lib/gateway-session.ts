@@ -11,6 +11,8 @@ import { analytics } from '@utils/analytics';
 import { WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
+import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
@@ -93,6 +95,14 @@ async function resolveGatewayAuth(
     );
   }
   const minted = await mintGatewayToken(host, accessToken, program);
+  const health = await checkLlmGatewayHealth(minted.gatewayUrl);
+  if (health.status !== ServiceHealthStatus.Healthy) {
+    throw new WizardError(
+      'The PostHog AI gateway is unavailable. Please try again later.',
+      undefined,
+      ErrorCodes.EnvServiceOutage,
+    );
+  }
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
   if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {

@@ -130,7 +130,10 @@ const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
 /**
  * Fired once per blocked readiness result, so we can quantify how often
- * the wizard pauses for its gateway or for unavailable skill downloads.
+ * the wizard refuses to start and — crucially — split that between
+ * confirmed PostHog outages and probe-level reachability failures that
+ * are most likely the user's network. Helps us decide whether the
+ * health-check UX is over-firing.
  */
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
   try {
@@ -150,9 +153,10 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
       ? 'no-connection'
       : 'confirmed-outage';
 
+    const posthogStatus = health.posthogOverall?.status;
     const retriesUsed = Math.max(
       0,
-      ...(['llmGateway', 'skillsOrigin'] as const).map((k) => {
+      ...(['mcp', 'skillsOrigin'] as const).map((k) => {
         const ind = health[k]?.rawIndicator ?? '';
         const m = ind.match(/attempts=(\d+)/);
         return m ? Number(m[1]) - 1 : 0;
@@ -162,6 +166,11 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
     analytics.wizardCapture('health check blocked', {
       decision,
       blocking_keys: blockingKeys,
+      posthog_status_reachable:
+        posthogStatus !== ServiceHealthStatus.NoConnection,
+      posthog_status_reports_incident:
+        posthogStatus === ServiceHealthStatus.Down ||
+        posthogStatus === ServiceHealthStatus.Degraded,
       retries_used: retriesUsed,
     });
   } catch (err) {
@@ -549,15 +558,10 @@ export class WizardStore {
   }
 
   setReadinessResult(result: WizardReadinessResult | null): void {
-    const newBlockedResult =
-      result &&
-      result !== this.session.readinessResult &&
-      result.decision === WizardReadiness.No;
-    if (newBlockedResult) {
-      this.$session.setKey('outageDismissed', false);
+    this.$session.setKey('readinessResult', result);
+    if (result && result.decision === WizardReadiness.No) {
       captureHealthCheckBlocked(result);
     }
-    this.$session.setKey('readinessResult', result);
     this.emitChange();
   }
 

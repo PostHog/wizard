@@ -1,83 +1,84 @@
-import { getSkillsBaseUrl } from '@lib/constants';
-import { awsUrlFor } from '@lib/fetch-retry';
+import { AWS_SKILLS_BASE_URL, GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
-// HTTP failures or unusable downloads confirm the endpoint is unavailable.
-// Network errors alone mean we cannot tell whether the service is down.
-const RETRY_BACKOFFS_MS = [500, 2000];
+// ---------------------------------------------------------------------------
+// Direct endpoint health checks
+//
+// These ping PostHog-owned services directly (no Statuspage intermediary).
+// Result taxonomy:
+//   - HTTP 2xx-3xx (per `isExpectedStatus`)        → Healthy
+//   - HTTP 4xx / 5xx                                → Down (confirmed)
+//   - Network error / DNS / timeout (after retries) → NoConnection
+// NoConnection means we don't know whose fault it is; readiness reconciles
+// against the status page before deciding how to surface it to the user.
+//
+// MCP – Cloudflare Worker
+//   Source: posthog/services/mcp/src/index.ts
+//   GET / → 302 to posthog.com docs. The redirect proves the worker is up.
+//
+// Skills download – context-mill releases
+//   GET <origin>/skill-menu.json on both origins; see checkSkillsOriginHealth.
+// ---------------------------------------------------------------------------
 
-type ResponseValidator = (response: Response) => Promise<void>;
-type RedirectMode = 'follow' | 'manual' | 'error';
-type FetchOutcome =
-  | { kind: 'response'; status: number }
-  | {
-      kind: 'error';
-      error: string;
-      httpStatus?: number;
-    };
+function noConnectionResult(error: string, attempts: number): BaseHealthResult {
+  return {
+    status: ServiceHealthStatus.NoConnection,
+    error,
+    rawIndicator: attempts > 1 ? `attempts=${attempts}` : undefined,
+  };
+}
+
+function downResult(error: string): BaseHealthResult {
+  return { status: ServiceHealthStatus.Down, error };
+}
+
+// Backoffs sized to cover typical wifi flakiness — a single dropped
+// packet recovers via the 500ms retry; a wifi access point reconnect
+// or wifi↔LTE handoff (2-5s) is caught by the 2000ms retry. Tighter
+// schedules miss multi-second blips because all retries land in the
+// same dead window.
+const RETRY_BACKOFFS_MS = [500, 2000];
 
 async function attemptFetch(
   url: string,
   timeoutMs: number,
-  isExpectedStatus: (status: number) => boolean,
-  redirect: RedirectMode,
-  validateResponse?: ResponseValidator,
-): Promise<FetchOutcome> {
+  redirect: 'follow' | 'manual' | 'error',
+): Promise<
+  | { kind: 'response'; res: Response }
+  | { kind: 'error'; error: Error; timedOut: boolean }
+> {
   const controller = new AbortController();
-  let httpStatus: number | undefined;
-  let timedOut = false;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-      reject(new Error(`Request timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
-
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const request = async (): Promise<FetchOutcome> => {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        redirect,
-      });
-      httpStatus = response.status;
-      if (isExpectedStatus(response.status) && validateResponse) {
-        // Keep the deadline active until the body has downloaded and parsed.
-        await validateResponse(response);
-      } else {
-        // Health endpoints only need their status, not their diagnostic body.
-        void response.body?.cancel().catch(() => undefined);
-      }
-      return { kind: 'response', status: response.status };
-    };
-    return await Promise.race([request(), deadline]);
-  } catch (error) {
-    return {
-      kind: 'error',
-      httpStatus,
-      error: timedOut
-        ? `Request timed out after ${timeoutMs}ms`
-        : error instanceof Error
-        ? error.message
-        : 'Unknown error',
-    };
-  } finally {
-    clearTimeout(timeout);
+    const res = await fetch(url, { signal: controller.signal, redirect });
+    clearTimeout(tid);
+    return { kind: 'response', res };
+  } catch (e) {
+    clearTimeout(tid);
+    const err = e instanceof Error ? e : new Error('Unknown error');
+    return { kind: 'error', error: err, timedOut: err.name === 'AbortError' };
   }
 }
 
-/** Probe an endpoint with bounded retries; downloads may also validate the body. */
+// Exported so tests can pin the retry/taxonomy machinery directly.
 export async function fetchEndpointHealth(
   url: string,
   timeoutMs = 5000,
-  isExpectedStatus: (status: number) => boolean = (status) => status === 200,
-  redirect: RedirectMode = 'follow',
-  validateResponse?: ResponseValidator,
+  isExpectedStatus: (status: number) => boolean = (s) => s === 200,
+  redirect: 'follow' | 'manual' | 'error' = 'follow',
 ): Promise<BaseHealthResult> {
-  let lastHttpStatus: number | undefined;
-  let lastHttpError: string | undefined;
+  // Total attempts = 1 initial + RETRY_BACKOFFS_MS.length retries. Both
+  // unexpected HTTP statuses (4xx/5xx) and network errors trigger a retry:
+  // transient 5xx and Cloudflare edge blips often recover on a retry, and
+  // even nominally deterministic 4xx can be transient (CDN propagation
+  // lag after a release, token rotation, rate-limit window resets). GETs
+  // are idempotent so retrying is safe.
+  //
+  // Final status if every attempt fails:
+  //   - At least one HTTP response observed → `Down` (server-side evidence)
+  //   - Only network errors observed         → `NoConnection`
+  let lastHttpStatus: number | null = null;
   let lastError = 'Unknown error';
   let attempts = 0;
 
@@ -87,139 +88,122 @@ export async function fetchEndpointHealth(
       logToFile(
         `[health-checks] retry ${i}/${RETRY_BACKOFFS_MS.length} for ${url} in ${wait}ms (last: ${lastError})`,
       );
-      await new Promise((resolve) => setTimeout(resolve, wait));
+      await new Promise((r) => setTimeout(r, wait));
     }
     attempts++;
-    const outcome = await attemptFetch(
-      url,
-      timeoutMs,
-      isExpectedStatus,
-      redirect,
-      validateResponse,
-    );
+
+    const outcome = await attemptFetch(url, timeoutMs, redirect);
 
     if (outcome.kind === 'response') {
-      if (isExpectedStatus(outcome.status)) {
+      const res = outcome.res;
+      if (isExpectedStatus(res.status)) {
         const result: BaseHealthResult = {
           status: ServiceHealthStatus.Healthy,
           rawIndicator:
             attempts > 1
-              ? `HTTP ${outcome.status} (attempts=${attempts})`
-              : `HTTP ${outcome.status}`,
+              ? `HTTP ${res.status} (attempts=${attempts})`
+              : `HTTP ${res.status}`,
         };
         logToFile(
-          `[health-checks] GET ${url} -> ${result.status} (${
-            result.rawIndicator ?? ''
-          })`,
+          `[health-checks] GET ${url} -> ${result.status}` +
+            ` (${result.rawIndicator})`,
         );
         return result;
       }
-      lastHttpStatus = outcome.status;
-      lastError = lastHttpError = `HTTP ${outcome.status}`;
-    } else {
-      lastError = outcome.error;
-      if (outcome.httpStatus !== undefined) {
-        lastHttpStatus = outcome.httpStatus;
-        lastHttpError = outcome.error;
-      }
+      lastHttpStatus = res.status;
+      lastError = `HTTP ${res.status}`;
+      continue;
     }
+
+    lastError = outcome.timedOut
+      ? `Request timed out after ${timeoutMs}ms`
+      : outcome.error.message;
   }
 
-  const result: BaseHealthResult = {
-    status:
-      lastHttpStatus !== undefined
-        ? ServiceHealthStatus.Down
-        : ServiceHealthStatus.NoConnection,
-    error: lastHttpError ?? lastError,
-    rawIndicator:
-      lastHttpStatus !== undefined
-        ? `HTTP ${lastHttpStatus} (attempts=${attempts})`
-        : `attempts=${attempts}`,
-  };
+  const result =
+    lastHttpStatus !== null
+      ? downResult(`HTTP ${lastHttpStatus} (attempts=${attempts})`)
+      : noConnectionResult(lastError, attempts);
   logToFile(
-    `[health-checks] GET ${url} -> ${result.status} (attempts=${attempts}, ${
-      lastHttpError ?? lastError
-    })`,
+    `[health-checks] GET ${url} -> ${result.status}` +
+      ` (attempts=${attempts}, ${result.error})`,
   );
   return result;
 }
 
-/** Readiness checks gateway dependencies, independently of its model providers. */
 export const checkLlmGatewayHealth = (
   gatewayUrl: string,
 ): Promise<BaseHealthResult> =>
   fetchEndpointHealth(new URL('/readyz', gatewayUrl).href);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Validate fields consumed by fetchSkillMenu, allowing optional newer metadata. */
-async function validateSkillMenu(response: Response): Promise<void> {
-  const menu: unknown = await response.json();
-  if (!isRecord(menu) || !isRecord(menu.categories)) {
-    throw new Error('Skill menu is missing its categories');
-  }
-  const categories = Object.values(menu.categories);
-  const valid = categories.every(
-    (entries) =>
-      Array.isArray(entries) &&
-      entries.every(
-        (entry: unknown) =>
-          isRecord(entry) &&
-          ['id', 'name', 'downloadUrl'].every(
-            (key) => typeof entry[key] === 'string' && entry[key].length > 0,
-          ) &&
-          (entry.variants === undefined ||
-            (Array.isArray(entry.variants) &&
-              entry.variants.every(
-                (variant: unknown) =>
-                  isRecord(variant) && typeof variant.id === 'string',
-              ))),
-      ),
+export const checkMcpHealth = (): Promise<BaseHealthResult> =>
+  fetchEndpointHealth(
+    'https://mcp.posthog.com/',
+    5000,
+    // 2xx-3xx counts as up (redirect to docs)
+    (s) => s >= 200 && s < 400,
+    'manual',
   );
-  if (!valid || !categories.some((entries) => (entries as unknown[]).length)) {
-    throw new Error('Skill menu has no usable skill entries');
-  }
-}
 
-/** Probe the actual skill sources, including the matching release's AWS mirror. */
-export async function checkSkillsOriginHealth(
-  skillsBaseUrl = getSkillsBaseUrl(),
-): Promise<BaseHealthResult> {
-  const primaryUrl = `${skillsBaseUrl.replace(/\/+$/, '')}/skill-menu.json`;
-  const fallbackUrl = awsUrlFor(primaryUrl);
-  const probe = (url: string) =>
-    fetchEndpointHealth(
-      url,
-      5000,
-      (status) => status === 200,
-      'follow',
-      validateSkillMenu,
-    );
-
-  // Local and custom sources have no production fallback in fetchWithRetry.
-  if (!fallbackUrl) return probe(primaryUrl);
-
-  const [primary, fallback] = await Promise.all([
-    probe(primaryUrl),
-    probe(fallbackUrl),
+/**
+ * Skills are published to two origins under the same filenames and
+ * `fetchWithRetry` fails over between them, so the run is only blocked when
+ * neither answers. Probed in parallel — sequential probes would double the
+ * worst case past `READINESS_TIMEOUT_MS`.
+ */
+export const checkSkillsOriginHealth = async (): Promise<BaseHealthResult> => {
+  const [github, aws] = await Promise.all([
+    fetchEndpointHealth(`${GITHUB_SKILLS_BASE_URL}/skill-menu.json`),
+    fetchEndpointHealth(`${AWS_SKILLS_BASE_URL}/skill-menu.json`),
   ]);
-  if (primary.status === ServiceHealthStatus.Healthy) return primary;
-  if (fallback.status === ServiceHealthStatus.Healthy) return fallback;
+  return combineOriginHealth(github, aws);
+};
 
-  logToFile(
-    `[health-checks] skill origins unavailable: primary=${
-      primary.error ?? 'unknown'
-    }; fallback=${fallback.error ?? 'unknown'}`,
-  );
+/**
+ * Mirrors `fetchWithRetry`: a download tries GitHub, then AWS, so the run is
+ * only blocked when neither origin answers. Whichever failure the probes saw,
+ * one origin serving means skills are reachable.
+ */
+function combineOriginHealth(
+  github: BaseHealthResult,
+  aws: BaseHealthResult,
+): BaseHealthResult {
+  if (github.status === ServiceHealthStatus.Healthy) {
+    // Naming the dead origin makes a one-sided outage legible in the log and
+    // in the readiness reasons, where the status alone reads as "fine".
+    return aws.status === ServiceHealthStatus.Healthy
+      ? github
+      : withIndicatorSuffix(github, 'aws unavailable');
+  }
+
+  if (aws.status === ServiceHealthStatus.Healthy) {
+    return withIndicatorSuffix(aws, 'via aws, github unavailable');
+  }
+
+  const error = `github: ${github.error ?? 'unknown'} | aws: ${
+    aws.error ?? 'unknown'
+  }`;
+  const confirmedDown =
+    github.status === ServiceHealthStatus.Down ||
+    aws.status === ServiceHealthStatus.Down;
   return {
-    status:
-      primary.status === ServiceHealthStatus.Down ||
-      fallback.status === ServiceHealthStatus.Down
-        ? ServiceHealthStatus.Down
-        : ServiceHealthStatus.NoConnection,
-    error: 'Both skill download sources are unavailable',
-    rawIndicator: primary.rawIndicator ?? fallback.rawIndicator,
+    status: confirmedDown
+      ? ServiceHealthStatus.Down
+      : ServiceHealthStatus.NoConnection,
+    error,
+    // Keeps the `attempts=N` the blocked-readiness analytics parses.
+    rawIndicator: github.rawIndicator ?? aws.rawIndicator,
+  };
+}
+
+function withIndicatorSuffix(
+  result: BaseHealthResult,
+  suffix: string,
+): BaseHealthResult {
+  return {
+    ...result,
+    rawIndicator: result.rawIndicator
+      ? `${result.rawIndicator} (${suffix})`
+      : suffix,
   };
 }
