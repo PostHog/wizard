@@ -69,7 +69,7 @@ const DONT_SPIRAL =
   '- If you get stuck on something outside your control — a package install that keeps failing, a command you are not permitted to run, or a fix outside the scope of this integration — do NOT spiral retrying it. Note it in the setup report for the user to resolve, and move on with the rest of the work.';
 
 const SKILL_MENU =
-  '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.';
+  '- Call `load_skill_menu` once per category needed by the workflow, then `install_skill` with the chosen ID. Reuse a category’s menu instead of loading it again.';
 
 const SKILL_STEPS =
   "- Follow the skill's steps in order. Finish the SDK setup — install it, import it at the top of the module, and INITIALIZE it at the framework's entry point for every runtime the integration targets (typically both client and server) — BEFORE adding any event capture. A capture against an uninitialized SDK silently no-ops, so initialization comes first. If you're stuck and cannot install an SDK, add capture calls and add a clear note at the top of the integration report. Never guard a capture behind a runtime \"if the SDK happens to be installed\" check or a dynamic `require`; that ships an uninitialized SDK and no events fire. Do not jump ahead to the fix/revise step just to get a build passing.";

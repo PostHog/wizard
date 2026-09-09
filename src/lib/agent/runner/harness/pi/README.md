@@ -76,7 +76,7 @@ extension:
 Because pi doesn't have Claude Code's built-in guidance, the wizard appends a
 long `PI_RUNTIME_NOTES` block to the shared commandments — batching rules, "use
 `ls`/`find`/`grep` not `bash ls`", "don't retry blocked commands", "call
-`load_skill_menu` once", "no literal PostHog URLs in source", and the
+`load_skill_menu` once per category", "no literal PostHog URLs in source", and the
 `posthog_exec` command grammar (`info` before `call`). These close the
 anti-spiral gaps that showed up in profiling before they became prompt
 engineering.
