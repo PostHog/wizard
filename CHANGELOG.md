@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.73.2](https://github.com/PostHog/wizard/compare/v2.73.1...v2.73.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **ci:** pin patched pnpm across release tooling ([#1230](https://github.com/PostHog/wizard/issues/1230)) ([8909d86](https://github.com/PostHog/wizard/commit/8909d86f8c1ecf4e35d4ba65ea9db506369009a8))
+* declare ai_product in the v2 gateway properties blob ([#1217](https://github.com/PostHog/wizard/issues/1217)) ([1dfde04](https://github.com/PostHog/wizard/commit/1dfde0402a85d052395413fefd204d7fd67e1142))
+
 ## [2.73.1](https://github.com/PostHog/wizard/compare/v2.73.0...v2.73.1) (2026-09-07)
 
 
