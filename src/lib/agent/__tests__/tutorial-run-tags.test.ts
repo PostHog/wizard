@@ -54,9 +54,9 @@ describe('buildTutorialRunTags', () => {
     expect(encoded).toContain('"program_id":"mcp-tutorial"');
   });
 
-  it('sends an empty blob when there is no program, the pre-fix shape', () => {
+  it('sends only product attribution when there is no program', () => {
     const encoded = buildAgentEnv(buildTutorialRunTags({}), {});
 
-    expect(encoded).toBe('X-PostHog-Properties: {}');
+    expect(encoded).toBe('X-PostHog-Properties: {"ai_product":"wizard"}');
   });
 });

@@ -604,6 +604,7 @@ describe('buildAgentEnv header shape', () => {
     // Fallback is native in the gateway's routing chain, and the run tags ride
     // the blob rather than per-key headers.
     expect(JSON.parse(json)).toEqual({
+      ai_product: 'wizard',
       team_id: 42,
       run_id: 'r1',
       integration: 'nextjs',

@@ -85,6 +85,7 @@ describe('createTriageLLMProvider', () => {
 
     const headers = complete.mock.calls[0][0].headers ?? {};
     expect(JSON.parse(headers['X-PostHog-Properties'])).toEqual({
+      ai_product: 'wizard',
       team_id: 42,
       run_id: 'r1',
       'wizard_flag_wizard-orchestrator': 'true',
