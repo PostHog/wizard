@@ -26,12 +26,12 @@ Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn mor
 
 ## Privacy & data usage
 
-The wizard uses **Anthropic Claude** (via PostHog's LLM gateway) to read your project's source files and integrate PostHog. A few things worth knowing up front:
+The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's AI gateway, to read your project's source files and integrate PostHog. A few things worth knowing up front:
 
-- **Source files** are sent to Anthropic as part of the agent's context.
+- **Source files** are sent to the selected model provider as part of the agent's context.
 - **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
 - **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
-- **AI opt-in**: the wizard honors your PostHog organization's `is_ai_data_processing_approved` setting (the same toggle that gates Max). If your org has not opted in, the wizard explains how to enable it and exits without sending source to Anthropic.
+- **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI and signup runs bypass this interactive gate.
 - **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
 
 The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
@@ -682,3 +682,8 @@ The script will:
 - Install dependencies for the app
 - Install the packed wizard tarball into an isolated temp project
 - Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks
+
+## Contributing
+
+Start with [AGENTS.md](AGENTS.md) for the development skills and execution policy.
+[Coherence](docs/coherence.md) provides optional local architecture checks.

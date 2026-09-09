@@ -36,6 +36,8 @@ plugins
 .claude/settings.json
 .claude/settings.local.json
 .claude/worktrees/
+.coherence/
+docs/coherence-generated/
 
 e2e-tests/fixtures/.tracking/*
 

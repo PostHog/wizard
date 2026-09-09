@@ -1,0 +1,42 @@
+{
+  "name": "PostHog Wizard",
+  "outputDir": "docs/coherence-generated",
+  "entryDir": ".",
+  "language": "typescript",
+  "codeExt": ["ts", "tsx"],
+  "ignore": [
+    "node_modules",
+    ".git",
+    ".coherence",
+    "coherence-generated",
+    "dist",
+    "build",
+    "coverage",
+    "e2e-tests"
+  ],
+  "sources": ["src", "scripts", "e2e-harness"],
+  "typecheck": ["pnpm", "typecheck"],
+  "test": [
+    "pnpm",
+    "exec",
+    "vitest",
+    "run",
+    "src/lib/agent/runner/__tests__/switchboard.test.ts",
+    "src/lib/programs/__tests__/program-step.test.ts",
+    "src/lib/agent/runner/harness/pi/__tests__/security.test.ts",
+    "-t"
+  ],
+  "testMatch": "[1-9][0-9]* passed",
+  "testBatch": [
+    "pnpm",
+    "exec",
+    "vitest",
+    "run",
+    "src/lib/agent/runner/__tests__/switchboard.test.ts",
+    "src/lib/programs/__tests__/program-step.test.ts",
+    "src/lib/agent/runner/harness/pi/__tests__/security.test.ts",
+    "--reporter=json",
+    "--outputFile=.coherence/test-report.json"
+  ],
+  "testBatchFormat": "vitest-json"
+}
