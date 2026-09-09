@@ -11,9 +11,18 @@ the scan is inconclusive, the default action lets the agent find the server and
 set up analytics in the current directory. "Choose another location" is an
 optional escape hatch for a different directory or entry-point file. The quick
 scan is a suggestion: no matches does not rule out a supported server. Tests,
-dependencies, and symlinked files are excluded. Python suggestions include the
-official SDK v2 `MCPServer` constructor alongside the older `FastMCP` and
-low-level `Server` constructors.
+dependencies, and symlinked files are excluded. Suggestions recognize the
+official SDK constructors, TypeScript FastMCP (including generic constructors),
+and Mastra's MCPServer. Recognition does not guarantee that a wrapper supports
+direct instrumentation: the agent still verifies its integration path.
+
+The scan reserves up to 500 matches for MCP-named directories and server-named
+files, alongside up to 500 general source matches. Both passes are bounded to
+six directory levels and read at most 64 KiB per unique file. This keeps
+unrelated application code from consuming the entire suggestion budget in large
+monorepos. Application packages sort before examples and templates. Test
+fixtures and comment-only examples do not become suggested servers. Aliases,
+deeper trees, and files beyond these bounds can still require agent discovery.
 
 Entering a directory scans that location again. Selecting a file uses its
 closest ancestor project directory and asks the agent to verify the selected

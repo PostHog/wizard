@@ -73,10 +73,15 @@ export function resolveMcpTarget(
 
 // These are suggestions, not an eligibility check: custom dispatchers and
 // aliased constructors still have the explicit-path and agent-search routes.
-function hasServerSignals(source: string): boolean {
+function hasServerSignals(contents: string): boolean {
+  const source = contents.replace(/^\s*(?:\/[/*]|\*|#).*$/gm, '');
   return (
-    (/\bnew\s+(?:McpServer|Server)\s*\(/.test(source) &&
+    (/\bnew\s+(?:McpServer|Server)\s*(?:<[^;]+?>\s*)?\(/.test(source) &&
       /@modelcontextprotocol\/(?:sdk\/server|server)/.test(source)) ||
+    (/\bnew\s+FastMCP\s*(?:<[^;]+?>\s*)?\(/.test(source) &&
+      /from\s+['"]fastmcp['"]/.test(source)) ||
+    (/\bnew\s+MCPServer\s*(?:<[^;]+?>\s*)?\(/.test(source) &&
+      /from\s+['"]@mastra\/mcp['"]/.test(source)) ||
     (/\b(?:FastMCP|MCPServer|Server)\s*\(/.test(source) &&
       /\bfrom\s+(?:mcp\.server(?:\.[\w.]+)?|fastmcp)\s+import\b/.test(
         source,
@@ -90,24 +95,42 @@ export async function findMcpServers(
   directory: string,
 ): Promise<McpServerScan> {
   const target = resolveMcpTarget(directory, '.');
-  const files = await boundedGlob('**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,py}', {
+  const sourceExtensions = '{ts,tsx,mts,cts,js,jsx,mjs,cjs,py}';
+  const options = {
     cwd: target.directory,
     deep: 6,
     limit: 500,
     extraIgnore: [
-      '**/tests/**',
-      '**/__tests__/**',
-      '**/e2e/**',
+      '**/{test,tests,__tests__,__fixtures__,fixtures,integration-tests,e2e,_test-utils}/**',
       '**/*.test.*',
       '**/*.spec.*',
+      '**/test_*.py',
+      '**/*_test.py',
       '**/*.d.ts',
     ],
-  });
+  };
+  const [likelyFiles, otherFiles] = await Promise.all([
+    boundedGlob(
+      [
+        `**/*{mcp,Mcp,MCP}*/**/*.${sourceExtensions}`,
+        `**/*{server,Server}*.${sourceExtensions}`,
+      ],
+      options,
+    ),
+    boundedGlob(`**/*.${sourceExtensions}`, options),
+  ]);
+  const files = [...new Set([...likelyFiles, ...otherFiles])];
   const candidates = files
     .filter((file) => {
       const source = readFileHead(join(target.directory, file), 64 * 1024);
       return source !== null && hasServerSignals(source);
     })
-    .sort();
+    .sort((left, right) => {
+      const examplePath = /(?:^|\/)(?:examples?|templates?|demos?)(?:\/|$)/;
+      return (
+        Number(examplePath.test(left)) - Number(examplePath.test(right)) ||
+        left.localeCompare(right)
+      );
+    });
   return { directory: target.directory, candidates };
 }
