@@ -30,6 +30,7 @@ import {
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
+import { legacyGatewayHeaders } from '@lib/legacy-gateway';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -396,18 +397,25 @@ export function isWarlockDisabled(): boolean {
 /**
  * Build ANTHROPIC_CUSTOM_HEADERS for the SDK subprocess: the run's metadata and
  * flags as one `X-PostHog-Properties` JSON blob. Bedrock fallback is native to
- * the gateway, so there is no opt-in header.
+ * the gateway, so there is no opt-in header. The CI fallback sends the legacy
+ * gateway's shape instead.
  */
 export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
-  teamId?: number,
+  auth: Pick<GatewayAuth, 'teamId' | 'legacy'>,
 ): string {
   const headers = createCustomHeaders();
-  headers.add(
-    'X-PostHog-Properties',
-    buildWizardPropertiesBlob(wizardMetadata, wizardFlags, teamId),
-  );
+  const shaped = auth.legacy
+    ? legacyGatewayHeaders(wizardMetadata, wizardFlags)
+    : {
+        'X-PostHog-Properties': buildWizardPropertiesBlob(
+          wizardMetadata,
+          wizardFlags,
+          auth.teamId,
+        ),
+      };
+  for (const [key, value] of Object.entries(shaped)) headers.add(key, value);
   const encoded = headers.encode();
   logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
   return encoded;
@@ -562,6 +570,7 @@ export async function initializeAgent(
         baseURL: current.gatewayUrl,
         authToken: current.token,
         teamId: current.teamId,
+        legacy: current.legacy,
         wizardMetadata: triageMetadata,
         wizardFlags: config.wizardFlags ?? {},
       };
@@ -1055,7 +1064,7 @@ export async function runAgent(
             ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
               agentConfig.wizardMetadata ?? {},
               agentConfig.wizardFlags ?? {},
-              agentConfig.gatewayAuth.teamId,
+              agentConfig.gatewayAuth,
             ),
           },
           canUseTool: (toolName: string, input: unknown) => {

@@ -385,7 +385,7 @@ export async function* runMcpPromptViaSdk(args: {
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             wizardMetadata ?? {},
             {},
-            auth.teamId,
+            auth,
           ),
         },
       },

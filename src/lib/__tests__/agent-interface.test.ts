@@ -607,7 +607,7 @@ describe('buildAgentEnv header shape', () => {
   const flags = { 'wizard-orchestrator': 'test' };
 
   it('sends one properties blob and no per-key or bedrock headers', () => {
-    const encoded = buildAgentEnv(metadata, flags, 42);
+    const encoded = buildAgentEnv(metadata, flags, { teamId: 42 });
     const [name, json] = encoded.split(': ', 2);
     expect(name).toBe('X-PostHog-Properties');
     // Fallback is native in the gateway's routing chain, and the run tags ride
@@ -621,6 +621,14 @@ describe('buildAgentEnv header shape', () => {
     });
     expect(encoded).not.toContain('x-posthog-use-bedrock-fallback');
     expect(encoded).not.toContain('X-POSTHOG-PROPERTY-');
+  });
+
+  it('sends per-key headers and the bedrock opt-in on the legacy gateway', () => {
+    const encoded = buildAgentEnv(metadata, flags, { legacy: true });
+    expect(encoded).toContain('x-posthog-use-bedrock-fallback: true');
+    expect(encoded).toContain('X-POSTHOG-PROPERTY-run_id: r1');
+    expect(encoded).toContain('X-POSTHOG-FLAG-WIZARD-ORCHESTRATOR: test');
+    expect(encoded).not.toContain('X-PostHog-Properties');
   });
 });
 
