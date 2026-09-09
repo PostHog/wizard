@@ -49,7 +49,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install pnpm
-        run: npm install -g pnpm@10.23.0
+        run: npm install -g pnpm@10.34.5
 
       - name: Install package.json dependencies with pnpm
         run: pnpm install --frozen-lockfile

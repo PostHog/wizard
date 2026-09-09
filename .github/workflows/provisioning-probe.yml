@@ -48,7 +48,7 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
         with:
-          version: 10.23.0
+          version: 10.34.5
           run_install: false
 
       - name: Set up Node
