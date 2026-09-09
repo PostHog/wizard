@@ -139,6 +139,16 @@ const promptFor = async (sources: DetectedSource[]) => {
   });
 };
 
+describe('default integration skill workflow', () => {
+  it('loads the framework category first and delegates observability to its workflow', async () => {
+    const prompt = await promptFor([]);
+    expect(prompt).toContain('category: "integration"');
+    expect(prompt).toContain('AI Observability and Logs skills');
+    expect(prompt).toContain('before verification and the setup report');
+    expect(prompt).not.toContain('Do NOT pick skills from other categories');
+  });
+});
+
 describe('report instruction', () => {
   it('asks the agent to note the sources in the report checklist', async () => {
     const prompt = await promptFor([POSTGRES]);
