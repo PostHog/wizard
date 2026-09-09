@@ -6,18 +6,21 @@
  * silent downgrade would spend uncapped, unattributed money to hide an outage.
  */
 
+import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
+import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import type { CloudRegion } from '@utils/types';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
   gatewayUrl: string;
-  /** Bearer for the gateway: the minted `phe_`. */
+  /** Gateway bearer, minted normally or supplied directly by CI. */
   token: string;
-  /** The team the mint verified; rides the blob so dashboards keep a breakdown. */
+  /** Team verified by the mint, or explicitly supplied for CI attribution. */
   teamId?: number;
   /**
    * Instant past which a 401 on this bearer is age rather than a bad
@@ -40,6 +43,51 @@ let cached: CachedAuth | null = null;
  * task at once, and each would otherwise take its own token and its own cap.
  */
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
+let ciAuth: GatewayAuth | null = null;
+
+// Snapshot CI supplies a gateway bearer without minting or re-minting.
+export function configureGatewayCredentialsForCI(
+  token: string,
+  projectId: number,
+  gatewayUrl: string,
+): void {
+  if (IS_PRODUCTION_BUILD)
+    throw new Error('CI gateway auth requires a non-production build');
+  if (!token.trim() || !Number.isSafeInteger(projectId) || projectId <= 0) {
+    throw new Error('CI gateway auth requires a token and valid project ID');
+  }
+  if (
+    !/^https?:\/\//.test(gatewayUrl) ||
+    !isTrustedGatewayUrl(gatewayUrl, '')
+  ) {
+    throw new Error('CI gateway auth requires a trusted gateway origin');
+  }
+  resetGatewaySession();
+  ciAuth = {
+    token: token.trim(),
+    teamId: projectId,
+    gatewayUrl: gatewayUrl.replace(/\/+$/, ''),
+    refreshAtMs: Infinity,
+  };
+}
+
+export function configureGatewayFromCIEnvironment(
+  projectId: number,
+  region: CloudRegion,
+): void {
+  if (IS_PRODUCTION_BUILD)
+    throw new Error('CI gateway auth requires a non-production build');
+  const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
+  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
+  const token = readFileSync(path, 'utf8');
+  delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
+  configureGatewayCredentialsForCI(
+    token,
+    projectId,
+    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
+      `https://ai-gateway.${region}.posthog.com`,
+  );
+}
 
 /**
  * Adoption floor. The anthropic subprocess holds its credential until a 401
@@ -62,6 +110,7 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
+  if (ciAuth) return ciAuth;
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
   const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
@@ -127,6 +176,7 @@ async function resolveGatewayAuth(
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
+  ciAuth = null;
 }
 
 /** Whether a 401 on this bearer may be age (past its refresh instant) rather than a bad credential. */

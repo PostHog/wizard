@@ -49,6 +49,13 @@ The direct host reads `APP_DIR`, `PROJECT_ID`, and either
 Detection-only MCP runs omit the key and stop at `auth`. The internal socket's
 `set_credentials` command is not exposed as an MCP tool.
 
+Agent runs require `WIZARD_CI_GATEWAY_TOKEN_FILE` containing an already-issued
+gateway bearer. CI uses it directly and never mints or refreshes it; missing or
+rejected credentials fail the run. `WIZARD_CI_GATEWAY_URL` optionally overrides
+`https://ai-gateway.<region>.posthog.com`. `POSTHOG_KEY_FILE` /
+`POSTHOG_PERSONAL_API_KEY` remain separate credentials for PostHog API and MCP.
+The same gateway settings apply to development `--ci` runs.
+
 ## The two routes
 
 - **CI snapshots** — `tui-snapshots.no-jest.ts` spawns `tui-host` (`MODE=fixed`)
