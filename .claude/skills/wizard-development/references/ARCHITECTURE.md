@@ -1,305 +1,171 @@
 ---
-title: Pipeline anatomy and data flow
-description: How data moves through the wizard — from CLI args to the screen the user sees. Read when you need to understand where a new concern should hook in.
+title: Runner architecture and data flow
+description:
+  Source map for routing, lifecycle, security boundaries, and screen resolution.
 ---
 
 # Architecture
 
-## The runner pipeline
+## Runner and lifecycle
 
-Every wizard run — framework integration, revenue analytics, audit, generic skill — executes the same pipeline in `agent-runner.ts`. The pipeline is fixed. What varies is the `ProgramRun` configuration object.
+[run-wizard.ts](../../../../src/lib/runners/run-wizard.ts) owns the program's
+interactive lifecycle: create the session and TUI, assign the session, run
+readiness hooks, and traverse steps and gates.
+[store.ts](../../../../src/ui/tui/store.ts) runs `onInit` when the TUI starts;
+`onReady` runs after the real session is assigned. Keep session-dependent
+detection in `onReady`. Noninteractive execution has its own lifecycle in
+[run-non-interactive.ts](../../../../src/lib/runners/run-non-interactive.ts).
 
-```
- 1. Init logging + debug
- 2. Health check (skip if TUI already ran it)
- 3. Settings conflict detection + resolution
- 4. OAuth / credential flow
- 5. Skill install (if ProgramRun.skillId is set)
- 6. Agent initialization (MCP servers, tools, sandbox, env)
- 7. Prompt assembly (project context + custom prompt + skill path)
- 8. Agent execution (SDK query with hooks)
- 9. Error classification + handling
-10. Post-run hooks (ProgramRun.postRun — e.g. env var upload)
-11. Outro data construction
-12. Analytics shutdown
-```
+[runner/index.ts](../../../../src/lib/agent/runner/index.ts) resolves a
+program's `run` definition, calls shared bootstrap, selects a binding,
+dispatches the sequence, and flushes the scanner report on cleanup. The old
+[agent-runner.ts](../../../../src/lib/agent/agent-runner.ts) is a compatibility
+export.
 
-### Where configuration hooks fire
+| Layer           | Source and responsibility                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bootstrap       | [shared/bootstrap.ts](../../../../src/lib/agent/runner/shared/bootstrap.ts): shared health/settings/auth/flag and MCP setup                                                    |
+| Switchboard     | [switchboard/index.ts](../../../../src/lib/agent/runner/switchboard/index.ts): resolve sequence, harness, model and effort override                                            |
+| Linear sequence | [sequence/linear.ts](../../../../src/lib/agent/runner/sequence/linear.ts): one conversation, skill/prompt assembly, post-run hooks and outro                                   |
+| Orchestrator    | [orchestrator-runner.ts](../../../../src/lib/agent/runner/sequence/orchestrator/orchestrator-runner.ts): seed plan, task queue, focused conversations, handoffs and completion |
+| Harness         | [harness/types.ts](../../../../src/lib/agent/runner/harness/types.ts): SDK boundary, implemented by Pi and Anthropic                                                           |
 
-- **ProgramRun.customPrompt** — called at step 7, receives `PromptContext` (projectId, apiKey, host, skillPath). Returns additional prompt text.
-- **ProgramRun.postRun** — called at step 10, receives session + credentials. Runs after the agent succeeds but before the outro.
-- **ProgramRun.buildOutroData** — called at step 11 if present. Otherwise the runner builds default outro data from successMessage/reportFile/docsUrl.
-- **ProgramRun.abortCases** — matched against `[ABORT] <reason>` signals during step 8. First regex match renders a custom error outro.
-- **ProgramStep.onInit** — fires during store construction (step 0, before session is assigned). Use for session-independent work only (e.g. health check prefetch).
-- **ProgramStep.onReady** — fires after `tui.store.session = session` in bin.ts. Awaited in sequence. Use for session-dependent pre-flow work (e.g. framework detection, prerequisite scanning).
-- **ProgramStep.gate** — predicate checked on every `emitChange()`. bin.ts parks on `await store.getGate(stepId)` until the predicate flips true.
+The contribution policy is
+[Pi by default, orchestration preferred](../SKILL.md#execution-policy-and-model-admission).
+Linear remains useful for very simple tasks and legacy support. Existing
+bindings and composed sub-runs still use it; the Anthropic SDK remains a
+supported legacy fallback. These are separate choices: sequence describes the
+work shape, harness selects the SDK, and the model selects a gateway/provider
+route.
 
-### What the runner does NOT know
+### Configuration hooks
 
-The `agent-runner.ts` doesn't know what framework is being integrated. It doesn't know what skills exist. It doesn't know what env vars are called. It doesn't know what the outro should say. All of that comes from `ProgramRun` and `FrameworkConfig` — configuration, not code.
+Read [ProgramRun](../../../../src/lib/agent/runner/shared/types.ts) for exact
+signatures.
 
-## The switchboard contract — deterministic (flags in) → (binding out)
+| Surface                                | Current consumer                                               |
+| -------------------------------------- | -------------------------------------------------------------- |
+| `customPrompt`, `abortCases`           | Linear prompt assembly and abort handling                      |
+| `postRun(session, credentials)`        | Linear success path, before outro                              |
+| `buildOutroData(session, credentials)` | Linear custom outro; otherwise defaults from run metadata      |
+| `agentFlow` and task skill variants    | Orchestrator flow selection and task execution                 |
+| `ProgramStep.run`                      | Explicit program composition in the outer lifecycle            |
+| `ProgramConfig.requires`               | Dependency metadata; it does not execute prerequisite programs |
 
-There is exactly one seam that decides what runs: **`resolveBinding(ctx, role?)`**
-in `src/lib/agent/runner/switchboard/index.ts`. Give it a `SwitchboardCtx`, get
-back the full binding — every axis, no partials — and a trace of which
-precedence rung decided each axis. This is the unit-testable surface: if you
-want to know "with these flags, what exactly will run?", you call this and
-assert on the whole object.
+Do not migrate a linear program merely by changing its binding if it depends on
+these hooks. Inspect the orchestrator's flow and completion path instead.
+[Metrics](../../../../src/lib/programs/metrics/) is a current Pi/orchestrator
+example. Native command modules still need registration in
+[bin.ts](../../../../bin.ts); screen sequences derive from the program registry.
 
-```ts
-// INPUT — everything a resolution may branch on. Built once per run.
-interface SwitchboardCtx {
-  program: ProgramId;
-  composed?: boolean;                    // dependency run inside a parent program
-  flags: Record<string, string>;         // PostHog flag snapshot (variants as strings)
-  flagPayloads?: Record<string, unknown>;// payload snapshot, same fetch
-  cliHarness?: Harness;                  // dev builds only
-  cliSequence?: Sequence;                // dev builds only
-  cliModel?: string;                     // dev builds only
-  trace?: SwitchboardTrace;              // filled during resolution
-}
+## Switchboard contract
 
-// OUTPUT — the complete run binding.
-interface ProgramBinding {
-  sequence: Sequence;                    // linear | orchestrator
-  harness: Harness;                      // anthropic | pi
-  model: string;                         // gateway model id
-  thinkingLevel?: EffortLevel;           // effort OVERRIDE; absent → model table default
-}
+`resolveBinding(ctx, role?)` is the routing seam. Read its exported types rather
+than copying their fields into another document. It receives the program, flag
+snapshot/payloads, composition state, and development overrides, returning the
+binding and stamping a trace of the selected precedence rungs.
 
-// TRACE — which rung decided each axis (telemetry reads this).
-interface SwitchboardTrace {
-  harness?:  'cli' | 'flag' | 'binding';
-  model?:    'cli' | 'flag' | 'binding';
-  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'payload' | 'flag' | 'binding';
-}
-```
+- Harness/model: development CLI override, declared flag route, per-program
+  binding, default.
+- Sequence: composed linear clamp, development CLI override, `runTask`
+  capability clamp, program flag route, sequence experiment, binding/default.
 
-Precedence, per axis (earlier wins):
+[Harness](../../../../src/lib/agent/runner/switchboard/harness.ts) and
+[sequence](../../../../src/lib/agent/runner/switchboard/sequence.ts) contain the
+exact chains. Published builds omit CLI overrides. `RUN_SURFACE` can disable
+harness experiments; static bindings and harness capabilities also affect
+resolution. Composed sub-runs remain linear even when a CLI override requests
+orchestration.
 
-```
-harness/model:  CLI (dev builds) → flag experiment route → program binding → DEFAULT_BINDING
-sequence:       composed clamp → CLI (dev builds) → runTask capability clamp
-                → program's own flag route `sequence` → sequence experiment → binding
-```
+Effort resolves in two stages: the binding supplies an override, then
+[modelCapabilities](../../../../src/lib/agent/runner/switchboard/models.ts)
+applies capabilities and defaults. All selected models and efforts must also be
+admitted by the minted token and gateway. Local routing cannot bypass that
+external policy; see the
+[model admission checklist](../SKILL.md#execution-policy-and-model-admission).
 
-**Determinism.** `resolveBinding` is a pure function of the ctx plus three
-enumerated static/ambient inputs — nothing else. No session, no network, no
-clock:
+Flags belong in
+[switchboard/flags](../../../../src/lib/agent/runner/switchboard/flags/).
+Experiments declare their program scope; malformed payloads yield no experiment
+route. Reuse the
+[switchboard tests](../../../../src/lib/agent/runner/__tests__/switchboard.test.ts)
+and experiment tests to check full bindings and isolation of unrelated programs.
+Do not add a second flag-reading path inside a harness or sequence.
 
-1. `RUN_SURFACE` (`@env`, ambient): `'cloud'` disables all harness-experiment
-   routes. Tests flip it with a mocked getter — the one input not on the ctx.
-2. `IS_PRODUCTION_BUILD` (build-time constant): strips the CLI rungs from the
-   chains in published builds.
-3. Static tables: `PROGRAM_BINDINGS`/`DEFAULT_BINDING`, the experiment
-   declarations in `switchboard/flags/`, and each harness's `runTask`
-   capability (a static property of the backend module).
+## Security boundaries
 
-**Effort is two-stage, both stages pure.** The binding's `thinkingLevel` is
-the *override* (from a flag variant or payload). The *effective* effort is
-`modelCapabilities(binding.model, binding.thinkingLevel)` in
-`switchboard/models.ts` — capability table + transport default, override
-applied only when the model reasons. Compose the two calls for the complete
-deterministic answer: which model, at which effort, on which harness, in
-which sequence.
+The gateway admits scoped tokens, models, efforts, and required prompt policy.
+Wizard's local tool boundary separately restricts operations on the user's
+project. Local commandments provide model guidance; they are not an enforcement
+mechanism.
 
-**Flags may only enter through `switchboard/flags/`.** Each experiment module
-declares its flag keys AND the program(s) they route (`HarnessExperiment` /
-`SequenceExperiment`); the middlewares consult `resolveFlagRoute` /
-`resolveFlagSequence` and nothing else. Payload-carrying flags are
-zod-validated and fail closed: any unexpected payload resolves to no route and
-the non-flagged binding default stands.
+- [agent-interface.ts](../../../../src/lib/agent/agent-interface.ts) configures
+  the Anthropic SDK's tool permissions, sandbox, and gateway transport.
+- [yara-hooks.ts](../../../../src/lib/yara-hooks.ts) adapts warlock scans to SDK
+  tool hooks.
+- [Pi security](../../../../src/lib/agent/runner/harness/pi/security.ts) adapts
+  shared permissions and scanning to Pi tool-call/result events, including
+  blocking, violation latching, and tool-call limits.
+- [Pi harness](../../../../src/lib/agent/runner/harness/pi/) explicitly supplies
+  tools, scrubs shell environments, and disables project-controlled
+  extensions/context loading.
+- [triage-provider.ts](../../../../src/lib/agent/triage-provider.ts) supplies
+  gateway-backed classification for scanner findings.
 
-**Test convention: every resolution test is (ctx in) → full `resolveBinding`
-out.** Assert the whole four-axis object (`toEqual`), never a single axis via
-`resolveHarness`/`resolveSequence` — a partial assertion cannot see a flag
-moving an axis it doesn't look at. `modelCapabilities` is asserted directly as
-the second stage.
+Scanner rules live in [warlock](https://github.com/PostHog/warlock); Wizard owns
+how its returned categories, severities, and actions affect execution. Scanner
+failures must not silently permit unsafe operations, but not every blocked call
+terminates the run. Check each adapter's state machine when changing rejection
+handling. Preserve useful rejection diagnostics without logging secret content.
 
-**How this is held in place** (all under `switchboard/flags/__tests__/` plus
-`runner/__tests__/switchboard.test.ts`, mutation-tested):
+Both SDK paths use a scoped gateway token minted through
+[gateway-session.ts](../../../../src/lib/gateway-session.ts), not the user's raw
+OAuth credential as a model API key. Rejection and refresh behavior belong at
+that seam; do not restore a legacy-gateway fallback to bypass admission.
 
-- One test file per experiment: routing behavior + a registry-wide isolation
-  sweep proving its flags leave every other program byte-identical to an
-  unflagged run.
-- `scoping.test.ts` — the cross-experiment pin: an empirically measured
-  flag → program → axes matrix asserted against an explicit table; every
-  `*_FLAG_KEY` constant forced on at once with uncovered programs required
-  to resolve unchanged; and a seam scan asserting `harness.ts`/`sequence.ts`/
-  `models.ts`/`index.ts` contain no direct flag reads — so a new flag cannot
-  route without a declaration, and every declaration is auto-probed.
-- `switchboard.test.ts` — machinery only: binding registry lockstep, CLI
-  precedence, trace stamping, `modelCapabilities`, the composed clamp.
+### Secret vault: keeping values out of the model
 
-A canonical unit test of the contract looks like:
+[secret-vault.ts](../../../../src/lib/secret-vault.ts) stores user-provided
+values in memory and returns opaque references. Sensitive `wizard_ask` answers
+become `secret:<uuid>` refs; `set_env_values` resolves the ref host-side when
+writing. Follow [wizard-tools](../../../../src/lib/wizard-tools/) and the Pi
+adapters when adding a secret-consuming tool. Return references and metadata to
+the agent, never the raw value. References are session-scoped, not durable
+credentials.
 
-```ts
-const ctx: SwitchboardCtx = {
-  program: 'self-driving',
-  flags: { 'wizard-self-driving-use-pi-harness': 'true' },
-  flagPayloads: {
-    'wizard-self-driving-use-pi-harness': { model: 'gpt-5-6-terra', effort: 'high' },
-  },
-};
-expect(resolveBinding(ctx)).toEqual({
-  sequence: Sequence.linear,
-  harness: Harness.pi,
-  model: GPT5_6_TERRA_MODEL,
-  thinkingLevel: 'high',
-});
-expect(ctx.trace).toEqual({ harness: 'flag', model: 'flag', sequence: 'binding' });
-```
+## UI state and agent output
 
-## Session data flow
+Business logic uses [WizardUI](../../../../src/ui/wizard-ui.ts) through
+`getUI()`. [InkUI](../../../../src/ui/tui/ink-ui.ts) updates the TUI store;
+[LoggingUI](../../../../src/ui/logging-ui.ts) is available for noninteractive
+callers that select it. A missing TTY does not automatically mean an arbitrary
+caller uses LoggingUI; snapshot CI drives Ink in a PTY. `requestQuestion` and
+task notices are supported interactions, not console prompts to invent in
+business logic.
 
-```
-CLI args / env vars
-    ↓
-buildSession()          → WizardSession (flat data bag, all fields initialized)
-    ↓
-Store assignment        → tui.store.session = session
-    ↓
-onReady hooks           → detect framework, gather context, check version
-    ↓
-TUI screens             → user confirms setup, authenticates, etc.
-    ↓                      (each screen calls a store setter → emitChange())
-Agent run               → agent reads/writes files, emits signals
-    ↓
-postRun hooks           → env var upload, etc.
-    ↓
-Outro                   → session.outroData drives the outro screen
-```
+Harness adapters translate SDK messages, status markers, task updates and tool
+activity into WizardUI calls. Anthropic message processing lives in
+[agent-interface.ts](../../../../src/lib/agent/agent-interface.ts); Pi uses its
+own session event handlers. Orchestrated tasks also have queue and handoff
+state. Do not assume all harness output passes through `handleSDKMessage`.
 
-Session is populated in layers. Early layers provide defaults. Later layers override. Business logic reads from the session — never calls a prompt. The session never calls `getUI()`.
+Session changes go through explicit store setters. They emit updates,
+re-evaluate gates, detect transitions, and refresh rendering. The
+[router](../../../../src/ui/tui/router.ts) resolves overlays first, then the
+first visible incomplete screen from
+[screen-sequences.ts](../../../../src/ui/tui/screen-sequences.ts). Those
+sequences are projected from registered program steps. Change the
+state/predicate that represents progress rather than adding imperative
+navigation.
 
-## Agent output flow
+## MCP and instrumentation
 
-During the agent run (step 8), the SDK emits messages via an async generator. `handleSDKMessage` in `agent-interface.ts` processes each message:
+Remote PostHog tools, local wizard tools, and optional framework MCP servers are
+separate surfaces. The Anthropic SDK's MCP integration and Pi's adapter expose
+them differently; inspect the selected harness rather than assuming identical
+tool names or discovery. Context-mill supplies skills and flow/task prompts.
 
-```
-SDK message (async generator)
-    ↓
-handleSDKMessage()
-    ├─ assistant message
-    │   ├─ text content → collectedText[] (for signal detection)
-    │   ├─ [STATUS] marker → getUI().pushStatus() → store.statusMessages
-    │   └─ TodoWrite tool_use → getUI().syncTodos() → store.tasks
-    ├─ result message
-    │   ├─ success → mark receivedSuccessResult
-    │   └─ error → log + surface to user (unless post-success cleanup noise)
-    └─ system message (init) → log tools/model/mcpServers
-```
-
-Key: the agent doesn't know the TUI exists. It uses standard Claude Code patterns (`[STATUS]` text markers, `TodoWrite` tool calls) and the harness translates them into store state. Adding a new observation channel means adding a new signal pattern to `handleSDKMessage` and a new store atom + setter, not modifying the agent prompt.
-
-## Security boundary flow
-
-Three layers, each enforced at a different point in the tool-use lifecycle:
-
-```
-Agent wants to use a tool
-    ↓
-canUseTool() [L1]            → allow/deny before execution
-    ↓                           (bash allowlist, .env file fencing)
-PreToolUse warlock hook [L2] → scan input, block if matched
-    ↓                           (exfiltration, destructive ops, supply chain)
-Tool executes
-    ↓
-PostToolUse warlock hook [L2] → scan output, instruct revert or terminate
-    ↓                           (PII in capture, hardcoded keys, prompt injection)
-Result returned to agent
-```
-
-The L2 detection layer is the [warlock](https://github.com/PostHog/warlock) sibling repo — an engine-only YARA-X scanner that returns matches with `category`, `severity`, and `action` (recommendation: `block` / `revert` / `warn`). The wizard wires it into the SDK's PreToolUse/PostToolUse hooks (`src/lib/yara-hooks.ts`) and decides how to respond per match. Adding a new detection means contributing a rule to warlock, not editing wizard code. Flagged matches go through warlock's LLM triage (`triageMatches`) to drop false positives before the wizard acts; the triage provider reuses the gateway auth via `triage-provider.ts`.
-
-**Naming — `yara` vs `warlock`.** These name two different things, and the split is intentional. YARA is the technique: scanning content against YARA rules. The wizard-side wiring keeps that name — `yara-hooks.ts`, `createPreToolUseYaraHooks`, the `[YARA …]` messages, `WIZARD_YARA_REPORT_FILE`. warlock is the engine package that actually runs the rules: `@posthog/warlock`, a real YARA-X engine, called via `getWarlock()` and the import. Think `parseJson()` versus the V8 engine underneath — the technique names the wizard's layer, the library names the dependency it calls. When you touch the scanning layer you will see both names, and that is expected.
-
-The sandbox (filesystem + network scoping) is configured once in the SDK `query()` call and enforced by the SDK runtime — not by wizard code.
-
-Commandments (L0) are in the system prompt and operate at the model's judgment layer — no code enforcement. They're the first line, not the last.
-
-## Secret vault: keeping values out of the model
-
-The layers above stop the agent from _misusing_ tools. A separate boundary stops secret _values_ from ever reaching the model in the first place: the session-scoped secret vault in `src/lib/secret-vault.ts`.
-
-```
-wizard_ask (sensitive: true)
-    ↓  user types secret in the TUI
-vault.put(value) → "secret:<uuid>"     ← raw value stays host-side
-    ↓
-agent receives { secretRef } — never the string
-    ↓  agent passes the ref to the next tool
-set_env_values({ KEY: { secretRef } })
-    ↓
-vault.get(ref) → value, written to .env  ← resolved at the last moment
-    ↓
-result returned to agent (no value)
-```
-
-The vault is a plain in-memory `Map` created once per `createWizardToolsServer()` call — one per wizard run, no persistence, no cross-session sharing. A ref minted in one run can't be resolved in another. `list()` exposes metadata (label, source, timestamp) but never values. The two ends of the pipe both live in `wizard-tools.ts`: `wizard_ask` mints refs for answers flagged `sensitive: true` (text questions only), and `set_env_values` accepts `{ secretRef }` in place of a literal and resolves it before writing.
-
-The point of the boundary: the model orchestrates a secret's journey from the user's keyboard to a `.env` file without the value entering the LLM conversation, the transcript, or the logs. When you add a tool that touches a user secret, route it through the vault — return refs, resolve them host-side — rather than passing the value back to the agent.
-
-## Screen resolution flow
-
-```
-Store setter called (e.g. store.completeSetup())
-    ↓
-$session atom updated
-    ↓
-emitChange()
-    ├─ version counter bumps (React re-renders via useSyncExternalStore)
-    ├─ _checkGates() — resolve any gate whose predicate is now true
-    └─ _detectTransition() — fire enter-screen hooks, capture analytics
-         ↓
-router.resolve(session)
-    ├─ if overlay stack non-empty → return top overlay
-    └─ walk program entries:
-         for each entry:
-           skip if entry.show(session) === false
-           skip if entry.isComplete(session) === true
-           return entry.screen  ← first incomplete, visible screen
-         fallback: last entry (outro)
-```
-
-No imperative navigation anywhere. The router is a pure function of session state + overlay stack. If you need to change which screen is active, change the session state that the predicates read.
-
-## The WizardUI abstraction
-
-Business logic never imports the store directly. It calls `getUI()`, which returns a `WizardUI` interface. Two implementations:
-
-- **InkUI** — translates calls to store setters. Used in interactive TUI mode.
-- **LoggingUI** — translates calls to console output. Used in CI mode.
-
-This boundary means the runner, the agent interface, and the OAuth flow don't know whether they're driving a TUI or printing to a log. When adding a new piece of state that the UI should reflect:
-
-1. Add the field to `WizardSession`
-2. Add a setter to `WizardStore` that calls `emitChange()`
-3. Add the method to `WizardUI` interface
-4. Implement in both `InkUI` (delegates to store setter) and `LoggingUI` (prints or no-ops)
-
-## MCP server topology
-
-The agent has access to two MCP servers:
-
-- **posthog-wizard** — remote, HTTP-based. The PostHog MCP server at `mcp.posthog.com/mcp` (or `mcp-eu.posthog.com/mcp`). Provides query tools for PostHog data, dashboard creation, etc. Authenticated via Bearer token. Tool schemas are deferred (`ENABLE_TOOL_SEARCH: 'auto:0'`) to avoid bloating the system prompt. It's almost never the right move to add tools here, unless a server-side component is the only path forward.
-
-- **wizard-tools** — local, in-process. Created by `createWizardToolsServer()` in `wizard-tools.ts`. Provides `check_env_keys`, `set_env_values`, `detect_package_manager`, `load_skill_menu`, `install_skill`, `wizard_ask`. Runs in the wizard process — secret values never leave the machine, and the secret vault (see [Secret vault](#secret-vault-keeping-values-out-of-the-model)) keeps them out of the model context entirely.
-
-Frameworks can add additional MCP servers via `FrameworkConfig.metadata.additionalMcpServers` (e.g. SvelteKit adds the official Svelte MCP at `https://mcp.svelte.dev/mcp`).
-
-## Middleware pipeline
-
-The middleware system is opt-in (currently used for benchmarking). It implements `{ onMessage, finalize }` — the same interface the runner expects:
-
-```
-MiddlewarePipeline
-    ├─ middleware 1: onInit, onMessage, onPhaseTransition, onFinalize
-    ├─ middleware 2: ...
-    └─ middleware N: ...
-```
-
-Each middleware has a `name` and optional lifecycle hooks. A shared store (`MiddlewareContext.get` / `MiddlewareStore.set`) lets upstream middleware publish data that downstream middleware reads. Phase detection is automatic (from SDK message content) or explicit (`pipeline.startPhase()`).
-
-To add a middleware: implement the `Middleware` interface, add it to the pipeline construction in `agent-runner.ts`. The pipeline dispatches in order.
+[Middleware](../../../../src/lib/middleware/) provides opt-in message/phase
+instrumentation. The linear sequence creates the benchmark pipeline; there is no
+pipeline construction in the compatibility `agent-runner.ts`. Inspect the actual
+consumer before extending instrumentation to another sequence or harness.

@@ -1,14 +1,4 @@
-/**
- * Model capabilities — the traits a harness needs that a bare gateway model id
- * doesn't carry. The switchboard resolves *which* model (harness.ts); this
- * resolves *what the model can do*, so a harness never hardcodes it.
- *
- * `reasoning` gates whether a harness requests reasoning at all; `thinkingLevel`
- * sets how much. Non-reasoning openai-completions models reject the reasoning
- * params (gpt-4o → gateway `UnsupportedParamsError` → the pi run no-ops), and
- * effort trades speed for depth (flagship gpt-5 at high effort runs long). Both
- * are silent when wrong, so they live here as one configurable table.
- */
+// Local capabilities inform transport parameters; gateway policy independently admits models and efforts.
 import {
   SONNET_5_MODEL,
   HAIKU_MODEL,
@@ -19,7 +9,7 @@ import {
   Harness,
 } from '@lib/constants';
 
-/** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
+/** Reasoning effort, mapped by each harness to its provider transport. */
 const THINKING_LEVELS = [
   'off',
   'minimal',
@@ -61,7 +51,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },
 };
 
-/** The only models the wizard may dispatch on. */
+// Local model choices; gateway admission also requires allowed models, efforts, and prompt compatibility.
 export const VALID_MODELS: ReadonlySet<string> = new Set(
   Object.keys(MODEL_CAPABILITIES),
 );
@@ -82,22 +72,12 @@ export function requireKnownModel(
   );
 }
 
-/**
- * Default for a model not in the table: reasoning on for anthropic-messages
- * models, off for openai-completions — the non-reasoning openai models reject
- * reasoning effort, so off is the safe default (a reasoning openai model opts
- * back in via the table above). Transport is inferred the same way the pi
- * harness infers it (`openai/` prefix → openai-completions).
- */
+// Unknown Anthropic models default to reasoning; OpenAI models must opt in through the local table.
 function defaultCaps(modelId: string): ModelCapabilities {
   return { reasoning: !modelId.startsWith('openai/') };
 }
 
-/**
- * Scan-triage classifier per harness: the cheapest tier of the line that harness
- * already speaks. Undated ids on purpose: triage is a boolean classifier, so it
- * should follow the current release rather than pin one.
- */
+// Triage requests must satisfy gateway safety policy and preserve Warlock’s classifier format.
 export const TRIAGE_MODELS: Record<Harness, string> = {
   [Harness.anthropic]: HAIKU_TRIAGE_MODEL,
   [Harness.pi]: GPT5_6_LUNA_MODEL,
