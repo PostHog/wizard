@@ -32,6 +32,9 @@ const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
 
+/** Task type of the seeded step below, matched against the drain's result. */
+const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
+
 function resolveContinueUrl(
   sess: WizardSession,
   host: HostResolution,
@@ -82,13 +85,19 @@ function warehouseSourceUrl(
  * one pass, and it is the only route offered once the list is too long to read.
  *
  * Returns undefined when nothing was detected, so the outro is unchanged for
- * projects with no connectable source.
+ * projects with no connectable source — and when the run's own warehouse step
+ * connected them, where every bullet here would ask the user to redo work the
+ * wizard just did and send them at a new-source form that would collide with
+ * the source already created.
  */
 function buildWarehouseNextSteps(
   sess: WizardSession,
   host: HostResolution,
   projectId: number | string,
+  completedSeededTypes: readonly string[],
 ): { heading: string; items: string[] } | undefined {
+  if (completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)) return undefined;
+
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return undefined;
 
@@ -155,7 +164,7 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   }
   return [
     {
-      type: 'warehouse',
+      type: WAREHOUSE_SEED_TASK_TYPE,
       inputs: {
         sources: sources.map((s) => ({
           kind: s.kind,
@@ -401,6 +410,14 @@ ${warehouseReportInstruction(session)}
         }
       },
 
+      buildOutroNextSteps: (sess, credentials, completedSeededTypes) =>
+        buildWarehouseNextSteps(
+          sess,
+          credentials.host,
+          credentials.projectId,
+          completedSeededTypes,
+        ),
+
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
@@ -426,10 +443,13 @@ ${warehouseReportInstruction(session)}
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          // The linear sequence seeds no tasks, so nothing here was connected
+          // during the run. `buildOutroNextSteps` carries the orchestrated case.
           nextSteps: buildWarehouseNextSteps(
             sess,
             credentials.host,
             credentials.projectId,
+            [],
           ),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,

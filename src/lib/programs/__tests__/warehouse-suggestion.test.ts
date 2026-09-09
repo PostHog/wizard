@@ -1,11 +1,16 @@
 /**
  * Data-warehouse-source suggestion in the default integration flow.
  *
- * The flow detects connectable sources and *points at* them — it does not
- * connect them. These tests pin the three properties that matter: the outro
- * hands over a link that opens the right source's form, projects with no
- * detected source see a byte-identical flow, and the suggestion never turns
- * into an inline run.
+ * These tests pin the properties that matter: the outro hands over a link that
+ * opens the right source's form, projects with no detected source see a
+ * byte-identical flow, and the suggestion never turns into an inline run.
+ *
+ * The links reach the user two ways, because the two sequences build the outro
+ * differently: the linear one asks the program for the whole thing
+ * (`buildOutroData`), while the orchestrated one composes its own message from
+ * the drain and takes only the bullets (`buildOutroNextSteps`). The second is
+ * the sequence that seeds the warehouse step, so it is also the one that can
+ * say the run already connected the sources.
  */
 
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
@@ -207,5 +212,52 @@ describe('flow shape', () => {
     // A step carrying its own `run` would flip run-wizard into the composed
     // walk, where a second agent run could abort before the outro is pushed.
     expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.run)).toBe(false);
+  });
+});
+
+describe('orchestrated outro suggestion', () => {
+  const nextSteps = async (
+    session: WizardSession,
+    completedSeededTypes: readonly string[],
+  ) => {
+    const runDef = await resolveRun(session);
+    return runDef.buildOutroNextSteps!(
+      session,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      CREDENTIALS as any,
+      completedSeededTypes,
+    );
+  };
+
+  it('carries the same links the linear outro does', async () => {
+    const s = sessionWith([POSTGRES, STRIPE]);
+
+    const text = (await nextSteps(s, []))!.items.join('\n');
+
+    expect(text).toContain(
+      'https://us.posthog.com/project/1/data-warehouse/new-source?kind=postgres',
+    );
+    expect(text).toContain('kind=stripe');
+    expect(text).toContain('npx @posthog/wizard warehouse');
+  });
+
+  it('still carries them when the seeded step did not connect the sources', async () => {
+    const s = sessionWith([POSTGRES]);
+
+    // A declined, skipped or failed warehouse step leaves the sources
+    // unconnected, which is the case these bullets exist for.
+    expect((await nextSteps(s, ['install']))!.items.join('\n')).toContain(
+      'kind=postgres',
+    );
+  });
+
+  it('offers nothing once the seeded warehouse step connected them', async () => {
+    const s = sessionWith([POSTGRES]);
+
+    expect(await nextSteps(s, ['warehouse'])).toBeUndefined();
+  });
+
+  it('offers nothing when nothing was detected', async () => {
+    expect(await nextSteps(sessionWith([]), [])).toBeUndefined();
   });
 });

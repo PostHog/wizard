@@ -246,6 +246,23 @@ export async function offerSeededTask(
   }
 }
 
+/**
+ * Which runner-seeded task types finished successfully.
+ *
+ * Handed to the program's `buildOutroNextSteps` so it can drop a next step its
+ * own seeded task already carried out. Only `Done` counts: a skipped, declined
+ * or failed step left the work undone, and that is exactly when the outro
+ * bullet pointing at the app is the one thing the user still needs.
+ */
+export function completedSeededTypes(
+  store: QueueStore,
+  seededTasks: readonly QueuedTask[],
+): string[] {
+  return seededTasks
+    .filter((task) => store.get(task.id)?.status === TaskStatus.Done)
+    .map((task) => task.type);
+}
+
 /** One seeded task's answer to its notice, taken once, at seed time. */
 export interface SeededConsent {
   keep: boolean;
@@ -1188,6 +1205,11 @@ export async function runOrchestrator(
       ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
       : undefined,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
+    nextSteps: config.buildOutroNextSteps?.(
+      session,
+      boot.credentials,
+      completedSeededTypes(store, seededTasks),
+    ),
   });
   getUI().outro(message);
   await analytics.shutdown('success');
