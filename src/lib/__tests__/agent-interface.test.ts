@@ -630,7 +630,7 @@ describe('subprocess gateway credentials', () => {
   const config = {
     workingDirectory: '/test/dir',
     mcpServers: {},
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     // Deliberately different from the gateway bearer below: identical values
     // would let either source pass.
     posthogApiKey: 'phx_user_oauth_token',
@@ -715,7 +715,7 @@ describe('gateway re-mint on 401', () => {
   ) => ({
     workingDirectory: '/test/dir',
     mcpServers: {},
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     posthogApiKey: 'phx_user_oauth_token',
     sequence: Sequence.linear,
     triageProvider: () => Promise.resolve('false_positive'),

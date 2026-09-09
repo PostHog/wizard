@@ -122,7 +122,7 @@ export class Wizard {
         })
         .option('model', {
           describe:
-            'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
+            'Override the agent model (gateway id, e.g. claude-sonnet-5 | openai/gpt-5.6-terra). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
           type: 'string',
           hidden: true,
         })

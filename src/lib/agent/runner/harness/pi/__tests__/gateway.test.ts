@@ -61,7 +61,7 @@ describe('buildGatewayProvider transport', () => {
   it('routes anthropic models over anthropic-messages without /v1', () => {
     const { api, baseUrl } = buildGatewayProvider({
       ...base,
-      modelId: 'claude-sonnet-4-6',
+      modelId: 'claude-sonnet-5',
     });
     expect(api).toBe('anthropic-messages');
     expect(baseUrl).toBe('https://ai-gateway.us.posthog.com');

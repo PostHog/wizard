@@ -63,7 +63,7 @@ Each step is one markdown file whose frontmatter declares its shape:
 type: dashboard
 flow: integration-v2
 label: Create a starter dashboard
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 skills: [basic-integration-dashboard]
 allowedTools: [Read, Glob, Grep]
 disallowedTools: [Write, Edit, Bash, enqueue_task]

@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
+  HAIKU_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
@@ -268,9 +269,8 @@ describe('switchboard composed clamp', () => {
 describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
   it('marks the known reasoning models as reasoning', () => {
     for (const m of [
-      'claude-sonnet-4-6',
-      'claude-opus-4-8',
-      'claude-haiku-4-5-20251001',
+      'claude-sonnet-5',
+      'claude-haiku-4-5',
       'openai/gpt-5.6-terra',
     ]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
@@ -315,18 +315,25 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
 });
 
 describe('switchboard model allow-list', () => {
-  it('allow-lists the sonnets and the gpt-5.6 line, nothing older', () => {
+  it('allow-lists Sonnet 5, Haiku 4.5 and the gpt-5.6 line', () => {
     for (const m of [
-      DEFAULT_AGENT_MODEL,
       SONNET_5_MODEL,
+      HAIKU_MODEL,
       GPT5_6_LUNA_MODEL,
       GPT5_6_TERRA_MODEL,
       GPT5_6_SOL_MODEL,
     ]) {
       expect(isValidModel(m)).toBe(true);
     }
-    // The retired openai ids are gone — no longer valid to dispatch on.
-    for (const m of ['openai/gpt-5', 'openai/gpt-5.4', 'openai/gpt-5.5']) {
+    // Retired model ids must not reach the gateway.
+    for (const m of [
+      'claude-sonnet-4-6',
+      'claude-opus-4-8',
+      'claude-haiku-4-5-20251001',
+      'openai/gpt-5',
+      'openai/gpt-5.4',
+      'openai/gpt-5.5',
+    ]) {
       expect(isValidModel(m)).toBe(false);
     }
     expect(isValidModel('')).toBe(false);
