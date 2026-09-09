@@ -17,6 +17,7 @@ import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
+  AgentRunContext,
   AskAnswers,
   Credentials,
   OutroData,
@@ -61,6 +62,7 @@ export class InkUI implements WizardUI {
   }
 
   outroError(data: OutroData): void {
+    this.store.setOutroDismissed(false);
     this.store.setOutroData(data);
     // Advance router past the run step so the outro screen renders
     if (this.store.session.runPhase !== RunPhase.Error) {
@@ -112,6 +114,10 @@ export class InkUI implements WizardUI {
 
   getFrameworkContext(key: string): unknown {
     return this.store.session.frameworkContext[key];
+  }
+
+  setAgentRunContext(context: AgentRunContext): void {
+    this.store.setAgentRunContext(context);
   }
 
   setDetectedFramework(label: string): void {

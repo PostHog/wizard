@@ -207,6 +207,13 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       apply: (store) => store.setOutroDismissed(),
     },
   ],
+  [ScreenId.MintFailure]: [
+    {
+      id: 'dismiss_outro',
+      description: 'Dismiss the mint failure so the wizard can exit.',
+      apply: (store) => store.setOutroDismissed(),
+    },
+  ],
 
   // ── MCP install ───────────────────────────────────────────────────────
   [ScreenId.Mcp]: [

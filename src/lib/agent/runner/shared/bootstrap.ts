@@ -7,13 +7,13 @@
  * effects. Returns the values the arms still need.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import { buildAgentRunContext, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
-import { gatewayAuth } from '@lib/gateway-session';
+import { requireGatewayAuth } from '@lib/agent/gateway-auth';
 import { resolveHarness } from '../switchboard';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
@@ -92,6 +92,7 @@ export async function bootstrapProgram(
   // 1. Init logging + debug
   initLogFile();
   session.skillId = config.skillId ?? config.integrationLabel;
+  getUI().setAgentRunContext(buildAgentRunContext(session, programConfig.id));
   logToFile(
     `[agent-runner] START ${config.integrationLabel} build=${analytics.build}` +
       `${session.ci ? ' (non-interactive)' : ''}`,
@@ -311,7 +312,11 @@ export async function bootstrapProgram(
   // readers re-resolve through the cache, which re-mints past the refresh
   // point.
   const currentGatewayAuth = () =>
-    gatewayAuth(credentials.host, credentials.accessToken, programConfig.id);
+    requireGatewayAuth(
+      credentials.host,
+      credentials.accessToken,
+      programConfig.id,
+    );
   await currentGatewayAuth();
 
   return {

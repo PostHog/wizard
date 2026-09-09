@@ -22,6 +22,8 @@ import { Program } from '@lib/programs/program-registry';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
+import { ErrorCodes } from '@lib/errors/codes';
+import { OutroKind } from '@lib/wizard-session';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(Program.PostHogIntegration);
@@ -45,6 +47,26 @@ const cleanReadiness = {
 };
 
 describe('WizardCiDriver — full integration flow', () => {
+  it('keeps a late mint failure open until it is dismissed again', async () => {
+    const store = freshStore();
+    const ui = new InkUI(store);
+    const driver = new WizardCiDriver(store);
+    store.setOutroDismissed();
+    ui.outroError({
+      kind: OutroKind.Error,
+      errorCode: ErrorCodes.GatewayMintFailed,
+    });
+    expect(driver.readState().currentScreen).toBe(ScreenId.MintFailure);
+    expect(store.session.outroDismissed).toBe(false);
+    const dismissed = vi.fn();
+    const waiting = ui.waitForOutroDismissed().then(dismissed);
+    await Promise.resolve();
+    expect(dismissed).not.toHaveBeenCalled();
+    driver.performAction('dismiss_outro');
+    await waiting;
+    expect(dismissed).toHaveBeenCalledOnce();
+  });
+
   it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
     const store = freshStore();
     const driver = new WizardCiDriver(store);

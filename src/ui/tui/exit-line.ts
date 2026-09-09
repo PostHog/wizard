@@ -15,6 +15,7 @@
 
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
+import { isMintFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
 
 const RESET_ATTRS = '\x1b[0m';
@@ -68,6 +69,16 @@ export function getExitLine(store: WizardStore): string {
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
+
+  if (isMintFailure(outro)) {
+    return [
+      'The wizard is unavailable. Setup has not been completed.',
+      outro?.handoffPrompt,
+      MINT_FAILURE_CONTACT,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;

@@ -45,6 +45,7 @@ export enum ScreenId {
   SlackConnect = 'slack-connect',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
+  MintFailure = 'mint-failure',
   Exit = 'exit',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',

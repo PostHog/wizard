@@ -32,10 +32,10 @@ import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
 import {
   buildWizardPropertiesBlob,
-  gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
 } from '@lib/gateway-session';
+import { requireGatewayAuth } from '@lib/agent/gateway-auth';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -539,7 +539,7 @@ export async function initializeAgent(
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
     const currentGatewayAuth = () =>
-      gatewayAuth(config.host, config.posthogApiKey, config.programId);
+      requireGatewayAuth(config.host, config.posthogApiKey, config.programId);
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;

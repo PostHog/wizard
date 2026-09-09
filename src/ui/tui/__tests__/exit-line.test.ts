@@ -1,6 +1,7 @@
 import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
+import { ErrorCodes } from '@lib/errors/codes';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -30,6 +31,27 @@ function setHudVisible(store: WizardStore, visible: boolean): void {
 }
 
 describe('getExitLine', () => {
+  it.each([ErrorCodes.GatewayMintRefused, ErrorCodes.GatewayMintFailed])(
+    'keeps the failed setup handoff and contact in scrollback for %s',
+    (errorCode) => {
+      const handoffPrompt =
+        'Read /project/.posthog/wizard-spellbook-123/README.md and finish setup.';
+      const line = stripAnsi(
+        getExitLine(
+          storeWithOutro({
+            kind: OutroKind.Error,
+            errorCode,
+            handoffPrompt,
+          }),
+        ),
+      );
+      expect(line).toContain('Setup has not been completed.');
+      expect(line.split('\n')).toContain(handoffPrompt);
+      expect(line).toContain('wizard@posthog.com');
+      expect(line).not.toContain('successfully');
+    },
+  );
+
   it('echoes the handoff prompt on its own line so it survives in scrollback', () => {
     const prompt =
       'Read `posthog-setup-report.md` and work through the checklist.';
