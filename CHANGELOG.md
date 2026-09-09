@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.73.1](https://github.com/PostHog/wizard/compare/v2.73.0...v2.73.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **replay-vision:** stop reporting unsupported-platform aborts as errors ([#1138](https://github.com/PostHog/wizard/issues/1138)) ([6526e29](https://github.com/PostHog/wizard/commit/6526e29c04fe0de0210775fdd6cd3cc2feab50d5))
+
 ## [2.73.0](https://github.com/PostHog/wizard/compare/v2.72.0...v2.73.0) (2026-09-04)
 
 
