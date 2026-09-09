@@ -230,6 +230,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       gatewayUrl: current.gatewayUrl,
       accessToken: current.token,
       teamId: current.teamId,
+      legacy: current.legacy,
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
       modelId,

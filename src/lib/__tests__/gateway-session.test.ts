@@ -10,6 +10,7 @@ import {
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
 import { ErrorCodes } from '@lib/errors';
+import { setLegacyGatewayFallback } from '@lib/legacy-gateway';
 import { WizardError } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -37,7 +38,10 @@ const renderArg = (a: unknown): string => {
 const loggedLines = () =>
   vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
-const host = { apiHost: 'https://us.posthog.com' } as unknown as HostResolution;
+const host = {
+  region: 'us',
+  apiHost: 'https://us.posthog.com',
+} as unknown as HostResolution;
 
 describe('gatewayAuth', () => {
   const fetchMock = vi.fn();
@@ -446,6 +450,91 @@ describe('gatewayAuth', () => {
     await expect(
       gatewayAuth(host, 'pha_oauth', 'integration'),
     ).rejects.toBeInstanceOf(GatewayMintRefused);
+  });
+
+  describe('CI legacy fallback', () => {
+    const refused = (status: number) => ({
+      ok: false,
+      status,
+      json: () => Promise.resolve({}),
+    });
+
+    beforeEach(() => setLegacyGatewayFallback(true));
+    afterEach(() => setLegacyGatewayFallback(false));
+
+    it('stays on the legacy gateway when the mint does not take the credential', async () => {
+      // A personal API key 401s at the mint; the legacy gateway authenticates it itself.
+      fetchMock.mockResolvedValue(refused(401));
+      const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+      expect(auth).toMatchObject({
+        gatewayUrl: 'https://gateway.us.posthog.com/wizard',
+        token: 'phx_personal',
+        legacy: true,
+      });
+      expect(isPastRefresh(auth)).toBe(false);
+    });
+
+    it('picks the legacy gateway for the region, or the local one for a dev host', async () => {
+      fetchMock.mockResolvedValue(refused(401));
+      const urlFor = async (region: string, apiHost: string) => {
+        resetGatewaySession();
+        const h = { region, apiHost } as unknown as HostResolution;
+        return (await gatewayAuth(h, 'phx_personal', 'integration')).gatewayUrl;
+      };
+      expect(await urlFor('eu', 'https://eu.i.posthog.com')).toBe(
+        'https://gateway.eu.posthog.com/wizard',
+      );
+      expect(await urlFor('us', 'http://localhost:8010')).toBe(
+        'http://localhost:3308/wizard',
+      );
+      expect(await urlFor('us', 'http://host.docker.internal:8010')).toBe(
+        'http://host.docker.internal:3308/wizard',
+      );
+    });
+
+    it('stays on the legacy gateway when the instance has no mint', async () => {
+      fetchMock.mockResolvedValue(refused(404));
+      const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+      expect(auth.legacy).toBe(true);
+    });
+
+    it('caches the fallback instead of re-asking the mint per caller', async () => {
+      fetchMock.mockResolvedValue(refused(401));
+      await gatewayAuth(host, 'phx_personal', 'integration');
+      await gatewayAuth(host, 'phx_personal', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('still fails a policy refusal', async () => {
+      // 403/429/400 are decisions about the run, which the legacy gateway would not enforce.
+      fetchMock.mockResolvedValue(refused(403));
+      await expect(
+        gatewayAuth(host, 'phx_personal', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintRefused);
+    });
+
+    it('still mints when the mint accepts the credential', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'https://gateway.us.posthog.com',
+          }),
+      });
+      const auth = await gatewayAuth(host, 'pha_app', 'integration');
+      expect(auth.token).toBe('phe_minted');
+      expect(auth.legacy).toBeUndefined();
+    });
+
+    it('does not fall back outside CI', async () => {
+      setLegacyGatewayFallback(false);
+      fetchMock.mockResolvedValue(refused(401));
+      await expect(
+        gatewayAuth(host, 'phx_personal', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintRefused);
+    });
   });
 
   it("names the run's program in the mint request", async () => {
