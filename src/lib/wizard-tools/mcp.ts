@@ -20,7 +20,11 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from '../programs/audit/types';
-import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
+import {
+  type WizardAskBridge,
+  isFullyCancelled,
+  isFullyTimedOut,
+} from '../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
@@ -45,6 +49,7 @@ import {
   ensureGitignoreCoverage,
   createAskAccounting,
   fetchSkillMenu,
+  formatAskResult,
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
   normaliseAskSubject,
@@ -768,7 +773,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify({ answers: sanitised }, null, 2),
+              text: formatAskResult(sanitised, isFullyTimedOut(answers)),
             },
           ],
         };

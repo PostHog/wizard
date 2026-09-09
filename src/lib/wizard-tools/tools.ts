@@ -29,7 +29,7 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from '../programs/audit/types';
-import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
+import { isUnansweredSentinel } from '../wizard-ask-bridge';
 import type { SecretVault } from '../secret-vault';
 import { fetchWithRetry, type RetryOpts } from '../fetch-retry';
 
@@ -388,9 +388,46 @@ export const WIZARD_ASK_TOOL_DESCRIPTION =
   'than asking one at a time, and tag the call with `subject`. Walking a list — ' +
   'one call per data-warehouse source, one call per integration step — is ' +
   'expected and is never blocked, because the batching guard counts consecutive ' +
-  'calls per subject. A fully cancelled or timed-out response does NOT count ' +
-  'against the per-run cap — treat it as "the user declined" and fall back ' +
-  'gracefully (e.g. hand over a deep link) without worrying about a wasted call.';
+  'calls per subject. Neither a cancelled nor a timed-out response counts ' +
+  'against the per-run cap, so an unanswered call never wastes a slot. The two ' +
+  'endings mean different things. Every answer is "__cancelled__" when the user ' +
+  'dismissed the prompt: treat that as a decline and fall back gracefully (e.g. ' +
+  'hand over a deep link). Every answer is "__timed_out__" when no answer ' +
+  'arrived in time: the user is probably still doing the slow work you asked ' +
+  'for, so ask the same question again to keep waiting, and never undo or revert ' +
+  'a change you already applied.';
+
+/**
+ * Guidance returned beside a fully timed-out `wizard_ask` result, shared by both
+ * harness facades so the contract cannot drift between them. The sentinel alone
+ * only says the answer is missing; this says what not to do about it. See
+ * `TIMED_OUT_SENTINEL` in `wizard-ask-bridge` for why the two endings differ.
+ */
+export const ASK_TIMED_OUT_NOTE =
+  'No answer arrived before the question timed out, so every answer above is ' +
+  '"__timed_out__". This is a timeout, not a decline. The user is probably still ' +
+  'doing the slow work you asked for — a production build, a browser step, a ' +
+  'check in PostHog — and is away from the terminal. Do NOT undo, revert, or ' +
+  'delete any change you already applied, and do NOT treat the run as declined. ' +
+  'Ask the same question again to keep waiting; a timed-out call costs nothing ' +
+  'against your call budget. If a later ask comes back as "__cancelled__", the ' +
+  'user dismissed it and you may fall back. If two more asks time out, finish the ' +
+  'run, leave every change in place, and report the step as unverified.';
+
+/**
+ * Format the `wizard_ask` tool result both harness facades return. A fully
+ * timed-out ask carries {@link ASK_TIMED_OUT_NOTE} beside the answers; every
+ * other ending returns the answers alone, exactly as before.
+ */
+export function formatAskResult(
+  answers: Record<string, string | string[] | { secretRef: string }>,
+  timedOut: boolean,
+): string {
+  const payload = timedOut
+    ? { answers, unanswered_reason: 'timeout', note: ASK_TIMED_OUT_NOTE }
+    : { answers };
+  return JSON.stringify(payload, null, 2);
+}
 
 export type AskCapDecision =
   | { kind: 'ok' }
@@ -823,8 +860,8 @@ export function mergeEnvValues(
 
 /**
  * Swap sensitive text answers for opaque vault refs before they return to
- * the agent — the raw value never enters the LLM conversation. Cancelled
- * answers pass through as the sentinel, unvaulted.
+ * the agent — the raw value never enters the LLM conversation. Unanswered
+ * answers pass through as their sentinel, unvaulted.
  */
 export function vaultSensitiveAnswers(
   questions: readonly { id: string; prompt: string; sensitive?: boolean }[],
@@ -841,7 +878,7 @@ export function vaultSensitiveAnswers(
     if (
       label !== undefined &&
       typeof answer === 'string' &&
-      answer !== CANCELLED_SENTINEL
+      !isUnansweredSentinel(answer)
     ) {
       const ref = vault.put(answer, { label, source: 'wizard_ask' });
       sanitised[id] = { secretRef: ref };

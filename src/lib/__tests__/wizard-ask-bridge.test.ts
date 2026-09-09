@@ -1,7 +1,9 @@
 import {
   CANCELLED_SENTINEL,
+  TIMED_OUT_SENTINEL,
   createWizardAskBridge,
   isFullyCancelled,
+  isFullyTimedOut,
 } from '@lib/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
 import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
@@ -189,10 +191,31 @@ describe('createWizardAskBridge', () => {
     it('is false for an empty answer map', () => {
       expect(isFullyCancelled({})).toBe(false);
     });
+
+    it('is true for a timed-out ask, so a timeout also refunds the slot', () => {
+      expect(
+        isFullyCancelled({ a: TIMED_OUT_SENTINEL, b: TIMED_OUT_SENTINEL }),
+      ).toBe(true);
+    });
+  });
+
+  describe('isFullyTimedOut', () => {
+    // Gates the timeout guidance the facades return: it must fire for a
+    // timeout and never for a dismissal, which needs the opposite advice.
+    it('is true only when every field is the timed-out sentinel', () => {
+      expect(
+        isFullyTimedOut({ a: TIMED_OUT_SENTINEL, b: TIMED_OUT_SENTINEL }),
+      ).toBe(true);
+      expect(
+        isFullyTimedOut({ a: CANCELLED_SENTINEL, b: CANCELLED_SENTINEL }),
+      ).toBe(false);
+      expect(isFullyTimedOut({ a: TIMED_OUT_SENTINEL, b: 'real' })).toBe(false);
+      expect(isFullyTimedOut({})).toBe(false);
+    });
   });
 
   describe('timeout', () => {
-    it('resolves every field with the cancelled sentinel and dismisses the host overlay when the user does not answer in time', async () => {
+    it('resolves every field with the timed-out sentinel and dismisses the host overlay when the user does not answer in time', async () => {
       vi.useFakeTimers();
       try {
         // showQuestion intentionally never resolves — the timeout has to win.
@@ -213,9 +236,12 @@ describe('createWizardAskBridge', () => {
 
         vi.advanceTimersByTime(1000);
 
+        // A timeout must not look like a dismissal. The agent reads the
+        // dismissal sentinel as "the user declined" and unwinds its work, and
+        // the user who walked off to run a build is still coming back.
         await expect(promise).resolves.toEqual({
-          goal: CANCELLED_SENTINEL,
-          audience: CANCELLED_SENTINEL,
+          goal: TIMED_OUT_SENTINEL,
+          audience: TIMED_OUT_SENTINEL,
         });
 
         // Without this, the host's pending-question state survives the

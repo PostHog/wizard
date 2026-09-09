@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import {
   CANCELLED_SENTINEL,
+  TIMED_OUT_SENTINEL,
   type WizardAskBridge,
 } from '@lib/wizard-ask-bridge';
 import { createWizardPiTools } from '../tools';
@@ -17,6 +18,7 @@ import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 import {
   ASK_BATCH_THRESHOLD,
+  ASK_TIMED_OUT_NOTE,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -90,6 +92,19 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
       answers: { token: string };
     };
     expect(answers.token).toBe(CANCELLED_SENTINEL);
+  });
+
+  it('a timed-out sensitive answer is returned as its own sentinel, not vaulted', async () => {
+    const { wizardAsk } = makeTools({ token: TIMED_OUT_SENTINEL });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'token', prompt: 'Zendesk token', kind: 'text', sensitive: true },
+      ],
+    });
+    const { answers } = JSON.parse(textOf(result)) as {
+      answers: { token: string };
+    };
+    expect(answers.token).toBe(TIMED_OUT_SENTINEL);
   });
 
   it('still rejects sensitive=true on non-text kinds', async () => {
@@ -457,5 +472,49 @@ describe('pi task tool grant — the names the inventory shows', () => {
       'complete_task',
       'read_handoffs',
     ]);
+  });
+});
+
+describe('pi wizard_ask — a timeout is not a decline', () => {
+  it('returns the do-not-revert guidance when every field timed out', async () => {
+    const { wizardAsk } = makeTools({ verified: TIMED_OUT_SENTINEL });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'verified', prompt: 'See the error in PostHog?', kind: 'text' },
+      ],
+    });
+    const body = JSON.parse(textOf(result)) as {
+      unanswered_reason?: string;
+      note?: string;
+    };
+    expect(body.unanswered_reason).toBe('timeout');
+    expect(body.note).toBe(ASK_TIMED_OUT_NOTE);
+  });
+
+  it('says nothing about a timeout when the user dismissed the prompt', async () => {
+    const { wizardAsk } = makeTools({ verified: CANCELLED_SENTINEL });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'verified', prompt: 'See the error in PostHog?', kind: 'text' },
+      ],
+    });
+    const body = JSON.parse(textOf(result)) as Record<string, unknown>;
+    expect(body.unanswered_reason).toBeUndefined();
+    expect(body.note).toBeUndefined();
+  });
+
+  it('does not burn a call slot, so the agent can ask again and keep waiting', async () => {
+    const { wizardAsk, request } = makeTools(
+      { verified: TIMED_OUT_SENTINEL },
+      1,
+    );
+    const questions = [
+      { id: 'verified', prompt: 'See the error in PostHog?', kind: 'text' },
+    ];
+    await call(wizardAsk, { questions, subject: 'verify' });
+    const second = await call(wizardAsk, { questions, subject: 'verify' });
+
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(textOf(second)).not.toContain('cap reached');
   });
 });
