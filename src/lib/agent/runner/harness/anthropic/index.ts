@@ -7,9 +7,9 @@
  * Implements both entry points:
  *   - `run`     for linear mode (one call per program)
  *   - `runTask` for orchestrator mode (one call for the seed plan, one per
- *               drained task). This is the only harness that supports
- *               orchestrator today; pi omits `runTask` and the orchestrator
- *               runner fails loudly when handed a harness without it.
+ *               drained task). pi implements `runTask` too; a harness
+ *               without it is clamped back to the linear sequence by the
+ *               switchboard's capability check (`runTaskCapabilityClampMw`).
  */
 
 import { getUI } from '@ui';

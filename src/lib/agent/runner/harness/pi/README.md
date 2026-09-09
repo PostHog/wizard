@@ -17,9 +17,11 @@ runtime is composed explicitly from parts the wizard supplies.
 Entry points:
 
 - **`run()`** — linear mode, one agent per program.
-- **`runTask()`** — **not implemented yet.** Orchestrator mode currently throws
-  with a clear impl-gap error when this harness is picked; the fix is wrapping
-  pi's `createAgentSession` in a task-shaped call.
+- **`runTask()`** — orchestrator mode, one fresh pi session for the seed plan
+  and one per drained task, with the in-process queue tools registered as pi
+  custom tools. Implemented in `task.ts` and imported lazily — it pulls in
+  typebox (ESM), which must stay out of the static module graph so CommonJS unit
+  tests can load the backend seam without parsing it.
 
 ## Core characteristics
 
