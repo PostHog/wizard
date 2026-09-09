@@ -150,8 +150,19 @@ export function createWizardAskBridge(
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
           timedOut = true;
-          opts.cancelQuestion?.();
+          // Answer before cleaning up, or cleanup wins the race. On the real
+          // TUI path `cancelQuestion` settles the `showQuestion` promise
+          // synchronously with the dismissal sentinel
+          // (`WizardStore.cancelPendingQuestion`), so cancelling first let that
+          // promise settle ahead of this one — and the timeout came back
+          // indistinguishable from the decline it is not.
           resolve(buildUnansweredAnswers(questions, TIMED_OUT_SENTINEL));
+          try {
+            opts.cancelQuestion?.();
+          } catch {
+            // Best-effort: the timeout answer is already settled, and a
+            // caller-injected callback must not take the run down from a timer.
+          }
         }, timeoutMs);
       });
 
