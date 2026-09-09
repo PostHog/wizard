@@ -7,9 +7,10 @@ import {
 
 describe('pricePerMtokForModel', () => {
   it('defaults to Sonnet pricing (DEFAULT_AGENT_MODEL) when no model is given', () => {
-    expect(
-      pricePerMtokForModel(undefined, new Date('2026-09-01T00:00:00Z')),
-    ).toEqual({
+    // DEFAULT_AGENT_MODEL is Sonnet 5, whose price is time-dependent, so pin
+    // `now` past the promo instead of letting the wall clock decide.
+    const afterPromo = new Date('2026-09-01T00:00:00Z');
+    expect(pricePerMtokForModel(undefined, afterPromo)).toEqual({
       input: 3,
       output: 15,
       cacheRead: 0.3,
@@ -19,7 +20,7 @@ describe('pricePerMtokForModel', () => {
   });
 
   it('strips a dated release suffix to match the undated table entry', () => {
-    // Resumed sessions can still report a dated model id.
+    // The SDK can report a dated id; HAIKU_MODEL is the undated table entry.
     expect(pricePerMtokForModel('claude-haiku-4-5-20251001')?.input).toBe(1);
   });
 

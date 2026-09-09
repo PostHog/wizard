@@ -31,7 +31,11 @@
  * DEFAULT_AGENT_MODEL/HAIKU_MODEL, since this table isn't fetched live.
  */
 
-import { DEFAULT_AGENT_MODEL } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  HAIKU_MODEL,
+  SONNET_5_MODEL,
+} from '@lib/constants';
 
 export interface PricePerMtok {
   input: number;
@@ -64,19 +68,20 @@ function pricingFromInput(input: number, output: number): PricePerMtok {
 /**
  * Exact-match price table, keyed by the *undated* model id prefix —
  * `pricePerMtokForModel` strips a dated suffix before falling back to this
- * table. Historical dated Haiku ids resolve via the `'claude-haiku-4-5'`
- * entry without needing duplicate keys. Historical model ids stay priced
- * correctly in case a resumed session or subagent reports one
- * (a turn on an id NOT in this table contributes $0 to the live estimate
- * rather than guessing — see `pricePerMtokForModel`).
+ * table, so a dated Anthropic id resolves via its undated entry without
+ * needing a duplicate key. Ids the wizard no longer dispatches on stay
+ * priced, since a subagent turn or the SDK can still report one (a turn on
+ * an id NOT in this table contributes $0 to the live estimate rather than
+ * guessing, see `pricePerMtokForModel`).
  *
- * `'claude-sonnet-5'` is intentionally absent — its price is time-dependent
- * (promotional launch discount), so it's resolved separately by
- * `pricePerMtokForModel` via `SONNET_5_PRICE`.
+ * `SONNET_5_MODEL` is intentionally absent: its price is time-dependent
+ * (promotional launch discount), so `pricePerMtokForModel` resolves it via
+ * `sonnet5Price`. It is also `DEFAULT_AGENT_MODEL`, so the no-model fallback
+ * goes through that branch.
  */
 const PRICE_TABLE: Record<string, PricePerMtok> = {
   'claude-sonnet-4-6': pricingFromInput(3, 15),
-  'claude-haiku-4-5': pricingFromInput(1, 5),
+  [HAIKU_MODEL]: pricingFromInput(1, 5),
   'claude-opus-4-5': pricingFromInput(5, 25),
 };
 
@@ -85,8 +90,8 @@ const PRICE_TABLE: Record<string, PricePerMtok> = {
  * UTC; from 2026-09-01 it reverts to the same rate as Sonnet 4.6 ($3/$15)
  * — not a coincidence, Anthropic prices it identically to 4.6 once the
  * promo ends. Re-verify against https://models.dev/api.json if this ever
- * looks off, and delete this special case once the promo window has
- * passed.
+ * looks off, and fold this special case into a flat `PRICE_TABLE` entry at
+ * the post-promo rate once the window is well past.
  */
 const SONNET_5_PROMO_ENDS_UTC = new Date('2026-09-01T00:00:00Z');
 
@@ -121,10 +126,10 @@ export function pricePerMtokForModel(
   model?: string,
   now: Date = new Date(),
 ): PricePerMtok | undefined {
-  const resolvedModel = model || DEFAULT_AGENT_MODEL;
-  const undated = stripDateSuffix(resolvedModel);
-  if (undated === 'claude-sonnet-5') return sonnet5Price(now);
-  return PRICE_TABLE[resolvedModel] ?? PRICE_TABLE[undated];
+  const id = model ?? DEFAULT_AGENT_MODEL;
+  const undated = stripDateSuffix(id);
+  if (undated === SONNET_5_MODEL) return sonnet5Price(now);
+  return PRICE_TABLE[id] ?? PRICE_TABLE[undated];
 }
 
 /**

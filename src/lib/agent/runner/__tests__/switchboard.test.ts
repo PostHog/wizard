@@ -13,10 +13,10 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
-  HAIKU_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
+  HAIKU_MODEL,
   SONNET_5_MODEL,
   Harness,
   Sequence,
@@ -32,6 +32,8 @@ import {
   modelCapabilities,
   isValidModel,
   requireKnownModel,
+  TRIAGE_MODELS,
+  VALID_MODELS,
 } from '@lib/agent/runner/switchboard/models';
 import { runBindingCases } from '@lib/agent/runner/switchboard/flags/__tests__/binding-cases';
 
@@ -268,11 +270,7 @@ describe('switchboard composed clamp', () => {
 
 describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
   it('marks the known reasoning models as reasoning', () => {
-    for (const m of [
-      'claude-sonnet-5',
-      'claude-haiku-4-5',
-      'openai/gpt-5.6-terra',
-    ]) {
+    for (const m of [SONNET_5_MODEL, HAIKU_MODEL, GPT5_6_TERRA_MODEL]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
   });
@@ -315,8 +313,34 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
 });
 
 describe('switchboard model allow-list', () => {
-  it('allow-lists Sonnet 5, Haiku 4.5 and the gpt-5.6 line', () => {
+  /**
+   * The gateway's mint allow-list, as Django pins it into `allowed_models`
+   * (`WIZARD_MODEL_ALLOWLIST` in posthog `posthog/llm/wizard_gateway_token.py`),
+   * with the `openai/` prefix Django strips already off. The gateway refuses a
+   * model outside it, so this list bounds what the wizard may dispatch.
+   */
+  const GATEWAY_ALLOWLIST = [
+    'claude-sonnet-5',
+    'claude-haiku-4-5',
+    'gpt-5.6-luna',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+  ];
+  const bare = (model: string): string => model.replace(/^openai\//, '');
+
+  it('never widens past the gateway mint allow-list', () => {
+    expect([...VALID_MODELS].map(bare).sort()).toEqual(
+      [...GATEWAY_ALLOWLIST].sort(),
+    );
+    // Triage runs on the same token, so its models are bound by the same list.
+    for (const model of Object.values(TRIAGE_MODELS)) {
+      expect(GATEWAY_ALLOWLIST).toContain(bare(model));
+    }
+  });
+
+  it('allow-lists the sonnet, haiku and gpt-5.6 line, nothing older', () => {
     for (const m of [
+      DEFAULT_AGENT_MODEL,
       SONNET_5_MODEL,
       HAIKU_MODEL,
       GPT5_6_LUNA_MODEL,
@@ -325,14 +349,15 @@ describe('switchboard model allow-list', () => {
     ]) {
       expect(isValidModel(m)).toBe(true);
     }
-    // Retired model ids must not reach the gateway.
+    // The retired openai ids are gone — no longer valid to dispatch on.
+    for (const m of ['openai/gpt-5', 'openai/gpt-5.4', 'openai/gpt-5.5']) {
+      expect(isValidModel(m)).toBe(false);
+    }
+    // Dropped from the gateway's allow-list, so they must fail here first.
     for (const m of [
       'claude-sonnet-4-6',
       'claude-opus-4-8',
       'claude-haiku-4-5-20251001',
-      'openai/gpt-5',
-      'openai/gpt-5.4',
-      'openai/gpt-5.5',
     ]) {
       expect(isValidModel(m)).toBe(false);
     }

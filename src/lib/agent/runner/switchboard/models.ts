@@ -95,7 +95,7 @@ function defaultCaps(modelId: string): ModelCapabilities {
 
 /**
  * Scan-triage classifier per harness: the cheapest tier of the line that harness
- * already speaks. Undated ids on purpose — triage is a boolean classifier, so it
+ * already speaks. Undated ids on purpose: triage is a boolean classifier, so it
  * should follow the current release rather than pin one.
  */
 export const TRIAGE_MODELS: Record<Harness, string> = {
