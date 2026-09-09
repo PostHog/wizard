@@ -16,7 +16,7 @@ The PostHog wizard helps you quickly add PostHog to your project using AI.
 To use the wizard, you can run it directly using:
 
 ```bash
-npx @posthog/wizard
+npx @posthog/wizard@latest
 ```
 
 Currently the wizard can be used for over 16+ frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
@@ -43,10 +43,10 @@ Protocol) servers:
 
 ```bash
 # Install PostHog MCP server to supported clients
-npx @posthog/wizard mcp add
+npx @posthog/wizard@latest mcp add
 
 # Remove PostHog MCP server from supported clients
-npx @posthog/wizard mcp remove
+npx @posthog/wizard@latest mcp remove
 ```
 
 ## Wizard programs
@@ -58,7 +58,7 @@ The wizard's commands are grouped into **programs** — self-contained agentic j
 Running the wizard with no arguments installs PostHog into your project. It detects your framework, wires up initialization, instruments a starter set of events, and walks you through a first dashboard:
 
 ```bash
-npx @posthog/wizard
+npx @posthog/wizard@latest
 ```
 
 Powered by the `posthog-integration` program. Most other programs below build on it (they declare `requires: ['posthog-integration']`) and will offer to run it first if PostHog isn't already set up.
@@ -68,7 +68,7 @@ Powered by the `posthog-integration` program. Most other programs below build on
 Autonomously sets up PostHog self-driving end-to-end. It connects GitHub, enables Session Replay and Error Tracking, wires up signal sources, and configures a Signals scout troop that watches your project for you.
 
 ```bash
-npx @posthog/wizard self-driving
+npx @posthog/wizard@latest self-driving
 ```
 
 If PostHog isn't already installed, the wizard runs the default integration first (composed run) before starting the self-driving setup.
@@ -81,16 +81,16 @@ audit (the default); pass a subcommand to run a specific one:
 
 ```bash
 # Runs the events audit (the default) — no subcommand needed
-npx @posthog/wizard audit
+npx @posthog/wizard@latest audit
 
 # Or run a specific audit directly
-npx @posthog/wizard audit events           # event capture quality + cost (default)
-npx @posthog/wizard audit all              # comprehensive audit across every area
-npx @posthog/wizard audit autocapture      # autocapture setup + cost
-npx @posthog/wizard audit feature-flags    # feature flag usage + cost
-npx @posthog/wizard audit identify         # your $identify implementation
-npx @posthog/wizard audit session-replay   # session replay setup
-npx @posthog/wizard audit web-analytics    # web analytics setup
+npx @posthog/wizard@latest audit events           # event capture quality + cost (default)
+npx @posthog/wizard@latest audit all              # comprehensive audit across every area
+npx @posthog/wizard@latest audit autocapture      # autocapture setup + cost
+npx @posthog/wizard@latest audit feature-flags    # feature flag usage + cost
+npx @posthog/wizard@latest audit identify         # your $identify implementation
+npx @posthog/wizard@latest audit session-replay   # session replay setup
+npx @posthog/wizard@latest audit web-analytics    # web analytics setup
 ```
 
 Most audit subcommands resolve at runtime from the published skill registry, so
@@ -108,7 +108,7 @@ new audits appear without a wizard release (`web-analytics` is wizard-native).
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
 ```bash
-npx @posthog/wizard revenue-analytics
+npx @posthog/wizard@latest revenue-analytics
 ```
 
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
@@ -120,7 +120,7 @@ Detect data sources your project already uses (Postgres, MySQL, MongoDB,
 Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
 
 ```bash
-npx @posthog/wizard warehouse
+npx @posthog/wizard@latest warehouse
 ```
 
 The wizard scans your dependencies and `.env` key names (never the values) to
@@ -132,7 +132,7 @@ OAuth sources open the PostHog app's new-source flow in your browser.
 Upload JavaScript source maps to PostHog error tracking so stack traces are symbolicated back to your original code:
 
 ```bash
-npx @posthog/wizard upload-source-maps
+npx @posthog/wizard@latest upload-source-maps
 ```
 
 ### Run skill
@@ -141,8 +141,8 @@ Run any context-mill skill directly by name, even if it isn't exposed as its own
 command:
 
 ```bash
-npx @posthog/wizard skill list              # list every available skill
-npx @posthog/wizard skill <skill-name>      # run one by name
+npx @posthog/wizard@latest skill list              # list every available skill
+npx @posthog/wizard@latest skill <skill-name>      # run one by name
 ```
 
 ## Wizard ownership
@@ -181,7 +181,7 @@ account, uses the returned personal API key to run the normal CI install,
 and wires PostHog into the project at `--install-dir`:
 
 ```bash
-npx @posthog/wizard --ci --signup \
+npx @posthog/wizard@latest --ci --signup \
   --email you@example.com \
   --install-dir .
 ```
@@ -197,10 +197,10 @@ PostHog yourself — use the `provision` subcommand, which emits a structured
 
 ```bash
 # Human-readable (when stdout is a TTY)
-npx @posthog/wizard provision --email user@example.com --region us
+npx @posthog/wizard@latest provision --email user@example.com --region us
 
 # Machine-readable — auto when stdout is piped, or force with --json
-npx @posthog/wizard provision --email user@example.com --region eu --json
+npx @posthog/wizard@latest provision --email user@example.com --region eu --json
 ```
 
 Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
@@ -235,13 +235,13 @@ The following CLI arguments are available:
 > gateway doesn't yet grant the scopes the wizard needs to personal API keys
 > for most users, so non-interactive `--ci` runs fail at the gateway. The flag
 > is disabled in the published package and exits with an error — run the wizard
-> in an interactive terminal instead (`npx @posthog/wizard`). The notes below
+> in an interactive terminal instead (`npx @posthog/wizard@latest`). The notes below
 > describe CI mode as it works in development builds.
 
 Run the wizard non-interactive executions with `--ci`:
 
 ```bash
-npx @posthog/wizard --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+npx @posthog/wizard@latest --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
 ```
 
 When running in CI mode (`--ci`):

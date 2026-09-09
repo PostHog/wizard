@@ -41,6 +41,19 @@ describe('error catalog', () => {
     }
   });
 
+  it('files the mint codes under the gateway group', () => {
+    // A refusal is a per-run decision the user can sometimes act on; a failure
+    // is the mint being unavailable and clears on its own.
+    expect(ERROR_CATALOG[ErrorCodes.GatewayMintRefused]).toMatchObject({
+      group: 'gateway',
+      retry: 'case-by-case',
+    });
+    expect(ERROR_CATALOG[ErrorCodes.GatewayMintFailed]).toMatchObject({
+      group: 'gateway',
+      retry: 'yes',
+    });
+  });
+
   it('every entry carries a group, retry advice, and a description', () => {
     for (const [code, entry] of Object.entries(ERROR_CATALOG)) {
       expect(entry.group, `${code} group`).toBeTruthy();
