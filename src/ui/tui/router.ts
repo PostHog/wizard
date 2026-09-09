@@ -64,23 +64,20 @@ export class WizardRouter {
       return this.overlays[this.overlays.length - 1];
     }
 
+    // Terminal errors must remain dismissible even when auth, a health check,
+    // or a composed run never completes. This changes only screen selection;
+    // the runnable gates stay blocked until the process exits.
+    if (
+      session.runPhase === RunPhase.Error &&
+      session.outroData &&
+      !session.outroDismissed
+    ) {
+      return ScreenId.Outro;
+    }
+
     for (const entry of this.sequence) {
       if (entry.show && !entry.show(session)) continue;
       if (entry.isComplete && entry.isComplete(session)) continue;
-      // A failed login aborts the run: wizardAbort renders the error outro
-      // and then waits for its dismissal. But the auth step only completes
-      // on credentials — which an aborted login never set — so the walk
-      // would park here forever: auth spinner up, outro unreachable, and
-      // that wait deadlocked. Route to the outro so the error can be read
-      // and dismissed. Auth only: the run steps already complete on
-      // RunPhase.Error, so later aborts reach their program's own outro.
-      if (
-        entry.id === ScreenId.Auth &&
-        session.runPhase === RunPhase.Error &&
-        session.outroData
-      ) {
-        return ScreenId.Outro;
-      }
       return entry.id;
     }
 

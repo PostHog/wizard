@@ -331,7 +331,7 @@ describe('WizardStore', () => {
       const result = {
         decision: WizardReadiness.No,
         health: {} as never,
-        reasons: ['Anthropic: down'],
+        reasons: ['LLM gateway: down'],
       };
       store.setReadinessResult(result);
       expect(store.session.readinessResult).toEqual(result);
@@ -1484,7 +1484,7 @@ describe('WizardStore', () => {
       evaluateWizardReadinessMock.mockResolvedValueOnce({
         decision: WizardReadiness.No,
         health: {} as never,
-        reasons: ['Anthropic: down'],
+        reasons: ['LLM gateway: down'],
       });
 
       const store = createStore();

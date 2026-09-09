@@ -1,32 +1,14 @@
 export {
   ServiceHealthStatus,
   type BaseHealthResult,
-  type ComponentStatus,
-  type ComponentHealthResult,
   type AllServicesHealth,
   type HealthCheckKey,
 } from './types';
 
-export {
-  checkAnthropicHealth,
-  checkGithubHealth,
-  checkNpmOverallHealth,
-  checkNpmComponentHealth,
-  checkCloudflareOverallHealth,
-  checkCloudflareComponentHealth,
-} from './statuspage';
+export { checkLlmGatewayHealth, checkSkillsOriginHealth } from './endpoints';
 
 export {
-  checkPosthogOverallHealth,
-  checkPosthogComponentHealth,
-  resetPosthogHealthCache,
-} from './incidentio';
-
-export { checkMcpHealth, checkSkillsOriginHealth } from './endpoints';
-
-export {
-  type WizardReadinessConfig,
-  DEFAULT_WIZARD_READINESS_CONFIG,
+  type HealthCheckOptions,
   checkAllExternalServices,
   WizardReadiness,
   type WizardReadinessResult,

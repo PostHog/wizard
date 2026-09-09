@@ -24,9 +24,7 @@ import {
 import {
   evaluateWizardReadiness,
   WizardReadiness,
-  SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
-  SERVICE_LABELS,
 } from '@lib/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
@@ -112,53 +110,17 @@ export async function bootstrapProgram(
       `posthog=${session.baseUrl ?? 'region-resolved'}`,
   );
 
-  // 2. Health check (guarded — skip if TUI already ran it). Only
-  // programs that declare a health-check screen get pre-flight checks;
-  // for everything else the checks never fire and never block.
+  // Pre-auth checks cover skill downloads only. The gateway URL is not known
+  // until mint; a cached TUI result must not suppress that later check.
+  // Programs without the health screen skip these advisory checks entirely.
   const hasHealthCheckScreen = programConfig.steps.some(
     (s) => s.screenId === 'health-check',
   );
-  if (session.readinessResult) {
-    logToFile(
-      `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +
-        `${
-          session.outageDismissed ? ' (outage dismissed by user)' : ''
-        } — skipping re-check`,
-    );
-  }
-  if (hasHealthCheckScreen && !session.readinessResult) {
-    logToFile('[agent-runner] evaluating wizard readiness');
-    const readinessConfig = session.signup
-      ? SIGNUP_WIZARD_READINESS_CONFIG
-      : undefined;
-    const readiness = await evaluateWizardReadiness(readinessConfig);
-    logToFile(`[agent-runner] readiness=${readiness.decision}`);
-    if (readiness.decision === WizardReadiness.No) {
-      const blockingKeys = getBlockingServiceKeys(
-        readiness.health,
-        readinessConfig,
-      );
-      const blockingLabels = blockingKeys.map(
-        (k) => `${SERVICE_LABELS[k]} (${readiness.health[k].status})`,
-      );
-      logToFile(`[agent-runner] blocked by: ${blockingLabels.join(', ')}`);
-
-      await getUI().showBlockingOutage(readiness);
-
-      // The TUI lets the user continue past an outage; non-interactive runs
-      // (CI) do the same automatically — the degraded services are reported
-      // above, but we proceed rather than aborting on a transient upstream blip.
-      if (!isNonInteractiveEnvironment()) {
-        await wizardAbort({
-          code: ErrorCodes.EnvServiceOutage,
-          message:
-            'Cannot start — external services are down:\n' +
-            blockingLabels.map((l) => `  - ${l}`).join('\n') +
-            '\n\nPlease try again later.',
-        });
-      }
-    } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
-      getUI().setReadinessWarnings(readiness);
+  let preflight = session.readinessResult;
+  if (hasHealthCheckScreen && !preflight) {
+    preflight = await evaluateWizardReadiness();
+    if (preflight.decision === WizardReadiness.No) {
+      await getUI().showBlockingOutage(preflight);
     }
   }
 
@@ -302,17 +264,31 @@ export async function bootstrapProgram(
   // The agent can't swap tokens mid-run, so freshness is measured after every park above, right before the mint.
   await refreshAccessTokenIfNeeded(session);
 
-  // Credentials (incl. the resolved host family and its MCP url) live on
-  // `session.credentials`; narrow once at this boundary — `authenticate` above
-  // set them — so downstream readers get a non-null type without asserting.
-  const credentials = session.credentials!;
+  // Read live credentials so a refresh after an outage dismissal is used by
+  // later mints, too. No agent or skill triage starts before the initial mint.
+  const currentGatewayAuth = () => {
+    const credentials = session.credentials!;
+    return gatewayAuth(
+      credentials.host,
+      credentials.accessToken,
+      programConfig.id,
+    );
+  };
+  const auth = await currentGatewayAuth();
 
-  // Mint now so a refusal fails the boot before any agent starts. Later
-  // readers re-resolve through the cache, which re-mints past the refresh
-  // point.
-  const currentGatewayAuth = () =>
-    gatewayAuth(credentials.host, credentials.accessToken, programConfig.id);
-  await currentGatewayAuth();
+  if (hasHealthCheckScreen) {
+    const readiness = await evaluateWizardReadiness({
+      gatewayUrl: auth.gatewayUrl,
+      skillsHealth: preflight?.health.skillsOrigin,
+    });
+    // A previously dismissed skills result must not hide a new gateway outage
+    // or cause the same skills warning to be displayed a second time.
+    if (getBlockingServiceKeys(readiness.health).includes('llmGateway')) {
+      await getUI().showBlockingOutage(readiness);
+      await refreshAccessTokenIfNeeded(session);
+    }
+  }
+  const credentials = session.credentials!;
 
   return {
     skillsBaseUrl,

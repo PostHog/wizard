@@ -598,51 +598,37 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/lib/health-checks/` checks external status pages and PostHog-owned
-services before the wizard runs to decide whether it can proceed. The entry
-point is `evaluateWizardReadiness()`, which returns one of three values:
+`src/lib/health-checks/` checks the dependencies the Wizard actually uses:
 
-| Decision            | Meaning                                                         |
-| ------------------- | --------------------------------------------------------------- |
-| `yes`               | All services healthy — proceed normally.                        |
-| `yes_with_warnings` | Some services degraded but no critical dependency is down.      |
-| `no`                | A critical dependency is down or degraded — do not run.         |
+- **Skills downloads:** fetch and validate `skill-menu.json` from GitHub
+  Releases and the AWS mirror. Either source working is healthy. A single-origin
+  outage does not warn or interrupt the run. Local context-mill runs check their
+  local server instead.
+- **LLM gateway:** after login and token mint, check `/readyz` on the exact
+  `gateway_url` returned by the backend. This works with regional, custom, and
+  local gateways without hardcoding the old gateway hostname.
 
-### Module layout
+Anthropic, GitHub, npm, Cloudflare, MCP, and general PostHog status pages are
+not queried or displayed. An individual provider outage does not establish a
+gateway outage: provider routing and fallback belong to the gateway.
 
-| File | Responsibility |
-| --- | --- |
-| `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
-| `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for MCP (`/`) and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
-| `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
-| `index.ts` | Barrel re-export |
-| `testme.md` | Test running instructions and endpoint reference |
+The shared health screen checks skills before login. Bootstrap reuses that
+result and checks the minted gateway before starting the agent. Signup uses the
+same policy. Programs without a health screen skip these advisory checks.
 
-## What blocks a run
+A failed gateway probe or unavailable skills sources interrupts the run. Network
+failures are labelled as connection problems, without claiming a confirmed
+service outage. Inconclusive checks do not produce warnings. Users can continue
+past a gateway warning or download available skills to use with another agent;
+when neither skills origin works, the screen offers exit and manual setup docs.
+CI reports failures and continues, as before.
 
-The `DEFAULT_WIZARD_READINESS_CONFIG` in `readiness.ts` controls this. It has
-two arrays:
-
-- **`downBlocksRun`** — if any of these report status **Down**, readiness is
-  **No**.
-- **`degradedBlocksRun`** — if any of these report **Degraded** (or worse),
-  readiness is **No**.
-
-### Current defaults
-
-```ts
-downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
-degradedBlocksRun: ['anthropic'],
-```
-
-`skillsOrigin` is one entry covering two origins: skills are published to
-GitHub Releases and an AWS mirror under the same filenames, and downloads fail
-over between them (`src/lib/fetch-retry.ts`). Both are probed in parallel, so
-the key only reports **Down** when neither origin answers — a GitHub Releases
-outage on its own doesn't block a run, including a 403 or 404, which is as
-often about the origin (expired asset redirect, blocked region, a publish that
-reached one origin and not the other) as about the asset.
+| File           | Responsibility                                             |
+| -------------- | ---------------------------------------------------------- |
+| `types.ts`     | Health results for the gateway and skills downloads        |
+| `endpoints.ts` | Direct probes, bounded retries, and skills mirror fallback |
+| `readiness.ts` | Aggregate checks and the two-dependency outage policy      |
+| `testme.md`    | Focused test instructions and endpoint reference           |
 
 ## Smoke test helper (`scripts/smoke-test-ci.sh`)
 

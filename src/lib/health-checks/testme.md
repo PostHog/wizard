@@ -1,61 +1,26 @@
-# Health Checks — Testing Guide
+# Health check tests
 
-## Running unit tests
-
-```bash
-# From the wizard/ root — runs only health-check tests (fast, no build step)
-npx jest src/lib/health-checks/__tests__/health-checks.test.ts
-
-# Watch mode
-npx jest src/lib/health-checks/__tests__/health-checks.test.ts --watch
-
-# With coverage
-npx jest src/lib/health-checks/__tests__/health-checks.test.ts --coverage
-```
-
-## Running health checks live
-
-To hit all 10 endpoints for real and see the full readiness result:
+Run the focused suites without building or contacting live services:
 
 ```bash
-# From the wizard/ root
-npx tsx -e "import { evaluateWizardReadiness } from './src/lib/health-checks/index'; evaluateWizardReadiness().then(r => console.log(JSON.stringify(r, null, 2)))"
+pnpm exec vitest run src/lib/health-checks/__tests__ src/lib/agent/runner/shared/__tests__/bootstrap-health.test.ts src/ui/tui/__tests__/ink-ui-health.test.ts
 ```
 
-## How the tests work
+Endpoint tests cover bounded retries, connection failures, malformed skill
+menus, GitHub/AWS fallback, local context-mill targets, and the gateway
+readiness route. Readiness tests cover the dependency matrix, pre-auth results,
+the actual minted gateway target, and absence of unrelated provider warnings.
+Bootstrap and UI tests cover cached skills checks and waiting for a fresh outage
+dismissal after login.
 
-All external HTTP calls are mocked via a global `fetch` override in
-`beforeEach`. No network access is required. Mock data is modelled on real
-responses captured from production endpoints on 2026-03-05.
+| Dependency         | Probe                                                                              | Healthy response                     |
+| ------------------ | ---------------------------------------------------------------------------------- | ------------------------------------ |
+| LLM gateway        | `<minted gateway_url>/readyz`                                                      | HTTP 200; no bearer or model request |
+| GitHub skills      | `https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json` | Downloadable, valid skill menu       |
+| AWS skills mirror  | `https://context-mill.posthog.com/latest/skill-menu.json`                          | Downloadable, valid skill menu       |
+| Local context-mill | `<configured skills base>/skill-menu.json`                                         | Downloadable, valid skill menu       |
 
-## Endpoints tested
-
-| Service                 | URL                                                    | Healthy response                      |
-| ----------------------- | ------------------------------------------------------ | ------------------------------------- |
-| Anthropic               | `https://status.claude.com/api/v2/status.json`         | `{"status":{"indicator":"none",...}}` |
-| PostHog                 | `https://www.posthogstatus.com/api/v2/status.json`     | Same shape                            |
-| PostHog (components)    | `https://www.posthogstatus.com/api/v2/summary.json`    | Adds `components[]` array             |
-| GitHub                  | `https://www.githubstatus.com/api/v2/status.json`      | Same shape                            |
-| npm                     | `https://status.npmjs.org/api/v2/status.json`          | Same shape                            |
-| npm (components)        | `https://status.npmjs.org/api/v2/summary.json`         | Adds `components[]` array             |
-| Cloudflare              | `https://www.cloudflarestatus.com/api/v2/status.json`  | Same shape                            |
-| Cloudflare (components) | `https://www.cloudflarestatus.com/api/v2/summary.json` | Adds `components[]` array             |
-| MCP                     | `https://mcp.posthog.com/`                             | HTML landing page (HTTP 200)          |
-
-### Statuspage.io API v2 reference
-
-- Docs: <https://metastatuspage.com/api>
-- `status.json` — page-level rollup; `indicator` is one of: `none`, `minor`,
-  `major`, `critical`
-- `summary.json` — same rollup + `components[]`; component `status` is one of:
-  `operational`, `degraded_performance`, `partial_outage`, `major_outage`,
-  `under_maintenance`
-- Component docs:
-  <https://support.atlassian.com/statuspage/docs/show-service-status-with-components>
-
-### MCP
-
-- Source: `posthog/services/mcp/src/index.ts`
-- `GET /` → HTML landing page (200)
-- No dedicated `/health` endpoint; 200 on `/` confirms the Cloudflare Worker is
-  running.
+The gateway is omitted before mint rather than guessed. Either release origin
+working is sufficient; local targets are checked independently of production.
+Provider status pages are not queried. No gateway readiness response body is
+shown to the user.

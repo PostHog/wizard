@@ -123,8 +123,9 @@ export class LoggingUI implements WizardUI {
       console.log(`│`);
       console.log(`│  Blocking services:`);
       for (const key of blockingKeys) {
-        const status = result.health[key].status;
-        const error = result.health[key].error;
+        const health = result.health[key];
+        if (!health) continue;
+        const { status, error } = health;
         const label = SERVICE_LABELS[key];
         const detail = error ? ` — ${error}` : '';
         console.log(`│    ✖ ${label}: ${status}${detail}`);

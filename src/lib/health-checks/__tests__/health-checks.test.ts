@@ -1,1291 +1,148 @@
-/**
- * Tests for health-checks.ts
- *
- * Mock data is modelled on live Statuspage.io v2 API responses.
- * Statuspage docs: https://metastatuspage.com/api
- *
- * status.json  – page-level rollup with indicator (none | minor | major | critical)
- * summary.json – same rollup plus component list; component statuses:
- *   operational | degraded_performance | partial_outage | major_outage | under_maintenance
- *   https://support.atlassian.com/statuspage/docs/show-service-status-with-components
-
- *
- * MCP – Cloudflare Worker, GET / returns an HTML landing page (200)
- *   Source: posthog/services/mcp/src/index.ts
- */
-
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   checkAllExternalServices,
-  checkAnthropicHealth,
-  checkCloudflareComponentHealth,
-  checkCloudflareOverallHealth,
-  checkGithubHealth,
-  checkSkillsOriginHealth,
-  checkMcpHealth,
-  checkNpmComponentHealth,
-  checkNpmOverallHealth,
-  checkPosthogComponentHealth,
-  checkPosthogOverallHealth,
-  resetPosthogHealthCache,
-  DEFAULT_WIZARD_READINESS_CONFIG,
   evaluateWizardReadiness,
-  ServiceHealthStatus,
+  getBlockingServiceKeys,
   WizardReadiness,
-} from '@lib/health-checks/index';
-import { fetchEndpointHealth } from '@lib/health-checks/endpoints';
+} from '../readiness';
+import { checkLlmGatewayHealth, checkSkillsOriginHealth } from '../endpoints';
+import { ServiceHealthStatus, type AllServicesHealth } from '../types';
 
-// ---------------------------------------------------------------------------
-// Real-world Statuspage.io v2 response factories
-// https://metastatuspage.com/api
-// ---------------------------------------------------------------------------
+vi.mock('../endpoints', () => ({
+  checkLlmGatewayHealth: vi.fn(),
+  checkSkillsOriginHealth: vi.fn(),
+}));
+vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
-function makeStatuspageStatus(opts: {
-  pageId: string;
-  pageName: string;
-  pageUrl: string;
-  indicator: 'none' | 'minor' | 'major' | 'critical';
-  description: string;
-}) {
-  return {
-    page: {
-      id: opts.pageId,
-      name: opts.pageName,
-      url: opts.pageUrl,
-      time_zone: 'Etc/UTC',
-      updated_at: '2026-03-05T16:03:38.861Z',
-    },
-    status: {
-      indicator: opts.indicator,
-      description: opts.description,
-    },
-  };
-}
+const healthy = { status: ServiceHealthStatus.Healthy };
+const down = { status: ServiceHealthStatus.Down };
+const unreachable = { status: ServiceHealthStatus.NoConnection };
+const gatewayUrl = 'https://ai-gateway.eu.posthog.com';
 
-function makeStatuspageSummary(opts: {
-  pageId: string;
-  pageName: string;
-  pageUrl: string;
-  indicator: 'none' | 'minor' | 'major' | 'critical';
-  description: string;
-  components: {
-    id: string;
-    name: string;
-    status: string;
-    position: number;
-    description: string | null;
-  }[];
-}) {
-  return {
-    page: {
-      id: opts.pageId,
-      name: opts.pageName,
-      url: opts.pageUrl,
-      time_zone: 'Etc/UTC',
-      updated_at: '2026-03-05T16:03:38.861Z',
-    },
-    status: {
-      indicator: opts.indicator,
-      description: opts.description,
-    },
-    components: opts.components.map((c) => ({
-      ...c,
-      page_id: opts.pageId,
-      created_at: '2023-07-11T17:52:24.275Z',
-      updated_at: '2026-03-04T17:01:29.960Z',
-      showcase: true,
-      start_date: '2023-07-11',
-      group_id: null,
-      group: false,
-      only_show_if_degraded: false,
-    })),
-    incidents: [],
-    scheduled_maintenances: [],
-  };
-}
+describe('Wizard dependency health', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(checkLlmGatewayHealth).mockReset().mockResolvedValue(healthy);
+    vi.mocked(checkSkillsOriginHealth).mockReset().mockResolvedValue(healthy);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-// Shapes taken from live GET on 2026-03-05
-const ANTHROPIC_STATUS_HEALTHY = makeStatuspageStatus({
-  pageId: 'tymt9n04zgry',
-  pageName: 'Claude',
-  pageUrl: 'https://status.claude.com',
-  indicator: 'none',
-  description: 'All Systems Operational',
-});
+  it('checks skills before auth without guessing a gateway or reporting a warning', async () => {
+    const result = await evaluateWizardReadiness();
+    expect(result).toEqual({
+      decision: WizardReadiness.Yes,
+      health: { skillsOrigin: healthy },
+      reasons: [],
+    });
+    expect(checkSkillsOriginHealth).toHaveBeenCalledOnce();
+    expect(checkLlmGatewayHealth).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
-const GITHUB_STATUS_HEALTHY = makeStatuspageStatus({
-  pageId: 'kctbh9vrtdwd',
-  pageName: 'GitHub',
-  pageUrl: 'https://www.githubstatus.com',
-  indicator: 'none',
-  description: 'All Systems Operational',
-});
+  it('uses the supplied gateway and skills targets', async () => {
+    const health = await checkAllExternalServices({
+      gatewayUrl: 'http://localhost:8080',
+      skillsBaseUrl: 'http://localhost:8765',
+    });
+    expect(checkLlmGatewayHealth).toHaveBeenCalledWith('http://localhost:8080');
+    expect(checkSkillsOriginHealth).toHaveBeenCalledWith(
+      'http://localhost:8765',
+    );
+    expect(health).toEqual({ llmGateway: healthy, skillsOrigin: healthy });
+  });
 
-const NPM_STATUS_HEALTHY = makeStatuspageStatus({
-  pageId: 'wyvgptkd90hm',
-  pageName: 'npm',
-  pageUrl: 'https://status.npmjs.org',
-  indicator: 'none',
-  description: 'All Systems Operational',
-});
+  it('checks the minted gateway even when skills health was cached before auth', async () => {
+    vi.mocked(checkLlmGatewayHealth).mockResolvedValue(down);
+    const result = await evaluateWizardReadiness({
+      gatewayUrl,
+      skillsHealth: healthy,
+    });
+    expect(checkLlmGatewayHealth).toHaveBeenCalledWith(gatewayUrl);
+    expect(checkSkillsOriginHealth).not.toHaveBeenCalled();
+    expect(result.decision).toBe(WizardReadiness.No);
+    expect(getBlockingServiceKeys(result.health)).toEqual(['llmGateway']);
+  });
 
-const NPM_SUMMARY_HEALTHY = makeStatuspageSummary({
-  pageId: 'wyvgptkd90hm',
-  pageName: 'npm',
-  pageUrl: 'https://status.npmjs.org',
-  indicator: 'none',
-  description: 'All Systems Operational',
-  components: [
-    {
-      id: 'mvm98gtxvb9b',
-      name: 'www.npmjs.com website',
-      status: 'operational',
-      position: 1,
-      description:
-        'The ability for users to navigate to or interact with the npm website.',
+  it.each([
+    [healthy, healthy, []],
+    [down, healthy, ['llmGateway']],
+    [unreachable, healthy, ['llmGateway']],
+    [healthy, down, ['skillsOrigin']],
+    [healthy, unreachable, ['skillsOrigin']],
+    [down, down, ['llmGateway', 'skillsOrigin']],
+    [unreachable, unreachable, ['llmGateway', 'skillsOrigin']],
+  ])(
+    'only interrupts for failed runtime dependencies (%j, %j)',
+    async (gateway, skills, blocked) => {
+      vi.mocked(checkLlmGatewayHealth).mockResolvedValue(gateway);
+      vi.mocked(checkSkillsOriginHealth).mockResolvedValue(skills);
+      const result = await evaluateWizardReadiness({ gatewayUrl });
+      expect(getBlockingServiceKeys(result.health)).toEqual(blocked);
+      expect(result.decision).toBe(
+        blocked.length ? WizardReadiness.No : WizardReadiness.Yes,
+      );
     },
-    {
-      id: 'k1wj10x6gmph',
-      name: 'Package installation',
-      status: 'operational',
-      position: 2,
-      description:
-        'The ability for users to read from the registry so that they can install packages.',
-    },
-  ],
-});
+  );
 
-const CLOUDFLARE_STATUS_HEALTHY = makeStatuspageStatus({
-  pageId: 'yh6f0r4529hb',
-  pageName: 'Cloudflare',
-  pageUrl: 'https://www.cloudflarestatus.com',
-  indicator: 'none',
-  description: 'All Systems Operational',
-});
+  it('does not turn a one-origin fallback into warnings or outage reasons', async () => {
+    vi.mocked(checkSkillsOriginHealth).mockResolvedValue({
+      ...healthy,
+      rawIndicator: 'HTTP 200 (via aws, github unavailable)',
+    });
+    const result = await evaluateWizardReadiness({ gatewayUrl });
+    expect(result.decision).toBe(WizardReadiness.Yes);
+    expect(result.reasons).toEqual([]);
+  });
 
-const CLOUDFLARE_SUMMARY_HEALTHY = makeStatuspageSummary({
-  pageId: 'yh6f0r4529hb',
-  pageName: 'Cloudflare',
-  pageUrl: 'https://www.cloudflarestatus.com',
-  indicator: 'none',
-  description: 'All Systems Operational',
-  components: [
-    {
-      id: '1km35smx8p41',
-      name: 'Cloudflare Sites and Services',
-      status: 'operational',
-      position: 1,
-      description:
-        'Sites and services that Cloudflare customers use to interact with the Cloudflare Network',
-    },
-  ],
-});
+  it('ignores obsolete provider and status-page results even in a stale health object', () => {
+    const stale: AllServicesHealth & Record<string, unknown> = {
+      skillsOrigin: healthy,
+      llmGateway: healthy,
+      anthropic: down,
+      posthogOverall: down,
+      posthogComponents: down,
+      github: down,
+      npmOverall: down,
+      npmComponents: down,
+      cloudflareOverall: down,
+      cloudflareComponents: down,
+      mcp: down,
+    };
+    expect(getBlockingServiceKeys(stale)).toEqual([]);
+  });
 
-// PostHog incident.io v1 API mock data
-const POSTHOG_INCIDENTIO_HEALTHY = {
-  page_title: 'PostHog',
-  page_url: 'https://www.posthogstatus.com/',
-  ongoing_incidents: [],
-  in_progress_maintenances: [],
-  scheduled_maintenances: [],
-};
+  it('does not include internal gateway diagnostics in outage reasons', async () => {
+    vi.mocked(checkLlmGatewayHealth).mockResolvedValue({
+      ...down,
+      error: 'private dependency detail',
+    });
+    const result = await evaluateWizardReadiness({ gatewayUrl });
+    expect(result.reasons).toEqual(['LLM gateway: down']);
+  });
 
-// MCP / landing page (from posthog/services/mcp/src/index.ts + src/static/landing.html)
-const MCP_LANDING_HTML =
-  '<!doctype html><html lang="en"><head><title>PostHog MCP Server</title></head><body></body></html>';
+  it('clears the watchdog after an unexpected failure and proceeds without warnings', async () => {
+    vi.mocked(checkSkillsOriginHealth).mockRejectedValue(
+      new Error('unexpected'),
+    );
+    const result = await evaluateWizardReadiness();
+    expect(result.decision).toBe(WizardReadiness.Yes);
+    expect(result.reasons).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
-// ---------------------------------------------------------------------------
-// URL constants (must match health-checks.ts)
-// ---------------------------------------------------------------------------
-
-const URLS = {
-  anthropicStatus: 'https://status.claude.com/api/v2/status.json',
-  posthogIncidentIo: 'https://www.posthogstatus.com/api/v1/summary',
-  githubStatus: 'https://www.githubstatus.com/api/v2/status.json',
-  npmStatus: 'https://status.npmjs.org/api/v2/status.json',
-  npmSummary: 'https://status.npmjs.org/api/v2/summary.json',
-  cloudflareStatus: 'https://www.cloudflarestatus.com/api/v2/status.json',
-  cloudflareSummary: 'https://www.cloudflarestatus.com/api/v2/summary.json',
-  mcpLanding: 'https://mcp.posthog.com/',
-  githubSkillMenu:
-    'https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json',
-  awsSkillMenu: 'https://context-mill.posthog.com/latest/skill-menu.json',
-} as const;
-
-// ---------------------------------------------------------------------------
-// Helper to build a default "all healthy" fetch mock
-// ---------------------------------------------------------------------------
-
-const HEALTHY_RESPONSES: Record<string, { body: string; contentType: string }> =
-  {
-    [URLS.anthropicStatus]: {
-      body: JSON.stringify(ANTHROPIC_STATUS_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.posthogIncidentIo]: {
-      body: JSON.stringify(POSTHOG_INCIDENTIO_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.githubStatus]: {
-      body: JSON.stringify(GITHUB_STATUS_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.npmStatus]: {
-      body: JSON.stringify(NPM_STATUS_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.npmSummary]: {
-      body: JSON.stringify(NPM_SUMMARY_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.cloudflareStatus]: {
-      body: JSON.stringify(CLOUDFLARE_STATUS_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.cloudflareSummary]: {
-      body: JSON.stringify(CLOUDFLARE_SUMMARY_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.mcpLanding]: {
-      body: MCP_LANDING_HTML,
-      contentType: 'text/html; charset=utf-8',
-    },
-    [URLS.githubSkillMenu]: {
-      body: JSON.stringify({ categories: { integration: [] } }),
-      contentType: 'application/json',
-    },
-    [URLS.awsSkillMenu]: {
-      body: JSON.stringify({ categories: { integration: [] } }),
-      contentType: 'application/json',
-    },
-  };
-
-function allHealthyFetchMock(url: string | URL | Request): Promise<Response> {
-  const urlStr =
-    typeof url === 'string'
-      ? url
-      : url instanceof URL
-      ? url.toString()
-      : url.url;
-  const entry = HEALTHY_RESPONSES[urlStr];
-  if (entry) {
-    return Promise.resolve(
-      new Response(entry.body, {
-        status: 200,
-        headers: { 'Content-Type': entry.contentType },
+  it('does not claim an outage when a check cannot finish', async () => {
+    vi.mocked(checkSkillsOriginHealth).mockReturnValue(
+      new Promise(() => {
+        // Deliberately never settles; the readiness watchdog must release the run.
       }),
     );
-  }
-  return Promise.resolve(new Response('Not found', { status: 404 }));
-}
-
-function overrideFetch(overrides: Record<string, () => Promise<Response>>) {
-  return (url: string | URL | Request): Promise<Response> => {
-    const urlStr =
-      typeof url === 'string'
-        ? url
-        : url instanceof URL
-        ? url.toString()
-        : url.url;
-    if (overrides[urlStr]) return overrides[urlStr]();
-    return allHealthyFetchMock(urlStr);
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-describe('health-checks', () => {
-  const originalFetch = global.fetch;
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    resetPosthogHealthCache();
-    (global as any).fetch = vi.fn(allHealthyFetchMock);
-  });
-
-  afterAll(() => {
-    (global as any).fetch = originalFetch;
-  });
-
-  // -----------------------------------------------------------------------
-  // Statuspage status.json checks (indicator-based)
-  // -----------------------------------------------------------------------
-
-  describe('checkAnthropicHealth', () => {
-    it('returns healthy for indicator=none ("All Systems Operational")', async () => {
-      const result = await checkAnthropicHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toBe('none');
-    });
-
-    it('returns degraded for indicator=minor ("Minor Service Outage")', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'tymt9n04zgry',
-        pageName: 'Claude',
-        pageUrl: 'https://status.claude.com',
-        indicator: 'minor',
-        description: 'Minor Service Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.anthropicStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkAnthropicHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.rawIndicator).toBe('minor');
-    });
-
-    it('returns down for indicator=major ("Partial System Outage")', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'tymt9n04zgry',
-        pageName: 'Claude',
-        pageUrl: 'https://status.claude.com',
-        indicator: 'major',
-        description: 'Partial System Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.anthropicStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkAnthropicHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-    });
-
-    it('returns down for indicator=critical ("Major Service Outage")', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'tymt9n04zgry',
-        pageName: 'Claude',
-        pageUrl: 'https://status.claude.com',
-        indicator: 'critical',
-        description: 'Major Service Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.anthropicStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkAnthropicHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-    });
-
-    it('returns degraded when statuspage returns HTTP 500', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.anthropicStatus]: () =>
-            Promise.resolve(
-              new Response('Internal Server Error', { status: 500 }),
-            ),
-        }),
-      );
-      const result = await checkAnthropicHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.error).toBe('HTTP 500');
-    });
-
-    it('returns degraded when fetch throws (network failure)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.anthropicStatus]: () =>
-            Promise.reject(
-              new Error('getaddrinfo ENOTFOUND status.claude.com'),
-            ),
-        }),
-      );
-      const result = await checkAnthropicHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.error).toBe('getaddrinfo ENOTFOUND status.claude.com');
-    });
-  });
-
-  describe('checkPosthogOverallHealth', () => {
-    it('returns healthy when no ongoing incidents', async () => {
-      const result = await checkPosthogOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-    });
-
-    it('returns down when an incident has full_outage impact', async () => {
-      const body = {
-        ...POSTHOG_INCIDENTIO_HEALTHY,
-        ongoing_incidents: [
-          {
-            id: '01KA9JH0ZB14TFA8VD4CFC3AYN',
-            name: 'Major service outage',
-            status: 'identified',
-            current_worst_impact: 'full_outage',
-            affected_components: [
-              {
-                id: 'c1',
-                name: 'App',
-                group_name: 'US Cloud',
-                current_status: 'full_outage',
-              },
-            ],
-            url: 'https://www.posthogstatus.com/incidents/test',
-            last_update_at: '2026-04-22T00:00:00Z',
-            last_update_message: 'Investigating',
-          },
-        ],
-      };
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkPosthogOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-    });
-
-    it('returns NoConnection when posthogstatus.com fetch fails with a network error', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.reject(new Error('getaddrinfo ENOTFOUND')),
-        }),
-      );
-      const result = await checkPosthogOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-    });
-
-    it('returns NoConnection when posthogstatus.com fetch times out', async () => {
-      const abortError = new Error('aborted');
-      abortError.name = 'AbortError';
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () => Promise.reject(abortError),
-        }),
-      );
-      const result = await checkPosthogOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-    });
-
-    it('returns Down when posthogstatus.com returns an HTTP error', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
-        }),
-      );
-      const result = await checkPosthogOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-    });
-
-    it('returns degraded when an incident has partial_outage impact', async () => {
-      const body = {
-        ...POSTHOG_INCIDENTIO_HEALTHY,
-        ongoing_incidents: [
-          {
-            id: '01KA9JH0ZB14TFA8VD4CFC3AYN',
-            name: 'Partial outage',
-            status: 'investigating',
-            current_worst_impact: 'partial_outage',
-            affected_components: [],
-            url: 'https://www.posthogstatus.com/incidents/test',
-            last_update_at: '2026-04-22T00:00:00Z',
-            last_update_message: 'Investigating',
-          },
-        ],
-      };
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkPosthogOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-    });
-  });
-
-  describe('checkGithubHealth', () => {
-    it('returns healthy for indicator=none', async () => {
-      const result = await checkGithubHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-    });
-  });
-
-  describe('checkNpmOverallHealth', () => {
-    it('returns healthy for indicator=none', async () => {
-      const result = await checkNpmOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-    });
-  });
-
-  describe('checkCloudflareOverallHealth', () => {
-    it('returns healthy for indicator=none', async () => {
-      const result = await checkCloudflareOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-    });
-
-    it('returns degraded for indicator=minor', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'yh6f0r4529hb',
-        pageName: 'Cloudflare',
-        pageUrl: 'https://www.cloudflarestatus.com',
-        indicator: 'minor',
-        description: 'Minor Service Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.cloudflareStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkCloudflareOverallHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Statuspage summary.json checks (component-based)
-  // -----------------------------------------------------------------------
-
-  describe('checkPosthogComponentHealth', () => {
-    it('reports healthy when no ongoing incidents', async () => {
-      const result = await checkPosthogComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.degradedOrDownComponents).toBeUndefined();
-    });
-
-    it('reports affected components from ongoing incidents', async () => {
-      const body = {
-        ...POSTHOG_INCIDENTIO_HEALTHY,
-        ongoing_incidents: [
-          {
-            id: 'inc1',
-            name: 'US Cloud outage',
-            status: 'identified',
-            current_worst_impact: 'full_outage',
-            affected_components: [
-              {
-                id: 'c1',
-                name: 'App',
-                group_name: 'US Cloud 🇺🇸',
-                current_status: 'full_outage',
-              },
-              {
-                id: 'c2',
-                name: 'Event Ingestion',
-                group_name: 'US Cloud 🇺🇸',
-                current_status: 'full_outage',
-              },
-            ],
-            url: 'https://www.posthogstatus.com/incidents/test',
-            last_update_at: '2026-04-22T00:00:00Z',
-            last_update_message: 'Investigating',
-          },
-        ],
-      };
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkPosthogComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.degradedOrDownComponents).toHaveLength(2);
-      expect(result.degradedOrDownComponents![0].name).toBe(
-        'US Cloud 🇺🇸 — App',
-      );
-      expect(result.degradedOrDownComponents![0].status).toBe(
-        ServiceHealthStatus.Down,
-      );
-      expect(result.degradedOrDownComponents![1].status).toBe(
-        ServiceHealthStatus.Down,
-      );
-    });
-
-    it('reports degraded for degraded_performance components', async () => {
-      const body = {
-        ...POSTHOG_INCIDENTIO_HEALTHY,
-        ongoing_incidents: [
-          {
-            id: 'inc1',
-            name: 'Slowness',
-            status: 'investigating',
-            current_worst_impact: 'degraded_performance',
-            affected_components: [
-              {
-                id: 'c1',
-                name: 'App',
-                group_name: 'EU Cloud',
-                current_status: 'degraded_performance',
-              },
-            ],
-            url: 'https://www.posthogstatus.com/incidents/test',
-            last_update_at: '2026-04-22T00:00:00Z',
-            last_update_message: 'Investigating',
-          },
-        ],
-      };
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkPosthogComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.degradedOrDownComponents![0].rawStatus).toBe(
-        'degraded_performance',
-      );
-      expect(result.degradedOrDownComponents![0].status).toBe(
-        ServiceHealthStatus.Degraded,
-      );
-    });
-  });
-
-  describe('checkNpmComponentHealth', () => {
-    it('reports healthy when all npm components operational', async () => {
-      const result = await checkNpmComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-    });
-
-    it('reports degraded when "Package installation" has partial_outage', async () => {
-      const body = makeStatuspageSummary({
-        pageId: 'wyvgptkd90hm',
-        pageName: 'npm',
-        pageUrl: 'https://status.npmjs.org',
-        indicator: 'major',
-        description: 'Partial System Outage',
-        components: [
-          {
-            id: 'mvm98gtxvb9b',
-            name: 'www.npmjs.com website',
-            status: 'operational',
-            position: 1,
-            description: null,
-          },
-          {
-            id: 'k1wj10x6gmph',
-            name: 'Package installation',
-            status: 'partial_outage',
-            position: 2,
-            description: null,
-          },
-        ],
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.npmSummary]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkNpmComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.degradedOrDownComponents![0].name).toBe(
-        'Package installation',
-      );
-    });
-  });
-
-  describe('checkCloudflareComponentHealth', () => {
-    it('reports healthy when Cloudflare components operational', async () => {
-      const result = await checkCloudflareComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // fetchEndpointHealth (retry + status-taxonomy machinery, probed directly
-  // against a synthetic URL — no production probe uses the strict defaults
-  // any more, but every endpoint check shares this loop)
-  // -----------------------------------------------------------------------
-
-  describe('fetchEndpointHealth', () => {
-    const PROBE_URL = 'https://probe.posthog.test/_liveness';
-
-    it('returns healthy on a 200', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () =>
-            Promise.resolve(new Response('ok', { status: 200 })),
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toBe('HTTP 200');
-      expect(global.fetch).toHaveBeenCalledWith(
-        PROBE_URL,
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-    });
-
-    it('returns down on 302 — the default predicate stays strict, redirects are not OK', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () =>
-            Promise.resolve(new Response(null, { status: 302 })),
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 302');
-    });
-
-    it('returns down when the endpoint responds 503 (e.g. deploying)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () =>
-            Promise.resolve(
-              new Response('Service Unavailable', { status: 503 }),
-            ),
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 503');
-    });
-
-    it('returns down when the endpoint responds 502 (bad gateway)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () =>
-            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 502');
-    });
-
-    it('returns no-connection on DNS resolution failure (no status-page corroboration)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () =>
-            Promise.reject(
-              new Error('getaddrinfo ENOTFOUND probe.posthog.test'),
-            ),
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-      expect(result.error).toBe('getaddrinfo ENOTFOUND probe.posthog.test');
-    });
-
-    it('returns no-connection on timeout (AbortError)', async () => {
-      const abortError = new Error('The operation was aborted.');
-      abortError.name = 'AbortError';
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () => Promise.reject(abortError),
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-      expect(result.error).toBe('Request timed out after 5000ms');
-    });
-
-    it('retries on network errors and recovers if a later attempt succeeds', async () => {
-      let calls = 0;
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () => {
-            calls++;
-            if (calls < 3) {
-              return Promise.reject(new Error('ECONNRESET'));
-            }
-            return Promise.resolve(new Response('ok', { status: 200 }));
-          },
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toContain('attempts=3');
-      expect(calls).toBe(3);
-    });
-
-    it('retries on persistent HTTP errors and stays Down after all attempts fail', async () => {
-      let calls = 0;
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () => {
-            calls++;
-            return Promise.resolve(
-              new Response('Service Unavailable', { status: 503 }),
-            );
-          },
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(calls).toBe(3);
-      expect(result.error).toContain('HTTP 503');
-      expect(result.error).toContain('attempts=3');
-    });
-
-    it('retries on transient 5xx and recovers if a later attempt succeeds', async () => {
-      let calls = 0;
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () => {
-            calls++;
-            if (calls < 3) {
-              return Promise.resolve(
-                new Response('Bad Gateway', { status: 502 }),
-              );
-            }
-            return Promise.resolve(new Response('ok', { status: 200 }));
-          },
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toContain('attempts=3');
-      expect(calls).toBe(3);
-    });
-
-    it('returns Down (not NoConnection) when last attempt got an HTTP response after earlier network errors', async () => {
-      let calls = 0;
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [PROBE_URL]: () => {
-            calls++;
-            if (calls < 3) return Promise.reject(new Error('ECONNRESET'));
-            return Promise.resolve(
-              new Response('Bad Gateway', { status: 502 }),
-            );
-          },
-        }),
-      );
-      const result = await fetchEndpointHealth(PROBE_URL);
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 502');
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // MCP (fetchEndpointHealth – / landing)
-  // -----------------------------------------------------------------------
-
-  describe('checkMcpHealth', () => {
-    it('returns healthy when MCP worker responds 200 with landing HTML', async () => {
-      const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toBe('HTTP 200');
-      expect(global.fetch).toHaveBeenCalledWith(
-        URLS.mcpLanding,
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-    });
-
-    it('returns healthy when worker responds 302 (redirect to docs, not followed)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () =>
-            Promise.resolve(new Response(null, { status: 302 })),
-        }),
-      );
-      const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toBe('HTTP 302');
-      expect(global.fetch).toHaveBeenCalledWith(
-        URLS.mcpLanding,
-        expect.objectContaining({ redirect: 'manual' }),
-      );
-    });
-
-    it('returns down on 400 — only 2xx-3xx counts as up', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () =>
-            Promise.resolve(new Response('Bad Request', { status: 400 })),
-        }),
-      );
-      const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 400');
-    });
-
-    it('returns down when worker responds 500', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () =>
-            Promise.resolve(
-              new Response('Internal Server Error', { status: 500 }),
-            ),
-        }),
-      );
-      const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 500');
-    });
-
-    it('returns down when Cloudflare returns 522 (connection timed out)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () =>
-            Promise.resolve(new Response('', { status: 522 })),
-        }),
-      );
-      const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('HTTP 522');
-    });
-
-    it('returns no-connection on network failure', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () => Promise.reject(new Error('fetch failed')),
-        }),
-      );
-      const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-      expect(result.error).toBe('fetch failed');
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Skills origins (fetchEndpointHealth – skill-menu.json on both origins)
-  // -----------------------------------------------------------------------
-
-  describe('checkSkillsOriginHealth', () => {
-    it('returns healthy on a final 200 and follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toBe('HTTP 200');
-      expect(global.fetch).toHaveBeenCalledWith(
-        URLS.githubSkillMenu,
-        expect.objectContaining({ redirect: 'follow' }),
-      );
-    });
-
-    it('probes both origins', async () => {
-      await checkSkillsOriginHealth();
-      const calledUrls = (global.fetch as Mock).mock.calls.map(
-        (c: unknown[]) => c[0],
-      );
-      expect(calledUrls).toContain(URLS.githubSkillMenu);
-      expect(calledUrls).toContain(URLS.awsSkillMenu);
-    });
-
-    it('stays healthy when GitHub 5xxs but AWS serves the menu', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.githubSkillMenu]: () =>
-            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toContain('github unavailable');
-    });
-
-    it('stays healthy when GitHub is unreachable but AWS serves the menu', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.githubSkillMenu]: () =>
-            Promise.reject(new Error('ENOTFOUND github.com')),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toContain('github unavailable');
-    });
-
-    it('stays healthy when GitHub 404s but AWS serves the menu', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.githubSkillMenu]: () =>
-            Promise.resolve(new Response('Not Found', { status: 404 })),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toContain('github unavailable');
-    });
-
-    it('stays healthy when AWS is unreachable but GitHub serves the menu', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.awsSkillMenu]: () => Promise.reject(new Error('fetch failed')),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toContain('aws unavailable');
-    });
-
-    it('returns down only when both origins 404 (release published without the asset)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.githubSkillMenu]: () =>
-            Promise.resolve(new Response('Not Found', { status: 404 })),
-          [URLS.awsSkillMenu]: () =>
-            Promise.resolve(new Response('Not Found', { status: 404 })),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toContain('github: HTTP 404');
-      expect(result.error).toContain('aws: HTTP 404');
-    });
-
-    it('returns no-connection when both origins fail at the network layer', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.githubSkillMenu]: () =>
-            Promise.reject(new Error('ENOTFOUND github.com')),
-          [URLS.awsSkillMenu]: () => Promise.reject(new Error('ECONNRESET')),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
-      expect(result.error).toContain('ENOTFOUND github.com');
-      expect(result.error).toContain('ECONNRESET');
-    });
-
-    it('reports down when GitHub 5xxs and AWS is unreachable', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.githubSkillMenu]: () =>
-            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
-          [URLS.awsSkillMenu]: () => Promise.reject(new Error('ECONNRESET')),
-        }),
-      );
-      const result = await checkSkillsOriginHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // checkAllExternalServices
-  // -----------------------------------------------------------------------
-
-  describe('checkAllExternalServices', () => {
-    it('returns all 10 service keys when everything is healthy', async () => {
-      const health = await checkAllExternalServices();
-      const keys = Object.keys(health);
-      expect(keys).toEqual(
-        expect.arrayContaining([
-          'anthropic',
-          'posthogOverall',
-          'posthogComponents',
-          'github',
-          'npmOverall',
-          'npmComponents',
-          'cloudflareOverall',
-          'cloudflareComponents',
-          'mcp',
-          'skillsOrigin',
-        ]),
-      );
-      expect(keys).toHaveLength(10);
-      for (const val of Object.values(health)) {
-        expect(val.status).toBe(ServiceHealthStatus.Healthy);
-      }
-    });
-
-    it('upgrades NoConnection mcp to Down when status page reports an outage', async () => {
-      const incidentBody = {
-        ...POSTHOG_INCIDENTIO_HEALTHY,
-        ongoing_incidents: [
-          {
-            id: 'inc1',
-            name: 'Major outage',
-            status: 'identified',
-            current_worst_impact: 'full_outage',
-            affected_components: [],
-            url: 'https://www.posthogstatus.com/incidents/test',
-            last_update_at: '2026-04-22T00:00:00Z',
-            last_update_message: 'Investigating',
-          },
-        ],
-      };
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(incidentBody), { status: 200 }),
-            ),
-          [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
-        }),
-      );
-
-      const health = await checkAllExternalServices();
-      expect(health.posthogOverall.status).toBe(ServiceHealthStatus.Down);
-      expect(health.mcp.status).toBe(ServiceHealthStatus.Down);
-      expect(health.mcp.error).toContain('corroborated by status page');
-    });
-
-    it('keeps mcp as NoConnection when posthogstatus.com itself is unreachable (the bug-fix scenario)', async () => {
-      // User on flaky wifi: every PostHog-owned URL fetch fails at the
-      // network layer, including posthogstatus.com. Previously
-      // incidentio.ts returned Degraded for fetch failures, which
-      // tricked reconciliation into upgrading the gateway probe to Down
-      // and showing the red "Ongoing service disruptions" screen — the
-      // exact false positive this PR fixes.
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogIncidentIo]: () =>
-            Promise.reject(new Error('ECONNRESET')),
-          [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
-        }),
-      );
-
-      const health = await checkAllExternalServices();
-      expect(health.posthogOverall.status).toBe(
-        ServiceHealthStatus.NoConnection,
-      );
-      expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
-    });
-
-    it('keeps mcp as NoConnection when status page reports no incident', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () => Promise.reject(new Error('ETIMEDOUT')),
-        }),
-      );
-
-      const health = await checkAllExternalServices();
-      expect(health.posthogOverall.status).toBe(ServiceHealthStatus.Healthy);
-      expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
-    });
-
-    it('fires all fetch calls in parallel', async () => {
-      await checkAllExternalServices();
-      const calledUrls = (global.fetch as Mock).mock.calls.map((c: unknown[]) =>
-        typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
-      );
-      // PostHog uses a single incident.io endpoint for both overall + components
-      expect(calledUrls).toHaveLength(10);
-      expect(calledUrls).toContain(URLS.posthogIncidentIo);
-      expect(calledUrls).toContain(URLS.mcpLanding);
-      expect(calledUrls).toContain(URLS.githubSkillMenu);
-      expect(calledUrls).toContain(URLS.awsSkillMenu);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // evaluateWizardReadiness
-  // -----------------------------------------------------------------------
-
-  describe('evaluateWizardReadiness', () => {
-    it('returns Yes when all services are healthy', async () => {
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.decision).toBe(WizardReadiness.Yes);
-    });
-
-    it('returns No when Anthropic is degraded (degradedBlocksRun)', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'tymt9n04zgry',
-        pageName: 'Claude',
-        pageUrl: 'https://status.claude.com',
-        indicator: 'minor',
-        description: 'Minor Service Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.anthropicStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.decision).toBe(WizardReadiness.No);
-      expect(result.health.anthropic.status).toBe(ServiceHealthStatus.Degraded);
-    });
-
-    it('returns No when MCP is down (downBlocksRun)', async () => {
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.mcpLanding]: () =>
-            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
-        }),
-      );
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.decision).toBe(WizardReadiness.No);
-      expect(result.health.mcp.status).toBe(ServiceHealthStatus.Down);
-    });
-
-    it('returns No when npm overall is down (downBlocksRun)', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'wyvgptkd90hm',
-        pageName: 'npm',
-        pageUrl: 'https://status.npmjs.org',
-        indicator: 'critical',
-        description: 'Major Service Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.npmStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.decision).toBe(WizardReadiness.No);
-      expect(result.health.npmOverall.status).toBe(ServiceHealthStatus.Down);
-    });
-
-    it('returns YesWithWarnings when a non-blocking service is degraded', async () => {
-      const body = makeStatuspageStatus({
-        pageId: 'yh6f0r4529hb',
-        pageName: 'Cloudflare',
-        pageUrl: 'https://www.cloudflarestatus.com',
-        indicator: 'minor',
-        description: 'Minor Service Outage',
-      });
-      (global.fetch as Mock).mockImplementation(
-        overrideFetch({
-          [URLS.cloudflareStatus]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.decision).toBe(WizardReadiness.YesWithWarnings);
-    });
-
-    it('includes human-readable reasons for every service', async () => {
-      const result = await evaluateWizardReadiness(
-        DEFAULT_WIZARD_READINESS_CONFIG,
-      );
-      expect(result.reasons.length).toBeGreaterThan(0);
-      expect(result.reasons.some((r) => r.includes('Anthropic'))).toBe(true);
-      expect(result.reasons.some((r) => r.includes('PostHog'))).toBe(true);
-      expect(result.reasons.some((r) => r.includes('GitHub'))).toBe(true);
-      expect(result.reasons.some((r) => r.includes('npm'))).toBe(true);
-      expect(result.reasons.some((r) => r.includes('Cloudflare'))).toBe(true);
-      expect(result.reasons.some((r) => r.includes('MCP'))).toBe(true);
-    });
+    const pending = evaluateWizardReadiness();
+    await vi.advanceTimersByTimeAsync(20_000);
+    const result = await pending;
+    expect(result.decision).toBe(WizardReadiness.Yes);
+    expect(result.reasons).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

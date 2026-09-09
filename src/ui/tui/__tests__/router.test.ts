@@ -6,6 +6,8 @@ import {
 } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
+import { healthCheckReady } from '@lib/programs/shared/health-check-step';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
@@ -16,6 +18,80 @@ function baseWizardSession() {
 
 describe('WizardRouter', () => {
   describe('resolve', () => {
+    it('shows the error outro when exiting a pre-auth skills outage without releasing startup', () => {
+      const router = new WizardRouter(Program.PostHogIntegration);
+      const session = baseWizardSession();
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.No,
+        health: { skillsOrigin: { status: ServiceHealthStatus.Down } },
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
+      session.runPhase = RunPhase.Error;
+      session.outroData = {
+        kind: OutroKind.Error,
+        message: 'Exited due to service outage.',
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+      expect(healthCheckReady(session)).toBe(false);
+      expect(session.outageDismissed).toBe(false);
+    });
+
+    it('shows the error outro when exiting a gateway outage during a composed integration run', () => {
+      const router = new WizardRouter(Program.SelfDriving);
+      const session = baseWizardSession();
+      session.setupConfirmed = true;
+      session.integrate = true;
+      session.integration = Integration.nextjs;
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      session.readinessResult = {
+        decision: WizardReadiness.No,
+        health: {
+          skillsOrigin: { status: ServiceHealthStatus.Healthy },
+          llmGateway: { status: ServiceHealthStatus.Down },
+        },
+        reasons: [],
+      };
+      session.runPhase = RunPhase.Error;
+      session.outroData = {
+        kind: OutroKind.Error,
+        message: 'Exited due to service outage.',
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+      expect(session.completedRuns).not.toContain('integrate-run');
+      expect(session.outageDismissed).toBe(false);
+    });
+    it('allows a dismissed terminal error to advance past the outro', () => {
+      const router = new WizardRouter(Program.PostHogIntegration);
+      const session = baseWizardSession();
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: { skillsOrigin: { status: ServiceHealthStatus.Healthy } },
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      session.runPhase = RunPhase.Error;
+      session.outroData = {
+        kind: OutroKind.Error,
+        message: 'A screen crashed.',
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+      session.outroDismissed = true;
+      expect(router.resolve(session)).toBe(ScreenId.Mcp);
+    });
+
     it('returns the first incomplete visible screen for the wizard flow', () => {
       const router = new WizardRouter(Program.PostHogIntegration);
       const session = baseWizardSession();
