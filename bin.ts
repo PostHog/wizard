@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
-import { Agent, setGlobalDispatcher } from 'undici';
 import { ErrorCodes } from './src/lib/errors/codes.js';
 import { emitWizardError } from './src/lib/errors/emit.js';
 
@@ -10,21 +9,6 @@ import { emitWizardError } from './src/lib/errors/emit.js';
 // TypeError on Node < 22.10).
 const NODE_VERSION_RANGE = '>=22.22.0';
 
-/*
- * TODO(#1198): remove when fetch over HTTP/2 is safe on Node 26. Remove when all
- * of these are true:
- *  - nodejs/node no longer creates an orphan ClientHttp2Stream when a client
- *    session gets HEADERS for a stream id it already reset. Repro: abort a fetch
- *    before its response headers, then idle 4s on Node 26. Fixed when the
- *    process survives.
- *  - modelcontextprotocol/typescript-sdk#2526 is closed.
- *  - pi-coding-agent's CLI drops `allowH2: false` from its http-dispatcher.
- * Same workaround as pi's CLI and typescript-sdk#2526: HTTP/1.1 only.
- */
-setGlobalDispatcher(new Agent({ allowH2: false }));
-
-// Have to run this above the other imports because they are importing clack that
-// has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   // eslint-disable-next-line no-console
   console.log(
@@ -48,6 +32,23 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   });
   process.exit(1);
 }
+
+/*
+ * Imported here, not at the top. A static import loads undici before the
+ * preflight above runs, and that load crashes on the runtimes it rejects.
+ *
+ * TODO(#1198): remove when fetch over HTTP/2 is safe on Node 26. Remove when all
+ * of these are true:
+ *  - nodejs/node no longer creates an orphan ClientHttp2Stream when a client
+ *    session gets HEADERS for a stream id it already reset. Repro: abort a fetch
+ *    before its response headers, then idle 4s on Node 26. Fixed when the
+ *    process survives.
+ *  - modelcontextprotocol/typescript-sdk#2526 is closed.
+ *  - pi-coding-agent's CLI drops `allowH2: false` from its http-dispatcher.
+ * Same workaround as pi's CLI and typescript-sdk#2526: HTTP/1.1 only.
+ */
+const { Agent, setGlobalDispatcher } = await import('undici');
+setGlobalDispatcher(new Agent({ allowH2: false }));
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
 // In production builds, tsdown replaces process.env.NODE_ENV with 'production',
