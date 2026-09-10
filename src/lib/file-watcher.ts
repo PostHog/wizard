@@ -124,13 +124,21 @@ export function startFileWatcher(
   };
 
   const attachWatch = () => {
-    watchers.push(
-      fs.watch(targetDir, (_eventType, filename) => {
-        if (filename == null || filename.toString() === targetName) {
-          scheduleRead();
-        }
-      }),
-    );
+    const watcher = fs.watch(targetDir, (_eventType, filename) => {
+      if (filename == null || filename.toString() === targetName) {
+        scheduleRead();
+      }
+    });
+    // Without an 'error' listener, Node re-throws runtime watcher errors (e.g.
+    // EMFILE when file descriptors run out) as uncaught exceptions that crash
+    // the process. Log and lean on the polling interval, which keeps working.
+    watcher.on('error', (error) => {
+      logReadError(
+        `watch:${String(error)}`,
+        `directory watch failed, falling back to polling (${String(error)})`,
+      );
+    });
+    watchers.push(watcher);
   };
 
   intervals.push(setInterval(() => read(), pollIntervalMs));
