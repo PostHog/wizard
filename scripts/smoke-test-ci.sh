@@ -131,6 +131,34 @@ if [ ! -f "$WIZARD_BIN" ]; then
   exit 1
 fi
 
+# ── Gateway identity, for CI only ───────────────────────────────────────────
+# Requested here rather than in the workflow because the build and installs
+# above take minutes and the token is short-lived. Seconds old at the mint.
+if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+  echo "==> Requesting a gateway identity token..."
+  # Fixed, not read from the environment: the workbench .env is sourced above,
+  # and an audience it could set is one the mint would refuse.
+  AUDIENCE="posthog-wizard-ci"
+  IDENTITY_TOKEN=$(curl -sS --fail-with-body \
+    -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+    "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r '.value') || IDENTITY_TOKEN=""
+  if [ -z "$IDENTITY_TOKEN" ] || [ "$IDENTITY_TOKEN" = "null" ]; then
+    echo "::error::could not obtain a GitHub identity token"
+    exit 1
+  fi
+  echo "::add-mask::$IDENTITY_TOKEN"
+  export POSTHOG_WIZARD_GATEWAY_TOKEN="$IDENTITY_TOKEN"
+  unset IDENTITY_TOKEN
+elif [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  # An unset pair means the job was not granted id-token: write. Without it the
+  # mint refuses and the run would quietly spend on the legacy path instead.
+  echo "::error::id-token: write is not granted to this job"
+  exit 1
+fi
+# The wizard runs model-written code below. Holding these is permission to ask
+# GitHub for a token naming any audience, so drop them either way.
+unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+
 # ── Run wizard in CI mode ───────────────────────────────────────────────────
 echo "==> Running wizard in CI mode..."
 echo "    App:        $APP"

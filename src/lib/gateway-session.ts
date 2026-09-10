@@ -65,8 +65,11 @@ const MAX_REFUSAL_OUTCOME_LENGTH = 64;
  * mint accepts, so it never becomes the run's gateway credential and the legacy
  * fallback keeps using the user's own token.
  */
-function mintBearer(accessToken: string): string {
-  return process.env.POSTHOG_WIZARD_GATEWAY_TOKEN?.trim() || accessToken;
+function mintBearer(accessToken: string): { bearer: string; ci: boolean } {
+  const identity = process.env.POSTHOG_WIZARD_GATEWAY_TOKEN?.trim();
+  return identity
+    ? { bearer: identity, ci: true }
+    : { bearer: accessToken, ci: false };
 }
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
@@ -75,7 +78,7 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
-  const bearer = mintBearer(accessToken);
+  const { bearer, ci } = mintBearer(accessToken);
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
   const key = `${host.apiHost}\n${bearer}\n${program ?? ''}`;
@@ -83,7 +86,14 @@ export async function gatewayAuth(
     return cached.auth;
   }
   if (inFlight && inFlight.key === key) return inFlight.promise;
-  const promise = resolveGatewayAuth(host, accessToken, bearer, key, program);
+  const promise = resolveGatewayAuth(
+    host,
+    accessToken,
+    bearer,
+    ci,
+    key,
+    program,
+  );
   inFlight = { key, promise };
   try {
     return await promise;
@@ -96,6 +106,7 @@ async function resolveGatewayAuth(
   host: HostResolution,
   accessToken: string,
   bearer: string,
+  ci: boolean,
   key: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
@@ -112,7 +123,10 @@ async function resolveGatewayAuth(
     minted = await mintGatewayToken(host, bearer, program);
   } catch (e) {
     if (!(e instanceof GatewayMintRefused)) throw e;
-    const legacy = legacyGatewayAuth(host, accessToken, e.status);
+    // A CI run that cannot mint has to fail. Falling back would leave a broken
+    // identity path behind a green smoke test, spending on the very gateway this
+    // exists to stop using.
+    const legacy = ci ? null : legacyGatewayAuth(host, accessToken, e.status);
     if (!legacy) throw e;
     logToFile(
       `[gateway] mint refused this credential (HTTP ${e.status}); CI run staying on the legacy gateway`,
@@ -139,7 +153,7 @@ async function resolveGatewayAuth(
     `[gateway] minted a scoped token: program=${program} team=${
       minted.teamId ?? 'unknown'
     } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl} identity=${
-      bearer === accessToken ? 'user' : 'ci'
+      ci ? 'ci' : 'user'
     }`,
   );
   const auth: GatewayAuth = {

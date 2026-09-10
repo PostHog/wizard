@@ -862,9 +862,48 @@ describe('gatewayAuth with a CI identity token', () => {
     );
   });
 
-  it('keeps the identity token out of the legacy fallback', async () => {
-    // Only the mint can verify it. The legacy gateway would read it as a
-    // credential, and it is not one.
+  it('fails the run rather than falling back when the mint refuses', async () => {
+    // The refusal a broken identity path produces is a 401, which the CI
+    // fallback admits. Falling back would pass the smoke test on the gateway
+    // this change exists to stop using.
+    setLegacyGatewayFallback(true);
+    try {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({}),
+      });
+
+      await expect(
+        gatewayAuth(host, 'phx_personal', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintRefused);
+    } finally {
+      setLegacyGatewayFallback(false);
+    }
+  });
+
+  it('still lets a user run fall back on the same refusal', async () => {
+    // The other arm: only the CI identity forfeits the fallback.
+    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '');
+    setLegacyGatewayFallback(true);
+    try {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({}),
+      });
+
+      const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+      expect(auth).toMatchObject({ token: 'phx_personal', legacy: true });
+    } finally {
+      setLegacyGatewayFallback(false);
+    }
+  });
+
+  it('treats a whitespace-only variable as absent', async () => {
+    // Pins the trim: an unset-but-present variable must not forfeit the
+    // fallback that a user run still has.
+    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '   ');
     setLegacyGatewayFallback(true);
     try {
       fetchMock.mockResolvedValue({
@@ -896,6 +935,15 @@ describe('gatewayAuth with a CI identity token', () => {
 
     await gatewayAuth(host, 'phx_personal', 'integration');
     expect(loggedLines().join('\n')).toContain('identity=ci');
+  });
+
+  it('names a user run as a user run', async () => {
+    // The other arm: labelling every mint `ci` would be as useless as no label.
+    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '');
+    fetchMock.mockResolvedValue(minted);
+
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(loggedLines().join('\n')).toContain('identity=user');
   });
 
   it('never writes the identity token to the log', async () => {

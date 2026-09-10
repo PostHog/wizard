@@ -64,20 +64,6 @@ jobs:
           [ -n "$API_KEY" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY is not set"; exit 1; }
           [ -n "$PROJECT_ID" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID is not set"; exit 1; }
 
-      # Proves this workflow's identity to the mint, which pins the repository,
-      # the owner id, this file's path and the ref before it issues a token.
-      - name: Request a gateway identity token
-        env:
-          AUDIENCE: posthog-wizard-ci
-        run: |
-          token="$(curl -sS --fail-with-body \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r '.value')"
-          [ -n "$token" ] && [ "$token" != "null" ] || {
-            echo "::error::could not obtain a GitHub identity token"; exit 1; }
-          echo "::add-mask::$token"
-          echo "POSTHOG_WIZARD_GATEWAY_TOKEN=$token" >> "$GITHUB_ENV"
-
       - name: Run smoke test
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
@@ -87,12 +73,10 @@ jobs:
           POSTHOG_WIZARD_REGION: us
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
           SMOKE_TEST_APP: ${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }}
-        run: |
-          # This step runs model-written code. The runner puts these two back
-          # after any step env: block, and holding them is permission to ask
-          # GitHub for tokens naming any audience, so drop them from the shell.
-          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
-          ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
+        # The script asks GitHub for the identity token itself, immediately before
+        # the run that spends it, and drops the request variables before the
+        # wizard starts. Doing it here would age the token through the build.
+        run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
 
       - name: Upload artifacts
         if: always()

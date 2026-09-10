@@ -37,11 +37,17 @@ describe('isBlockedAgentEnvKey', () => {
   });
 
   it('blocks the CI identity token and the means to ask for another', () => {
-    // The pair below is permission to request tokens for any audience the
-    // holder names, which is the whole of what CI proves to the mint.
+    // Holding the request pair is permission to ask GitHub for a token naming
+    // any audience, which is the whole of what CI proves to the mint.
     expect(isBlockedAgentEnvKey('POSTHOG_WIZARD_GATEWAY_TOKEN')).toBe(true);
     expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_URL')).toBe(true);
     expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_TOKEN')).toBe(true);
+  });
+
+  it('blocks the whole identity-request namespace, not the two names', () => {
+    expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_ANYTHING')).toBe(
+      true,
+    );
   });
 
   it('still passes through POSTHOG_API_KEY (deliberate, pre-existing disposition)', () => {

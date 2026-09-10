@@ -34,6 +34,13 @@
 const PROVIDER_ENV_NAMESPACE = /^(ANTHROPIC_|CLAUDE_CODE_)/;
 
 /**
+ * The runner's identity-token namespace. Holding any of it is permission to ask
+ * GitHub for a token naming any audience, so it goes by namespace rather than by
+ * the two names that exist today.
+ */
+const CI_IDENTITY_ENV_NAMESPACE = /^ACTIONS_ID_TOKEN_REQUEST/;
+
+/**
  * Off-namespace credential that the binary can use without a provider-activation
  * flag, so the namespace rule alone wouldn't catch it. (Bedrock ignores it once
  * `CLAUDE_CODE_USE_BEDROCK` is gone, but strip it anyway — defense in depth.)
@@ -56,10 +63,9 @@ const BLOCKED_OFF_NAMESPACE_KEYS = new Set(['AWS_BEARER_TOKEN_BEDROCK']);
  *   read by the wizard's analytics only; they let the agent fingerprint the
  *   run directory where the handoff path typically sits.
  *
- * - `POSTHOG_WIZARD_GATEWAY_TOKEN` and the two `ACTIONS_ID_TOKEN_REQUEST_*`
- *   values are CI identity: the first is the bearer the mint verifies, the pair
- *   lets a holder ask GitHub for more of them, for any audience it names. Only
- *   the wizard process itself mints, so the agent never needs either.
+ * - `POSTHOG_WIZARD_GATEWAY_TOKEN` is the bearer the wizard's own mint call
+ *   verifies. Only the wizard process mints, so the agent never needs it. The
+ *   request variables that produce it are stripped by namespace above.
  *
  * Deliberately NOT stripped: `POSTHOG_API_KEY` / `POSTHOG_HOST` — pre-existing
  * passthrough that the agent may rely on when writing the user's project key
@@ -71,8 +77,6 @@ const HOST_ONLY_ENV_KEYS = new Set([
   'POSTHOG_TASK_RUN_ID',
   'POSTHOG_TASK_ID',
   'POSTHOG_WIZARD_GATEWAY_TOKEN',
-  'ACTIONS_ID_TOKEN_REQUEST_URL',
-  'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
 ]);
 
 /**
@@ -160,6 +164,7 @@ export const BLOCKED_AGENT_ENV_PATTERNS: readonly RegExp[] = [
 export function isBlockedAgentEnvKey(key: string): boolean {
   return (
     PROVIDER_ENV_NAMESPACE.test(key) ||
+    CI_IDENTITY_ENV_NAMESPACE.test(key) ||
     BLOCKED_OFF_NAMESPACE_KEYS.has(key) ||
     HOST_ONLY_ENV_KEYS.has(key)
   );
