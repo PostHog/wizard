@@ -36,6 +36,14 @@ describe('isBlockedAgentEnvKey', () => {
     expect(isBlockedAgentEnvKey('POSTHOG_TASK_ID')).toBe(true);
   });
 
+  it('blocks the CI identity token and the means to ask for another', () => {
+    // The pair below is permission to request tokens for any audience the
+    // holder names, which is the whole of what CI proves to the mint.
+    expect(isBlockedAgentEnvKey('POSTHOG_WIZARD_GATEWAY_TOKEN')).toBe(true);
+    expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_URL')).toBe(true);
+    expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_TOKEN')).toBe(true);
+  });
+
   it('still passes through POSTHOG_API_KEY (deliberate, pre-existing disposition)', () => {
     // The agent may rely on it when writing the user's project key into the
     // project's own .env; changing that is a separate decision.
@@ -135,6 +143,9 @@ describe('sanitizeAgentSubprocessEnv', () => {
       POSTHOG_HANDOFF_OUTPUT_PATH: '/run/task-42/handoff.md',
       POSTHOG_TASK_RUN_ID: 'task-42',
       POSTHOG_TASK_ID: '019abc',
+      POSTHOG_WIZARD_GATEWAY_TOKEN: 'header.payload.signature',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://pipelines.example/token',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'runner-request-token',
       // — user-facing PostHog config the agent may need for the project .env
       //   (deliberately PRESERVED, pre-existing disposition) —
       POSTHOG_API_KEY: 'phc_project_key',

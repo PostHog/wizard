@@ -56,6 +56,11 @@ const BLOCKED_OFF_NAMESPACE_KEYS = new Set(['AWS_BEARER_TOKEN_BEDROCK']);
  *   read by the wizard's analytics only; they let the agent fingerprint the
  *   run directory where the handoff path typically sits.
  *
+ * - `POSTHOG_WIZARD_GATEWAY_TOKEN` and the two `ACTIONS_ID_TOKEN_REQUEST_*`
+ *   values are CI identity: the first is the bearer the mint verifies, the pair
+ *   lets a holder ask GitHub for more of them, for any audience it names. Only
+ *   the wizard process itself mints, so the agent never needs either.
+ *
  * Deliberately NOT stripped: `POSTHOG_API_KEY` / `POSTHOG_HOST` — pre-existing
  * passthrough that the agent may rely on when writing the user's project key
  * into the project's own .env. Changing that disposition is a separate,
@@ -65,6 +70,9 @@ const HOST_ONLY_ENV_KEYS = new Set([
   'POSTHOG_HANDOFF_OUTPUT_PATH',
   'POSTHOG_TASK_RUN_ID',
   'POSTHOG_TASK_ID',
+  'POSTHOG_WIZARD_GATEWAY_TOKEN',
+  'ACTIONS_ID_TOKEN_REQUEST_URL',
+  'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
 ]);
 
 /**

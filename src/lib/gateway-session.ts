@@ -138,7 +138,9 @@ async function resolveGatewayAuth(
   logToFile(
     `[gateway] minted a scoped token: program=${program} team=${
       minted.teamId ?? 'unknown'
-    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}`,
+    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl} identity=${
+      bearer === accessToken ? 'user' : 'ci'
+    }`,
   );
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,

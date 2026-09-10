@@ -866,15 +866,36 @@ describe('gatewayAuth with a CI identity token', () => {
     // Only the mint can verify it. The legacy gateway would read it as a
     // credential, and it is not one.
     setLegacyGatewayFallback(true);
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 401,
-      json: () => Promise.resolve({}),
-    });
+    try {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({}),
+      });
 
-    const auth = await gatewayAuth(host, 'phx_personal', 'integration');
-    expect(auth).toMatchObject({ token: 'phx_personal', legacy: true });
-    setLegacyGatewayFallback(false);
+      const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+      expect(auth).toMatchObject({ token: 'phx_personal', legacy: true });
+    } finally {
+      setLegacyGatewayFallback(false);
+    }
+  });
+
+  it('mints again when the identity token changes', async () => {
+    // The session cache keys on the bearer actually sent. Keyed on the personal
+    // key instead, a second run would serve the first run's token.
+    fetchMock.mockResolvedValue(minted);
+
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', 'second.identity.token');
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('names the identity that minted, so a CI run is separable in the log', async () => {
+    fetchMock.mockResolvedValue(minted);
+
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(loggedLines().join('\n')).toContain('identity=ci');
   });
 
   it('never writes the identity token to the log', async () => {
