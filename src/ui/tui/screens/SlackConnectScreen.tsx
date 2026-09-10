@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { ApiError, fetchSlackConnected } from '@lib/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
@@ -155,12 +155,23 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // Capture once and stop polling — repeating a failing call
-          // every tick would spam error tracking. The nudge copy is
-          // the fallback either way; a failed check counts as not
-          // connected so the screen doesn't sit on the loading state.
+          // A failed check counts as not connected so the screen falls
+          // back to the nudge instead of sitting on the loading state,
+          // and we stop polling either way — repeating a failing call
+          // every tick would spam error tracking.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
+          }
+          // Auth failures are expected, not bugs: 403 means the token
+          // lacks the `integration:read` scope, 401 means it's expired
+          // or invalid. Either way the nudge copy is the right fallback,
+          // so degrade quietly and don't capture — it's just noise in
+          // error tracking. Anything else is unexpected: capture once
+          // with the typed message rather than a raw AxiosError stack.
+          const status = err instanceof ApiError ? err.statusCode : undefined;
+          if (status === 401 || status === 403) {
+            logToFile(`Slack connection check auth failure (${status})`);
+            return;
           }
           analytics.captureException(
             err instanceof Error ? err : new Error(String(err)),
