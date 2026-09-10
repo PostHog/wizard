@@ -105,8 +105,9 @@ export interface ProgramBinding {
 // Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
 export const DEFAULT_BINDING: ProgramBinding = {
   sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: DEFAULT_AGENT_MODEL,
+  harness: Harness.pi,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
 };
 
 /**
