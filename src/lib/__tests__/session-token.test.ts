@@ -1,4 +1,4 @@
-import { refreshAccessTokenIfNeeded } from '../authenticate';
+import { refreshAccessTokenIfNeeded } from '@lib/session-token';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
 import { isGrantRevoked, resetAuthSessionState } from '@lib/auth-session-state';
@@ -120,7 +120,7 @@ describe('refreshAccessTokenIfNeeded', () => {
     mockedRefresh.mockRejectedValueOnce(new Error('network down'));
     const session = sessionWith(aging());
 
-    await expect(refreshAccessTokenIfNeeded(session)).resolves.toBeUndefined();
+    await expect(refreshAccessTokenIfNeeded(session)).resolves.toBe(false);
     expect(session.credentials!.accessToken).toBe('pha_old');
     expect(setAccessToken).not.toHaveBeenCalled();
   });
@@ -139,5 +139,33 @@ describe('refreshAccessTokenIfNeeded', () => {
     await refreshAccessTokenIfNeeded(sessionWith(aging()));
 
     expect(isGrantRevoked()).toBe(false);
+  });
+
+  // The Self-driving GitHub gate calls this after a 401: the token was
+  // rejected, so its stated expiry proves nothing.
+  it('refreshes a token that still looks fresh when forced', async () => {
+    mockedRefresh.mockResolvedValueOnce({
+      access_token: 'pha_new',
+      expires_in: 3600,
+      token_type: 'Bearer',
+      scope: 'project:read',
+    });
+    const session = sessionWith(
+      aging({ expiresAt: Date.now() + 6 * 60 * 60 * 1000 }),
+    );
+
+    await expect(
+      refreshAccessTokenIfNeeded(session, { force: true }),
+    ).resolves.toBe(true);
+    expect(session.credentials!.accessToken).toBe('pha_new');
+  });
+
+  it('still needs a refresh token when forced', async () => {
+    await expect(
+      refreshAccessTokenIfNeeded(sessionWith({ accessToken: 'pha_ci_key' }), {
+        force: true,
+      }),
+    ).resolves.toBe(false);
+    expect(mockedRefresh).not.toHaveBeenCalled();
   });
 });

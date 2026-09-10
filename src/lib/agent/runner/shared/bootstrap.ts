@@ -10,7 +10,8 @@
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
-import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
+import { authenticate } from './authenticate';
+import { refreshAccessTokenIfNeeded } from '@lib/session-token';
 import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { gatewayAuth } from '@lib/gateway-session';
