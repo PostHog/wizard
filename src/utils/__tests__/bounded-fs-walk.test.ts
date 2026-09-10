@@ -25,19 +25,27 @@ describe('reportFsError (via walkProjectFiles / safeReadFile)', () => {
 
   // Benign codes are expected while scanning arbitrary trees (protected dirs,
   // races, symlink loops) — they must be logged, not captured as exceptions.
-  it.each(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'ELOOP', 'EMFILE'])(
-    'does not capture an exception for benign fs error %s',
-    (code) => {
-      vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
-        throw errnoError(code);
-      });
+  it.each([
+    'EACCES',
+    'EPERM',
+    'ENOENT',
+    'ENOTDIR',
+    'ELOOP',
+    'EMFILE',
+    'ETIMEDOUT',
+    'EBUSY',
+    'EIO',
+    'EHOSTDOWN',
+  ])('does not capture an exception for benign fs error %s', (code) => {
+    vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
+      throw errnoError(code);
+    });
 
-      walkProjectFiles('/some/dir', vi.fn());
+    walkProjectFiles('/some/dir', vi.fn());
 
-      expect(captureException).not.toHaveBeenCalled();
-      expect(mockLogToFile).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(captureException).not.toHaveBeenCalled();
+    expect(mockLogToFile).toHaveBeenCalledTimes(1);
+  });
 
   it('captures an exception for an unexpected fs error code', () => {
     vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
