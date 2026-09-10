@@ -63,7 +63,7 @@ jobs:
       - name: Write gateway token
         run: printf '%s' "$GATEWAY_TOKEN" > "$RUNNER_TEMP/gateway-token"
         env:
-          GATEWAY_TOKEN: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_GATEWAY_TOKEN }}
+          GATEWAY_TOKEN: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_GATEWAY_TOKEN }}
 
       - name: Run smoke test
         env:

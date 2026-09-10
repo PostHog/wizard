@@ -38,17 +38,40 @@ export interface ModelCapabilities {
   thinkingLevel?: ThinkingLevel;
 }
 
-/** Explicit per-model traits. Anything absent falls back to `defaultCaps`. */
+/**
+ * Explicit per-model traits. Anything absent falls back to `defaultCaps`.
+ *
+ * A reasoning model without a `thinkingLevel` leaves the effort to the harness,
+ * and the mint pins effort per model (posthog `WIZARD_MODEL_ALLOWLIST`), so an
+ * unpinned reasoning model is refused with no tool calls. Every level below is
+ * one the mint allows for that model.
+ */
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
-  [SONNET_5_MODEL]: { reasoning: true },
-  [HAIKU_MODEL]: { reasoning: true },
+  // The mint takes sonnet 5 at `none` or `high`; high is the only level it
+  // serves once reasoning is on.
+  [SONNET_5_MODEL]: { reasoning: true, thinkingLevel: 'high' },
+  // The mint takes haiku with no effort parameter at all, which is `off`.
+  [HAIKU_MODEL]: { reasoning: true, thinkingLevel: 'off' },
   // The openai 5.6 line; all reasoning models, so they must opt in past the
   // openai-completions default (reasoning off). Luna stays low for cheap,
   // short-context mechanical work; terra runs medium as the sonnet-tier parallel
   // — enough reasoning depth for the judgment tasks without high's latency blowup.
   [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
-  [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+};
+
+/**
+ * The mint's per-model effort pin, mirrored from posthog
+ * `WIZARD_MODEL_ALLOWLIST`. `'off'` is the CLI's spelling of the mint's
+ * `"none"` — a call carrying no effort parameter.
+ */
+export const MINT_ALLOWED_EFFORTS: Record<string, readonly ThinkingLevel[]> = {
+  [SONNET_5_MODEL]: ['off', 'high'],
+  [HAIKU_MODEL]: ['off'],
+  [GPT5_6_LUNA_MODEL]: ['low'],
+  [GPT5_6_SOL_MODEL]: ['medium'],
+  [GPT5_6_TERRA_MODEL]: ['low', 'medium', 'high'],
 };
 
 // Local model choices; gateway admission also requires allowed models, efforts, and prompt compatibility.

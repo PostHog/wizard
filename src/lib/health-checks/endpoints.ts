@@ -2,24 +2,7 @@ import { AWS_SKILLS_BASE_URL, GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
-// ---------------------------------------------------------------------------
-// Direct endpoint health checks
-//
-// These ping PostHog-owned services directly (no Statuspage intermediary).
-// Result taxonomy:
-//   - HTTP 2xx-3xx (per `isExpectedStatus`)        → Healthy
-//   - HTTP 4xx / 5xx                                → Down (confirmed)
-//   - Network error / DNS / timeout (after retries) → NoConnection
-// NoConnection means we don't know whose fault it is; readiness reconciles
-// against the status page before deciding how to surface it to the user.
-//
-// MCP – Cloudflare Worker
-//   Source: posthog/services/mcp/src/index.ts
-//   GET / → 302 to posthog.com docs. The redirect proves the worker is up.
-//
-// Skills download – context-mill releases
-//   GET <origin>/skill-menu.json on both origins; see checkSkillsOriginHealth.
-// ---------------------------------------------------------------------------
+// Direct gateway and skill-origin checks distinguish HTTP failures from connection failures.
 
 function noConnectionResult(error: string, attempts: number): BaseHealthResult {
   return {
@@ -122,10 +105,7 @@ export async function fetchEndpointHealth(
 
   const result =
     lastHttpStatus !== null
-      ? downResult(
-          `HTTP ${lastHttpStatus} (attempts=${attempts})`,
-          lastHttpStatus,
-        )
+      ? downResult(`HTTP ${lastHttpStatus} (attempts=${attempts})`)
       : noConnectionResult(lastError, attempts);
   logToFile(
     `[health-checks] GET ${url} -> ${result.status}` +
@@ -134,14 +114,10 @@ export async function fetchEndpointHealth(
   return result;
 }
 
-export const checkMcpHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth(
-    'https://mcp.posthog.com/',
-    5000,
-    // 2xx-3xx counts as up (redirect to docs)
-    (s) => s >= 200 && s < 400,
-    'manual',
-  );
+export const checkLlmGatewayHealth = (
+  gatewayUrl: string,
+): Promise<BaseHealthResult> =>
+  fetchEndpointHealth(new URL('/readyz', gatewayUrl).href);
 
 /**
  * Skills are published to two origins under the same filenames and

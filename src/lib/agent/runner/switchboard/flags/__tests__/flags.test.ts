@@ -44,17 +44,17 @@ const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const ORCH = WIZARD_ORCHESTRATOR_FLAG_KEY;
 const SD = WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY;
 
-const LINEAR_ANTHROPIC_DEFAULT = {
+const LINEAR_DEFAULT = {
   sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: DEFAULT_AGENT_MODEL,
-  thinkingLevel: undefined,
+  harness: Harness.pi,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
 } as const;
 const ORCHESTRATOR_PI_DEFAULT = {
   sequence: Sequence.orchestrator,
   harness: Harness.pi,
-  model: DEFAULT_AGENT_MODEL,
-  thinkingLevel: undefined,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
 } as const;
 
 describe('flag declarations', () => {
@@ -79,18 +79,18 @@ describe('the truth table — posthog-integration × wizard-orchestrator', () =>
       {
         name: 'off/absent → linear on anthropic, default model',
         ctx: { program: 'posthog-integration', flags: {} },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
+        binding: LINEAR_DEFAULT,
         trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
       },
       {
         name: "'false' → identical to absent",
         ctx: { program: 'posthog-integration', flags: { [ORCH]: 'false' } },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
+        binding: LINEAR_DEFAULT,
       },
       {
         name: "garbage ('banana') → identical to absent",
         ctx: { program: 'posthog-integration', flags: { [ORCH]: 'banana' } },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
+        binding: LINEAR_DEFAULT,
       },
       {
         name: "'true' → orchestrator on pi; model stays the binding default (frontmatter decides per task)",
@@ -110,7 +110,7 @@ describe('the truth table — self-driving × its pi payload flag', () => {
       {
         name: 'off/absent → linear on anthropic, default model',
         ctx: { program: 'self-driving', flags: {} },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
+        binding: LINEAR_DEFAULT,
       },
       {
         name: 'on + full payload → pi on the payload model/effort, payload may pin the sequence too',
@@ -127,7 +127,7 @@ describe('the truth table — self-driving × its pi payload flag', () => {
         },
       },
       {
-        name: 'on + model-only payload → pi on that model, table-default effort, linear',
+        name: "on + model-only payload → pi on that model, the binding's effort, linear",
         ctx: {
           program: 'self-driving',
           flags: { [SD]: 'true' },
@@ -137,7 +137,7 @@ describe('the truth table — self-driving × its pi payload flag', () => {
           sequence: Sequence.linear,
           harness: Harness.pi,
           model: GPT5_6_TERRA_MODEL,
-          thinkingLevel: undefined,
+          thinkingLevel: 'medium',
         },
       },
       {
@@ -161,12 +161,12 @@ describe('the truth table — self-driving × its pi payload flag', () => {
           flags: { [SD]: 'true' },
           flagPayloads: { [SD]: { model: 'banana' } },
         },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
+        binding: LINEAR_DEFAULT,
       },
       {
         name: 'on + missing payload → fail closed to the default',
         ctx: { program: 'self-driving', flags: { [SD]: 'true' } },
-        binding: LINEAR_ANTHROPIC_DEFAULT,
+        binding: LINEAR_DEFAULT,
       },
     ],
     setSurface,
@@ -275,14 +275,18 @@ describe('isolation — everything on at once', () => {
         });
       } else if (program === 'ai-observability') {
         expect(resolved).toEqual({
-          ...LINEAR_ANTHROPIC_DEFAULT,
+          ...LINEAR_DEFAULT,
+          harness: Harness.anthropic,
           model: SONNET_5_MODEL,
+          thinkingLevel: undefined,
         });
       } else if (program === 'metrics') {
         // Orchestrator + pi from its OWN binding, not the flag; stage models
         // are pinned context-mill side in the flow frontmatter.
         expect(resolved).toEqual({
           ...ORCHESTRATOR_PI_DEFAULT,
+          model: DEFAULT_AGENT_MODEL,
+          thinkingLevel: undefined,
         });
       } else if (program === 'error-tracking-upload-source-maps') {
         // Pi + sol medium from its OWN binding, not the flag.
@@ -297,8 +301,11 @@ describe('isolation — everything on at once', () => {
         // wizard-orchestrator experiment does not cover this program, so it
         // lands here whether the flag is on or off. Anthropic, not pi.
         expect(resolved).toEqual({
-          ...LINEAR_ANTHROPIC_DEFAULT,
+          ...LINEAR_DEFAULT,
           sequence: Sequence.orchestrator,
+          harness: Harness.anthropic,
+          model: DEFAULT_AGENT_MODEL,
+          thinkingLevel: undefined,
         });
         expect(ctx.trace).toEqual({
           harness: 'binding',
@@ -306,7 +313,7 @@ describe('isolation — everything on at once', () => {
           sequence: 'binding',
         });
       } else {
-        expect(resolved).toEqual(LINEAR_ANTHROPIC_DEFAULT);
+        expect(resolved).toEqual(LINEAR_DEFAULT);
         expect(ctx.trace).toEqual({
           harness: 'binding',
           model: 'binding',

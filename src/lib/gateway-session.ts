@@ -2,8 +2,9 @@
  * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
  * pinned attribution, a spend cap and an expiry.
  *
- * Every mint failure throws. There is no other gateway to fall back to, and a
- * silent downgrade would spend uncapped, unattributed money to hide an outage.
+ * Every mint failure throws, since a silent downgrade would spend uncapped,
+ * unattributed money to hide an outage. The CI-only exception lives in
+ * legacy-gateway.ts.
  */
 
 import { readFileSync } from 'node:fs';
@@ -12,6 +13,9 @@ import { analytics } from '@utils/analytics';
 import { WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
+import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+import { legacyGatewayAuth } from '@lib/legacy-gateway';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
@@ -22,6 +26,8 @@ export interface GatewayAuth {
   token: string;
   /** Team verified by the mint, or explicitly supplied for CI attribution. */
   teamId?: number;
+  /** Set only by the CI fallback in legacy-gateway.ts. */
+  legacy?: boolean;
   /**
    * Instant past which a 401 on this bearer is age rather than a bad
    * credential: the cache re-mints past it, and a session still holding the
@@ -141,7 +147,27 @@ async function resolveGatewayAuth(
       'this run has no program to attribute its spend to',
     );
   }
-  const minted = await mintGatewayToken(host, accessToken, program);
+  let minted: MintedToken;
+  try {
+    minted = await mintGatewayToken(host, accessToken, program);
+  } catch (e) {
+    if (!(e instanceof GatewayMintRefused)) throw e;
+    const legacy = legacyGatewayAuth(host, accessToken, e.status);
+    if (!legacy) throw e;
+    logToFile(
+      `[gateway] mint refused this credential (HTTP ${e.status}); CI run staying on the legacy gateway`,
+    );
+    cached = { key, auth: legacy, staleAtMs: legacy.refreshAtMs };
+    return legacy;
+  }
+  const health = await checkLlmGatewayHealth(minted.gatewayUrl);
+  if (health.status !== ServiceHealthStatus.Healthy) {
+    throw new WizardError(
+      'The PostHog AI gateway is unavailable. Please try again later.',
+      undefined,
+      ErrorCodes.EnvServiceOutage,
+    );
+  }
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
   if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {

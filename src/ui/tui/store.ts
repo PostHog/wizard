@@ -41,7 +41,6 @@ import {
   getBlockingServiceKeys,
   type WizardReadinessResult,
 } from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
 import {
   WizardRouter,
   type ScreenName,
@@ -128,49 +127,17 @@ interface GateEntry {
  */
 const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
-/**
- * Fired once per blocked readiness result, so we can quantify how often
- * the wizard refuses to start and — crucially — split that between
- * confirmed PostHog outages and probe-level reachability failures that
- * are most likely the user's network. Helps us decide whether the
- * health-check UX is over-firing.
- */
+// Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
   try {
     const health = result.health;
     const blockingKeys = getBlockingServiceKeys(health);
-    const blockingStatuses = blockingKeys.map((k) => health[k]?.status);
-
-    const allNoConnection =
-      blockingStatuses.length > 0 &&
-      blockingStatuses.every((s) => s === ServiceHealthStatus.NoConnection);
-    const onlySkillsOrigin =
-      blockingKeys.length === 1 && blockingKeys[0] === 'skillsOrigin';
-
-    const decision = onlySkillsOrigin
-      ? 'skills-origin-down'
-      : allNoConnection
-      ? 'no-connection'
-      : 'confirmed-outage';
-
-    const posthogStatus = health.posthogOverall?.status;
-    const retriesUsed = Math.max(
-      0,
-      ...(['mcp', 'skillsOrigin'] as const).map((k) => {
-        const ind = health[k]?.rawIndicator ?? '';
-        const m = ind.match(/attempts=(\d+)/);
-        return m ? Number(m[1]) - 1 : 0;
-      }),
-    );
+    const attempts = health.skillsOrigin.rawIndicator?.match(/attempts=(\d+)/);
+    const retriesUsed = Math.max(0, attempts ? Number(attempts[1]) - 1 : 0);
 
     analytics.wizardCapture('health check blocked', {
-      decision,
+      decision: 'skills-origin-down',
       blocking_keys: blockingKeys,
-      posthog_status_reachable:
-        posthogStatus !== ServiceHealthStatus.NoConnection,
-      posthog_status_reports_incident:
-        posthogStatus === ServiceHealthStatus.Down ||
-        posthogStatus === ServiceHealthStatus.Degraded,
       retries_used: retriesUsed,
     });
   } catch (err) {
