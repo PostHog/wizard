@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.74.1](https://github.com/PostHog/wizard/compare/v2.74.0...v2.74.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **health:** warn only for skills and gateway failures ([#1236](https://github.com/PostHog/wizard/issues/1236)) ([d2d757d](https://github.com/PostHog/wizard/commit/d2d757dce1b36167e2f2fa4ef4d4d1c22fbc01df))
+* **models:** pin every model to an effort the mint allows ([#1244](https://github.com/PostHog/wizard/issues/1244)) ([538e052](https://github.com/PostHog/wizard/commit/538e052a551a31d8e105adea959909b9e545942d))
+
 ## [2.74.0](https://github.com/PostHog/wizard/compare/v2.73.2...v2.74.0) (2026-09-09)
 
 
