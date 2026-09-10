@@ -30,6 +30,7 @@ import {
 } from '@lib/agent/runner/switchboard';
 import {
   modelCapabilities,
+  MINT_ALLOWED_EFFORTS,
   isValidModel,
   requireKnownModel,
   TRIAGE_MODELS,
@@ -286,14 +287,29 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
     for (const m of [GPT5_6_LUNA_MODEL, GPT5_6_TERRA_MODEL, GPT5_6_SOL_MODEL]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
-    // luna/sol stay low (fast); terra runs medium as the sonnet-tier parallel.
+    // luna stays low (fast); terra and sol run medium, the level the mint pins.
     expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
-    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
-    // Anthropic default carries no explicit effort — the harness default stands.
-    expect(
-      modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
-    ).toBeUndefined();
+    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('medium');
+    // The anthropic default carries an explicit effort: an unpinned reasoning
+    // model leaves the level to the harness, which the mint then refuses.
+    expect(modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel).toBe('high');
+  });
+
+  // The mint pins effort per model, so a reasoning model resolving to a level
+  // outside its pin is refused mid-run with no tool calls.
+  it('resolves every model to an effort the mint allows', () => {
+    for (const model of VALID_MODELS) {
+      const { reasoning, thinkingLevel } = modelCapabilities(model);
+      const allowed = MINT_ALLOWED_EFFORTS[model] ?? [];
+      // A reasoning model with no pinned level sends the harness default, which
+      // is never one of the mint's levels; no reasoning at all is its "none".
+      const declared = reasoning ? thinkingLevel ?? 'harness-default' : 'off';
+      expect([model, allowed.includes(declared as never)]).toEqual([
+        model,
+        true,
+      ]);
+    }
   });
 
   it('defaults unknown models by transport: anthropic on, openai off', () => {
