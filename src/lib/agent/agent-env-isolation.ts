@@ -33,11 +33,7 @@
  */
 const PROVIDER_ENV_NAMESPACE = /^(ANTHROPIC_|CLAUDE_CODE_)/;
 
-/**
- * The runner's identity-token namespace. Holding any of it is permission to ask
- * GitHub for a token naming any audience, so it goes by namespace rather than by
- * the two names that exist today.
- */
+/** The runner's identity-token namespace, blocked whole: any of it can request a token for any audience. */
 const CI_IDENTITY_ENV_NAMESPACE = /^ACTIONS_ID_TOKEN_REQUEST/;
 
 /**

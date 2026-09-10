@@ -1,8 +1,4 @@
-/**
- * GitHub Actions identity for CI runs. A run opted in with WIZARD_CI_IDENTITY
- * asks GitHub for a fresh token before each mint: the tokens are single-use and
- * expire in minutes, and a long run mints more than once.
- */
+/** GitHub Actions identity for CI runs: a fresh single-use token from GitHub for each mint. */
 
 import { runtimeEnv } from '@env';
 
@@ -23,7 +19,7 @@ export class CiIdentityUnavailable extends Error {
 /** Undefined until captured; null when the job holds no request pair. */
 let captured: { url: string; token: string } | null | undefined;
 
-/** The run's opt-in; an unknown value fails the run instead of using the user's credential. */
+/** The run's opt-in; an unknown value fails the run. */
 export function ciIdentityMode(): 'github-actions' | 'off' | 'unknown' {
   const value = runtimeEnv('WIZARD_CI_IDENTITY');
   if (!value) return 'off';
@@ -34,11 +30,7 @@ export function usesCiIdentity(): boolean {
   return ciIdentityMode() === 'github-actions';
 }
 
-/**
- * Moves the runner's identity-request pair out of the environment, so no process the
- * wizard starts inherits it. Hygiene, not a boundary: same-user code can still read a
- * parent's start-up environment, so the mint's limits are what bound the pair.
- */
+/** Moves the request pair out of process.env; hygiene only, as same-user code can still read it. */
 export function captureCiIdentityRequest(): void {
   if (captured !== undefined || !usesCiIdentity()) return;
   const url = runtimeEnv('ACTIONS_ID_TOKEN_REQUEST_URL');
@@ -103,6 +95,5 @@ export function resetCiIdentity(): void {
   captured = undefined;
 }
 
-// At import, before any caller can start a process: every entrypoint that mints
-// reaches this module through the gateway session.
+// At import, before any caller can start a process.
 captureCiIdentityRequest();

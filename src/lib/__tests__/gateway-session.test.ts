@@ -851,8 +851,7 @@ describe('gatewayAuth with a CI identity', () => {
     status: 503,
     json: () => Promise.resolve({}),
   };
-  // GitHub answers the identity request with a new token each time; the mint
-  // answers with whatever `mint` returns.
+  // GitHub answers each identity request with a new token.
   const route = (mint: () => unknown) =>
     fetchMock.mockImplementation((url: URL | string) =>
       Promise.resolve(
@@ -900,8 +899,7 @@ describe('gatewayAuth with a CI identity', () => {
   });
 
   it('asks GitHub for a new identity token when it re-mints', async () => {
-    // Identity tokens are single-use and expire in minutes, so a re-mint that
-    // reused the first would be refused.
+    // Identity tokens are single-use, so a re-mint that reused the first would be refused.
     vi.useFakeTimers({ toFake: ['Date'] });
     route(() => minted(150_000));
     await gatewayAuth(host, 'phx_personal', 'integration');
@@ -914,8 +912,7 @@ describe('gatewayAuth with a CI identity', () => {
   });
 
   it('fails the run rather than falling back when the mint refuses', async () => {
-    // The refusal a broken identity path produces is a 401, which the CI
-    // fallback admits for a personal key.
+    // A broken identity path gets a 401, which the CI fallback admits for a personal key.
     setLegacyGatewayFallback(true);
     try {
       route(() => refused);

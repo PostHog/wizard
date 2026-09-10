@@ -37,8 +37,6 @@ describe('isBlockedAgentEnvKey', () => {
   });
 
   it('blocks the means to ask GitHub for an identity token', () => {
-    // Holding the request pair is permission to ask GitHub for a token naming
-    // any audience, which is the whole of what CI proves to the mint.
     expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_URL')).toBe(true);
     expect(isBlockedAgentEnvKey('ACTIONS_ID_TOKEN_REQUEST_TOKEN')).toBe(true);
   });
