@@ -4,7 +4,7 @@
  * value — and set_env_values resolves refs host-side into the .env file.
  */
 import { mkdtempSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -285,6 +285,26 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     expect(textOf(written)).not.toContain(SECRET);
     const env = await readFile(join(workingDirectory, '.env'), 'utf8');
     expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
+  });
+
+  it('gitignores the env file it just wrote, like the MCP facade does', async () => {
+    // An iOS/Android project's .gitignore lists xcuserdata or build/, never
+    // .env — so without this pass the personal API key the flow writes is
+    // staged by the next `git add`.
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(join(workingDirectory, '.gitignore'), 'xcuserdata/\n');
+
+    await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_CLI_HOST: 'https://us.posthog.com' },
+    });
+
+    const gitignore = await readFile(
+      join(workingDirectory, '.gitignore'),
+      'utf8',
+    );
+    expect(gitignore.split('\n')).toContain('.env');
+    expect(gitignore).toContain('xcuserdata/');
   });
 
   it('mixed values map: literal + secretRef written together, secret still never in output', async () => {
