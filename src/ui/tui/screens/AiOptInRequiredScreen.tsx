@@ -101,6 +101,8 @@ export const AiOptInRequiredScreen = ({
         store.setApiUser(user);
       })
       .catch((err: unknown) => {
+        // fetchUserData no longer captures — report this genuine retry failure.
+        analytics.captureUnknown(err, { step: 'ai_opt_in_retry' });
         setRetryError(err instanceof Error ? err.message : 'Retry failed.');
       })
       .finally(() => {
