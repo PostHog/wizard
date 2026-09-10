@@ -82,6 +82,80 @@ describe('install-cli-steering', () => {
       expect(result.error).toContain('install failed');
     });
 
+    it('gives every npm failure a stable exception message so they group', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: `npm error path ${os.homedir()}\\AppData\\Roaming\\npm\n`,
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.errorObject?.message).toBe(
+        'npm install --global @posthog/cli@latest failed',
+      );
+    });
+
+    it('drops personal data from the reported detail', () => {
+      const home = os.homedir();
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: [
+          'npm error code E404',
+          'npm error 404 Not Found - GET https://registry.npmjs.org/@posthog/cli',
+          `npm error path ${home}\\AppData\\Roaming\\npm`,
+          `npm error command ${home}\\node.exe install`,
+          `npm error A complete log is in ${home}\\npm-cache\\log`,
+        ].join('\n'),
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.detail).not.toContain(home);
+      expect(result.detail).not.toContain('npm error path');
+      expect(result.detail).not.toContain('npm error command');
+      // Keeps the diagnosable bits: HTTP status and the failing registry URL.
+      expect(result.detail).toContain('E404');
+      expect(result.detail).toContain('registry.npmjs.org');
+      expect(result.error).not.toContain(home);
+    });
+
+    it('keeps the exit status when npm fails with no output', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        signal: null,
+        stdout: '',
+        stderr: '',
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.success).toBe(false);
+      // Grouping message stays stable...
+      expect(result.errorObject?.message).toBe(
+        'npm install --global @posthog/cli@latest failed',
+      );
+      // ...but the exit status survives in the error and detail so a silent
+      // failure is still distinguishable.
+      expect(result.error).toContain('exited with status 1');
+      expect(result.detail).toContain('exited with status 1');
+    });
+
+    it('keeps the terminating signal when npm is killed with no output', () => {
+      spawnSyncMock.mockReturnValue({
+        status: null,
+        signal: 'SIGKILL',
+        stdout: '',
+        stderr: '',
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.success).toBe(false);
+      expect(result.errorObject?.message).toBe(
+        'npm install --global @posthog/cli@latest failed',
+      );
+      expect(result.error).toContain('terminated by signal SIGKILL');
+      expect(result.detail).toContain('terminated by signal SIGKILL');
+    });
+
     it('explains when npm itself cannot be run', () => {
       spawnSyncMock.mockReturnValue({
         error: new Error('spawn npm ENOENT'),
