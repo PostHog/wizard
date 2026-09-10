@@ -220,6 +220,15 @@ export function runNonInteractive(
     };
 
     try {
+      if (mode === 'ci') {
+        const { configureGatewayFromCIEnvironment } = await import(
+          '@lib/gateway-session'
+        );
+        configureGatewayFromCIEnvironment(
+          Number(session.projectId),
+          session.region ?? 'us',
+        );
+      }
       if (config.ciPreRun) {
         await config.ciPreRun(session);
       } else {
