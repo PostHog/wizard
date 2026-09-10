@@ -662,16 +662,26 @@ export async function performOAuthFlow(
           ? 'timeout'
           : 'unknown';
 
-        analytics.captureException(error, {
-          step: 'oauth_flow',
-          oauth_error_code: oauthErrorCode,
-          oauth_error_description: flowError?.description,
-          client_id: clientId,
-          requested_scopes: config.scopes.join(' '),
-          // Collapse OAuth callback failures of the same kind into one issue
-          // instead of fragmenting by each user's install path in the stack trace.
-          $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
-        });
+        if (accessDenied) {
+          // A user who clicks "Deny" made a deliberate choice, not an error.
+          // Record the cancellation as a plain event so we keep the rate
+          // without filing an exception for a normal outcome.
+          analytics.wizardCapture('oauth authorization cancelled', {
+            client_id: clientId,
+            requested_scopes: config.scopes.join(' '),
+          });
+        } else {
+          analytics.captureException(error, {
+            step: 'oauth_flow',
+            oauth_error_code: oauthErrorCode,
+            oauth_error_description: flowError?.description,
+            client_id: clientId,
+            requested_scopes: config.scopes.join(' '),
+            // Collapse OAuth callback failures of the same kind into one issue
+            // instead of fragmenting by each user's install path in the stack trace.
+            $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
+          });
+        }
 
         await abort();
         throw error;
