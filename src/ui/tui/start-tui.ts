@@ -35,9 +35,20 @@ export function startTUI(
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
-  const { unmount: inkUnmount, waitUntilExit } = render(
-    createElement(App, { store }),
-  );
+  // render() throws synchronously when Ink's reconciler cannot drive the
+  // resolved React — the signature of a react / react-reconciler version
+  // mismatch. enterDarkTerminal() already switched to the alt screen, so leave
+  // it before the error propagates. Without this the caller prints its message
+  // into the alt buffer, which the terminal discards on exit, and the user is
+  // left on a blank screen with no message.
+  let rendered: ReturnType<typeof render>;
+  try {
+    rendered = render(createElement(App, { store }));
+  } catch (err) {
+    releaseTerminal();
+    throw err;
+  }
+  const { unmount: inkUnmount, waitUntilExit } = rendered;
 
   analytics.setTag('program_id', program);
   // The launch marker — the first event of every TUI run, captured under
