@@ -3,6 +3,8 @@ import { satisfies } from 'semver';
 import { Agent, setGlobalDispatcher } from 'undici';
 import { ErrorCodes } from './src/lib/errors/codes.js';
 import { emitWizardError } from './src/lib/errors/emit.js';
+// Only pulls in node:net, so safe to hoist above the version guard.
+import { configureDualStackFallback } from './src/lib/net-tuning.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -48,6 +50,9 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   });
   process.exit(1);
 }
+
+// Must run before any network client opens a connection.
+configureDualStackFallback();
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
 // In production builds, tsdown replaces process.env.NODE_ENV with 'production',
