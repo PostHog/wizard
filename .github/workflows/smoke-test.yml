@@ -60,6 +60,11 @@ jobs:
           [ -n "$API_KEY" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY is not set"; exit 1; }
           [ -n "$PROJECT_ID" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID is not set"; exit 1; }
 
+      - name: Write gateway token
+        run: printf '%s' "$GATEWAY_TOKEN" > "$RUNNER_TEMP/gateway-token"
+        env:
+          GATEWAY_TOKEN: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_GATEWAY_TOKEN }}
+
       - name: Run smoke test
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
@@ -67,6 +72,7 @@ jobs:
           # team and 403s. Same secret name wizard-workbench's wizard-ci.yml uses.
           POSTHOG_WIZARD_PROJECT_ID: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID }}
           POSTHOG_WIZARD_REGION: us
+          WIZARD_CI_GATEWAY_TOKEN_FILE: ${{ runner.temp }}/gateway-token
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
           SMOKE_TEST_APP: ${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }}
         run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
