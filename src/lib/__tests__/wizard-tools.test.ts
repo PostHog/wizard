@@ -6,6 +6,7 @@ import { zipSync } from 'fflate';
 import {
   ASK_BATCH_THRESHOLD,
   ASK_SUBJECT_UNSPECIFIED,
+  ASK_TIMED_OUT_NOTE,
   DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -918,10 +919,24 @@ describe('wizard_ask shared descriptions', () => {
     expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/never blocked/i);
   });
 
-  it('keeps the cancellation promise the warehouse skill relies on', () => {
+  it('keeps the free-cancellation promise the warehouse skill relies on', () => {
     expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(
-      /cancelled or timed-out response does NOT count/,
+      /Neither a cancelled nor a timed-out response counts/,
     );
+  });
+
+  it('separates a dismissal from a timeout, and forbids reverting on a timeout', () => {
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/__cancelled__/);
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/__timed_out__/);
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/ask the same question again/i);
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/never undo or revert/i);
+  });
+
+  it('tells the agent on a timeout to keep waiting and leave its changes in place', () => {
+    expect(ASK_TIMED_OUT_NOTE).toMatch(/not a decline/i);
+    expect(ASK_TIMED_OUT_NOTE).toMatch(/Do NOT undo, revert, or delete/);
+    expect(ASK_TIMED_OUT_NOTE).toMatch(/Ask the same question again/);
+    expect(ASK_TIMED_OUT_NOTE).toMatch(/costs nothing/);
   });
 
   it('explains what a subject is and what omitting it costs', () => {

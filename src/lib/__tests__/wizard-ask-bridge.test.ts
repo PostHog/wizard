@@ -1,10 +1,16 @@
 import {
   CANCELLED_SENTINEL,
+  TIMED_OUT_SENTINEL,
   createWizardAskBridge,
   isFullyCancelled,
+  isFullyTimedOut,
 } from '@lib/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
-import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
+import type {
+  AskAnswers,
+  AskQuestion,
+  PendingQuestion,
+} from '@lib/wizard-session';
 
 vi.mock('../../utils/analytics', () => ({
   analytics: {
@@ -189,10 +195,31 @@ describe('createWizardAskBridge', () => {
     it('is false for an empty answer map', () => {
       expect(isFullyCancelled({})).toBe(false);
     });
+
+    it('is true for a timed-out ask, so a timeout also refunds the slot', () => {
+      expect(
+        isFullyCancelled({ a: TIMED_OUT_SENTINEL, b: TIMED_OUT_SENTINEL }),
+      ).toBe(true);
+    });
+  });
+
+  describe('isFullyTimedOut', () => {
+    // Gates the timeout guidance the facades return: it must fire for a
+    // timeout and never for a dismissal, which needs the opposite advice.
+    it('is true only when every field is the timed-out sentinel', () => {
+      expect(
+        isFullyTimedOut({ a: TIMED_OUT_SENTINEL, b: TIMED_OUT_SENTINEL }),
+      ).toBe(true);
+      expect(
+        isFullyTimedOut({ a: CANCELLED_SENTINEL, b: CANCELLED_SENTINEL }),
+      ).toBe(false);
+      expect(isFullyTimedOut({ a: TIMED_OUT_SENTINEL, b: 'real' })).toBe(false);
+      expect(isFullyTimedOut({})).toBe(false);
+    });
   });
 
   describe('timeout', () => {
-    it('resolves every field with the cancelled sentinel and dismisses the host overlay when the user does not answer in time', async () => {
+    it('resolves every field with the timed-out sentinel and dismisses the host overlay when the user does not answer in time', async () => {
       vi.useFakeTimers();
       try {
         // showQuestion intentionally never resolves — the timeout has to win.
@@ -213,15 +240,64 @@ describe('createWizardAskBridge', () => {
 
         vi.advanceTimersByTime(1000);
 
+        // A timeout must not look like a dismissal. The agent reads the
+        // dismissal sentinel as "the user declined" and unwinds its work, and
+        // the user who walked off to run a build is still coming back.
         await expect(promise).resolves.toEqual({
-          goal: CANCELLED_SENTINEL,
-          audience: CANCELLED_SENTINEL,
+          goal: TIMED_OUT_SENTINEL,
+          audience: TIMED_OUT_SENTINEL,
         });
 
         // Without this, the host's pending-question state survives the
         // timeout and every later wizard_ask in the run is rejected as a
         // duplicate request.
         expect(cancelQuestion).toHaveBeenCalledTimes(1);
+
+        const cancelledCall = wizardCaptureMock.mock.calls.find(
+          ([name]) => name === 'wizard_ask cancelled',
+        );
+        expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // The regression this guards: `cancelQuestion` is not a no-op on the real
+    // TUI path. `WizardStore.cancelPendingQuestion()` fills every field with
+    // the dismissal sentinel and resolves the pending `showQuestion` promise
+    // synchronously, so cancelling before resolving let the dismissal settle
+    // first and win the `Promise.race` — the agent got "__cancelled__" and
+    // none of the timeout guidance, on exactly the path this all exists for.
+    it('answers with the timeout sentinel even when cancelQuestion settles the host promise', async () => {
+      vi.useFakeTimers();
+      try {
+        const questions: AskQuestion[] = [
+          { id: 'goal', prompt: 'Goal?', kind: 'text' },
+          { id: 'audience', prompt: 'Who?', kind: 'text' },
+        ];
+        let resolveHost!: (answers: AskAnswers) => void;
+
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: () =>
+            new Promise<AskAnswers>((r) => {
+              resolveHost = r;
+            }),
+          cancelQuestion: () => {
+            const cancelled: AskAnswers = {};
+            for (const q of questions) cancelled[q.id] = CANCELLED_SENTINEL;
+            resolveHost(cancelled);
+          },
+          timeoutMs: 1000,
+        });
+
+        const promise = bridge.request({ questions });
+        vi.advanceTimersByTime(1000);
+
+        await expect(promise).resolves.toEqual({
+          goal: TIMED_OUT_SENTINEL,
+          audience: TIMED_OUT_SENTINEL,
+        });
 
         const cancelledCall = wizardCaptureMock.mock.calls.find(
           ([name]) => name === 'wizard_ask cancelled',

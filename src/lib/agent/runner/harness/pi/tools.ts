@@ -27,6 +27,7 @@ import {
   checkEnvKeys as checkEnvKeysCore,
   createAskAccounting,
   fetchSkillMenu,
+  formatAskResult,
   installSkillById,
   mergeEnvValues,
   normaliseAskSubject,
@@ -39,7 +40,11 @@ import {
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from '@lib/wizard-tools/tools';
 import type { LLMProvider } from '@posthog/warlock';
-import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  isFullyCancelled,
+  isFullyTimedOut,
+  type WizardAskBridge,
+} from '@lib/wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
@@ -393,7 +398,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
             Object.keys(answers).length
           } answer(s) for ${args.questions.length} question(s)`,
         );
-        return text(JSON.stringify({ answers: sanitised }, null, 2));
+        return text(formatAskResult(sanitised, isFullyTimedOut(answers)));
       } catch (err) {
         askAccounting.refund(args.subject);
         const message = err instanceof Error ? err.message : String(err);
