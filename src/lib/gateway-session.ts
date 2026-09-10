@@ -2,9 +2,10 @@
  * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
  * pinned attribution, a spend cap and an expiry.
  *
- * Every mint failure throws, since a silent downgrade would spend uncapped,
- * unattributed money to hide an outage. The CI-only exception lives in
- * legacy-gateway.ts.
+ * A mint failure never downgrades to uncapped, unattributed spend. A first mint
+ * that fails throws; a renewal that fails without a refusal, or is throttled,
+ * keeps the current capped token for a few backed-off retries. The CI-only
+ * legacy exception lives in legacy-gateway.ts.
  */
 
 import { logToFile } from '@utils/debug';
@@ -13,6 +14,11 @@ import { WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
 import { legacyGatewayAuth } from '@lib/legacy-gateway';
+import {
+  CiIdentityUnavailable,
+  ciIdentityMode,
+  requestCiIdentityToken,
+} from '@lib/ci-identity';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
@@ -36,6 +42,10 @@ interface CachedAuth {
   auth: GatewayAuth;
   /** Re-resolve once past this instant. */
   staleAtMs: number;
+  /** The token stops working here; until then a failed renewal keeps serving it. */
+  expiresAtMs: number;
+  /** Renewals that failed without a refusal while this token was cached. */
+  failedRenewals: number;
 }
 
 let cached: CachedAuth | null = null;
@@ -52,6 +62,13 @@ let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
 const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 /** Re-resolve at this fraction of the token's life, leaving a usable remainder. */
 const REFRESH_AT_FRACTION = 0.8;
+/** The first wait after a renewal fails without a refusal; it doubles each time. */
+const RENEWAL_RETRY_MS = 60_000;
+/**
+ * Retries per cached token. Each may have spent a CI mint slot, so past this the
+ * token is served unrenewed until it expires.
+ */
+const MAX_RENEWAL_RETRIES = 3;
 // Exceeds the backend's own 10s gateway timeout: a slow mint that lands after the
 // CLI hangs up spends a daily mint and orphans a live token.
 const MINT_TIMEOUT_MS = 20_000;
@@ -61,15 +78,20 @@ const MAX_REFUSAL_DETAIL_LENGTH = 500;
 const MAX_REFUSAL_OUTCOME_LENGTH = 64;
 
 /**
- * The bearer the mint reads. CI presents a GitHub OIDC token, which only the
- * mint accepts, so it never becomes the run's gateway credential and the legacy
- * fallback keeps using the user's own token.
+ * A fresh GitHub identity token for one mint. Only the mint reads it, so it never
+ * becomes the run's gateway credential; a mint that cannot get one fails.
  */
-function mintBearer(accessToken: string): { bearer: string; ci: boolean } {
-  const identity = process.env.POSTHOG_WIZARD_GATEWAY_TOKEN?.trim();
-  return identity
-    ? { bearer: identity, ci: true }
-    : { bearer: accessToken, ci: false };
+async function ciIdentityBearer(): Promise<string> {
+  try {
+    return await requestCiIdentityToken();
+  } catch (e) {
+    const reason =
+      e instanceof CiIdentityUnavailable
+        ? e.message
+        : 'the identity request failed';
+    logToFile(`[gateway] no CI identity token: ${reason}`);
+    throw new GatewayMintFailed(`could not get a CI identity token: ${reason}`);
+  }
 }
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
@@ -78,21 +100,16 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
-  const { bearer, ci } = mintBearer(accessToken);
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
-  const key = `${host.apiHost}\n${bearer}\n${program ?? ''}`;
+  const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
   if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
     return cached.auth;
   }
   if (inFlight && inFlight.key === key) return inFlight.promise;
-  const promise = resolveGatewayAuth(
-    host,
-    accessToken,
-    bearer,
-    ci,
-    key,
-    program,
+  // On the shared promise, so callers that join a renewal get the same answer.
+  const promise = resolveGatewayAuth(host, accessToken, key, program).catch(
+    (e: unknown) => keepLiveToken(key, e),
   );
   inFlight = { key, promise };
   try {
@@ -102,11 +119,37 @@ export async function gatewayAuth(
   }
 }
 
+/**
+ * A renewal that fails without a refusal keeps a still-live token for the same key
+ * and retries with a doubling wait, MAX_RENEWAL_RETRIES times. A throttle is not a
+ * verdict on the token, so it keeps it too; any other refusal still ends the run.
+ */
+function keepLiveToken(key: string, e: unknown): GatewayAuth {
+  const live =
+    cached && cached.key === key && Date.now() < cached.expiresAtMs
+      ? cached
+      : null;
+  const refused = e instanceof GatewayMintRefused && e.status !== 429;
+  if (!live || refused) throw e;
+  live.failedRenewals += 1;
+  live.staleAtMs =
+    live.failedRenewals > MAX_RENEWAL_RETRIES
+      ? live.expiresAtMs
+      : Math.min(
+          Date.now() + RENEWAL_RETRY_MS * 2 ** (live.failedRenewals - 1),
+          live.expiresAtMs,
+        );
+  logToFile(
+    `[gateway] renewal failed (${
+      e instanceof Error ? e.message : 'unknown error'
+    }); keeping the current token`,
+  );
+  return live.auth;
+}
+
 async function resolveGatewayAuth(
   host: HostResolution,
   accessToken: string,
-  bearer: string,
-  ci: boolean,
   key: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
@@ -118,9 +161,22 @@ async function resolveGatewayAuth(
       'this run has no program to attribute its spend to',
     );
   }
+  const mode = ciIdentityMode();
+  if (mode === 'unknown') {
+    logToFile(
+      '[gateway] WIZARD_CI_IDENTITY has an unknown value; failing the run',
+    );
+    throw new GatewayMintFailed(
+      'WIZARD_CI_IDENTITY must be github-actions or unset',
+    );
+  }
+  const ci = mode === 'github-actions';
+  const renewal =
+    cached !== null && cached.key === key && Date.now() < cached.expiresAtMs;
   let minted: MintedToken;
   try {
-    minted = await mintGatewayToken(host, bearer, program);
+    const bearer = ci ? await ciIdentityBearer() : accessToken;
+    minted = await mintGatewayToken(host, bearer, program, renewal);
   } catch (e) {
     if (!(e instanceof GatewayMintRefused)) throw e;
     // A CI run that cannot mint has to fail: falling back would leave a broken
@@ -130,7 +186,13 @@ async function resolveGatewayAuth(
     logToFile(
       `[gateway] mint refused this credential (HTTP ${e.status}); CI run staying on the legacy gateway`,
     );
-    cached = { key, auth: legacy, staleAtMs: legacy.refreshAtMs };
+    cached = {
+      key,
+      auth: legacy,
+      staleAtMs: legacy.refreshAtMs,
+      expiresAtMs: Number.POSITIVE_INFINITY,
+      failedRenewals: 0,
+    };
     return legacy;
   }
   const expiresAtMs = Date.parse(minted.expiresAt);
@@ -138,9 +200,7 @@ async function resolveGatewayAuth(
   if (!Number.isFinite(expiresAtMs) || ttlMs < MIN_USABLE_TTL_MS) {
     // Expired, unreadable, or too short to serve a session. Adopting it would
     // 401 mid-run, and downgrading would spend the rest of the run uncapped.
-    logToFile(
-      `[gateway] mint returned a token with ${ttlMs}ms of life; failing the run`,
-    );
+    logToFile(`[gateway] mint returned a token with ${ttlMs}ms of life`);
     throw new GatewayMintFailed(
       `the PostHog gateway issued a token with ${ttlMs}ms of life`,
     );
@@ -161,7 +221,7 @@ async function resolveGatewayAuth(
     teamId: minted.teamId,
     refreshAtMs: staleAtMs,
   };
-  cached = { key, auth, staleAtMs };
+  cached = { key, auth, staleAtMs, expiresAtMs, failedRenewals: 0 };
   return auth;
 }
 
@@ -223,9 +283,10 @@ interface MintedToken {
 
 /**
  * A deliberate refusal from the mint endpoint, as opposed to the mint being
- * unavailable. Thrown so the run stops instead of proceeding without the
- * controls the refusal was enforcing. A WizardError, so the runners print its
- * message as-is and `wizardAbort` resolves its code.
+ * unavailable. It ends the run rather than proceeding without the controls the
+ * refusal enforces; a throttled renewal keeps its live token instead. A
+ * WizardError, so the runners print its message as-is and `wizardAbort`
+ * resolves its code.
  */
 export class GatewayMintRefused extends WizardError {
   readonly status: number;
@@ -252,7 +313,7 @@ export class GatewayMintFailed extends WizardError {
 }
 
 /**
- * Whether a mint status means "refused this run" rather than "not available".
+ * Whether a mint status is a refusal rather than "not available".
  * 429 the daily run limit, 403 revoked project access, 400 a login covering
  * more than one project, 401 a credential the mint does not accept, 404 an
  * instance without the mint endpoint.
@@ -338,6 +399,7 @@ async function mintGatewayToken(
   host: HostResolution,
   bearer: string,
   program: string,
+  renewal: boolean,
 ): Promise<MintedToken> {
   try {
     const resp = await fetch(`${host.apiHost}/api/wizard/gateway_token/`, {
@@ -358,14 +420,15 @@ async function mintGatewayToken(
         logToFile(
           `[gateway] mint refused with HTTP ${resp.status} (${
             refusal.outcome ?? 'no outcome'
-          }); failing the run`,
+          })`,
         );
-        // The terminal denial event for this run. The backend's own event has
-        // no run id, so this is what joins a refusal to the session.
+        // The backend's own event has no run id, so this joins a refusal to the
+        // session. It ends the run unless it is a 429 on a renewal, which keeps the token.
         analytics.wizardCapture('gateway mint refused', {
           status: resp.status,
           outcome: refusal.outcome,
           program,
+          renewal,
         });
         throw new GatewayMintRefused(
           resp.status,
@@ -373,9 +436,7 @@ async function mintGatewayToken(
           refusal.outcome,
         );
       }
-      logToFile(
-        `[gateway] mint failed with HTTP ${resp.status}; failing the run`,
-      );
+      logToFile(`[gateway] mint failed with HTTP ${resp.status}`);
       throw new GatewayMintFailed(
         `the PostHog gateway could not issue a token (HTTP ${resp.status})`,
       );
@@ -389,21 +450,19 @@ async function mintGatewayToken(
     // Checked one at a time, not in a loop, so each clause narrows the optional
     // field for the return below and each names itself in the failure.
     if (!body.token) {
-      logToFile('[gateway] mint response omitted token; failing the run');
+      logToFile('[gateway] mint response omitted token');
       throw new GatewayMintFailed('mint response omitted token');
     }
     if (!body.expires_at) {
-      logToFile('[gateway] mint response omitted expires_at; failing the run');
+      logToFile('[gateway] mint response omitted expires_at');
       throw new GatewayMintFailed('mint response omitted expires_at');
     }
     if (!body.gateway_url) {
-      logToFile('[gateway] mint response omitted gateway_url; failing the run');
+      logToFile('[gateway] mint response omitted gateway_url');
       throw new GatewayMintFailed('mint response omitted gateway_url');
     }
     if (!isTrustedGatewayUrl(body.gateway_url, host.apiHost)) {
-      logToFile(
-        '[gateway] mint returned an untrusted gateway url; failing the run',
-      );
+      logToFile('[gateway] mint returned an untrusted gateway url');
       throw new GatewayMintFailed('mint returned an untrusted gateway url');
     }
     return {
@@ -417,9 +476,7 @@ async function mintGatewayToken(
     // errors, and folding the others into it would lose the reason.
     if (e instanceof GatewayMintRefused || e instanceof GatewayMintFailed)
       throw e;
-    logToFile(
-      `[gateway] mint transport failure (${String(e)}); failing the run`,
-    );
+    logToFile(`[gateway] mint transport failure (${String(e)})`);
     throw new GatewayMintFailed(
       `could not reach the PostHog gateway (${String(e)})`,
     );

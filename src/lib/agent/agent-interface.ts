@@ -1314,7 +1314,7 @@ export async function runAgent(
       signals.forgetApiErrors();
       spinner.message('Renewing the gateway token...');
       const stale = agentConfig.gatewayAuth;
-      // A refusal or failure here ends the run with its own message.
+      // A refusal ends the run here; a failed renewal can hand back the same token.
       agentConfig.gatewayAuth = await refreshGatewayAuth();
       logToFile(
         `Gateway token renewed after a 401 (${Math.round(

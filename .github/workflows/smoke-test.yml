@@ -19,10 +19,6 @@ permissions:
 
 jobs:
   smoke-test:
-    permissions:
-      contents: read
-      # Lets this job ask GitHub for the identity token the wizard mint verifies.
-      id-token: write
     name: Smoke Test (${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -73,8 +69,6 @@ jobs:
           POSTHOG_WIZARD_REGION: us
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
           SMOKE_TEST_APP: ${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }}
-        # The script requests the identity token itself, so it is seconds old at
-        # the mint, and drops the request variables before the wizard starts.
         run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
 
       - name: Upload artifacts

@@ -11,6 +11,7 @@ import {
 import type { HostResolution } from '@lib/host-resolution';
 import { ErrorCodes } from '@lib/errors';
 import { setLegacyGatewayFallback } from '@lib/legacy-gateway';
+import { resetCiIdentity } from '@lib/ci-identity';
 import { WizardError } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -325,7 +326,7 @@ describe('gatewayAuth', () => {
     );
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'gateway mint refused',
-      { status: 403, outcome: 'blocked', program: 'audit' },
+      { status: 403, outcome: 'blocked', program: 'audit', renewal: false },
     );
   });
 
@@ -380,7 +381,7 @@ describe('gatewayAuth', () => {
     expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'gateway mint refused',
-      { status: 403, outcome: 'blocked', program: 'audit' },
+      { status: 403, outcome: 'blocked', program: 'audit', renewal: false },
     );
     expect((err as GatewayMintRefused).outcome).toBe('blocked');
   });
@@ -400,7 +401,12 @@ describe('gatewayAuth', () => {
       ).rejects.toBeInstanceOf(GatewayMintRefused);
       expect(analytics.wizardCapture).toHaveBeenCalledWith(
         'gateway mint refused',
-        { status: 429, outcome: undefined, program: 'integration' },
+        {
+          status: 429,
+          outcome: undefined,
+          program: 'integration',
+          renewal: false,
+        },
       );
     },
   );
@@ -822,58 +828,97 @@ describe('isTrustedGatewayUrl', () => {
   });
 });
 
-describe('gatewayAuth with a CI identity token', () => {
+describe('gatewayAuth with a CI identity', () => {
   const fetchMock = vi.fn();
-  const minted = {
+  const MINT_URL = 'https://us.posthog.com/api/wizard/gateway_token/';
+  const REQUEST_URL =
+    'https://run-actions-1-azure-eastus.actions.githubusercontent.com/abc/idtoken?api-version=2.0';
+  let issued = 0;
+
+  const minted = (ttlMs = 3600_000) => ({
     ok: true,
     json: () =>
       Promise.resolve({
         token: 'phe_ci',
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        expires_at: new Date(Date.now() + ttlMs).toISOString(),
         gateway_url: 'https://ai-gateway.us.posthog.com',
       }),
+  });
+  const refused = { ok: false, status: 401, json: () => Promise.resolve({}) };
+  const throttled = { ok: false, status: 429, json: () => Promise.resolve({}) };
+  const unavailable = {
+    ok: false,
+    status: 503,
+    json: () => Promise.resolve({}),
   };
+  // GitHub answers the identity request with a new token each time; the mint
+  // answers with whatever `mint` returns.
+  const route = (mint: () => unknown) =>
+    fetchMock.mockImplementation((url: URL | string) =>
+      Promise.resolve(
+        String(url).startsWith(REQUEST_URL)
+          ? {
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({ value: `identity.token.${++issued}` }),
+            }
+          : mint(),
+      ),
+    );
+  const mintBearers = () =>
+    fetchMock.mock.calls
+      .filter(([url]) => String(url) === MINT_URL)
+      .map(
+        ([, init]) =>
+          (init as { headers: Record<string, string> }).headers.Authorization,
+      );
 
   beforeEach(() => {
+    issued = 0;
     resetGatewaySession();
+    resetCiIdentity();
     fetchMock.mockReset();
     vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', 'header.payload.signature');
+    vi.stubEnv('WIZARD_CI_IDENTITY', 'github-actions');
+    vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_URL', REQUEST_URL);
+    vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'runner-request-token');
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 
-  it('mints with the identity token rather than the personal key', async () => {
-    fetchMock.mockResolvedValue(minted);
-
+  it('mints with a GitHub identity token rather than the personal key', async () => {
+    route(() => minted());
     const auth = await gatewayAuth(host, 'phx_personal', 'integration');
     expect(auth.token).toBe('phe_ci');
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://us.posthog.com/api/wizard/gateway_token/',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer header.payload.signature',
-        }),
-      }),
-    );
+    expect(mintBearers()).toEqual(['Bearer identity.token.1']);
+  });
+
+  it('asks GitHub for a new identity token when it re-mints', async () => {
+    // Identity tokens are single-use and expire in minutes, so a re-mint that
+    // reused the first would be refused.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    route(() => minted(150_000));
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    vi.setSystemTime(Date.now() + 130_000);
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(mintBearers()).toEqual([
+      'Bearer identity.token.1',
+      'Bearer identity.token.2',
+    ]);
   });
 
   it('fails the run rather than falling back when the mint refuses', async () => {
     // The refusal a broken identity path produces is a 401, which the CI
-    // fallback admits. Falling back would pass the smoke test on the gateway
-    // this change exists to stop using.
+    // fallback admits for a personal key.
     setLegacyGatewayFallback(true);
     try {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({}),
-      });
-
+      route(() => refused);
       await expect(
         gatewayAuth(host, 'phx_personal', 'integration'),
       ).rejects.toBeInstanceOf(GatewayMintRefused);
@@ -882,89 +927,234 @@ describe('gatewayAuth with a CI identity token', () => {
     }
   });
 
+  it('fails the run without minting when GitHub gives no identity token', async () => {
+    setLegacyGatewayFallback(true);
+    try {
+      vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_TOKEN', '');
+      route(() => minted());
+      await expect(
+        gatewayAuth(host, 'phx_personal', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintFailed);
+      expect(mintBearers()).toEqual([]);
+    } finally {
+      setLegacyGatewayFallback(false);
+    }
+  });
+
   it('still lets a user run fall back on the same refusal', async () => {
-    // The other arm: only the CI identity forfeits the fallback.
-    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '');
+    vi.stubEnv('WIZARD_CI_IDENTITY', '');
     setLegacyGatewayFallback(true);
     try {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({}),
-      });
-
+      route(() => refused);
       const auth = await gatewayAuth(host, 'phx_personal', 'integration');
       expect(auth).toMatchObject({ token: 'phx_personal', legacy: true });
+      expect(mintBearers()).toEqual(['Bearer phx_personal']);
     } finally {
       setLegacyGatewayFallback(false);
     }
-  });
-
-  it('treats a whitespace-only variable as absent', async () => {
-    // Pins the trim: an unset-but-present variable must not forfeit the
-    // fallback that a user run still has.
-    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '   ');
-    setLegacyGatewayFallback(true);
-    try {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({}),
-      });
-
-      const auth = await gatewayAuth(host, 'phx_personal', 'integration');
-      expect(auth).toMatchObject({ token: 'phx_personal', legacy: true });
-    } finally {
-      setLegacyGatewayFallback(false);
-    }
-  });
-
-  it('mints again when the identity token changes', async () => {
-    // The session cache keys on the bearer actually sent. Keyed on the personal
-    // key instead, a second run would serve the first run's token.
-    fetchMock.mockResolvedValue(minted);
-
-    await gatewayAuth(host, 'phx_personal', 'integration');
-    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', 'second.identity.token');
-    await gatewayAuth(host, 'phx_personal', 'integration');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('names the identity that minted, so a CI run is separable in the log', async () => {
-    fetchMock.mockResolvedValue(minted);
-
+    route(() => minted());
     await gatewayAuth(host, 'phx_personal', 'integration');
     expect(loggedLines().join('\n')).toContain('identity=ci');
   });
 
   it('names a user run as a user run', async () => {
-    // The other arm: labelling every mint `ci` would be as useless as no label.
-    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '');
-    fetchMock.mockResolvedValue(minted);
-
+    vi.stubEnv('WIZARD_CI_IDENTITY', '');
+    route(() => minted());
     await gatewayAuth(host, 'phx_personal', 'integration');
     expect(loggedLines().join('\n')).toContain('identity=user');
   });
 
-  it('never writes the identity token to the log', async () => {
-    fetchMock.mockResolvedValue(minted);
-
-    await gatewayAuth(host, 'phx_personal', 'integration');
-    expect(loggedLines().join('\n')).not.toContain('header.payload.signature');
+  it('keeps a live token when a renewal fails for availability, then renews', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let available = true;
+    route(() =>
+      available
+        ? minted(150_000)
+        : { ok: false, status: 503, json: () => Promise.resolve({}) },
+    );
+    const first = await gatewayAuth(host, 'phx_personal', 'integration');
+    available = false;
+    vi.setSystemTime(start + 130_000);
+    await expect(
+      gatewayAuth(host, 'phx_personal', 'integration'),
+    ).resolves.toBe(first);
+    available = true;
+    vi.setSystemTime(start + 151_000);
+    const renewed = await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(renewed).not.toBe(first);
+    expect(mintBearers()).toHaveLength(3);
   });
 
-  it('falls back to the personal key when the variable is blank', async () => {
-    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '   ');
-    fetchMock.mockResolvedValue(minted);
+  it('gives callers that join a failing renewal the live token too', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let available = true;
+    route(() => (available ? minted(150_000) : unavailable));
+    const first = await gatewayAuth(host, 'phx_personal', 'integration');
+    available = false;
+    vi.setSystemTime(start + 130_000);
+    const joined = await Promise.all([
+      gatewayAuth(host, 'phx_personal', 'integration'),
+      gatewayAuth(host, 'phx_personal', 'integration'),
+    ]);
+    expect(joined).toEqual([first, first]);
+    expect(mintBearers()).toHaveLength(2);
+  });
 
+  it("never answers a failed mint for one program with another program's token", async () => {
+    let available = true;
+    route(() => (available ? minted() : unavailable));
     await gatewayAuth(host, 'phx_personal', 'integration');
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://us.posthog.com/api/wizard/gateway_token/',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer phx_personal',
-        }),
-      }),
+    available = false;
+    await expect(
+      gatewayAuth(host, 'phx_personal', 'warehouse'),
+    ).rejects.toThrow();
+  });
+
+  it('stops serving a kept token once it expires', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let available = true;
+    route(() => (available ? minted(150_000) : unavailable));
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    available = false;
+    vi.setSystemTime(start + 151_000);
+    await expect(
+      gatewayAuth(host, 'phx_personal', 'integration'),
+    ).rejects.toThrow();
+  });
+
+  it('doubles the wait between failed renewals and stops after three retries', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let available = true;
+    route(() => (available ? minted(7_200_000) : unavailable));
+    const first = await gatewayAuth(host, 'phx_personal', 'integration');
+    available = false;
+    const at = async (seconds: number, mints: number) => {
+      vi.setSystemTime(start + seconds * 1000);
+      const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+      expect(mintBearers()).toHaveLength(mints);
+      return auth;
+    };
+    // Stale at 5760s. The waits are 60s, 120s and 240s, probed a second either side.
+    await at(5800, 2);
+    await at(5859, 2);
+    await at(5860, 3);
+    await at(5979, 3);
+    await at(5980, 4);
+    await at(6219, 4);
+    await at(6220, 5);
+    await expect(at(7199, 5)).resolves.toBe(first);
+    vi.setSystemTime(start + 7_200_000);
+    await expect(
+      gatewayAuth(host, 'phx_personal', 'integration'),
+    ).rejects.toThrow();
+    expect(mintBearers()).toHaveLength(6);
+  });
+
+  it('starts the retry count again after a renewal succeeds', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let available = true;
+    route(() => (available ? minted(7_200_000) : unavailable));
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    const at = (seconds: number) => {
+      vi.setSystemTime(start + seconds * 1000);
+      return gatewayAuth(host, 'phx_personal', 'integration');
+    };
+    available = false;
+    await at(5800);
+    available = true;
+    const renewed = await at(5860);
+    available = false;
+    // The renewed token is stale at 11620s, and its first failure waits 60s again.
+    await at(11620);
+    await expect(at(11679)).resolves.toBe(renewed);
+    expect(mintBearers()).toHaveLength(4);
+    await at(11680);
+    expect(mintBearers()).toHaveLength(5);
+  });
+
+  it('keeps a live token when a renewal is throttled', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let throttle = false;
+    route(() => (throttle ? throttled : minted(150_000)));
+    const first = await gatewayAuth(host, 'phx_personal', 'integration');
+    throttle = true;
+    vi.setSystemTime(start + 130_000);
+    await expect(
+      gatewayAuth(host, 'phx_personal', 'integration'),
+    ).resolves.toBe(first);
+  });
+
+  it('marks a throttled renewal in the refusal event, since the run goes on', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = Date.now();
+    let throttle = false;
+    route(() => (throttle ? throttled : minted(150_000)));
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    vi.mocked(analytics.wizardCapture).mockClear();
+    throttle = true;
+    vi.setSystemTime(start + 130_000);
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint refused',
+      {
+        status: 429,
+        outcome: undefined,
+        program: 'integration',
+        renewal: true,
+      },
     );
+  });
+
+  it.each([400, 401, 403, 404])(
+    'still ends the run when a renewal is refused with %i',
+    async (status) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const start = Date.now();
+      let refuse = false;
+      route(() =>
+        refuse
+          ? { ok: false, status, json: () => Promise.resolve({}) }
+          : minted(150_000),
+      );
+      await gatewayAuth(host, 'phx_personal', 'integration');
+      refuse = true;
+      vi.setSystemTime(start + 130_000);
+      await expect(
+        gatewayAuth(host, 'phx_personal', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintRefused);
+    },
+  );
+
+  it('fails the run on an unknown opt-in value instead of using the personal key', async () => {
+    vi.stubEnv('WIZARD_CI_IDENTITY', 'github');
+    setLegacyGatewayFallback(true);
+    try {
+      route(() => refused);
+      await expect(
+        gatewayAuth(host, 'phx_personal', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintFailed);
+      expect(mintBearers()).toEqual([]);
+    } finally {
+      setLegacyGatewayFallback(false);
+    }
+  });
+
+  it('never writes the identity token or the request token to the log', async () => {
+    route(() => refused);
+    await gatewayAuth(host, 'phx_personal', 'integration').catch(
+      () => undefined,
+    );
+    const logged = loggedLines().join('\n');
+    expect(logged).not.toContain('identity.token');
+    expect(logged).not.toContain('runner-request-token');
   });
 });

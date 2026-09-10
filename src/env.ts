@@ -53,6 +53,10 @@ type RuntimeEnvKey =
   // would claim it as an unknown CLI option and strict-reject the run.
   | 'WIZARD_CI_FLAG_OVERRIDES'
   | 'WIZARD_CI_EXCLUDE_TASKS'
+  // CI identity opt-in and the runner's identity-request pair (lib/ci-identity.ts).
+  | 'WIZARD_CI_IDENTITY'
+  | 'ACTIONS_ID_TOKEN_REQUEST_URL'
+  | 'ACTIONS_ID_TOKEN_REQUEST_TOKEN'
   // Wizard CLI configuration (yargs POSTHOG_WIZARD_ prefix)
   | 'POSTHOG_WIZARD_BENCHMARK_CONFIG'
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
