@@ -1,0 +1,53 @@
+{
+  "program": "error-tracking",
+  "summary": "Happy path: detect framework, confirm intro, run the error-tracking orchestrator flow (install/init when PostHog is absent, exception capture, the source-map subgraph where the platform needs it, report), delete installed skills. The driver answers the flow's asks: the upload key via wizard_ask (id \"api-key\"; the raw key is vaulted by the ask tool, the agent only sees a secretRef) and declines the test-affordance offer.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first",
+    "askAnswers": [
+      { "match": "api-key", "value": "${SOURCE_MAPS_CLI_KEY}", "secret": true },
+      { "match": "test-affordance", "value": "no" }
+    ]
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "orchestrator / pi — the program's pinned binding; stage models from the flow frontmatter (terra seed, sol tasks, luna report)"
+    },
+    {
+      "name": "linear-fallback",
+      "summary": "linear arm: the customPrompt drives a single agent through menu-installed skills",
+      "sequence": "linear"
+    }
+  ],
+  "path": [
+    {
+      "screen": "detect",
+      "auto": "(headless) — framework detection puts the framework id on session.skillId; pre-installs posthog-cli for symbol-upload platforms"
+    },
+    {
+      "screen": "error-tracking-intro",
+      "auto": "confirm & continue"
+    },
+    {
+      "screen": "auth",
+      "auto": "(external) — the runner resolves credentials from the phx key"
+    },
+    {
+      "screen": "run",
+      "auto": "(external) — the orchestrator flow; the profile answers wizard_ask \"api-key\" with SOURCE_MAPS_CLI_KEY and \"test-affordance\" with \"no\""
+    },
+    {
+      "screen": "outro",
+      "auto": "dismiss"
+    },
+    {
+      "screen": "keep-skills",
+      "auto": "delete the installed skills"
+    }
+  ]
+}

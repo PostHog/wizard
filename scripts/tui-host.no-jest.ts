@@ -25,6 +25,7 @@ import {
 } from '@lib/programs/program-registry';
 import type { Harness, Sequence } from '@lib/constants';
 import { buildSession } from '@lib/wizard-session';
+import { initLocalDev } from '@lib/local-dev';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
@@ -194,6 +195,17 @@ async function main() {
   // auth). Without it, ask-driven flows like self-driving abort with
   // requires-interactive-mode the moment they need to ask a question.
   process.env.WIZARD_ASK_AUTODRIVE = '1';
+
+  // The bin initializes the local-dev singleton from its yargs middleware;
+  // this host bypasses yargs, so `getSkillsBaseUrl()` would silently resolve
+  // to production even when the session carries the local flags. Initialize it
+  // here from the same env-backed spellings, before anything reads it.
+  initLocalDev({
+    localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
+    localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
+    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
+    localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
+  });
 
   const { store } = startTUI(VERSION, programId);
   store.session = buildSession({

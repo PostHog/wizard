@@ -26,6 +26,7 @@ import {
   WIZARD_TOOL_NAMES,
   checkEnvKeys as checkEnvKeysCore,
   createAskAccounting,
+  ensureGitignoreCoverage,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
@@ -241,6 +242,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(resolved, merged, 'utf8');
+      // Same post-write pass as the MCP facade: a credential file the
+      // project does not ignore yet gets committed by the next `git add`.
+      ensureGitignoreCoverage(workingDirectory, path.basename(resolved));
       logToFile(
         `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(
           ',',
