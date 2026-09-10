@@ -60,20 +60,30 @@ const MAX_REFUSAL_DETAIL_LENGTH = 500;
 /** Outcomes are short snake_case labels; anything longer is not one. */
 const MAX_REFUSAL_OUTCOME_LENGTH = 64;
 
+/**
+ * The bearer the mint reads. CI presents a GitHub OIDC token, which only the
+ * mint accepts, so it never becomes the run's gateway credential and the legacy
+ * fallback keeps using the user's own token.
+ */
+function mintBearer(accessToken: string): string {
+  return process.env.POSTHOG_WIZARD_GATEWAY_TOKEN?.trim() || accessToken;
+}
+
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
   host: HostResolution,
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
+  const bearer = mintBearer(accessToken);
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
-  const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
+  const key = `${host.apiHost}\n${bearer}\n${program ?? ''}`;
   if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
     return cached.auth;
   }
   if (inFlight && inFlight.key === key) return inFlight.promise;
-  const promise = resolveGatewayAuth(host, accessToken, key, program);
+  const promise = resolveGatewayAuth(host, accessToken, bearer, key, program);
   inFlight = { key, promise };
   try {
     return await promise;
@@ -85,6 +95,7 @@ export async function gatewayAuth(
 async function resolveGatewayAuth(
   host: HostResolution,
   accessToken: string,
+  bearer: string,
   key: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
@@ -98,7 +109,7 @@ async function resolveGatewayAuth(
   }
   let minted: MintedToken;
   try {
-    minted = await mintGatewayToken(host, accessToken, program);
+    minted = await mintGatewayToken(host, bearer, program);
   } catch (e) {
     if (!(e instanceof GatewayMintRefused)) throw e;
     const legacy = legacyGatewayAuth(host, accessToken, e.status);
@@ -310,14 +321,14 @@ function mintRefusalMessage(status: number, detail?: string): string {
 
 async function mintGatewayToken(
   host: HostResolution,
-  accessToken: string,
+  bearer: string,
   program: string,
 ): Promise<MintedToken> {
   try {
     const resp = await fetch(`${host.apiHost}/api/wizard/gateway_token/`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${bearer}`,
         'Content-Type': 'application/json',
       },
       // The flag tells the server this build reads a refusal, so it may answer

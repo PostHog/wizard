@@ -19,6 +19,10 @@ permissions:
 
 jobs:
   smoke-test:
+    permissions:
+      contents: read
+      # Lets this job ask GitHub for the identity token the wizard mint verifies.
+      id-token: write
     name: Smoke Test (${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -60,9 +64,27 @@ jobs:
           [ -n "$API_KEY" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY is not set"; exit 1; }
           [ -n "$PROJECT_ID" ] || { echo "::error::GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID is not set"; exit 1; }
 
+      # Proves this workflow's identity to the mint, which pins the repository,
+      # the owner id, this file's path and the ref before it issues a token.
+      - name: Request a gateway identity token
+        env:
+          AUDIENCE: posthog-wizard-ci
+        run: |
+          token="$(curl -sS --fail-with-body \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r '.value')"
+          [ -n "$token" ] && [ "$token" != "null" ] || {
+            echo "::error::could not obtain a GitHub identity token"; exit 1; }
+          echo "::add-mask::$token"
+          echo "POSTHOG_WIZARD_GATEWAY_TOKEN=$token" >> "$GITHUB_ENV"
+
       - name: Run smoke test
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
+          # This step runs model-written code in a sandbox. Blanked so that code
+          # cannot mint further identity tokens for audiences of its choosing.
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
           # Required — without it the wizard falls back to the key's default
           # team and 403s. Same secret name wizard-workbench's wizard-ci.yml uses.
           POSTHOG_WIZARD_PROJECT_ID: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID }}

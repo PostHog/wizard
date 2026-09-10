@@ -821,3 +821,81 @@ describe('isTrustedGatewayUrl', () => {
     ).toBe(true);
   });
 });
+
+describe('gatewayAuth with a CI identity token', () => {
+  const fetchMock = vi.fn();
+  const minted = {
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        token: 'phe_ci',
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        gateway_url: 'https://ai-gateway.us.posthog.com',
+      }),
+  };
+
+  beforeEach(() => {
+    resetGatewaySession();
+    fetchMock.mockReset();
+    vi.mocked(logToFile).mockClear();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', 'header.payload.signature');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('mints with the identity token rather than the personal key', async () => {
+    fetchMock.mockResolvedValue(minted);
+
+    const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(auth.token).toBe('phe_ci');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://us.posthog.com/api/wizard/gateway_token/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer header.payload.signature',
+        }),
+      }),
+    );
+  });
+
+  it('keeps the identity token out of the legacy fallback', async () => {
+    // Only the mint can verify it. The legacy gateway would read it as a
+    // credential, and it is not one.
+    setLegacyGatewayFallback(true);
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({}),
+    });
+
+    const auth = await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(auth).toMatchObject({ token: 'phx_personal', legacy: true });
+    setLegacyGatewayFallback(false);
+  });
+
+  it('never writes the identity token to the log', async () => {
+    fetchMock.mockResolvedValue(minted);
+
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(loggedLines().join('\n')).not.toContain('header.payload.signature');
+  });
+
+  it('falls back to the personal key when the variable is blank', async () => {
+    vi.stubEnv('POSTHOG_WIZARD_GATEWAY_TOKEN', '   ');
+    fetchMock.mockResolvedValue(minted);
+
+    await gatewayAuth(host, 'phx_personal', 'integration');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://us.posthog.com/api/wizard/gateway_token/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer phx_personal',
+        }),
+      }),
+    );
+  });
+});
