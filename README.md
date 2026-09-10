@@ -598,23 +598,20 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/lib/health-checks/` checks external status pages and PostHog-owned
-services before the wizard runs to decide whether it can proceed. The entry
-point is `evaluateWizardReadiness()`, which returns one of three values:
+`src/lib/health-checks/` checks skills download origins before the wizard runs.
+The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
 
 | Decision            | Meaning                                                         |
 | ------------------- | --------------------------------------------------------------- |
-| `yes`               | All services healthy — proceed normally.                        |
-| `yes_with_warnings` | Some services degraded but no critical dependency is down.      |
-| `no`                | A critical dependency is down or degraded — do not run.         |
+| `yes`               | Skills are reachable — proceed without outage warnings.         |
+| `no`                | Neither skills origin is reachable — do not run.                |
 
 ### Module layout
 
 | File | Responsibility |
 | --- | --- |
 | `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
-| `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for MCP (`/`) and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
+| `endpoints.ts` | Direct gateway (`/readyz`) and skills origin (`skill-menu.json`) checks |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
 | `index.ts` | Barrel re-export |
 | `testme.md` | Test running instructions and endpoint reference |
@@ -632,9 +629,12 @@ two arrays:
 ### Current defaults
 
 ```ts
-downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
-degradedBlocksRun: ['anthropic'],
+downBlocksRun: ['skillsOrigin'],
 ```
+
+The same policy applies during signup. Third-party status pages are not queried.
+After minting a token, `gateway-session.ts` checks `/readyz` on the returned
+gateway URL and reports an unavailable gateway through the existing error path.
 
 `skillsOrigin` is one entry covering two origins: skills are published to
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail

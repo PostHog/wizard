@@ -1,16 +1,4 @@
-/**
- * HealthCheckDemo — Playground demo for health check UI components.
- *
- * Cycles through three states (2s checking spinner → 5s confirmed-outage
- * red modal → 5s no-connection yellow modal, then loops):
- *   1. Checking (spinner)
- *   2. Confirmed outage (status page corroborates → red framing)
- *   3. No connection only (no status-page incident → yellow "couldn't
- *      reach PostHog" framing)
- *
- * Renders components directly (not HealthCheckScreen) to avoid useInput
- * conflicts with TabContainer's key handling.
- */
+// Preview the skills health-check states without handling input.
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
@@ -21,47 +9,12 @@ import { getBlockingServiceKeys } from '@lib/health-checks/readiness';
 import { ServiceHealthStatus } from '@lib/health-checks/types';
 import type { AllServicesHealth } from '@lib/health-checks/types';
 
-const HEALTHY = { status: ServiceHealthStatus.Healthy } as const;
-
 const MOCK_CONFIRMED_OUTAGE: AllServicesHealth = {
-  anthropic: { status: ServiceHealthStatus.Down, rawIndicator: 'major' },
-  posthogOverall: HEALTHY,
-  posthogComponents: { status: ServiceHealthStatus.Healthy },
-  github: HEALTHY,
-  npmOverall: {
-    status: ServiceHealthStatus.Degraded,
-    rawIndicator: 'minor',
-  },
-  npmComponents: {
-    status: ServiceHealthStatus.Degraded,
-    degradedOrDownComponents: [
-      {
-        name: 'Registry API',
-        status: ServiceHealthStatus.Degraded,
-        rawStatus: 'degraded_performance',
-      },
-    ],
-  },
-  cloudflareOverall: HEALTHY,
-  cloudflareComponents: { status: ServiceHealthStatus.Healthy },
-  mcp: HEALTHY,
-  skillsOrigin: HEALTHY,
+  skillsOrigin: { status: ServiceHealthStatus.Down },
 };
 
 const MOCK_NO_CONNECTION: AllServicesHealth = {
-  anthropic: HEALTHY,
-  posthogOverall: HEALTHY,
-  posthogComponents: { status: ServiceHealthStatus.Healthy },
-  github: HEALTHY,
-  npmOverall: HEALTHY,
-  npmComponents: { status: ServiceHealthStatus.Healthy },
-  cloudflareOverall: HEALTHY,
-  cloudflareComponents: { status: ServiceHealthStatus.Healthy },
-  mcp: {
-    status: ServiceHealthStatus.NoConnection,
-    error: 'fetch failed',
-  },
-  skillsOrigin: HEALTHY,
+  skillsOrigin: { status: ServiceHealthStatus.NoConnection },
 };
 
 type Phase = 'checking' | 'confirmed' | 'no-connection';
@@ -103,15 +56,13 @@ export const HealthCheckDemo = () => {
       borderColor={isNoConnection ? 'yellow' : 'red'}
       title={
         isNoConnection
-          ? "Couldn't reach PostHog"
-          : `${Icons.warning} Ongoing service disruptions`
+          ? "Couldn't reach skill downloads"
+          : `${Icons.warning} Skill downloads unavailable`
       }
       width={72}
       footer={
         <Box marginLeft={2}>
-          <Text dimColor>
-            Continue [Enter] / Exit [Esc] (disabled in playground)
-          </Text>
+          <Text dimColor>Exit [Esc] (disabled in playground)</Text>
         </Box>
       }
     >
@@ -136,8 +87,8 @@ export const HealthCheckDemo = () => {
 
       <Text dimColor>
         {isNoConnection
-          ? "We couldn't reach these services. PostHog's status page shows no incidents, likely a network issue (VPN, firewall, captive portal, or Wi-Fi)."
-          : 'The wizard may not work reliably while services are affected.'}
+          ? "We couldn't reach either skills source. Check your connection and try again."
+          : 'Neither GitHub Releases nor the AWS mirror is available.'}
       </Text>
     </ModalOverlay>
   );
