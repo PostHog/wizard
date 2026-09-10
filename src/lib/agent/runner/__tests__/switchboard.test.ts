@@ -233,7 +233,11 @@ describe('switchboard composed clamp', () => {
               thinkingLevel: undefined,
             }
           : program === 'metrics'
-          ? { ...DEFAULT_RESOLVED, model: DEFAULT_AGENT_MODEL, thinkingLevel: undefined }
+          ? {
+              ...DEFAULT_RESOLVED,
+              model: DEFAULT_AGENT_MODEL,
+              thinkingLevel: undefined,
+            }
           : program === 'replay-vision'
           ? {
               ...DEFAULT_RESOLVED,
