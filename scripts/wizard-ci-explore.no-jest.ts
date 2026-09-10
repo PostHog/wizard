@@ -1,13 +1,4 @@
-/**
- * Quick eyeball test of the agent (MCP) route — without a full Claude session.
- *
- * Spawns the wizard-ci MCP server (which boots the real TUI host), drives a few
- * steps over stdio JSON-RPC, and prints the REAL rendered screen that
- * render_screen returns. Pass STEP=run to also kick off the integration.
- *
- *   APP_DIR=/tmp/app POSTHOG_KEY_FILE=/path/phx.txt PROJECT_ID=228144 \
- *     npx tsx scripts/wizard-ci-explore.no-jest.ts
- */
+// Open an app, confirm setup, and print one MCP frame; see scripts/README.md.
 import { spawn } from 'child_process';
 import path from 'path';
 

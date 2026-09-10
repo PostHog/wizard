@@ -333,6 +333,7 @@ export async function bootstrapProgram(
           baseURL: auth.gatewayUrl,
           authToken: auth.token,
           teamId: auth.teamId,
+          legacy: auth.legacy,
           // `call_type` splits scan spend out of the program's agent cost,
           // the same tag the in-run triage provider carries.
           wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },

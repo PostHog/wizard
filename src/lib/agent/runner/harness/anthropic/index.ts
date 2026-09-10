@@ -1,16 +1,4 @@
-/**
- * The `anthropic` runner — the control. Wraps the claude-agent-sdk path
- * (`initializeAgent` + `runAgent`) that was inline in `linear.ts` before the
- * runner seam. Owns only the agent loop + model transport; the shared pipeline
- * (skill install, prompt, ask bridge, error routing, outro) stays in `linear.ts`.
- *
- * Implements both entry points:
- *   - `run`     for linear mode (one call per program)
- *   - `runTask` for orchestrator mode (one call for the seed plan, one per
- *               drained task). This is the only harness that supports
- *               orchestrator today; pi omits `runTask` and the orchestrator
- *               runner fails loudly when handed a harness without it.
- */
+// Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
 import { getUI } from '@ui';
 import { Harness } from '@lib/constants';

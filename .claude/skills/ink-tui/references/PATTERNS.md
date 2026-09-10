@@ -1,288 +1,53 @@
-# Layout Patterns & Design Recipes
+# Composition and keyboard patterns
 
-Common patterns for building wizard-style TUIs with Ink.
+Use existing screens and demos as examples; their props stay checked with the
+codebase.
 
-## Layout patterns
+| Task                                                 | Start here                                                                                                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Compose a run screen with conditional event-plan tab | [RunScreen](../../../../src/ui/tui/screens/RunScreen.tsx)                                                                                       |
+| Build a program intro                                | [IntroScreenLayout](../../../../src/ui/tui/screens/IntroScreenLayout.tsx)                                                                       |
+| Compose a learning deck                              | [LearnCard](../../../../src/ui/tui/components/LearnCard.tsx), [LearnDeckDemo](../../../../src/ui/tui/playground/demos/LearnDeckDemo.tsx)        |
+| Compare layout primitives                            | [LayoutDemo](../../../../src/ui/tui/playground/demos/LayoutDemo.tsx)                                                                            |
+| Exercise picker and confirmation controls            | [InputDemo](../../../../src/ui/tui/playground/demos/InputDemo.tsx)                                                                              |
+| Add an interaction modal                             | [WizardAskScreen](../../../../src/ui/tui/screens/WizardAskScreen.tsx), [AskModalDemo](../../../../src/ui/tui/playground/demos/AskModalDemo.tsx) |
 
-### Full-screen app shell (3-zone layout)
+## Keep progression in session state
 
-The standard wizard layout: header → content → footer.
+A tab's active index is local presentation state. A wizard step completes
+through its session predicate and explicit setter. Do not create a parallel
+`useWizardState` hook or advance wizard steps through tab callbacks. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for screen and gate ownership.
 
-```tsx
-import { Box, Text, useStdout } from 'ink';
+## Keyboard handling
 
-const AppShell = ({ header, children, footer }) => {
-  const { stdout } = useStdout();
+Use [useKeyBindings](../../../../src/ui/tui/hooks/useKeyBindings.ts) for visible
+shortcuts: it couples handlers to labels in the shared hints bar.
+[KeyboardHintsDemo](../../../../src/ui/tui/playground/demos/KeyboardHintsDemo.tsx)
+shows the pattern. Reuse its `KeyMatch` vocabulary and choose a distinct
+registration id for each mounted control.
 
-  return (
-    <Box flexDirection="column" height={stdout.rows}>
-      {/* Header — fixed height */}
-      <Box paddingX={1} justifyContent="space-between">
-        {header}
-      </Box>
+For an ordinary-key dismissal, use
+[useDismissOnAnyKey](../../../../src/ui/tui/hooks/useDismissOnAnyKey.ts). It
+ignores Ctrl/Meta combinations so the global Ctrl+T HUD shortcut does not also
+dismiss the screen.
 
-      {/* Content — fills remaining space */}
-      <Box flexDirection="column" flexGrow={1} paddingX={2} overflow="hidden">
-        {children}
-      </Box>
+Ink delivers input to mounted handlers, including components hidden with
+`display="none"`. Hiding content does not disable its input or effects.
+`TabContainer` mounts only the active tab's content; preserve that behavior
+unless the new control explicitly coordinates handlers. Raw `useInput` remains
+available for specialized interactions, but consider which other mounted
+handlers will receive the same key.
 
-      {/* Footer — fixed height */}
-      <Box paddingX={1}>
-        {footer}
-      </Box>
-    </Box>
-  );
-};
-```
+## Layout and diagnostics
 
-### Two-column layout (sidebar + main)
+Visible text belongs inside Ink `Text`. Reuse the shared color/alignment
+constants and the relevant primitive's border treatment. Use
+[useStdoutDimensions](../../../../src/ui/tui/hooks/useStdoutDimensions.ts) when
+layout must update on terminal resize; reading `useStdout` alone does not
+subscribe. Account for the shell's title, hints, tabs, status expansion, and
+optional HUD rather than allocating the full terminal height to screen content.
 
-```tsx
-<Box flexGrow={1}>
-  {/* Sidebar */}
-  <Box flexDirection="column" width={30}
-       borderStyle="single" borderRight
-       borderTop={false} borderBottom={false} borderLeft={false}>
-    {sidebarContent}
-  </Box>
-
-  {/* Main content */}
-  <Box flexDirection="column" flexGrow={1} paddingLeft={2}>
-    {mainContent}
-  </Box>
-</Box>
-```
-
-### Bordered panel component
-
-```tsx
-const Panel = ({ title, children, borderColor = 'cyan' }) => (
-  <Box flexDirection="column" borderStyle="single" borderColor={borderColor}
-       paddingX={1} paddingY={0}>
-    {title && (
-      <Box marginBottom={1}>
-        <Text bold color={borderColor}>{title}</Text>
-      </Box>
-    )}
-    {children}
-  </Box>
-);
-```
-
-### Inline mode (non-fullscreen)
-
-For short interactions that should scroll with terminal history, don't set
-`height` on the root Box. Ink will render inline and scroll naturally.
-
-```tsx
-// Inline: just renders and scrolls
-<Box flexDirection="column">
-  <Text>Quick question:</Text>
-  <Select options={options} onChange={handleSelect} />
-</Box>
-
-// vs. Full-screen: takes over the terminal
-<Box flexDirection="column" height={stdout.rows}>
-  {/* ... */}
-</Box>
-```
-
-## Tab navigation pattern
-
-### Tab bar component
-
-```tsx
-import React from 'react';
-import { Box, Text } from 'ink';
-import figures from 'figures';
-
-type Tab = { label: string; status: 'pending' | 'active' | 'complete' };
-
-const TabBar = ({ tabs, activeIndex }: { tabs: Tab[], activeIndex: number }) => (
-  <Box gap={1} paddingX={1}>
-    {tabs.map((tab, i) => {
-      const icon = tab.status === 'complete'
-        ? figures.tick
-        : tab.status === 'active'
-        ? figures.pointer
-        : figures.bullet;
-
-      const color = tab.status === 'complete'
-        ? 'green'
-        : i === activeIndex
-        ? 'cyan'
-        : 'gray';
-
-      return (
-        <Text key={i} color={color} bold={i === activeIndex}>
-          {icon} {tab.label}
-        </Text>
-      );
-    })}
-  </Box>
-);
-```
-
-### Tab switching with useInput
-
-```tsx
-const [activeTab, setActiveTab] = useState(0);
-
-useInput((input, key) => {
-  if (key.leftArrow) setActiveTab(i => Math.max(0, i - 1));
-  if (key.rightArrow) setActiveTab(i => Math.min(TABS.length - 1, i + 1));
-
-  // Number keys for direct tab access
-  const num = parseInt(input, 10);
-  if (num >= 1 && num <= TABS.length) setActiveTab(num - 1);
-}, { isActive: !isInputFocused }); // disable when typing in an input
-```
-
-**Important:** Use `isActive: false` on the tab-switching `useInput` when the user
-is focused on a text input or other component that needs arrow keys. Otherwise
-arrow keys will switch tabs instead of navigating within the component.
-
-### Conditional rendering for tab content
-
-```tsx
-// Simple: mount/unmount (loses state when switching away)
-{activeTab === 0 && <SetupTab />}
-
-// Preserve state: render all but hide inactive
-{TABS.map((_, i) => (
-  <Box key={i} display={i === activeTab ? 'flex' : 'none'}
-       flexDirection="column" flexGrow={1}>
-    <TabContent index={i} />
-  </Box>
-))}
-```
-
-## State management patterns
-
-### Centralized wizard state hook
-
-```tsx
-interface WizardState {
-  framework: string | null;
-  language: 'typescript' | 'javascript' | null;
-  apiKey: string | null;
-  features: string[];
-  installStatus: 'idle' | 'running' | 'success' | 'error';
-  error: string | null;
-}
-
-const initialState: WizardState = {
-  framework: null,
-  language: null,
-  apiKey: null,
-  features: [],
-  installStatus: 'idle',
-  error: null,
-};
-
-export function useWizardState() {
-  const [state, setState] = useState<WizardState>(initialState);
-
-  const update = (patch: Partial<WizardState>) =>
-    setState(prev => ({ ...prev, ...patch }));
-
-  const isStepComplete = (step: number): boolean => {
-    switch (step) {
-      case 0: return state.framework !== null;
-      case 1: return state.apiKey !== null;
-      case 2: return state.installStatus === 'success';
-      case 3: return false; // verification is terminal
-      default: return false;
-    }
-  };
-
-  return { state, update, isStepComplete };
-}
-```
-
-### Tab-to-tab data flow
-
-Pass wizard state down to tabs, and `onComplete` callbacks up:
-
-```tsx
-const App = () => {
-  const { state, update, isStepComplete } = useWizardState();
-  const [activeTab, setActiveTab] = useState(0);
-
-  const advanceTab = () =>
-    setActiveTab(i => Math.min(TABS.length - 1, i + 1));
-
-  return (
-    <AppShell>
-      {activeTab === 0 && (
-        <SetupTab
-          onSelect={(fw) => { update({ framework: fw }); advanceTab(); }}
-        />
-      )}
-      {activeTab === 1 && (
-        <ConfigTab
-          framework={state.framework}
-          onComplete={(config) => { update(config); advanceTab(); }}
-        />
-      )}
-      {activeTab === 2 && (
-        <InstallTab config={state} onComplete={() => advanceTab()} />
-      )}
-    </AppShell>
-  );
-};
-```
-
-## Progress and completion patterns
-
-### Spinner → result replacement
-
-Show a spinner while working, then replace in-place with the result:
-
-```tsx
-const Step = ({ label, status }: { label: string; status: 'pending' | 'running' | 'done' | 'error' }) => (
-  <Box gap={1}>
-    {status === 'running' && <Spinner label="" />}
-    {status === 'done' && <Text color="green">{figures.tick}</Text>}
-    {status === 'error' && <Text color="red">{figures.cross}</Text>}
-    {status === 'pending' && <Text dimColor>{figures.bullet}</Text>}
-    <Text dimColor={status === 'pending'}>{label}</Text>
-  </Box>
-);
-```
-
-### Multi-step progress list
-
-```tsx
-const steps = [
-  { id: 'deps', label: 'Installing dependencies', status: 'done' },
-  { id: 'config', label: 'Writing configuration', status: 'running' },
-  { id: 'snippet', label: 'Adding code snippet', status: 'pending' },
-  { id: 'verify', label: 'Verifying setup', status: 'pending' },
-];
-
-<Box flexDirection="column" gap={0}>
-  {steps.map(step => <Step key={step.id} {...step} />)}
-</Box>
-```
-
-## Debug logging
-
-Never write debug output to stdout — it will corrupt the Ink display.
-Write to a file or stderr instead:
-
-```tsx
-import { writeFileSync, appendFileSync } from 'node:fs';
-
-const debug = (msg: string) => {
-  if (process.env.DEBUG) {
-    appendFileSync('/tmp/wizard-debug.log', `${new Date().toISOString()} ${msg}\n`);
-  }
-};
-```
-
-Or use `useStderr()`:
-```tsx
-const { write } = useStderr();
-write('Debug: something happened\n');
-```
+Write diagnostics through [logToFile](../../../../src/utils/debug.ts), which
+uses the configured wizard log destination. Avoid introducing a separate
+hardcoded temporary log or writing debug lines into the live TUI.

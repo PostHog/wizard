@@ -214,8 +214,7 @@ export interface AgentPrompt {
    * one an agent can reach — it can neither invent the task nor forget it.
    */
   runnerSeeded: boolean;
-  /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
-   * harness. The mapping is not 1:1 across providers, so each agent names both. */
+  /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
   modelSdk?: string;
@@ -238,8 +237,7 @@ export interface AgentPrompt {
   body: string;
 }
 
-/** The model + effort an agent runs on for a given harness — `pi` picks the gpt
- * column, anything else the sdk (anthropic) column. */
+/** Pi selects the pi profile; the legacy Anthropic SDK selects the sdk profile. */
 export function promptModelFor(
   prompt: AgentPrompt,
   harness: string,

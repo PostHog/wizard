@@ -11,6 +11,7 @@ import {
   isPastRefresh,
   type GatewayAuth,
 } from '@lib/gateway-session';
+import { legacyGatewayHeaders } from '@lib/legacy-gateway';
 import {
   modelCapabilities,
   type ThinkingLevel,
@@ -35,10 +36,10 @@ export type GatewayApi =
  * OpenAI models take the Responses API because OpenAI rejects function tools
  * combined with `reasoning_effort` on chat completions and every task sends both.
  */
-export function gatewayApiFor(modelId: string): GatewayApi {
-  return modelId.startsWith('openai/')
-    ? 'openai-responses'
-    : 'anthropic-messages';
+export function gatewayApiFor(modelId: string, legacy?: boolean): GatewayApi {
+  if (!modelId.startsWith('openai/')) return 'anthropic-messages';
+  // The legacy gateway routes openai models through chat completions itself.
+  return legacy ? 'openai-completions' : 'openai-responses';
 }
 
 /**
@@ -51,14 +52,19 @@ export function buildGatewayHeaders(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
   teamId?: number,
+  legacy?: boolean,
 ): Record<string, string> {
   return {
     'anthropic-beta': 'context-1m-2025-08-07',
-    'X-PostHog-Properties': buildWizardPropertiesBlob(
-      wizardMetadata,
-      wizardFlags,
-      teamId,
-    ),
+    ...(legacy
+      ? legacyGatewayHeaders(wizardMetadata, wizardFlags)
+      : {
+          'X-PostHog-Properties': buildWizardPropertiesBlob(
+            wizardMetadata,
+            wizardFlags,
+            teamId,
+          ),
+        }),
   };
 }
 
@@ -67,6 +73,8 @@ export interface GatewayProviderInputs {
   accessToken: string;
   /** Customer team for the properties blob (from the mint response). */
   teamId?: number;
+  /** Set only by the CI fallback in legacy-gateway.ts. */
+  legacy?: boolean;
   wizardMetadata: Record<string, string>;
   wizardFlags: Record<string, string>;
   modelId: string;
@@ -82,8 +90,9 @@ export interface GatewayProviderInputs {
  * callers (scan triage) hand it straight to `completeSimple`.
  */
 export function buildGatewayModel(inputs: GatewayProviderInputs) {
-  const { gatewayUrl, wizardMetadata, wizardFlags, modelId, teamId } = inputs;
-  const api = gatewayApiFor(modelId);
+  const { gatewayUrl, wizardMetadata, wizardFlags, modelId, teamId, legacy } =
+    inputs;
+  const api = gatewayApiFor(modelId, legacy);
   return {
     id: modelId,
     name: `${modelId} (PostHog Gateway)`,
@@ -99,7 +108,7 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
     maxTokens: 64_000,
-    headers: buildGatewayHeaders(wizardMetadata, wizardFlags, teamId),
+    headers: buildGatewayHeaders(wizardMetadata, wizardFlags, teamId, legacy),
   };
 }
 
@@ -114,8 +123,8 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   gatewayUrl: string;
   baseUrl: string;
 } {
-  const { gatewayUrl, accessToken, modelId, effort } = inputs;
-  const api = gatewayApiFor(modelId);
+  const { gatewayUrl, accessToken, modelId, effort, legacy } = inputs;
+  const api = gatewayApiFor(modelId, legacy);
   // One resolution point for the model's traits and the run's effort override.
   // pi clamps whatever comes out of here against the levels this spec declares,
   // so a level the spec doesn't carry is silently reduced by the session.

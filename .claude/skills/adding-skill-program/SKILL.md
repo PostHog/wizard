@@ -1,159 +1,139 @@
 ---
 name: adding-skill-program
-description: Create a new skill-based program for the PostHog wizard. Use when adding a program type (like revenue analytics, audit, error tracking) that installs a context-mill skill and runs an agent against it. Covers the createSkillProgram factory for the common case, customization via ProgramRun, and advanced patterns for custom screens or detection.
-compatibility: Designed for Claude Code working on the PostHog wizard codebase.
+description:
+  Add a PostHog wizard capability backed by context-mill content. Choose a skill
+  command or native program, configure an orchestrator flow, and wire any
+  required CLI, screens, or prerequisites.
+compatibility:
+  Designed for coding agents working on the PostHog wizard codebase.
 metadata:
   author: posthog
-  version: "2.0"
+  version: '3.0'
 ---
 
 # Adding a Skill-Based Program
 
-A skill-based program installs a context-mill skill and runs the agent against it. Examples in the codebase: the `audit` program (clean factory call), the `revenue-analytics` program (factory + custom intro screen + detect step).
+Read [wizard-development](../wizard-development/SKILL.md) for the shared design
+policy. Use Pi for new agent work and prefer an orchestrator flow. Linear runs
+are for very simple work and existing flows. The Anthropic SDK remains a
+supported legacy fallback, deprecated as the default for new work; the shared
+guide owns the fallback criteria and gateway model/effort/system-prompt
+contract.
 
-Before reading this, read `wizard-development/SKILL.md` for the architectural context — particularly principle 4 ("New capability is a new program, not a new branch").
+These are contribution defaults. Current runtime
+[bindings](../../../src/lib/agent/runner/switchboard/index.ts) still default
+many programs to Anthropic plus linear; documentation changes do not migrate
+them.
 
-## Architecture
+## Choose the contribution surface
 
-The wizard's runner pipeline is fixed. What varies between programs is a `ProgramRun` configuration object that controls the skill ID, prompt, success message, abort cases, and post-run hooks. A `ProgramConfig` ties together: the CLI command, the step list, and the `ProgramRun`. The program registry derives all downstream wiring — CLI subcommands, TUI programs, the router — from a single array. **Adding a program is configuration, not code.**
+- **Content-only capability:** use the existing skill command machinery when it
+  can express the workflow.
+  [Context-mill](https://github.com/PostHog/context-mill) owns skill content and
+  `cliEntries`. A new skill-backed child of an existing family ships through
+  context-mill; inspect
+  [family dispatch](../../../src/lib/programs/dispatch-family.ts). Unpromoted
+  skills run through [the skill command](../../../src/commands/skill.ts).
+- **Native program:** use a
+  [ProgramConfig](../../../src/lib/programs/program-step.ts) when the wizard
+  needs its own flow, screens, detection, composition, or other native behavior.
+  Keep product instructions in context-mill.
 
-## The common case: `createSkillProgram`
+Command names, program `id`, content-mill `agentFlow`, and `skillId` have
+different roles. Use the full product name for public commands. The config field
+is `id`, not the retired `flowKey`.
 
-For programs that just install a skill and let the agent run it (most programs), use the factory in `agent-skill/index.ts`:
+## Build a native orchestrator program
 
-```ts
-// src/lib/programs/error-tracking/index.ts
-import { createSkillProgram } from '../agent-skill/index.js';
+Use [metrics](../../../src/lib/programs/metrics/) as the current Pi/orchestrator
+example and read the
+[runner architecture](../wizard-development/references/ARCHITECTURE.md) when
+changing execution behavior.
 
-export const errorTrackingConfig = createSkillProgram({
-  skillId: 'error-tracking-setup',
-  command: 'errors',
-  flowKey: 'error-tracking',
-  description: 'Set up PostHog error tracking',
-  integrationLabel: 'error-tracking',
-  successMessage: 'Error tracking configured!',
-  reportFile: 'posthog-error-tracking-report.md',
-  docsUrl: 'https://posthog.com/docs/error-tracking',
-  spinnerMessage: 'Setting up error tracking...',
-  estimatedDurationMinutes: 5,
-  requires: ['posthog-integration'],  // optional: prior programs that must run first
-});
-```
+1. Add the program config under `src/lib/programs/<name>/`. Set `agentFlow` when
+   its content-mill flow differs from `id`; setting it explicitly also documents
+   the content dependency. Keep a `run` definition so the outer runner executes
+   agent work.
+2. Supply the flow's seed and task prompts in context-mill, including the task
+   dependencies and applicable skill variants. The
+   [orchestrator](../../../src/lib/agent/runner/sequence/orchestrator/orchestrator-runner.ts)
+   loads `agentFlow ?? id`, requires a seed prompt, and checks task-skill
+   variants before running. `run.skillId` alone does not define this flow.
+3. Register the config in
+   [PROGRAM_REGISTRY](../../../src/lib/programs/program-registry.ts) and add its
+   Pi/orchestrator entry to
+   [PROGRAM_BINDINGS](../../../src/lib/agent/runner/switchboard/index.ts).
+   [Existing binding checks](../../../src/lib/agent/runner/__tests__/switchboard.test.ts)
+   enforce coverage; `ProgramId` currently widens to `string`.
+4. For a standalone native command, create a command module with
+   [nativeCommandFactory](../../../src/commands/factories/native-command-factory.ts)
+   and register it in [bin.ts](../../../bin.ts). A native family child uses the
+   handlers in family dispatch. Program registration derives screen sequences
+   and store lookup, not the top-level CLI `.use()` chain.
+5. Check [program OAuth scopes](../../../src/lib/oauth/program-scopes.ts)
+   against the tools the program needs; add scopes only when the base set is
+   insufficient.
 
-Then register it in one place:
+Model and effort selections in flow frontmatter must be supported by the wizard
+and gateway. Follow the cross-repo procedure in
+[wizard-development](../wizard-development/SKILL.md) before introducing a model
+or changing gateway-required prompt material.
 
-1. `src/lib/programs/program-registry.ts` — add to `PROGRAM_REGISTRY` array
+## Simple linear programs and existing flows
 
-That's the entire program. **bin.ts, the store, the agent runner, the router, and the screen sequences (`src/ui/tui/screen-sequences.ts`) all derive their wiring from the registry automatically.** Don't add a yargs command. Don't add a runner function. Don't touch bin.ts. The `ProgramId` union type updates itself from the registry contents.
+For a very simple linear flow, use
+[createSkillProgram](../../../src/lib/programs/agent-skill/index.ts) to
+configure installation of one skill. Register the native program as above with
+an explicit Pi/linear binding; the factory does not select a sequence. Read
+`SkillProgramOptions` for required fields;
+[audit](../../../src/lib/programs/audit/) demonstrates factory customization and
+a dynamic `run(session)` that seeds a ledger.
+[Revenue analytics](../../../src/lib/programs/revenue-analytics/) builds its
+config directly and adds prerequisite detection.
 
-The `audit` program (`src/lib/programs/audit/`) is the cleanest example of this pattern.
+`ProgramRun.customPrompt`, `abortCases`, `postRun`, and `buildOutroData` are
+consumed by the
+[linear sequence](../../../src/lib/agent/runner/sequence/linear.ts). `postRun`
+runs after success; `buildOutroData` receives session and credentials, with host
+information inside credentials. The orchestrator currently uses its own task
+prompts, failure handling, and outro, and does not invoke those hooks. Check
+this limitation before migrating a linear flow; setting an orchestrator binding
+does not preserve these behaviors automatically.
 
-## Customizing the agent run
+## Screens, prerequisites, and composition
 
-`createSkillProgram` accepts these optional fields on `SkillProgramOptions`, all of which flow through to the `ProgramRun`:
+Reuse [AGENT_SKILL_STEPS](../../../src/lib/programs/agent-skill/steps.ts):
+intro, health check, auth, run, outro, and keep-skills. Auth also applies the
+shared [AI opt-in gate](../../../src/lib/programs/ai-opt-in-gate.ts) for agent
+programs. Override `screenId`, not `screen`, when adapting a step. New screens
+need an entry in [ScreenId](../../../src/ui/tui/screen-sequences.ts), a
+component, and registration in
+[screen-registry](../../../src/ui/tui/screen-registry.tsx). Follow
+[ink-tui](../ink-tui/SKILL.md) for rendering and store usage.
 
-| Option | Purpose |
-|---|---|
-| `customPrompt` | Extra prompt instructions appended after the default project prompt |
-| `buildOutroData` | Override the default outro. Receives session, credentials, cloud region. Returns `OutroData`. |
-| `abortCases` | Array of `{ match: RegExp, message, body, docsUrl? }` that match `[ABORT] <reason>` signals from the skill |
-| `requires` | Other program `flowKey`s that must be satisfied first |
+Use a headless step's `onReady` for session-dependent detection, then render
+structured `frameworkContext.detectError` data in the intro. `onInit` runs when
+the TUI starts rendering with its initial session; `onReady` runs after the real
+session is assigned. See [store hooks](../../../src/ui/tui/store.ts) and
+[run-wizard](../../../src/lib/runners/run-wizard.ts). The
+[noninteractive runner](../../../src/lib/runners/run-non-interactive.ts) also
+walks `onReady` by default; set `ciPreRun` only when it needs a different
+prerequisite strategy.
 
-For more complex post-agent work (env var upload, dashboard creation, anything that needs to run after the agent completes but before the outro), drop the factory and build the `ProgramConfig` directly so you can set `ProgramRun.postRun`. See `posthog-integration` for that pattern.
+`requires` currently records metadata; it does not execute or enforce prior
+programs. Compose real work through `ProgramStep.run`, with `onRunPrep` and
+`targetDir` when needed. The
+[integration run step](../../../src/lib/programs/posthog-integration/index.ts)
+and [self-driving](../../../src/lib/programs/self-driving/) demonstrate this.
+Composed sub-runs are structurally linear; orchestrators cannot nest.
 
-## Dynamic run configuration
+## Validate the affected path
 
-If your program needs to inspect the session before building the run config (read framework context, seed state on disk, set per-session prompt fragments), pass an async function as the program's `run`:
-
-```ts
-const baseConfig = createSkillProgram({ /* ... */ });
-
-const dynamicRun = async (session: WizardSession): Promise<ProgramRun> => {
-  // do per-session work here (e.g. seed a ledger, populate frameworkContext)
-  if (!baseConfig.run) throw new Error('missing run');
-  return typeof baseConfig.run === 'function'
-    ? baseConfig.run(session)
-    : baseConfig.run;
-};
-
-export const yourConfig: ProgramConfig = {
-  ...baseConfig,
-  run: dynamicRun,
-};
-```
-
-The `audit` program uses this pattern to seed a checks ledger on disk before the agent run.
-
-## Custom screens
-
-Skill-based programs default to the generic step list in `agent-skill/steps.ts` (intro → auth → run → outro → keep-skills). To use program-specific screens (a custom intro that displays detection results, a custom outro with program-specific bullets), override the relevant step's `screen` field:
-
-```ts
-const SCREEN_BY_STEP: Record<string, string> = {
-  intro: 'your-intro',
-  outro: 'your-outro',
-};
-
-const yourSteps: ProgramStep[] = AGENT_SKILL_STEPS.map((step) => {
-  const override = SCREEN_BY_STEP[step.id];
-  return override ? { ...step, screen: override } : step;
-});
-
-export const yourConfig: ProgramConfig = {
-  ...baseConfig,
-  steps: yourSteps,
-};
-```
-
-Then:
-
-1. Add the screen IDs to the `ScreenId` enum in `src/ui/tui/screen-sequences.ts`
-2. Create the React component(s) under `src/ui/tui/screens/`
-3. Register them in `src/ui/tui/screen-registry.tsx`
-
-The screen reads from the store (via `useWizardStore`), renders error states from `frameworkContext.detectError` if present, and calls `store.completeSetup()` (or equivalent) when the user advances. The router resolves the active screen from session state — see `wizard-development/references/ARCHITECTURE.md` for the full screen resolution flow. **Never call `console.error` or imperatively navigate from inside the TUI.**
-
-## Detection / prerequisite checking
-
-If your program needs to verify prerequisites before showing the intro screen (e.g. PostHog must already be installed, certain SDKs must be present), add a headless detect step at the top of the program with an `onReady` hook:
-
-```ts
-{
-  id: 'detect',
-  label: 'Detecting prerequisites',
-  // No screen — this step is headless
-  onReady: async (ctx) => {
-    // ctx.session.installDir is the user's project dir
-    // On success: ctx.setFrameworkContext('skillPath', '...')
-    // On failure: ctx.setFrameworkContext('detectError', { kind: '...', ... })
-  },
-},
-```
-
-Use `onReady`, not `onInit` — `onInit` fires during store construction before `session` is assigned, so it can't read `installDir`. The custom intro screen reads `frameworkContext.detectError` and renders an error view (with an Exit option) when present, or the welcome view otherwise.
-
-The `revenue-analytics` program is the canonical example of this pattern (detect step + custom intro + abort cases).
-
-## Verification
-
-```bash
-pnpm build
-pnpm test
-pnpm fix
-```
-
-Then run end-to-end against a real test app:
-
-```bash
-pnpm try --install-dir=<path> <your-command>
-```
-
-Test failure cases too — missing prerequisites, bad install directories, network errors during skill download. The wizard should render structured error outros, not stack traces.
-
-## Canonical examples in the codebase
-
-- `src/lib/programs/audit/` — clean `createSkillProgram` call with abort cases, custom screens, and a dynamic `run` function for per-session seeding
-- `src/lib/programs/revenue-analytics/` — factory + custom intro screen + detect step with prerequisite checking
-- `src/lib/programs/agent-skill/` — the factory itself (`createSkillProgram`) and the generic step list (`AGENT_SKILL_STEPS`)
-
-When in doubt, read the directory of the program that most resembles what you're building.
+Reuse the relevant registry, binding, detection, or routing checks. Add a
+focused behavioral test only for a meaningful gap; avoid tests that repeat
+configuration fields. Check that the selected CLI route resolves the intended
+program and that its content-mill flow is available. Use the
+[exploration guide](../exploring-the-wizard/SKILL.md) for a warranted end-to-end
+run against a disposable app. Follow
+[wizard-development](../wizard-development/SKILL.md) for proportionate checks;
+documentation-only changes need source/link verification.
