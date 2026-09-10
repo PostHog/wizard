@@ -73,9 +73,8 @@ jobs:
           POSTHOG_WIZARD_REGION: us
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
           SMOKE_TEST_APP: ${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }}
-        # The script asks GitHub for the identity token itself, immediately before
-        # the run that spends it, and drops the request variables before the
-        # wizard starts. Doing it here would age the token through the build.
+        # The script requests the identity token itself, so it is seconds old at
+        # the mint, and drops the request variables before the wizard starts.
         run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
 
       - name: Upload artifacts

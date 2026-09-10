@@ -132,12 +132,11 @@ if [ ! -f "$WIZARD_BIN" ]; then
 fi
 
 # ── Gateway identity, for CI only ───────────────────────────────────────────
-# Requested here rather than in the workflow because the build and installs
-# above take minutes and the token is short-lived. Seconds old at the mint.
+# The build and installs above take minutes and the token is short-lived, so it
+# is requested here: seconds old when the mint reads it.
 if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
   echo "==> Requesting a gateway identity token..."
-  # Fixed, not read from the environment: the workbench .env is sourced above,
-  # and an audience it could set is one the mint would refuse.
+  # Fixed: the workbench .env is sourced above and could otherwise set it.
   AUDIENCE="posthog-wizard-ci"
   IDENTITY_TOKEN=$(curl -sS --fail-with-body \
     -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
@@ -150,8 +149,8 @@ if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUES
   export POSTHOG_WIZARD_GATEWAY_TOKEN="$IDENTITY_TOKEN"
   unset IDENTITY_TOKEN
 elif [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-  # An unset pair means the job was not granted id-token: write. Without it the
-  # mint refuses and the run would quietly spend on the legacy path instead.
+  # An unset pair means the job was not granted id-token: write. Failing here
+  # names that, rather than surfacing it as a mint refusal further along.
   echo "::error::id-token: write is not granted to this job"
   exit 1
 fi

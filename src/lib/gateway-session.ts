@@ -123,9 +123,8 @@ async function resolveGatewayAuth(
     minted = await mintGatewayToken(host, bearer, program);
   } catch (e) {
     if (!(e instanceof GatewayMintRefused)) throw e;
-    // A CI run that cannot mint has to fail. Falling back would leave a broken
-    // identity path behind a green smoke test, spending on the very gateway this
-    // exists to stop using.
+    // A CI run that cannot mint has to fail: falling back would leave a broken
+    // identity path behind a green smoke test.
     const legacy = ci ? null : legacyGatewayAuth(host, accessToken, e.status);
     if (!legacy) throw e;
     logToFile(
