@@ -30,7 +30,6 @@ import {
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
-import { legacyGatewayHeaders } from '@lib/legacy-gateway';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -397,25 +396,18 @@ export function isWarlockDisabled(): boolean {
 /**
  * Build ANTHROPIC_CUSTOM_HEADERS for the SDK subprocess: the run's metadata and
  * flags as one `X-PostHog-Properties` JSON blob. Bedrock fallback is native to
- * the gateway, so there is no opt-in header. The CI fallback sends the legacy
- * gateway's shape instead.
+ * the gateway, so there is no opt-in header.
  */
 export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
-  auth: Pick<GatewayAuth, 'teamId' | 'legacy'>,
+  auth: Pick<GatewayAuth, 'teamId'>,
 ): string {
   const headers = createCustomHeaders();
-  const shaped = auth.legacy
-    ? legacyGatewayHeaders(wizardMetadata, wizardFlags)
-    : {
-        'X-PostHog-Properties': buildWizardPropertiesBlob(
-          wizardMetadata,
-          wizardFlags,
-          auth.teamId,
-        ),
-      };
-  for (const [key, value] of Object.entries(shaped)) headers.add(key, value);
+  headers.add(
+    'X-PostHog-Properties',
+    buildWizardPropertiesBlob(wizardMetadata, wizardFlags, auth.teamId),
+  );
   const encoded = headers.encode();
   logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
   return encoded;
@@ -570,7 +562,6 @@ export async function initializeAgent(
         baseURL: current.gatewayUrl,
         authToken: current.token,
         teamId: current.teamId,
-        legacy: current.legacy,
         wizardMetadata: triageMetadata,
         wizardFlags: config.wizardFlags ?? {},
       };

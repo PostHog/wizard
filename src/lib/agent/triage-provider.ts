@@ -29,8 +29,6 @@ export interface TriageGatewayAuth {
   authToken: string;
   /** Customer team for the properties blob. */
   teamId?: number;
-  /** Set only by the CI fallback in legacy-gateway.ts. */
-  legacy?: boolean;
   /** The run's trace tags, with `call_type` overridden to
    *  `CallType.yaraTriage` so scan spend is separable from agent work. */
   wizardMetadata?: Record<string, string>;
@@ -69,7 +67,6 @@ export function createTriageLLMProvider(
       gatewayUrl: current.baseURL,
       accessToken: authToken,
       teamId: current.teamId,
-      legacy: current.legacy,
       wizardMetadata: current.wizardMetadata ?? {},
       wizardFlags: current.wizardFlags ?? {},
       modelId,
