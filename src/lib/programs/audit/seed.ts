@@ -4,7 +4,7 @@ import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
 /**
- * The 10 source-tree checks the audit runs, plus one row for the PostHog-side
+ * The 11 source-tree checks the audit runs, plus one row for the PostHog-side
  * sweep and two workflow rows at the end (so the skill's
  * `audit_resolve_checks` calls for `write-report` and `upload-notebook`
  * succeed — the skill writes the report to disk, then mirrors it into a
@@ -52,6 +52,12 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     id: 'cross-runtime-distinct-id',
     area: 'Identification',
     label: 'Same distinct_id across client and server',
+    status: 'pending',
+  },
+  {
+    id: 'cross-runtime-session-id',
+    area: 'Identification',
+    label: 'Same $session_id across client and server',
     status: 'pending',
   },
   {
