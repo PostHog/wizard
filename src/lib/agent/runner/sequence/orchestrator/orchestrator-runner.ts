@@ -65,7 +65,10 @@ import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  createWizardAskBridge,
+  CREDENTIAL_ASK_TIMEOUT_MS,
+} from '@lib/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
@@ -196,7 +199,7 @@ function resolveReferenceSkillId(
  * open a database console or mint a restricted API key. The drain waits it out
  * — the executor holds the task's promise — so the only real limit is this one.
  */
-const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+const TASK_ASK_TIMEOUT_MS = CREDENTIAL_ASK_TIMEOUT_MS;
 
 /**
  * How long an optional step's notice waits for an answer.
