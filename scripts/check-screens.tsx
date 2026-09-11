@@ -16,6 +16,7 @@ import { ManagedSettingsScreen } from '@ui/tui/screens/ManagedSettingsScreen';
 import { SettingsOverrideScreen } from '@ui/tui/screens/SettingsOverrideScreen';
 import { WizardAskScreen } from '@ui/tui/screens/WizardAskScreen';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
+import { checkMcpOnboarding } from './check-mcp-onboarding.no-jest';
 
 function fakeStore(session: Record<string, unknown>): any {
   return {
@@ -181,6 +182,13 @@ check(
   />,
   ['Database host?', 'ESC', 'skip'],
 );
+
+try {
+  await checkMcpOnboarding();
+} catch (error) {
+  console.error(error);
+  failures++;
+}
 
 if (failures > 0) {
   console.error(`\n${failures} screen check(s) failed`);

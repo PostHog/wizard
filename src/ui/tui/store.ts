@@ -903,6 +903,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setInstallDir(installDir: string): void {
+    this.$session.setKey('installDir', installDir);
+    this.emitChange();
+  }
+
   // ── Derived state ───────────────────────────────────────────────
 
   /**
