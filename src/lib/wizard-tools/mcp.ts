@@ -44,6 +44,7 @@ import {
   downloadSkill,
   ensureGitignoreCoverage,
   createAskAccounting,
+  describeAskCancellation,
   fetchSkillMenu,
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
@@ -738,7 +739,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       askAccounting.record(args.subject);
 
       try {
-        const answers = await askBridge.request({
+        const { answers, timedOut } = await askBridge.request({
           questions: args.questions,
           subject: normaliseAskSubject(args.subject),
         });
@@ -759,16 +760,24 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           secretVault,
         );
 
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the pi facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
+
         logToFile(
           `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
             args.questions.length
-          } question(s)`,
+          } question(s)${cancelled ? `, cancelled: ${cancelled.reason}` : ''}`,
         );
         return {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify({ answers: sanitised }, null, 2),
+              text: JSON.stringify(
+                { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+                null,
+                2,
+              ),
             },
           ],
         };

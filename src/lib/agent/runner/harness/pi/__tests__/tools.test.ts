@@ -17,6 +17,8 @@ import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 import {
   ASK_BATCH_THRESHOLD,
+  ASK_CANCELLED_NOTE,
+  ASK_TIMED_OUT_NOTE,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -27,8 +29,9 @@ const SECRET = 'phx_live_zendesk_token_123';
 const makeTools = (
   answers: Record<string, string | string[]>,
   maxQuestions?: number,
+  timedOut = false,
 ) => {
-  const request = vi.fn().mockResolvedValue(answers);
+  const request = vi.fn().mockResolvedValue({ answers, timedOut });
   const workingDirectory = mkdtempSync(join(tmpdir(), 'pi-tools-vault-'));
   const tools = createWizardPiTools({
     workingDirectory,
@@ -90,6 +93,54 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
       answers: { token: string };
     };
     expect(answers.token).toBe(CANCELLED_SENTINEL);
+  });
+
+  it('names the cancellation explicitly instead of leaving the sentinel to be read', async () => {
+    // The agent's only signal used to be the sentinel string inside `answers`,
+    // which says neither "this was not collected" nor who ended the prompt.
+    const { wizardAsk } = makeTools({
+      host: CANCELLED_SENTINEL,
+      password: CANCELLED_SENTINEL,
+    });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'host', prompt: 'Host', kind: 'text' },
+        { id: 'password', prompt: 'Password', kind: 'text', sensitive: true },
+      ],
+      subject: 'Postgres',
+    });
+    const { cancelled } = JSON.parse(textOf(result)) as {
+      cancelled: { reason: string; questionIds: string[]; note: string };
+    };
+    expect(cancelled.reason).toBe('user-cancelled');
+    expect(cancelled.questionIds).toEqual(['host', 'password']);
+    expect(cancelled.note).toBe(ASK_CANCELLED_NOTE);
+  });
+
+  it('distinguishes a timed-out prompt from a dismissed one', async () => {
+    // A timeout means nobody is reading the terminal, so every later prompt in
+    // the run costs another full timeout before it fails the same way.
+    const { wizardAsk } = makeTools(
+      { host: CANCELLED_SENTINEL },
+      undefined,
+      true,
+    );
+    const result = await call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Host', kind: 'text' }],
+    });
+    const { cancelled } = JSON.parse(textOf(result)) as {
+      cancelled: { reason: string; note: string };
+    };
+    expect(cancelled.reason).toBe('timed-out');
+    expect(cancelled.note).toBe(ASK_TIMED_OUT_NOTE);
+  });
+
+  it('carries no cancellation envelope when every question was answered', async () => {
+    const { wizardAsk } = makeTools({ host: 'db.example.com' });
+    const result = await call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Host', kind: 'text' }],
+    });
+    expect(JSON.parse(textOf(result))).not.toHaveProperty('cancelled');
   });
 
   it('still rejects sensitive=true on non-text kinds', async () => {
@@ -400,9 +451,11 @@ describe('pi task wiring — wizard_ask pauses Write/Edit', () => {
     let release!: (answers: Record<string, string>) => void;
     const request = vi.fn(
       () =>
-        new Promise<Record<string, string>>((resolve) => {
-          release = resolve;
-        }),
+        new Promise<{ answers: Record<string, string>; timedOut: boolean }>(
+          (resolve) => {
+            release = (answers) => resolve({ answers, timedOut: false });
+          },
+        ),
     );
     const [wizardAsk] = createWizardPiTools({
       workingDirectory: mkdtempSync(join(tmpdir(), 'pi-ask-pause-')),

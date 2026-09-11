@@ -26,6 +26,7 @@ import {
   WIZARD_TOOL_NAMES,
   checkEnvKeys as checkEnvKeysCore,
   createAskAccounting,
+  describeAskCancellation,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
@@ -376,7 +377,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       // mutate files while it's waiting on the user's answer.
       onAskPendingChange?.(true);
       try {
-        const answers = await askBridge.request({
+        const { answers, timedOut } = await askBridge.request({
           questions: args.questions,
           subject: normaliseAskSubject(args.subject),
         });
@@ -388,12 +389,23 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           answers,
           secretVault,
         );
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the MCP facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
         logToFile(
           `[pi] wizard_ask: resolved ${
             Object.keys(answers).length
-          } answer(s) for ${args.questions.length} question(s)`,
+          } answer(s) for ${args.questions.length} question(s)${
+            cancelled ? `, cancelled: ${cancelled.reason}` : ''
+          }`,
         );
-        return text(JSON.stringify({ answers: sanitised }, null, 2));
+        return text(
+          JSON.stringify(
+            { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+            null,
+            2,
+          ),
+        );
       } catch (err) {
         askAccounting.refund(args.subject);
         const message = err instanceof Error ? err.message : String(err);

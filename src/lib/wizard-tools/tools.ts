@@ -389,8 +389,76 @@ export const WIZARD_ASK_TOOL_DESCRIPTION =
   'one call per data-warehouse source, one call per integration step — is ' +
   'expected and is never blocked, because the batching guard counts consecutive ' +
   'calls per subject. A fully cancelled or timed-out response does NOT count ' +
-  'against the per-run cap — treat it as "the user declined" and fall back ' +
-  'gracefully (e.g. hand over a deep link) without worrying about a wasted call.';
+  'against the per-run cap, so nothing is wasted. When a field is not ' +
+  'collected the result carries a `cancelled` object naming those question ' +
+  'ids, whether the user dismissed the prompt or it timed out, and what to do ' +
+  'next: read that instead of inspecting the answer values, and fall back ' +
+  'gracefully (e.g. hand over a deep link) rather than re-asking.';
+
+/**
+ * Guidance returned with a `wizard_ask` result when the user dismissed the
+ * prompt. Shared by both harness facades, like the descriptions above.
+ *
+ * Deliberately says nothing about how the caller reports its own outcome:
+ * `wizard_ask` serves programs with no task queue as well as the orchestrator's
+ * seeded ones, so the note covers the ask and only the ask.
+ */
+export const ASK_CANCELLED_NOTE =
+  'The user dismissed this prompt, so none of these fields were collected. ' +
+  'Read it as a decline for this subject: do not re-ask the same questions. ' +
+  'Fall back to a route that needs no answer from them (for example, hand ' +
+  'them a link to finish it themselves) and carry on with the rest of your ' +
+  'work. Asking about a different subject is still fine.';
+
+/**
+ * Guidance returned with a `wizard_ask` result when the prompt timed out.
+ *
+ * A timeout is not one decline: it says nobody is reading the terminal, and
+ * every later prompt in the run will end the same way after the same wait.
+ * Naming that is the difference between falling back once and stopping the run
+ * behind one unattended prompt per remaining item.
+ */
+export const ASK_TIMED_OUT_NOTE =
+  'This prompt timed out with no answer, so the user is most likely away from ' +
+  'the terminal. Read it as a decline, and expect any further prompt in this ' +
+  'run to time out the same way after the same wait: stop asking and finish ' +
+  'without them — hand over links for everything still outstanding — rather ' +
+  'than opening another prompt.';
+
+/**
+ * The explicit outcome returned alongside `answers` when an ask collected
+ * nothing for one or more of its questions.
+ *
+ * Cancelled fields arrive inside `answers` as the {@link CANCELLED_SENTINEL}
+ * string, which an agent can only recognise if it already knows the sentinel,
+ * and which says nothing about who ended the prompt. Both facades return this
+ * envelope so the outcome is stated rather than encoded in an answer value.
+ */
+export type AskCancellation = {
+  reason: 'user-cancelled' | 'timed-out';
+  /** Ids of the questions that came back uncollected. */
+  questionIds: string[];
+  /** What the agent should do next, given the reason. */
+  note: string;
+};
+
+/**
+ * Describe an ask's cancelled fields, or `undefined` when every question was
+ * answered. `timedOut` comes from the ask bridge — it is the only thing that
+ * tells a dismissed prompt from an unattended one.
+ */
+export function describeAskCancellation(
+  answers: Record<string, string | string[] | { secretRef: string }>,
+  timedOut: boolean,
+): AskCancellation | undefined {
+  const questionIds = Object.entries(answers)
+    .filter(([, value]) => value === CANCELLED_SENTINEL)
+    .map(([id]) => id);
+  if (questionIds.length === 0) return undefined;
+  return timedOut
+    ? { reason: 'timed-out', questionIds, note: ASK_TIMED_OUT_NOTE }
+    : { reason: 'user-cancelled', questionIds, note: ASK_CANCELLED_NOTE };
+}
 
 export type AskCapDecision =
   | { kind: 'ok' }
