@@ -50,8 +50,14 @@ export class WizardRouter {
   private overlays: Overlay[] = [];
 
   constructor(programId: ProgramId = Program.PostHogIntegration) {
+    this.setProgram(programId);
+  }
+
+  /** Point the router at a different program. */
+  setProgram(programId: ProgramId): void {
     this.programId = programId;
     this.sequence = PROGRAM_SEQUENCES[programId];
+    this.overlays = [];
   }
 
   /**

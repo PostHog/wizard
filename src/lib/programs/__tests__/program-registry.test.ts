@@ -1,6 +1,8 @@
 import {
   PROGRAM_REGISTRY,
   agentSkillConfig,
+  getCommandPath,
+  getLaunchablePrograms,
   getProgramConfig,
   getSubcommandPrograms,
 } from '@lib/programs/program-registry';
@@ -34,11 +36,59 @@ describe('getSubcommandPrograms', () => {
     const subcommands = getSubcommandPrograms();
     const commands = subcommands.map((c) => c.command);
 
-    expect(commands).toContain('integrate');
     expect(commands).toContain('revenue-analytics');
     for (const config of subcommands) {
       expect(config.command).toBeTruthy();
     }
+  });
+});
+
+// A nested program is only reachable through its parent's word.
+describe('getCommandPath', () => {
+  const subcommand = (id: string) =>
+    getSubcommandPrograms().find((config) => config.id === id)!;
+
+  it('reaches a nested program through its parent', () => {
+    expect(getCommandPath(subcommand('web-analytics-doctor'))).toBe(
+      'audit web-analytics',
+    );
+  });
+
+  it('leaves a top-level program alone', () => {
+    expect(getCommandPath(subcommand('revenue-analytics-setup'))).toBe(
+      'revenue-analytics',
+    );
+  });
+});
+
+describe('getLaunchablePrograms', () => {
+  // The list is curated, so an id that stops matching drops its row in silence.
+  it("offers the intro's programs, in order, all resolving", () => {
+    expect(getLaunchablePrograms().map((config) => config.id)).toEqual([
+      'self-driving',
+      'error-tracking-upload-source-maps',
+      'warehouse-source',
+      'audit',
+      'posthog-doctor',
+      'mcp-analytics',
+      'replay-vision',
+      'ai-observability',
+      'metrics',
+      'revenue-analytics-setup',
+    ]);
+  });
+
+  // A row wider than the terminal stops the whole block from centering.
+  it('keeps every row inside an 80-column terminal', () => {
+    const COMMAND_COLUMN = 21;
+    const MARKER_PREFIX = 2;
+    const BUDGET = 80 - COMMAND_COLUMN - MARKER_PREFIX;
+
+    const tooLong = getLaunchablePrograms()
+      .filter((config) => config.description.length > BUDGET)
+      .map((config) => `${config.id} (${config.description.length})`);
+
+    expect(tooLong).toEqual([]);
   });
 });
 

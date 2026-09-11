@@ -14,6 +14,10 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
 import {
+  getCommandPath,
+  getLaunchablePrograms,
+} from '@lib/programs/program-registry';
+import {
   PickerMenu,
   LoadingBox,
   type PickerOption,
@@ -21,11 +25,15 @@ import {
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { ScanConsent } from '@lib/wizard-session';
+import { KeyMatch, useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Icons } from '@ui/tui/styles';
 import { analytics } from '@utils/analytics';
 import { PRIVACY_PANEL_LABEL } from '@ui/tui/components/PrivacyPanel';
-
-type View = 'default' | 'more-info';
+import type { IntroMenuView } from '@ui/tui/posthog-integration-intro';
+import {
+  introHeadline,
+  introMenuOptions,
+} from '@ui/tui/posthog-integration-intro';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
@@ -43,18 +51,6 @@ const SUBTITLE = (
     <Text dimColor>.env* values stay on your machine.</Text>
   </>
 );
-
-/**
- * Exported so a test can measure every label against the menu's column.
- * `Privacy & data` is not here: IntroScreenLayout appends it to every intro
- * menu, so no screen carries its own copy.
- */
-export const CONTINUE_MENU_OPTIONS: { label: string; value: string }[] = [
-  { label: 'Continue', value: 'continue' },
-  { label: 'Change framework', value: 'framework' },
-  { label: 'More info', value: 'more-info' },
-  { label: 'Cancel', value: 'cancel' },
-];
 
 /**
  * A blank, unselectable row. Navigation skips disabled options, so this is a
@@ -131,7 +127,7 @@ export const PostHogIntegrationIntroScreen = ({
 
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
-  const [view, setView] = useState<View>('default');
+  const [view, setView] = useState<IntroMenuView>('default');
 
   const { session } = store;
   const sharing = session.scanConsent !== ScanConsent.Declined;
@@ -149,6 +145,21 @@ export const PostHogIntegrationIntroScreen = ({
     !pickingFramework &&
     view === 'default' &&
     !unsupported;
+
+  // The only view with no menu to carry a Back row, so Esc is its way out.
+  useKeyBindings(
+    'posthog-integration-intro',
+    view === 'commands'
+      ? [
+          {
+            match: KeyMatch.Escape,
+            label: 'esc',
+            action: 'back',
+            handler: () => setView('default'),
+          },
+        ]
+      : [],
+  );
 
   // ── Title ──────────────────────────────────────────────────────────
 
@@ -218,10 +229,36 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
-  } else if (showContinue) {
+  } else if (view === 'commands') {
     body = (
-      <Box>
-        <Text>Let's do two hours of work in eight minutes.</Text>
+      <PickerMenu
+        message="The Wizard can do more than integrate with your project:"
+        options={getLaunchablePrograms().map((program) => ({
+          label: `${getCommandPath(program).padEnd(21)}${program.description}`,
+          value: program.id,
+        }))}
+        onSelect={(value) => {
+          const id = Array.isArray(value) ? value[0] : value;
+          analytics.wizardCapture('intro menu selected', { value: id, view });
+          store.switchProgram(id);
+        }}
+      />
+    );
+  } else if (showContinue) {
+    const paragraphs = introHeadline(session.posthogSdkDetected);
+    body = (
+      <Box
+        flexDirection="column"
+        width={64}
+        flexShrink={0}
+        // A wrapped block reads as ragged centered; one line always centered.
+        alignItems={paragraphs.length > 1 ? undefined : 'center'}
+      >
+        {paragraphs.map((paragraph, i) => (
+          <Box key={paragraph} marginTop={i === 0 ? 0 : 1}>
+            <Text>{paragraph}</Text>
+          </Box>
+        ))}
       </Box>
     );
   }
@@ -240,6 +277,13 @@ export const PostHogIntegrationIntroScreen = ({
       label: 'Framework',
       value: frameworkLabel,
       suffix: suffixParts.join(' ') || undefined,
+    });
+  }
+
+  if (session.posthogSdkDetected) {
+    detectionRows.push({
+      label: 'PostHog',
+      value: 'detected in package.json',
     });
   }
 
@@ -285,14 +329,11 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Menu ───────────────────────────────────────────────────────────
 
-  let menuOptions: PickerOption<string>[] | null = null;
-
-  if (view === 'more-info') {
-    // No route to the panel from here: it has its own top-level menu item.
-    menuOptions = [{ label: 'Back', value: 'back' }];
-  } else if (showContinue) {
-    menuOptions = CONTINUE_MENU_OPTIONS;
-  }
+  const menuOptions = introMenuOptions({
+    view,
+    showContinue,
+    posthogSdkDetected: session.posthogSdkDetected,
+  });
 
   const handleSelect = (value: string) => {
     analytics.wizardCapture('intro menu selected', { value, view });
@@ -303,6 +344,8 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
+    } else if (value === 'commands') {
+      setView('commands');
     } else if (value === 'back') {
       setView('default');
     } else if (value === 'share') {

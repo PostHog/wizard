@@ -36,8 +36,7 @@ const baseConfig = createSkillProgram({
   skillId: 'audit',
   command: 'audit',
   id: 'audit',
-  description:
-    'Audit an existing PostHog integration for correctness and best practices',
+  description: 'Audit and improve your PostHog setup',
   integrationLabel: 'audit',
   customPrompt:
     'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.',

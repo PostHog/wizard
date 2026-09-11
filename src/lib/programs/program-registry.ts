@@ -135,3 +135,32 @@ export function getSubcommandPrograms(): SubcommandProgram[] {
     (c): c is SubcommandProgram => c.command != null,
   );
 }
+
+/** What a user types to reach the program. Nested ones go through its parent. */
+export function getCommandPath(config: SubcommandProgram): string {
+  return config.parentCommand
+    ? `${config.parentCommand} ${config.command}`
+    : config.command;
+}
+
+/** What the intro offers, in order. Curated: no config field ranks these. */
+const INTRO_PROGRAMS = [
+  'self-driving',
+  'error-tracking-upload-source-maps',
+  'warehouse-source',
+  'audit',
+  'posthog-doctor',
+  'mcp-analytics',
+  'replay-vision',
+  'ai-observability',
+  'metrics',
+  'revenue-analytics-setup',
+];
+
+/** The programs the intro can hand off to, in the order it lists them. */
+export function getLaunchablePrograms(): SubcommandProgram[] {
+  const byId = new Map(getSubcommandPrograms().map((c) => [c.id, c]));
+  return INTRO_PROGRAMS.map((id) => byId.get(id)).filter(
+    (config): config is SubcommandProgram => config != null,
+  );
+}

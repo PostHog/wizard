@@ -294,7 +294,8 @@ const FilterRow = ({
   shown: number;
   total: number;
 }) => (
-  <Box>
+  // Indented to sit under PromptLabel, which carries a leading space.
+  <Box paddingLeft={1}>
     <Text dimColor>
       {filter
         ? `Filter: ${filter} (${shown} of ${total})`
