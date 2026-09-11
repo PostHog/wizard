@@ -17,6 +17,8 @@ export const WIZARD_COMMANDMENTS = [
 
   'Treat feature flags, custom properties, and event names as part of an analytics contract. Prefer reusing existing names and patterns in the project. When you must introduce new ones, make them clear, descriptive, and consistent with existing conventions, and avoid scattering the same flag or property across many unrelated callsites.',
 
+  'Newly instrumented events will not appear in PostHog read-data-schema until they are ingested. Do not treat that as failure; create dashboards and insights using the event names and properties you just added.',
+
   'Keep PostHog data capture at its defaults unless the user explicitly asks otherwise. Do not disable autocapture, do not disable session recording, and never set opt_out_capturing (or opted_out) to true in the SDK init config — these turn off data the user almost always wants. Note: posthog.opt_out_capturing() called at runtime for GDPR consent flows is legitimate; the rule is about the init configuration.',
 
   "Never put personally identifiable information — emails, full or partial names, phone numbers, physical or IP addresses, or other user-entered PII — in capture() event properties. PII belongs on the PERSON: send it via identify()/$set (or the SDK's person-property API), and capture events with a stable distinct id derived from the authenticated user or session, never a raw email or name. This holds for every SDK, client and server.",

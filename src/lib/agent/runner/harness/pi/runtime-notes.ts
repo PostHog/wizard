@@ -13,6 +13,7 @@
  * capability notes only when the task actually holds that tool.
  */
 import { Sequence } from '@lib/constants';
+import { BASH_FENCE_AGENT_GUIDANCE } from '@lib/agent/bash-fence';
 
 const HEADER = [
   '## This runtime',
@@ -50,7 +51,9 @@ const ANGLE_PLACEHOLDERS =
 
 // Capability-gated: only when the task holds `bash` / a PostHog MCP tool.
 const BASH_SCOPE = [
-  '- `bash` is ONLY for install/build/typecheck/lint/format commands the project itself defines (its package manager and scripts). Run installs synchronously and wait (e.g. `npm install <pkg>`); `&`, `&&`, and pipes are all blocked. Do not invoke standalone toolchain binaries the project has not configured (ad-hoc formatters, version probes) — they are blocked.',
+  ...BASH_FENCE_AGENT_GUIDANCE,
+  '- When the skill asks you to clean up `.posthog-events.json`, use the scoped `rm` form above.',
+  '- Run installs synchronously and wait (e.g. `npm install <pkg>`); `&`, `&&`, and pipes are all blocked. Do not invoke standalone toolchain binaries the project has not configured (ad-hoc formatters, version probes) — they are blocked.',
   '- `bash` already runs in the project root, and its full output is returned to you. Run commands BARE: no `cd` into the project, no `--dir`/`-w`/workspace flags, no `2>&1` or `| tail` for output. Just `pnpm add <pkg>` or `pnpm typecheck` — adding any of those wrappers gets the command blocked.',
   '- NEVER run a project-wide `format` or `lint --fix` script (e.g. `prettier --write .`, `eslint --fix`, a bare `pnpm format`). They rewrite files you never touched — reordering imports, changing quotes, reflowing whitespace — producing a huge diff of unrelated churn that violates the minimal-edits rule. Format or lint-fix ONLY the specific files you changed; if the project offers no way to scope its script to those files, skip it and keep your own edits clean by hand. Running a build or typecheck to verify is fine; reformatting untouched files is not.',
   "- For Python, always spell the interpreter `python3` and the installer `pip3`: bare `python` and `pip` do not exist on macOS or most modern Linux, so they fail with `command not found` before anything else is even checked. Install into a virtual environment, never the system interpreter (which is often externally managed and rejects a direct install). FIRST look for one that already exists — `ls`/`find` for `.venv/`, `venv/`, or `env/` in the project root, and check whether the project is tool-managed (a `poetry.lock`, `uv.lock`, or `Pipfile.lock` means you install with `poetry add` / `uv add` / `pipenv install` and never touch a venv yourself). Create one ONLY if that search finds nothing: `python3 -m venv .venv`. Either way, install through that venv's own interpreter — `.venv/bin/pip install …`, `.venv/bin/python …` — which exists once the venv does.",
