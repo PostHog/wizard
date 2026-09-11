@@ -111,8 +111,14 @@ function lastEnabled<T>(
  * deliberately generous estimate: overshooting just shows a few fewer rows,
  * whereas undershooting lets a long list overflow the viewport (the bug this
  * windowing guards against). Mirrors GroupedPickerMenu's budgeting.
+ *
+ * 15 is measured, not guessed: the intro screen (title bar, wizard title,
+ * two subtitle lines, detection notice, prompt, spacing, hints bar) consumes
+ * 15 rows around its picker plus the filter row counted via `chromeBelow` —
+ * the framework picker corrupted at 27 terminal rows under the previous
+ * value of 13 (#1111).
  */
-const CHROME_OVERHEAD = 13;
+const CHROME_OVERHEAD = 15;
 /**
  * Max visual rows a picker renders regardless of terminal height. Without a
  * ceiling a tall terminal lets a long list fill the whole viewport, which
@@ -127,7 +133,7 @@ const MIN_COUNT_TO_PAGE = 5;
 /** Width the multi-select wraps option descriptions to (matches the render). */
 const DESCRIPTION_WIDTH = 56;
 
-interface PickerViewport {
+export interface PickerViewport {
   needsScroll: boolean;
   /** First option index on the current page. */
   start: number;
@@ -140,27 +146,37 @@ interface PickerViewport {
 }
 
 /**
- * Pages a single-column option list to the terminal height. The visible page
- * is derived from the focused index — no scroll state — so ↑/↓ flip pages as
- * focus crosses a page edge and n/p jump a whole page. Pages hold a fixed
- * option count sized to the tallest row (`rowCost`), trading a sparser page
- * on mixed-height lists for arithmetic-only paging. Engages only for
- * single-column pickers — multi-column grids already compress vertically.
+ * Pages an option list to the terminal height. The visible page is derived
+ * from the focused index — no scroll state — so ↑/↓ flip pages as focus
+ * crosses a page edge and n/p jump a whole page. Pages hold a fixed option
+ * count sized to the tallest row (`rowCost`), trading a sparser page on
+ * mixed-height lists for arithmetic-only paging.
+ *
+ * A multi-column grid compresses vertically to ceil(count / columns) rows,
+ * but that can still outgrow a short terminal — 23 options in 2 columns is
+ * a 12-row grid, taller than a 24-row viewport leaves (#1111). When the
+ * grid is too tall the picker pages, falling back to the flat single-column
+ * page the render already knows how to draw.
+ *
+ * Exported for unit tests; components use the `usePickerViewport` wrapper.
  */
-function usePickerViewport(
+export function computePickerViewport(
   count: number,
   rowCost: number,
   chromeBelow: number,
-  enabled: boolean,
+  columns: number,
   focused: number,
+  termRows: number,
 ): PickerViewport {
-  const [, termRows] = useStdoutDimensions();
+  // Floor of 3: two indicator rows plus at least one option. A one-option
+  // page on a very short terminal is cramped but correct — a taller floor
+  // would push the frame past the viewport and corrupt the paint instead.
   const budget = Math.max(
-    5,
+    3,
     Math.min(termRows - CHROME_OVERHEAD - chromeBelow, MAX_LIST_ROWS),
   );
-  const needsScroll =
-    enabled && count >= MIN_COUNT_TO_PAGE && count * rowCost > budget;
+  const gridRows = Math.ceil(count / columns) * rowCost;
+  const needsScroll = count >= MIN_COUNT_TO_PAGE && gridRows > budget;
   // Reserve two rows for the "↑/↓ N more" indicators.
   const perPage = needsScroll
     ? Math.max(1, Math.floor((budget - 2) / rowCost))
@@ -177,6 +193,24 @@ function usePickerViewport(
     pageStep: (f, dir) =>
       ((Math.floor(f / perPage) + dir + pageCount) % pageCount) * perPage,
   };
+}
+
+function usePickerViewport(
+  count: number,
+  rowCost: number,
+  chromeBelow: number,
+  columns: number,
+  focused: number,
+): PickerViewport {
+  const [, termRows] = useStdoutDimensions();
+  return computePickerViewport(
+    count,
+    rowCost,
+    chromeBelow,
+    columns,
+    focused,
+    termRows,
+  );
 }
 
 interface PickerMenuProps<T> {
@@ -327,15 +361,18 @@ const SinglePickerMenu = <T,>({
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(() => firstEnabled(options));
-  const rows = Math.ceil(options.length / columns);
   // Single-select rows are label-only (no descriptions): one line plus margin.
   const viewport = usePickerViewport(
     options.length,
     1 + optionMarginBottom,
     filter !== null ? 1 : 0,
-    columns === 1,
+    columns,
     focused,
   );
+  // A paged list draws one flat column, so navigation has to match what's on
+  // screen: treat the grid as single-column while paging is engaged.
+  const effectiveColumns = viewport.needsScroll ? 1 : columns;
+  const rows = Math.ceil(options.length / effectiveColumns);
 
   // Re-validate focus when the options change while mounted \u2014 a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -391,7 +428,7 @@ const SinglePickerMenu = <T,>({
     },
   ];
 
-  if (columns > 1) {
+  if (effectiveColumns > 1) {
     bindings.splice(1, 0, {
       match: [KeyMatch.LeftArrow, KeyMatch.RightArrow],
       label: '\u2190\u2192',
@@ -402,11 +439,11 @@ const SinglePickerMenu = <T,>({
 
         let next = focused;
         if (key.leftArrow) {
-          const prevCol = col > 0 ? col - 1 : columns - 1;
+          const prevCol = col > 0 ? col - 1 : effectiveColumns - 1;
           next = Math.min(prevCol * rows + row, options.length - 1);
         }
         if (key.rightArrow) {
-          const nextCol = col < columns - 1 ? col + 1 : 0;
+          const nextCol = col < effectiveColumns - 1 ? col + 1 : 0;
           next = Math.min(nextCol * rows + row, options.length - 1);
         }
         // Landing on a disabled option slides to the column's nearest
@@ -553,7 +590,6 @@ const MultiPickerMenu = <T,>({
   const [focused, setFocused] = useState(() => firstEnabled(options));
   // When true, the cursor is on the Confirm button rather than an option.
   const [onButton, setOnButton] = useState(false);
-  const rows = Math.ceil(options.length / columns);
   // A row is its label line plus any margin; a description adds one line per
   // wrapped line beneath the label. Pages size to the tallest row.
   const rowCost = options.reduce(
@@ -572,9 +608,13 @@ const MultiPickerMenu = <T,>({
     options.length,
     rowCost,
     CONFIRM_CHROME + (filter !== null ? 1 : 0),
-    columns === 1,
+    columns,
     focused,
   );
+  // A paged list draws one flat column, so navigation has to match what's on
+  // screen: treat the grid as single-column while paging is engaged.
+  const effectiveColumns = viewport.needsScroll ? 1 : columns;
+  const rows = Math.ceil(options.length / effectiveColumns);
 
   // Re-validate focus when the options change while mounted — a list
   // that shrinks or disables entries can leave `focused` pointing at a
@@ -689,7 +729,7 @@ const MultiPickerMenu = <T,>({
     },
   ];
 
-  if (columns > 1) {
+  if (effectiveColumns > 1) {
     bindings.splice(1, 0, {
       match: [KeyMatch.LeftArrow, KeyMatch.RightArrow],
       label: '\u2190\u2192',
@@ -701,11 +741,11 @@ const MultiPickerMenu = <T,>({
 
         let next = focused;
         if (key.leftArrow) {
-          const prevCol = col > 0 ? col - 1 : columns - 1;
+          const prevCol = col > 0 ? col - 1 : effectiveColumns - 1;
           next = Math.min(prevCol * rows + row, options.length - 1);
         }
         if (key.rightArrow) {
-          const nextCol = col < columns - 1 ? col + 1 : 0;
+          const nextCol = col < effectiveColumns - 1 ? col + 1 : 0;
           next = Math.min(nextCol * rows + row, options.length - 1);
         }
         // Landing on a disabled option slides to the column's nearest
