@@ -48,7 +48,6 @@ describe('buildTutorialRunTags', () => {
     const encoded = buildAgentEnv(
       buildTutorialRunTags({ programId: 'mcp-tutorial' }),
       {},
-      {},
     );
 
     expect(encoded).toContain('X-PostHog-Properties: ');
@@ -56,7 +55,7 @@ describe('buildTutorialRunTags', () => {
   });
 
   it('sends only product attribution when there is no program', () => {
-    const encoded = buildAgentEnv(buildTutorialRunTags({}), {}, {});
+    const encoded = buildAgentEnv(buildTutorialRunTags({}), {});
 
     expect(encoded).toBe('X-PostHog-Properties: {"ai_product":"wizard"}');
   });

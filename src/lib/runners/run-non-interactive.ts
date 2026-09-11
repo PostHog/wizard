@@ -1,5 +1,4 @@
 import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
-import { setLegacyGatewayFallback } from '@lib/legacy-gateway';
 import {
   checkLocalServices,
   getLocalDev,
@@ -100,8 +99,6 @@ export function runNonInteractive(
   // (cloud / CI/CD) tags 'headless'; a dev/test `--ci` run upgrades 'dev' to
   // 'ci'. The mode string is the tag value.
   analytics.setTag('build', mode);
-  // Only `--ci` may fall back to the legacy gateway; see legacy-gateway.ts.
-  setLegacyGatewayFallback(mode === 'ci');
 
   void (async () => {
     const path = await import('path');
