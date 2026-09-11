@@ -58,17 +58,6 @@ describe('buildGatewayProvider transport', () => {
     expect(baseUrl).toBe('https://ai-gateway.us.posthog.com/v1');
   });
 
-  it('routes openai models over chat completions on the legacy gateway', () => {
-    const { api, baseUrl } = buildGatewayProvider({
-      ...base,
-      gatewayUrl: 'https://gateway.us.posthog.com/wizard',
-      legacy: true,
-      modelId: 'openai/gpt-5.6-terra',
-    });
-    expect(api).toBe('openai-completions');
-    expect(baseUrl).toBe('https://gateway.us.posthog.com/wizard/v1');
-  });
-
   it('routes anthropic models over anthropic-messages without /v1', () => {
     const { api, baseUrl } = buildGatewayProvider({
       ...base,
@@ -94,20 +83,6 @@ describe('buildGatewayHeaders', () => {
     });
     expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
     expect(headers['X-POSTHOG-PROPERTY-run_id']).toBeUndefined();
-  });
-
-  it('carries per-key headers and the bedrock opt-in on the legacy gateway', () => {
-    const headers = buildGatewayHeaders(
-      { run_id: 'r1' },
-      { 'wizard-orchestrator': 'test', unrelated: 'x' },
-      42,
-      true,
-    );
-    expect(headers['X-POSTHOG-PROPERTY-run_id']).toBe('r1');
-    expect(headers['X-POSTHOG-FLAG-WIZARD-ORCHESTRATOR']).toBe('test');
-    expect(headers['X-POSTHOG-FLAG-UNRELATED']).toBeUndefined();
-    expect(headers['x-posthog-use-bedrock-fallback']).toBe('true');
-    expect(headers['X-PostHog-Properties']).toBeUndefined();
   });
 });
 

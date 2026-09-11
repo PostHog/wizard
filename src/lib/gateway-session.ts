@@ -2,9 +2,8 @@
  * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
  * pinned attribution, a spend cap and an expiry.
  *
- * Every mint failure throws, since a silent downgrade would spend uncapped,
- * unattributed money to hide an outage. The CI-only exception lives in
- * legacy-gateway.ts.
+ * Every mint failure throws: a silent downgrade would spend uncapped,
+ * unattributed money to hide an outage.
  */
 
 import { readFileSync } from 'node:fs';
@@ -15,7 +14,6 @@ import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
 import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
 import { ServiceHealthStatus } from '@lib/health-checks/types';
-import { legacyGatewayAuth } from '@lib/legacy-gateway';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
@@ -26,8 +24,6 @@ export interface GatewayAuth {
   token: string;
   /** Team verified by the mint, or explicitly supplied for CI attribution. */
   teamId?: number;
-  /** Set only by the CI fallback in legacy-gateway.ts. */
-  legacy?: boolean;
   /**
    * Instant past which a 401 on this bearer is age rather than a bad
    * credential: the cache re-mints past it, and a session still holding the
@@ -147,19 +143,7 @@ async function resolveGatewayAuth(
       'this run has no program to attribute its spend to',
     );
   }
-  let minted: MintedToken;
-  try {
-    minted = await mintGatewayToken(host, accessToken, program);
-  } catch (e) {
-    if (!(e instanceof GatewayMintRefused)) throw e;
-    const legacy = legacyGatewayAuth(host, accessToken, e.status);
-    if (!legacy) throw e;
-    logToFile(
-      `[gateway] mint refused this credential (HTTP ${e.status}); CI run staying on the legacy gateway`,
-    );
-    cached = { key, auth: legacy, staleAtMs: legacy.refreshAtMs };
-    return legacy;
-  }
+  const minted = await mintGatewayToken(host, accessToken, program);
   const health = await checkLlmGatewayHealth(minted.gatewayUrl);
   if (health.status !== ServiceHealthStatus.Healthy) {
     throw new WizardError(
@@ -181,7 +165,7 @@ async function resolveGatewayAuth(
     );
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
-  // Only failures and fallbacks are logged otherwise, so a successful run leaves no
+  // Only failures are logged otherwise, so a successful run leaves no
   // local trace. Never log the token itself.
   logToFile(
     `[gateway] minted a scoped token: program=${program} team=${
