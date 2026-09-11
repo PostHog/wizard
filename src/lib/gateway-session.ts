@@ -2,8 +2,8 @@
  * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
  * pinned attribution, a spend cap and an expiry.
  *
- * Every mint failure throws. There is no other gateway to fall back to, and a
- * silent downgrade would spend uncapped, unattributed money to hide an outage.
+ * Every mint failure throws: a silent downgrade would spend uncapped,
+ * unattributed money to hide an outage.
  */
 
 import { readFileSync } from 'node:fs';
