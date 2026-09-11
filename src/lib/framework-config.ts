@@ -92,6 +92,14 @@ export interface FrameworkDetection {
   /** Package name to check in package.json (e.g., "next", "react") */
   packageName: string;
 
+  /**
+   * Other package names that count as this framework being installed, for
+   * frameworks that changed package name across major versions (React Router
+   * v6 ships as `react-router-dom`, v7 consolidated onto `react-router`).
+   * Checked alongside `packageName`.
+   */
+  alternatePackageNames?: string[];
+
   /** Human-readable name for error messages (e.g., "Next.js") */
   packageDisplayName: string;
 

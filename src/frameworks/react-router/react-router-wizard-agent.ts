@@ -4,9 +4,8 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getDeclaredVersion,
+  findDeclaredPackage,
   getInstalledPackageVersion,
-  hasDeclaredDependency,
   type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
@@ -21,6 +20,22 @@ import {
 type ReactRouterContext = {
   routerMode?: ReactRouterMode;
 };
+
+const REACT_ROUTER_PACKAGE = 'react-router';
+
+/**
+ * v6 ships the router as `react-router-dom`; v7 consolidated onto
+ * `react-router`. Both names have to count, or v6 projects — which declare
+ * only `react-router-dom` — never match and fall through to the generic
+ * JavaScript fallbacks.
+ */
+const REACT_ROUTER_ALTERNATE_PACKAGES = ['react-router-dom'];
+
+/** Lookup order matches `getReactRouterMode` in ./utils. */
+const REACT_ROUTER_PACKAGES = [
+  ...REACT_ROUTER_ALTERNATE_PACKAGES,
+  REACT_ROUTER_PACKAGE,
+];
 
 export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
   metadata: {
@@ -41,20 +56,24 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
   },
 
   detection: {
-    packageName: 'react-router',
+    packageName: REACT_ROUTER_PACKAGE,
+    alternatePackageNames: REACT_ROUTER_ALTERNATE_PACKAGES,
     packageDisplayName: 'React Router',
     getVersion: (packageJson: unknown) =>
-      getDeclaredVersion('react-router', packageJson as PackageJson),
+      findDeclaredPackage(REACT_ROUTER_PACKAGES, packageJson as PackageJson)
+        ?.version,
     getVersionBucket: getReactRouterVersionBucket,
     minimumVersion: '6.0.0',
     getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(
-        getInstalledPackageVersion('react-router', options.installDir),
+        REACT_ROUTER_PACKAGES.map((name) =>
+          getInstalledPackageVersion(name, options.installDir),
+        ).find((version) => version !== undefined),
       ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson
-        ? hasDeclaredDependency('react-router', packageJson)
+        ? findDeclaredPackage(REACT_ROUTER_PACKAGES, packageJson) !== undefined
         : false;
     },
     detectPackageManager: detectNodePackageManagers,
