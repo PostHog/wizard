@@ -87,6 +87,23 @@ export const DEFAULT_TIPS: Tip[] = [
       isEnabled: (store) => store.session.llmOptIn,
     },
   },
+  {
+    id: 'http-log',
+    title: 'PostHog can show you bot and AI crawler traffic',
+    description: '',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.HttpLog),
+    toggle: {
+      key: 'b',
+      feature: AdditionalFeature.HttpLog,
+      enabledLabel: 'Server log capture queued next',
+      prompt: 'Your project can forward server logs with one file.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.HttpLog,
+        ),
+    },
+  },
 ];
 
 export const TipsCard = ({

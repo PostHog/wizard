@@ -47,6 +47,30 @@ describe('discoverFeatures', () => {
     expect(features).toHaveLength(2);
   });
 
+  it.each([
+    [
+      'a wrangler dependency',
+      () => writePackageJson(tmpDir, { wrangler: '3.0.0' }),
+    ],
+    [
+      'a wrangler config file',
+      () => {
+        writePackageJson(tmpDir);
+        writeFile(tmpDir, 'wrangler.toml', 'name = "my-worker"');
+      },
+    ],
+    [
+      'a root middleware file',
+      () => {
+        writePackageJson(tmpDir);
+        writeFile(tmpDir, 'middleware.ts', 'export function middleware() {}');
+      },
+    ],
+  ])('detects the HttpLog feature from %s', (_name, setup) => {
+    setup();
+    expect(discoverFeatures(tmpDir)).toEqual([DiscoveredFeature.HttpLog]);
+  });
+
   it('returns empty for unrelated dependencies', () => {
     writePackageJson(tmpDir, { react: '18.0.0', express: '4.0.0' });
     expect(discoverFeatures(tmpDir)).toEqual([]);
