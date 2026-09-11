@@ -6,6 +6,8 @@ import {
   getLogFilePath,
   initLogFile,
   logToFile,
+  MAX_LOG_FILE_BYTES,
+  MAX_LOG_LINE_BYTES,
 } from '@utils/debug';
 
 describe('log file writing', () => {
@@ -62,5 +64,35 @@ describe('log file writing', () => {
     const content = fs.readFileSync(logPath, 'utf8');
     expect(content).toContain('plain write');
     expect(content).toContain('second write');
+  });
+
+  it('caps a single log write at 8 KB', () => {
+    const logPath = path.join(tmpRoot, 'capped-line.log');
+    configureLogFile({ path: logPath, enabled: true });
+
+    logToFile('x'.repeat(100_000));
+
+    const written = fs.readFileSync(logPath, 'utf8');
+    expect(Buffer.byteLength(written, 'utf8')).toBeLessThanOrEqual(
+      MAX_LOG_LINE_BYTES,
+    );
+    expect(written).toContain('[truncated');
+  });
+
+  it('stops appending once the log file reaches 10 MB', () => {
+    const logPath = path.join(tmpRoot, 'capped-file.log');
+    // Tiny headroom so a normal log line forces the file-cap path.
+    const seedSize = MAX_LOG_FILE_BYTES - 16;
+    fs.writeFileSync(logPath, 'y'.repeat(seedSize));
+    configureLogFile({ path: logPath, enabled: true });
+
+    logToFile('x'.repeat(1000));
+    const sizeAfterFirst = fs.statSync(logPath).size;
+    expect(sizeAfterFirst).toBeLessThanOrEqual(MAX_LOG_FILE_BYTES);
+    expect(sizeAfterFirst).toBeGreaterThan(seedSize);
+
+    logToFile('should-not-grow');
+    expect(fs.statSync(logPath).size).toBe(sizeAfterFirst);
+    expect(fs.readFileSync(logPath, 'utf8')).not.toContain('should-not-grow');
   });
 });
