@@ -57,6 +57,25 @@ export const CONTINUE_MENU_OPTIONS: { label: string; value: string }[] = [
 ];
 
 /**
+ * Suffix for the Framework detection row. Auto-detect gets "(detected)"; a
+ * manual pick from either picker must not — otherwise a failed detection
+ * still claims success (#944).
+ */
+export function frameworkRowSuffix({
+  manuallySelected,
+  beta,
+}: {
+  manuallySelected: boolean;
+  beta?: boolean;
+}): string | undefined {
+  const suffixParts: string[] = [];
+  if (!manuallySelected) suffixParts.push('(detected)');
+  // Some frameworks may be marked as beta/early-access in their config.
+  // If so, show a [BETA] tag to set expectations for users.
+  return suffixParts.join(' ') || undefined;
+}
+
+/**
  * A blank, unselectable row. Navigation skips disabled options, so this is a
  * margin the menu can hold rather than one the layout has to special-case.
  */
@@ -172,7 +191,10 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
         <FrameworkPicker
           store={store}
-          onComplete={() => setPickingFramework(false)}
+          onComplete={() => {
+            setManuallySelected(true);
+            setPickingFramework(false);
+          }}
         />
       </>
     );
@@ -180,7 +202,10 @@ export const PostHogIntegrationIntroScreen = ({
     body = (
       <FrameworkPicker
         store={store}
-        onComplete={() => setPickingFramework(false)}
+        onComplete={() => {
+          setManuallySelected(true);
+          setPickingFramework(false);
+        }}
       />
     );
   } else if (view === 'more-info') {
@@ -230,16 +255,13 @@ export const PostHogIntegrationIntroScreen = ({
 
   const detectionRows: DetectionRow[] = [];
   if (frameworkLabel) {
-    const suffixParts: string[] = [];
-    if (!manuallySelected) suffixParts.push('(detected)');
-    // Dead path today — every framework went GA. Kept for re-activation
-    // when the next beta framework lands (set `beta: true` on its config).
-    if (config?.metadata.beta) suffixParts.push('[BETA]');
-
     detectionRows.push({
       label: 'Framework',
       value: frameworkLabel,
-      suffix: suffixParts.join(' ') || undefined,
+      suffix: frameworkRowSuffix({
+        manuallySelected,
+        beta: config?.metadata.beta,
+      }),
     });
   }
 
