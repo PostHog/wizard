@@ -165,7 +165,7 @@ async function resolveGatewayAuth(
     );
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
-  // Only failures and fallbacks are logged otherwise, so a successful run leaves no
+  // Only failures are logged otherwise, so a successful run leaves no
   // local trace. Never log the token itself.
   logToFile(
     `[gateway] minted a scoped token: program=${program} team=${
