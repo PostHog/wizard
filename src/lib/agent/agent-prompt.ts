@@ -37,6 +37,12 @@ export interface PromptContext {
     exceptionAutocapture?: boolean | null;
     surveys?: boolean | null;
   } | null;
+  /**
+   * Requested OAuth scopes the grant came back without (deselected at consent
+   * or clamped by the app's ceiling). Lets a program's custom prompt degrade a
+   * scope-gated step at login instead of letting the run hit a 403 mid-flow.
+   */
+  missingScopes?: readonly string[];
 }
 
 function defaultProjectPrompt(ctx: PromptContext): string {
