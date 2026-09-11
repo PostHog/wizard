@@ -61,6 +61,26 @@ export interface ProgramRun {
     credentials: Credentials,
   ) => WizardSession['outroData'];
   /**
+   * Outro bullets for a sequence that composes its own outro data.
+   *
+   * `buildOutroData` is the linear sequence's seam: it hands the program the
+   * whole outro. The orchestrated sequence cannot, because its message is the
+   * drain's result — how many steps ran, what was skipped, which conflict the
+   * review step left. So a program with next steps to offer had nowhere to put
+   * them there, and the integration's data-source links were built and then
+   * dropped on every orchestrated run. This hook keeps the message with the
+   * sequence and the bullets with the program.
+   *
+   * `completedSeededTypes` names the runner-seeded task types that finished
+   * successfully, so a program can leave out a step its own seeded task
+   * already did — the sequence stays ignorant of what any type means.
+   */
+  buildOutroNextSteps?: (
+    session: WizardSession,
+    credentials: Credentials,
+    completedSeededTypes: readonly string[],
+  ) => { heading: string; items: string[] } | undefined;
+  /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
    * always returns a "batch your questions" error regardless of the cap.
    */
