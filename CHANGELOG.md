@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.74.2](https://github.com/PostHog/wizard/compare/v2.74.1...v2.74.2) (2026-09-11)
+
+
+### Bug Fixes
+
+* separate CI gateway and PostHog credentials ([#1240](https://github.com/PostHog/wizard/issues/1240)) ([662f54d](https://github.com/PostHog/wizard/commit/662f54da548b3851f26b201f9c06c9ddf8e5b344))
+
 ## [2.74.1](https://github.com/PostHog/wizard/compare/v2.74.0...v2.74.1) (2026-09-10)
 
 
