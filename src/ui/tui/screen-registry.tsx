@@ -47,6 +47,9 @@ import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.j
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
+import { MintFailureScreen } from './screens/MintFailureScreen.js';
+import { writeWizardSpellbook } from '@lib/wizard-spellbook';
+import { getProgramConfig } from '@lib/programs/program-registry';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { SessionTimeoutScreen } from './screens/SessionTimeoutScreen.js';
@@ -57,12 +60,21 @@ import { createMcpSuggestedPromptsServices } from './services/mcp-suggested-prom
 import type { McpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 
 export interface ScreenServices {
+  leaveSpellbook: () => ReturnType<typeof writeWizardSpellbook>;
   mcpInstaller: McpInstaller;
   mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
 export function createServices(store: WizardStore): ScreenServices {
   return {
+    leaveSpellbook: () =>
+      writeWizardSpellbook(
+        store.session.agentRunContext ?? store.session,
+        getProgramConfig(
+          store.session.agentRunContext?.programId ??
+            store.router.activeProgram,
+        ),
+      ),
     mcpInstaller: createMcpInstaller(),
     mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),
   };
@@ -127,6 +139,12 @@ export function createScreens(
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
+    [ScreenId.MintFailure]: (
+      <MintFailureScreen
+        store={store}
+        leaveSpellbook={services.leaveSpellbook}
+      />
+    ),
     [ScreenId.Exit]: <ExitScreen />,
 
     // Standalone MCP flows

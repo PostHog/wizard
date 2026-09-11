@@ -25,6 +25,7 @@ import { EndScreensDemo } from './demos/EndScreensDemo.js';
 import { AiOptInDemo } from './demos/AiOptInDemo.js';
 import { AskModalDemo } from './demos/AskModalDemo.js';
 import { ViewportGuardDemo } from './demos/ViewportGuardDemo.js';
+import { MintFailureDemo } from './demos/MintFailureDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -34,6 +35,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
   const tabs = [
     { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
     { id: 'input', label: 'Input', component: <InputDemo /> },
+    {
+      id: 'mint-failure',
+      label: 'Mint failure',
+      component: <MintFailureDemo />,
+    },
     { id: 'ask-modal', label: 'Ask modal', component: <AskModalDemo /> },
     { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
     { id: 'logs', label: 'Logs', component: <LogDemo /> },

@@ -22,6 +22,7 @@ import {
   type TokenUsageDelta,
 } from '@ui/wizard-ui';
 import {
+  type AgentRunContext,
   type WizardSession,
   type OutroData,
   type DiscoveredFeature,
@@ -500,6 +501,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setAgentRunContext(context: AgentRunContext): void {
+    this.$session.setKey('agentRunContext', context);
+    this.emitChange();
+  }
+
   setSkillId(skillId: string | null): void {
     this.$session.setKey('skillId', skillId);
     this.emitChange();
@@ -875,8 +881,8 @@ export class WizardStore {
     this.setRunPhase(RunPhase.Idle);
   }
 
-  setOutroDismissed(): void {
-    this.$session.setKey('outroDismissed', true);
+  setOutroDismissed(dismissed = true): void {
+    this.$session.setKey('outroDismissed', dismissed);
     this.emitChange();
   }
 

@@ -11,7 +11,11 @@
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
-import type { Credentials, TaskNotice } from '@lib/wizard-session';
+import type {
+  AgentRunContext,
+  Credentials,
+  TaskNotice,
+} from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -221,6 +225,7 @@ export interface WizardUI {
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
   setDetectedFramework(label: string): void;
+  setAgentRunContext(context: AgentRunContext): void;
 
   /** Register a callback to run when the TUI transitions onto the given screen. */
   onEnterScreen(screen: string, fn: () => void): void;

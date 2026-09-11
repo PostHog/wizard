@@ -13,6 +13,7 @@
  */
 
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
+import { isMintFailure } from '@ui/mint-failure';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
@@ -60,6 +61,9 @@ export class WizardRouter {
    * returns the first incomplete screen.
    */
   resolve(session: WizardSession): ScreenName {
+    // Fatal mint errors interrupt every program until wizardAbort exits.
+    if (isMintFailure(session.outroData)) return ScreenId.MintFailure;
+
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
