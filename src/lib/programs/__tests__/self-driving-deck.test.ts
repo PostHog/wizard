@@ -1,41 +1,80 @@
-/**
- * Layout guards for the self-driving learn deck. The LearnCard pane is
- * ~37 chars wide at an 80-column terminal (the narrowest split view; below
- * 80 cols the pane is dropped entirely). Prose blocks word-wrap fine, but
- * fixed-layout `lines` blocks (diagrams, lists) must fit unwrapped, and no
- * scene should stack more prose than the pane can show at once.
- */
+import type { ReactElement, ReactNode } from 'react';
+import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { WizardStore } from '@ui/tui/store';
 
-import type { ReactNode, ReactElement } from 'react';
-import { getContentBlocks } from '@lib/programs/self-driving/content/index';
-
-/** paneWidth in LearnCard at 80 cols: (min(120, 80) - 2) / 2 - 2 */
 const PANE_WIDTH_80COL = 37;
+const LEGACY_FIXED_LINE_WIDTH_BY_PROGRAM = new Map([
+  ['posthog-integration', 45],
+  ['migration', 53],
+]);
+const LEGACY_PROSE_ROWS_BY_PROGRAM = new Map([
+  ['error-tracking-upload-source-maps', 6],
+]);
 
 function textOf(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join('');
-  const el = node as ReactElement<{ children?: ReactNode }>;
-  return textOf(el.props?.children);
+  const element = node as ReactElement<{ children?: ReactNode }>;
+  return textOf(element.props?.children);
 }
 
-describe('self-driving learn deck', () => {
-  const blocks = getContentBlocks();
+const baseStore = new WizardStore();
+const decks = PROGRAM_REGISTRY.flatMap((program) => {
+  if (!program.getContentBlocks) return [];
+  const store = program.skillId
+    ? withSessionOverride(baseStore, { skillId: program.skillId })
+    : baseStore;
+  return [
+    {
+      id: program.id,
+      blocks: program.getContentBlocks(store),
+    },
+  ];
+});
 
-  it('has blocks', () => {
-    expect(blocks.length).toBeGreaterThan(0);
+function withSessionOverride(
+  store: WizardStore,
+  patch: Partial<WizardStore['session']>,
+): WizardStore {
+  const stub = Object.create(Object.getPrototypeOf(store)) as WizardStore;
+  Object.assign(stub, store);
+  Object.defineProperty(stub, 'session', {
+    value: { ...store.session, ...patch },
+    writable: false,
+    configurable: true,
+  });
+  return stub;
+}
+
+describe('program learn decks', () => {
+  it('has blocks in every registered deck', () => {
+    const emptyDecks = decks
+      .filter((deck) => deck.blocks.length === 0)
+      .map((deck) => deck.id);
+    expect(emptyDecks).toEqual([]);
   });
 
-  it('keeps every fixed-layout line within the 80-col pane', () => {
+  it('keeps every fixed-layout line within its width ceiling', () => {
     const wide: string[] = [];
-    for (const b of blocks) {
-      if (typeof b !== 'object' || !('type' in b) || b.type !== 'lines') {
-        continue;
-      }
-      for (const line of b.lines) {
-        const text = textOf(line);
-        if ([...text].length > PANE_WIDTH_80COL) wide.push(text);
+    for (const deck of decks) {
+      const maxLineWidth =
+        LEGACY_FIXED_LINE_WIDTH_BY_PROGRAM.get(deck.id) ?? PANE_WIDTH_80COL;
+      for (const block of deck.blocks) {
+        if (
+          typeof block !== 'object' ||
+          !('type' in block) ||
+          block.type !== 'lines'
+        ) {
+          continue;
+        }
+        for (const line of block.lines) {
+          for (const physicalLine of textOf(line).split('\n')) {
+            if ([...physicalLine].length > maxLineWidth) {
+              wide.push(`${deck.id}: ${physicalLine}`);
+            }
+          }
+        }
       }
     }
     expect(wide).toEqual([]);
@@ -43,13 +82,31 @@ describe('self-driving learn deck', () => {
 
   it('keeps every prose beat short enough to never fill the pane', () => {
     const long: string[] = [];
-    for (const b of blocks) {
-      if (typeof b !== 'object' || !('content' in b)) continue;
-      if (typeof b.content !== 'string') continue;
-      if (Math.ceil(b.content.length / PANE_WIDTH_80COL) > 4) {
-        long.push(b.content);
+    for (const deck of decks) {
+      const maxProseRows = LEGACY_PROSE_ROWS_BY_PROGRAM.get(deck.id) ?? 4;
+      for (const block of deck.blocks) {
+        if (typeof block !== 'object' || !('content' in block)) continue;
+        if (typeof block.content !== 'string') continue;
+        if (Math.ceil(block.content.length / PANE_WIDTH_80COL) > maxProseRows) {
+          long.push(`${deck.id}: ${block.content}`);
+        }
       }
     }
     expect(long).toEqual([]);
+  });
+
+  it('keeps implementation jargon out of the cull deck', () => {
+    const cullDeck = decks.find((deck) => deck.id === 'cull-feature-flags');
+    expect(cullDeck).toBeDefined();
+    const forbiddenContent = cullDeck?.blocks.filter((block) => {
+      if (typeof block === 'string') {
+        return /winning branch|grep|bucket/i.test(block);
+      }
+      if (!('content' in block) || typeof block.content !== 'string') {
+        return false;
+      }
+      return /winning branch|grep|bucket/i.test(block.content);
+    });
+    expect(forbiddenContent).toEqual([]);
   });
 });

@@ -25,6 +25,7 @@ import { EndScreensDemo } from './demos/EndScreensDemo.js';
 import { AiOptInDemo } from './demos/AiOptInDemo.js';
 import { AskModalDemo } from './demos/AskModalDemo.js';
 import { ViewportGuardDemo } from './demos/ViewportGuardDemo.js';
+import { CullRunDemo } from './demos/CullRunDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -76,6 +77,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'audit-checks',
       label: 'Audit checks',
       component: <AuditChecksDemo />,
+    },
+    {
+      id: 'cull-run',
+      label: 'Cull run',
+      component: <CullRunDemo />,
     },
     {
       id: 'learn-deck',

@@ -117,6 +117,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description: 'The project platform has no matching skill variant.',
   },
+  [ErrorCodes.DetectDirtyWorkingTree]: {
+    group: 'detect',
+    retry: 'yes',
+    description:
+      'The program edits project files and needs a clean git working tree so the edits stay revertable on their own.',
+  },
   [ErrorCodes.DetectNoPosthogSdk]: {
     group: 'detect',
     retry: 'no',

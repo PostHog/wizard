@@ -280,6 +280,9 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   ],
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
   'replay-vision': REPLAY_VISION_SCOPE_ADDITIONS,
+  // Disabling a flag needs feature_flag:write; the agent-skill set already
+  // carries the read/write pair.
+  'cull-feature-flags': AGENT_SKILL_SCOPE_ADDITIONS,
 };
 
 /**
