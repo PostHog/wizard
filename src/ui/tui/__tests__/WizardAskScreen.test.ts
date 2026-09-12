@@ -23,6 +23,7 @@ import { WizardStore } from '@ui/tui/store';
 import {
   handleAskKey,
   isRequiredButEmpty,
+  shouldMaskAnswer,
 } from '@ui/tui/screens/WizardAskScreen';
 
 const pending = {
@@ -59,6 +60,22 @@ describe('handleAskKey', () => {
       port: '__cancelled__',
     });
     expect(store.session.pendingQuestion).toBeNull();
+  });
+});
+
+describe('shouldMaskAnswer', () => {
+  it('masks a text answer the agent asked to vault', () => {
+    expect(shouldMaskAnswer({ kind: 'text', sensitive: true })).toBe(true);
+  });
+
+  it('leaves an ordinary text answer visible', () => {
+    expect(shouldMaskAnswer({ kind: 'text' })).toBe(false);
+    expect(shouldMaskAnswer({ kind: 'text', sensitive: false })).toBe(false);
+  });
+
+  it('never masks a picker, which has nothing to type', () => {
+    expect(shouldMaskAnswer({ kind: 'single', sensitive: true })).toBe(false);
+    expect(shouldMaskAnswer({ kind: 'multi', sensitive: true })).toBe(false);
   });
 });
 

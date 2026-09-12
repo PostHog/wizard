@@ -162,8 +162,8 @@ export interface AskQuestion {
    * Only meaningful for kind='text'. When true, the wizard-tools `wizard_ask`
    * tool stores the user's answer in the session secret vault and returns
    * `{ secretRef }` to the agent instead of the plain string — so the value
-   * never enters the LLM conversation. The TUI may also mask input
-   * accordingly. See `secret-vault.ts`.
+   * never enters the LLM conversation. The TUI masks the input as it is typed
+   * (see `shouldMaskAnswer`). See `secret-vault.ts`.
    */
   sensitive?: boolean;
 }
