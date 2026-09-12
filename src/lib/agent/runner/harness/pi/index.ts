@@ -42,7 +42,7 @@ import type {
 } from '../types';
 import type { BootstrapResult } from '@lib/agent/runner/shared/types';
 import type { TaskStore } from './tasks';
-import { completionFailure } from './completion';
+import { completionFailure, runErrorType } from './completion';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
 function piMcpContext(
@@ -226,8 +226,13 @@ export const piBackend: AgentHarness = {
         duration_seconds: Math.round(durationMs / 1000),
       };
     };
-    const captureAborted = () =>
+    // `reason` is the closed AgentErrorType this run is about to return. Without
+    // it every terminal path below — a security termination, a no-op run, a plan
+    // left open, a gateway error — arrived as the same unlabelled event, so a
+    // run that died could be counted but not diagnosed.
+    const captureAborted = (reason: AgentErrorType) =>
       analytics.wizardCapture('agent aborted', {
+        reason,
         ...runDurations(),
         model: modelId,
       });
@@ -588,7 +593,7 @@ export const piBackend: AgentHarness = {
         logToFile(
           `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
         );
-        captureAborted();
+        captureAborted(AgentErrorType.YARA_VIOLATION);
         return { error: AgentErrorType.YARA_VIOLATION };
       }
 
@@ -604,14 +609,14 @@ export const piBackend: AgentHarness = {
         analytics.wizardCapture('agent no progress', {
           assistant_turns: assistantTurns,
         });
-        captureAborted();
+        captureAborted(failure);
         return { error: failure };
       }
       if (failure === AgentErrorType.INCOMPLETE_TASKS) {
         spinner.stop('Agent stopped before finishing');
         logToFile('[pi] incomplete: tasks left open');
         analytics.wizardCapture('agent incomplete tasks', { open_tasks: true });
-        captureAborted();
+        captureAborted(failure);
         return { error: failure };
       }
 
@@ -658,13 +663,9 @@ export const piBackend: AgentHarness = {
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
       getUI().log.error(`pi backend error: ${message}`);
-      captureAborted();
-
-      const lower = message.toLowerCase();
-      if (lower.includes('rate limit') || lower.includes('429')) {
-        return { error: AgentErrorType.RATE_LIMIT, message };
-      }
-      return { error: AgentErrorType.API_ERROR, message };
+      const error = runErrorType(message);
+      captureAborted(error);
+      return { error, message };
     }
   },
 
