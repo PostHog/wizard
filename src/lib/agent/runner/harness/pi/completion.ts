@@ -11,3 +11,20 @@ export function completionFailure(args: {
   if (args.openTasks) return AgentErrorType.INCOMPLETE_TASKS;
   return undefined;
 }
+
+/**
+ * Which error type a thrown pi run reports.
+ *
+ * Both pi entry points classified the caught message inline with the same two
+ * needles, and both did it *after* firing `agent aborted` — so the event that
+ * announces the abort could not name it. Pulling the classification out lets
+ * each entry point decide the type first and hand it to the event, and keeps
+ * the one rule in one place.
+ */
+export function runErrorType(message: string): AgentErrorType {
+  const lower = message.toLowerCase();
+  if (lower.includes('rate limit') || lower.includes('429')) {
+    return AgentErrorType.RATE_LIMIT;
+  }
+  return AgentErrorType.API_ERROR;
+}
