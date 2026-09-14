@@ -2,6 +2,7 @@ import { Integration } from '@lib/constants';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import type { ProgramRun } from '@lib/agent/runner/shared/types';
 import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/steps';
 import { detectPostHogIntegration } from '@lib/programs/posthog-integration/detect';
@@ -37,12 +38,36 @@ export const SYMBOL_UPLOAD_CLI_FRAMEWORKS: ReadonlySet<Integration> = new Set([
 ]);
 
 /**
+ * Frameworks the flow cannot run on. KMP's skill variants carry no `framework`
+ * tag, so orchestrator preflight cannot resolve them and aborts every run.
+ */
+export const ERROR_TRACKING_UNSUPPORTED: ReadonlySet<Integration> = new Set([
+  Integration.kmp,
+]);
+
+async function abortUnsupportedPlatform(
+  integration: Integration,
+): Promise<void> {
+  const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
+  // A clean exit, not a crash: an event, never an `error` for captureException.
+  analytics.wizardCapture('error tracking unsupported platform', {
+    integration,
+  });
+  await wizardAbort({
+    code: ErrorCodes.DetectUnsupportedPlatform,
+    message:
+      `The wizard cannot set up error tracking for ${name} projects yet.\n\n` +
+      `Set it up manually:\n  ${ERROR_TRACKING_DOCS_URL}`,
+  });
+}
+
+/**
  * Pre-install posthog-cli when the detected framework's symbol upload will
  * shell out to it. See `preinstallPostHogCliOnce` for the once-per-process
  * guard and the warn-don't-fail handling.
  */
-function maybePreinstallPostHogCli(integration: Integration): void {
-  if (!SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
+function maybePreinstallPostHogCli(integration: Integration | null): void {
+  if (!integration || !SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
   preinstallPostHogCliOnce('error tracking posthog-cli preinstall failed', {
     integration,
   });
@@ -54,8 +79,8 @@ function maybePreinstallPostHogCli(integration: Integration): void {
  * detected framework id before the run arm starts, because the runner
  * resolves the reference integration skill and every task's mini-skill
  * variants (`integration-v2-install`, `integration-v2-error-tracking-step`, …)
- * against it in preflight. Unlike replay-vision there is no platform
- * allow-list — every detectable framework has an error-tracking-step variant.
+ * against it in preflight. Frameworks in `ERROR_TRACKING_UNSUPPORTED` stop
+ * here. Detection only: nothing runs on the machine before the intro gate.
  */
 const DETECT_STEP: ProgramStep = {
   id: 'detect',
@@ -71,7 +96,10 @@ const DETECT_STEP: ProgramStep = {
       });
       return;
     }
-    maybePreinstallPostHogCli(integration);
+    if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
+      await abortUnsupportedPlatform(integration);
+      return;
+    }
     await detectPostHogIntegration(ctx);
   },
 };
@@ -84,10 +112,9 @@ const ERROR_TRACKING_STEPS: ProgramStep[] = [
 ];
 
 /**
- * Mode-agnostic run instructions. The orchestrator's seed reads them as
- * context on top of its own flow prompts; a linear override
- * (`--sequence=linear`) relies on them entirely, so they spell out the
- * skill-menu lookups the flow's tasks would otherwise perform.
+ * Run instructions for a linear override (`--sequence=linear`), the only
+ * sequence that reads `customPrompt`. The orchestrator runs the flow's own
+ * prompts, so these spell out the skill-menu lookups its tasks perform.
  */
 const ERROR_TRACKING_PROMPT = `Set up PostHog error tracking end-to-end:
 
@@ -109,6 +136,21 @@ const ERROR_TRACKING_PROMPT = `Set up PostHog error tracking end-to-end:
 
 The final report is written to ./${ERROR_TRACKING_REPORT_FILE}.`;
 
+const ERROR_TRACKING_RUN: ProgramRun = {
+  integrationLabel: 'error-tracking',
+  customPrompt: () => ERROR_TRACKING_PROMPT,
+  successMessage: `Error tracking configured! View the report at ./${ERROR_TRACKING_REPORT_FILE}`,
+  reportFile: ERROR_TRACKING_REPORT_FILE,
+  docsUrl: ERROR_TRACKING_DOCS_URL,
+  spinnerMessage: 'Setting up error tracking...',
+  estimatedDurationMinutes: 8,
+  // The flow can park on wizard_ask while the user does slow work (mint a
+  // personal API key in the browser, run a build and trigger the test
+  // error). The orchestrator caps per-task asks itself; this covers the
+  // linear fallback.
+  askTimeoutMs: 30 * 60 * 1000,
+};
+
 /**
  * `wizard error-tracking` — flat command on the orchestrator sequence.
  *
@@ -125,9 +167,10 @@ The final report is written to ./${ERROR_TRACKING_REPORT_FILE}.`;
  *   themselves (there is no bare `error-tracking` menu entry), so the intro is
  *   a custom screen rather than the generic skill intro.
  * - `DETECT_STEP` in front, so `session.skillId` carries the framework id the
- *   orchestrator's preflight resolves reference + mini-skill variants with. It
- *   also pre-installs posthog-cli for symbol-upload platforms, which the agent
- *   cannot (warlock blocks \`npm install -g\`).
+ *   orchestrator's preflight resolves reference + mini-skill variants with.
+ * - `run` is a function: `runAgent` resolves it after the intro gate (and
+ *   after `ciPreRun` headless), so the posthog-cli pre-install, which the
+ *   agent cannot do (warlock blocks \`npm install -g\`), waits for the user.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
  * - `ciPreRun` mirrors replay-vision: scope the install dir to the right
@@ -143,19 +186,9 @@ export const errorTrackingConfig: ProgramConfig = {
   reportFile: ERROR_TRACKING_REPORT_FILE,
   getContentBlocks,
 
-  run: {
-    integrationLabel: 'error-tracking',
-    customPrompt: () => ERROR_TRACKING_PROMPT,
-    successMessage: `Error tracking configured! View the report at ./${ERROR_TRACKING_REPORT_FILE}`,
-    reportFile: ERROR_TRACKING_REPORT_FILE,
-    docsUrl: ERROR_TRACKING_DOCS_URL,
-    spinnerMessage: 'Setting up error tracking...',
-    estimatedDurationMinutes: 8,
-    // The flow can park on wizard_ask while the user does slow work (mint a
-    // personal API key in the browser, run a build and trigger the test
-    // error). The orchestrator caps per-task asks itself; this covers the
-    // linear fallback.
-    askTimeoutMs: 30 * 60 * 1000,
+  run: (session: WizardSession): Promise<ProgramRun> => {
+    maybePreinstallPostHogCli(session.integration);
+    return Promise.resolve(ERROR_TRACKING_RUN);
   },
 
   ciPreRun: async (session: WizardSession): Promise<void> => {
@@ -169,7 +202,10 @@ export const errorTrackingConfig: ProgramConfig = {
       });
       return;
     }
-    maybePreinstallPostHogCli(integration);
+    if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
+      await abortUnsupportedPlatform(integration);
+      return;
+    }
     session.integration = integration;
     analytics.setTag('integration', integration);
 
