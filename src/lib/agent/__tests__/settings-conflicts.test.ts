@@ -219,7 +219,7 @@ describe('buildAuthErrorContext', () => {
   it('reports no conflict and a default region when nothing overrides auth', () => {
     const ctx = buildAuthErrorContext(
       project,
-      'https://gateway.us.posthog.com/wizard',
+      'https://ai-gateway.us.posthog.com',
       home,
     );
 
@@ -236,7 +236,7 @@ describe('buildAuthErrorContext', () => {
 
     const ctx = buildAuthErrorContext(
       project,
-      'https://gateway.eu.posthog.com/wizard',
+      'https://ai-gateway.eu.posthog.com',
       home,
     );
 
@@ -250,11 +250,8 @@ describe('buildAuthErrorContext', () => {
 
   it('derives the region from the gateway url', () => {
     expect(
-      buildAuthErrorContext(
-        project,
-        'https://gateway.eu.posthog.com/wizard',
-        home,
-      ).region,
+      buildAuthErrorContext(project, 'https://ai-gateway.eu.posthog.com', home)
+        .region,
     ).toBe('eu');
     expect(
       buildAuthErrorContext(project, 'http://localhost:3308/wizard', home)
