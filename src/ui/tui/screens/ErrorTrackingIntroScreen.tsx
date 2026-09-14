@@ -21,11 +21,11 @@ export const ErrorTrackingIntroScreen = ({
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
   const { session } = store;
-  // error-tracking resolves its skill variants per framework at run time, so
-  // there's no single pre-seeded skillId. Fall back to the group id for the
-  // "more info" lookup.
-  const skillId = session.skillId ?? 'error-tracking';
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
+  // The flow resolves its skills per framework at run time, and after detect
+  // session.skillId holds the framework, not a skill. Point "more info" at the
+  // capture step, the one skill every run of this flow installs.
+  const skillId = 'integration-v2-error-tracking-step';
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId);
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>
