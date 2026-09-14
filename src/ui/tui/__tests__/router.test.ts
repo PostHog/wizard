@@ -7,6 +7,7 @@ import {
 import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
+import { WizardStore } from '@ui/tui/store';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 
@@ -15,6 +16,24 @@ function baseWizardSession() {
 }
 
 describe('WizardRouter', () => {
+  it('interrupts overlays for a mint failure and continues the post-run steps', () => {
+    const store = new WizardStore(Program.PostHogIntegration);
+    const router = store.router;
+    router.pushOverlay(Overlay.WizardAsk);
+    store.setAgentHandoff('pending');
+    expect(router.resolve(store.session)).toBe(ScreenId.MintFailure);
+    store.setAgentHandoff('continue');
+    expect(router.resolve(store.session)).toBe(ScreenId.Mcp);
+    store.setMcpComplete(McpOutcome.Skipped);
+    expect(router.resolve(store.session)).toBe(ScreenId.SlackConnect);
+    store.setSlackStepDismissed();
+    expect(router.resolve(store.session)).toBe(ScreenId.KeepSkills);
+    store.setSkillsComplete(true);
+    expect(router.resolve(store.session)).toBe(ScreenId.Exit);
+    store.setAgentHandoff('exit');
+    expect(router.resolve(store.session)).toBe(ScreenId.Exit);
+  });
+
   describe('resolve', () => {
     it('returns the first incomplete visible screen for the wizard flow', () => {
       const router = new WizardRouter(Program.PostHogIntegration);

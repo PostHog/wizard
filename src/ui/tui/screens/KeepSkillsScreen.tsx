@@ -65,20 +65,21 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
         }
         if (result.length === 0) {
           store.setSkillsComplete(true);
-          process.exit(0);
+          if (!store.session.agentHandoff) process.exit(0);
+          return;
         }
         setSkills(result);
         setPhase(Phase.Ask);
       } catch {
         store.setSkillsComplete(true);
-        process.exit(0);
+        if (!store.session.agentHandoff) process.exit(0);
       }
     })();
   }, []); // eslint-disable-line
 
   const handleKeep = () => {
     store.setSkillsComplete(true);
-    process.exit(0);
+    if (!store.session.agentHandoff) process.exit(0);
   };
 
   const handleRemove = async () => {
@@ -104,8 +105,8 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
     setPhase(Phase.Done);
     // Give React a tick to paint the "Skills removed." message before exit
     setTimeout(() => {
-      store.setSkillsComplete(false);
-      process.exit(0);
+      store.setSkillsComplete(true);
+      if (!store.session.agentHandoff) process.exit(0);
     }, 600);
   };
 

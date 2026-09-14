@@ -8,12 +8,15 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
-import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@lib/errors';
+import { GatewayMintFailed, GatewayMintRefused } from '@lib/gateway-session';
+import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
@@ -216,59 +219,69 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.run)) {
-        // A composed program: its step list splices in run steps that carry
-        // their own agent (self-driving runs the integration before its own
-        // run). Walk the list once, advancing each step to completion.
-        for (const step of config.steps) {
-          if (step.screenId === 'outro') break; // run-completion wait owns it
-          if (shown(step)) await advanceStep(step, activeTui.store, config);
-        }
-      } else if (skipAgent) {
-        const { getOrAskForProjectData } = await import('@utils/setup-utils');
-        const { projectApiKey, host, accessToken, projectId } =
-          await getOrAskForProjectData({
-            signup: session.signup,
-            ci: session.ci,
-            apiKey: session.apiKey,
-            projectId: session.projectId,
-            baseUrl: session.baseUrl,
-            programId: config.id,
+      let mintFailure: GatewayMintFailed | GatewayMintRefused | null = null;
+      try {
+        if (config.steps.some((s) => s.run)) {
+          // A composed program: its step list splices in run steps that carry
+          // their own agent (self-driving runs the integration before its own
+          // run). Walk the list once, advancing each step to completion.
+          for (const step of config.steps) {
+            if (step.screenId === 'outro') break; // run-completion wait owns it
+            if (shown(step)) await advanceStep(step, activeTui.store, config);
+          }
+        } else if (skipAgent) {
+          const { getOrAskForProjectData } = await import('@utils/setup-utils');
+          const { projectApiKey, host, accessToken, projectId } =
+            await getOrAskForProjectData({
+              signup: session.signup,
+              ci: session.ci,
+              apiKey: session.apiKey,
+              projectId: session.projectId,
+              baseUrl: session.baseUrl,
+              programId: config.id,
+            });
+          activeTui.store.setCredentials({
+            accessToken,
+            projectApiKey,
+            host,
+            projectId,
           });
-        activeTui.store.setCredentials({
-          accessToken,
-          projectApiKey,
-          host,
-          projectId,
+        } else {
+          await runAgent(config, activeTui.store.session);
+        }
+      } catch (error) {
+        if (
+          !(error instanceof GatewayMintFailed) &&
+          !(error instanceof GatewayMintRefused)
+        )
+          throw error;
+        // The gateway declined: keep the TUI alive and hand off to the
+        // user's own agent instead of dying on the FATAL path.
+        mintFailure = error;
+        runCleanups();
+        logToFile('[run-wizard] mint failed, handing off:', error);
+        analytics.wizardCapture('agent handoff', { error_code: error.code });
+        activeTui.store.setAgentHandoff('pending');
+        getUI().outroError({
+          kind: OutroKind.Error,
+          errorCode: error.code,
+          message: error.message,
         });
-      } else {
-        await runAgent(config, activeTui.store.session);
       }
 
-      const isDone = (): boolean =>
-        skipAgent
-          ? activeTui.store.session.outroDismissed
-          : activeTui.store.session.skillsComplete;
-
-      await new Promise<void>((resolve) => {
-        const unsub = activeTui.store.subscribe(() => {
-          if (isDone()) {
-            unsub();
-            resolve();
-          }
-        });
-        if (isDone()) {
-          unsub();
-          resolve();
-        }
-      });
+      await activeTui.store.waitUntil(
+        (s) =>
+          s.agentHandoff === 'exit' ||
+          (mintFailure || !skipAgent ? s.skillsComplete : s.outroDismissed),
+      );
 
       exitInProgress = true;
       await activeStream.shutdown(2000);
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
+      if (mintFailure) await analytics.shutdown('error');
       activeTui.unmount();
-      process.exit(0);
+      process.exit(mintFailure ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);

@@ -208,6 +208,20 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
     },
   ],
 
+  // ── Mint failure ─────────────────────────────────────────────────────
+  [ScreenId.MintFailure]: [
+    {
+      id: 'continue_setup',
+      description: 'Continue to MCP and Slack after saving the skills.',
+      apply: (store) => store.setAgentHandoff('continue'),
+    },
+    {
+      id: 'dismiss_outro',
+      description: 'Exit the wizard from the mint failure screen.',
+      apply: (store) => store.setAgentHandoff('exit'),
+    },
+  ],
+
   // ── MCP install ───────────────────────────────────────────────────────
   [ScreenId.Mcp]: [
     {

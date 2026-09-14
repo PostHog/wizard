@@ -101,11 +101,10 @@ describe('WizardCiDriver — full integration flow', () => {
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     const done = driver.performAction('keep_skills', { kept: true });
 
-    // keep-skills is the terminal step: it has no isComplete predicate, so the
-    // router rests on it. Completion is signalled by skillsComplete — the exact
-    // condition run-wizard.ts awaits to end the run.
+    // keep-skills completes on skillsComplete — the exact condition
+    // run-wizard.ts awaits to end the run — and the router rests on Exit.
     expect(store.session.skillsComplete).toBe(true);
-    expect(done.currentScreen).toBe(ScreenId.KeepSkills);
+    expect(done.currentScreen).toBe(ScreenId.Exit);
   });
 
   it('read_state is a truthful projection and never leaks the access token', () => {

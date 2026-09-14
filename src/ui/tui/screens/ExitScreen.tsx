@@ -6,10 +6,12 @@
  */
 
 import { useEffect } from 'react';
+import type { WizardStore } from '../store';
 
-export const ExitScreen = () => {
+export const ExitScreen = ({ store }: { store?: WizardStore }) => {
   useEffect(() => {
-    process.exit(0);
+    // A handoff exit is owned by run-wizard's wait, not this screen.
+    if (!store?.session.agentHandoff) process.exit(0);
   }, []);
 
   return null;

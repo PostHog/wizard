@@ -891,6 +891,22 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setAgentHandoff(action: WizardSession['agentHandoff']): void {
+    if (action === 'pending') {
+      // The mint failure owns the run: close whatever interrupted it so the
+      // handoff screens are reachable.
+      this.cancelPendingQuestion();
+      this.resolveTaskNotice(false);
+    }
+    this.$session.setKey('agentHandoff', action);
+    this.emitChange();
+  }
+
+  setSpellbook(spellbook: NonNullable<WizardSession['spellbook']>): void {
+    this.$session.setKey('spellbook', spellbook);
+    this.emitChange();
+  }
+
   setDashboardUrl(url: string): void {
     logToFile(`store.setDashboardUrl: ${url}`);
     this.$session.setKey('dashboardUrl', url);

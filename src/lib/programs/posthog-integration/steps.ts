@@ -10,6 +10,7 @@ import type { ProgramStep } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
+import { AGENT_HANDOFF_STEPS } from '@lib/programs/shared/agent-handoff-steps';
 import { detectPostHogIntegration } from './detect.js';
 
 function needsSetup(session: WizardSession): boolean {
@@ -65,22 +66,5 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     screenId: 'outro',
     isComplete: (session) => session.outroDismissed,
   },
-  {
-    id: 'mcp',
-    label: 'MCP servers',
-    screenId: 'mcp',
-    isComplete: (session) => session.mcpComplete,
-  },
-  {
-    id: 'slack-connect',
-    label: 'Connect Slack',
-    screenId: 'slack-connect',
-    // Always shown — the user declines via Skip/esc, never bypassed.
-    isComplete: (session) => session.slackStepDismissed,
-  },
-  {
-    id: 'keep-skills',
-    label: 'Keep Skills',
-    screenId: 'keep-skills',
-  },
+  ...AGENT_HANDOFF_STEPS,
 ];

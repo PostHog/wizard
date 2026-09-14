@@ -11,6 +11,7 @@
 import type { ReactNode } from 'react';
 import type { WizardStore } from './store.js';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
+import { getLogFilePath } from '@utils/debug';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
 import { DoctorIntroScreen } from './screens/doctor/DoctorIntroScreen.js';
@@ -47,6 +48,9 @@ import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.j
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
+import { MintFailureScreen } from './screens/MintFailureScreen.js';
+import type { MintFailureServices } from './screens/MintFailureScreen.js';
+import { writeWizardSpellbook } from '@lib/wizard-spellbook';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { SessionTimeoutScreen } from './screens/SessionTimeoutScreen.js';
@@ -57,12 +61,19 @@ import { createMcpSuggestedPromptsServices } from './services/mcp-suggested-prom
 import type { McpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 
 export interface ScreenServices {
+  mintFailure: MintFailureServices;
   mcpInstaller: McpInstaller;
   mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
 export function createServices(store: WizardStore): ScreenServices {
   return {
+    mintFailure: {
+      get logPath() {
+        return getLogFilePath();
+      },
+      leaveSpellbook: () => writeWizardSpellbook(store.session),
+    },
     mcpInstaller: createMcpInstaller(),
     mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),
   };
@@ -127,7 +138,10 @@ export function createScreens(
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
-    [ScreenId.Exit]: <ExitScreen />,
+    [ScreenId.MintFailure]: (
+      <MintFailureScreen store={store} services={services.mintFailure} />
+    ),
+    [ScreenId.Exit]: <ExitScreen store={store} />,
 
     // Standalone MCP flows
     [ScreenId.McpAdd]: (

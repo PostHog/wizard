@@ -442,6 +442,14 @@ export interface WizardSession {
   /** Copy for the task-notice modal, set while it is open. */
   taskNotice: TaskNotice | null;
   outroData: OutroData | null;
+  /**
+   * Mint-failure recovery: `pending` shows the handoff screen, `continue`
+   * routes to the post-run steps, `exit` leaves. Set only when the gateway
+   * mint fails or refuses; null on every normal path.
+   */
+  agentHandoff: 'pending' | 'continue' | 'exit' | null;
+  /** Skill bundle saved for the user's own agent during the handoff. */
+  spellbook: { path: string; skillsIncluded: boolean } | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
@@ -562,6 +570,8 @@ export function buildSession(args: {
     portConflictProcess: null,
     taskNotice: null,
     outroData: null,
+    agentHandoff: null,
+    spellbook: null,
     dashboardUrl: null,
     notebookUrl: null,
     additionalFeatureQueue: [],

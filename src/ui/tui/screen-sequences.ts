@@ -13,6 +13,7 @@ import {
 } from '@lib/programs/program-registry';
 import { createProgramSequence } from '@lib/programs/program-step';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import { AGENT_HANDOFF_STEPS } from '@lib/programs/shared/agent-handoff-steps';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {
@@ -45,6 +46,7 @@ export enum ScreenId {
   SlackConnect = 'slack-connect',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
+  MintFailure = 'mint-failure',
   Exit = 'exit',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
@@ -62,6 +64,11 @@ export interface Screen {
 
 /** An ordered list of screens — a program's screen journey. */
 export type Sequence = Screen[];
+
+/** The post-run steps a mint-failure handoff continues through. */
+export const AGENT_HANDOFF_SEQUENCE = createProgramSequence(
+  AGENT_HANDOFF_STEPS,
+) as Sequence;
 
 /** All program screen sequences keyed by program id. */
 export const PROGRAM_SEQUENCES: Record<ProgramId, Sequence> =
