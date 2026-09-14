@@ -15,18 +15,15 @@
 #   ./scripts/smoke-test-ci.sh                          # default: basic-integration/next-js/15-app-router-todo
 #   ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 #
-# Examples:
-#   # With API key inline:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh
-#
-#   # With project ID override:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here POSTHOG_PROJECT_ID=12345 ./scripts/smoke-test-ci.sh
-#
-#   # Specific app:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
-#
-#   # If ../wizard-workbench/.env has POSTHOG_PERSONAL_API_KEY, just:
+# Examples (personal API key already exported):
+#   export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"
+#   export POSTHOG_WIZARD_PROJECT_ID=12345
+#   export POSTHOG_WIZARD_REGION=us
 #   ./scripts/smoke-test-ci.sh
+#   ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
+#
+# Both secrets and project settings may also be loaded from the workbench .env.
+# See docs/local-dev.md for the separate API key and gateway token setup.
 #
 set -euo pipefail
 

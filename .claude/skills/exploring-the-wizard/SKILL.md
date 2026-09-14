@@ -34,9 +34,14 @@ wizard, so finish recording one app before opening another.
 
 - **Detection only:** pass `appDir` and `projectId` (both required strings),
   with no key. Stop at `auth` without calling `run_agent`.
-- **Full integration:** reuse the authorized phx key file path and project id;
+- **Full integration:** reuse the authorized phx key file path, separate gateway
+  token file path, and project id;
   ask only for missing inputs. Prefer `keyFile` so the key stays out of tool
-  arguments. Never print or commit the key. Read the
+  arguments. Set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the MCP server environment
+  before launch (restart an existing server); it is not an `open_app` argument.
+  The file must contain an already-issued gateway bearer, not the phx key.
+  CI does not mint or refresh it. Never print or commit either secret. See
+  [local credential setup](../../../docs/local-dev.md#credentials-for-local-ci-and-headless-runs). Read the
   [credential and region limitations](../../../e2e-harness/ARCHITECTURE.md#current-host-limitations)
   before starting: an inherited key can shadow `keyFile`, and the host currently
   hardcodes the US region.

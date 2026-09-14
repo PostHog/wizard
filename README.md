@@ -231,17 +231,18 @@ The following CLI arguments are available:
 
 # CI Mode
 
-> ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM
-> gateway doesn't yet grant the scopes the wizard needs to personal API keys
-> for most users, so non-interactive `--ci` runs fail at the gateway. The flag
-> is disabled in the published package and exits with an error — run the wizard
-> in an interactive terminal instead (`npx @posthog/wizard@latest`). The notes below
-> describe CI mode as it works in development builds.
+**CI mode is available only in development/test builds.** Published builds
+reject `--ci`; use an interactive terminal for `npx @posthog/wizard@latest`.
 
-Run the wizard non-interactive executions with `--ci`:
+Local CI runs require a PostHog personal API key **and a separate gateway
+token file**, plus the target project ID. See
+[local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs)
+for setup and the CI secret names. With both secrets configured:
 
 ```bash
-npx @posthog/wizard@latest --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
+  --project-id 12345 --region us --install-dir /absolute/path/to/test-app
 ```
 
 When running in CI mode (`--ci`):
@@ -510,6 +511,10 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 
 ## Running locally
 
+For `--ci`, smoke tests, and full headless runs, configure both the personal API
+key and gateway token file first: [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+Interactive runs mint their gateway token after authentication.
+
 ### Quick test without linking
 
 ```bash
@@ -533,8 +538,8 @@ wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
 wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
 ```
 
-See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog. Note
-`--local-mcp` selects the MCP server only — it no longer also switches skills.
+See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
+`--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
 
 ### Testing
 
@@ -568,7 +573,9 @@ Example prompt — explore against
 [open-saas](https://github.com/wasp-lang/open-saas):
 
 > Explore the PostHog wizard against open-saas, following the
-> `exploring-the-wizard` skill. Ask me for my phx key file path and project id,
+> `exploring-the-wizard` skill. Reuse my phx key file path, gateway token file path, and project id,
+> asking only for missing inputs. Launch the MCP server with
+> `WIZARD_CI_GATEWAY_TOKEN_FILE` set to the gateway token file path;
 > then clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp`
 > copy. Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding
 > each screen:
@@ -654,21 +661,28 @@ This repo includes a helper script to run a full end‑to‑end smoke test of th
   - Setting `WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench`, or
   - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
 - Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
-- (Optional) Set `POSTHOG_PROJECT_ID` to target a specific PostHog project.
+- Set `WIZARD_CI_GATEWAY_TOKEN_FILE` to an absolute path containing the separate
+  AI gateway token. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+- Set `POSTHOG_WIZARD_PROJECT_ID` to the intended test project and
+  `POSTHOG_WIZARD_REGION` to `us` or `eu` (CI uses `us`). The helper also accepts
+  `POSTHOG_PROJECT_ID` and `POSTHOG_REGION` as fallback names.
 
 **Usage**
 
 ```bash
-# Default app: next-js/15-app-router-todo
+# With both secrets and the target project configured above:
+# Default app: basic-integration/next-js/15-app-router-todo
 ./scripts/smoke-test-ci.sh
 
 # Specify a different app from wizard-workbench/apps
-./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 
-# With API key (and optional project ID) inline
+# With both secrets and project settings inline
 POSTHOG_PERSONAL_API_KEY=phx_your_key_here \
-POSTHOG_PROJECT_ID=12345 \
-./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+POSTHOG_WIZARD_PROJECT_ID=12345 \
+POSTHOG_WIZARD_REGION=us \
+./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 
 # Pointing at a custom wizard-workbench checkout
 WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench \

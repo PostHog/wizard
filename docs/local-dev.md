@@ -3,6 +3,57 @@
 Running the wizard against local servers. Four things can independently be
 local, and this doc is the catalog of how to control each.
 
+## Credentials for local CI and headless runs
+
+Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need
+**two separate secrets**, plus the target project ID:
+
+| Input | Purpose | How to pass it |
+|---|---|---|
+| PostHog personal API key (`phx_...`) | PostHog API and MCP authentication | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; headless host: `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
+| Already-issued AI gateway bearer | Model calls | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the token |
+| Target project ID | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; headless host: `PROJECT_ID` (MCP: `projectId`) |
+
+The personal API key is not the gateway token. CI reads the gateway token
+from the file and uses it directly; it does not mint or refresh one. Keep the
+file outside the repo, restrict its permissions (`chmod 600`), and supply a
+valid token for the gateway being used. Missing, expired, or rejected tokens
+fail the run.
+
+With your personal API key already exported and gateway token saved locally:
+
+```bash
+export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"
+export POSTHOG_WIZARD_PROJECT_ID=12345
+export POSTHOG_WIZARD_REGION=us
+
+pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
+  --project-id "$POSTHOG_WIZARD_PROJECT_ID" \
+  --region "$POSTHOG_WIZARD_REGION" --install-dir=/absolute/path/to/test-app
+```
+
+`WIZARD_CI_GATEWAY_URL` optionally sets the gateway origin (no `/v1`);
+otherwise CI uses `https://ai-gateway.<region>.posthog.com`. The local service
+flags below do not override this CI gateway setting.
+
+For the `wizard-ci` MCP server, set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the
+server's environment before launch; restart an existing server after changing
+it. It is not an `open_app` argument. Pass the personal key via `keyFile` or
+`apiKey` and the project via `projectId`. Detection-only runs that stop at
+`auth` do not need either secret.
+
+[Smoke-test CI](../.github/workflows/smoke-test.yml) supplies these credentials:
+`GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY` becomes
+`POSTHOG_PERSONAL_API_KEY`, while
+`GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_GATEWAY_TOKEN` is written to a temporary
+file referenced by `WIZARD_CI_GATEWAY_TOKEN_FILE`. CI also supplies
+`GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID` as
+`POSTHOG_WIZARD_PROJECT_ID`.
+
+Interactive runs authenticate normally and mint their gateway token through
+PostHog; they do not require this CI token file. Published builds reject
+`--ci`; use source, a development build, or `pnpm build:ci` for these recipes.
+
 ## The four dimensions
 
 | # | What | Local target | How you control it |
@@ -12,14 +63,12 @@ local, and this doc is the catalog of how to control each.
 | 3 | PostHog MCP server | `http://localhost:8787/mcp` | `--local-mcp` |
 | 4 | PostHog app / API | `http://localhost:8010` | `--local-posthog` |
 
-Dimensions 2–4 are genuinely independent. The common case is **not** "everything
-local": CI runs local skills against the *production* MCP, and someone testing an
-MCP change usually keeps PostHog on prod.
+Select the skills, MCP, and PostHog servers independently. For example, CI
+runs local skills against production MCP and PostHog.
 
 ## Flags
 
-All dev/test builds only. A published build rejects them with an explanation —
-they point at localhost, which is never right for a real user.
+These flags are available in dev/test builds. Published builds reject them.
 
 | Flag | Env | Effect |
 |---|---|---|
@@ -43,10 +92,9 @@ MCP_URL / --base-url                                       (explicit URL)
   > production defaults
 ```
 
-A specific flag beats the umbrella in both directions, so
-`--local-dev --no-local-mcp` means "everything local except MCP". Prefer the
-additive form though — with three dimensions, "all but one" is just the other
-two, and it reads better.
+A specific flag overrides the umbrella in both directions.
+`--local-dev --no-local-mcp` selects local skills and PostHog with production
+MCP, as does `--local-context-mill --local-posthog`.
 
 ### Recipes
 
@@ -73,43 +121,32 @@ requested it, and how to start it:
 Start the missing services, or drop the flag to use production.
 ```
 
-This runs **before authentication**, so a missing local PostHog fails here
-rather than as "Failed to fetch user data" — and it aborts in CI too, since a
-run pointed at a server that isn't there is testing nothing.
+Preflight runs **before authentication** and stops both interactive and CI
+runs when a requested local service is unreachable.
 
-Only reachability is checked. Any HTTP reply counts, including 404 and 405 —
-the real MCP rejects a bare GET, and that's not a reason to stop.
+Only reachability is checked. Any HTTP reply counts, including 404 and 405.
 
-## `--local-mcp` no longer selects skills
+## Selecting local MCP and skills servers
 
-It used to do both — one boolean drove the MCP url *and* the skills base url.
-That made "local skills, prod MCP" impossible to say, which is why workbench CI
-had to set `MCP_URL=https://mcp.posthog.com/mcp` to undo half of it.
+`--local-mcp` selects the MCP server at `localhost:8787`.
+`--local-context-mill` selects the skills server at `localhost:8765`.
+Pass both flags to use both local services, or `--local-dev` to include local
+PostHog as well.
 
-If you have `--local-mcp` in a shell alias or script expecting local skills, add
-`--local-context-mill` (or switch to `--local-dev`). The wizard prints a notice
-when it sees `--local-mcp` on its own; that notice is temporary and will be
-removed once the change has settled.
+## Editor MCP configuration
 
-## `wizard mcp add --local` is a different thing
+`wizard mcp add --local` writes a `posthog-local` server entry into your
+editor's MCP config (Cursor, Claude Code, Codex, Zed, VS Code), pointing at
+`localhost:8787`. It sits alongside the normal `posthog` entry.
+`wizard mcp remove --local` removes the `posthog-local` entry.
 
-Not a local dev target. `mcp add --local` writes a **`posthog-local`** server
-entry into your editor's MCP config (Cursor, Claude Code, Codex, Zed, VS Code)
-pointing at `localhost:8787` — a durable artifact for a *different program* to
-use later, sitting alongside your normal `posthog` entry rather than replacing
-it. `mcp remove --local` removes only that entry.
-
-It's for developing the **MCP server itself** (in the posthog repo,
-`services/mcp`), so you can exercise your build conversationally.
-
-It is command-scoped, available in published builds, and unaffected by the
-`--local-*` flags above. There is deliberately **no global `--local`** — reusing
-that name would give one flag two unrelated meanings.
+Use this command to develop the MCP server in `posthog/services/mcp` through
+your editor. The command-scoped `--local` option is available in published
+builds and independent of the wizard run's `--local-*` flags.
 
 ## Running the wizard
 
-Dimension 1 isn't a flag; a binary can't flag itself into being a different
-binary. It's how you invoke it:
+Choose the wizard binary through its invocation:
 
 | Mode | Command | Build |
 |---|---|---|
@@ -124,10 +161,8 @@ skills url, MCP url, and PostHog host together.
 
 ## Implementation
 
-`src/lib/local-dev.ts` owns the endpoints and the precedence rule. Everything
-downstream reads a resolved value rather than re-deriving "am I local".
+`src/lib/local-dev.ts` defines the endpoints and precedence. Downstream code
+reads the resolved targets.
 
-One trap worth knowing: the three specific flags are declared **without** a yargs
-`default`. They must stay `undefined` when absent so `resolveLocalDev` can tell
-"unset, inherit the umbrella" from "explicitly negated". Adding `default: false`
-silently breaks both the umbrella and `--no-local-*`.
+The three service flags have no yargs default. An absent flag is `undefined`
+and inherits the umbrella setting; an explicit `false` overrides it.

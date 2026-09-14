@@ -62,14 +62,21 @@ git checkout <branch under test>            # the code you are benchmarking
 pnpm install && node scripts/generate-version.cjs   # version.ts is generated, not committed
 cd .. && git clone https://github.com/PostHog/wizard-workbench   # optional: automated judging
 
-# 2. Credentials — a personal API key for a DEDICATED test project
-#    (runs create real events and dashboards in it). Note the project id.
-echo 'phx_...' > ~/wizard-bench-key.txt
+# 2. Credentials — a personal API key AND a separate gateway token.
+#    Save the issued secrets in private files outside the repo. Use a
+#    DEDICATED test project (runs create real events and dashboards).
+export POSTHOG_KEY_FILE="$HOME/wizard-bench-key.txt"
+export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"
+chmod 600 "$POSTHOG_KEY_FILE" "$WIZARD_CI_GATEWAY_TOKEN_FILE"
+export PROJECT_ID=12345
 
 # 3. Target apps — shallow-clone each once; treat as read-only sources
 mkdir -p ~/bench/src && cd ~/bench/src
 git clone --depth 1 https://github.com/<org>/<app>
 ```
+
+See [local credentials](local-dev.md#credentials-for-local-ci-and-headless-runs)
+for gateway token behavior and MCP server environment setup.
 
 Also install the toolchains your chosen apps need (node, python, php+composer,
 ruby, gradle) — a missing toolchain fails runs for reasons that are yours, not
