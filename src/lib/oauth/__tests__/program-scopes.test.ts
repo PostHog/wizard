@@ -47,6 +47,15 @@ describe('replay-vision scopes', () => {
   });
 });
 
+/** Error tracking relies on SDK autocapture and never changes team settings. */
+describe('error-tracking scopes', () => {
+  it('does not request product enablement', () => {
+    expect(getOAuthScopesForProgram('error-tracking')).not.toContain(
+      'product_enablement:write',
+    );
+  });
+});
+
 /**
  * The signup path mints a token from these scopes. A program's additions
  * must reach its own provisioned tokens and no one else's.
