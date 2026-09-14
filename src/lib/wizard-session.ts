@@ -300,6 +300,9 @@ export interface WizardSession {
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
 
+  /** PostHog found in the project's dependencies. A signal, not a verified install. */
+  posthogSdkDetected: boolean;
+
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
 
@@ -522,6 +525,7 @@ export function buildSession(args: {
     frameworkContext: {},
     typescript: false,
     detectedFrameworkLabel: null,
+    posthogSdkDetected: false,
     detectionComplete: false,
     unsupportedVersion: null,
 
@@ -578,4 +582,11 @@ export function reportableDiscoveredFeatures(
   session: WizardSession,
 ): DiscoveredFeature[] | undefined {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+}
+
+/** Also a scan result, so it travels under the same consent as the rest. */
+export function reportablePosthogSdkDetected(
+  session: WizardSession,
+): boolean | undefined {
+  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
 }
