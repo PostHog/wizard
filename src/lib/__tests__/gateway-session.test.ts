@@ -104,6 +104,8 @@ describe('gatewayAuth', () => {
     ['token', NaN, 'https://ai-gateway.us.posthog.com'],
     ['token', 42, 'https://untrusted.example'],
     ['token', 42, 'https://ai-gateway.us.posthog.com/v1'],
+    ['token', 42, 'https://gateway.us.posthog.com'],
+    ['token', 42, 'https://gateway.eu.posthog.com'],
     ['token', 42, 'ftp://localhost'],
   ] as const)(
     'rejects invalid CI gateway configuration',
@@ -150,14 +152,14 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
           team_id: 42,
         }),
     });
 
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth).toEqual({
-      gatewayUrl: 'https://gateway.us.posthog.com',
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
       token: 'phe_minted',
       teamId: 42,
       refreshAtMs: expect.any(Number),
@@ -176,7 +178,7 @@ describe('gatewayAuth', () => {
     await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(
-      'https://gateway.us.posthog.com',
+      'https://ai-gateway.us.posthog.com',
     );
   });
 
@@ -217,7 +219,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_secret_value',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
           team_id: 42,
         }),
     });
@@ -577,7 +579,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
 
@@ -610,7 +612,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
 
@@ -668,7 +670,7 @@ describe('gatewayAuth', () => {
             Promise.resolve({
               token: 'phe_minted',
               expires_at: new Date(Date.now() + ttlMs).toISOString(),
-              gateway_url: 'https://gateway.us.posthog.com',
+              gateway_url: 'https://ai-gateway.us.posthog.com',
             }),
         }),
       );
@@ -700,7 +702,7 @@ describe('gatewayAuth', () => {
           Promise.resolve({
             token: 'phe_minted',
             expires_at: new Date(Date.now() + ttlMs).toISOString(),
-            gateway_url: 'https://gateway.us.posthog.com',
+            gateway_url: 'https://ai-gateway.us.posthog.com',
           }),
       });
       const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
@@ -730,7 +732,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_after_retry',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
@@ -750,20 +752,27 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses a gateway url outside the trusted origins', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          token: 'phe_x',
-          expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://evil.example.com',
-        }),
-    });
-    await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ).rejects.toBeInstanceOf(GatewayMintFailed);
-  });
+  it.each([
+    'https://evil.example.com',
+    'https://gateway.us.posthog.com',
+    'https://gateway.eu.posthog.com',
+  ])(
+    'refuses an untrusted or retired minted gateway %s',
+    async (gatewayUrl) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_x',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: gatewayUrl,
+          }),
+      });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintFailed);
+    },
+  );
 
   it('fails the run on a transport failure', async () => {
     fetchMock.mockRejectedValue(new Error('network down'));
@@ -825,6 +834,12 @@ describe('isTrustedGatewayUrl', () => {
   });
 
   it.each([
+    'https://gateway.us.posthog.com',
+    'https://gateway.eu.posthog.com',
+    'https://gateway.us.posthog.com/wizard',
+    'https://gateway.eu.posthog.com/wizard',
+    'https://us.posthog.com',
+    'https://ai-gateway.us.posthog.com:444',
     'https://evil.example.com',
     'http://ai-gateway.us.posthog.com',
     'not-a-url',
