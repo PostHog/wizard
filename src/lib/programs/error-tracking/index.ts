@@ -11,8 +11,7 @@ import type {
   ProgramStep,
 } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
-import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
-import { getUI } from '@ui';
+import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
@@ -37,34 +36,16 @@ export const SYMBOL_UPLOAD_CLI_FRAMEWORKS: ReadonlySet<Integration> = new Set([
   Integration.rust,
 ]);
 
-let postHogCliInstallAttempted = false;
-
 /**
  * Pre-install posthog-cli when the detected framework's symbol upload will
- * shell out to it. Warn, don't fail — the run still instruments exception
- * capture; only the release build's upload step needs the CLI.
+ * shell out to it. See `preinstallPostHogCliOnce` for the once-per-process
+ * guard and the warn-don't-fail handling.
  */
 function maybePreinstallPostHogCli(integration: Integration): void {
   if (!SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
-  if (postHogCliInstallAttempted) return;
-  postHogCliInstallAttempted = true;
-
-  const result = installOrUpdatePostHogCli();
-  if (!result.success) {
-    analytics.wizardCapture('error tracking posthog-cli preinstall failed', {
-      integration,
-      error: String(result.error).slice(0, 500),
-    });
-    analytics.captureException(
-      result.errorObject ??
-        new Error(`posthog-cli pre-install failed: ${result.error}`),
-      { source: 'error_tracking_cli_preinstall', integration },
-    );
-    getUI().log.warn(
-      `Could not pre-install posthog-cli (${result.error}). Your release build ` +
-        `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
-    );
-  }
+  preinstallPostHogCliOnce('error tracking posthog-cli preinstall failed', {
+    integration,
+  });
 }
 
 /**
@@ -81,7 +62,16 @@ const DETECT_STEP: ProgramStep = {
   label: 'Detecting framework',
   onReady: async (ctx: ProgramReadyContext) => {
     const integration = await detectFramework(ctx.session.installDir);
-    if (integration) maybePreinstallPostHogCli(integration);
+    // Same stop as ciPreRun. Without it the run bootstraps with the program id
+    // as the framework and preflight aborts with a misleading download error.
+    if (!integration) {
+      await wizardAbort({
+        code: ErrorCodes.DetectNoFramework,
+        message: 'Could not auto-detect your framework for this project.',
+      });
+      return;
+    }
+    maybePreinstallPostHogCli(integration);
     await detectPostHogIntegration(ctx);
   },
 };
