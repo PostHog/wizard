@@ -74,13 +74,13 @@ describe('switchboard PROGRAM_BINDINGS', () => {
 
   runBindingCases([
     {
-      name: 'binds ai-observability to anthropic + sonnet 5',
+      name: 'binds ai-observability to pi + sol medium',
       ctx: { program: 'ai-observability', flags: {} },
       binding: {
         sequence: Sequence.linear,
-        harness: Harness.anthropic,
-        model: SONNET_5_MODEL,
-        thinkingLevel: undefined,
+        harness: Harness.pi,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -225,14 +225,7 @@ describe('switchboard composed clamp', () => {
       // clamp holds every sequence at linear — the orchestrator bindings
       // (metrics, replay-vision) included; other axes keep their bindings.
       expect(resolveBinding(ctx)).toEqual(
-        program === 'ai-observability'
-          ? {
-              ...DEFAULT_RESOLVED,
-              harness: Harness.anthropic,
-              model: SONNET_5_MODEL,
-              thinkingLevel: undefined,
-            }
-          : program === 'metrics'
+        program === 'metrics'
           ? {
               ...DEFAULT_RESOLVED,
               model: DEFAULT_AGENT_MODEL,
