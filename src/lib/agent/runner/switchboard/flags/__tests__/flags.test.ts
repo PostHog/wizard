@@ -14,7 +14,6 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-  SONNET_5_MODEL,
 } from '@lib/constants';
 import {
   areSeededTasksEnabled,
@@ -275,10 +274,10 @@ describe('isolation — everything on at once', () => {
         });
       } else if (program === 'ai-observability') {
         expect(resolved).toEqual({
-          ...LINEAR_DEFAULT,
-          harness: Harness.anthropic,
-          model: SONNET_5_MODEL,
-          thinkingLevel: undefined,
+          sequence: Sequence.linear,
+          harness: Harness.pi,
+          model: GPT5_6_SOL_MODEL,
+          thinkingLevel: 'medium',
         });
       } else if (program === 'metrics') {
         // Orchestrator + pi from its OWN binding, not the flag; stage models
