@@ -195,7 +195,7 @@ function generateCodeChallenge(verifier: string): string {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
 
-async function startCallbackServer(
+export async function startCallbackServer(
   authUrl: string,
   signupUrl: string,
   port: number,
@@ -302,6 +302,59 @@ async function startCallbackServer(
           </html>
         `);
       }
+    });
+
+    server.on('clientError', (error: NodeJS.ErrnoException, socket) => {
+      if (socket.destroyed || socket.writableEnded) return;
+      if (error.code === 'ECONNRESET' || !socket.writable) {
+        socket.destroy();
+        return;
+      }
+
+      // Parser errors may contain cookies and OAuth codes in rawPacket.
+      logToFile(
+        `[oauth] local HTTP request rejected: ${error.code ?? 'unknown'}`,
+      );
+      const overflow = error.code === 'HPE_HEADER_OVERFLOW';
+      let status = '400 Bad Request';
+      // Preserve Node's other parser error statuses when replacing its default handler.
+      switch (error.code) {
+        case 'HPE_HEADER_OVERFLOW':
+          status = '431 Request Header Fields Too Large';
+          break;
+        case 'HPE_CHUNK_EXTENSIONS_OVERFLOW':
+          status = '413 Payload Too Large';
+          break;
+        case 'ERR_HTTP_REQUEST_TIMEOUT':
+          status = '408 Request Timeout';
+          break;
+      }
+      const body = overflow
+        ? `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>PostHog wizard - Browser request too large</title>
+    ${OAUTH_CALLBACK_STYLES}
+  </head>
+  <body>
+    <p>Your browser sent more than ${
+      http.maxHeaderSize / 1024
+    } KiB of request headers.</p>
+    <p>This can happen when cookies from other localhost apps accumulate.</p>
+    <p>Clear cookies for localhost and retry, or open the login link from your terminal in a private/incognito window.</p>
+  </body>
+</html>`
+        : '';
+
+      socket.end(
+        `HTTP/1.1 ${status}\r\n` +
+          'Content-Type: text/html; charset=utf-8\r\n' +
+          `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+          'Connection: close\r\n' +
+          'Cache-Control: no-store\r\n\r\n' +
+          body,
+      );
     });
 
     server.listen(port, () => {
