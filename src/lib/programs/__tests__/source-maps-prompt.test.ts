@@ -32,6 +32,34 @@ describe('buildSourceMapsUploadPrompt hand-off report', () => {
   });
 });
 
+describe('buildSourceMapsUploadPrompt env tool contract', () => {
+  it('describes the answer check_env_keys actually returns', () => {
+    // The prompt used to promise "present/absent", a shape the tool never
+    // returned after it started answering { status, foundIn }. A prompt that
+    // misdescribes its own tool teaches the agent to misread the result.
+    const prompt = buildSourceMapsUploadPrompt(baseParams);
+
+    expect(prompt).toContain('status');
+    expect(prompt).toContain('foundIn');
+    expect(prompt).not.toContain('present/absent');
+  });
+
+  it('warns that a template declaration is not a set credential', () => {
+    // This program writes credentials. If it reads a key declared in
+    // .env.example as already set, it skips writing the real one.
+    const prompt = buildSourceMapsUploadPrompt(baseParams);
+
+    expect(prompt).toMatch(/\.env\.example/);
+    expect(prompt).toMatch(/documents a key rather than setting it/);
+  });
+
+  it('keeps the never-read-values rule', () => {
+    expect(buildSourceMapsUploadPrompt(baseParams)).toMatch(
+      /never values|don't read the file directly/,
+    );
+  });
+});
+
 describe('buildSourceMapsUploadPrompt env file paths', () => {
   it('scopes env tools to the selected monorepo project', () => {
     const prompt = buildSourceMapsUploadPrompt({

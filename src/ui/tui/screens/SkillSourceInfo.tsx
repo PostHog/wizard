@@ -2,9 +2,10 @@
  * Shared "Skill: <id> / URL: <downloadUrl>" block for intro screens.
  *
  * `useSkillEntry` fetches the entry from the skill menu and re-runs when
- * `skillId` or `local` change. The previous fetch is cancelled (its result
- * is ignored) so a session that flips `local=false → true` mid-mount picks
- * up the right base URL.
+ * `skillId` changes — detection sets it after mount. The previous fetch is
+ * cancelled so a late result can't overwrite a newer one. Which registry to
+ * fetch from is not a screen's business: `getSkillsBaseUrl()` reads the
+ * process-wide target.
  *
  * `<SkillSourceInfo>` renders the block, taking the entry as a prop so the
  * caller can reuse the same hook result for additional UI (e.g. showing
@@ -44,10 +45,10 @@ export function resolveSkillEntry(
   return variants.length === 1 ? variants[0] : null;
 }
 
-export function useSkillEntry(
-  skillId: string | null,
-  local: boolean,
-): { skillEntry: SkillEntry | null; fetchFailed: boolean } {
+export function useSkillEntry(skillId: string | null): {
+  skillEntry: SkillEntry | null;
+  fetchFailed: boolean;
+} {
   const [skillEntry, setSkillEntry] = useState<SkillEntry | null>(null);
   const [fetchFailed, setFetchFailed] = useState(false);
 
@@ -59,7 +60,7 @@ export function useSkillEntry(
     let cancelled = false;
     setSkillEntry(null);
     setFetchFailed(false);
-    void fetchSkillMenu(getSkillsBaseUrl(local)).then((menu) => {
+    void fetchSkillMenu(getSkillsBaseUrl()).then((menu) => {
       if (cancelled) return;
       if (!menu) {
         setFetchFailed(true);
@@ -75,7 +76,7 @@ export function useSkillEntry(
     return () => {
       cancelled = true;
     };
-  }, [skillId, local]);
+  }, [skillId]);
 
   return { skillEntry, fetchFailed };
 }

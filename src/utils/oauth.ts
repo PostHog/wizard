@@ -414,6 +414,46 @@ async function exchangeCodeForToken(
   return token;
 }
 
+// Refresh-token grant (RFC 6749 §6); the server rotates, so callers must store the returned refresh_token.
+export async function refreshAccessToken(
+  refreshToken: string,
+  baseUrl?: string,
+  clientId?: string,
+): Promise<OAuthTokenResponse> {
+  const oauthUrl = getOAuthUrl(baseUrl);
+  logToFile(`[oauth] refreshing access token at ${oauthUrl}/oauth/token`);
+  try {
+    const response = await axios.post(
+      `${oauthUrl}/oauth/token`,
+      {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        // The grant only refreshes under its minting app — provisioning signups pass their regional client.
+        client_id: clientId ?? getOAuthClientId(baseUrl),
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 30_000,
+      },
+    );
+    const token = OAuthTokenResponseSchema.parse(response.data);
+    logToFile('[oauth] access token refreshed');
+    return token;
+  } catch (e) {
+    logToFile(
+      '[oauth] token refresh failed:',
+      e instanceof Error ? e.message : e,
+    );
+    const refreshError = axios.isAxiosError(e)
+      ? oauthErrorFromTokenBody(e.response?.data)
+      : null;
+    throw refreshError ?? e;
+  }
+}
+
 /**
  * Warn — at login, while the user is still watching — when the grant came back
  * narrower than the request, and record the gap so narrowed runs are countable.

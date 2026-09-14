@@ -36,7 +36,12 @@ import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';
+import {
+  buildGatewayProvider,
+  GATEWAY_PROVIDER,
+  withGatewayRemint,
+} from './gateway';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
@@ -89,9 +94,10 @@ export function allowedOrchestratorTools(
 
 /**
  * The wizard tools a task gets. Four are always on — their handlers are fenced
- * and the coding tasks depend on them. `wizard_ask` is opt-in per task: it
- * stops the run until a person answers, so only a task whose prompt asks for it
- * may open that overlay.
+ * and the coding tasks depend on them. The rest are opt-in per task through
+ * its frontmatter: `wizard_ask` stops the run until a person answers, and the
+ * skill-menu pair (`load_skill_menu`, `install_skill`) lets a task pull its
+ * own skill variant.
  */
 const ALWAYS_ON_WIZARD_TOOLS = [
   'check_env_keys',
@@ -100,15 +106,16 @@ const ALWAYS_ON_WIZARD_TOOLS = [
   'publish_handoff',
 ];
 
+const OPT_IN_WIZARD_TOOLS = ['wizard_ask', 'load_skill_menu', 'install_skill'];
+
 export function allowedPiWizardTools(
   allowedTools: readonly string[] | undefined,
 ): Set<string> {
   const allowed = (allowedTools ?? []).map(shortToolName);
-  return new Set(
-    allowed.includes('wizard_ask')
-      ? [...ALWAYS_ON_WIZARD_TOOLS, 'wizard_ask']
-      : ALWAYS_ON_WIZARD_TOOLS,
-  );
+  return new Set([
+    ...ALWAYS_ON_WIZARD_TOOLS,
+    ...OPT_IN_WIZARD_TOOLS.filter((tool) => allowed.includes(tool)),
+  ]);
 }
 
 /**
@@ -212,9 +219,17 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const { provider, caps } = buildGatewayProvider({
-      gatewayUrl: boot.credentials.host.gatewayUrl,
-      accessToken: boot.credentials.accessToken,
+    const refreshAuth = () =>
+      gatewayAuth(
+        boot.credentials.host,
+        boot.credentials.accessToken,
+        boot.programId,
+      );
+    const auth = await refreshAuth();
+    const providerInputs = (current: GatewayAuth) => ({
+      gatewayUrl: current.gatewayUrl,
+      accessToken: current.token,
+      teamId: current.teamId,
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
       modelId,
@@ -222,6 +237,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       // back to the model table.
       effort,
     });
+    const { provider, caps } = buildGatewayProvider(providerInputs(auth));
     const registry = ModelRegistry.inMemory(AuthStorage.create());
     registry.registerProvider(GATEWAY_PROVIDER, provider as never);
     const model = registry.find(GATEWAY_PROVIDER, modelId);
@@ -232,12 +248,20 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       };
     }
 
+    // Shared flag: true while a wizard_ask overlay is open. The ask tool sets
+    // it (onAskPendingChange, below); the security fence reads it to pause
+    // Write/Edit until the answer comes back. Wired the same way as the linear
+    // pi run — without it the warehouse task could mutate files while its
+    // credential prompt sits open (up to TASK_ASK_TIMEOUT_MS).
+    const askState = { pending: false };
+
     // The same fail-closed fence as the linear run, with the task's disallow
     // list layered in (both the wizard-vocabulary and pi-short names).
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
       triageProvider: boot.triageProvider,
+      getWizardAskPending: () => askState.pending,
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
@@ -328,6 +352,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,
+      // Pause Write/Edit while the ask overlay is open (see askState above).
+      onAskPendingChange: (pending) => {
+        askState.pending = pending;
+      },
     }).filter((t) => wizardToolNames.has(t.name));
 
     const { createPiOrchestratorTools } = await import('./orchestrator-tools');
@@ -347,6 +375,22 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       customTools,
     });
     await agentSession.bindExtensions({});
+
+    // A turn that ends on a 401 from an aged bearer re-mints once and
+    // continues with the nudge the task would get anyway.
+    const turns = withGatewayRemint({
+      session: agentSession,
+      registry,
+      auth,
+      refreshAuth,
+      providerInputs,
+      continueText: () =>
+        orchestrator.currentTaskId ? TASK_NUDGE : SEED_NUDGE,
+      onRemint: () => {
+        logToFile('[pi-task] gateway token renewed after a 401; continuing');
+        analytics.wizardCapture('gateway token reminted', { harness: 'pi' });
+      },
+    });
 
     // The one complete list: exactly the tools registered on this session, in
     // the names the agent will call them by. posthog_exec binds as an extension.
@@ -369,6 +413,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
             break;
           }
           assistantTurns += 1;
+          turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
@@ -408,7 +453,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     capture.setInitialPrompt(taskPrompt);
 
     try {
-      await agentSession.prompt(taskPrompt);
+      await turns.prompt(taskPrompt);
 
       // pi's prompt() resolves the moment a turn carries no tool call — which
       // an agent mid-plan does emit. While the work has not reached its
@@ -423,7 +468,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         logToFile(
           `[pi-task] completion guard: not settled, nudge ${nudges}/${MAX_TASK_NUDGES}`,
         );
-        await agentSession.prompt(
+        await turns.prompt(
           orchestrator.currentTaskId ? TASK_NUDGE : SEED_NUDGE,
         );
       }

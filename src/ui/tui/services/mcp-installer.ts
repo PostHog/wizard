@@ -21,6 +21,7 @@ import {
   type McpClientResult,
 } from '@steps/add-mcp-server-to-clients/results';
 import { isPluginCapable } from '@steps/add-mcp-server-to-clients/plugin-client';
+import { isLoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
 import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
@@ -28,11 +29,17 @@ import { analytics } from '@utils/analytics';
 export interface McpClientInfo {
   name: string;
   supportsPlugin: boolean;
+  /** True when the plugin already ships the posthog MCP server (no direct entry needed). */
+  pluginBundlesMcp: boolean;
   /**
    * Set for clients connected by opening a hosted page in the browser. The
    * Done screen renders this so the user knows to finish setup in the browser.
    */
   finish?: { url: string; instruction: string };
+  /** The editor's own login command (e.g. `claude mcp login posthog`), the one manual step left. */
+  loginCommand?: string;
+  /** Same, for the plugin-provided server (e.g. `claude mcp login plugin:posthog:posthog`). */
+  pluginLoginCommand?: string;
 }
 
 export { McpClientStatus };
@@ -77,9 +84,13 @@ export function createMcpInstaller(): McpInstaller {
       return supported.map((c) => ({
         name: c.name,
         supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
+        pluginBundlesMcp: isPluginCapable(c) && c.pluginBundlesMcpServer(),
         finish: isBrowserFinishable(c)
           ? { url: c.connectorUrl, instruction: c.finishInstruction }
           : undefined,
+        loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
+        pluginLoginCommand:
+          (isLoginCapable(c) && c.pluginLoginCommand?.()) || undefined,
       }));
     },
 

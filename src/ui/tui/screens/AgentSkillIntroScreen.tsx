@@ -28,7 +28,7 @@ export const AgentSkillIntroScreen = ({
 
   const { session } = store;
   const skillId = session.skillId ?? 'unknown';
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId);
 
   let body: ReactNode;
 

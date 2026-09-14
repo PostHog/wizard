@@ -31,6 +31,7 @@ import {
   AdditionalFeature,
   McpOutcome,
   RunPhase,
+  ScanConsent,
   buildSession,
   type TaskNotice,
 } from '@lib/wizard-session';
@@ -40,7 +41,6 @@ import {
   getBlockingServiceKeys,
   type WizardReadinessResult,
 } from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
 import {
   WizardRouter,
   type ScreenName,
@@ -56,6 +56,7 @@ import type {
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
@@ -126,49 +127,17 @@ interface GateEntry {
  */
 const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
-/**
- * Fired once per blocked readiness result, so we can quantify how often
- * the wizard refuses to start and — crucially — split that between
- * confirmed PostHog outages and probe-level reachability failures that
- * are most likely the user's network. Helps us decide whether the
- * health-check UX is over-firing.
- */
+// Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
   try {
     const health = result.health;
     const blockingKeys = getBlockingServiceKeys(health);
-    const blockingStatuses = blockingKeys.map((k) => health[k]?.status);
-
-    const allNoConnection =
-      blockingStatuses.length > 0 &&
-      blockingStatuses.every((s) => s === ServiceHealthStatus.NoConnection);
-    const onlyGithubReleases =
-      blockingKeys.length === 1 && blockingKeys[0] === 'githubReleases';
-
-    const decision = onlyGithubReleases
-      ? 'github-releases-down'
-      : allNoConnection
-      ? 'no-connection'
-      : 'confirmed-outage';
-
-    const posthogStatus = health.posthogOverall?.status;
-    const retriesUsed = Math.max(
-      0,
-      ...(['llmGateway', 'mcp', 'githubReleases'] as const).map((k) => {
-        const ind = health[k]?.rawIndicator ?? '';
-        const m = ind.match(/attempts=(\d+)/);
-        return m ? Number(m[1]) - 1 : 0;
-      }),
-    );
+    const attempts = health.skillsOrigin.rawIndicator?.match(/attempts=(\d+)/);
+    const retriesUsed = Math.max(0, attempts ? Number(attempts[1]) - 1 : 0);
 
     analytics.wizardCapture('health check blocked', {
-      decision,
+      decision: 'skills-origin-down',
       blocking_keys: blockingKeys,
-      posthog_status_reachable:
-        posthogStatus !== ServiceHealthStatus.NoConnection,
-      posthog_status_reports_incident:
-        posthogStatus === ServiceHealthStatus.Down ||
-        posthogStatus === ServiceHealthStatus.Degraded,
       retries_used: retriesUsed,
     });
   } catch (err) {
@@ -428,11 +397,52 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed. Gate resolves via _checkGates(). */
+  /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
+    // Reports first: analytics merges tags into an event as it is sent, so
+    // `setup confirmed` only carries the warehouse tags if they are already
+    // set. On main they were, because reporting happened back in detect.
+    this._markWarehouseSourcesReportedIfNeeded();
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
+  }
+
+  /**
+   * Sharing is on: either the user turned it back on in the panel, or they
+   * pressed Continue without ever touching it. Both are reversible until
+   * completeSetup() resolves the intro gate and reports.
+   */
+  grantSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Granted);
+    this.emitChange();
+  }
+
+  /**
+   * Sharing is off. Suppresses reporting only — local detection still ran and
+   * the results stay in the session, so the outro suggestion and the warehouse
+   * task are unaffected; see `scanConsent` on `WizardSession`.
+   *
+   * Deliberately does not report. The panel's toggle can come back here, so
+   * marking the run reported would strand a user who turns sharing off and
+   * then on again. completeSetup() owns the single report.
+   */
+  declineSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Declined);
+    this.emitChange();
+  }
+
+  /**
+   * reportWarehouseSourcesDetected() is the single place scan results turn
+   * into telemetry; this just supplies its idempotency flag via the normal
+   * setter path (never mutate session directly). A no-op once
+   * `warehouseSourcesReported` is set, or for any program that never
+   * populated a warehouse-scan result in the first place.
+   */
+  private _markWarehouseSourcesReportedIfNeeded(): void {
+    if (reportWarehouseSourcesDetected(this.session)) {
+      this.$session.setKey('warehouseSourcesReported', true);
+    }
   }
 
   setRunPhase(phase: RunPhase): void {
@@ -449,6 +459,12 @@ export class WizardStore {
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
+    this.emitChange();
+  }
+
+  /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
+  setAccessToken(credentials: WizardSession['credentials']): void {
+    this.$session.setKey('credentials', credentials);
     this.emitChange();
   }
 
@@ -735,10 +751,12 @@ export class WizardStore {
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
+    loginCommands: string[] = [],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    this.$session.setKey('mcpLoginCommands', loginCommands);
     const featuresPayload =
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }
@@ -773,6 +791,22 @@ export class WizardStore {
 
   setSlackConnected(connected: boolean): void {
     this.$session.setKey('slackConnected', connected);
+    this.emitChange();
+  }
+
+  setGithubConnected(connected: boolean): void {
+    this.$session.setKey('githubConnected', connected);
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving GitHub gate declined. Carries the outro the user lands on,
+   * since declining ends the flow before the agent runs and there is no abort
+   * case to render one.
+   */
+  declineGithub(outroData: OutroData): void {
+    this.$session.setKey('githubDeclined', true);
+    this.$session.setKey('outroData', outroData);
     this.emitChange();
   }
 

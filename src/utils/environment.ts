@@ -21,8 +21,35 @@ export function isNonInteractiveEnvironment(): boolean {
   return false;
 }
 
+/**
+ * Session fields the environment must never set, matched case-insensitively
+ * against the camel-cased key `read-env` produces.
+ *
+ * `e2eAsk` re-wires the `wizard_ask` bridge in an otherwise non-interactive
+ * run. Only the e2e TUI host may set it: a real `--ci` run has nobody to answer,
+ * so every question would stall for the bridge timeout instead of failing fast
+ * with an actionable error. See `shouldDisableAsk`.
+ */
+const NEVER_FROM_ENV = ['e2eAsk'];
+
+/**
+ * Session args from the `POSTHOG_WIZARD_*` environment variables.
+ *
+ * `read-env` camel-cases every prefixed variable into a key, and the CI runner
+ * spreads the whole bag into `buildSession` — so adding a field to the session
+ * silently adds an environment variable that sets it. Most of them are meant to
+ * work that way (`POSTHOG_WIZARD_DEBUG` → `debug`); the ones in
+ * {@link NEVER_FROM_ENV} are not, and are dropped here rather than at the call
+ * site, so a second caller cannot reopen the door.
+ */
 export function readEnvironment(): Record<string, unknown> {
-  const result = readEnv('POSTHOG_WIZARD');
+  const result = readEnv('POSTHOG_WIZARD') as Record<string, unknown>;
+
+  for (const key of Object.keys(result)) {
+    if (NEVER_FROM_ENV.some((k) => k.toLowerCase() === key.toLowerCase())) {
+      delete result[key];
+    }
+  }
 
   return result;
 }

@@ -12,7 +12,6 @@ vi.mock('@utils/urls', () => ({
   detectRegion: vi.fn(),
   getHost: (r: string) => `https://${r}.posthog.com`,
   getCloudUrl: (r: string) => `https://${r}.posthog.com`,
-  getLlmGatewayUrl: (host: string) => `${host}/llm-gateway`,
   getUiHostFromHost: (host: string) => host,
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));

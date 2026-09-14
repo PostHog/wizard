@@ -10,8 +10,10 @@
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
-import { authenticate } from './authenticate';
+import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
+import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
+import { gatewayAuth } from '@lib/gateway-session';
 import { resolveHarness } from '../switchboard';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
@@ -28,8 +30,11 @@ import {
 } from '@lib/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
-import { CallType, getSkillsBaseUrl } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, IS_DEV } from '@lib/constants';
+import { VERSION } from '@lib/version';
+import { mcpUrlFor } from '@lib/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
@@ -42,20 +47,27 @@ import type { ProgramRun, BootstrapResult } from './types';
  * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
  * the program's `disallowedTools` so the SDK rejects calls outright.
  * Extracted so the policy can be unit-tested directly.
+ *
+ * `session.e2eAsk` is the one escape hatch. The e2e harness runs a `ci`
+ * session, but it does have an answerer — the driver loop answers each
+ * `wizard_ask` batch from the program's e2e profile. Without the flag the
+ * agent-in-the-loop layer (the ask bridge in both sequence arms, and the
+ * orchestrator's seeded warehouse task) stays unreachable from a test.
+ *
+ * Only the e2e TUI host sets the flag, from the `E2E_ASK` env var. No CLI flag
+ * populates it, so plain `--ci` and `--signup` runs behave exactly as before.
  */
 export function shouldDisableAsk(
-  session: Pick<WizardSession, 'ci' | 'signup'>,
+  session: Pick<WizardSession, 'ci' | 'signup' | 'e2eAsk'>,
 ): boolean {
-  return session.ci || session.signup;
+  return (session.ci || session.signup) && !session.e2eAsk;
 }
 
 export function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    default: false,
     signup: session.signup,
-    localMcp: session.localMcp,
     ci: session.ci,
     benchmark: session.benchmark,
     projectId: session.projectId,
@@ -89,7 +101,16 @@ export async function bootstrapProgram(
     enableDebugLogs();
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
+  const skillsBaseUrl = getSkillsBaseUrl();
+
+  // Where this run actually points. The three services switch independently,
+  // so otherwise "why did it use prod skills?" means reading three call sites.
+  logToFile(
+    `[agent-runner] targets build=${VERSION}${IS_DEV ? '/dev' : ''} ` +
+      `skills=${skillsBaseUrl} ` +
+      `mcp=${mcpUrlFor(session.localMcp)} ` +
+      `posthog=${session.baseUrl ?? 'region-resolved'}`,
+  );
 
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs that declare a health-check screen get pre-flight checks;
@@ -129,6 +150,7 @@ export async function bootstrapProgram(
       // above, but we proceed rather than aborting on a transient upstream blip.
       if (!isNonInteractiveEnvironment()) {
         await wizardAbort({
+          code: ErrorCodes.EnvServiceOutage,
           message:
             'Cannot start — external services are down:\n' +
             blockingLabels.map((l) => `  - ${l}`).join('\n') +
@@ -201,6 +223,18 @@ export async function bootstrapProgram(
     // writable file we failed to back up) must be fixed by the user. Fail
     // closed: the screen names the file + keys and exits.
     if (unfixable.length > 0) {
+      if (isNonInteractiveEnvironment()) {
+        await wizardAbort({
+          code: ErrorCodes.SettingsUnfixableConflict,
+          message:
+            'Cannot start — a Claude settings file redirects the agent away ' +
+            'from the PostHog gateway and cannot be neutralized automatically:\n' +
+            unfixable
+              .map((c) => `  - ${c.source} (${c.path}): ${c.keys.join(', ')}`)
+              .join('\n') +
+            '\n\nRemove the conflicting keys and re-run the wizard.',
+        });
+      }
       await getUI().showSettingsOverride(unfixable, () =>
         backupAndFixClaudeSettings(session.installDir),
       );
@@ -219,6 +253,7 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
+  maybeStampAiSdkDetected(session);
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -264,14 +299,27 @@ export async function bootstrapProgram(
     skillId: config.skillId,
   });
 
+  // The agent can't swap tokens mid-run, so freshness is measured after every park above, right before the mint.
+  await refreshAccessTokenIfNeeded(session);
+
   // Credentials (incl. the resolved host family and its MCP url) live on
   // `session.credentials`; narrow once at this boundary — `authenticate` above
   // set them — so downstream readers get a non-null type without asserting.
   const credentials = session.credentials!;
 
+  // Mint now so a refusal fails the boot before any agent starts. Later
+  // readers re-resolve through the cache, which re-mints past the refresh
+  // point.
+  const currentGatewayAuth = () =>
+    gatewayAuth(credentials.host, credentials.accessToken, programConfig.id);
+  await currentGatewayAuth();
+
   return {
     skillsBaseUrl,
     credentials,
+    // Carried so per-task sessions re-resolve against the same program the boot
+    // minted for, rather than digging it back out of the metadata bag.
+    programId: programConfig.id,
     wizardFlags,
     wizardFlagPayloads,
     wizardMetadata,
@@ -279,13 +327,17 @@ export async function bootstrapProgram(
     // Resolved once, here: the only place holding both the switchboard inputs
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(
-      {
-        baseURL: credentials.host.gatewayUrl,
-        authToken: credentials.accessToken,
-        // `call_type` splits scan spend out of the program's agent cost —
-        // same tag the in-run triage provider carries.
-        wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
-        wizardFlags,
+      async () => {
+        const auth = await currentGatewayAuth();
+        return {
+          baseURL: auth.gatewayUrl,
+          authToken: auth.token,
+          teamId: auth.teamId,
+          // `call_type` splits scan spend out of the program's agent cost,
+          // the same tag the in-run triage provider carries.
+          wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
+          wizardFlags,
+        };
       },
       resolveHarness({
         program: programConfig.id,

@@ -48,6 +48,23 @@ export const claudeConfigDir = (homeDir: string = os.homedir()): string =>
   process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
 
 /**
+ * Create a fresh, empty config dir for the agent subprocess and return its path.
+ * The spawn site sets it as `CLAUDE_CONFIG_DIR`, so the SDK's `claude` binary
+ * resolves credentials from this empty dir — never the user's `~/.claude`. With
+ * no `.credentials.json` to find, the binary cannot outrank the wizard's gateway
+ * token (see {@link detectStoredClaudeLogin}), so a stored login can no longer
+ * reach the PostHog gateway and 401.
+ *
+ * `mkdtempSync` gives each run its own dir, so concurrent runs never share one.
+ * `/tmp` on macOS/Linux matches the agent sandbox's writable roots; Windows has
+ * no `/tmp`, so fall back to the OS temp dir there.
+ */
+export function createIsolatedAgentConfigDir(): string {
+  const base = process.platform === 'win32' ? os.tmpdir() : '/tmp';
+  return fs.mkdtempSync(path.join(base, 'posthog-wizard-claude-'));
+}
+
+/**
  * Look for a stored Claude login. `homeDir` / `platform` are injectable for
  * tests; production uses the real home dir and platform.
  */

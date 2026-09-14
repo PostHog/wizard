@@ -165,6 +165,10 @@ const ORCHESTRATOR_TOOLS = new Set([
 /** The one tool that stops a task until a person answers. Named short in frontmatter. */
 export const ASK_TOOL = 'wizard_ask';
 
+/** The skill-menu tools, as agents ask for them in frontmatter. */
+const SKILL_MENU_TOOL = 'load_skill_menu';
+const INSTALL_SKILL_TOOL = 'install_skill';
+
 /**
  * The PostHog MCP, as an agent asks for it in frontmatter. Every tool a task
  * gets is granted by its own prompt, this one included: a task that never names
@@ -210,8 +214,7 @@ export interface AgentPrompt {
    * one an agent can reach — it can neither invent the task nor forget it.
    */
   runnerSeeded: boolean;
-  /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
-   * harness. The mapping is not 1:1 across providers, so each agent names both. */
+  /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
   modelSdk?: string;
@@ -234,8 +237,7 @@ export interface AgentPrompt {
   body: string;
 }
 
-/** The model + effort an agent runs on for a given harness — `pi` picks the gpt
- * column, anything else the sdk (anthropic) column. */
+/** Pi selects the pi profile; the legacy Anthropic SDK selects the sdk profile. */
 export function promptModelFor(
   prompt: AgentPrompt,
   harness: string,
@@ -309,6 +311,8 @@ interface AgentMenu {
 /** A native tool passes through; an MCP tool gets its fully-qualified name. */
 function expandToolName(name: string): string {
   if (name === ASK_TOOL) return WIZARD_TOOL_NAMES.wizardAsk;
+  if (name === SKILL_MENU_TOOL) return WIZARD_TOOL_NAMES.loadSkillMenu;
+  if (name === INSTALL_SKILL_TOOL) return WIZARD_TOOL_NAMES.installSkill;
   if (name === POSTHOG_MCP_TOOL) return POSTHOG_MCP_SDK_TOOL;
   return ORCHESTRATOR_TOOLS.has(name)
     ? `${ORCHESTRATOR_TOOL_PREFIX}${name}`

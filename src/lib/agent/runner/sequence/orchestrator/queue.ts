@@ -27,6 +27,66 @@ export const TaskStatus = {
 
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
+/**
+ * Why a task ended as skipped.
+ *
+ * A skip has several causes that look identical from outside: an agent finding
+ * the step does not apply, a user declining it, and an offer nobody answered.
+ * They mean opposite things — the first is a no-op, the last two are the user
+ * telling us something — and telling them apart needs the reason recorded at
+ * the moment of the skip, not inferred later from timings.
+ *
+ * Recorded on the task like `error` is on a failed one, so it reaches the
+ * skipped-task event and the run's queue.json alike.
+ */
+export const SkipReason = {
+  /** The user answered the step's notice with Skip. */
+  UserDeclined: 'user-declined',
+  /** The notice went unanswered until it timed out. */
+  NoticeTimeout: 'notice-timeout',
+  /** The notice could not be shown at all, so consent failed closed. */
+  NoticeError: 'notice-error',
+  /** The task agent reported `not needed`. See {@link NotNeededReason} for why. */
+  AgentNotNeeded: 'agent-not-needed',
+} as const;
+
+export type SkipReason = (typeof SkipReason)[keyof typeof SkipReason];
+
+/**
+ * Why the agent itself reported `not needed`.
+ *
+ * {@link SkipReason.AgentNotNeeded} records who decided the skip, not what they
+ * decided. `complete_task` offers `not needed` both for "the step does not
+ * apply" and for "you cannot do it", so an agent that never got a credential
+ * out of the user lands in the same bucket as one that found nothing to
+ * connect — and the bucket is named after the first meaning. For the one step
+ * that stops to ask for credentials, that is the difference that matters: a
+ * step nobody supplied a password for is not a step that did not apply.
+ *
+ * A sub-dimension of the skip reason, never a replacement for it, so every
+ * existing reason value keeps counting exactly what it counted before.
+ */
+export const NotNeededReason = {
+  /** Nothing to do: the step genuinely does not apply to this project. */
+  NotApplicable: 'not-applicable',
+  /** The user was asked and declined, or left the prompts unanswered. */
+  UserDeclined: 'user-declined',
+  /** Something outside the run stopped it — a credential, plan, or endpoint. */
+  Blocked: 'blocked',
+} as const;
+
+export type NotNeededReason =
+  (typeof NotNeededReason)[keyof typeof NotNeededReason];
+
+/**
+ * Whether a value names a reason. The pi harness hands tool arguments over
+ * unvalidated, so an invented value would otherwise reach the analytics
+ * dimension as free text — the one thing this step must never emit.
+ */
+export function isNotNeededReason(value: unknown): value is NotNeededReason {
+  return (Object.values(NotNeededReason) as unknown[]).includes(value);
+}
+
 export interface QueuedTask {
   id: string;
   type: string;
@@ -60,6 +120,10 @@ export interface QueuedTask {
   startedAt?: string;
   finishedAt?: string;
   error?: { type: string; message: string };
+  /** Set when `status` is `not needed`: why. The failed-task `error` of a skip. */
+  skipReason?: SkipReason;
+  /** Set only for an agent-reported skip, and only when the agent declared it. */
+  notNeededReason?: NotNeededReason;
 }
 
 export interface QueueFile {
@@ -294,8 +358,25 @@ export class QueueStore {
     return this.finish(id, TaskStatus.Done, handoff);
   }
 
-  /** Terminal: the agent could not do the task. Not done, not failed. */
-  skip(id: string, handoff?: TaskHandoff): QueuedTask {
+  /**
+   * Terminal: the task was not done, and that is not a failure.
+   *
+   * The reason is required, and sits before the optional handoff for that
+   * reason. A skip carrying no reason is what let a five-minute auto-decline
+   * hide inside the same event as an agent deciding a step did not apply.
+   *
+   * `notNeededReason` splits the agent-reported reason one level further; only
+   * an agent supplies it, and only when it declared one.
+   */
+  skip(
+    id: string,
+    reason: SkipReason,
+    handoff?: TaskHandoff,
+    notNeededReason?: NotNeededReason,
+  ): QueuedTask {
+    const t = this.require(id);
+    t.skipReason = reason;
+    if (notNeededReason) t.notNeededReason = notNeededReason;
     return this.finish(id, TaskStatus.Skipped, handoff);
   }
 

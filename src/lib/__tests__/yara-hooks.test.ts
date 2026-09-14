@@ -180,9 +180,12 @@ describe('yara-hooks', () => {
       expect(mockScan).not.toHaveBeenCalled();
     });
 
-    it('fails closed (blocks) when the scanner throws', async () => {
+    it('fails closed (blocks) when the scanner throws, without ending the run', async () => {
+      // Unlike a handoff, a blocked command leaves the agent somewhere to go.
+      const onTerminate = vi.fn();
       mockScan.mockRejectedValueOnce(new Error('wasm boom'));
-      const hook = createPreToolUseYaraHooks()[0].hooks[0];
+      const hook = createPreToolUseYaraHooks(undefined, onTerminate)[0]
+        .hooks[0];
       const result = await hook(
         input({ tool_name: 'Bash', tool_input: { command: 'echo hi' } }),
         'test-4',
@@ -190,6 +193,7 @@ describe('yara-hooks', () => {
       );
       expect(result.decision).toBe('block');
       expect(result.reason).toContain('Scanner error');
+      expect(onTerminate).not.toHaveBeenCalled();
     });
 
     it('returns empty when command is missing', async () => {
@@ -200,6 +204,260 @@ describe('yara-hooks', () => {
         { signal: dummySignal },
       );
       expect(result).toEqual({});
+    });
+
+    it('returns two matchers (Bash, publish_handoff)', () => {
+      const hooks = createPreToolUseYaraHooks();
+      expect(hooks).toHaveLength(2);
+    });
+
+    describe('publish_handoff content scanning', () => {
+      const handoffHook = () => createPreToolUseYaraHooks()[1].hooks[0];
+
+      it('blocks a flagged handoff report before the tool runs', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('hardcoded_posthog_api_key', {
+              severity: 'critical',
+              category: 'hardcoded_secrets',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: {
+              content: '# Report\n\nKey: phx_live_secret',
+            },
+          }),
+          'test-h1',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('YARA');
+        expect(result.reason).toContain('hardcoded_posthog_api_key');
+        expect(mockScan).toHaveBeenCalledWith(
+          '# Report\n\nKey: phx_live_secret',
+        );
+      });
+
+      it('allows a clean handoff report', async () => {
+        mockScan.mockResolvedValueOnce(noMatch);
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Setup report\n\nAll done.' },
+          }),
+          'test-h2',
+          { signal: dummySignal },
+        );
+        expect(result).toEqual({});
+      });
+
+      it('runs the scan in the output context with triage', async () => {
+        // An 'output'-context rule fires for the handoff scan; the provider
+        // is wired through so triage can drop false positives (here it
+        // doesn't — default mock keeps matches as true positives).
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', { scan_context: 'output' }),
+          ),
+        );
+        await createPreToolUseYaraHooks(dummyProvider)[1].hooks[0](
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: {
+              content: "posthog.capture('login', { email: user.email })",
+            },
+          }),
+          'test-h3',
+          { signal: dummySignal },
+        );
+        expect(mockScan).toHaveBeenCalledWith(
+          "posthog.capture('login', { email: user.email })",
+        );
+        expect(mockTriage).toHaveBeenCalled();
+      });
+
+      it("publishes anyway on a high-severity match — the report is the run's only channel", async () => {
+        // posthog_pii fires on prose *describing* the user's capture call.
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              severity: 'high',
+              category: 'posthog_pii',
+              action: 'remediate',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: {
+              content:
+                "# Report\n\nFound `posthog.capture('login', { email: user.email })` in src/auth.ts.",
+            },
+          }),
+          'test-h3b',
+          { signal: dummySignal },
+        );
+        expect(result).toEqual({});
+        // Allowed, not ignored — so this can't pass on an empty scan.
+        const report = formatScanReport();
+        expect(report).toContain(
+          '[WARNED] posthog_pii_in_capture_call (HIGH) — PreToolUse:publish_handoff',
+        );
+      });
+
+      it('still blocks a critical match — a live key must not reach a PR body', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_hardcoded_personal_api_key', {
+              severity: 'critical',
+              category: 'posthog_hardcoded_key',
+              action: 'remediate',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report\n\nKey: phx_' + 'a'.repeat(40) },
+          }),
+          'test-h3c',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('posthog_hardcoded_personal_api_key');
+      });
+
+      it('blocks on the critical match even when a lesser one outranks it in order', async () => {
+        // Names the critical rule, not whichever match came back first.
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              severity: 'high',
+              category: 'posthog_pii',
+              scan_context: 'output',
+            }),
+            match('hardcoded_github_pat', {
+              severity: 'critical',
+              category: 'hardcoded_secret',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report' },
+          }),
+          'test-h3d',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('hardcoded_github_pat');
+      });
+
+      it("ignores matches for another surface's scan_context", async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('prompt_injection_instruction_override', {
+              scan_context: 'input',
+            }),
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report' },
+          }),
+          'test-h4',
+          { signal: dummySignal },
+        );
+        expect(result).toEqual({});
+      });
+
+      it('ignores other MCP tools and core tools', async () => {
+        for (const toolName of [
+          'Bash',
+          'Write',
+          'mcp__wizard-tools__set_env_values',
+          'mcp__posthog-wizard__fetch',
+        ]) {
+          const result = await handoffHook()(
+            input({ tool_name: toolName, tool_input: { content: 'x' } }),
+            'test-h5',
+            { signal: dummySignal },
+          );
+          expect(result).toEqual({});
+          expect(mockScan).not.toHaveBeenCalled();
+        }
+      });
+
+      it('terminates the run when the scanner throws', async () => {
+        // Blocking alone would leave the agent rewording a report that can
+        // never publish — the run has to end visibly instead.
+        const onTerminate = vi.fn();
+        mockScan.mockRejectedValueOnce(new Error('wasm boom'));
+        const result = await createPreToolUseYaraHooks(
+          undefined,
+          onTerminate,
+        )[1].hooks[0](
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report' },
+          }),
+          'test-h6',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('Scanner error');
+        expect(onTerminate).toHaveBeenCalledWith(
+          expect.stringContaining('session terminated'),
+        );
+      });
+
+      it('does not terminate the run on an ordinary block', async () => {
+        const onTerminate = vi.fn();
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('hardcoded_github_pat', {
+              severity: 'critical',
+              category: 'hardcoded_secret',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const result = await createPreToolUseYaraHooks(
+          undefined,
+          onTerminate,
+        )[1].hooks[0](
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: { content: '# Report\n\nghp_' + 'a'.repeat(36) },
+          }),
+          'test-h6b',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(onTerminate).not.toHaveBeenCalled();
+      });
+
+      it('returns empty when content is missing', async () => {
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_handoff',
+            tool_input: null,
+          }),
+          'test-h7',
+          { signal: dummySignal },
+        );
+        expect(result).toEqual({});
+      });
     });
   });
 

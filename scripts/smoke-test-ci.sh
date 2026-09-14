@@ -4,7 +4,8 @@
 # wizard-workbench, and run in CI mode.
 #
 # Prerequisites:
-#   - POSTHOG_PERSONAL_API_KEY env var (or in .env)
+#   - POSTHOG_PERSONAL_API_KEY env var (or in .env): a personal API key (phx_)
+#   - WIZARD_CI_GATEWAY_TOKEN_FILE: path to a file holding the AI gateway key
 #   - A wizard-workbench repo checked out (for the test app), pointed to by:
 #       - WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench
 #         or
@@ -73,7 +74,11 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-PROJECT_ID="${POSTHOG_PROJECT_ID:-}"
+# Prefer the wizard's own env var names; keep the old spellings working.
+PROJECT_ID="${POSTHOG_WIZARD_PROJECT_ID:-${POSTHOG_PROJECT_ID:-}}"
+
+# Without --region the wizard races /api/users/@me/ across both clouds (f9215b37).
+REGION="${POSTHOG_WIZARD_REGION:-${POSTHOG_REGION:-}}"
 
 # ── Build & Pack ────────────────────────────────────────────────────────────
 # Build the CI variant (NODE_ENV=ci): identical to the published build except
@@ -131,6 +136,9 @@ echo "    Dir:        $WORK_DIR"
 if [ -n "$PROJECT_ID" ]; then
   echo "    Project ID: $PROJECT_ID"
 fi
+if [ -n "$REGION" ]; then
+  echo "    Region:     $REGION"
+fi
 echo ""
 
 CMD=(
@@ -143,6 +151,10 @@ CMD=(
 
 if [ -n "$PROJECT_ID" ]; then
   CMD+=(--project-id "$PROJECT_ID")
+fi
+
+if [ -n "$REGION" ]; then
+  CMD+=(--region "$REGION")
 fi
 
 "${CMD[@]}"

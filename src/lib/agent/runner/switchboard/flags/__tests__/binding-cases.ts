@@ -4,7 +4,7 @@
  * `runBindingCases` turns a table into `it` blocks — specs stay declarative.
  */
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_AGENT_MODEL, Harness, Sequence } from '@lib/constants';
+import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@lib/constants';
 import {
   resolveBinding,
   type SwitchboardCtx,
@@ -57,9 +57,9 @@ describe('runBindingCases', () => {
       ctx: { program: 'posthog-integration', flags: {} },
       binding: {
         sequence: Sequence.linear,
-        harness: Harness.anthropic,
-        model: DEFAULT_AGENT_MODEL,
-        thinkingLevel: undefined,
+        harness: Harness.pi,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },

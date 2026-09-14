@@ -35,6 +35,20 @@ describe('allowedPiWizardTools', () => {
   it('withholds wizard_ask when a task states no tools at all', () => {
     expect(allowedPiWizardTools(undefined).has('wizard_ask')).toBe(false);
   });
+
+  it('grants the skill-menu pair only to a task whose prompt allows them', () => {
+    const granted = allowedPiWizardTools([
+      'Read',
+      'load_skill_menu',
+      'install_skill',
+    ]);
+    expect(granted.has('load_skill_menu')).toBe(true);
+    expect(granted.has('install_skill')).toBe(true);
+
+    const withheld = allowedPiWizardTools(['Read', 'Edit']);
+    expect(withheld.has('load_skill_menu')).toBe(false);
+    expect(withheld.has('install_skill')).toBe(false);
+  });
 });
 
 describe('allowedPiCodingTools', () => {

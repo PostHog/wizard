@@ -112,8 +112,13 @@ export function piRuntimeNotes(sequence: Sequence, caps: RuntimeCaps): string {
 
   if (linear) notes.push(SKILL_MENU, SKILL_STEPS);
   notes.push(NO_LITERAL_URL, ENV_VIA_MCP);
-  if (caps.posthogMcp) notes.push(POSTHOG_MCP);
-  if (linear) notes.push(DASHBOARD_STEP);
+  // Both of these name `posthog_exec`, so both need the tool to exist. The
+  // dashboard step is not a separate judgement: it IS a run of `posthog_exec`
+  // calls, and a run whose MCP setup failed carries on without that step.
+  if (caps.posthogMcp) {
+    notes.push(POSTHOG_MCP);
+    if (linear) notes.push(DASHBOARD_STEP);
+  }
 
   notes.push(linear ? STATUS_LINEAR : STATUS_TASK);
   if (!linear) notes.push(COMPLETE_TASK);

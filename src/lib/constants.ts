@@ -5,32 +5,27 @@
 import { VERSION } from './version';
 
 // ── Models ──────────────────────────────────────────────────────────
-
-/**
- * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
- * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
- */
-export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
+// Coordinate IDs/efforts with the mint allowlists and gateway transport/required prompt policy; see agent/runner/README.md.
 
 /** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
 
 /**
- * Cheaper, faster model for mechanical agent work (e.g. repo classification
- * during source-map detection). Passed via AgentConfig.modelOverride.
+ * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
+ * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
  */
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const DEFAULT_AGENT_MODEL = SONNET_5_MODEL;
 
-/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
+/** Undated haiku, for scan triage. The alias tracks the current 4.5 release rather than pinning one. */
 export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
 
 /**
- * Larger model for planning / hard work. Named the switchboard could route to
- * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ * Cheaper, faster model for mechanical agent work (e.g. repo classification
+ * during source-map detection). Passed via AgentConfig.modelOverride.
  */
-export const OPUS_MODEL = 'claude-opus-4-8';
+export const HAIKU_MODEL = HAIKU_TRIAGE_MODEL;
 
-// The only openai models the wizard runs.
+// Locally supported OpenAI models; constants alone do not authorize gateway use.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
 export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
 export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
@@ -97,6 +92,11 @@ export enum Integration {
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  elixir = 'elixir',
+  go = 'go',
+  rust = 'rust',
+  // Must stay after kmp/swift/android: those claim gradle projects first.
+  java = 'java',
 
   // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
@@ -113,13 +113,18 @@ export interface Args {
 // ── Environment ──────────────────────────────────────────────────────
 
 import { IS_DEV } from '@env';
+import {
+  CONTEXT_MILL_LOCAL_URL,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from './local-dev';
 export { IS_DEV };
 export const DEBUG = false;
 
 // ── URLs ─────────────────────────────────────────────────────────────
 
 export const DEFAULT_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://us.posthog.com';
 /**
  * Region-agnostic PostHog app URL. Resolves to us.posthog.com or
@@ -128,10 +133,10 @@ export const DEFAULT_URL = IS_DEV
  * land on the right region without us needing to know it client-side.
  */
 export const POSTHOG_APP_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://app.posthog.com';
 export const DEFAULT_HOST_URL = IS_DEV
-  ? 'http://localhost:8010'
+  ? POSTHOG_LOCAL_URL
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
 /** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
@@ -154,18 +159,24 @@ export const POSTHOG_ORG_AI_SETTINGS_URL =
   'https://app.posthog.com/settings/organization-details#setting=organization-ai-consent';
 export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
 
-/** Remote base URL for fetching the skill menu + downloading skills. */
-export const REMOTE_SKILLS_BASE_URL =
+/**
+ * Two origins for the same release, same filenames. Interchangeable bases, so
+ * making AWS primary is a `getSkillsBaseUrl` change, not a code change.
+ */
+export const GITHUB_SKILLS_BASE_URL =
   'https://github.com/PostHog/context-mill/releases/latest/download';
-/** Local base URL when `--local-mcp` is set (served by context-mill dev server). */
-export const LOCAL_SKILLS_BASE_URL = 'http://localhost:8765';
+export const AWS_SKILLS_BASE_URL = 'https://context-mill.posthog.com/latest';
+/** Alias of `@lib/local-dev`'s constant, kept for existing importers. */
+export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 
 /**
- * Pick the skills base URL based on the session's localMcp flag.
- * Single source of truth — do not inline this ternary anywhere.
+ * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
+ * both). Takes no argument on purpose: callers can't pass the wrong flag.
  */
-export function getSkillsBaseUrl(localMcp: boolean): string {
-  return localMcp ? LOCAL_SKILLS_BASE_URL : REMOTE_SKILLS_BASE_URL;
+export function getSkillsBaseUrl(): string {
+  return getLocalDev().localContextMill
+    ? LOCAL_SKILLS_BASE_URL
+    : GITHUB_SKILLS_BASE_URL;
 }
 
 // ── Analytics (internal) ──────────────────────────────────────────────
@@ -291,13 +302,6 @@ export function wizardUserAgentForProgram(programId?: string): string {
     ? `${WIZARD_USER_AGENT}; program: ${programId}`
     : WIZARD_USER_AGENT;
 }
-
-// ── HTTP headers ─────────────────────────────────────────────────────
-
-/** Header prefix for PostHog properties (e.g. X-POSTHOG-PROPERTY-VARIANT). */
-export const POSTHOG_PROPERTY_HEADER_PREFIX = 'X-POSTHOG-PROPERTY-';
-/** Header prefix for PostHog feature flags. */
-export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 
 // ── Timeouts ─────────────────────────────────────────────────────────
 

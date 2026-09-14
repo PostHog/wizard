@@ -16,8 +16,10 @@ import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import { gatewayAuth } from '@lib/gateway-session';
 import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
+import { createIsolatedAgentConfigDir } from '@lib/agent/stored-login';
 import { analytics } from '@utils/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
@@ -201,8 +203,8 @@ export async function* runMcpPromptViaSdk(args: {
    *  context so the follow-up prompt can reference what the agent
    *  already showed. */
   resumeSessionId?: string;
-  /** Program this run's gateway spend attributes to; omitting it leaves the
-   *  spend unattributed. */
+  /** Program this run's gateway spend attributes to. Omitting it fails the run
+   *  rather than going unattributed, so every caller must supply one. */
   programId?: string;
   /** Integration label for the trace tags; the tutorial usually has none. */
   integration?: string;
@@ -213,8 +215,8 @@ export async function* runMcpPromptViaSdk(args: {
   // have to import this module's dependencies.
   const wizardMetadata = buildTutorialRunTags(args);
 
-  // Route the SDK's LLM calls through the PostHog LLM gateway, authed
-  // with the user's OAuth access token. Set BEFORE loading the SDK in
+  // Route the SDK's LLM calls through the PostHog AI gateway, authed
+  // with the run's minted token. Set BEFORE loading the SDK in
   // case any in-process code reads env at module init (cached base
   // URLs, OAuth setup, etc.) — same reason `initializeAgent` does this
   // before its query() call. Without these the SDK tries to
@@ -222,17 +224,21 @@ export async function* runMcpPromptViaSdk(args: {
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-  // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  const gatewayUrl = credentials.host.gatewayUrl;
+  // The url and the bearer are one unit: a run must take both from the same
+  // mint.
+  const auth = await gatewayAuth(
+    credentials.host,
+    credentials.accessToken,
+    args.programId,
+  );
+  const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
-  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  process.env.ANTHROPIC_AUTH_TOKEN = auth.token;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
 
   logToFile(
     `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
-      credentials.accessToken
-        ? credentials.accessToken.slice(0, 4) + '***'
-        : '(missing)'
+      auth.token ? auth.token.slice(0, 4) + '***' : '(missing)'
     }`,
   );
 
@@ -355,11 +361,16 @@ export async function* runMcpPromptViaSdk(args: {
           // wizard's own gateway routing is injected fresh below. See
           // agent-env-isolation.ts.
           ...sanitizeAgentSubprocessEnv(process.env),
-          // Gateway routing — injected explicitly (set on process.env above;
-          // the strip removed them from the inherited copy, so re-add here).
-          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
-          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // Gateway routing from this run's own auth, not process.env: a
+          // concurrent run writes those globals too, and there is an await
+          // between the write above and this read.
+          ANTHROPIC_BASE_URL: auth.gatewayUrl,
+          ANTHROPIC_AUTH_TOKEN: auth.token,
+          CLAUDE_CODE_OAUTH_TOKEN: auth.token,
+          // Point the binary at an empty config dir so it cannot resolve a
+          // stored Claude login and send that to the gateway, which 401s it.
+          // See stored-login.ts.
+          CLAUDE_CONFIG_DIR: createIsolatedAgentConfigDir(),
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // The MCP config resolves this in the child; sending the value would
           // put it on the CLI's argv.
@@ -368,10 +379,14 @@ export async function* runMcpPromptViaSdk(args: {
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
-          // Bedrock fallback plus this run's trace tags — the gateway reads
-          // these to attribute its `$ai_generation` events. Flags stay empty:
-          // the tutorial doesn't fork on any.
-          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(wizardMetadata ?? {}, {}),
+          // This run's trace tags, which the gateway reads to attribute its
+          // `$ai_generation` events. Flags stay empty: the tutorial doesn't
+          // fork on any.
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            wizardMetadata ?? {},
+            {},
+            auth.teamId,
+          ),
         },
       },
     });

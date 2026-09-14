@@ -1,4 +1,5 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { ErrorCodes } from '@lib/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
@@ -11,6 +12,7 @@ const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
   {
     match: /^unsupported language for mcp analytics$/i,
+    errorCode: ErrorCodes.DetectUnsupportedPlatform,
     message: 'Unsupported language for MCP analytics',
     body:
       'MCP analytics supports TypeScript/JavaScript (`@posthog/mcp`) and Python ' +

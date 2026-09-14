@@ -2,6 +2,7 @@ import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
@@ -9,7 +10,9 @@ import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
+import { classifyRunFailure, emitWizardError } from '@lib/errors';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
@@ -47,6 +50,7 @@ async function advanceStep(
 ): Promise<void> {
   if (step.screenId === 'auth') {
     await authenticate(store.session, config.id);
+    maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
     await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);
@@ -82,13 +86,31 @@ export function runWizard(
         '@lib/task-stream/destinations/posthog'
       );
 
+      // Before the TUI mounts: once Ink owns the alt screen, anything written
+      // to it is wiped on unmount (see the catch block below), so an abort here
+      // would leave the user on a loading screen with no message.
+      const local = getLocalDev();
+      const localServicesError = await checkLocalServices({
+        ...local,
+        // An explicit --base-url wins over --local-posthog (see buildSession),
+        // so don't probe :8010 when one was given.
+        localPosthog: local.localPosthog && !options.baseUrl,
+      });
+      if (localServicesError) {
+        const { wizardAbort } = await import('@utils/wizard-abort');
+        await wizardAbort({ message: localServicesError });
+        return;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tui = startTUI(WIZARD_VERSION, config.id as any);
       const activeTui = tui;
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
+        localDev: options.localDev as boolean | undefined,
         localMcp: options.localMcp as boolean | undefined,
+        localPosthog: options.localPosthog as boolean | undefined,
         installDir,
         ci: false,
         signup: options.signup as boolean | undefined,
@@ -254,11 +276,20 @@ export function runWizard(
           // ignore
         }
       }
-      // Print after unmount — anything printed into the alt screen is wiped.
-      // eslint-disable-next-line no-console
-      console.error('Wizard run failed:', err);
+      // Print after unmount: anything printed into the alt screen is wiped.
+      // A coded failure is a decision with its own message; anything else is
+      // unexpected and goes out whole.
+      const failure = classifyRunFailure(err);
+      if (failure.coded) {
+        // eslint-disable-next-line no-console
+        console.error(failure.message);
+      } else {
+        // eslint-disable-next-line no-console
+        console.error('Wizard run failed:', err);
+      }
       // eslint-disable-next-line no-console
       console.error(`Full logs: ${getLogFilePath()}`);
+      emitWizardError({ code: failure.code, message: failure.message });
       process.exit(1);
     }
   })();

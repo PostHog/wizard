@@ -116,6 +116,7 @@ describe('createWizardAskBridge', () => {
           { id: 'a', prompt: 'A', kind: 'text' },
           { id: 'b', prompt: 'B', kind: 'text' },
         ],
+        subject: 'postgres',
       });
       resolveAnswers({ a: 'x', b: 'y' });
       await p;
@@ -124,6 +125,7 @@ describe('createWizardAskBridge', () => {
         'wizard_ask answered',
         expect.objectContaining({
           source: 'product-tours',
+          subject: 'postgres',
           question_count: 2,
           duration_ms: expect.any(Number),
         }),
@@ -142,6 +144,7 @@ describe('createWizardAskBridge', () => {
           { id: 'a', prompt: 'A', kind: 'text' },
           { id: 'b', prompt: 'B', kind: 'text' },
         ],
+        subject: 'stripe',
       });
 
       const cancelledCall = wizardCaptureMock.mock.calls.find(
@@ -150,6 +153,7 @@ describe('createWizardAskBridge', () => {
       expect(cancelledCall).toBeDefined();
       expect(cancelledCall?.[1]).toMatchObject({
         source: 'product-tours',
+        subject: 'stripe',
         question_count: 2,
         timed_out: false,
       });

@@ -80,6 +80,20 @@ describe('warehouse seed task', () => {
     );
     expect(tasks).toEqual([]);
   });
+
+  it('queues the task in an e2e run, where the harness answers', () => {
+    // The e2e host runs a `ci` session but drives the ask overlay itself, so
+    // the seeded-task path gets pre-merge coverage instead of none.
+    const tasks = seed(
+      session({
+        ci: true,
+        e2eAsk: true,
+        frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [POSTGRES] },
+      }),
+    );
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].type).toBe('warehouse');
+  });
 });
 
 describe('warehouse task notice', () => {
@@ -104,6 +118,22 @@ describe('warehouse task notice', () => {
     // The task is deferred behind the code work (seeded-deps.ts), so consenting
     // up front must not read as "expect a prompt any moment now".
     expect(notice()?.body[0]).toContain('at the end');
+  });
+
+  it('asks for the answer now, and says the credentials come later', () => {
+    // Two moments, minutes apart. The copy is shown at the first and has to
+    // name the second, or a user who says yes has no idea they will be needed
+    // again — which is how an accepted step still ends in an unanswered prompt.
+    const body = notice()?.body[0] ?? '';
+    expect(body).toContain('Answer now');
+    expect(body).toContain('credentials');
+  });
+
+  it('does not invite the user to leave for the whole run', () => {
+    // The copy written for the old start-of-run modal said "you can leave the
+    // setup to run until it asks". The run does stop and ask, at the end, for
+    // credentials only that person has.
+    expect(notice()?.body.join(' ')).not.toContain('leave the setup to run');
   });
 
   it('names what was detected', () => {

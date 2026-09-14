@@ -330,3 +330,84 @@ describe('deferSeededTasks', () => {
     expect(store.get(other.id)?.dependsOn).toContain(warehouse.id);
   });
 });
+
+/**
+ * The half of #1103 this change keeps.
+ *
+ * Consent moved back to seed time; execution did not. The warehouse step still
+ * runs last, after every coding task, because that is where its credential
+ * questions belong. These drain the whole planned graph and assert the order the
+ * user actually experiences, so a future change that answers the notice early
+ * cannot quietly drag the work forward with it.
+ */
+describe('execution still happens last', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'seeded-order-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  /** Run the graph to completion, tier by tier, recording the order. */
+  const drain = (): string[][] => {
+    const tiers: string[][] = [];
+    for (let guard = 0; guard < 20; guard += 1) {
+      const runnable = store.nextRunnable();
+      if (runnable.length === 0) break;
+      tiers.push(runnable.map((t) => t.type).sort());
+      for (const task of runnable) {
+        store.start(task.id);
+        store.complete(task.id);
+      }
+    }
+    return tiers;
+  };
+
+  it('leaves the seeded task in the last tier before the sink', () => {
+    const { warehouse } = plannedQueue(store);
+    deferSeededTasks(store, [warehouse], () => [], SINKS);
+
+    const tiers = drain();
+
+    expect(tiers.at(-1)).toEqual(['report']);
+    expect(tiers.at(-2)).toEqual(['warehouse']);
+    expect(tiers[0]).toEqual(['init', 'install']);
+  });
+
+  it('runs every coding task before the seeded one, whatever order they finish in', () => {
+    const { warehouse } = plannedQueue(store);
+    deferSeededTasks(store, [warehouse], () => [], SINKS);
+
+    const order = drain().flat();
+    const warehouseAt = order.indexOf('warehouse');
+
+    for (const type of [
+      'install',
+      'init',
+      'identify',
+      'error-tracking',
+      'capture',
+      'review',
+      'dashboard',
+    ]) {
+      expect(order.indexOf(type)).toBeLessThan(warehouseAt);
+    }
+    expect(order.indexOf('report')).toBeGreaterThan(warehouseAt);
+  });
+
+  it('is not pulled forward by a task that was answered but not yet run', () => {
+    // Consent is taken at seed time, before the planner runs. The task is still
+    // an ordinary pending task at that point, so the deferral applies to it
+    // exactly as it did before the answer existed.
+    const { warehouse } = plannedQueue(store);
+    expect(store.get(warehouse.id)?.status).toBe('pending');
+
+    deferSeededTasks(store, [warehouse], () => [], SINKS);
+
+    expect(store.get(warehouse.id)?.dependsOn).toHaveLength(7);
+    expect(store.nextRunnable().map((t) => t.type)).not.toContain('warehouse');
+  });
+});

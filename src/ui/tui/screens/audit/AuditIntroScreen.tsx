@@ -22,7 +22,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
   // bin.ts seeds session.skillId from ProgramConfig.skillId before render,
   // so audit and events-audit pick up their respective skill metadata here.
   const skillId = session.skillId ?? 'audit';
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId);
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>

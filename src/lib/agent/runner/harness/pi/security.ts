@@ -29,7 +29,11 @@ import {
   scanAndTriage,
   type RepeatBlockTracker,
 } from '@lib/yara-hooks';
-import { scanVerdict, type ScanContext } from '@lib/yara-policy';
+import {
+  publishBlockingMatch,
+  scanVerdict,
+  type ScanContext,
+} from '@lib/yara-policy';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 
@@ -111,6 +115,8 @@ export interface ToolGateContext {
 export interface GateDecision {
   block: boolean;
   reason?: string;
+  /** End the run, don't just refuse the call. Set when a blocked publish_handoff would otherwise leave no report. */
+  terminate?: boolean;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -265,6 +271,8 @@ function blockMessage(m: ScanMatch): string {
  *   hardcoded keys, PII), WITH triage, and with the same wizard-doc
  *   `posthog_pii` suppression the anthropic path uses so the agent's own
  *   event-plan files aren't blocked.
+ * - publish_handoff → scan the report ('output'-context rules) with triage,
+ *   but only a CRITICAL match refuses the publish — it's the only channel.
  * Returns a block reason, or undefined to allow. Read/grep are post-scanned on
  * their output (in the tool_result hook), not here.
  */
@@ -311,6 +319,15 @@ async function preExecutionYaraBlock(
       phase = 'PostToolUse';
       tool = 'Edit';
       break;
+    case 'publish_handoff':
+      // Agent-authored content persisted to the task stream and the host file.
+      // Own labels, not Write's — the block bar differs (critical only).
+      content = str(input.content);
+      ctx = 'output';
+      triage = llmProvider;
+      phase = 'PreToolUse';
+      tool = 'publish_handoff';
+      break;
     default:
       return undefined;
   }
@@ -321,11 +338,22 @@ async function preExecutionYaraBlock(
   if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
     matches = matches.filter((m) => m.metadata.category !== 'posthog_pii');
   }
-  recordExternalScan(phase, tool, matches.map(toReportViolation), 'blocked');
-  if (matches.length === 0) return undefined;
+  // Any match blocks — except publish_handoff, critical only.
+  const blocking =
+    toolName === 'publish_handoff'
+      ? publishBlockingMatch(matches)
+      : matches[0] ?? null;
+
+  recordExternalScan(
+    phase,
+    tool,
+    matches.map(toReportViolation),
+    blocking ? 'blocked' : 'warned',
+  );
+  if (!blocking) return undefined;
 
   const attempt = repeatTracker?.attempt(toolName, content) ?? 1;
-  return repeatBlockReason(attempt, toolName, blockMessage(matches[0]));
+  return repeatBlockReason(attempt, toolName, blockMessage(blocking));
 }
 
 /**
@@ -375,9 +403,12 @@ export async function evaluateToolCall(
     return { block: false };
   } catch (err) {
     logToFile('[pi-security] gate error — failing closed:', err);
+    // A publish_handoff the gate can't clear leaves the run with no report at
+    // all, so end it visibly instead of letting the agent reword and retry.
     return {
       block: true,
       reason: 'Security check failed; tool blocked (fail-closed).',
+      terminate: toolName === 'publish_handoff',
     };
   }
 }
@@ -444,6 +475,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       );
       if (decision.block) {
         state.blockedCount += 1;
+        if (decision.terminate) state.criticalViolation = true;
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
         return { block: true, reason: decision.reason };
       }

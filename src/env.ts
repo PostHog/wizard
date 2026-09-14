@@ -53,6 +53,8 @@ type RuntimeEnvKey =
   // would claim it as an unknown CLI option and strict-reject the run.
   | 'WIZARD_CI_FLAG_OVERRIDES'
   | 'WIZARD_CI_EXCLUDE_TASKS'
+  | 'WIZARD_CI_GATEWAY_TOKEN_FILE'
+  | 'WIZARD_CI_GATEWAY_URL'
   // Wizard CLI configuration (yargs POSTHOG_WIZARD_ prefix)
   | 'POSTHOG_WIZARD_BENCHMARK_CONFIG'
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
@@ -66,6 +68,7 @@ type RuntimeEnvKey =
   // which would tie every sandbox deploy to an npm release of this package.
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
+  | 'POSTHOG_HANDOFF_OUTPUT_PATH'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'

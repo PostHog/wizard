@@ -1,14 +1,8 @@
-/**
- * The switchboard — where a program's `(sequence, harness, model)` binding is
- * resolved. Two independent middleware chains, one per axis: CLI wins over
- * PostHog flag wins over per-program binding wins over `DEFAULT_BINDING`.
- *
- * Layout: `index.ts` (shared machinery + composer), `harness.ts`, `sequence.ts`.
- * Model ids are gateway strings — add new ones as constants in `@lib/constants`.
- */
+// Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
 import {
   DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
   SONNET_5_MODEL,
   Harness,
   Sequence,
@@ -108,11 +102,12 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-/** Default binding. Every program points here until it overrides. */
+// Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
 export const DEFAULT_BINDING: ProgramBinding = {
   sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: DEFAULT_AGENT_MODEL,
+  harness: Harness.pi,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
 };
 
 /**
@@ -123,7 +118,12 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'posthog-integration': DEFAULT_BINDING,
   'revenue-analytics-setup': DEFAULT_BINDING,
   'warehouse-source': DEFAULT_BINDING,
-  'error-tracking-upload-source-maps': DEFAULT_BINDING,
+  'error-tracking-upload-source-maps': {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
   audit: DEFAULT_BINDING,
   'events-audit': DEFAULT_BINDING,
   'posthog-doctor': DEFAULT_BINDING,
@@ -135,6 +135,14 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  // Orchestrator on pi. The binding routes only; every stage's model and
+  // effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
+  metrics: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'replay-vision': {
     sequence: Sequence.orchestrator,
     harness: Harness.anthropic,

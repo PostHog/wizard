@@ -6,8 +6,13 @@ import {
   createStopHook,
   isWarlockDisabled,
   buildAuthErrorContext,
+  buildAgentEnv,
+  reportMcpSetup,
 } from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { RESUME_INSTRUCTION } from '@lib/agent/signals';
+import { analytics } from '@utils/analytics';
+import { wizardAbort } from '@utils/wizard-abort';
 import { Sequence } from '@lib/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -19,6 +24,11 @@ import {
 // Mock dependencies
 vi.mock('../../utils/analytics');
 vi.mock('../../utils/debug');
+// wizardAbort exits the process; the 401 tests below need it to just reject.
+vi.mock('@utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
+  wizardAbort: vi.fn(),
+}));
 
 // Mock the SDK module
 const mockQuery = vi.fn();
@@ -51,6 +61,7 @@ const mockUIInstance = {
   showBlockingOutage: vi.fn(),
   setReadinessWarnings: vi.fn(),
   showSettingsOverride: vi.fn(),
+  showAuthError: vi.fn(),
   startRun: vi.fn(),
   syncTodos: vi.fn(),
   groupMultiselect: vi.fn(),
@@ -72,9 +83,7 @@ describe('runAgent', () => {
   const defaultOptions: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    default: false,
     signup: false,
-    localMcp: false,
     ci: false,
     benchmark: false,
     yaraReport: false,
@@ -87,6 +96,14 @@ describe('runAgent', () => {
     posthogApiKey: 'phx_test_token',
     sequence: Sequence.linear,
     triageProvider: () => Promise.resolve('false_positive'),
+    gatewayAuth: {
+      // Deliberately different from posthogApiKey above: the subprocess must
+      // take its bearer from the run's resolved auth, and identical values
+      // would make either source pass.
+      gatewayUrl: 'https://gateway.test',
+      token: 'phe_run_scoped_token',
+      refreshAtMs: Date.now() + 3600_000,
+    },
   };
 
   beforeEach(() => {
@@ -582,5 +599,395 @@ describe('buildAuthErrorContext', () => {
     expect(
       ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
     ).toBe(true);
+  });
+});
+
+describe('buildAgentEnv header shape', () => {
+  const metadata = { run_id: 'r1', integration: 'nextjs' };
+  const flags = { 'wizard-orchestrator': 'test' };
+
+  it('sends one properties blob and no per-key or bedrock headers', () => {
+    const encoded = buildAgentEnv(metadata, flags, 42);
+    const [name, json] = encoded.split(': ', 2);
+    expect(name).toBe('X-PostHog-Properties');
+    // Fallback is native in the gateway's routing chain, and the run tags ride
+    // the blob rather than per-key headers.
+    expect(JSON.parse(json)).toEqual({
+      ai_product: 'wizard',
+      team_id: 42,
+      run_id: 'r1',
+      integration: 'nextjs',
+      'wizard_flag_wizard-orchestrator': 'test',
+    });
+    expect(encoded).not.toContain('x-posthog-use-bedrock-fallback');
+    expect(encoded).not.toContain('X-POSTHOG-PROPERTY-');
+  });
+});
+
+describe('subprocess gateway credentials', () => {
+  // Self-contained: the fixtures inside the runAgent describe are not in scope
+  // here, and this test only needs a config plus a spinner.
+  const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+  const config = {
+    workingDirectory: '/test/dir',
+    mcpServers: {},
+    model: 'claude-sonnet-5',
+    // Deliberately different from the gateway bearer below: identical values
+    // would let either source pass.
+    posthogApiKey: 'phx_user_oauth_token',
+    sequence: Sequence.linear,
+    triageProvider: () => Promise.resolve('false_positive'),
+    gatewayAuth: {
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      token: 'phe_run_scoped_token',
+      teamId: 42,
+      refreshAtMs: Date.now() + 3600_000,
+    },
+  };
+  const options: WizardRunOptions = {
+    debug: false,
+    installDir: '/test/dir',
+    signup: false,
+    ci: false,
+    benchmark: false,
+    yaraReport: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUIInstance.spinner.mockReturnValue(spinner);
+  });
+
+  it('takes the base url and bearer from the run own auth', async () => {
+    function* ok() {
+      yield {
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        result: 'done',
+      };
+    }
+    mockQuery.mockReturnValue(ok());
+
+    await runAgent(
+      config,
+      'test prompt',
+      options,
+      spinner as unknown as SpinnerHandle,
+      {
+        successMessage: 'ok',
+        errorMessage: 'err',
+      },
+    );
+
+    const env = mockQuery.mock.calls[0][0].options.env;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://ai-gateway.us.posthog.com');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('phe_run_scoped_token');
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('phe_run_scoped_token');
+    // The MCP token is the user's own OAuth key and must not be swapped for
+    // the gateway bearer.
+    expect(env.POSTHOG_MCP_TOKEN).toBe('phx_user_oauth_token');
+    // The run tags ride one properties blob, with the minted team on it.
+    expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
+    expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('"team_id":42');
+  });
+});
+
+describe('gateway re-mint on 401', () => {
+  const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+  const options: WizardRunOptions = {
+    debug: false,
+    installDir: '/test/dir',
+    signup: false,
+    ci: false,
+    benchmark: false,
+    yaraReport: false,
+  };
+  const HOUR = 3600_000;
+  const auth = (token: string, refreshAtMs: number) => ({
+    gatewayUrl: 'https://ai-gateway.us.posthog.com',
+    token,
+    teamId: 42,
+    refreshAtMs,
+  });
+  const config = (
+    gatewayAuth: ReturnType<typeof auth>,
+    refreshGatewayAuth: () => Promise<ReturnType<typeof auth>>,
+  ) => ({
+    workingDirectory: '/test/dir',
+    mcpServers: {},
+    model: 'claude-sonnet-5',
+    posthogApiKey: 'phx_user_oauth_token',
+    sequence: Sequence.linear,
+    triageProvider: () => Promise.resolve('false_positive'),
+    gatewayAuth,
+    refreshGatewayAuth,
+  });
+  const run = (cfg: ReturnType<typeof config>) =>
+    runAgent(cfg, 'test prompt', options, spinner as unknown as SpinnerHandle, {
+      successMessage: 'ok',
+      errorMessage: 'err',
+    });
+
+  function* rejectedSession(id: string) {
+    yield {
+      type: 'system',
+      subtype: 'init',
+      session_id: id,
+      model: 'm',
+      tools: [],
+      mcp_servers: [],
+    };
+    yield {
+      type: 'assistant',
+      session_id: id,
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'API Error: 401 {"detail":"token expired"}' },
+        ],
+      },
+    };
+    // Not reached: the 401 handler leaves the loop before the SDK's result.
+    yield {
+      type: 'result',
+      subtype: 'success',
+      session_id: id,
+      is_error: true,
+      result: 'API Error: 401',
+    };
+  }
+  function* completedSession(id: string) {
+    yield {
+      type: 'system',
+      subtype: 'init',
+      session_id: id,
+      model: 'm',
+      tools: [],
+      mcp_servers: [],
+    };
+    yield {
+      type: 'result',
+      subtype: 'success',
+      session_id: id,
+      is_error: false,
+      result: 'done',
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUIInstance.spinner.mockReturnValue(spinner);
+    vi.mocked(wizardAbort).mockRejectedValue(new Error('wizardAbort: exit'));
+  });
+
+  it('mints once and resumes the session when an aged bearer is rejected', async () => {
+    mockQuery
+      .mockReturnValueOnce(rejectedSession('sess-1'))
+      .mockReturnValueOnce(completedSession('sess-2'));
+    const refresh = vi
+      .fn()
+      .mockResolvedValue(auth('phe_fresh', Date.now() + HOUR));
+    const cfg = config(auth('phe_stale', Date.now() - 1), refresh);
+
+    const result = await run(cfg);
+
+    expect(result).toEqual({});
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(wizardAbort).not.toHaveBeenCalled();
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    const [first, second] = mockQuery.mock.calls.map((c) => c[0]);
+    expect(first.options.resume).toBeUndefined();
+    expect(second.options.resume).toBe('sess-1');
+    // The new subprocess carries the new bearer and finds the transcript in
+    // the same config dir; the env is frozen at spawn, so a new one is the
+    // only way to hand it over.
+    expect(second.options.env.ANTHROPIC_AUTH_TOKEN).toBe('phe_fresh');
+    expect(second.options.env.CLAUDE_CODE_OAUTH_TOKEN).toBe('phe_fresh');
+    expect(second.options.env.CLAUDE_CONFIG_DIR).toBe(
+      first.options.env.CLAUDE_CONFIG_DIR,
+    );
+    // The resumed session is told to pick up, not restarted from the prompt.
+    const resumed = await second.prompt.next();
+    expect(resumed.value.message.content).toBe(RESUME_INSTRUCTION);
+    expect(cfg.gatewayAuth.token).toBe('phe_fresh');
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway token reminted',
+      { resumed: true },
+    );
+  });
+
+  it('fails the run on a second 401 after the re-mint', async () => {
+    mockQuery
+      .mockReturnValueOnce(rejectedSession('sess-1'))
+      .mockReturnValueOnce(rejectedSession('sess-2'));
+    // The new bearer is also past refresh (a slow run under a short TTL), so
+    // only the once-per-run rule stands between this and a second mint.
+    const refresh = vi
+      .fn()
+      .mockResolvedValue(auth('phe_fresh', Date.now() - 1));
+
+    const result = await run(
+      config(auth('phe_stale', Date.now() - 1), refresh),
+    );
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(mockUIInstance.showAuthError).toHaveBeenCalledTimes(1);
+    expect(wizardAbort).toHaveBeenCalledTimes(1);
+    // In production wizardAbort exits; the mocked rejection surfaces as the
+    // run's API error.
+    expect(result.error).toBe('WIZARD_API_ERROR');
+  });
+
+  it('judges a failed resumed session on its own error, not the old 401', async () => {
+    function* resumedThenFailed(id: string) {
+      yield {
+        type: 'system',
+        subtype: 'init',
+        session_id: id,
+        model: 'm',
+        tools: [],
+        mcp_servers: [],
+      };
+      yield {
+        type: 'result',
+        subtype: 'success',
+        session_id: id,
+        is_error: true,
+        result: 'API Error: 500 upstream exploded',
+      };
+    }
+    mockQuery
+      .mockReturnValueOnce(rejectedSession('sess-1'))
+      .mockReturnValueOnce(resumedThenFailed('sess-2'));
+    const refresh = vi
+      .fn()
+      .mockResolvedValue(auth('phe_fresh', Date.now() + HOUR));
+
+    const result = await run(
+      config(auth('phe_stale', Date.now() - 1), refresh),
+    );
+
+    // The 401 that triggered the re-mint is history; reporting it here would
+    // send the user to the auth screen for a 500.
+    expect(result.error).toBe('WIZARD_API_ERROR');
+    expect(result.message).toContain('500');
+    expect(result.message).not.toContain('401');
+    expect(mockUIInstance.showAuthError).not.toHaveBeenCalled();
+  });
+
+  it('does not re-mint when a fresh bearer is rejected', async () => {
+    mockQuery.mockReturnValueOnce(rejectedSession('sess-1'));
+    const refresh = vi.fn();
+
+    const result = await run(
+      config(auth('phe_fresh', Date.now() + HOUR), refresh),
+    );
+
+    // A fresh token the gateway rejects is a bad credential, not age.
+    expect(refresh).not.toHaveBeenCalled();
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(mockUIInstance.showAuthError).toHaveBeenCalledTimes(1);
+    expect(wizardAbort).toHaveBeenCalledTimes(1);
+    expect(result.error).toBe('WIZARD_API_ERROR');
+  });
+});
+
+describe('auth error context', () => {
+  // The 401 screen's region comes from whichever url it is handed, which is why
+  // runAgent passes the run's resolved auth rather than the process global a
+  // concurrent run also writes.
+  it.each([
+    ['https://ai-gateway.us.posthog.com', 'us'],
+    ['https://gateway.eu.posthog.com/wizard', 'eu'],
+    ['http://localhost:3308', 'local'],
+  ])('derives the region from the url it is given (%s)', (url, region) => {
+    const ctx = buildAuthErrorContext('/test/dir', url);
+    expect(ctx.gatewayUrl).toBe(url);
+    expect(ctx.region).toBe(region);
+  });
+});
+
+describe('mcp setup reporting', () => {
+  const PH = 'posthog-wizard';
+  const TOOL = `mcp__${PH}__exec`;
+
+  beforeEach(() => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+  });
+
+  const captures = () =>
+    vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.filter(([name]) => name === 'mcp setup failed');
+
+  /** Properties of the one capture the case expects, narrowed for the asserts. */
+  const firstCaptureProps = (): Record<string, unknown> => {
+    const [call] = captures();
+    if (!call) throw new Error('expected an "mcp setup failed" capture');
+    return call[1] ?? {};
+  };
+
+  it('says nothing when the server connected and gave us its tool', () => {
+    reportMcpSetup({
+      mcp_servers: [{ name: PH, status: 'connected' }],
+      tools: ['Read', 'Bash', TOOL],
+    });
+    expect(captures()).toHaveLength(0);
+  });
+
+  /**
+   * The whole point. The SDK drops a server it cannot reach and the run carries
+   * on without the tool — so the only signal is this init report, and before
+   * this it went to a log file nobody reads. A warehouse run that created
+   * nothing looked identical to one that chose not to.
+   */
+  it.each([
+    ['failed', [{ name: PH, status: 'failed' }], [], /server status: failed/],
+    [
+      'pending',
+      [{ name: PH, status: 'pending' }],
+      [],
+      /server status: pending/,
+    ],
+    [
+      'absent from the report',
+      [{ name: 'wizard-tools', status: 'connected' }],
+      ['mcp__wizard-tools__exec'],
+      /missing from the SDK init report/,
+    ],
+    [
+      'connected but registering no tool',
+      [{ name: PH, status: 'connected' }],
+      ['Read', 'Bash'],
+      /registered no tool/,
+    ],
+  ])(
+    'captures a PostHog MCP server that is %s',
+    (_label, servers, tools, reason) => {
+      reportMcpSetup({ mcp_servers: servers, tools });
+      const props = firstCaptureProps();
+      expect(props).toMatchObject({ harness: 'anthropic', scope: 'run' });
+      expect(props.error).toMatch(reason);
+    },
+  );
+
+  it('carries the whole server roster so one event explains the run', () => {
+    reportMcpSetup({
+      mcp_servers: [
+        { name: PH, status: 'failed' },
+        { name: 'wizard-tools', status: 'connected' },
+      ],
+      tools: [],
+    });
+    expect(firstCaptureProps().mcp_servers).toBe(
+      `${PH}:failed,wizard-tools:connected`,
+    );
+  });
+
+  it('treats an init message with no server list as a failure', () => {
+    reportMcpSetup({});
+    expect(captures()).toHaveLength(1);
   });
 });

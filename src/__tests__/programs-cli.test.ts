@@ -207,7 +207,7 @@ describe('flat skill commands', () => {
   });
 });
 
-describe('yargs parsing for the audit family', () => {
+describe('yargs parsing for program commands', () => {
   test('camelCases --install-dir end-to-end', async () => {
     const argv = await parseCommand(
       auditCommand,

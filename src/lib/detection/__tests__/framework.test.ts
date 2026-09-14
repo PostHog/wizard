@@ -5,6 +5,10 @@ import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
+import { ELIXIR_AGENT_CONFIG } from '../../../frameworks/elixir/elixir-wizard-agent';
+import { GO_AGENT_CONFIG } from '../../../frameworks/go/go-wizard-agent';
+import { JAVA_AGENT_CONFIG } from '../../../frameworks/java/java-wizard-agent';
+import { RUST_AGENT_CONFIG } from '../../../frameworks/rust/rust-wizard-agent';
 import { FLUTTER_AGENT_CONFIG } from '../../../frameworks/flutter/flutter-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
@@ -53,6 +57,18 @@ describe('Integration enum order (drives first-match detection)', () => {
   test('generic Node is the last resort of the entire detection', () => {
     // javascriptNode matches any package.json; anything after it is unreachable.
     expect(order[order.length - 1]).toBe(Integration.javascriptNode);
+  });
+
+  test('java is ordered after kmp, swift, and android (they claim gradle projects first)', () => {
+    for (const specific of [
+      Integration.kmp,
+      Integration.swift,
+      Integration.android,
+    ]) {
+      expect(order.indexOf(Integration.java)).toBeGreaterThan(
+        order.indexOf(specific),
+      );
+    }
   });
 
   test('flutter is ordered before android and swift (its subtrees look native)', () => {
@@ -149,6 +165,69 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Rust crate resolves to rust', async () => {
+    const opts = project({
+      'Cargo.toml': '[package]\nname = "my-app"\nedition = "2021"\n',
+      'src/main.rs': 'fn main() {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.rust,
+    );
+  });
+
+  test('a Phoenix project resolves to elixir', async () => {
+    const opts = project({
+      'mix.exs':
+        'defmodule MyApp.MixProject do\n  use Mix.Project\n\n  def project do\n    [app: :my_app, deps: deps()]\n  end\n\n  defp deps do\n    [{:phoenix, "~> 1.7"}]\n  end\nend\n',
+      'config/config.exs': 'import Config',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.elixir,
+    );
+  });
+
+  test('a Go module project resolves to go', async () => {
+    const opts = project({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'main.go': 'package main',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.go,
+    );
+  });
+
+  test('a Go project with an embedded frontend package.json still resolves to go', async () => {
+    const opts = project({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'package.json': JSON.stringify({ devDependencies: { esbuild: '^0.20' } }),
+      'package-lock.json': '{}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.go,
+    );
+  });
+
+  test('a Maven project resolves to java', async () => {
+    const opts = project({
+      'pom.xml':
+        '<project><groupId>com.example</groupId><artifactId>app</artifactId></project>',
+      'src/main/java/App.java': 'class App {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.java,
+    );
+  });
+
+  test('a plain Gradle JVM project resolves to java, not android', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'java' id 'org.springframework.boot' }`,
+      'src/main/java/App.java': 'class App {}',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.java,
+    );
+  });
+
   test('a Flutter project resolves to flutter, not its android/ subtree', async () => {
     const opts = project({
       'pubspec.yaml': FLUTTER_PUBSPEC,
@@ -224,6 +303,122 @@ describe('android detect', () => {
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('java detect', () => {
+  const detect = JAVA_AGENT_CONFIG.detection.detect;
+
+  test('claims a Maven project', async () => {
+    const opts = project({ 'pom.xml': '<project></project>' });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a plain Gradle JVM project', async () => {
+    const opts = project({
+      'build.gradle.kts': `plugins { java }\ndependencies {}`,
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim an Android gradle project', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'com.android.application' }`,
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a gradle project with an AndroidManifest.xml subtree', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'java' }`,
+      'app/src/main/AndroidManifest.xml': '<manifest/>',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a KMP project', async () => {
+    const opts = project({
+      'build.gradle.kts': `plugins { kotlin("multiplatform") }`,
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a Flutter project', async () => {
+    const opts = project({
+      'pubspec.yaml': 'name: my_flutter_app\n',
+      'android/build.gradle': `plugins { id 'com.android.application' }`,
+      'settings.gradle': 'include ":app"',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project with no build files', async () => {
+    const opts = project({ 'src/main/java/App.java': 'class App {}' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('rust detect', () => {
+  const detect = RUST_AGENT_CONFIG.detection.detect;
+
+  test('claims a crate with a [package] section', async () => {
+    const opts = project({
+      'Cargo.toml': '[package]\nname = "my-app"\nedition = "2021"\n',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a workspace-root-only manifest', async () => {
+    const opts = project({
+      'Cargo.toml': '[workspace]\nmembers = ["crates/*"]\n',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a Cargo.toml', async () => {
+    const opts = project({ 'src/main.rs': 'fn main() {}' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('elixir detect', () => {
+  const detect = ELIXIR_AGENT_CONFIG.detection.detect;
+
+  const mixExs =
+    'defmodule MyApp.MixProject do\n  use Mix.Project\n\n  def project do\n    [app: :my_app]\n  end\nend\n';
+
+  test('claims a Mix project', async () => {
+    const opts = project({ 'mix.exs': mixExs });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a mix.exs without a project definition', async () => {
+    const opts = project({ 'mix.exs': '# placeholder\n' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a mix.exs', async () => {
+    const opts = project({ 'lib/my_app.ex': 'defmodule MyApp do\nend\n' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('go detect', () => {
+  const detect = GO_AGENT_CONFIG.detection.detect;
+
+  test('claims a Go module project', async () => {
+    const opts = project({ 'go.mod': 'module example.com/app\n\ngo 1.22\n' });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a go.mod without a module directive', async () => {
+    const opts = project({ 'go.mod': '// not a real module file\n' });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a project without a go.mod', async () => {
+    const opts = project({ 'main.go': 'package main' });
     await expect(detect(opts)).resolves.toBe(false);
   });
 });

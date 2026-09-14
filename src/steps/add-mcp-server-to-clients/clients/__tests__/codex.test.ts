@@ -80,28 +80,26 @@ describe('CodexMCPClient', () => {
   });
 
   describe('isServerInstalled', () => {
-    it('returns true when posthog appears in mcp list output', async () => {
-      spawnSyncMock.mockReturnValue({
-        status: 0,
-        stdout: 'posthog\n',
-        stderr: '',
-      });
+    it('returns true when config.toml has the posthog server section', async () => {
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp"\n',
+      );
       const client = new CodexMCPClient();
       await expect(client.isServerInstalled()).resolves.toBe(true);
     });
 
-    it('returns false when posthog is absent from mcp list output', async () => {
-      spawnSyncMock.mockReturnValue({
-        status: 0,
-        stdout: 'other-server\n',
-        stderr: '',
-      });
+    it('returns false when posthog is absent from config.toml', async () => {
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.other]\nurl = "https://example.com"\n',
+      );
       const client = new CodexMCPClient();
       await expect(client.isServerInstalled()).resolves.toBe(false);
     });
 
-    it('returns false when mcp list exits non-zero', async () => {
-      spawnSyncMock.mockReturnValue({ status: 1, stdout: '', stderr: 'err' });
+    it('returns false when config.toml is unreadable', async () => {
+      readFileSyncMock.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
       const client = new CodexMCPClient();
       await expect(client.isServerInstalled()).resolves.toBe(false);
     });

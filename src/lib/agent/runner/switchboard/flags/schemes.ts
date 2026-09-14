@@ -6,7 +6,6 @@
  */
 import { z } from 'zod';
 import {
-  DEFAULT_AGENT_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
@@ -20,12 +19,13 @@ import type { EffortLevel } from '../models';
 
 // ── Shared vocabulary ─────────────────────────────────────────────────────
 
-/** Model variant key → gateway id. */
+/** Model variant key → gateway id. A key the gateway no longer mints is dropped
+ * rather than re-aimed: the payload then fails validation and the binding
+ * default stands, which is visible in the log instead of silently rerouting. */
 const MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
   'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
   'gpt-5-6-sol': GPT5_6_SOL_MODEL,
-  'sonnet-4-6': DEFAULT_AGENT_MODEL,
   'sonnet-5': SONNET_5_MODEL,
 };
 

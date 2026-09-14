@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { ErrorCodes } from '@lib/errors';
 import { findPackageJsons } from '@lib/programs/shared/package-scanning';
 
 export type WebAnalyticsDetectError =
@@ -24,6 +25,7 @@ export const WEB_ANALYTICS_ABORT_CASES: AbortCase[] = [
   },
   {
     match: /^insufficient permissions$/i,
+    errorCode: ErrorCodes.AuthMissingScope,
     message: 'Insufficient permissions',
     body:
       'The doctor could not query your project — the authenticated token is ' +
@@ -33,6 +35,7 @@ export const WEB_ANALYTICS_ABORT_CASES: AbortCase[] = [
   },
   {
     match: /^posthog sdk not installed$/i,
+    errorCode: ErrorCodes.DetectNoPosthogSdk,
     message: 'PostHog SDK not installed',
     body:
       'The doctor could not find a PostHog SDK in this project. Install and ' +

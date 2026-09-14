@@ -42,6 +42,18 @@ export class AgentOutputSignals {
   }
 
   /**
+   * Drop the retained API-error lines and keep every other signal. Used after
+   * a re-mint so the run is judged on the resumed session, not on the 401
+   * that ended the first one.
+   */
+  forgetApiErrors(): void {
+    const kept = this.lines.filter(
+      (line) => !line.includes(OUTPUT_SIGNALS.API_ERROR),
+    );
+    this.lines.splice(0, this.lines.length, ...kept);
+  }
+
+  /**
    * Record the SDK's `apiKeySource` from its `init` message (e.g.
    * `"/login managed key"`, `"ANTHROPIC_API_KEY"`). Used to triage a 401:
    * a managed-login source means the SDK authenticated with a stored Claude

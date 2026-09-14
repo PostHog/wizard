@@ -38,6 +38,10 @@ export interface StreamTask {
 export interface TaskStreamError {
   type: string;
   message: string;
+  /** Stable error code from the wizard error catalog, when known. */
+  code?: string;
+  /** Structured context for the error code. */
+  detail?: Record<string, unknown>;
 }
 
 /**

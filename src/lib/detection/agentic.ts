@@ -76,12 +76,16 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
-  // Rust / Go / Elixir / JVM / .NET: no framework targets yet, but found so
-  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
-  'Cargo.toml',
-  'go.mod',
-  'mix.exs',
+  // Java
   'pom.xml',
+  // Rust
+  'Cargo.toml',
+  // Elixir
+  'mix.exs',
+  // Go
+  'go.mod',
+  // .NET: no framework targets yet, but found so
+  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   '*.csproj',
   // Mobile / native
   'Package.swift',
@@ -304,13 +308,11 @@ function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
     installDir: session.installDir,
     ci: session.ci,
     debug: session.debug,
-    default: false,
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,
     signup: session.signup,
     apiKey: session.apiKey,
     projectId: session.projectId,
-    localMcp: session.localMcp,
   };
 }
 
@@ -363,7 +365,8 @@ export async function detectProjectsWithAgent(
       posthogApiKey: accessToken,
       host,
       detectPackageManager: detectNodePackageManagers,
-      skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
+      skillsBaseUrl: getSkillsBaseUrl(),
+      programId,
       integrationLabel: 'agentic-detect',
       wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],

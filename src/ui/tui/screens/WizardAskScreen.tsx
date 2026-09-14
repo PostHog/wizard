@@ -37,6 +37,26 @@ export function handleAskKey(
   if (key.escape) store.cancelPendingQuestion();
 }
 
+/**
+ * Whether an answer would leave a required question effectively unanswered.
+ *
+ * The `wizard_ask` schema marks fields `required` (defaulting to true), but the
+ * overlay used to submit whatever the input held — so pressing Enter on an empty
+ * required credential field sent an empty string on to the agent. A blank host
+ * or password is indistinguishable there from a real answer, so the warehouse
+ * task ran on it, failed source creation, and dead-ended with no signal that the
+ * user had in effect declined. Blocking the empty submit keeps the contract the
+ * schema already advertises; Esc stays the way to skip. Optional fields
+ * (`required === false`) are never blocked, and pickers always yield a value.
+ */
+export function isRequiredButEmpty(
+  question: Pick<AskQuestion, 'required'>,
+  value: string | string[],
+): boolean {
+  if (question.required === false) return false;
+  return Array.isArray(value) ? value.length === 0 : value.trim().length === 0;
+}
+
 export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -50,6 +70,9 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<AskAnswers>({});
   const [lastPendingId, setLastPendingId] = useState<string | null>(null);
+  // Set when the user tries to submit an empty required field, cleared once a
+  // real answer goes through. Drives the inline "this field is required" nudge.
+  const [requiredHint, setRequiredHint] = useState(false);
   // What the user last did with the link, so the overlay can confirm it. The
   // auto-copy below seeds 'copied'; pressing `o`/`c` overrides it.
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'opened'>(
@@ -138,6 +161,7 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
     setLastPendingId(pending.id);
     setIndex(0);
     setAnswers({});
+    setRequiredHint(false);
     return null;
   }
 
@@ -148,6 +172,13 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const progress = total > 1 ? `Question ${index + 1} of ${total}` : null;
 
   const submit = (value: string | string[]) => {
+    // Don't let a required field go through empty — it would reach the agent as
+    // a blank answer it can't tell from a real one. Nudge instead; Esc skips.
+    if (isRequiredButEmpty(question, value)) {
+      setRequiredHint(true);
+      return;
+    }
+    setRequiredHint(false);
     const next: AskAnswers = { ...answers, [question.id]: value };
     if (index + 1 < total) {
       setAnswers(next);
@@ -211,6 +242,14 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
           onSubmit={submit}
         />
       </Box>
+      {requiredHint && (
+        <Box marginTop={1}>
+          <Text color={Colors.accent}>
+            {Icons.warning} This field is required — type an answer, or press
+            ESC to skip.
+          </Text>
+        </Box>
+      )}
       <Box marginTop={1}>
         <Text dimColor>
           <Text color={Colors.accent}>ESC</Text> skip

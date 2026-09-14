@@ -46,6 +46,12 @@ import { OutroKind } from '@lib/wizard-session';
 interface ProjectData {
   projectApiKey: string;
   accessToken: string;
+  /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
+  expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   host: HostResolution;
   distinctId: string;
   projectId: number;
@@ -425,6 +431,12 @@ export async function getOrAskForProjectData(
   host: HostResolution;
   projectApiKey: string;
   accessToken: string;
+  /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
+  expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
   projectId: number;
   roleAtOrganization: string | null;
   user: ApiUser | null;
@@ -495,6 +507,9 @@ export async function getOrAskForProjectData(
     host,
     projectApiKey,
     accessToken,
+    refreshToken,
+    expiresAt,
+    oauthClientId,
     projectId,
     roleAtOrganization,
     user,
@@ -527,6 +542,9 @@ ${cloudUrl}/settings/project#variables`);
 
   return {
     accessToken,
+    refreshToken,
+    expiresAt,
+    oauthClientId,
     host,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
@@ -687,6 +705,8 @@ async function askForWizardLogin(options: {
 
   const data = {
     accessToken: tokenResponse.access_token,
+    refreshToken: tokenResponse.refresh_token,
+    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
     projectApiKey: projectData.api_token,
     host,
     distinctId: userData.distinct_id,
@@ -743,6 +763,9 @@ async function askForProvisioningSignup(
 
     return {
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresAt: result.expiresAt,
+      oauthClientId: result.oauthClientId,
       projectApiKey: result.projectApiKey,
       host,
       distinctId: email,

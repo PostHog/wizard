@@ -41,6 +41,33 @@ const PROVIDER_ENV_NAMESPACE = /^(ANTHROPIC_|CLAUDE_CODE_)/;
 const BLOCKED_OFF_NAMESPACE_KEYS = new Set(['AWS_BEARER_TOKEN_BEDROCK']);
 
 /**
+ * Host-orchestration values read only by the wizard process itself (via
+ * `runtimeEnv` in src/env.ts). None of them is ever consumed by the spawned
+ * agent subprocess — the `publish_handoff` MCP tool executes in the wizard's
+ * own process — so the subprocess only ever loses attack surface:
+ *
+ * - `POSTHOG_HANDOFF_OUTPUT_PATH` names the host file the wizard writes the
+ *   agent's handoff report to. Handing it to the subprocess tells a
+ *   (prompt-injected) agent exactly which file its own report content lands
+ *   in, turning the write into a pre-plantable symlink/same-UID overwrite
+ *   target. The write itself refuses symlinks, but the agent has no business
+ *   knowing the destination at all.
+ * - `POSTHOG_TASK_RUN_ID` / `POSTHOG_TASK_ID` identify the sandbox run and are
+ *   read by the wizard's analytics only; they let the agent fingerprint the
+ *   run directory where the handoff path typically sits.
+ *
+ * Deliberately NOT stripped: `POSTHOG_API_KEY` / `POSTHOG_HOST` — pre-existing
+ * passthrough that the agent may rely on when writing the user's project key
+ * into the project's own .env. Changing that disposition is a separate,
+ * deliberate decision, not part of this hardening.
+ */
+const HOST_ONLY_ENV_KEYS = new Set([
+  'POSTHOG_HANDOFF_OUTPUT_PATH',
+  'POSTHOG_TASK_RUN_ID',
+  'POSTHOG_TASK_ID',
+]);
+
+/**
  * Credential / routing knobs that, set in an on-disk Claude **settings** `env`
  * block, redirect the binary. A settings file is applied by the binary itself,
  * so the subprocess-env strip below cannot remove it — `claude-settings.ts`
@@ -119,11 +146,14 @@ export const BLOCKED_AGENT_ENV_PATTERNS: readonly RegExp[] = [
 /**
  * True if `key` must NOT be inherited by the agent subprocess: anything in the
  * provider namespace (the wizard re-injects its own values at the spawn site),
- * plus the lone off-namespace credential.
+ * the lone off-namespace credential, and host-only orchestration values the
+ * subprocess never reads.
  */
 export function isBlockedAgentEnvKey(key: string): boolean {
   return (
-    PROVIDER_ENV_NAMESPACE.test(key) || BLOCKED_OFF_NAMESPACE_KEYS.has(key)
+    PROVIDER_ENV_NAMESPACE.test(key) ||
+    BLOCKED_OFF_NAMESPACE_KEYS.has(key) ||
+    HOST_ONLY_ENV_KEYS.has(key)
   );
 }
 

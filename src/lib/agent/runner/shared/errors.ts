@@ -3,6 +3,7 @@
  */
 
 import type { InstallSkillResult } from '@lib/wizard-tools';
+import { skillErrorCode } from '@lib/errors';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 
 export async function abortOnInstallFailure(
@@ -10,6 +11,8 @@ export async function abortOnInstallFailure(
   result: InstallSkillResult,
 ): Promise<void> {
   if (result.kind === 'ok') return;
+
+  const code = skillErrorCode(result) ?? undefined;
 
   const message = (() => {
     switch (result.kind) {
@@ -24,14 +27,18 @@ export async function abortOnInstallFailure(
 
   await wizardAbort({
     message,
-    error: new WizardError(`Skill install failed: ${result.kind}`, {
-      integration: integrationLabel,
-      error_type: result.kind,
-      platform: process.platform,
-      // The kind can't separate missing-tool from network failures.
-      ...(result.kind === 'download-failed'
-        ? { error_detail: result.message.slice(0, 500) }
-        : {}),
-    }),
+    code,
+    error: new WizardError(
+      `Skill install failed: ${result.kind}`,
+      {
+        integration: integrationLabel,
+        error_type: result.kind,
+        platform: process.platform,
+        ...(result.kind === 'download-failed'
+          ? { error_detail: result.message.slice(0, 500) }
+          : {}),
+      },
+      code,
+    ),
   });
 }

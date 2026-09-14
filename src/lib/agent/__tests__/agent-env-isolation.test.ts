@@ -26,6 +26,23 @@ describe('isBlockedAgentEnvKey', () => {
     expect(isBlockedAgentEnvKey('CLAUDE_CODE_SOME_FUTURE_TOKEN')).toBe(true);
   });
 
+  it('blocks host-only orchestration values the subprocess never reads', () => {
+    // POSTHOG_HANDOFF_OUTPUT_PATH names the file the wizard writes the
+    // agent's handoff to — leaking it to the subprocess turns the write into
+    // a discoverable symlink target. The task ids fingerprint the sandbox run
+    // dir where that path typically sits.
+    expect(isBlockedAgentEnvKey('POSTHOG_HANDOFF_OUTPUT_PATH')).toBe(true);
+    expect(isBlockedAgentEnvKey('POSTHOG_TASK_RUN_ID')).toBe(true);
+    expect(isBlockedAgentEnvKey('POSTHOG_TASK_ID')).toBe(true);
+  });
+
+  it('still passes through POSTHOG_API_KEY (deliberate, pre-existing disposition)', () => {
+    // The agent may rely on it when writing the user's project key into the
+    // project's own .env; changing that is a separate decision.
+    expect(isBlockedAgentEnvKey('POSTHOG_API_KEY')).toBe(false);
+    expect(isBlockedAgentEnvKey('POSTHOG_HOST')).toBe(false);
+  });
+
   it('blocks inline workload-identity / federation auth', () => {
     expect(isBlockedAgentEnvKey('ANTHROPIC_IDENTITY_TOKEN')).toBe(true);
     expect(isBlockedAgentEnvKey('ANTHROPIC_FEDERATION_RULE_ID')).toBe(true);
@@ -112,6 +129,16 @@ describe('sanitizeAgentSubprocessEnv', () => {
       ANTHROPIC_VERTEX_PROJECT_ID: 'user-proj',
       AWS_BEARER_TOKEN_BEDROCK: 'aws-bearer',
       CLAUDE_CODE_SOME_FUTURE_KNOB: '1',
+      // — host-only orchestration values (must be STRIPPED: read by the
+      //   wizard process only; leaking them fingerprints the run + the
+      //   handoff output target) —
+      POSTHOG_HANDOFF_OUTPUT_PATH: '/run/task-42/handoff.md',
+      POSTHOG_TASK_RUN_ID: 'task-42',
+      POSTHOG_TASK_ID: '019abc',
+      // — user-facing PostHog config the agent may need for the project .env
+      //   (deliberately PRESERVED, pre-existing disposition) —
+      POSTHOG_API_KEY: 'phc_project_key',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
     };
 
     const out = sanitizeAgentSubprocessEnv(input);
@@ -121,7 +148,21 @@ describe('sanitizeAgentSubprocessEnv', () => {
       HOME: '/home/dev',
       AWS_ACCESS_KEY_ID: 'AKIA-for-builds',
       GOOGLE_APPLICATION_CREDENTIALS: '/home/dev/gcp.json',
+      POSTHOG_API_KEY: 'phc_project_key',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
     });
+  });
+
+  it('does not leak the handoff output path to the agent subprocess', () => {
+    const out = sanitizeAgentSubprocessEnv({
+      POSTHOG_HANDOFF_OUTPUT_PATH: '/run/task-42/handoff.md',
+      POSTHOG_TASK_RUN_ID: 'r1',
+      POSTHOG_API_KEY: 'phx_secret',
+      PATH: '/usr/bin',
+    });
+    expect('POSTHOG_HANDOFF_OUTPUT_PATH' in out).toBe(false);
+    expect('POSTHOG_TASK_RUN_ID' in out).toBe(false);
+    expect(out.POSTHOG_API_KEY).toBe('phx_secret');
   });
 
   it('removes blocked keys entirely (absent, not set to undefined)', () => {

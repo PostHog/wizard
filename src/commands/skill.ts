@@ -7,6 +7,8 @@ import { analytics } from '@utils/analytics';
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
 import { runCommandHandler } from './factories/shared';
+import { ErrorCodes } from '@lib/errors';
+import { emitWizardError } from '@lib/errors';
 import type { Command } from './command';
 
 /** Read the `<skill-name>` positional (yargs camelCases the hyphenated key). */
@@ -33,11 +35,8 @@ const BROWSABLE_ROLES: ReadonlySet<CliEntry['role']> = new Set([
  * step's own `menu-fetch-failed` handling, rather than adding a second network
  * dependency that could block an otherwise-valid run.
  */
-async function assertSkillExists(
-  skillName: string,
-  localMcp: boolean,
-): Promise<void> {
-  const skillsBaseUrl = getSkillsBaseUrl(localMcp);
+async function assertSkillExists(skillName: string): Promise<void> {
+  const skillsBaseUrl = getSkillsBaseUrl();
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return; // registry down — let the download step surface it
   const known = Object.values(menu.categories)
@@ -80,9 +79,9 @@ function formatEntry(entry: CliEntry): string {
 const listCommand: Command = {
   name: 'list',
   description: 'List every browsable skill in the catalog',
-  handler: (argv) => {
+  handler: () => {
     runCommandHandler(async () => {
-      const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+      const skillsBaseUrl = getSkillsBaseUrl();
       const menu = await fetchSkillMenu(skillsBaseUrl);
       if (!menu) {
         analytics.wizardCapture('cli dispatch error', {
@@ -100,6 +99,10 @@ const listCommand: Command = {
           `\n\x1b[1;91m✖ Couldn't reach the skill registry.\x1b[0m\n` +
             `  Check your network connection and try again.\n\n`,
         );
+        emitWizardError({
+          code: ErrorCodes.SkillMenuFetchFailed,
+          message: "Couldn't reach the skill registry.",
+        });
         process.exit(1);
       }
       const entries = (menu.cliEntries ?? []).filter((e) =>
@@ -165,7 +168,7 @@ export const skillCommand: Command = {
   handler: (argv) => {
     runCommandHandler(async () => {
       const skillName = readSkillName(argv);
-      await assertSkillExists(skillName, Boolean(argv['local-mcp']));
+      await assertSkillExists(skillName);
       // runSkillMode reads `argv.skill`; bridge the positional onto it.
       runSkillMode({ ...argv, skill: skillName });
     });

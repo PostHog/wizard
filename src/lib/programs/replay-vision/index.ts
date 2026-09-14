@@ -14,6 +14,7 @@ import type {
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -54,7 +55,15 @@ async function abortUnsupportedPlatform(
   integration: Integration,
 ): Promise<void> {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
+  // This is a clean, intentional exit, not a crash. Count it with a normal
+  // event keyed on the platform so aborts roll up into one series. Do not hand
+  // `wizardAbort` an `error` — that forwards to captureException and mints a
+  // new error-tracking issue per install location and per platform.
+  analytics.wizardCapture('replay-vision unsupported platform', {
+    integration,
+  });
   await wizardAbort({
+    code: ErrorCodes.DetectUnsupportedPlatform,
     message:
       `Session replay isn't available for ${name} projects, and Replay ` +
       'vision needs session recordings to watch — so there is nothing to ' +
@@ -62,7 +71,6 @@ async function abortUnsupportedPlatform(
       'If this repo also contains a web or mobile app, run the command from ' +
       'that project directory instead. See what replay supports at:\n' +
       '  https://posthog.com/docs/session-replay',
-    error: new Error(`Replay vision unsupported platform: ${integration}`),
   });
 }
 
@@ -166,6 +174,7 @@ export const replayVisionConfig: ProgramConfig = {
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
+        code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
       return;
@@ -184,9 +193,7 @@ export const replayVisionConfig: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      default: false,
       signup: session.signup,
-      localMcp: session.localMcp,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,

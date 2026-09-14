@@ -2,7 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
-import { detectStoredClaudeLogin, hasStoredClaudeLogin } from '../stored-login';
+import {
+  createIsolatedAgentConfigDir,
+  detectStoredClaudeLogin,
+  hasStoredClaudeLogin,
+} from '../stored-login';
 
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
 vi.mock('@utils/analytics', () => ({
@@ -80,5 +84,36 @@ describe('detectStoredClaudeLogin', () => {
   it('treats a missing keychain item as no login', () => {
     spawnSyncMock.mockReturnValue({ status: 44 });
     expect(detectStoredClaudeLogin(home, 'darwin').keychain).toBe(false);
+  });
+});
+
+describe('createIsolatedAgentConfigDir', () => {
+  const created: string[] = [];
+
+  afterEach(() => {
+    for (const dir of created.splice(0)) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
+    }
+  });
+
+  it('creates a fresh, empty directory that holds no stored login', () => {
+    const dir = createIsolatedAgentConfigDir();
+    created.push(dir);
+
+    // Empty: no `.credentials.json` for the SDK to resolve a stored login from.
+    expect(fs.existsSync(dir)).toBe(true);
+    expect(fs.readdirSync(dir)).toEqual([]);
+  });
+
+  it('returns a distinct directory on each call so concurrent runs never share', () => {
+    const a = createIsolatedAgentConfigDir();
+    const b = createIsolatedAgentConfigDir();
+    created.push(a, b);
+
+    expect(a).not.toBe(b);
   });
 });

@@ -21,6 +21,17 @@ import type {
 
 export interface WizardAskRequest {
   questions: AskQuestion[];
+  /**
+   * Normalised `subject` of the originating `wizard_ask` call — the thing the
+   * questions collect for (a data-warehouse source kind like "postgres", an
+   * integration step). Stamped onto the `answered`/`cancelled` events so an
+   * outcome can be attributed to what was being asked, not just the run: the
+   * warehouse task asks one call per detected source, and without this a
+   * cancellation cannot be told apart by source. The caller normalises it
+   * (same `normaliseAskSubject` the cap accounting uses) so the value joins to
+   * the `wizard_ask capped` event's `subject`. Absent when the call declared none.
+   */
+  subject?: string;
 }
 
 export interface WizardAskBridge {
@@ -85,7 +96,7 @@ export function createWizardAskBridge(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_ASK_TIMEOUT_MS;
 
   return {
-    async request({ questions }) {
+    async request({ questions, subject }) {
       const pending: PendingQuestion = {
         id: randomUUID(),
         questions,
@@ -118,6 +129,7 @@ export function createWizardAskBridge(
         if (isFullyCancelled(answers)) {
           analytics.wizardCapture('wizard_ask cancelled', {
             source: pending.source,
+            subject,
             question_count: questions.length,
             duration_ms: durationMs,
             timed_out: durationMs >= timeoutMs,
@@ -125,6 +137,7 @@ export function createWizardAskBridge(
         } else {
           analytics.wizardCapture('wizard_ask answered', {
             source: pending.source,
+            subject,
             question_count: questions.length,
             duration_ms: durationMs,
           });

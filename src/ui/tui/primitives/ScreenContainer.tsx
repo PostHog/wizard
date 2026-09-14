@@ -10,7 +10,7 @@
  * screen content (inside the transition area) so all screens get it.
  */
 
-import { Box, useInput } from 'ink';
+import { Box, useInput, useStdout } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '@ui/tui/components/TitleBar';
 import {
@@ -22,6 +22,10 @@ import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
+import {
+  ViewportTooSmall,
+  isViewportTooSmall,
+} from './ViewportTooSmall.js';
 import type { WizardStore } from '@ui/tui/store';
 
 const MIN_WIDTH = 80;
@@ -40,6 +44,7 @@ interface ScreenContainerProps {
 
 export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   const [columns, rows] = useStdoutDimensions();
+  const { stdout } = useStdout();
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -71,8 +76,28 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
 
+  // Too small to lay out: hide the screens rather than unmounting them. Yoga
+  // drops display:none subtrees from layout entirely, so the hidden tree can't
+  // overflow into the notice, and staying mounted keeps a half-typed input
+  // alive and — the reason this isn't a plain unmount — stops every screen's
+  // mount effects (browser opens, health checks, detection) from re-firing
+  // each time someone drags the window edge. The cost is that keypresses
+  // still reach the hidden screen; that's how ctrl+c keeps working, and it
+  // beats today's behaviour of typing into a garbled one.
+  //
+  // Only enforced on a real terminal: with stdout piped there are no
+  // dimensions to read (useStdoutDimensions substitutes 80×24) and no window
+  // for anyone to resize, so nagging would be both wrong and unactionable.
+  const tooSmall =
+    Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
+
   const inner = (
-    <Box flexDirection="column" height={rows} width={width}>
+    <Box
+      flexDirection="column"
+      height={rows}
+      width={width}
+      display={tooSmall ? 'none' : 'flex'}
+    >
       <TitleBar version={store.version} width={width} />
       <Box height={1} />
       {hudVisible && (
@@ -115,6 +140,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
       alignItems="center"
       justifyContent="flex-start"
     >
+      {tooSmall && <ViewportTooSmall columns={columns} rows={rows} />}
       <KeyboardHintsProvider>{inner}</KeyboardHintsProvider>
     </Box>
   );

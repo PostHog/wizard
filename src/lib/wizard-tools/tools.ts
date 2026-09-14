@@ -11,6 +11,15 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { readProjectFile } from '@utils/bounded-fs';
+import {
+  collectProjectEnvKeys,
+  isTemplateEnvFileName,
+  parseEnvKeyNames,
+  toPromptSafeRelativePath,
+  type EnvKeyDefinition,
+  type EnvKeyLocations,
+} from '@utils/env-scan';
 import { scanInstalledSkill } from '@lib/yara-hooks';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
@@ -298,8 +307,90 @@ export async function installSkillById(
 }
 
 export const DEFAULT_ASK_MAX_QUESTIONS = 10;
-/** The call after this many returns a one-time batch-your-questions nudge. */
+/**
+ * Consecutive calls about the *same subject* before the one-time
+ * batch-your-questions nudge fires. Adjacency is per subject, not per run:
+ * the guard exists to stop an agent firing many small prompts about one
+ * thing, not to stop a flow that legitimately walks a list — the warehouse
+ * task asks one call per detected source, and 5–8 sources need 15–25 fields,
+ * far more than the 8-question schema limit allows in a single call.
+ */
 export const ASK_BATCH_THRESHOLD = 3;
+
+/** Subject recorded for a `wizard_ask` call that declares none. */
+export const ASK_SUBJECT_UNSPECIFIED = '(unspecified)';
+
+/** Longest subject we keep; anything longer is truncated, never rejected. */
+const ASK_SUBJECT_MAX_LENGTH = 60;
+
+/**
+ * Fold a caller-supplied subject into the key adjacency is counted by.
+ * Case- and whitespace-insensitive so `Postgres`, `postgres ` and ` POSTGRES`
+ * are one subject. An absent or blank subject collapses to a single shared
+ * key, so an agent that declares nothing keeps the original run-wide guard.
+ */
+export function normaliseAskSubject(subject?: string): string {
+  const trimmed = (subject ?? '').trim().toLowerCase();
+  if (trimmed.length === 0) return ASK_SUBJECT_UNSPECIFIED;
+  return trimmed.slice(0, ASK_SUBJECT_MAX_LENGTH);
+}
+
+/**
+ * The `wizard_ask` `sensitive` field description, shared by both harness facades
+ * (the zod schema in `./mcp` and the typebox mirror in `harness/pi/tools.ts`) so
+ * the secret-handling guidance cannot drift between them — the same discipline
+ * `HANDOFF_FIELDS` applies to the handoff schema.
+ *
+ * The load-bearing part is the last two sentences: a vaulted `{secretRef}` is
+ * resolved only by wizard-tools that accept it, and the PostHog data-warehouse
+ * tools reject it. Without that, a pi agent collecting a credential it must hand
+ * to `external-data-sources-create` vaults it, gets a ref the create tool
+ * rejects, and dead-ends into the browser fallback — the exact loss the wizard's
+ * in-cli source setup is meant to avoid.
+ */
+export const WIZARD_ASK_SENSITIVE_DESCRIPTION =
+  "Only valid for kind='text'. When true, the user's answer is stored in the " +
+  "wizard's secret vault and returned to you as { secretRef: 'secret:...' } " +
+  'instead of the raw string. Use for API keys, tokens, and any other secret ' +
+  'the user types in. The secretRef is only resolved by wizard-tools that ' +
+  'accept it (e.g. set_env_values) — it is NOT resolved when passed to other ' +
+  'MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a ' +
+  'secret that must reach another tool, write it to the env with set_env_values ' +
+  "first, or use that tool's own credential-reference flow.";
+
+/**
+ * The `wizard_ask` `subject` field description, shared by both harness facades
+ * so the batching contract cannot drift between them.
+ *
+ * `subject` is what lets the runtime tell "three rapid prompts about one thing"
+ * (which the guard should stop) from "one prompt per item in a list" (which it
+ * must not). Without it the runtime saw only a call count, so a warehouse run
+ * with five detected sources tripped the nudge on its third source.
+ */
+export const WIZARD_ASK_SUBJECT_DESCRIPTION =
+  'Short, stable tag naming what this call collects — the data-warehouse ' +
+  'source kind (e.g. "Postgres", "Stripe"), the integration step, or the ' +
+  'decision at hand. The batching guard counts consecutive calls per subject, ' +
+  'so walking a list one call per item is never interrupted as long as each ' +
+  'call carries its own subject. Reuse the same subject only when you are ' +
+  'still collecting for the same thing (e.g. re-asking after a validation ' +
+  'failure). Omit it and every call counts as one shared subject.';
+
+/**
+ * The `wizard_ask` tool description, shared by both harness facades (the MCP
+ * server in `./mcp` and the pi-native mirror in `harness/pi/tools.ts`) so the
+ * batching and cancellation contract reads identically in both harnesses.
+ */
+export const WIZARD_ASK_TOOL_DESCRIPTION =
+  'Ask the user one or more structured questions and wait for their answers. ' +
+  'Use this whenever you would otherwise inline a question in your text output. ' +
+  'Batch every question about one subject into a single call (up to 8) rather ' +
+  'than asking one at a time, and tag the call with `subject`. Walking a list — ' +
+  'one call per data-warehouse source, one call per integration step — is ' +
+  'expected and is never blocked, because the batching guard counts consecutive ' +
+  'calls per subject. A fully cancelled or timed-out response does NOT count ' +
+  'against the per-run cap — treat it as "the user declined" and fall back ' +
+  'gracefully (e.g. hand over a deep link) without worrying about a wasted call.';
 
 export type AskCapDecision =
   | { kind: 'ok' }
@@ -307,7 +398,25 @@ export type AskCapDecision =
       kind: 'capped';
       reason: 'max_questions' | 'adjacency';
       message: string;
+      /** Normalised subject of the call that was capped — analytics dimension. */
+      subject: string;
+      /** Consecutive calls already sent for that subject. */
+      subjectRunLength: number;
     };
+
+/** Everything the cap policy needs about the upcoming `wizard_ask` call. */
+export type AskCapInput = {
+  /** Calls already sent to the user in this run (cancelled ones are refunded). */
+  callCount: number;
+  /** Hard per-run ceiling on sent calls. */
+  maxQuestions: number;
+  /** Normalised subject of the upcoming call. */
+  subject: string;
+  /** Consecutive calls already sent for that same subject. */
+  subjectRunLength: number;
+  /** Whether the one-time adjacency nudge already fired in this run. */
+  adjacencyNudged?: boolean;
+};
 
 /**
  * Pure decision function for the wizard_ask caps. Returns whether the
@@ -320,33 +429,133 @@ export type AskCapDecision =
  * failure — an agent that reads it as a refusal abandons the source instead
  * of re-asking with batched questions.
  *
+ * Adjacency counts consecutive calls that share a `subject`, not calls in the
+ * run. A flow that walks a list — the warehouse task's one call per detected
+ * source — changes subject on every call, so its run length never grows and
+ * the nudge never fires. Only repeated prompting about the same thing trips
+ * it, which is what the guard was always for. An agent that declares no
+ * subject falls back to one shared key, so the original run-wide guard still
+ * applies to it.
+ *
  * The adjacency nudge fires exactly once per run (the caller records it
  * via `adjacencyNudged`) — flows that legitimately need several
- * sequential, answer-dependent asks then proceed up to `maxQuestions`.
- * Without the flag the rejected call would never advance the counter and
- * every later call would be rejected, making caps above the threshold
- * unreachable.
+ * sequential, answer-dependent asks about one subject then proceed up to
+ * `maxQuestions`. Without the flag the rejected call would never advance the
+ * counter and every later call would be rejected, making caps above the
+ * threshold unreachable.
+ *
+ * `maxQuestions` is checked first and is never per-subject, so subjects can
+ * never widen the per-run budget.
  */
-export function evaluateAskCap(
-  callCount: number,
-  maxQuestions: number,
+export function evaluateAskCap({
+  callCount,
+  maxQuestions,
+  subject,
+  subjectRunLength,
   adjacencyNudged = false,
-): AskCapDecision {
+}: AskCapInput): AskCapDecision {
   if (callCount >= maxQuestions) {
     return {
       kind: 'capped',
       reason: 'max_questions',
+      subject,
+      subjectRunLength,
       message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
     };
   }
-  if (!adjacencyNudged && callCount >= ASK_BATCH_THRESHOLD) {
+  if (!adjacencyNudged && subjectRunLength >= ASK_BATCH_THRESHOLD) {
+    const subjectNote =
+      subject === ASK_SUBJECT_UNSPECIFIED
+        ? 'they all declared no `subject`, so they count as one subject'
+        : `they all used subject "${subject}"`;
     return {
       kind: 'capped',
       reason: 'adjacency',
-      message: `Not an error — this ask was not sent (a one-time nudge). You've made ${callCount} wizard_ask calls in a row. Batch the questions you still need into a single call (the schema accepts up to 8 questions per invocation) and call wizard_ask again now; or, if they genuinely depend on earlier answers, just ask again as-is. Either way the next call goes through. Do not abandon the task or fall back to browser setup because of this message.`,
+      subject,
+      subjectRunLength,
+      message:
+        `Not an error — this ask was not sent (a one-time nudge). ` +
+        `You have sent ${subjectRunLength} wizard_ask calls in a row about the same subject (${subjectNote}). ` +
+        `Batch every question you still need for that subject into one call (up to 8 questions) and send wizard_ask again now. ` +
+        `If your next questions are about something else — another data-warehouse source, another integration step — ` +
+        `set a different \`subject\` on the call. Adjacency is counted per subject, so one call per source is never blocked, ` +
+        `and you must not try to squeeze several sources into one 8-question call. ` +
+        `Either way the next call is sent. Do not abandon the task, and do not fall back to browser setup because of this message.`,
     };
   }
   return { kind: 'ok' };
+}
+
+/**
+ * Per-run `wizard_ask` call accounting: the total cap plus the per-subject
+ * adjacency run. Both harness facades drive one of these instead of holding
+ * their own counters, so the cap, the nudge and the cancellation refund
+ * cannot drift between the MCP server and the pi-native tools.
+ */
+export type AskAccounting = {
+  /**
+   * Decide whether the upcoming call may go through. Records the one-time
+   * adjacency nudge as a side effect, so a nudged call is never nudged twice.
+   */
+  evaluate(subject?: string): AskCapDecision;
+  /** Record a call that was sent to the user. */
+  record(subject?: string): void;
+  /**
+   * Refund a call that never produced an answer — cancelled, timed out, or
+   * failed in the bridge. Rolls back the total *and* the subject run, so a
+   * declined ask costs the agent nothing on either cap.
+   */
+  refund(subject?: string): void;
+  /** Current state, for analytics and tests. */
+  snapshot(): {
+    callCount: number;
+    subject: string;
+    subjectRunLength: number;
+    adjacencyNudged: boolean;
+  };
+};
+
+export function createAskAccounting(maxQuestions: number): AskAccounting {
+  let callCount = 0;
+  let currentSubject = ASK_SUBJECT_UNSPECIFIED;
+  let subjectRunLength = 0;
+  let adjacencyNudged = false;
+
+  return {
+    evaluate(subject) {
+      const key = normaliseAskSubject(subject);
+      const decision = evaluateAskCap({
+        callCount,
+        maxQuestions,
+        subject: key,
+        subjectRunLength: key === currentSubject ? subjectRunLength : 0,
+        adjacencyNudged,
+      });
+      if (decision.kind === 'capped' && decision.reason === 'adjacency') {
+        adjacencyNudged = true;
+      }
+      return decision;
+    },
+    record(subject) {
+      const key = normaliseAskSubject(subject);
+      callCount += 1;
+      subjectRunLength = key === currentSubject ? subjectRunLength + 1 : 1;
+      currentSubject = key;
+    },
+    refund(subject) {
+      const key = normaliseAskSubject(subject);
+      callCount = Math.max(0, callCount - 1);
+      if (key === currentSubject) {
+        subjectRunLength = Math.max(0, subjectRunLength - 1);
+      }
+    },
+    snapshot: () => ({
+      callCount,
+      subject: currentSubject,
+      subjectRunLength,
+      adjacencyNudged,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +564,17 @@ export function evaluateAskCap(
 
 export const ENV_FILE_PATH_DESCRIPTION =
   'Path to the .env file, relative to the wizard working directory. Pass ".env" for a file in that directory, or include the selected subproject path (for example, "packages/app/.env") for a nested project. Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
+/** Shared `check_env_keys` tool description — both facades declare the same contract. */
+export const CHECK_ENV_KEYS_DESCRIPTION =
+  'Check which environment variable keys the project already sets, and in which file. By default it scans the .env files in the project (including .env.local and nested ones such as apps/api/.env, but not ones inside dependency or hidden directories), so it agrees with the source detection the wizard reports. Returns, per key, { "status": "present" | "missing", "foundIn": [file paths] }. "present" means a real env file sets the key; a key found only in a committed template (.env.example, .env.sample, .env.template, .env.dist) is "missing", because a template documents a key rather than setting it — so "missing" with a non-empty "foundIn" means the project expects this key and you still need to collect it. A template listed in "foundIn" is NEVER a write target: it is committed to the repository, so writing a real credential there would publish it. Write to .env or .env.local instead. Key NAMES and file paths only — it never reads or reveals a value.';
+
+/**
+ * `filePath` on `check_env_keys` is optional — omitting it scans the whole
+ * project, which is what makes the tool agree with the wizard's own detector.
+ */
+export const CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION =
+  'Optional. Omit it to scan the project\'s .env files (the default, and what you want in a monorepo or when the keys may live in .env.local). Pass a single path, relative to the wizard working directory, only to restrict the check to that one file — for example ".env" or "packages/app/.env". Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
 
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
@@ -401,17 +621,154 @@ export function ensureGitignoreCoverage(
 }
 
 /**
- * Parse a .env file's content and return the set of defined key names.
+ * Parse a .env file's content and return the set of defined key NAMES.
+ * Delegates to the shared parser the warehouse detector uses, so the two
+ * cannot disagree about what counts as a key (the `export KEY=` form used to
+ * be a key to the detector and not to this tool).
  */
 export function parseEnvKeys(content: string): Set<string> {
-  const keys = new Set<string>();
-  for (const line of content.split('\n')) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-    if (match) {
-      keys.add(match[1]);
-    }
+  return new Set(parseEnvKeyNames(content));
+}
+
+// ---------------------------------------------------------------------------
+// check_env_keys
+// ---------------------------------------------------------------------------
+
+/** Whether a requested key is set, and which env files mention it. */
+export interface EnvKeyPresence {
+  /**
+   * `present` only when a real env file sets the key. A key declared solely in
+   * a committed template is `missing` — documented, not set.
+   */
+  status: 'present' | 'missing';
+  /**
+   * Project-relative paths of every `.env*` file that declares the key,
+   * templates included. `missing` with a non-empty `foundIn` is the useful
+   * case: the project expects this key and has not set it.
+   *
+   * A path here is evidence, not a write target. A template is committed, so
+   * writing a credential into one publishes it — `set_env_values` should be
+   * pointed at `.env`/`.env.local`.
+   */
+  foundIn: string[];
+}
+
+/**
+ * Answer "which of these env keys does the project already define, and where".
+ *
+ * Shared by both tool facades (MCP and pi) so the answer cannot drift between
+ * harnesses. Two modes:
+ *  - `filePath` omitted (preferred): scan every `.env*` file in the project,
+ *    within the same depth and size bounds the warehouse detector uses. This
+ *    is what stops the tool reporting "missing" for a key the detector found
+ *    in `apps/api/.env.local`.
+ *  - `filePath` given: check that one file only — the original behaviour,
+ *    kept for callers that already pass a path.
+ *
+ * In both modes `status` answers "is this key set?", which is not the same as
+ * "does some file mention it": a committed template declares keys without
+ * setting them, so it never makes a key `present`. `foundIn` still lists it.
+ *
+ * SECURITY: returns key NAMES and file paths only. A `.env` value is never
+ * read into the result and never logged.
+ */
+export function checkEnvKeys(
+  workingDirectory: string,
+  keys: string[],
+  filePath?: string,
+): Record<string, EnvKeyPresence> {
+  const locations =
+    filePath === undefined
+      ? collectProjectEnvKeys(workingDirectory)
+      : readSingleEnvFile(workingDirectory, filePath);
+
+  // Key names only — never the values, and never the file contents.
+  logToFile(
+    `check_env_keys: ${
+      filePath === undefined
+        ? `project scan of ${workingDirectory}`
+        : resolveEnvPath(workingDirectory, filePath)
+    }, keys: ${keys.join(', ')}`,
+  );
+
+  const results: Record<string, EnvKeyPresence> = {};
+  for (const key of keys) {
+    const definitions = locations.get(key) ?? [];
+    results[key] = {
+      // A template declares a key; it does not set one. Counting
+      // `.env.example` as "present" would tell the agent the credential is
+      // already configured and stop it collecting one — the same failure as
+      // the "missing" answer this tool was fixed to stop giving, inverted.
+      // Nearly every project has a template, so this is the common case.
+      status: definitions.some((d) => !d.template) ? 'present' : 'missing',
+      foundIn: definitions.map((d) => d.file),
+    };
   }
-  return keys;
+  return results;
+}
+
+/**
+ * The single-file arm of `checkEnvKeys`, shaped like the project scan so the
+ * caller handles one type. Reads through `readProjectFile`, which returns null
+ * for a missing file, an oversized file, or a `.env` that is a DIRECTORY —
+ * the last of which used to crash the tool with EISDIR.
+ */
+function readSingleEnvFile(
+  workingDirectory: string,
+  filePath: string,
+): EnvKeyLocations {
+  const resolved = resolveEnvPath(workingDirectory, filePath);
+  const content = readProjectFile(resolved);
+  const locations: EnvKeyLocations = new Map();
+  if (content === null) return locations;
+
+  const definition: EnvKeyDefinition = {
+    file: toPromptSafeRelativePath(workingDirectory, resolved),
+    // The template rule holds however the file was reached, so `status` means
+    // one thing in both modes. `foundIn` still names the file, so an explicit
+    // check of a template is answered rather than silently empty.
+    template: isTemplateEnvFileName(path.basename(resolved)),
+  };
+  for (const key of parseEnvKeyNames(content)) {
+    if (!locations.has(key)) locations.set(key, [definition]);
+  }
+  return locations;
+}
+
+/**
+ * `set_env_values`' refusal for a committed template file, or null when the
+ * path is an ordinary env file. Shared by both facades so the two cannot
+ * disagree about what is a legal destination.
+ *
+ * `check_env_keys` hands the agent file paths now, and a template is one of
+ * them — so the tool that resolves secret refs must not accept one as a
+ * target. A template is committed, so a credential written there is published,
+ * and the `ensureGitignoreCoverage` that follows the write does not save it:
+ * adding an already-tracked file to `.gitignore` changes nothing.
+ *
+ * Nothing legitimate is lost. No wizard code path writes a template, and the
+ * agent's Read/Write gate deliberately lets it edit one directly — so
+ * documenting a key name keeps its route, and this one stays for credentials.
+ */
+export function templateEnvWriteRefusal(resolvedPath: string): string | null {
+  const name = path.basename(resolvedPath);
+  if (!isTemplateEnvFileName(name)) return null;
+  return (
+    `Error: "${name}" is a committed template that documents key names, so it is not a valid target for set_env_values — ` +
+    `a credential written there would be published with the repository. ` +
+    `Write to .env or .env.local instead (it is created if missing). ` +
+    `If you only mean to document the key name, edit the template directly.`
+  );
+}
+
+/**
+ * Escape a key before it is interpolated into the match regex below. The key
+ * comes from the agent, and a stray metacharacter would otherwise build a
+ * pattern that matches an unrelated line — `A|B` turns `^(\s*A|B\s*=)` into
+ * "any line starting with A", whose value the merge would then overwrite.
+ */
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -427,7 +784,17 @@ export function mergeEnvValues(
 
   for (const [key, value] of Object.entries(values)) {
     // Preserve the existing `KEY=` prefix exactly; only swap the value.
-    const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
+    //
+    // The `export ` form counts as the same declaration. `check_env_keys`
+    // reads it, so without this the reader reports a key present while the
+    // writer fails to find the line and appends a second definition below it
+    // — two declarations of one key, with the winner left to whichever dotenv
+    // loader the app happens to use. Capturing the prefix in $1 keeps the
+    // file's existing style on the way out.
+    const regex = new RegExp(
+      `^(\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=).*$`,
+      'm',
+    );
     if (regex.test(result)) {
       result = result.replace(regex, `$1${value}`);
       updatedKeys.add(key);

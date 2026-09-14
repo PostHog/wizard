@@ -18,6 +18,7 @@ import {
 } from '@utils/bounded-fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { ErrorCodes } from '@lib/errors';
 
 /**
  * Skill variants published under the `error-tracking-upload-source-maps`
@@ -152,6 +153,7 @@ export type SourceMapsDetectError =
 export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
   {
     match: /^no posthog sdk detected$/i,
+    errorCode: ErrorCodes.DetectNoPosthogSdk,
     message: 'No PostHog SDK detected',
     body:
       'The agent could not find a PostHog SDK in your project. ' +
@@ -172,6 +174,7 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
   },
   {
     match: /^bare react native not supported$/i,
+    errorCode: ErrorCodes.DetectUnsupportedPlatform,
     message: 'Bare React Native is not supported',
     body:
       'Source-map upload for React Native requires Expo, and this project ' +

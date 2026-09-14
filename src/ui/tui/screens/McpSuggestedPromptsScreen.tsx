@@ -43,6 +43,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
+import { Program } from '@lib/programs/program-registry';
 import { Colors, Icons } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import {
@@ -149,9 +150,16 @@ export const McpSuggestedPromptsScreen = ({
     [programId],
   );
 
-  // Phase.Choose is the no-commitment entry. Login fires only when the
-  // user picks 'Start tutorial' — explicit consent for the OAuth dance.
-  const [phase, setPhase] = useState<Phase>(Phase.Choose);
+  // Phase.Choose is the tutorial's no-commitment entry: login fires only when
+  // the user picks 'Start tutorial' — explicit consent for the OAuth dance.
+  // After an install (`mcp add`), skip the pitch entirely: land on the
+  // all-set screen with the login commands, no surprise OAuth. The tutorial
+  // stays reachable via `wizard mcp tutorial`.
+  const [phase, setPhase] = useState<Phase>(
+    store.router.activeProgram === Program.McpTutorial
+      ? Phase.Choose
+      : Phase.Goodbye,
+  );
   // The scout's read of the project, set in the Scouting phase. Drives the
   // data-aware picker, greeting flavor, and Goodbye samples. Null until the
   // probe completes (the picker treats null as legacy / data-unaware).
@@ -684,6 +692,7 @@ export const McpSuggestedPromptsScreen = ({
             integration={session.integration}
             profile={profile}
             engaged={branchHistory.length > 0}
+            loginCommands={session.mcpLoginCommands}
             onClose={closeWizard}
           />
         )}
@@ -1246,6 +1255,8 @@ interface GoodbyePhaseProps {
   profile: ProjectDataProfile | null;
   /** True if the user actually ran at least one prompt this session. */
   engaged: boolean;
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`). */
+  loginCommands: string[];
   onClose: () => void;
 }
 
@@ -1255,6 +1266,7 @@ const GoodbyePhase = ({
   integration,
   profile,
   engaged,
+  loginCommands,
   onClose,
 }: GoodbyePhaseProps) => {
   // Three "next time you open your IDE, try this" reminders. Prefer quests
@@ -1294,6 +1306,22 @@ const GoodbyePhase = ({
       </Box>
 
       <Box marginBottom={1}>{introLine}</Box>
+
+      {loginCommands.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="green" bold>
+            {'\u2714'} Authenticate to finish (opens your browser):
+          </Text>
+          {loginCommands.map((command) => (
+            <Text key={command}>
+              {'  '}
+              <Text bold color="green">
+                {command}
+              </Text>
+            </Text>
+          ))}
+        </Box>
+      )}
 
       <Box marginBottom={1} flexDirection="column">
         {samples.map((p, i) => (

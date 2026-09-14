@@ -46,6 +46,16 @@ export function highestSeverityMatch(matches: ScanMatch[]): ScanMatch {
   );
 }
 
+/**
+ * The match that refuses a publish, or null to allow. Critical only — every
+ * 'output' rule asks for `remediate`, and the handoff has no second channel.
+ */
+export function publishBlockingMatch(matches: ScanMatch[]): ScanMatch | null {
+  if (matches.length === 0) return null;
+  const match = highestSeverityMatch(matches);
+  return isTerminalMatch(match) ? match : null;
+}
+
 export interface ScanVerdict {
   /** The match worth reporting: the highest-severity one. */
   match: ScanMatch;

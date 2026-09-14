@@ -1,5 +1,175 @@
 # Changelog
 
+## [2.74.1](https://github.com/PostHog/wizard/compare/v2.74.0...v2.74.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **health:** warn only for skills and gateway failures ([#1236](https://github.com/PostHog/wizard/issues/1236)) ([d2d757d](https://github.com/PostHog/wizard/commit/d2d757dce1b36167e2f2fa4ef4d4d1c22fbc01df))
+* **models:** pin every model to an effort the mint allows ([#1244](https://github.com/PostHog/wizard/issues/1244)) ([538e052](https://github.com/PostHog/wizard/commit/538e052a551a31d8e105adea959909b9e545942d))
+
+## [2.74.0](https://github.com/PostHog/wizard/compare/v2.73.2...v2.74.0) (2026-09-09)
+
+
+### Features
+
+* **ci:** accept a wizard-app gateway token under --ci ([#1225](https://github.com/PostHog/wizard/issues/1225)) ([251aabb](https://github.com/PostHog/wizard/commit/251aabb3b87a26d061bc2ede7b7aa212e528cfef))
+* **gateway:** code and report a refused mint ([#1222](https://github.com/PostHog/wizard/issues/1222)) ([0929ab5](https://github.com/PostHog/wizard/commit/0929ab5ff06be1ddec7c5b9a85da344a12ffcddf))
+* **gateway:** re-mint once and resume on a 401 from an aged bearer ([#1224](https://github.com/PostHog/wizard/issues/1224)) ([fd710c0](https://github.com/PostHog/wizard/commit/fd710c00c95b2fd5a39ed4dfdfefcb8276a38c0e))
+* **gateway:** stop falling back to the legacy gateway ([#1221](https://github.com/PostHog/wizard/issues/1221)) ([44410f3](https://github.com/PostHog/wizard/commit/44410f3c9353657f813fa837fa4ec4f09b1db39d))
+
+
+### Bug Fixes
+
+* **ci:** fall back to the legacy gateway under --ci ([#1241](https://github.com/PostHog/wizard/issues/1241)) ([90d3e97](https://github.com/PostHog/wizard/commit/90d3e972eefc7946f1d6563f9f497a9e9fa37615))
+* **models:** follow the gateway's mint allowlist ([#1228](https://github.com/PostHog/wizard/issues/1228)) ([5b91786](https://github.com/PostHog/wizard/commit/5b91786c98d59c00d1e313012fb0c61d800cd828))
+
+## [2.73.2](https://github.com/PostHog/wizard/compare/v2.73.1...v2.73.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **ci:** pin patched pnpm across release tooling ([#1230](https://github.com/PostHog/wizard/issues/1230)) ([8909d86](https://github.com/PostHog/wizard/commit/8909d86f8c1ecf4e35d4ba65ea9db506369009a8))
+* declare ai_product in the v2 gateway properties blob ([#1217](https://github.com/PostHog/wizard/issues/1217)) ([1dfde04](https://github.com/PostHog/wizard/commit/1dfde0402a85d052395413fefd204d7fd67e1142))
+
+## [2.73.1](https://github.com/PostHog/wizard/compare/v2.73.0...v2.73.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **replay-vision:** stop reporting unsupported-platform aborts as errors ([#1138](https://github.com/PostHog/wizard/issues/1138)) ([6526e29](https://github.com/PostHog/wizard/commit/6526e29c04fe0de0210775fdd6cd3cc2feab50d5))
+
+## [2.73.0](https://github.com/PostHog/wizard/compare/v2.72.0...v2.73.0) (2026-09-04)
+
+
+### Features
+
+* fallback to aws after github retries for context mill downloads ([#1206](https://github.com/PostHog/wizard/issues/1206)) ([4f0ad4f](https://github.com/PostHog/wizard/commit/4f0ad4fc829274aec6d6efcbbdc9bc61f18a30b8))
+
+
+### Bug Fixes
+
+* **skills:** don't retry non-retryable download statuses ([#829](https://github.com/PostHog/wizard/issues/829)) ([14338c1](https://github.com/PostHog/wizard/commit/14338c1f4f8ae14f3bb9f4f1de7284f018914e19))
+
+## [2.72.0](https://github.com/PostHog/wizard/compare/v2.71.0...v2.72.0) (2026-09-03)
+
+
+### Features
+
+* **self-driving:** show a one-time login link on the GitHub gate for provisioning signups ([#1186](https://github.com/PostHog/wizard/issues/1186)) ([8f4d523](https://github.com/PostHog/wizard/commit/8f4d523f2050056977144d1a42f3f91aa01b62e1))
+
+
+### Bug Fixes
+
+* keep fetch on HTTP/1.1 so Node 26 does not exit the wizard mid-run ([#1203](https://github.com/PostHog/wizard/issues/1203)) ([b75540b](https://github.com/PostHog/wizard/commit/b75540b174565ebec586f658233fe0f69f1e8b66))
+* **mcp-analytics:** accept CI region option ([#1187](https://github.com/PostHog/wizard/issues/1187)) ([fa4d1c4](https://github.com/PostHog/wizard/commit/fa4d1c4c43d42d950420d5875ae0ff8747c141ee))
+* **orchestrator:** name the model allow-list where enqueue_task picks it ([#1194](https://github.com/PostHog/wizard/issues/1194)) ([e62eb38](https://github.com/PostHog/wizard/commit/e62eb386ad3d9d03d94fc5b9b2c8db180e6f09a4))
+* **orchestrator:** record why an agent reported a task 'not needed' ([#1195](https://github.com/PostHog/wizard/issues/1195)) ([821023a](https://github.com/PostHog/wizard/commit/821023a8387747716117d304fc4438298b0e41f7))
+* **privacy:** stamp wizard_ai_sdk_detected after auth instead of at consent time ([#1184](https://github.com/PostHog/wizard/issues/1184)) ([41a9a55](https://github.com/PostHog/wizard/commit/41a9a552e150c39d84005aa525913fe81190a3a7))
+
+## [2.71.0](https://github.com/PostHog/wizard/compare/v2.70.1...v2.71.0) (2026-09-01)
+
+
+### Features
+
+* **gateway:** record a successful mint in the run log ([#1179](https://github.com/PostHog/wizard/issues/1179)) ([b6f6e42](https://github.com/PostHog/wizard/commit/b6f6e42791029d5369a03c335d2148b2692a3c75))
+* **self-driving:** gate GitHub on a screen before the agent runs ([#1178](https://github.com/PostHog/wizard/issues/1178)) ([2360b82](https://github.com/PostHog/wizard/commit/2360b8207944fd36491ff71eac0de2cffc7fe410))
+* **tui:** show a red notice when the terminal is too small ([#1181](https://github.com/PostHog/wizard/issues/1181)) ([bd839d3](https://github.com/PostHog/wizard/commit/bd839d34cf2b6cfa7ca975a0a2ee203172f961d5))
+
+
+### Bug Fixes
+
+* **agent:** isolate CLAUDE_CONFIG_DIR so a stored Claude login cannot 401 the run ([#1180](https://github.com/PostHog/wizard/issues/1180)) ([919e7d1](https://github.com/PostHog/wizard/commit/919e7d15089499901fa2717bf4098c3d6b01e0ad))
+* **agent:** report a dropped PostHog MCP server, and stop promising tools a run does not have ([#1168](https://github.com/PostHog/wizard/issues/1168)) ([7943eb1](https://github.com/PostHog/wizard/commit/7943eb139ce488e9bb13549274a4b0fb8d3a7904))
+* **auth:** refresh the OAuth access token before each agent run ([#1176](https://github.com/PostHog/wizard/issues/1176)) ([fdf6d4e](https://github.com/PostHog/wizard/commit/fdf6d4e21e83f1898b96a0231bb6aca92e7dcc9a))
+* **self-driving:** drop replay from the step 4 native sources ([#1174](https://github.com/PostHog/wizard/issues/1174)) ([2ca84f3](https://github.com/PostHog/wizard/commit/2ca84f3b6b33803a2f97216987faa364c805a309))
+
+## [2.70.1](https://github.com/PostHog/wizard/compare/v2.70.0...v2.70.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **tui:** don't let wizard_ask submit an empty required field ([#1171](https://github.com/PostHog/wizard/issues/1171)) ([a2b492b](https://github.com/PostHog/wizard/commit/a2b492bdc0b068602bb743d8e3f578b51c3fb0ff))
+* **warehouse:** route Firebase source setup to the browser, not the CLI ([#1149](https://github.com/PostHog/wizard/issues/1149)) ([7debc38](https://github.com/PostHog/wizard/commit/7debc38d3256c40e8e89d22819df2e20b1eb23d4))
+
+## [2.70.0](https://github.com/PostHog/wizard/compare/v2.69.0...v2.70.0) (2026-08-31)
+
+
+### Features
+
+* **privacy:** disclose the dependency scan and let users decline sharing ([#1099](https://github.com/PostHog/wizard/issues/1099)) ([dc65104](https://github.com/PostHog/wizard/commit/dc65104f55a4b5012c91fff0788f0b21627dbab8))
+
+## [2.69.0](https://github.com/PostHog/wizard/compare/v2.68.0...v2.69.0) (2026-08-28)
+
+
+### Features
+
+* **gateway:** tag events with the gateway edition and fail hollow runs ([#1165](https://github.com/PostHog/wizard/issues/1165)) ([db0c556](https://github.com/PostHog/wizard/commit/db0c556fedd1cc2bf012e28e369d5b22b9ebb482))
+
+
+### Bug Fixes
+
+* **gateway:** route v2 openai calls over the responses api ([#1166](https://github.com/PostHog/wizard/issues/1166)) ([a8c3ef1](https://github.com/PostHog/wizard/commit/a8c3ef1f21a764f0189b93b27591cc0cd1ef4d56))
+
+## [2.68.0](https://github.com/PostHog/wizard/compare/v2.67.0...v2.68.0) (2026-08-28)
+
+
+### Features
+
+* **e2e:** let the e2e harness drive the warehouse flow ([#1152](https://github.com/PostHog/wizard/issues/1152)) ([0b87fc8](https://github.com/PostHog/wizard/commit/0b87fc8f97fa76ab9f9de39b9c9f848fc0e39b84))
+* **gateway:** use server-minted scoped tokens for model calls ([#1130](https://github.com/PostHog/wizard/issues/1130)) ([dc32339](https://github.com/PostHog/wizard/commit/dc32339cdfaf7aa8064de88d504acf9092c58750))
+* **telemetry:** stamp wizard_ask outcome events with the ask subject ([#1162](https://github.com/PostHog/wizard/issues/1162)) ([d1cce49](https://github.com/PostHog/wizard/commit/d1cce49244e9462861220c03d317858cf95bef63))
+* **wizard-ci:** let a PR comment pin the context-mill ref ([#1153](https://github.com/PostHog/wizard/issues/1153)) ([b494975](https://github.com/PostHog/wizard/commit/b4949755db48c9f10484634446f69b8d05edf424))
+
+
+### Bug Fixes
+
+* **warehouse-e2e:** stop the secret rule refusing every credential question ([#1161](https://github.com/PostHog/wizard/issues/1161)) ([f0e024d](https://github.com/PostHog/wizard/commit/f0e024d301dcdb53587e06fbf51e01d1cd06e5b2))
+
+## [2.67.0](https://github.com/PostHog/wizard/compare/v2.66.0...v2.67.0) (2026-08-27)
+
+
+### Features
+
+* export handoffs to host paths ([#1141](https://github.com/PostHog/wizard/issues/1141)) ([216ffac](https://github.com/PostHog/wizard/commit/216ffacbb04995c647df0afd03743a2a38bbb0be))
+* stable error catalog with machine-readable error codes ([#1148](https://github.com/PostHog/wizard/issues/1148)) ([25be176](https://github.com/PostHog/wizard/commit/25be176ad5ea0f295aeb13c5468e003ed0d61366))
+
+## [2.66.0](https://github.com/PostHog/wizard/compare/v2.65.0...v2.66.0) (2026-08-26)
+
+
+### Features
+
+* **warehouse:** cover 258 warehouse source kinds ([#1145](https://github.com/PostHog/wizard/issues/1145)) ([e5cafaa](https://github.com/PostHog/wizard/commit/e5cafaa1968f7dd5dc25251cfeb5a432c699a03e))
+
+
+### Bug Fixes
+
+* **mcp:** drop feature-selection menus, surface the editor's login command ([#1122](https://github.com/PostHog/wizard/issues/1122)) ([e9e407f](https://github.com/PostHog/wizard/commit/e9e407f85f3fdc1cd2b1dbde203fa9a96dae7d56))
+* **orchestrator:** take warehouse consent at seed time, and name every skip ([#1147](https://github.com/PostHog/wizard/issues/1147)) ([bcf1052](https://github.com/PostHog/wizard/commit/bcf10523a12c6b996618e174f9b4235555385576))
+* **warehouse:** make check_env_keys agree with the source detector ([#1144](https://github.com/PostHog/wizard/issues/1144)) ([d6f1937](https://github.com/PostHog/wizard/commit/d6f1937c9ec01e4f434bac8a271424c2b78aadf5))
+* **wizard-ask:** count the batching nudge per subject, not per run ([#1146](https://github.com/PostHog/wizard/issues/1146)) ([ba774ab](https://github.com/PostHog/wizard/commit/ba774ab27db0a499b0e9a2c4aee40b3572a2d8e3))
+
+## [2.65.0](https://github.com/PostHog/wizard/compare/v2.64.1...v2.65.0) (2026-08-24)
+
+
+### Features
+
+* add Elixir framework support ([#946](https://github.com/PostHog/wizard/issues/946)) ([b8b8aa6](https://github.com/PostHog/wizard/commit/b8b8aa6212b98af1d710c6edc46d882caf649ff3))
+* add Go framework support ([#945](https://github.com/PostHog/wizard/issues/945)) ([50965d7](https://github.com/PostHog/wizard/commit/50965d7ae98eaf5f18b4f02f91097566cc9734b7))
+* add Java framework support ([#948](https://github.com/PostHog/wizard/issues/948)) ([c56a894](https://github.com/PostHog/wizard/commit/c56a894ca7753f4d25da837de208b3d504267f6f))
+* add Rust framework support ([#947](https://github.com/PostHog/wizard/issues/947)) ([9b768a0](https://github.com/PostHog/wizard/commit/9b768a01a84e4efcba5e899692b6668b7a123411))
+* **metrics:** add `wizard metrics` program (runs the context-mill metrics skill) ([#1102](https://github.com/PostHog/wizard/issues/1102)) ([9f45ef5](https://github.com/PostHog/wizard/commit/9f45ef520f8fab4fcc24c08c0f9ae754888c0121))
+* new local flags ([#1125](https://github.com/PostHog/wizard/issues/1125)) ([b91dbe8](https://github.com/PostHog/wizard/commit/b91dbe88f8b537d847eefb857b6c8bac17b4c37b))
+
+
+### Bug Fixes
+
+* adding analytics tags to blindspots and other stuff ([#1119](https://github.com/PostHog/wizard/issues/1119)) ([1b4fd5c](https://github.com/PostHog/wizard/commit/1b4fd5c777acd633a22c1c517a99c9dbd10e9a74))
+* **e2e:** read pubspec dependencies in the result JSON ([#1113](https://github.com/PostHog/wizard/issues/1113)) ([56b1aa5](https://github.com/PostHog/wizard/commit/56b1aa59344e15fb39d6738ee9fefb671b5290c9))
+* fix smoke test ([#1126](https://github.com/PostHog/wizard/issues/1126)) ([f0f123f](https://github.com/PostHog/wizard/commit/f0f123f9660d446ba5b62a9baf5a55b1d204c3d4))
+* **orchestrator:** pause Write/Edit while a task's wizard_ask is open ([#1133](https://github.com/PostHog/wizard/issues/1133)) ([841d3ad](https://github.com/PostHog/wizard/commit/841d3ad6b31e5f0ce02940ba3381e068cf039967))
+* **wizard-tools:** share wizard_ask sensitive-field guidance across harnesses ([#1135](https://github.com/PostHog/wizard/issues/1135)) ([f190954](https://github.com/PostHog/wizard/commit/f190954df0966087739a14654b05e6415bcad739))
+
 ## [2.64.1](https://github.com/PostHog/wizard/compare/v2.64.0...v2.64.1) (2026-08-20)
 
 
