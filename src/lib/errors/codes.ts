@@ -22,6 +22,7 @@ export const ErrorCodes = {
   DetectNoFramework: 'PHW_DETECT_NO_FRAMEWORK',
   DetectUnsupportedVersion: 'PHW_DETECT_UNSUPPORTED_VERSION',
   DetectUnsupportedPlatform: 'PHW_DETECT_UNSUPPORTED_PLATFORM',
+  DetectDirtyWorkingTree: 'PHW_DETECT_DIRTY_WORKING_TREE',
   DetectNoPosthogSdk: 'PHW_DETECT_NO_POSTHOG_SDK',
   DetectNoProjectFiles: 'PHW_DETECT_NO_PROJECT_FILES',
   DetectNoSources: 'PHW_DETECT_NO_SOURCES',

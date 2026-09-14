@@ -22,6 +22,7 @@ import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
 import { replayVisionCommand } from '../commands/replay-vision';
+import { cullFeatureFlagsCommand } from '../commands/cull-feature-flags';
 import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
@@ -89,6 +90,11 @@ describe('top-level command shapes', () => {
   test('replay-vision is a flat skill command', () => {
     expect(replayVisionCommand.name).toBe('replay-vision');
     expect(replayVisionCommand.children).toBeUndefined();
+  });
+
+  test('cull-feature-flags is a flat skill command', () => {
+    expect(cullFeatureFlagsCommand.name).toBe('cull-feature-flags');
+    expect(cullFeatureFlagsCommand.children).toBeUndefined();
   });
 
   test('warehouse is a flat skill command', () => {

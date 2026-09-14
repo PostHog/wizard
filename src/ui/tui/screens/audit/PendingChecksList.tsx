@@ -75,7 +75,7 @@ const GroupHeader = ({
 const CheckRow = ({ check }: { check: AuditCheck }) => {
   const { glyph, color } = AUDIT_SEVERITY_STYLE[check.status];
   return (
-    <Text>
+    <Text wrap="truncate-end">
       <Text color={color}>{glyph}</Text>
       <Text dimColor={check.status === 'pending'}> {check.label}</Text>
     </Text>
