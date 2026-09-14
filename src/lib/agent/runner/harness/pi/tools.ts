@@ -34,6 +34,7 @@ import {
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
   vaultSensitiveAnswers,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
@@ -210,14 +211,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       ),
     }),
     async execute(_id, args) {
-      const forbidden = Object.keys(args.values).find(
-        (k) => k.toUpperCase() === 'POSTHOG_KEY',
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
       );
-      if (forbidden) {
-        return text(
-          `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
-        );
-      }
+      if (keyRefusal) return text(keyRefusal);
       // Resolve secret refs host-side; the value never reaches the agent.
       const resolution = resolveEnvSecretRefs(args.values, secretVault);
       if (!resolution.ok) {

@@ -4,7 +4,7 @@
  * value — and set_env_values resolves refs host-side into the .env file.
  */
 import { mkdtempSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -305,6 +305,56 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     );
     expect(gitignore.split('\n')).toContain('.env');
     expect(gitignore).toContain('xcuserdata/');
+  });
+
+  it('refuses POSTHOG_KEY in a project that does not read it', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('is not a valid PostHog env var name');
+    await expect(
+      readFile(join(workingDirectory, '.env'), 'utf8'),
+    ).rejects.toThrow();
+  });
+
+  it('keeps POSTHOG_KEY when the project code already reads it', async () => {
+    // Refusing here forces a rename of working code, and a deploy step that
+    // still passes POSTHOG_KEY then starts the app with an empty token.
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await mkdir(join(workingDirectory, 'src'));
+    await writeFile(
+      join(workingDirectory, 'src', 'index.ts'),
+      "const client = new PostHog(process.env.POSTHOG_KEY ?? '');\n",
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('Wrote 1 key(s)');
+    expect(await readFile(join(workingDirectory, '.env'), 'utf8')).toMatch(
+      /^POSTHOG_KEY=.*phc_test/m,
+    );
+  });
+
+  it('does not count NEXT_PUBLIC_POSTHOG_KEY as a read of POSTHOG_KEY', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(
+      join(workingDirectory, 'providers.tsx'),
+      'posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!);\n',
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('is not a valid PostHog env var name');
   });
 
   it('mixed values map: literal + secretRef written together, secret still never in output', async () => {
