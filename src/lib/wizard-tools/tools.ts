@@ -764,9 +764,9 @@ export function templateEnvWriteRefusal(resolvedPath: string): string | null {
 /** Whole-word, so `NEXT_PUBLIC_POSTHOG_KEY` (`_` is a word character) does not count. */
 const LEGACY_KEY_USE = /\bPOSTHOG_KEY\b/;
 
-/** Files where a project reads or defines an env var: source, config, env files. */
+/** Files where a project reads or defines an env var: source, config, env, shell and build files. */
 const LEGACY_KEY_SCAN_FILE =
-  /^(\.env.*|Dockerfile.*|.*\.[cm]?[jt]sx?|.*\.(vue|svelte|astro|py|rb|php|go|rs|exs?|java|kts?|swift|dart|cs|ya?ml|toml))$/;
+  /^(\.env.*|Dockerfile.*|Makefile|Procfile|package\.json|app\.json|eas\.json|.*\.[cm]?[jt]sx?|.*\.(vue|svelte|astro|py|rb|php|go|rs|exs?|java|kts?|swift|dart|cs|ya?ml|toml|sh|bash|gradle|properties|xcconfig|plist))$/;
 
 function projectReadsLegacyKey(workingDirectory: string): boolean {
   let found = false;

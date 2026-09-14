@@ -342,6 +342,21 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     );
   });
 
+  it('keeps POSTHOG_KEY when only a startup script reads it', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(
+      join(workingDirectory, 'start.sh'),
+      '#!/bin/sh\nAPP_TOKEN="$POSTHOG_KEY" exec ./server\n',
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('Wrote 1 key(s)');
+  });
+
   it('does not count NEXT_PUBLIC_POSTHOG_KEY as a read of POSTHOG_KEY', async () => {
     const { setEnvValues, workingDirectory } = makeTools({});
     await writeFile(
