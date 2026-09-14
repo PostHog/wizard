@@ -538,8 +538,8 @@ wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
 wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
 ```
 
-See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog. Note
-`--local-mcp` selects the MCP server only — it no longer also switches skills.
+See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
+`--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
 
 ### Testing
 

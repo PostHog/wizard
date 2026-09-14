@@ -189,6 +189,10 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 
 ## Repository conventions
 
+- Write documentation as the current design. Describe behavior and usage
+  directly; omit change history, migration narration, and implementation
+  rationale. Apply the same style to PR descriptions.
+
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
