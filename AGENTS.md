@@ -170,6 +170,11 @@ nonmutating lint checks, and scope formatting fixes to edited files. Do not add
 tests for prose, compiler-enforced shapes, or duplicated implementation. Keep
 new code comments to one line; put longer explanations in linked docs.
 
+Local `--ci`, smoke-test, and full headless runs require two separate secrets:
+a PostHog personal API key and an already-issued gateway token supplied through
+`WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
+[credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+
 ### Local dev targets
 
 Four things can independently point at a local server — the wizard binary,

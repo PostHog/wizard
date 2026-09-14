@@ -31,6 +31,16 @@ arguments. For new runs follow the
 [current host limitations](../e2e-harness/ARCHITECTURE.md#current-host-limitations)
 before choosing credentials or an EU project.
 
+## Credentials for full agent runs
+
+Full TUI host and snapshot runs require both the personal API key (or
+`POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus `PROJECT_ID`.
+For MCP runs, pass the personal key through `open_app` and set the gateway
+token file path in the server environment before launch. Restart the server
+after changing it; the gateway path is not an MCP tool argument.
+Detection-only exploration does not need either secret. See
+[local credential setup](../docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+
 ## Background
 
 The control plane lives in [`e2e-harness/`](../e2e-harness/) — out of `src/`, so

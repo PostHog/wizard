@@ -3,6 +3,57 @@
 Running the wizard against local servers. Four things can independently be
 local, and this doc is the catalog of how to control each.
 
+## Credentials for local CI and headless runs
+
+Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need
+**two separate secrets**, plus the target project ID:
+
+| Input | Purpose | How to pass it |
+|---|---|---|
+| PostHog personal API key (`phx_...`) | PostHog API and MCP authentication | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; headless host: `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
+| Already-issued AI gateway bearer | Model calls | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the token |
+| Target project ID | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; headless host: `PROJECT_ID` (MCP: `projectId`) |
+
+The personal API key is not the gateway token. CI reads the gateway token
+from the file and uses it directly; it does not mint or refresh one. Keep the
+file outside the repo, restrict its permissions (`chmod 600`), and supply a
+valid token for the gateway being used. Missing, expired, or rejected tokens
+fail the run.
+
+With your personal API key already exported and gateway token saved locally:
+
+```bash
+export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"
+export POSTHOG_WIZARD_PROJECT_ID=12345
+export POSTHOG_WIZARD_REGION=us
+
+pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
+  --project-id "$POSTHOG_WIZARD_PROJECT_ID" \
+  --region "$POSTHOG_WIZARD_REGION" --install-dir=/absolute/path/to/test-app
+```
+
+`WIZARD_CI_GATEWAY_URL` optionally sets the gateway origin (no `/v1`);
+otherwise CI uses `https://ai-gateway.<region>.posthog.com`. The local service
+flags below do not override this CI gateway setting.
+
+For the `wizard-ci` MCP server, set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the
+server's environment before launch; restart an existing server after changing
+it. It is not an `open_app` argument. Pass the personal key via `keyFile` or
+`apiKey` and the project via `projectId`. Detection-only runs that stop at
+`auth` do not need either secret.
+
+This matches [smoke-test CI](../.github/workflows/smoke-test.yml):
+`GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY` becomes
+`POSTHOG_PERSONAL_API_KEY`, while
+`GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_GATEWAY_TOKEN` is written to a temporary
+file referenced by `WIZARD_CI_GATEWAY_TOKEN_FILE`. CI also supplies
+`GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID` as
+`POSTHOG_WIZARD_PROJECT_ID`.
+
+Interactive runs authenticate normally and mint their gateway token through
+PostHog; they do not require this CI token file. Published builds reject
+`--ci`; use source, a development build, or `pnpm build:ci` for these recipes.
+
 ## The four dimensions
 
 | # | What | Local target | How you control it |
