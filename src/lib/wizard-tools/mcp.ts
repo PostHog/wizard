@@ -100,7 +100,7 @@ export interface WizardToolsOptions {
   /** Framework-specific package manager detector */
   detectPackageManager: PackageManagerDetector;
 
-  /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
+  /** Primary skills origin (e.g. http://localhost:8765 or the GitHub Releases URL); downloads fail over to the AWS mirror */
   skillsBaseUrl: string;
 
   /**

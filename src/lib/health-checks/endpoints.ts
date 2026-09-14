@@ -1,26 +1,8 @@
-import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
+import { AWS_SKILLS_BASE_URL, GITHUB_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
-// ---------------------------------------------------------------------------
-// Direct endpoint health checks
-//
-// These ping PostHog-owned services directly (no Statuspage intermediary).
-// Result taxonomy:
-//   - HTTP 2xx-3xx (per `isExpectedStatus`)        → Healthy
-//   - HTTP 4xx / 5xx                                → Down (confirmed)
-//   - Network error / DNS / timeout (after retries) → NoConnection
-// NoConnection means we don't know whose fault it is; readiness reconciles
-// against the status page before deciding how to surface it to the user.
-//
-// LLM Gateway – FastAPI service
-//   Source: posthog/services/llm-gateway/src/llm_gateway/api/health.py
-//   GET /_liveness → 200 {"status":"alive"}
-//
-// MCP – Cloudflare Worker
-//   Source: posthog/services/mcp/src/index.ts
-//   GET / → 302 to posthog.com docs. The redirect proves the worker is up.
-// ---------------------------------------------------------------------------
+// Direct gateway and skill-origin checks distinguish HTTP failures from connection failures.
 
 function noConnectionResult(error: string, attempts: number): BaseHealthResult {
   return {
@@ -62,7 +44,8 @@ async function attemptFetch(
   }
 }
 
-async function fetchEndpointHealth(
+// Exported so tests can pin the retry/taxonomy machinery directly.
+export async function fetchEndpointHealth(
   url: string,
   timeoutMs = 5000,
   isExpectedStatus: (status: number) => boolean = (s) => s === 200,
@@ -131,17 +114,70 @@ async function fetchEndpointHealth(
   return result;
 }
 
-export const checkLlmGatewayHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth('https://gateway.us.posthog.com/_liveness');
+export const checkLlmGatewayHealth = (
+  gatewayUrl: string,
+): Promise<BaseHealthResult> =>
+  fetchEndpointHealth(new URL('/readyz', gatewayUrl).href);
 
-export const checkMcpHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth(
-    'https://mcp.posthog.com/',
-    5000,
-    // 2xx-3xx counts as up (redirect to docs)
-    (s) => s >= 200 && s < 400,
-    'manual',
-  );
+/**
+ * Skills are published to two origins under the same filenames and
+ * `fetchWithRetry` fails over between them, so the run is only blocked when
+ * neither answers. Probed in parallel — sequential probes would double the
+ * worst case past `READINESS_TIMEOUT_MS`.
+ */
+export const checkSkillsOriginHealth = async (): Promise<BaseHealthResult> => {
+  const [github, aws] = await Promise.all([
+    fetchEndpointHealth(`${GITHUB_SKILLS_BASE_URL}/skill-menu.json`),
+    fetchEndpointHealth(`${AWS_SKILLS_BASE_URL}/skill-menu.json`),
+  ]);
+  return combineOriginHealth(github, aws);
+};
 
-export const checkGithubReleasesHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth(`${REMOTE_SKILLS_BASE_URL}/skill-menu.json`);
+/**
+ * Mirrors `fetchWithRetry`: a download tries GitHub, then AWS, so the run is
+ * only blocked when neither origin answers. Whichever failure the probes saw,
+ * one origin serving means skills are reachable.
+ */
+function combineOriginHealth(
+  github: BaseHealthResult,
+  aws: BaseHealthResult,
+): BaseHealthResult {
+  if (github.status === ServiceHealthStatus.Healthy) {
+    // Naming the dead origin makes a one-sided outage legible in the log and
+    // in the readiness reasons, where the status alone reads as "fine".
+    return aws.status === ServiceHealthStatus.Healthy
+      ? github
+      : withIndicatorSuffix(github, 'aws unavailable');
+  }
+
+  if (aws.status === ServiceHealthStatus.Healthy) {
+    return withIndicatorSuffix(aws, 'via aws, github unavailable');
+  }
+
+  const error = `github: ${github.error ?? 'unknown'} | aws: ${
+    aws.error ?? 'unknown'
+  }`;
+  const confirmedDown =
+    github.status === ServiceHealthStatus.Down ||
+    aws.status === ServiceHealthStatus.Down;
+  return {
+    status: confirmedDown
+      ? ServiceHealthStatus.Down
+      : ServiceHealthStatus.NoConnection,
+    error,
+    // Keeps the `attempts=N` the blocked-readiness analytics parses.
+    rawIndicator: github.rawIndicator ?? aws.rawIndicator,
+  };
+}
+
+function withIndicatorSuffix(
+  result: BaseHealthResult,
+  suffix: string,
+): BaseHealthResult {
+  return {
+    ...result,
+    rawIndicator: result.rawIndicator
+      ? `${result.rawIndicator} (${suffix})`
+      : suffix,
+  };
+}

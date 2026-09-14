@@ -7,8 +7,10 @@
 
 import { Harness } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import type { GatewayEdition } from '@lib/gateway-session';
-import { buildGatewayModel } from '@lib/agent/runner/harness/pi/gateway';
+import {
+  buildGatewayModel,
+  gatewayApiFor,
+} from '@lib/agent/runner/harness/pi/gateway';
 import {
   modelCapabilities,
   triageModelFor,
@@ -23,11 +25,9 @@ const TRIAGE_TIMEOUT_MS = 20_000;
 export interface TriageGatewayAuth {
   /** Gateway base url, from the run's resolved gateway auth. */
   baseURL: string;
-  /** The run's gateway bearer (minted phe_ on v2, OAuth token on legacy). */
+  /** The run's minted gateway bearer. */
   authToken: string;
-  /** Gateway contract in play; selects the header shape. Default legacy. */
-  edition?: GatewayEdition;
-  /** Customer team for the v2 properties blob. */
+  /** Customer team for the properties blob. */
   teamId?: number;
   /** The run's trace tags, with `call_type` overridden to
    *  `CallType.yaraTriage` so scan spend is separable from agent work. */
@@ -39,32 +39,38 @@ export interface TriageGatewayAuth {
  * Triage provider for a harness. Auth is always explicit: every caller already
  * holds the gateway url and the run's token, and reading them back out of
  * ANTHROPIC_* made an unauthed provider silent — it returned undefined, the
- * caller failed closed, and a clean first-party skill got deleted.
+ * caller failed closed, and a clean first-party skill got deleted. A resolver
+ * is re-read on every call, so a run that re-mints mid-way scans with the
+ * current bearer rather than the one it started with.
  */
 export function createTriageLLMProvider(
-  auth: TriageGatewayAuth,
+  auth: TriageGatewayAuth | (() => Promise<TriageGatewayAuth>),
   harness: Harness,
 ): LLMProvider {
-  const { baseURL, authToken } = auth;
+  const resolveAuth =
+    typeof auth === 'function' ? auth : () => Promise.resolve(auth);
   const modelId = triageModelFor(harness);
-  const model = buildGatewayModel({
-    gatewayUrl: baseURL,
-    accessToken: authToken,
-    edition: auth.edition,
-    teamId: auth.teamId,
-    wizardMetadata: auth?.wizardMetadata ?? {},
-    wizardFlags: auth?.wizardFlags ?? {},
-    modelId,
-  });
   const { reasoning, thinkingLevel } = modelCapabilities(modelId);
   logToFile(
-    `[YARA] triage provider ready (model: ${modelId}, api: ${model.api})`,
+    `[YARA] triage provider ready (model: ${modelId}, api: ${gatewayApiFor(
+      modelId,
+    )})`,
   );
 
   return async (prompt: string): Promise<string> => {
     // Lazy: pi-ai is a 5MB ESM tree, and this module is in the static graph of
     // every command. Same constraint as the pi harness's SDK imports.
     const { completeSimple } = await import('@earendil-works/pi-ai');
+    const current = await resolveAuth();
+    const authToken = current.authToken;
+    const model = buildGatewayModel({
+      gatewayUrl: current.baseURL,
+      accessToken: authToken,
+      teamId: current.teamId,
+      wizardMetadata: current.wizardMetadata ?? {},
+      wizardFlags: current.wizardFlags ?? {},
+      modelId,
+    });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TRIAGE_TIMEOUT_MS);
     try {

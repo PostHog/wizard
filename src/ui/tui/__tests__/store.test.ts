@@ -808,7 +808,7 @@ describe('WizardStore', () => {
         cacheCreationTokens: 0,
         cacheCreation5m: 0,
         cacheCreation1h: 0,
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-haiku-4-5',
       });
       store.addTokenUsage({
         inputTokens: 1_000_000,

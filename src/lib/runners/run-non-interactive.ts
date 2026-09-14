@@ -13,7 +13,12 @@ import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
 import { join } from 'node:path';
-import { ErrorCodes, detectErrorCode, emitWizardError } from '@lib/errors';
+import {
+  ErrorCodes,
+  classifyRunFailure,
+  detectErrorCode,
+  emitWizardError,
+} from '@lib/errors';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -31,6 +36,10 @@ function modeLabel(mode: NonInteractiveMode): string {
   return mode === 'headless' ? 'Headless' : 'CI';
 }
 
+/** The credentials every non-interactive mode accepts, for error messages. */
+export const API_KEY_HINT =
+  'personal API key phx_xxx or wizard-app OAuth access token pha_xxx';
+
 /**
  * The single non-interactive validation layer: requires api-key and
  * install-dir. Every non-interactive entry point routes through
@@ -42,16 +51,12 @@ export function validateNonInteractiveOptions(
   mode: NonInteractiveMode,
 ): void {
   const label = modeLabel(mode);
-  const keyHint =
-    mode === 'headless'
-      ? 'personal API key phx_xxx or pha_ OAuth access token'
-      : 'personal API key phx_xxx';
   if (!options.apiKey) {
     getUI().intro('PostHog Wizard');
-    getUI().log.error(`${label} mode requires --api-key (${keyHint})`);
+    getUI().log.error(`${label} mode requires --api-key (${API_KEY_HINT})`);
     emitWizardError({
       code: ErrorCodes.ArgsMissingApiKey,
-      message: `${label} mode requires --api-key (${keyHint})`,
+      message: `${label} mode requires --api-key (${API_KEY_HINT})`,
     });
     process.exit(1);
   }
@@ -212,6 +217,15 @@ export function runNonInteractive(
     };
 
     try {
+      if (mode === 'ci') {
+        const { configureGatewayFromCIEnvironment } = await import(
+          '@lib/gateway-session'
+        );
+        configureGatewayFromCIEnvironment(
+          Number(session.projectId),
+          session.region ?? 'us',
+        );
+      }
       if (config.ciPreRun) {
         await config.ciPreRun(session);
       } else {
@@ -315,14 +329,19 @@ export function runNonInteractive(
         session.frameworkConfig?.metadata.docsUrl ??
         runDef?.docsUrl ??
         POSTHOG_DOCS_URL;
+      // A coded failure is a decision with its own message; anything else is
+      // unexpected and gets the generic framing.
+      const failure = classifyRunFailure(error);
       await settleStream(RunPhase.Error, {
         kind: OutroKind.Error,
         message: errorMessage,
-        errorCode: ErrorCodes.InternalUnhandled,
+        errorCode: failure.code,
       });
       await wizardAbort({
-        code: ErrorCodes.InternalUnhandled,
-        message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
+        code: failure.code,
+        message: failure.coded
+          ? `${errorMessage}${debugInfo}`
+          : `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,
       });
     }

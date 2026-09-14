@@ -19,7 +19,6 @@
 import {
   getHost,
   getCloudUrl,
-  getLlmGatewayUrl,
   getUiHostFromHost,
   detectRegion,
   resolveBaseUrl,
@@ -88,8 +87,6 @@ export class HostResolution {
   readonly appHost: string;
   /** CDN asset host (e.g. `https://us-assets.i.posthog.com`). */
   readonly assetHost: string;
-  /** PostHog LLM gateway URL the agent SDK authenticates its model calls against. */
-  readonly gatewayUrl: string;
   /**
    * PostHog MCP server URL the agent connects to. Region-independent — the
    * server resolves the user's region from the bearer token — so this is driven
@@ -103,14 +100,12 @@ export class HostResolution {
     apiHost: string;
     appHost: string;
     assetHost: string;
-    gatewayUrl: string;
     mcpUrl: string;
   }) {
     this.region = fields.region;
     this.apiHost = fields.apiHost;
     this.appHost = fields.appHost;
     this.assetHost = fields.assetHost;
-    this.gatewayUrl = fields.gatewayUrl;
     this.mcpUrl = fields.mcpUrl;
     Object.freeze(this);
   }
@@ -130,7 +125,6 @@ export class HostResolution {
       apiHost,
       appHost: getCloudUrl(region, opts.baseUrl),
       assetHost: assetHostFor(region, opts.baseUrl),
-      gatewayUrl: getLlmGatewayUrl(apiHost),
       mcpUrl: mcpUrlFor(opts.localMcp ?? false),
     });
   }
@@ -150,7 +144,6 @@ export class HostResolution {
       apiHost,
       appHost: getUiHostFromHost(apiHost),
       assetHost: assetHostFromApiHost(apiHost),
-      gatewayUrl: getLlmGatewayUrl(apiHost),
       mcpUrl: mcpUrlFor(opts.localMcp ?? false),
     });
   }

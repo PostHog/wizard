@@ -16,7 +16,7 @@
   "variations": [
     {
       "name": "default",
-      "summary": "orchestrator / pi — the program's pinned binding; stage models from the flow frontmatter (terra seed, sol tasks, luna report)"
+      "summary": "orchestrator / pi — the program's pinned binding; stage models from the flow frontmatter (terra seed, install and init, sol tasks, luna report)"
     },
     {
       "name": "linear-fallback",

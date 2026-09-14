@@ -11,6 +11,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
+import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { gatewayAuth } from '@lib/gateway-session';
 import { resolveHarness } from '../switchboard';
@@ -252,6 +253,7 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
+  maybeStampAiSdkDetected(session);
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -305,13 +307,12 @@ export async function bootstrapProgram(
   // set them — so downstream readers get a non-null type without asserting.
   const credentials = session.credentials!;
 
-  // Resolve the gateway posture once for the boot: v2 scoped token when the
-  // backend mints, legacy OAuth otherwise.
-  const auth = await gatewayAuth(
-    credentials.host,
-    credentials.accessToken,
-    programConfig.id,
-  );
+  // Mint now so a refusal fails the boot before any agent starts. Later
+  // readers re-resolve through the cache, which re-mints past the refresh
+  // point.
+  const currentGatewayAuth = () =>
+    gatewayAuth(credentials.host, credentials.accessToken, programConfig.id);
+  await currentGatewayAuth();
 
   return {
     skillsBaseUrl,
@@ -326,15 +327,17 @@ export async function bootstrapProgram(
     // Resolved once, here: the only place holding both the switchboard inputs
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(
-      {
-        baseURL: auth.gatewayUrl,
-        authToken: auth.token,
-        edition: auth.edition,
-        teamId: auth.teamId,
-        // `call_type` splits scan spend out of the program's agent cost —
-        // same tag the in-run triage provider carries.
-        wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
-        wizardFlags,
+      async () => {
+        const auth = await currentGatewayAuth();
+        return {
+          baseURL: auth.gatewayUrl,
+          authToken: auth.token,
+          teamId: auth.teamId,
+          // `call_type` splits scan spend out of the program's agent cost,
+          // the same tag the in-run triage provider carries.
+          wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
+          wizardFlags,
+        };
       },
       resolveHarness({
         program: programConfig.id,

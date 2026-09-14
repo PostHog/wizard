@@ -2,7 +2,7 @@
  * Self-driving program step list.
  *
  * detect → intro → integration-check → health-check → auth → integrate-detect →
- * integrate-run → self-driving-handoff → run → outro. A deterministic check in
+ * integrate-run → self-driving-handoff → self-driving-github → run → outro. A deterministic check in
  * `detect` decides whether PostHog is already in the project: found → the
  * integration screens are skipped and the integrate-run phase never shows; not
  * found → integration-check reports it and the only action sets up PostHog.
@@ -10,8 +10,8 @@
  * which project to set PostHog up in (a monorepo can have several);
  * `integrate-run` then runs the real integration program's agent (its own task
  * list) in that project. `self-driving-handoff` then bridges to Self-driving
- * ("PostHog is installed — now set up Self-driving") before the Self-driving
- * run. No keep-skills step: the setup skill is transient, so postRun removes it.
+ * ("PostHog is installed — now set up Self-driving"), then `self-driving-github`
+ * gates on the GitHub App connection the run cannot proceed without. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
 import type { ProgramStep } from '@lib/programs/program-step';
@@ -113,9 +113,24 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.selfDrivingHandoffConfirmed,
   },
   {
+    // Hard gate before the agent starts: Self-driving cannot research findings
+    // or open fixes without repo access. Asking here rather than mid-run means
+    // a user who steps away isn't read as declining, and a user who won't
+    // connect hasn't paid for an agent start. Complete once GitHub is
+    // connected, or once the user says they can't — which hides `run` below.
+    id: 'self-driving-github',
+    label: 'GitHub',
+    screenId: 'self-driving-github',
+    isComplete: (session) =>
+      session.githubConnected === true || session.githubDeclined,
+    gate: (session) =>
+      session.githubConnected === true || session.githubDeclined,
+  },
+  {
     id: 'run',
     label: 'Self-driving',
     screenId: 'run',
+    show: (session) => !session.githubDeclined,
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,

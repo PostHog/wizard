@@ -6,6 +6,7 @@ export type ErrorGroup =
   | 'detect'
   | 'skill'
   | 'agent'
+  | 'gateway'
   | 'settings'
   | 'internal';
 

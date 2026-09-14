@@ -261,6 +261,33 @@ export async function fetchSlackConnected(
   return parsed.data.results.some((i) => i.kind === 'slack');
 }
 
+/**
+ * Check whether the project already has a GitHub App integration connected.
+ * Requires the `integration:read` scope. Throws on failure — callers (the
+ * SelfDrivingGitHubScreen poll) decide how to degrade and are responsible for
+ * capturing the error exactly once.
+ */
+export async function fetchGithubConnected(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const response = await axios.get(
+    `${baseUrl}/api/projects/${projectId}/integrations/`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
+      },
+      signal,
+    },
+  );
+  const parsed = IntegrationsResponseSchema.safeParse(response.data);
+  if (!parsed.success) return false;
+  return parsed.data.results.some((i) => i.kind === 'github');
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

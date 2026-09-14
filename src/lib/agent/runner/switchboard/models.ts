@@ -1,18 +1,6 @@
-/**
- * Model capabilities — the traits a harness needs that a bare gateway model id
- * doesn't carry. The switchboard resolves *which* model (harness.ts); this
- * resolves *what the model can do*, so a harness never hardcodes it.
- *
- * `reasoning` gates whether a harness requests reasoning at all; `thinkingLevel`
- * sets how much. Non-reasoning openai-completions models reject the reasoning
- * params (gpt-4o → gateway `UnsupportedParamsError` → the pi run no-ops), and
- * effort trades speed for depth (flagship gpt-5 at high effort runs long). Both
- * are silent when wrong, so they live here as one configurable table.
- */
+// Local capabilities inform transport parameters; gateway policy independently admits models and efforts.
 import {
-  DEFAULT_AGENT_MODEL,
   SONNET_5_MODEL,
-  OPUS_MODEL,
   HAIKU_MODEL,
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
@@ -21,7 +9,7 @@ import {
   Harness,
 } from '@lib/constants';
 
-/** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
+/** Reasoning effort, mapped by each harness to its provider transport. */
 const THINKING_LEVELS = [
   'off',
   'minimal',
@@ -50,22 +38,43 @@ export interface ModelCapabilities {
   thinkingLevel?: ThinkingLevel;
 }
 
-/** Explicit per-model traits. Anything absent falls back to `defaultCaps`. */
+/**
+ * Explicit per-model traits. Anything absent falls back to `defaultCaps`.
+ *
+ * A reasoning model without a `thinkingLevel` leaves the effort to the harness,
+ * and the mint pins effort per model (posthog `WIZARD_MODEL_ALLOWLIST`), so an
+ * unpinned reasoning model is refused with no tool calls. Every level below is
+ * one the mint allows for that model.
+ */
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
-  [DEFAULT_AGENT_MODEL]: { reasoning: true }, // claude-sonnet-4-6
-  [SONNET_5_MODEL]: { reasoning: true },
-  [OPUS_MODEL]: { reasoning: true },
-  [HAIKU_MODEL]: { reasoning: true },
+  // The mint takes sonnet 5 at `none` or `high`; high is the only level it
+  // serves once reasoning is on.
+  [SONNET_5_MODEL]: { reasoning: true, thinkingLevel: 'high' },
+  // The mint takes haiku with no effort parameter at all, which is `off`.
+  [HAIKU_MODEL]: { reasoning: true, thinkingLevel: 'off' },
   // The openai 5.6 line; all reasoning models, so they must opt in past the
   // openai-completions default (reasoning off). Luna stays low for cheap,
   // short-context mechanical work; terra runs medium as the sonnet-tier parallel
   // — enough reasoning depth for the judgment tasks without high's latency blowup.
   [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
-  [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
 };
 
-/** The only models the wizard may dispatch on. */
+/**
+ * The mint's per-model effort pin, mirrored from posthog
+ * `WIZARD_MODEL_ALLOWLIST`. `'off'` is the CLI's spelling of the mint's
+ * `"none"` — a call carrying no effort parameter.
+ */
+export const MINT_ALLOWED_EFFORTS: Record<string, readonly ThinkingLevel[]> = {
+  [SONNET_5_MODEL]: ['off', 'high'],
+  [HAIKU_MODEL]: ['off'],
+  [GPT5_6_LUNA_MODEL]: ['low'],
+  [GPT5_6_SOL_MODEL]: ['medium'],
+  [GPT5_6_TERRA_MODEL]: ['low', 'medium', 'high'],
+};
+
+// Local model choices; gateway admission also requires allowed models, efforts, and prompt compatibility.
 export const VALID_MODELS: ReadonlySet<string> = new Set(
   Object.keys(MODEL_CAPABILITIES),
 );
@@ -86,23 +95,12 @@ export function requireKnownModel(
   );
 }
 
-/**
- * Default for a model not in the table: reasoning on for anthropic-messages
- * models, off for openai-completions — the non-reasoning openai models reject
- * reasoning effort, so off is the safe default (a reasoning openai model opts
- * back in via the table above). Transport is inferred the same way the pi
- * harness infers it (`openai/` prefix → openai-completions).
- */
+// Unknown Anthropic models default to reasoning; OpenAI models must opt in through the local table.
 function defaultCaps(modelId: string): ModelCapabilities {
   return { reasoning: !modelId.startsWith('openai/') };
 }
 
-/**
- * Scan-triage classifier per harness: the cheapest tier of the line that harness
- * already speaks. Undated ids on purpose — triage is a boolean classifier, so it
- * should follow the current release rather than pin one, and these are not
- * dispatchable agent models (absent from MODEL_CAPABILITIES by design).
- */
+// Triage requests must satisfy gateway safety policy and preserve Warlock’s classifier format.
 export const TRIAGE_MODELS: Record<Harness, string> = {
   [Harness.anthropic]: HAIKU_TRIAGE_MODEL,
   [Harness.pi]: GPT5_6_LUNA_MODEL,

@@ -287,6 +287,12 @@ export interface WizardSession {
   scanConsent: ScanConsent;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
+  /**
+   * Guards `maybeStampAiSdkDetected` against running twice: it is called from
+   * both run-wizard.ts's auth step and bootstrap.ts, since either can be the
+   * first real `authenticate()` to complete depending on the program.
+   */
+  aiSdkStampReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -395,6 +401,21 @@ export interface WizardSession {
    */
   selfDrivingHandoffConfirmed: boolean;
 
+  /**
+   * Self-driving only: whether the project has the PostHog GitHub App
+   * connected. `null` until the GitHub gate's first check resolves. Self-driving
+   * cannot research issues or open fixes without it, so the gate holds the run
+   * until this is `true`.
+   */
+  githubConnected: boolean | null;
+
+  /**
+   * Self-driving only: the user answered "I can't connect right now" on the
+   * GitHub gate. Completes the gate step and hides the run step, so the flow
+   * lands on the outro without starting the agent.
+   */
+  githubDeclined: boolean;
+
   // Runtime
   readinessResult: WizardReadinessResult | null;
   outageDismissed: boolean;
@@ -496,6 +517,7 @@ export function buildSession(args: {
     // headless `--ci --signup` run stays covered by the ci branch above.
     scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
+    aiSdkStampReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,
@@ -520,6 +542,8 @@ export function buildSession(args: {
     integrate: args.integrate === true ? true : null,
     completedRuns: [],
     selfDrivingHandoffConfirmed: false,
+    githubConnected: null,
+    githubDeclined: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,

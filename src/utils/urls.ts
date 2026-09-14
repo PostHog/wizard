@@ -89,22 +89,6 @@ export async function detectRegion(
   );
 }
 
-export const getLlmGatewayUrl = (host: string) => {
-  if (host.includes('host.docker.internal')) {
-    return 'http://host.docker.internal:3308/wizard';
-  }
-
-  if (host.includes('localhost')) {
-    return 'http://localhost:3308/wizard';
-  }
-
-  if (host.includes('eu.posthog.com') || host.includes('eu.i.posthog.com')) {
-    return 'https://gateway.eu.posthog.com/wizard';
-  }
-
-  return 'https://gateway.us.posthog.com/wizard';
-};
-
 /** Region-agnostic prod OAuth server. Resolves to the right region server-side. */
 const PROD_OAUTH_URL = 'https://oauth.posthog.com';
 
@@ -114,3 +98,18 @@ const PROD_OAUTH_URL = 'https://oauth.posthog.com';
  */
 export const getOAuthUrl = (baseUrl?: string): string =>
   resolveBaseUrl(baseUrl) ?? PROD_OAUTH_URL;
+
+/**
+ * One-click integration install/authorize deep-link. Opening it in the user's
+ * logged-in browser runs the install directly — no settings-page hunting. The
+ * one link covers fresh install, link-existing, and re-auth.
+ */
+export const getIntegrationAuthorizeUrl = (
+  appHost: string,
+  projectId: number,
+  kind: string,
+): string =>
+  `${appHost.replace(
+    /\/$/,
+    '',
+  )}/api/environments/${projectId}/integrations/authorize?kind=${kind}`;

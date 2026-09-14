@@ -17,3 +17,4 @@ export {
   type WizardErrorLine,
 } from './emit';
 export { sanitizeErrorDetail } from './sanitize';
+export { classifyRunFailure, type RunFailure } from './run-failure';

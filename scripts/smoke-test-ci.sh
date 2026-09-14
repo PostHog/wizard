@@ -4,7 +4,8 @@
 # wizard-workbench, and run in CI mode.
 #
 # Prerequisites:
-#   - POSTHOG_PERSONAL_API_KEY env var (or in .env)
+#   - POSTHOG_PERSONAL_API_KEY env var (or in .env): a personal API key (phx_)
+#   - WIZARD_CI_GATEWAY_TOKEN_FILE: path to a file holding the AI gateway key
 #   - A wizard-workbench repo checked out (for the test app), pointed to by:
 #       - WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench
 #         or
