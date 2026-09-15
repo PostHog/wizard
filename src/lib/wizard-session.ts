@@ -10,6 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
+import path from 'path';
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
 import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
@@ -491,7 +492,8 @@ export function buildSession(args: {
   const local = resolveLocalDev(args);
   return {
     debug: args.debug ?? false,
-    installDir: args.installDir ?? process.cwd(),
+    // Canonical from here on — consumers compare it against resolved paths.
+    installDir: path.resolve(args.installDir ?? process.cwd()),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
     e2eAsk: args.e2eAsk ?? false,
