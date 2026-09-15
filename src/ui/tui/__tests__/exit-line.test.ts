@@ -1,6 +1,7 @@
 import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
+import { ErrorCodes } from '@lib/errors/codes';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -30,6 +31,24 @@ function setHudVisible(store: WizardStore, visible: boolean): void {
 }
 
 describe('getExitLine', () => {
+  it.each([ErrorCodes.GatewayMintRefused, ErrorCodes.GatewayMintFailed])(
+    'keeps the saved skill path and contact in scrollback for %s',
+    (errorCode) => {
+      const path = '/project/.posthog/wizard-spellbook-123/README.md';
+      const store = storeWithOutro({ kind: OutroKind.Error, errorCode });
+      store.setSpellbook({ path, skillsIncluded: true });
+      const line = stripAnsi(getExitLine(store));
+      const lines = line.split('\n');
+      expect(line).toContain('Setup has not been completed.');
+      expect(line).toContain('Point your agent at this skill');
+      expect(lines).toContain(path);
+      expect(line).toContain('wizard@posthog.com');
+      // The log path sits on the line after the contact copy.
+      expect(lines[lines.indexOf(path) + 3]).toMatch(/\S/);
+      expect(line).not.toContain('successfully');
+    },
+  );
+
   it('echoes the handoff prompt on its own line so it survives in scrollback', () => {
     const prompt =
       'Read `posthog-setup-report.md` and work through the checklist.';

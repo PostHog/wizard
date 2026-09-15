@@ -14,6 +14,8 @@ import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@lib/errors';
+import { isMintFailure } from '@ui/mint-failure';
+import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
@@ -242,33 +244,29 @@ export function runWizard(
           projectId,
         });
       } else {
-        await runAgent(config, activeTui.store.session);
+        // A mint failure parks this run forever (requireGatewayAuth) and
+        // shows the mint-failure screen; the wait below races the user's exit.
+        await Promise.race([
+          runAgent(config, activeTui.store.session),
+          activeTui.store.waitUntil((s) => s.mintHandoff !== null),
+        ]);
       }
 
-      const isDone = (): boolean =>
-        skipAgent
-          ? activeTui.store.session.outroDismissed
-          : activeTui.store.session.skillsComplete;
-
-      await new Promise<void>((resolve) => {
-        const unsub = activeTui.store.subscribe(() => {
-          if (isDone()) {
-            unsub();
-            resolve();
-          }
-        });
-        if (isDone()) {
-          unsub();
-          resolve();
-        }
+      const mintFailed = (): boolean =>
+        isMintFailure(activeTui.store.session.outroData);
+      await activeTui.store.waitUntil((s) => {
+        if (s.mintHandoff === 'exit') return true;
+        if (skipAgent && !mintFailed()) return s.outroDismissed;
+        return s.skillsComplete;
       });
 
       exitInProgress = true;
       await activeStream.shutdown(2000);
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
+      if (mintFailed()) await analytics.shutdown('error');
       activeTui.unmount();
-      process.exit(0);
+      process.exit(mintFailed() ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);

@@ -9,12 +9,50 @@ import { WizardReadiness } from '@lib/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { ErrorCodes } from '@lib/errors/codes';
+import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 
 function baseWizardSession() {
   return buildSession({});
 }
 
 describe('WizardRouter', () => {
+  it.each(PROGRAM_REGISTRY.map((program) => program.id))(
+    'shows mint failures over every step and overlay in %s',
+    (program) => {
+      const router = new WizardRouter(program);
+      router.pushOverlay(Overlay.WizardAsk);
+      for (const code of [
+        ErrorCodes.GatewayMintRefused,
+        ErrorCodes.GatewayMintFailed,
+      ]) {
+        const session = baseWizardSession();
+        session.outroDismissed = true;
+        session.outroData = { kind: OutroKind.Error, errorCode: code };
+        expect(router.resolve(session)).toBe(ScreenId.MintFailure);
+      }
+    },
+  );
+
+  it('continues a mint failure through the post-run steps, then exits', () => {
+    const router = new WizardRouter(Program.SelfDriving);
+    const session = baseWizardSession();
+    session.outroData = {
+      kind: OutroKind.Error,
+      errorCode: ErrorCodes.GatewayMintFailed,
+    };
+    session.mintHandoff = 'continue';
+    expect(router.resolve(session)).toBe(ScreenId.Mcp);
+    session.mcpComplete = true;
+    expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+    session.slackStepDismissed = true;
+    expect(router.resolve(session)).toBe(ScreenId.KeepSkills);
+    session.skillsComplete = true;
+    expect(router.resolve(session)).toBe(ScreenId.Exit);
+    session.mintHandoff = 'exit';
+    expect(router.resolve(session)).toBe(ScreenId.Exit);
+  });
+
   describe('resolve', () => {
     it('returns the first incomplete visible screen for the wizard flow', () => {
       const router = new WizardRouter(Program.PostHogIntegration);

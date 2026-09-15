@@ -45,6 +45,7 @@ export enum ScreenId {
   SlackConnect = 'slack-connect',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
+  MintFailure = 'mint-failure',
   Exit = 'exit',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
@@ -62,6 +63,14 @@ export interface Screen {
 
 /** An ordered list of screens — a program's screen journey. */
 export type Sequence = Screen[];
+
+/** Post-run steps a mint-failure handoff continues through; ends on exit. */
+export const MINT_HANDOFF_SEQUENCE: Sequence = [
+  { id: ScreenId.Mcp, isComplete: (s) => s.mcpComplete },
+  { id: ScreenId.SlackConnect, isComplete: (s) => s.slackStepDismissed },
+  { id: ScreenId.KeepSkills, isComplete: (s) => s.skillsComplete },
+  { id: ScreenId.Exit },
+];
 
 /** All program screen sequences keyed by program id. */
 export const PROGRAM_SEQUENCES: Record<ProgramId, Sequence> =

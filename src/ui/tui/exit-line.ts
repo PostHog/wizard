@@ -15,7 +15,9 @@
 
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
+import { isMintFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
+import { getLogFilePath } from '@utils/debug';
 
 const RESET_ATTRS = '\x1b[0m';
 const GREEN = '\x1b[32m';
@@ -68,6 +70,20 @@ export function getExitLine(store: WizardStore): string {
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
+
+  if (isMintFailure(outro)) {
+    const spellbook = store.session.spellbook;
+    return [
+      'The wizard is unavailable. Setup has not been completed.',
+      spellbook &&
+        `${DIM}Point your agent at this skill (triple-click to select):${RESET_ATTRS}\n${spellbook.path}`,
+      `${DIM}${MINT_FAILURE_CONTACT}${RESET_ATTRS}\n${getLogFilePath()}`,
+      loginBlock,
+      costLine,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;

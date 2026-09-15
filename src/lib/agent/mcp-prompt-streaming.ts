@@ -16,7 +16,7 @@ import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { gatewayAuth } from '@lib/gateway-session';
+import { requireGatewayAuth } from '@lib/agent/gateway-auth';
 import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
 import { createIsolatedAgentConfigDir } from '@lib/agent/stored-login';
@@ -226,7 +226,7 @@ export async function* runMcpPromptViaSdk(args: {
 
   // The url and the bearer are one unit: a run must take both from the same
   // mint.
-  const auth = await gatewayAuth(
+  const auth = await requireGatewayAuth(
     credentials.host,
     credentials.accessToken,
     args.programId,

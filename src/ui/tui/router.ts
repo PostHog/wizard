@@ -13,9 +13,11 @@
  */
 
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
+import { isMintFailure } from '@ui/mint-failure';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
+  MINT_HANDOFF_SEQUENCE,
   ScreenId,
   type Screen,
   type Sequence,
@@ -66,11 +68,18 @@ export class WizardRouter {
    * returns the first incomplete screen.
    */
   resolve(session: WizardSession): ScreenName {
+    // A mint failure interrupts every program until the user leaves its
+    // screen: exit, or continue through the post-run steps.
+    const mintFailed = isMintFailure(session.outroData);
+    if (mintFailed && session.mintHandoff === 'exit') return ScreenId.Exit;
+    if (mintFailed && !session.mintHandoff) return ScreenId.MintFailure;
+
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
 
-    for (const entry of this.sequence) {
+    const sequence = mintFailed ? MINT_HANDOFF_SEQUENCE : this.sequence;
+    for (const entry of sequence) {
       if (entry.show && !entry.show(session)) continue;
       if (entry.isComplete && entry.isComplete(session)) continue;
       // A failed login aborts the run: wizardAbort renders the error outro
@@ -91,7 +100,7 @@ export class WizardRouter {
     }
 
     // All entries complete — show the last screen (outro)
-    return this.sequence[this.sequence.length - 1].id;
+    return sequence[sequence.length - 1].id;
   }
 
   /** The screen that should be rendered right now. */

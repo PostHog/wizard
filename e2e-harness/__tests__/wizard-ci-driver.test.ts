@@ -22,6 +22,8 @@ import { Program } from '@lib/programs/program-registry';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
+import { ErrorCodes } from '@lib/errors/codes';
+import { OutroKind } from '@lib/wizard-session';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(Program.PostHogIntegration);
@@ -45,6 +47,25 @@ const cleanReadiness = {
 };
 
 describe('WizardCiDriver — full integration flow', () => {
+  it('lets a late mint failure exit or continue to MCP', () => {
+    const store = freshStore();
+    const ui = new InkUI(store);
+    const driver = new WizardCiDriver(store);
+    store.setOutroDismissed();
+    ui.outroError({
+      kind: OutroKind.Error,
+      errorCode: ErrorCodes.GatewayMintFailed,
+    });
+    expect(driver.readState().currentScreen).toBe(ScreenId.MintFailure);
+    driver.performAction('continue_setup');
+    expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
+    driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
+    driver.performAction('dismiss_slack');
+    expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
+    driver.performAction('keep_skills', { kept: true });
+    expect(driver.readState().currentScreen).toBe(ScreenId.Exit);
+  });
+
   it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
     const store = freshStore();
     const driver = new WizardCiDriver(store);
