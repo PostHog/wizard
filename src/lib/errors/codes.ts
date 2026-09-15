@@ -37,6 +37,7 @@ export const ErrorCodes = {
   AgentResourceMissing: 'PHW_AGENT_RESOURCE_MISSING',
   AgentRateLimit: 'PHW_AGENT_RATE_LIMIT',
   AgentApiError: 'PHW_AGENT_API_ERROR',
+  AgentModuleMissing: 'PHW_AGENT_MODULE_MISSING',
   AgentYaraViolation: 'PHW_AGENT_YARA_VIOLATION',
   AgentNoProgress: 'PHW_AGENT_NO_PROGRESS',
   AgentIncompleteTasks: 'PHW_AGENT_INCOMPLETE_TASKS',

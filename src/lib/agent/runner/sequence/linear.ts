@@ -18,6 +18,7 @@ import {
   registerCleanup,
 } from '../../../../utils/wizard-abort';
 import { ErrorCodes, AGENT_ERROR_CODE } from '@lib/errors';
+import { formatModuleMissingMessage } from '@lib/errors/module-missing';
 import { analytics } from '../../../../utils/analytics';
 import {
   formatScanReport,
@@ -276,6 +277,26 @@ export async function runLinearProgram(
           error_type: AgentErrorType.INCOMPLETE_TASKS,
         },
         AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
+      ),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.MODULE_MISSING) {
+    analytics.wizardCapture('agent module missing', {
+      integration: config.integrationLabel,
+      error_type: AgentErrorType.MODULE_MISSING,
+      error_message: agentResult.message,
+    });
+    await wizardAbort({
+      code: AGENT_ERROR_CODE[AgentErrorType.MODULE_MISSING],
+      message: formatModuleMissingMessage(agentResult.message ?? ''),
+      error: new WizardError(
+        `Dependency missing from the npx download: ${agentResult.message}`,
+        {
+          integration: config.integrationLabel,
+          error_type: AgentErrorType.MODULE_MISSING,
+        },
+        AGENT_ERROR_CODE[AgentErrorType.MODULE_MISSING],
       ),
     });
   }
