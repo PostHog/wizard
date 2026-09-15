@@ -114,6 +114,26 @@ describe('scopeInstallDirToProject', () => {
     return calls[0][1] as Record<string, unknown>;
   };
 
+  it('leaves the session untouched and fires auth-failed when early auth throws', async () => {
+    // A transient failure on the eager auth (network blip / 5xx on the user lookup) must not kill the
+    // run — it sits on the CI critical path via ciPreRun. Skip scoping; bootstrap retries auth later.
+    const failure = new Error('Failed to fetch user data');
+    vi.mocked(authenticate).mockRejectedValueOnce(failure);
+    const session = buildSession({ installDir: '/repo' });
+    await scopeInstallDirToProject(session);
+
+    expect(session.installDir).toBe('/repo');
+    expect(flagsSpy).not.toHaveBeenCalled();
+    expect(scan).not.toHaveBeenCalled();
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'auth-failed',
+      error_message: 'Failed to fetch user data',
+    });
+    expect(exceptionSpy).toHaveBeenCalledWith(failure, {
+      step: 'agentic_detection_auth',
+    });
+  });
+
   it('fires flag-off and never scans when the flag is off (or the fetch failed)', async () => {
     // A failed flag fetch surfaces as an empty map, so this path also covers "flags unavailable".
     const session = buildSession({ installDir: '/repo' });
