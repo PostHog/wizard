@@ -101,6 +101,14 @@ describe('resolveEnvPath', () => {
       'Path traversal rejected',
     );
   });
+
+  it('accepts a working directory that is a file-system root', () => {
+    const root = path.parse(process.cwd()).root;
+    expect(resolveEnvPath(root, '.env')).toBe(path.resolve(root, '.env'));
+    expect(resolveEnvPath(root, 'sub/.env')).toBe(
+      path.resolve(root, 'sub/.env'),
+    );
+  });
 });
 
 describe('parseEnvKeys', () => {

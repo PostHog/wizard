@@ -588,8 +588,11 @@ export function resolveEnvPath(
   filePath: string,
 ): string {
   const root = path.resolve(workingDirectory);
+  // A file-system or drive root already ends with the separator, so appending
+  // one would build a `//` prefix that no valid child path starts with.
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
   const resolved = path.resolve(root, filePath);
-  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+  if (!resolved.startsWith(prefix) && resolved !== root) {
     // Without this the refusal is invisible: no event carries the tool error.
     analytics.wizardCapture('env path traversal rejected', {
       file_name: path.basename(filePath),
