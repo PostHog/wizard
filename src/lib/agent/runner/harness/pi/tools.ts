@@ -26,6 +26,7 @@ import {
   WIZARD_TOOL_NAMES,
   checkEnvKeys as checkEnvKeysCore,
   createAskAccounting,
+  ensureGitignoreCoverage,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
@@ -33,6 +34,7 @@ import {
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
   vaultSensitiveAnswers,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
@@ -209,14 +211,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       ),
     }),
     async execute(_id, args) {
-      const forbidden = Object.keys(args.values).find(
-        (k) => k.toUpperCase() === 'POSTHOG_KEY',
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
       );
-      if (forbidden) {
-        return text(
-          `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
-        );
-      }
+      if (keyRefusal) return text(keyRefusal);
       // Resolve secret refs host-side; the value never reaches the agent.
       const resolution = resolveEnvSecretRefs(args.values, secretVault);
       if (!resolution.ok) {
@@ -241,6 +240,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(resolved, merged, 'utf8');
+      // Same post-write pass as the MCP facade: a credential file the
+      // project does not ignore yet gets committed by the next `git add`.
+      ensureGitignoreCoverage(workingDirectory, path.basename(resolved));
       logToFile(
         `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(
           ',',

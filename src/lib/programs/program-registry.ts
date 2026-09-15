@@ -21,6 +21,7 @@ import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
+import { errorTrackingConfig } from './error-tracking/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
@@ -70,6 +71,7 @@ export const PROGRAM_REGISTRY = [
   revenueAnalyticsConfig,
   warehouseSourceConfig,
   errorTrackingUploadSourceMapsConfig,
+  errorTrackingConfig,
   auditConfig,
   eventsAuditConfig,
   posthogDoctorConfig,
@@ -97,6 +99,7 @@ export const Program = {
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
   WarehouseSource: warehouseSourceConfig.id,
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
+  ErrorTracking: errorTrackingConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,

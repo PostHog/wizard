@@ -11,7 +11,7 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { readProjectFile } from '@utils/bounded-fs';
+import { readProjectFile, walkProjectFiles } from '@utils/bounded-fs';
 import {
   collectProjectEnvKeys,
   isTemplateEnvFileName,
@@ -758,6 +758,49 @@ export function templateEnvWriteRefusal(resolvedPath: string): string | null {
     `a credential written there would be published with the repository. ` +
     `Write to .env or .env.local instead (it is created if missing). ` +
     `If you only mean to document the key name, edit the template directly.`
+  );
+}
+
+/** Whole-word, so `NEXT_PUBLIC_POSTHOG_KEY` (`_` is a word character) does not count. */
+const LEGACY_KEY_USE = /\bPOSTHOG_KEY\b/;
+
+/** Files where a project reads or defines an env var: source, config, env, shell and build files. */
+const LEGACY_KEY_SCAN_FILE =
+  /^(\.env.*|Dockerfile.*|Makefile|Procfile|package\.json|app\.json|eas\.json|.*\.[cm]?[jt]sx?|.*\.(vue|svelte|astro|py|rb|php|go|rs|exs?|java|kts?|swift|dart|cs|ya?ml|toml|sh|bash|gradle|properties|xcconfig|plist))$/;
+
+function projectReadsLegacyKey(workingDirectory: string): boolean {
+  let found = false;
+  walkProjectFiles(
+    workingDirectory,
+    (name, fullPath) => {
+      if (found || !LEGACY_KEY_SCAN_FILE.test(name)) return;
+      const content = readProjectFile(fullPath);
+      if (content !== null && LEGACY_KEY_USE.test(content)) found = true;
+    },
+    6,
+  );
+  return found;
+}
+
+/**
+ * `set_env_values`' refusal for the legacy `POSTHOG_KEY` name, or null. Shared
+ * by both facades so the two cannot disagree about it.
+ *
+ * `POSTHOG_KEY` is the old name for the project token, so a new project gets
+ * the canonical one (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN). A project whose
+ * code already reads `POSTHOG_KEY` keeps it: refusing there forces a rename of
+ * working code, and every deploy step and CI secret that still passes the old
+ * name then starts the app with an empty token.
+ */
+export function legacyKeyNameRefusal(
+  workingDirectory: string,
+  keys: readonly string[],
+): string | null {
+  const key = keys.find((k) => k.toUpperCase() === 'POSTHOG_KEY');
+  if (!key || projectReadsLegacyKey(workingDirectory)) return null;
+  return (
+    `Error: "${key}" is not a valid PostHog env var name. Use the key name from your framework's integration guide (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN). ` +
+    `POSTHOG_KEY is accepted only when the project already reads it.`
   );
 }
 

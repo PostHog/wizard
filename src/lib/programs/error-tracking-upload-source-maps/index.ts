@@ -15,39 +15,20 @@ import {
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
 import { getUI } from '@ui';
-import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
-import { analytics } from '@utils/analytics';
+import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-preinstall';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
 
-let postHogCliInstallAttempted = false;
-
 /**
  * Pre-install posthog-cli for variants that need a machine-global copy
- * (`VARIANTS_REQUIRING_POSTHOG_CLI`). The agent can't — warlock blocks
- * `npm install -g` — so the wizard does it in-process. Warn, don't fail.
+ * (`VARIANTS_REQUIRING_POSTHOG_CLI`). See `preinstallPostHogCliOnce` for the
+ * once-per-process guard and the warn-don't-fail handling.
  */
 function ensurePostHogCli(variant: SkillVariant): void {
-  if (postHogCliInstallAttempted) return;
-  postHogCliInstallAttempted = true;
-
-  const result = installOrUpdatePostHogCli();
-  if (!result.success) {
-    analytics.wizardCapture('source maps posthog-cli preinstall failed', {
-      variant,
-      error: String(result.error).slice(0, 500),
-    });
-    analytics.captureException(
-      result.errorObject ??
-        new Error(`posthog-cli pre-install failed: ${result.error}`),
-      { source: 'source_maps_cli_preinstall', variant },
-    );
-    getUI().log.warn(
-      `Could not pre-install posthog-cli (${result.error}). Your release build ` +
-        `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
-    );
-  }
+  preinstallPostHogCliOnce('source maps posthog-cli preinstall failed', {
+    variant,
+  });
 }
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {

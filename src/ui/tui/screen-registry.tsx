@@ -30,6 +30,8 @@ import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { AiObservabilityIntroScreen } from './screens/AiObservabilityIntroScreen.js';
 import { MetricsIntroScreen } from './screens/MetricsIntroScreen.js';
+import { ErrorTrackingIntroScreen } from './screens/ErrorTrackingIntroScreen.js';
+import { ErrorTrackingDetectScreen } from './screens/ErrorTrackingDetectScreen.js';
 import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
 import { SelfDrivingIntegrationCheckScreen } from './screens/SelfDrivingIntegrationCheckScreen.js';
 import { SelfDrivingIntegrationDetectScreen } from './screens/SelfDrivingIntegrationDetectScreen.js';
@@ -96,6 +98,8 @@ export function createScreens(
       <AiObservabilityIntroScreen store={store} />
     ),
     [ScreenId.MetricsIntro]: <MetricsIntroScreen store={store} />,
+    [ScreenId.ErrorTrackingIntro]: <ErrorTrackingIntroScreen store={store} />,
+    [ScreenId.ErrorTrackingDetect]: <ErrorTrackingDetectScreen store={store} />,
     [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
     [ScreenId.SelfDrivingIntegrationCheck]: (
       <SelfDrivingIntegrationCheckScreen store={store} />
