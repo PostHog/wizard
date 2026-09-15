@@ -281,4 +281,36 @@ describe('WizardRouter', () => {
       expect(router.resolve(session)).toBe(ScreenId.Run);
     });
   });
+
+  describe('error-tracking project picker', () => {
+    function loggedIn() {
+      const session = baseWizardSession();
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      return session;
+    }
+
+    it('shows the project picker after login, before a project is picked', () => {
+      const router = new WizardRouter(Program.ErrorTracking);
+      expect(router.resolve(loggedIn())).toBe(ScreenId.ErrorTrackingDetect);
+    });
+
+    it('advances to the run once a project is picked', () => {
+      const router = new WizardRouter(Program.ErrorTracking);
+      const session = loggedIn();
+      session.integration = Integration.nextjs;
+      session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.nextjs];
+      expect(router.resolve(session)).toBe(ScreenId.Run);
+    });
+  });
 });

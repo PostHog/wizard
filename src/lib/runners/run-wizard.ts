@@ -196,10 +196,11 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.run)) {
+      if (config.steps.some((s) => s.run || s.targetDir)) {
         // A composed program: its step list splices in run steps that carry
         // their own agent (self-driving runs the integration before its own
-        // run). Walk the list once, advancing each step to completion.
+        // run), or scopes its own run to a picked project (error-tracking).
+        // Walk the list once, advancing each step to completion.
         for (const step of config.steps) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
           if (shown(step)) await advanceStep(step, activeTui.store, config);

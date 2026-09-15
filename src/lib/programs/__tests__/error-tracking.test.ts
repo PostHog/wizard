@@ -2,15 +2,19 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { ProgramRun } from '@lib/agent/runner/shared/types';
 import { Integration } from '@lib/constants';
+import type { AgenticDetectionReport } from '@lib/detection/agentic';
 import { detectFramework } from '@lib/detection/index';
 import { ErrorCodes } from '@lib/errors';
+import { ERROR_TRACKING_TIPS } from '@lib/programs/error-tracking/content/tips';
+import {
+  ERROR_TRACKING_PROJECT_PATH_KEY,
+  toErrorTrackingReport,
+} from '@lib/programs/error-tracking/detect-agentic';
 import {
   errorTrackingConfig,
   SYMBOL_UPLOAD_CLI_FRAMEWORKS,
 } from '@lib/programs/error-tracking/index';
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@lib/programs/error-tracking-upload-source-maps/detect';
-import { detectPostHogIntegration } from '@lib/programs/posthog-integration/detect';
-import type { ProgramReadyContext } from '@lib/programs/program-step';
 import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-preinstall';
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
@@ -22,9 +26,7 @@ vi.mock('@lib/detection/index', async (importOriginal) => ({
 }));
 vi.mock('@lib/detection/project-scope', () => ({
   scopeInstallDirToProject: vi.fn(),
-}));
-vi.mock('@lib/programs/posthog-integration/detect', () => ({
-  detectPostHogIntegration: vi.fn(),
+  detectIntegrationProjects: vi.fn(),
 }));
 vi.mock('@lib/programs/shared/posthog-cli-preinstall', () => ({
   preinstallPostHogCliOnce: vi.fn(),
@@ -38,6 +40,8 @@ const resolveRun = errorTrackingConfig.run as (
   session: WizardSession,
 ) => Promise<ProgramRun>;
 
+const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(analytics, 'wizardCapture').mockImplementation(() => undefined);
@@ -48,18 +52,12 @@ describe('error-tracking program', () => {
     expect(errorTrackingConfig.agentFlow).toBe('error-tracking');
   });
 
-  test('detects the framework before the agent-skill steps', () => {
-    expect(errorTrackingConfig.steps[0]?.id).toBe('detect');
-    expect(errorTrackingConfig.steps[0]?.onReady).toBeDefined();
-  });
-
   test('declares ci prerequisite work for headless runs', () => {
     expect(errorTrackingConfig.ciPreRun).toBeDefined();
   });
 
   test('shows the program-specific intro screen', () => {
-    const intro = errorTrackingConfig.steps.find((s) => s.id === 'intro');
-    expect(intro?.screenId).toBe('error-tracking-intro');
+    expect(step('intro')?.screenId).toBe('error-tracking-intro');
   });
 
   test('pre-installs no skill — the flow resolves variants per framework', async () => {
@@ -69,54 +67,96 @@ describe('error-tracking program', () => {
     const run = await resolveRun({ integration: null } as WizardSession);
     expect(run.skillId).toBeUndefined();
   });
+
+  test('picks the project after login and before the run', () => {
+    const ids = errorTrackingConfig.steps.map((s) => s.id);
+    expect(ids.indexOf('auth')).toBeLessThan(ids.indexOf('detect'));
+    expect(ids.indexOf('detect')).toBeLessThan(ids.indexOf('run'));
+    expect(step('detect')?.screenId).toBe('error-tracking-detect');
+  });
+
+  test('runs the agent in the picked project, else the repo root', () => {
+    const targetDir = step('run')?.targetDir;
+    const picked = {
+      installDir: '/repo',
+      frameworkContext: { [ERROR_TRACKING_PROJECT_PATH_KEY]: 'apps/web' },
+    } as unknown as WizardSession;
+    const unpicked = {
+      installDir: '/repo',
+      frameworkContext: {},
+    } as unknown as WizardSession;
+
+    expect(targetDir?.(picked)).toBe('/repo/apps/web');
+    expect(targetDir?.(unpicked)).toBe('/repo');
+  });
 });
 
-describe('error-tracking detect step', () => {
-  const ctx = {
-    session: { installDir: '/tmp/error-tracking-detect' },
-  } as unknown as ProgramReadyContext;
-  const onReady = errorTrackingConfig.steps[0]!.onReady!;
+describe('error-tracking project picker report', () => {
+  const scan = (
+    projects: AgenticDetectionReport['projects'],
+  ): AgenticDetectionReport => ({ repoType: 'monorepo', projects });
 
-  test('aborts before the run when no framework is detected', async () => {
-    // Without the stop, bootstrap puts the program id on session.skillId and
-    // preflight fails with a misleading "failed to download" message.
-    vi.mocked(detectFramework).mockResolvedValue(undefined);
-
-    await onReady(ctx);
-
-    expect(wizardAbort).toHaveBeenCalledWith(
-      expect.objectContaining({ code: ErrorCodes.DetectNoFramework }),
+  test('offers supported frameworks with or without PostHog installed', () => {
+    const report = toErrorTrackingReport(
+      scan([
+        {
+          path: 'apps/web',
+          framework: 'Next.js',
+          targetId: 'nextjs',
+          hasPostHog: true,
+        },
+        {
+          path: 'apps/api',
+          framework: 'Express',
+          targetId: 'javascript_node',
+          hasPostHog: false,
+        },
+      ]),
     );
-    expect(detectPostHogIntegration).not.toHaveBeenCalled();
+
+    expect(report.projects.map((p) => p.instrumentable)).toEqual([true, true]);
   });
 
-  test('runs the full detection when a framework is found', async () => {
-    vi.mocked(detectFramework).mockResolvedValue(Integration.nextjs);
-
-    await onReady(ctx);
-
-    expect(wizardAbort).not.toHaveBeenCalled();
-    expect(detectPostHogIntegration).toHaveBeenCalledWith(ctx);
-  });
-
-  test('stops KMP, whose skill variants preflight cannot resolve', async () => {
-    vi.mocked(detectFramework).mockResolvedValue(Integration.kmp);
-
-    await onReady(ctx);
-
-    expect(wizardAbort).toHaveBeenCalledWith(
-      expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),
+  test('does not offer KMP or an unknown framework', () => {
+    // KMP skill variants have no framework tag, so preflight would abort the run.
+    const report = toErrorTrackingReport(
+      scan([
+        {
+          path: 'shared',
+          framework: 'KMP',
+          targetId: 'kmp',
+          hasPostHog: false,
+        },
+        { path: 'tools', framework: 'Zig', targetId: null, hasPostHog: false },
+      ]),
     );
-    expect(detectPostHogIntegration).not.toHaveBeenCalled();
+
+    expect(report.projects.map((p) => p.instrumentable)).toEqual([
+      false,
+      false,
+    ]);
   });
 
-  test('installs nothing before the intro gate', async () => {
-    // onReady runs before the user can cancel on the intro screen.
-    vi.mocked(detectFramework).mockResolvedValue(Integration.swift);
+  test('lists the recommended project first', () => {
+    const report = toErrorTrackingReport(
+      scan([
+        {
+          path: 'apps/api',
+          framework: 'Express',
+          targetId: 'javascript_node',
+          hasPostHog: false,
+        },
+        {
+          path: 'apps/web',
+          framework: 'Next.js',
+          targetId: 'nextjs',
+          hasPostHog: false,
+          recommended: true,
+        },
+      ]),
+    );
 
-    await onReady(ctx);
-
-    expect(preinstallPostHogCliOnce).not.toHaveBeenCalled();
+    expect(report.projects[0]?.path).toBe('apps/web');
   });
 });
 
@@ -138,7 +178,7 @@ describe('error-tracking ciPreRun', () => {
 });
 
 describe('error-tracking run config', () => {
-  test('pre-installs posthog-cli when run resolves, after the intro gate', async () => {
+  test('pre-installs posthog-cli when run resolves, after the project pick', async () => {
     await resolveRun({ integration: Integration.swift } as WizardSession);
 
     expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
@@ -169,5 +209,19 @@ describe('error-tracking posthog-cli pre-install set', () => {
       .map((variant) => (variant === 'ios' ? Integration.swift : variant))
       .sort();
     expect([...SYMBOL_UPLOAD_CLI_FRAMEWORKS].sort()).toEqual(expected);
+  });
+});
+
+describe('error-tracking tips', () => {
+  const replayTip = ERROR_TRACKING_TIPS.find((t) => t.id === 'session-replay');
+  const storeFor = (integration: Integration | null) =>
+    ({ session: { integration } } as never);
+
+  test('shows the replay tip only where session replay records', () => {
+    expect(replayTip?.visible?.(storeFor(Integration.nextjs))).toBe(true);
+    expect(replayTip?.visible?.(storeFor(Integration.javascriptNode))).toBe(
+      false,
+    );
+    expect(replayTip?.visible?.(storeFor(null))).toBe(false);
   });
 });

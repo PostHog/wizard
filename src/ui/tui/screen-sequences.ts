@@ -27,6 +27,7 @@ export enum ScreenId {
   AiObservabilityIntro = 'ai-observability-intro',
   MetricsIntro = 'metrics-intro',
   ErrorTrackingIntro = 'error-tracking-intro',
+  ErrorTrackingDetect = 'error-tracking-detect',
   SelfDrivingIntro = 'self-driving-intro',
   SelfDrivingIntegrationCheck = 'self-driving-integration-check',
   SelfDrivingIntegrationDetect = 'self-driving-integration-detect',

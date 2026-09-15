@@ -21,9 +21,8 @@ export const ErrorTrackingIntroScreen = ({
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
   const { session } = store;
-  // The flow resolves its skills per framework at run time, and after detect
-  // session.skillId holds the framework, not a skill. Point "more info" at the
-  // capture step, the one skill every run of this flow installs.
+  // The flow resolves its skills per framework after the project pick. Point
+  // "more info" at the capture step, the one skill every run of this flow installs.
   const skillId = 'integration-v2-error-tracking-step';
   const { skillEntry, fetchFailed } = useSkillEntry(skillId);
 

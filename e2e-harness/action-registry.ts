@@ -83,6 +83,8 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.SelfDrivingIntegrationDetect,
   ScreenId.SelfDrivingHandoff,
+  // The e2e host injects the pick, as it does for self-driving's detect screen.
+  ScreenId.ErrorTrackingDetect,
   Overlay.ManagedSettings,
   Overlay.AuthError,
   Overlay.SessionTimeout,

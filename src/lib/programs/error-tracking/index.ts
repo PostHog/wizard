@@ -1,16 +1,17 @@
 import { Integration } from '@lib/constants';
-import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
+import { detectFramework } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { ProgramRun } from '@lib/agent/runner/shared/types';
-import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/steps';
-import { detectPostHogIntegration } from '@lib/programs/posthog-integration/detect';
-import type {
-  ProgramConfig,
-  ProgramReadyContext,
-  ProgramStep,
-} from '@lib/programs/program-step';
+import { getContentBlocks } from '@lib/programs/error-tracking/content/index';
+import { getTips } from '@lib/programs/error-tracking/content/tips';
+import {
+  ERROR_TRACKING_UNSUPPORTED,
+  errorTrackingProjectDir,
+  gatherErrorTrackingContext,
+} from '@lib/programs/error-tracking/detect-agentic';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
@@ -35,14 +36,6 @@ export const SYMBOL_UPLOAD_CLI_FRAMEWORKS: ReadonlySet<Integration> = new Set([
   Integration.flutter,
   Integration.go,
   Integration.rust,
-]);
-
-/**
- * Frameworks the flow cannot run on. KMP's skill variants carry no `framework`
- * tag, so orchestrator preflight cannot resolve them and aborts every run.
- */
-export const ERROR_TRACKING_UNSUPPORTED: ReadonlySet<Integration> = new Set([
-  Integration.kmp,
 ]);
 
 async function abortUnsupportedPlatform(
@@ -74,42 +67,36 @@ function maybePreinstallPostHogCli(integration: Integration | null): void {
 }
 
 /**
- * Framework detection ahead of the run, exactly like the default integration
- * program. The orchestrator requires it: `session.skillId` must hold the
- * detected framework id before the run arm starts, because the runner
- * resolves the reference integration skill and every task's mini-skill
- * variants (`integration-v2-install`, `integration-v2-error-tracking-step`, …)
- * against it in preflight. Frameworks in `ERROR_TRACKING_UNSUPPORTED` stop
- * here. Detection only: nothing runs on the machine before the intro gate.
+ * After login, the scan lists the repo's projects and the user picks one, as in
+ * the legacy upload-source-maps program. The pick sets the framework preflight
+ * resolves task skills against, and the project path the run is scoped to.
  */
-const DETECT_STEP: ProgramStep = {
+const PICK_PROJECT_STEP: ProgramStep = {
   id: 'detect',
-  label: 'Detecting framework',
-  onReady: async (ctx: ProgramReadyContext) => {
-    const integration = await detectFramework(ctx.session.installDir);
-    // Same stop as ciPreRun. Without it the run bootstraps with the program id
-    // as the framework and preflight aborts with a misleading download error.
-    if (!integration) {
-      await wizardAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
-      return;
-    }
-    if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
-      return;
-    }
-    await detectPostHogIntegration(ctx);
-  },
+  label: 'Detecting projects',
+  screenId: 'error-tracking-detect',
+  isComplete: (session) => session.integration != null,
 };
 
-const ERROR_TRACKING_STEPS: ProgramStep[] = [
-  DETECT_STEP,
-  ...AGENT_SKILL_STEPS.map((step) =>
-    step.id === 'intro' ? { ...step, screenId: 'error-tracking-intro' } : step,
-  ),
-];
+const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(
+  (step): ProgramStep[] => {
+    if (step.id === 'intro') {
+      return [{ ...step, screenId: 'error-tracking-intro' }];
+    }
+    if (step.id === 'auth') return [step, PICK_PROJECT_STEP];
+    if (step.id === 'run') {
+      // targetDir makes run-wizard walk the steps and run in the picked project.
+      return [
+        {
+          ...step,
+          targetDir: errorTrackingProjectDir,
+          onRunPrep: gatherErrorTrackingContext,
+        },
+      ];
+    }
+    return [step];
+  },
+);
 
 /**
  * Run instructions for a linear override (`--sequence=linear`), the only
@@ -166,16 +153,16 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  * - No `run.skillId`: the flow's tasks resolve per-framework mini-skills
  *   themselves (there is no bare `error-tracking` menu entry), so the intro is
  *   a custom screen rather than the generic skill intro.
- * - `DETECT_STEP` in front, so `session.skillId` carries the framework id the
- *   orchestrator's preflight resolves reference + mini-skill variants with.
- * - `run` is a function: `runAgent` resolves it after the intro gate (and
- *   after `ciPreRun` headless), so the posthog-cli pre-install, which the
- *   agent cannot do (warlock blocks \`npm install -g\`), waits for the user.
+ * - `PICK_PROJECT_STEP` after auth: the user picks the project, which sets the
+ *   framework preflight needs and the directory the run is scoped to.
+ * - `run` is a function: `runAgent` resolves it after the pick (and after
+ *   `ciPreRun` headless), so the posthog-cli pre-install, which the agent
+ *   cannot do (warlock blocks \`npm install -g\`), waits for the user.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
  * - `ciPreRun` mirrors replay-vision: scope the install dir to the right
  *   project (monorepos), then detect the framework — the headless equivalent
- *   of the detect step's onReady hook.
+ *   of the project picker.
  */
 export const errorTrackingConfig: ProgramConfig = {
   command: 'error-tracking',
@@ -185,6 +172,7 @@ export const errorTrackingConfig: ProgramConfig = {
   steps: ERROR_TRACKING_STEPS,
   reportFile: ERROR_TRACKING_REPORT_FILE,
   getContentBlocks,
+  getTips,
 
   run: (session: WizardSession): Promise<ProgramRun> => {
     maybePreinstallPostHogCli(session.integration);
@@ -208,23 +196,9 @@ export const errorTrackingConfig: ProgramConfig = {
     }
     session.integration = integration;
     analytics.setTag('integration', integration);
-
-    const frameworkConfig = FRAMEWORK_REGISTRY[integration];
-    session.frameworkConfig = frameworkConfig;
+    session.frameworkConfig = FRAMEWORK_REGISTRY[integration];
     session.skillId = integration;
 
-    const context = await gatherFrameworkContext(frameworkConfig, {
-      installDir: session.installDir,
-      debug: session.debug,
-      signup: session.signup,
-      ci: true,
-      benchmark: session.benchmark,
-      yaraReport: session.yaraReport,
-    });
-    for (const [key, value] of Object.entries(context)) {
-      if (!(key in session.frameworkContext)) {
-        session.frameworkContext[key] = value;
-      }
-    }
+    await gatherErrorTrackingContext(session);
   },
 };

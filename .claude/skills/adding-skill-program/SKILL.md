@@ -125,7 +125,10 @@ programs. Compose real work through `ProgramStep.run`, with `onRunPrep` and
 `targetDir` when needed. The
 [integration run step](../../../src/lib/programs/posthog-integration/index.ts)
 and [self-driving](../../../src/lib/programs/self-driving/) demonstrate this.
-Composed sub-runs are structurally linear; orchestrators cannot nest.
+Composed sub-runs are structurally linear; orchestrators cannot nest. A host run
+step without `run` can also set `targetDir` and `onRunPrep` to scope the
+program's own agent to a picked project and keep its sequence, as
+[error-tracking](../../../src/lib/programs/error-tracking/) does.
 
 ## Validate the affected path
 

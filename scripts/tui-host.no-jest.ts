@@ -36,6 +36,7 @@ import { detectFramework } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { Integration } from '@lib/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@lib/programs/error-tracking/detect-agentic';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
@@ -274,29 +275,35 @@ async function main() {
     await store.getGate('health-check');
 
     // Mirror run-wizard's composed walk for programs whose steps splice in
-    // their own run steps (self-driving: detect → integrate → handoff → run).
+    // their own run steps (self-driving: detect → integrate → handoff → run),
+    // or scope their own run to a picked project (error-tracking).
     // `authenticate` here resolves the phx key, not OAuth, since the session is
     // built with ci + apiKey.
-    if (programConfig.steps.some((s) => s.run)) {
+    if (programConfig.steps.some((s) => s.run || s.targetDir)) {
+      const runSessionFor = async (
+        step: (typeof programConfig.steps)[number],
+      ) => {
+        const live = store.session;
+        const runSession = step.targetDir
+          ? {
+              ...live,
+              installDir: step.targetDir(live),
+              frameworkContext: { ...live.frameworkContext },
+            }
+          : live;
+        if (step.onRunPrep) await step.onRunPrep(runSession);
+        return runSession;
+      };
       for (const step of programConfig.steps) {
         if (step.screenId === 'outro') break;
         if (step.show && !step.show(store.session)) continue;
         if (step.screenId === 'auth') {
           await authenticate(store.session, programConfig.id);
         } else if (step.run) {
-          const live = store.session;
-          const runSession = step.targetDir
-            ? {
-                ...live,
-                installDir: step.targetDir(live),
-                frameworkContext: { ...live.frameworkContext },
-              }
-            : live;
-          if (step.onRunPrep) await step.onRunPrep(runSession);
-          await step.run(runSession);
+          await step.run(await runSessionFor(step));
           store.completeRunStep(step.id);
         } else if (step.screenId === 'run') {
-          await runAgent(programConfig, store.session);
+          await runAgent(programConfig, await runSessionFor(step));
         } else if (step.isComplete) {
           await store.waitUntil(step.isComplete);
         }
@@ -475,6 +482,25 @@ async function main() {
               FRAMEWORK_REGISTRY[pick.integration],
             );
           }
+          continue;
+        }
+
+        // Headless error-tracking detect: the same pick injection as above, into
+        // the error-tracking path key, so the run is scoped to the picked app.
+        if (
+          state.currentScreen === ScreenId.ErrorTrackingDetect &&
+          state.session.integration == null
+        ) {
+          const pick = await pickIntegrationTarget(store.session.installDir);
+          if (!pick) {
+            mark('error-tracking detect found no framework to set up');
+            process.exit(1);
+          }
+          store.setFrameworkContext(ERROR_TRACKING_PROJECT_PATH_KEY, pick.path);
+          store.setFrameworkConfig(
+            pick.integration,
+            FRAMEWORK_REGISTRY[pick.integration],
+          );
           continue;
         }
 
