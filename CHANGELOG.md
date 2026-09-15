@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.75.0](https://github.com/PostHog/wizard/compare/v2.74.1...v2.75.0) (2026-09-15)
+
+
+### Features
+
+* add friendly mint failure recovery ([#1238](https://github.com/PostHog/wizard/issues/1238)) ([7aaf21c](https://github.com/PostHog/wizard/commit/7aaf21c0080f7bbe1a82362189844d820d5aa250))
+* **error-tracking:** add the error-tracking program on the orchestrator flow ([#1185](https://github.com/PostHog/wizard/issues/1185)) ([632b80a](https://github.com/PostHog/wizard/commit/632b80aa2aa149884b86d4a98a60c7f00e13597d))
+* **posthog-integration:** detect existing PostHog, surface the other commands ([#1190](https://github.com/PostHog/wizard/issues/1190)) ([1b34483](https://github.com/PostHog/wizard/commit/1b344836e9b186b7da96ddd9f992a3337136e845))
+
+
+### Bug Fixes
+
+* finish legacy gateway cleanup ([#1250](https://github.com/PostHog/wizard/issues/1250)) ([e88050d](https://github.com/PostHog/wizard/commit/e88050da988309f61049d8acb40f55ee7df4e81f))
+* **oauth:** explain oversized browser headers ([#1253](https://github.com/PostHog/wizard/issues/1253)) ([be2bcd2](https://github.com/PostHog/wizard/commit/be2bcd2870a3362bc471f2633099b91b0ac0e7e7))
+* separate CI gateway and PostHog credentials ([#1240](https://github.com/PostHog/wizard/issues/1240)) ([662f54d](https://github.com/PostHog/wizard/commit/662f54da548b3851f26b201f9c06c9ddf8e5b344))
+
 ## [2.74.1](https://github.com/PostHog/wizard/compare/v2.74.0...v2.74.1) (2026-09-10)
 
 
