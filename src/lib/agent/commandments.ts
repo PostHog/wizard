@@ -45,6 +45,6 @@ export const WIZARD_COMMANDMENTS = [
     '  - For `single` and `multi`, extract the alternatives from the prose into `options` as `{ label, value }` pairs. Use the human phrase as `label` and a lowercase-hyphenated form as `value` (e.g., `label: "Vanilla JS"`, `value: "vanilla-js"`).',
     '  - Use a kebab-case slug of the question label as `id` (e.g., "Tech stack" → `tech-stack`, "Show frequency" → `show-frequency`).',
     '  - Do not invent fields the schema does not define (no `source`, `category`, `priority`, etc.) — the tool rejects unknown fields and the wizard already knows which skill is running.',
-    'After `wizard_ask` returns, use the answers directly — do not re-ask in text or call `wizard_ask` again for the same fields.',
+    'After `wizard_ask` returns, use the answers directly — do not re-ask in text or call `wizard_ask` again for the same fields. The one exception is a fully timed-out return, where every answer is `__timed_out__`: nothing was answered, so ask the same questions again to keep waiting, and follow the guidance that result carries.',
   ].join('\n'),
 ];

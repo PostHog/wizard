@@ -133,6 +133,15 @@ describe('commandments by axis', () => {
     it('tells the agent to use answers directly without re-asking', () => {
       expect(text).toMatch(/do not re-ask/i);
     });
+
+    // The no-re-ask rule and the timeout guidance in `WIZARD_ASK_TOOL_DESCRIPTION`
+    // both reach the agent in one context. Without this carve-out the commandment
+    // — assembled first, in every run — forbids the retry that is the whole point
+    // of answering a timeout with its own sentinel.
+    it('exempts a fully timed-out return from the no-re-ask rule', () => {
+      expect(text).toMatch(/`__timed_out__`/);
+      expect(text).toMatch(/ask the same questions again to keep waiting/i);
+    });
   });
 });
 

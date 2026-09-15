@@ -38,7 +38,9 @@ export interface WizardAskBridge {
   /**
    * Open the WizardAsk overlay and resolve with the user's answers.
    * One answer per question id (string for `single`/`text`, string[] for
-   * `multi`). Cancelled fields come back as the literal `"__cancelled__"`.
+   * `multi`). A field the user dismissed comes back as the literal
+   * `"__cancelled__"`; a field the timeout closed comes back as
+   * `"__timed_out__"`.
    */
   request(req: WizardAskRequest): Promise<AskAnswers>;
 }
@@ -51,7 +53,7 @@ export interface WizardAskBridgeOptions {
   /**
    * Per-question timeout in milliseconds. When the user takes longer than
    * this to answer, every unanswered field resolves with the
-   * {@link CANCELLED_SENTINEL} value. Defaults to {@link DEFAULT_ASK_TIMEOUT_MS}.
+   * {@link TIMED_OUT_SENTINEL} value. Defaults to {@link DEFAULT_ASK_TIMEOUT_MS}.
    */
   timeoutMs?: number;
   /**
@@ -70,24 +72,56 @@ export interface WizardAskBridgeOptions {
   cancelQuestion?: () => void;
 }
 
-/** Sentinel returned for unanswered fields on cancellation or timeout. */
+/** Sentinel returned for unanswered fields when the user dismisses the overlay. */
 export const CANCELLED_SENTINEL = '__cancelled__';
+
+/**
+ * Sentinel returned for unanswered fields when the timeout wins the race.
+ *
+ * A timeout is not a decline. The programs that raise `askTimeoutMs` park on a
+ * question while the user does slow work away from the terminal — run a
+ * production build, trigger a test error, check Error Tracking. Before this
+ * sentinel existed both endings resolved to {@link CANCELLED_SENTINEL}, the
+ * agent read "the user declined", and it unwound work the user was still in the
+ * middle of verifying. The two endings need different answers so the agent can
+ * tell them apart.
+ */
+export const TIMED_OUT_SENTINEL = '__timed_out__';
 
 /** Default per-question timeout (5 minutes). */
 export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
 
-function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
+function buildUnansweredAnswers(
+  questions: AskQuestion[],
+  sentinel: string,
+): AskAnswers {
   const out: AskAnswers = {};
   for (const q of questions) {
-    out[q.id] = CANCELLED_SENTINEL;
+    out[q.id] = sentinel;
   }
   return out;
 }
 
+/** True for either unanswered sentinel — a dismissal or a timeout. */
+export function isUnansweredSentinel(value: unknown): boolean {
+  return value === CANCELLED_SENTINEL || value === TIMED_OUT_SENTINEL;
+}
+
+/**
+ * True when no field carries a real answer. Gates the per-run cap refund, so
+ * it must cover both endings: neither a dismissal nor a timeout may burn a slot.
+ */
 export function isFullyCancelled(answers: AskAnswers): boolean {
   const values = Object.values(answers);
   if (values.length === 0) return false;
-  return values.every((v) => v === CANCELLED_SENTINEL);
+  return values.every(isUnansweredSentinel);
+}
+
+/** True when every field came back as the timeout sentinel. */
+export function isFullyTimedOut(answers: AskAnswers): boolean {
+  const values = Object.values(answers);
+  if (values.length === 0) return false;
+  return values.every((v) => v === TIMED_OUT_SENTINEL);
 }
 
 export function createWizardAskBridge(
@@ -107,6 +141,7 @@ export function createWizardAskBridge(
 
       const startedAt = Date.now();
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
 
       // Race the user against the timeout. Whichever fires first wins. On
       // timeout we also cancel the host's overlay: resolving our side alone
@@ -114,8 +149,20 @@ export function createWizardAskBridge(
       // wizard_ask would be rejected as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
-          opts.cancelQuestion?.();
-          resolve(buildCancelledAnswers(questions));
+          timedOut = true;
+          // Answer before cleaning up, or cleanup wins the race. On the real
+          // TUI path `cancelQuestion` settles the `showQuestion` promise
+          // synchronously with the dismissal sentinel
+          // (`WizardStore.cancelPendingQuestion`), so cancelling first let that
+          // promise settle ahead of this one — and the timeout came back
+          // indistinguishable from the decline it is not.
+          resolve(buildUnansweredAnswers(questions, TIMED_OUT_SENTINEL));
+          try {
+            opts.cancelQuestion?.();
+          } catch {
+            // Best-effort: the timeout answer is already settled, and a
+            // caller-injected callback must not take the run down from a timer.
+          }
         }, timeoutMs);
       });
 
@@ -132,7 +179,7 @@ export function createWizardAskBridge(
             subject,
             question_count: questions.length,
             duration_ms: durationMs,
-            timed_out: durationMs >= timeoutMs,
+            timed_out: timedOut,
           });
         } else {
           analytics.wizardCapture('wizard_ask answered', {

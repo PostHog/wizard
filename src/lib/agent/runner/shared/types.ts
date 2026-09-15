@@ -76,7 +76,9 @@ export interface ProgramRun {
    * Per-question `wizard_ask` timeout in milliseconds. Defaults to
    * DEFAULT_ASK_TIMEOUT_MS (5 minutes). Raise it for programs whose
    * questions send the user off to do slow work (run a build, create a
-   * key in the browser) before they can answer.
+   * key in the browser) before they can answer. A timeout is not a decline:
+   * it answers with TIMED_OUT_SENTINEL and tells the agent to ask again
+   * rather than unwind its work, so the timer bounds one wait, not the run.
    */
   askTimeoutMs?: number;
   /**
