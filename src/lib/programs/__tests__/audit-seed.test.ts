@@ -15,6 +15,19 @@ describe('AUDIT_SEED_CHECKS', () => {
     expect(new Set(ids(AUDIT_SEED_CHECKS)).size).toBe(AUDIT_SEED_CHECKS.length);
   });
 
+  it('keeps cross-runtime identity and session checks together', () => {
+    const order = ids(AUDIT_SEED_CHECKS);
+    const distinctId = order.indexOf('cross-runtime-distinct-id');
+    const sessionId = order.indexOf('cross-runtime-session-id');
+
+    expect(distinctId).toBeGreaterThan(-1);
+    expect(sessionId).toBe(distinctId + 1);
+    expect(AUDIT_SEED_CHECKS[sessionId]).toMatchObject({
+      area: 'Identification',
+      status: 'pending',
+    });
+  });
+
   it('sweeps PostHog for open findings before writing the report', () => {
     const order = ids(AUDIT_SEED_CHECKS);
     const sweep = order.indexOf('live-data-findings');
