@@ -7,7 +7,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -264,7 +264,11 @@ interface QuestionInputProps {
   onSubmit: (value: string | string[]) => void;
 }
 
-const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
+/**
+ * Renders the input for one question. Exported so the sensitive-answer path can
+ * be asserted without a live Ink render.
+ */
+export const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
   switch (question.kind) {
     case 'single':
       return (
@@ -310,10 +314,20 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
         // to fit its widest child, so the right-aligned hint walks left/right
         // as the typed text changes width.
         <Box flexDirection="column" width="100%">
-          <TextInput
-            placeholder="Type your answer"
-            onSubmit={(value) => onSubmit(value)}
-          />
+          {/* A sensitive answer is a live credential the agent never sees in
+              the clear (it is vaulted as a secretRef). Echoing it would still
+              leave it in the terminal scrollback, so mask the input too. */}
+          {question.sensitive ? (
+            <PasswordInput
+              placeholder="Paste your answer. It stays hidden."
+              onSubmit={(value) => onSubmit(value)}
+            />
+          ) : (
+            <TextInput
+              placeholder="Type your answer"
+              onSubmit={(value) => onSubmit(value)}
+            />
+          )}
           <Box marginTop={1} width="100%" justifyContent="flex-end">
             <Text>
               <Text color={Colors.accent}>ENTER</Text>

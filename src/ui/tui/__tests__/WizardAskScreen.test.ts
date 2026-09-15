@@ -19,10 +19,13 @@ vi.mock('../../../utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
+import { PasswordInput, TextInput } from '@inkjs/ui';
+import { isValidElement, type ReactNode } from 'react';
 import { WizardStore } from '@ui/tui/store';
 import {
   handleAskKey,
   isRequiredButEmpty,
+  QuestionInput,
 } from '@ui/tui/screens/WizardAskScreen';
 
 const pending = {
@@ -82,5 +85,32 @@ describe('isRequiredButEmpty', () => {
   it('treats an empty multi-select selection as unanswered when required', () => {
     expect(isRequiredButEmpty({}, [])).toBe(true);
     expect(isRequiredButEmpty({}, ['events'])).toBe(false);
+  });
+});
+
+/** Every component type in a rendered element tree, in no particular order. */
+function componentTypes(node: ReactNode): unknown[] {
+  if (Array.isArray(node)) return node.flatMap(componentTypes);
+  if (!isValidElement(node)) return [];
+  const children = (node.props as { children?: ReactNode }).children;
+  return [node.type, ...componentTypes(children)];
+}
+
+describe('QuestionInput', () => {
+  it('masks a sensitive answer so the credential stays out of the scrollback', () => {
+    const types = componentTypes(
+      QuestionInput({
+        question: {
+          id: 'api-key',
+          prompt: 'Paste your personal API key',
+          kind: 'text',
+          sensitive: true,
+        },
+        onSubmit: vi.fn(),
+      }),
+    );
+
+    expect(types).toContain(PasswordInput);
+    expect(types).not.toContain(TextInput);
   });
 });
