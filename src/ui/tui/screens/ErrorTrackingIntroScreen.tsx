@@ -41,10 +41,10 @@ export const ErrorTrackingIntroScreen = ({
           error-tracking
         </Text>{' '}
         program makes uncaught errors reach PostHog with readable stack traces.
-        It installs and initializes the PostHog SDK when the project doesn't
-        have it yet, wires up exception capture through the SDK's own mechanism,
-        and — on platforms that ship minified bundles or stripped binaries —
-        sets up source-map / debug-symbol upload for your production builds.
+        It installs and initializes the PostHog, wires up exception capture,
+        and sets up source-map uploading when necessary. In PostHog, 
+        you can analyze these errors and have agents proactively suggest
+        fixes in self-driving.
       </Text>
       <Box marginTop={1}>
         <SkillSourceInfo
