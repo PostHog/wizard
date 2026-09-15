@@ -9,6 +9,8 @@
  */
 
 import type { ReactNode } from 'react';
+import path from 'node:path';
+import { getLogFilePath } from '@utils/debug';
 import type { WizardStore } from './store.js';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
 
@@ -49,6 +51,11 @@ import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.j
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
+import { MintFailureScreen } from './screens/MintFailureScreen.js';
+import type { MintFailureServices } from './screens/MintFailureScreen.js';
+import { openCodingAgent } from './services/coding-agent-launcher.js';
+import { writeWizardSpellbook } from '@lib/wizard-spellbook';
+import { getProgramConfig } from '@lib/programs/program-registry';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { SessionTimeoutScreen } from './screens/SessionTimeoutScreen.js';
@@ -58,13 +65,23 @@ import type { McpInstaller } from './services/mcp-installer.js';
 import { createMcpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 import type { McpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 
-export interface ScreenServices {
+export interface ScreenServices extends MintFailureServices {
   mcpInstaller: McpInstaller;
   mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
 export function createServices(store: WizardStore): ScreenServices {
   return {
+    get logPath() {
+      return path.resolve(getLogFilePath());
+    },
+    openAgent: (agent, spellbookPath) =>
+      openCodingAgent(agent, store.session.installDir, spellbookPath),
+    leaveSpellbook: () =>
+      writeWizardSpellbook(
+        store.session,
+        getProgramConfig(store.router.activeProgram),
+      ),
     mcpInstaller: createMcpInstaller(),
     mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),
   };
@@ -131,7 +148,10 @@ export function createScreens(
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
-    [ScreenId.Exit]: <ExitScreen />,
+    [ScreenId.MintFailure]: (
+      <MintFailureScreen store={store} services={services} />
+    ),
+    [ScreenId.Exit]: <ExitScreen store={store} />,
 
     // Standalone MCP flows
     [ScreenId.McpAdd]: (

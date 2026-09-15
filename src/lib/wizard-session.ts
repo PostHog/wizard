@@ -442,6 +442,13 @@ export interface WizardSession {
   /** Copy for the task-notice modal, set while it is open. */
   taskNotice: TaskNotice | null;
   outroData: OutroData | null;
+  /** Skill saved for the user's own agent during the handoff. */
+  spellbook: { path: string; skillsIncluded: boolean } | null;
+  /**
+   * How the user left the mint-failure screen: `continue` walks the
+   * post-run steps (MCP, Slack, keep-skills), `exit` leaves. Null until then.
+   */
+  mintHandoff: 'continue' | 'exit' | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
@@ -562,6 +569,8 @@ export function buildSession(args: {
     portConflictProcess: null,
     taskNotice: null,
     outroData: null,
+    spellbook: null,
+    mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
     additionalFeatureQueue: [],

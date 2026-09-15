@@ -506,6 +506,19 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setSpellbook(spellbook: NonNullable<WizardSession['spellbook']>): void {
+    this.$session.setKey('spellbook', spellbook);
+    this.emitChange();
+  }
+
+  setMintHandoff(action: NonNullable<WizardSession['mintHandoff']>): void {
+    // The parked agent may still hold a question or notice open.
+    this.cancelPendingQuestion();
+    if (this.session.taskNotice) this.resolveTaskNotice(false);
+    this.$session.setKey('mintHandoff', action);
+    this.emitChange();
+  }
+
   setSkillId(skillId: string | null): void {
     this.$session.setKey('skillId', skillId);
     this.emitChange();
@@ -881,8 +894,8 @@ export class WizardStore {
     this.setRunPhase(RunPhase.Idle);
   }
 
-  setOutroDismissed(): void {
-    this.$session.setKey('outroDismissed', true);
+  setOutroDismissed(dismissed = true): void {
+    this.$session.setKey('outroDismissed', dismissed);
     this.emitChange();
   }
 
