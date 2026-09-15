@@ -30,7 +30,7 @@ export const ErrorTrackingIntroScreen = ({
     <Box flexDirection="column" width={56}>
       <Box marginBottom={1}>
         <Text>
-          The wizard is an agent that executes PostHog tasks. Its code is open
+          The Wizard is an agent, it's here to help you setup PostHog. Its code is open
           source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
         </Text>
       </Box>
