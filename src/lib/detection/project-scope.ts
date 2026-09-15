@@ -12,6 +12,7 @@ import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
+  Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -23,6 +24,38 @@ import { logToFile } from '@utils/debug';
 const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
+
+const INTEGRATION_IDS = new Set<string>(Object.values(Integration));
+
+/** A scanned project matched to a wizard framework. Each program classifies it with its own rule. */
+export type IntegrationCandidate = {
+  /** Path relative to the repo root ("." for the root). */
+  path: string;
+  /** Human-readable framework the agent detected (e.g. "Next.js"). */
+  framework: string;
+  /** The wizard framework the project matches, else null. */
+  integration: Integration | null;
+  /** Whether a PostHog SDK is already installed in this project. */
+  hasPostHog: boolean;
+  /** The scan's pick for the main app. Always false unless the scan set `recommend`. */
+  recommended: boolean;
+};
+
+/** Match each project of an integration scan to a wizard framework. */
+export function toIntegrationCandidates(
+  report: AgenticDetectionReport,
+): IntegrationCandidate[] {
+  return report.projects.map((p) => ({
+    path: p.path,
+    framework: p.framework,
+    integration:
+      p.targetId && INTEGRATION_IDS.has(p.targetId)
+        ? (p.targetId as Integration)
+        : null,
+    hasPostHog: p.hasPostHog,
+    recommended: p.recommended === true,
+  }));
+}
 
 /** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(

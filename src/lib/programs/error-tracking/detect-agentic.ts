@@ -1,6 +1,14 @@
 /**
  * Error-tracking adapter over the shared integration scan: classifies each
  * project for the post-login picker and scopes the run to the picked one.
+ *
+ * Self-driving classifies the same scan (`toIntegrationCandidates`) with a
+ * different rule, so each program keeps its own:
+ * - A project that already has PostHog is a setup target here. Self-driving
+ *   offers it as "continue with existing" instead.
+ * - KMP is not offered here (see `ERROR_TRACKING_UNSUPPORTED`).
+ * - The scan asks for a recommended project, and the picker lists it first.
+ * - The scan bills to error-tracking.
  */
 
 import { Integration } from '@lib/constants';
@@ -10,7 +18,10 @@ import {
   type DetectEvent,
 } from '@lib/detection/agentic';
 import { gatherFrameworkContext } from '@lib/detection/index';
-import { detectIntegrationProjects } from '@lib/detection/project-scope';
+import {
+  detectIntegrationProjects,
+  toIntegrationCandidates,
+} from '@lib/detection/project-scope';
 import type { WizardSession } from '@lib/wizard-session';
 
 /** frameworkContext key for the picked project's path, relative to the repo root. */
@@ -20,8 +31,6 @@ export const ERROR_TRACKING_PROJECT_PATH_KEY = 'errorTrackingProjectPath';
 export const ERROR_TRACKING_UNSUPPORTED: ReadonlySet<Integration> = new Set([
   Integration.kmp,
 ]);
-
-const INTEGRATION_IDS = new Set<string>(Object.values(Integration));
 
 /** One project, classified for the picker. */
 export type ErrorTrackingProject = {
@@ -44,24 +53,18 @@ export type ErrorTrackingDetectionReport = {
 export function toErrorTrackingReport(
   report: AgenticDetectionReport,
 ): ErrorTrackingDetectionReport {
-  const ordered = [...report.projects].sort(
-    (a, b) => Number(b.recommended === true) - Number(a.recommended === true),
+  const candidates = toIntegrationCandidates(report).sort(
+    (a, b) => Number(b.recommended) - Number(a.recommended),
   );
   return {
     repoType: report.repoType,
-    projects: ordered.map((p) => {
-      const integration =
-        p.targetId && INTEGRATION_IDS.has(p.targetId)
-          ? (p.targetId as Integration)
-          : null;
-      return {
-        path: p.path,
-        framework: p.framework,
-        integration,
-        instrumentable:
-          integration != null && !ERROR_TRACKING_UNSUPPORTED.has(integration),
-      };
-    }),
+    projects: candidates.map((p) => ({
+      path: p.path,
+      framework: p.framework,
+      integration: p.integration,
+      instrumentable:
+        p.integration != null && !ERROR_TRACKING_UNSUPPORTED.has(p.integration),
+    })),
   };
 }
 

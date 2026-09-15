@@ -24,7 +24,8 @@ vi.mock('@lib/detection/index', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@lib/detection/index')>()),
   detectFramework: vi.fn(),
 }));
-vi.mock('@lib/detection/project-scope', () => ({
+vi.mock('@lib/detection/project-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@lib/detection/project-scope')>()),
   scopeInstallDirToProject: vi.fn(),
   detectIntegrationProjects: vi.fn(),
 }));
