@@ -17,6 +17,10 @@ import type { WizardRunOptions } from './types';
  * (e.g. `~`) routinely hits OS-protected paths (macOS `Library/Group
  * Containers/group.com.apple.*`) that throw EPERM/EACCES per entry — capturing
  * each as an exception buried real errors under thousands of noise events.
+ * Network-backed mounts (macOS `CloudStorage` folders for Google Drive,
+ * MacDroid, and similar) add a second family: a read of a manifest can time
+ * out or fail per entry (ETIMEDOUT/EBUSY/EIO/EHOSTDOWN) while the walk itself
+ * still completes, so these are environmental too.
  */
 const BENIGN_FS_ERROR_CODES = new Set<string>([
   'EACCES', // permission denied
@@ -27,6 +31,10 @@ const BENIGN_FS_ERROR_CODES = new Set<string>([
   'ENAMETOOLONG', // path too long
   'EMFILE', // too many open files (environmental, not a wizard bug)
   'ENFILE',
+  'ETIMEDOUT', // read timed out on a network-backed mount
+  'EBUSY', // resource busy on a flaky network mount
+  'EIO', // I/O error on a network-backed mount
+  'EHOSTDOWN', // host of a network mount is down
 ]);
 
 /**
