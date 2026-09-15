@@ -40,6 +40,7 @@ const INTEGRATION_ENTRIES = [
   },
   { id: 'integration-tanstack-start', framework: 'tanstack-start' },
   { id: 'integration-laravel', framework: 'laravel' },
+  { id: 'integration-wordpress', framework: 'wordpress' },
   { id: 'integration-php' },
   { id: 'integration-ruby-on-rails', framework: 'rails' },
   { id: 'integration-android', framework: 'android' },
