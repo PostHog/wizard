@@ -42,6 +42,7 @@ import {
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
+import { runErrorType } from './completion';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
@@ -194,8 +195,13 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       duration_seconds: Math.round(durationMs / 1000),
     };
   };
-  const captureAborted = () =>
+  // `reason` is the closed AgentErrorType this run is about to return. Without
+  // it every terminal path below — a security termination, a rate limit, a
+  // gateway error — arrived as the same unlabelled event, so a task agent that
+  // died could be counted but not diagnosed.
+  const captureAborted = (reason: AgentErrorType) =>
     analytics.wizardCapture('agent aborted', {
+      reason,
       ...runDurations(),
       model: modelId,
       ...analyticsProperties,
@@ -490,7 +496,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       logToFile(
         `[pi-task] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
       );
-      captureAborted();
+      captureAborted(AgentErrorType.YARA_VIOLATION);
       return { error: AgentErrorType.YARA_VIOLATION };
     }
 
@@ -529,11 +535,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     if (errorMessage || spinnerMessage) {
       spinner.stop(errorMessage ?? 'Task failed');
     }
-    captureAborted();
-    const lower = message.toLowerCase();
-    if (lower.includes('rate limit') || lower.includes('429')) {
-      return { error: AgentErrorType.RATE_LIMIT, message };
-    }
-    return { error: AgentErrorType.API_ERROR, message };
+    const error = runErrorType(message);
+    captureAborted(error);
+    return { error, message };
   }
 }
