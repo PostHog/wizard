@@ -7,7 +7,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -35,6 +35,28 @@ export function handleAskKey(
   store: Pick<WizardStore, 'cancelPendingQuestion'>,
 ): void {
   if (key.escape) store.cancelPendingQuestion();
+}
+
+/**
+ * Whether the overlay must mask what the user types for this question.
+ *
+ * A `sensitive` answer is one the wizard has already promised to treat as a
+ * secret: `wizard_ask` vaults it and hands the agent an opaque `secretRef`, so
+ * the raw string never enters the model's conversation. Every other boundary
+ * guards it the same way — the skip events carry no free text, handoff prose is
+ * kept out of telemetry — but the overlay that collects it echoed it back in
+ * plain text as it was typed, which is the one place a database password or an
+ * API key is read by a person other than its owner: a shared screen, a pairing
+ * session, a recorded terminal.
+ *
+ * `kind` is checked as well as the flag. The tool already rejects `sensitive`
+ * on a picker, and a picker has nothing to mask, so this keeps the predicate
+ * total over a question rather than relying on that rejection.
+ */
+export function shouldMaskAnswer(
+  question: Pick<AskQuestion, 'kind' | 'sensitive'>,
+): boolean {
+  return question.kind === 'text' && question.sensitive === true;
 }
 
 /**
@@ -303,14 +325,15 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
       );
     }
 
-    case 'text':
+    case 'text': {
+      const Input = shouldMaskAnswer(question) ? PasswordInput : TextInput;
       return (
         // `width="100%"` on both the column and the hint row anchors them to
         // the modal's content width — without it, Ink/Yoga shrinks the column
         // to fit its widest child, so the right-aligned hint walks left/right
         // as the typed text changes width.
         <Box flexDirection="column" width="100%">
-          <TextInput
+          <Input
             placeholder="Type your answer"
             onSubmit={(value) => onSubmit(value)}
           />
@@ -322,5 +345,6 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
           </Box>
         </Box>
       );
+    }
   }
 };
