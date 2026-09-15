@@ -36,8 +36,7 @@ import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import type { GatewayAuth } from '@lib/gateway-session';
-import { requireGatewayAuth } from '@lib/agent/gateway-auth';
+import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -221,7 +220,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     } = sdk;
 
     const refreshAuth = () =>
-      requireGatewayAuth(
+      gatewayAuth(
         boot.credentials.host,
         boot.credentials.accessToken,
         boot.programId,

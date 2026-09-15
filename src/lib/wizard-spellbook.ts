@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from './constants';
 import type { ProgramConfig } from './programs/program-step';
-import type { AgentRunContext } from './wizard-session';
+import type { WizardSession } from './wizard-session';
 import {
   downloadSkill,
   fetchSkillMenu,
@@ -11,7 +11,10 @@ import {
 } from './wizard-tools/tools';
 
 export type WizardSpellbook = { path: string; skillsIncluded: boolean };
-type SpellbookSession = Omit<AgentRunContext, 'programId'>;
+type SpellbookSession = Pick<
+  WizardSession,
+  'installDir' | 'integration' | 'skillId' | 'frameworkConfig'
+>;
 
 function selectSkills(
   menu: SkillMenu,

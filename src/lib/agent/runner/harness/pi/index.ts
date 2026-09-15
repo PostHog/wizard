@@ -27,8 +27,7 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
-import type { GatewayAuth } from '@lib/gateway-session';
-import { requireGatewayAuth } from '@lib/agent/gateway-auth';
+import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -254,7 +253,7 @@ export const piBackend: AgentHarness = {
       // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
       // run's scoped token.
       const refreshAuth = () =>
-        requireGatewayAuth(
+        gatewayAuth(
           boot.credentials.host,
           boot.credentials.accessToken,
           boot.programId,

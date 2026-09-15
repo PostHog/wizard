@@ -74,18 +74,11 @@ export function createServices(store: WizardStore): ScreenServices {
       return path.resolve(getLogFilePath());
     },
     openAgent: (agent, spellbookPath) =>
-      openCodingAgent(
-        agent,
-        store.session.agentRunContext?.installDir ?? store.session.installDir,
-        spellbookPath,
-      ),
+      openCodingAgent(agent, store.session.installDir, spellbookPath),
     leaveSpellbook: () =>
       writeWizardSpellbook(
-        store.session.agentRunContext ?? store.session,
-        getProgramConfig(
-          store.session.agentRunContext?.programId ??
-            store.router.activeProgram,
-        ),
+        store.session,
+        getProgramConfig(store.router.activeProgram),
       ),
     mcpInstaller: createMcpInstaller(),
     mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),

@@ -22,7 +22,6 @@ import { Program } from '@lib/programs/program-registry';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
-import { ErrorCodes } from '@lib/errors/codes';
 import { OutroKind } from '@lib/wizard-session';
 
 function freshStore(): WizardStore {
@@ -47,15 +46,18 @@ const cleanReadiness = {
 };
 
 describe('WizardCiDriver — full integration flow', () => {
-  it('lets a late mint failure exit or continue to MCP', () => {
+  it('lets a failed run exit or continue to MCP', () => {
     const store = freshStore();
     const ui = new InkUI(store);
     const driver = new WizardCiDriver(store);
-    store.setOutroDismissed();
-    ui.outroError({
-      kind: OutroKind.Error,
-      errorCode: ErrorCodes.GatewayMintFailed,
+    store.setCredentials({
+      accessToken: 'phx_secret_should_not_leak',
+      projectApiKey: 'phc_public',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
+      projectId: 42,
     });
+    store.setOutroDismissed();
+    ui.outroError({ kind: OutroKind.Error, message: 'agent failed' });
     expect(driver.readState().currentScreen).toBe(ScreenId.MintFailure);
     driver.performAction('continue_setup');
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);

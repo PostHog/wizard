@@ -13,7 +13,7 @@
  */
 
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
-import { isMintFailure } from '@ui/mint-failure';
+import { isRunFailure } from '@ui/mint-failure';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
@@ -68,17 +68,17 @@ export class WizardRouter {
    * returns the first incomplete screen.
    */
   resolve(session: WizardSession): ScreenName {
-    // A mint failure interrupts every program until the user leaves its
-    // screen: exit, or continue through the post-run steps.
-    const mintFailed = isMintFailure(session.outroData);
-    if (mintFailed && session.mintHandoff === 'exit') return ScreenId.Exit;
-    if (mintFailed && !session.mintHandoff) return ScreenId.MintFailure;
+    // A failed agent run interrupts every program until the user leaves the
+    // handoff screen: exit, or continue through the post-run steps.
+    const runFailed = isRunFailure(session);
+    if (runFailed && session.mintHandoff === 'exit') return ScreenId.Exit;
+    if (runFailed && !session.mintHandoff) return ScreenId.MintFailure;
 
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
 
-    const sequence = mintFailed ? MINT_HANDOFF_SEQUENCE : this.sequence;
+    const sequence = runFailed ? MINT_HANDOFF_SEQUENCE : this.sequence;
     for (const entry of sequence) {
       if (entry.show && !entry.show(session)) continue;
       if (entry.isComplete && entry.isComplete(session)) continue;

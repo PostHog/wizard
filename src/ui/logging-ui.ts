@@ -14,14 +14,12 @@ import {
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
 import { OAUTH_TIMEOUT_MS } from '@lib/constants';
-import { isMintFailure, MINT_FAILURE_CONTACT } from './mint-failure';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '@lib/health-checks/readiness';
 import type {
-  AgentRunContext,
   AskAnswers,
   Credentials,
   OutroData,
@@ -42,7 +40,6 @@ export class LoggingUI implements WizardUI {
     console.log(`✖  ${data.message ?? 'Wizard aborted'}`);
     if (data.body) console.log(`│  ${data.body}`);
     if (data.docsUrl) console.log(`│  Docs: ${data.docsUrl}`);
-    if (isMintFailure(data)) console.log(`│  ${MINT_FAILURE_CONTACT}`);
   }
 
   waitForOutroDismissed(): Promise<void> {
@@ -96,10 +93,6 @@ export class LoggingUI implements WizardUI {
 
   pushStatus(message: string): void {
     console.log(`◇  ${message}`);
-  }
-
-  setAgentRunContext(_context: AgentRunContext): void {
-    // The interactive handoff uses this context only in the TUI.
   }
 
   setDetectedFramework(label: string): void {

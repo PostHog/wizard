@@ -1,5 +1,4 @@
-import { ErrorCodes } from '@lib/errors/codes';
-import { OutroKind, type OutroData } from '@lib/wizard-session';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
 
 export const MINT_FAILURE_MESSAGE = "The Wizard's a little busy";
 
@@ -9,10 +8,12 @@ export const MINT_FAILURE_BODY =
 export const MINT_FAILURE_CONTACT =
   'Email wizard@posthog.com and tell us what happened. Please attach this log:';
 
-export function isMintFailure(data: OutroData | null | undefined): boolean {
+/** The agent run ended in an error, whatever the reason. Login failures also
+ *  set an error outro but never had credentials, so they stay on the outro. */
+export function isRunFailure(
+  session: Pick<WizardSession, 'outroData' | 'credentials'>,
+): boolean {
   return (
-    data?.kind === OutroKind.Error &&
-    (data.errorCode === ErrorCodes.GatewayMintRefused ||
-      data.errorCode === ErrorCodes.GatewayMintFailed)
+    session.outroData?.kind === OutroKind.Error && session.credentials !== null
   );
 }

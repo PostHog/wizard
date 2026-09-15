@@ -18,36 +18,6 @@ import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser, ApiProject } from './api';
 import type { HostResolution } from './host-resolution';
 
-export type AgentRunContext = Pick<
-  WizardSession,
-  'installDir' | 'integration' | 'skillId'
-> & {
-  programId: string;
-  frameworkConfig: {
-    metadata: Pick<FrameworkConfig['metadata'], 'name' | 'docsUrl'>;
-  } | null;
-};
-
-export function buildAgentRunContext(
-  session: WizardSession,
-  programId: string,
-): AgentRunContext {
-  return {
-    programId,
-    installDir: session.installDir,
-    integration: session.integration,
-    skillId: session.skillId,
-    frameworkConfig: session.frameworkConfig
-      ? {
-          metadata: {
-            name: session.frameworkConfig.metadata.name,
-            docsUrl: session.frameworkConfig.metadata.docsUrl,
-          },
-        }
-      : null,
-  };
-}
-
 export interface Credentials {
   accessToken: string;
   /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
@@ -488,7 +458,6 @@ export interface WizardSession {
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
   skillId: string | null;
-  agentRunContext: AgentRunContext | null;
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
@@ -607,7 +576,6 @@ export function buildSession(args: {
     additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
-    agentRunContext: null,
     frameworkConfig: null,
     pendingQuestion: null,
   };

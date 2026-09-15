@@ -7,7 +7,7 @@ import {
 } from '../screens/MintFailureScreen';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
 import { OutroKind } from '@lib/wizard-session';
-import { ErrorCodes } from '@lib/errors/codes';
+import { HostResolution } from '@lib/host-resolution';
 import { ScreenId } from '../router';
 
 vi.mock('ink', () =>
@@ -26,10 +26,13 @@ const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 function setup() {
   const store = new WizardStore();
-  store.setOutroData({
-    kind: OutroKind.Error,
-    errorCode: ErrorCodes.GatewayMintFailed,
+  store.setCredentials({
+    accessToken: 'tok',
+    projectApiKey: 'pk',
+    host: HostResolution.fromApiHost('https://app.posthog.com'),
+    projectId: 1,
   });
+  store.setOutroData({ kind: OutroKind.Error, message: 'agent failed' });
   const services: MintFailureServices = {
     leaveSpellbook: vi.fn().mockResolvedValue(saved),
     openAgent: vi.fn().mockResolvedValue(undefined),

@@ -22,7 +22,6 @@ import {
   type TokenUsageDelta,
 } from '@ui/wizard-ui';
 import {
-  type AgentRunContext,
   type WizardSession,
   type OutroData,
   type DiscoveredFeature,
@@ -504,11 +503,6 @@ export class WizardStore {
 
   setPosthogSdkDetected(detected: boolean): void {
     this.$session.setKey('posthogSdkDetected', detected);
-    this.emitChange();
-  }
-
-  setAgentRunContext(context: AgentRunContext): void {
-    this.$session.setKey('agentRunContext', context);
     this.emitChange();
   }
 

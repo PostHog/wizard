@@ -9,38 +9,40 @@ import { WizardReadiness } from '@lib/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { ErrorCodes } from '@lib/errors/codes';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 
 function baseWizardSession() {
   return buildSession({});
 }
 
+/** An agent run that ended in an error: credentials set, error outro shown. */
+function failedRunSession() {
+  const session = baseWizardSession();
+  session.credentials = {
+    accessToken: 'tok',
+    projectApiKey: 'pk',
+    host: HostResolution.fromApiHost('https://app.posthog.com'),
+    projectId: 1,
+  };
+  session.outroData = { kind: OutroKind.Error, message: 'agent failed' };
+  return session;
+}
+
 describe('WizardRouter', () => {
   it.each(PROGRAM_REGISTRY.map((program) => program.id))(
-    'shows mint failures over every step and overlay in %s',
+    'shows a failed run over every step and overlay in %s',
     (program) => {
       const router = new WizardRouter(program);
       router.pushOverlay(Overlay.WizardAsk);
-      for (const code of [
-        ErrorCodes.GatewayMintRefused,
-        ErrorCodes.GatewayMintFailed,
-      ]) {
-        const session = baseWizardSession();
-        session.outroDismissed = true;
-        session.outroData = { kind: OutroKind.Error, errorCode: code };
-        expect(router.resolve(session)).toBe(ScreenId.MintFailure);
-      }
+      const session = failedRunSession();
+      session.outroDismissed = true;
+      expect(router.resolve(session)).toBe(ScreenId.MintFailure);
     },
   );
 
-  it('continues a mint failure through the post-run steps, then exits', () => {
+  it('continues a failed run through the post-run steps, then exits', () => {
     const router = new WizardRouter(Program.SelfDriving);
-    const session = baseWizardSession();
-    session.outroData = {
-      kind: OutroKind.Error,
-      errorCode: ErrorCodes.GatewayMintFailed,
-    };
+    const session = failedRunSession();
     session.mintHandoff = 'continue';
     expect(router.resolve(session)).toBe(ScreenId.Mcp);
     session.mcpComplete = true;

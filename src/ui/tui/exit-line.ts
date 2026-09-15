@@ -15,7 +15,7 @@
 
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
-import { isMintFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
+import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
 import { getLogFilePath } from '@utils/debug';
 
@@ -71,7 +71,7 @@ export function getExitLine(store: WizardStore): string {
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
 
-  if (isMintFailure(outro)) {
+  if (isRunFailure(store.session)) {
     const spellbook = store.session.spellbook;
     return [
       'The wizard is unavailable. Setup has not been completed.',

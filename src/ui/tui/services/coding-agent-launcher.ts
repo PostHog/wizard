@@ -30,13 +30,19 @@ async function executable(name: string): Promise<string> {
   );
 }
 
-function launch(command: string, args: string[], cwd: string): Promise<void> {
+function launch(
+  command: string,
+  args: string[],
+  cwd: string,
+  verbatim = false,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       stdio: 'ignore',
       detached: true,
       shell: false,
+      windowsVerbatimArguments: verbatim,
     });
     const timer = setTimeout(() => {
       child.unref();
@@ -78,7 +84,6 @@ export async function openCodingAgent(
       'Opening an agent is not supported on this system. Use the saved skill path to continue.',
     );
   }
-  const terminal = mac ? '/usr/bin/open' : await executable('wt');
   const folder = await mkdtemp(path.join(tmpdir(), 'wizard-handoff-'));
   const script = path.join(
     folder,
@@ -106,18 +111,23 @@ export async function openCodingAgent(
     await writeFile(script, lines.join(mac ? '\n' : '\r\n') + '\n', {
       mode: 0o700,
     });
-    const args = mac
-      ? ['-a', 'Terminal', script]
-      : [
-          'new-tab',
-          '-d',
-          folder,
-          process.env.ComSpec ?? 'cmd.exe',
-          '/d',
-          '/c',
-          path.basename(script),
-        ].map((arg) => arg.replace(/;/g, '\\;'));
-    await launch(terminal, args, mac ? cwd : folder);
+
+    if (mac) {
+      // The system default handler for `.command` files (Terminal unless the
+      // user has changed it).
+      await launch('/usr/bin/open', [script], cwd);
+      return;
+    }
+
+    const shell = process.env.ComSpec ?? 'cmd.exe';
+    // `start` opens the system default terminal application. /s strips the
+    // outer quotes so the inner ones survive intact.
+    await launch(
+      shell,
+      ['/d', '/s', '/c', `"start "" ${shell} /d /c "${script}""`],
+      folder,
+      true,
+    );
   } catch (error) {
     await rm(folder, { recursive: true, force: true });
     throw error;

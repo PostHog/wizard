@@ -8,13 +8,14 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
-import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@lib/errors';
-import { isMintFailure } from '@ui/mint-failure';
+import { isRunFailure } from '@ui/mint-failure';
+import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 
@@ -244,19 +245,30 @@ export function runWizard(
           projectId,
         });
       } else {
-        // A mint failure parks this run forever (requireGatewayAuth) and
-        // shows the mint-failure screen; the wait below races the user's exit.
-        await Promise.race([
-          runAgent(config, activeTui.store.session),
-          activeTui.store.waitUntil((s) => s.mintHandoff !== null),
-        ]);
+        try {
+          await runAgent(config, activeTui.store.session);
+        } catch (error) {
+          // The run threw before its own error handling rendered an outro.
+          // Show the handoff screen and let the user's agent take over.
+          const failure = classifyRunFailure(error);
+          logToFile('[run-wizard] run failed, handing off:', error);
+          runCleanups();
+          analytics.captureException(
+            error instanceof Error ? error : new Error(String(error)),
+            { error_code: failure.code },
+          );
+          getUI().outroError({
+            kind: OutroKind.Error,
+            errorCode: failure.code,
+            message: failure.message,
+          });
+        }
       }
 
-      const mintFailed = (): boolean =>
-        isMintFailure(activeTui.store.session.outroData);
+      const runFailed = isRunFailure(activeTui.store.session);
       await activeTui.store.waitUntil((s) => {
         if (s.mintHandoff === 'exit') return true;
-        if (skipAgent && !mintFailed()) return s.outroDismissed;
+        if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
       });
 
@@ -264,9 +276,9 @@ export function runWizard(
       await activeStream.shutdown(2000);
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
-      if (mintFailed()) await analytics.shutdown('error');
+      if (runFailed) await analytics.shutdown('error');
       activeTui.unmount();
-      process.exit(mintFailed() ? 1 : 0);
+      process.exit(runFailed ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);
