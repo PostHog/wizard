@@ -484,6 +484,10 @@ export const McpScreen = ({
             message="Select the PostHog areas your agent can reach"
             groups={AVAILABLE_FEATURES}
             initialSelected={[]}
+            // Without the noun the button reads "Confirm (31)", which people
+            // take as "31 things are about to happen" rather than the number
+            // of areas they've granted.
+            countNoun="areas"
             onSelect={(features) => {
               void doInstall(selectedClientNames, features);
             }}
