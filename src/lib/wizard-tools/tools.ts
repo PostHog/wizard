@@ -578,16 +578,24 @@ export const CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION =
 
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
+ *
+ * Both sides are canonicalised first: a working directory that is only spelled
+ * differently (a trailing separator, a relative path) is the same directory,
+ * and a raw string comparison rejects an ordinary `.env` as traversal.
  */
 export function resolveEnvPath(
   workingDirectory: string,
   filePath: string,
 ): string {
-  const resolved = path.resolve(workingDirectory, filePath);
-  if (
-    !resolved.startsWith(workingDirectory + path.sep) &&
-    resolved !== workingDirectory
-  ) {
+  const root = path.resolve(workingDirectory);
+  const resolved = path.resolve(root, filePath);
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+    // Without this the refusal is invisible: no event carries the tool error.
+    analytics.wizardCapture('env path traversal rejected', {
+      file_name: path.basename(filePath),
+      requested_is_absolute: path.isAbsolute(filePath),
+      platform: process.platform,
+    });
     throw new Error(
       `Path traversal rejected: "${filePath}" resolves outside working directory`,
     );

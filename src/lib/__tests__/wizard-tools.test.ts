@@ -86,6 +86,21 @@ describe('resolveEnvPath', () => {
       'Path traversal rejected',
     );
   });
+
+  it('accepts a non-canonical working directory', () => {
+    expect(resolveEnvPath(`/project${path.sep}`, '.env')).toBe(
+      path.resolve('/project', '.env'),
+    );
+    expect(resolveEnvPath('/project/./app', '.env')).toBe(
+      path.resolve('/project/app', '.env'),
+    );
+    expect(resolveEnvPath('project', '.env')).toBe(
+      path.resolve('project', '.env'),
+    );
+    expect(() => resolveEnvPath(`/project${path.sep}`, '../.env')).toThrow(
+      'Path traversal rejected',
+    );
+  });
 });
 
 describe('parseEnvKeys', () => {
