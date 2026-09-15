@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { ApiError, fetchSlackConnected } from '@lib/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
@@ -155,17 +155,29 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // Capture once and stop polling — repeating a failing call
-          // every tick would spam error tracking. The nudge copy is
-          // the fallback either way; a failed check counts as not
-          // connected so the screen doesn't sit on the loading state.
+          // Stop polling — repeating a failing call every tick would spam
+          // error tracking. The nudge copy is the fallback either way; a
+          // failed check counts as not connected so the screen doesn't sit
+          // on the loading state.
           if (store.session.slackConnected === null) {
             store.setSlackConnected(false);
           }
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'slack_connected_check' },
-          );
+          // An expired/invalid token (401) or a missing `integration:read`
+          // scope (403) is an expected degradation here, not a bug — record
+          // it as a benign analytics event so it doesn't create error
+          // tracking noise. Anything else is a real exception worth capturing.
+          const status = err instanceof ApiError ? err.statusCode : undefined;
+          if (status === 401 || status === 403) {
+            analytics.wizardCapture('slack connect check unauthorized', {
+              role,
+              status,
+            });
+          } else {
+            analytics.captureException(
+              err instanceof Error ? err : new Error(String(err)),
+              { step: 'slack_connected_check' },
+            );
+          }
         });
     };
     check();
