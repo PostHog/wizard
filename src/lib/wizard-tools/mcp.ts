@@ -49,6 +49,7 @@ import {
   mergeEnvValues,
   normaliseAskSubject,
   readLedger,
+  resolveAskQuestionKinds,
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
@@ -57,6 +58,7 @@ import {
   writeLedgerAtomic,
   type SkillEntry,
   AUDIT_STATUSES,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -609,9 +611,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     prompt: z.string().min(1).describe('Question text shown to the user'),
     kind: z
       .enum(['single', 'multi', 'text'])
-      .describe(
-        "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
-      ),
+      .optional()
+      .describe(WIZARD_ASK_KIND_DESCRIPTION),
     options: z
       .array(
         z.object({
@@ -647,7 +648,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       questions: Array<{
         id: string;
         prompt: string;
-        kind: 'single' | 'multi' | 'text';
+        kind?: 'single' | 'multi' | 'text';
         options?: { label: string; value: string }[];
         required?: boolean;
         sensitive?: boolean;
@@ -685,9 +686,13 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
+      // A question with no kind takes the one its options imply, so the
+      // overlay always has an input to render. See resolveAskQuestionKinds.
+      const questions = resolveAskQuestionKinds(args.questions);
+
       // Validate that single/multi questions include options. The schema
       // alone can't enforce a per-kind requirement.
-      for (const q of args.questions) {
+      for (const q of questions) {
         if (
           (q.kind === 'single' || q.kind === 'multi') &&
           (!q.options || q.options.length === 0)
@@ -716,7 +721,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }
 
       const ids = new Set<string>();
-      for (const q of args.questions) {
+      for (const q of questions) {
         if (ids.has(q.id)) {
           return {
             content: [
@@ -735,7 +740,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       try {
         const answers = await askBridge.request({
-          questions: args.questions,
+          questions,
           subject: normaliseAskSubject(args.subject),
         });
 
@@ -750,7 +755,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
         // Sensitive answers go to the vault; the agent sees an opaque ref.
         const sanitised = vaultSensitiveAnswers(
-          args.questions,
+          questions,
           answers,
           secretVault,
         );

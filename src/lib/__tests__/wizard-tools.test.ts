@@ -7,6 +7,7 @@ import {
   ASK_BATCH_THRESHOLD,
   ASK_SUBJECT_UNSPECIFIED,
   DEFAULT_ASK_MAX_QUESTIONS,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
   WIZARD_TOOL_NAMES,
@@ -21,6 +22,7 @@ import {
   mergeEnvValues,
   normaliseAskSubject,
   parseEnvKeys,
+  resolveAskQuestionKinds,
   resolveEnvPath,
   templateEnvWriteRefusal,
 } from '@lib/wizard-tools';
@@ -911,6 +913,47 @@ describe('createAskAccounting', () => {
   });
 });
 
+describe('resolveAskQuestionKinds', () => {
+  it('reads a kind-less question as free text, which is what a credential is', () => {
+    expect(
+      resolveAskQuestionKinds([
+        { id: 'password', prompt: 'Database password', sensitive: true },
+      ]),
+    ).toEqual([
+      {
+        id: 'password',
+        prompt: 'Database password',
+        sensitive: true,
+        kind: 'text',
+      },
+    ]);
+  });
+
+  it('reads a kind-less question that carries options as a picker', () => {
+    const [question] = resolveAskQuestionKinds([
+      {
+        id: 'auth',
+        prompt: 'How?',
+        options: [{ label: 'OAuth', value: 'oauth' }],
+      },
+    ]);
+    expect(question.kind).toBe('single');
+  });
+
+  it('leaves a declared kind alone, including multi', () => {
+    const questions = resolveAskQuestionKinds([
+      {
+        id: 'tables',
+        prompt: 'Which tables?',
+        kind: 'multi' as const,
+        options: [],
+      },
+      { id: 'host', prompt: 'Host', kind: 'text' as const },
+    ]);
+    expect(questions.map((q) => q.kind)).toEqual(['multi', 'text']);
+  });
+});
+
 describe('wizard_ask shared descriptions', () => {
   it('tells the agent that walking a list is expected, not capped', () => {
     expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/`subject`/);
@@ -922,6 +965,11 @@ describe('wizard_ask shared descriptions', () => {
     expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(
       /cancelled or timed-out response does NOT count/,
     );
+  });
+
+  it('names the kind that an omitted `kind` falls back to', () => {
+    expect(WIZARD_ASK_KIND_DESCRIPTION).toMatch(/Optional/);
+    expect(WIZARD_ASK_KIND_DESCRIPTION).toMatch(/'text' when you do not/);
   });
 
   it('explains what a subject is and what omitting it costs', () => {

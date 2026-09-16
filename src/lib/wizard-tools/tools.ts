@@ -335,6 +335,40 @@ export function normaliseAskSubject(subject?: string): string {
   return trimmed.slice(0, ASK_SUBJECT_MAX_LENGTH);
 }
 
+/** The question kinds the ask overlay can render. */
+export type AskQuestionKind = 'single' | 'multi' | 'text';
+
+/**
+ * The `wizard_ask` `kind` field description, shared by both harness facades so
+ * the inferred default cannot drift between them.
+ */
+export const WIZARD_ASK_KIND_DESCRIPTION =
+  "'single' = pick one option, 'multi' = pick any, 'text' = free-form " +
+  'single-line answer. Optional: omit it and the kind follows the question — ' +
+  "'single' when you pass options, 'text' when you do not, which is what a " +
+  'credential question wants.';
+
+/**
+ * Fill in the `kind` of every question that arrived without one.
+ *
+ * The field was declared required and nothing could enforce it: pi hands tool
+ * arguments over unvalidated. So a question with no kind either lost the whole
+ * call — a credential question also carries `sensitive: true`, which is legal
+ * only on `text`, so the per-kind check refused it and no question reached the
+ * user — or sailed through to the overlay, which renders an input for the kinds
+ * it knows and nothing at all for one it does not, leaving a prompt the user can
+ * only dismiss. Both cost the step the very answer it stopped to collect, and
+ * `options` already says which kind was meant.
+ */
+export function resolveAskQuestionKinds<
+  Q extends { kind?: AskQuestionKind; options?: readonly unknown[] },
+>(questions: readonly Q[]): (Q & { kind: AskQuestionKind })[] {
+  return questions.map((q) => ({
+    ...q,
+    kind: q.kind ?? (q.options && q.options.length > 0 ? 'single' : 'text'),
+  }));
+}
+
 /**
  * The `wizard_ask` `sensitive` field description, shared by both harness facades
  * (the zod schema in `./mcp` and the typebox mirror in `harness/pi/tools.ts`) so

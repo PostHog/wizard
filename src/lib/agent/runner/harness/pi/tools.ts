@@ -31,11 +31,13 @@ import {
   installSkillById,
   mergeEnvValues,
   normaliseAskSubject,
+  resolveAskQuestionKinds,
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
   legacyKeyNameRefusal,
   vaultSensitiveAnswers,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -288,16 +290,15 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           prompt: Type.String({
             description: 'Question text shown to the user',
           }),
-          kind: Type.Union(
-            [
-              Type.Literal('single'),
-              Type.Literal('multi'),
-              Type.Literal('text'),
-            ],
-            {
-              description:
-                "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
-            },
+          kind: Type.Optional(
+            Type.Union(
+              [
+                Type.Literal('single'),
+                Type.Literal('multi'),
+                Type.Literal('text'),
+              ],
+              { description: WIZARD_ASK_KIND_DESCRIPTION },
+            ),
           ),
           options: Type.Optional(
             Type.Array(
@@ -350,9 +351,13 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         return text(cap.message);
       }
 
+      // A question with no kind takes the one its options imply, so the
+      // overlay always has an input to render. See resolveAskQuestionKinds.
+      const questions = resolveAskQuestionKinds(args.questions);
+
       // The schema can't enforce per-kind requirements or unique ids.
       const ids = new Set<string>();
-      for (const q of args.questions) {
+      for (const q of questions) {
         if ((q.kind === 'single' || q.kind === 'multi') && !q.options?.length) {
           return text(
             `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
@@ -379,14 +384,14 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       onAskPendingChange?.(true);
       try {
         const answers = await askBridge.request({
-          questions: args.questions,
+          questions,
           subject: normaliseAskSubject(args.subject),
         });
         if (isFullyCancelled(answers)) askAccounting.refund(args.subject);
         // Sensitive answers go to the vault; the agent sees an opaque ref
         // (same contract as the MCP wizard_ask).
         const sanitised = vaultSensitiveAnswers(
-          args.questions,
+          questions,
           answers,
           secretVault,
         );
