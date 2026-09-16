@@ -195,13 +195,18 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       duration_seconds: Math.round(durationMs / 1000),
     };
   };
-  // `reason` is the closed AgentErrorType this run is about to return. Without
-  // it every terminal path below — a security termination, a rate limit, a
-  // gateway error — arrived as the same unlabelled event, so a task agent that
-  // died could be counted but not diagnosed.
-  const captureAborted = (reason: AgentErrorType) =>
+  // How this task run failed: the closed AgentErrorType it is about to return.
+  // Without it every terminal path below — a security termination, a rate
+  // limit, a gateway error — arrived as the same unlabelled event, so a task
+  // agent that died could be counted but not diagnosed. A security stop is not
+  // an error, hence "failure mode" over "error".
+  //
+  // Not `reason`: the linear sequence emits this same event with a `reason`
+  // holding the agent's free-text [ABORT] string, and one property cannot be
+  // both a closed enum and unbounded prose without making either unreadable.
+  const captureAborted = (failureMode: AgentErrorType) =>
     analytics.wizardCapture('agent aborted', {
-      reason,
+      failure_mode: failureMode,
       ...runDurations(),
       model: modelId,
       ...analyticsProperties,
