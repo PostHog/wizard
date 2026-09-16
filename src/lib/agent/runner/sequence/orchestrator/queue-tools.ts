@@ -48,6 +48,22 @@ export const ENQUEUE_MODEL_DESCRIPTION = `Optional model override for this task.
   ...VALID_MODELS,
 ].join(', ')}.`;
 
+/**
+ * The `complete_task` tool description, shared by both harnesses' schemas so
+ * the outcome contract cannot drift — the same discipline {@link HANDOFF_FIELDS}
+ * applies to the fields inside the handoff.
+ *
+ * The closing sentence names the nesting because agents kept learning it from a
+ * rejection instead: a first call with `goals`/`did`/`forNextAgent` at the top
+ * level fails schema validation, and reading that error back was the only place
+ * the shape was stated. Naming it where the agent fills the call in costs
+ * nothing, the same reasoning as {@link ENQUEUE_MODEL_DESCRIPTION}.
+ */
+export const COMPLETE_TASK_DESCRIPTION =
+  'Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. ' +
+  "Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'. " +
+  'The handoff is one nested object: put `goals`, `did` and `forNextAgent` — all three required — inside `handoff`, along with any optional fields, never at the top level.';
+
 /** The per-task remark ask, shared by both harnesses' complete_task schemas. */
 export const REMARK_ASK =
   'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
@@ -512,7 +528,7 @@ export function buildOrchestratorTools(
 
   const completeTask = tool(
     'complete_task',
-    "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
+    COMPLETE_TASK_DESCRIPTION,
     COMPLETE_SHAPE,
     ((args: CompleteArgs) => {
       const res = applyComplete(ctx, args);
