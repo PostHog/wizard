@@ -129,7 +129,7 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
         `Analyzed your JavaScript project structure`,
         `Installed the posthog-js package using ${packageManagerName}`,
         `Created PostHog initialization code`,
-        `Configured autocapture, error tracking, and event capture`,
+        `Configured autocapture and event capture`,
       ];
     },
     getOutroNextSteps: () => [
