@@ -246,7 +246,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // it (onAskPendingChange, below); the security fence reads it to pause
     // Write/Edit until the answer comes back. Wired the same way as the linear
     // pi run — without it the warehouse task could mutate files while its
-    // credential prompt sits open (up to TASK_ASK_TIMEOUT_MS).
+    // credential prompt sits open (up to LONGER_ASK_TIMEOUT_MS).
     const askState = { pending: false };
 
     // The same fail-closed fence as the linear run, with the task's disallow

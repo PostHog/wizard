@@ -20,7 +20,7 @@ vi.mock('@utils/analytics', () => ({
 
 import { warehouseSourceConfig } from '@lib/programs/warehouse-source/index';
 import {
-  CREDENTIAL_ASK_TIMEOUT_MS,
+  LONGER_ASK_TIMEOUT_MS,
   DEFAULT_ASK_TIMEOUT_MS,
 } from '@lib/wizard-ask-bridge';
 
@@ -33,7 +33,7 @@ describe('warehouse command ask timeout', () => {
     const { run } = warehouseSourceConfig;
     const resolved = typeof run === 'function' ? await run(session()) : run;
 
-    expect(resolved?.askTimeoutMs).toBe(CREDENTIAL_ASK_TIMEOUT_MS);
+    expect(resolved?.askTimeoutMs).toBe(LONGER_ASK_TIMEOUT_MS);
     expect(resolved?.askTimeoutMs).toBeGreaterThan(DEFAULT_ASK_TIMEOUT_MS);
   });
 });

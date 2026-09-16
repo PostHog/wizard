@@ -1,7 +1,7 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
-import { CREDENTIAL_ASK_TIMEOUT_MS } from '@lib/wizard-ask-bridge';
+import { LONGER_ASK_TIMEOUT_MS } from '@lib/wizard-ask-bridge';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import {
   WAREHOUSE_ABORT_CASES,
@@ -65,7 +65,7 @@ export const warehouseSourceConfig: ProgramConfig = {
       // same allowance. On the 5-minute default a user who went to fetch a
       // database password came back to a cancelled prompt and the browser
       // fallback — in the command the outro sends declines to.
-      askTimeoutMs: CREDENTIAL_ASK_TIMEOUT_MS,
+      askTimeoutMs: LONGER_ASK_TIMEOUT_MS,
       abortCases: WAREHOUSE_ABORT_CASES,
     }),
   requires: ['posthog-integration'],
