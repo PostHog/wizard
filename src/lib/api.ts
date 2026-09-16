@@ -235,58 +235,60 @@ const IntegrationsResponseSchema = z.object({
 });
 
 /**
- * Check whether the project already has a Slack integration connected.
- * Requires the `integration:read` scope. Throws on failure — callers
- * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
+ * Check whether the project already has an integration of `kind` connected.
+ * Requires the `integration:read` scope. Throws an `ApiError` on failure —
+ * the connect-screen polls decide how to degrade and are responsible for
+ * capturing the error exactly once. The status matters to them: the
+ * Self-driving GitHub gate reads a 401 as an expired login, not as an
+ * integration that is missing.
  */
-export async function fetchSlackConnected(
+async function fetchIntegrationConnected(
+  kind: string,
   accessToken: string,
   projectId: number,
   baseUrl: string,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  const response = await axios.get(
-    `${baseUrl}/api/projects/${projectId}/integrations/`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
+  try {
+    const response = await axios.get(
+      `${baseUrl}/api/projects/${projectId}/integrations/`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        signal,
+        // Bound the request so one stalled socket can't wedge the poll. The
+        // Self-driving GitHub gate can't be skipped, so a hang here would
+        // strand the user the same way a rejected token does. A timeout raises
+        // ECONNABORTED with no response, which the poll reads as a non-auth
+        // blip and retries.
+        timeout: 10_000,
       },
-      signal,
-    },
-  );
-  const parsed = IntegrationsResponseSchema.safeParse(response.data);
-  if (!parsed.success) return false;
-  return parsed.data.results.some((i) => i.kind === 'slack');
+    );
+    const parsed = IntegrationsResponseSchema.safeParse(response.data);
+    if (!parsed.success) return false;
+    return parsed.data.results.some((i) => i.kind === kind);
+  } catch (error) {
+    throw handleApiError(error, `check the ${kind} connection`);
+  }
 }
 
-/**
- * Check whether the project already has a GitHub App integration connected.
- * Requires the `integration:read` scope. Throws on failure — callers (the
- * SelfDrivingGitHubScreen poll) decide how to degrade and are responsible for
- * capturing the error exactly once.
- */
-export async function fetchGithubConnected(
+export const fetchSlackConnected = (
   accessToken: string,
   projectId: number,
   baseUrl: string,
   signal?: AbortSignal,
-): Promise<boolean> {
-  const response = await axios.get(
-    `${baseUrl}/api/projects/${projectId}/integrations/`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-      signal,
-    },
-  );
-  const parsed = IntegrationsResponseSchema.safeParse(response.data);
-  if (!parsed.success) return false;
-  return parsed.data.results.some((i) => i.kind === 'github');
-}
+): Promise<boolean> =>
+  fetchIntegrationConnected('slack', accessToken, projectId, baseUrl, signal);
+
+export const fetchGithubConnected = (
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<boolean> =>
+  fetchIntegrationConnected('github', accessToken, projectId, baseUrl, signal);
 
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
