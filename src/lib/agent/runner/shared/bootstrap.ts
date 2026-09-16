@@ -307,13 +307,12 @@ export async function bootstrapProgram(
   // set them — so downstream readers get a non-null type without asserting.
   const credentials = session.credentials!;
 
-  // Resolve the gateway posture once for the boot: v2 scoped token when the
-  // backend mints, legacy OAuth otherwise.
-  const auth = await gatewayAuth(
-    credentials.host,
-    credentials.accessToken,
-    programConfig.id,
-  );
+  // Mint now so a refusal fails the boot before any agent starts. Later
+  // readers re-resolve through the cache, which re-mints past the refresh
+  // point.
+  const currentGatewayAuth = () =>
+    gatewayAuth(credentials.host, credentials.accessToken, programConfig.id);
+  await currentGatewayAuth();
 
   return {
     skillsBaseUrl,
@@ -328,15 +327,17 @@ export async function bootstrapProgram(
     // Resolved once, here: the only place holding both the switchboard inputs
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(
-      {
-        baseURL: auth.gatewayUrl,
-        authToken: auth.token,
-        edition: auth.edition,
-        teamId: auth.teamId,
-        // `call_type` splits scan spend out of the program's agent cost —
-        // same tag the in-run triage provider carries.
-        wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
-        wizardFlags,
+      async () => {
+        const auth = await currentGatewayAuth();
+        return {
+          baseURL: auth.gatewayUrl,
+          authToken: auth.token,
+          teamId: auth.teamId,
+          // `call_type` splits scan spend out of the program's agent cost,
+          // the same tag the in-run triage provider carries.
+          wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
+          wizardFlags,
+        };
       },
       resolveHarness({
         program: programConfig.id,

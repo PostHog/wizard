@@ -1,151 +1,105 @@
-# TUI Architecture: Reactive Flow, State, and Screen Management
+# Screen flow, state, and interactions
 
-## Core principle
+## Ownership
 
-The rendered screen is a pure function of session state. Nobody imperatively pushes screens around. Business logic sets state through store setters, the router derives which screen should be active.
+| Surface                                                           | Owns                                                                          |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [WizardSession](../../../../src/lib/wizard-session.ts)            | Run configuration, decisions, credentials, and lifecycle state                |
+| [ProgramStep](../../../../src/lib/programs/program-step.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
+| [screen-sequences.ts](../../../../src/ui/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
+| [WizardRouter](../../../../src/ui/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
+| [WizardStore](../../../../src/ui/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
+| [WizardUI](../../../../src/ui/wizard-ui.ts)                       | Typed operations available to business logic                                  |
 
-## Session
+## Program screens
 
-**Source of truth:** `src/lib/wizard-session.ts` — read the `WizardSession` interface for current fields.
+`createProgramSequence` projects program steps with a `screenId` into `Screen`
+entries: `id`, `show`, and `isComplete`. Completion defaults to the step's
+`gate` when no separate `isComplete` is provided. Steps without a screen are
+omitted, and the exit screen is appended. The projection applies
+[withAiOptInGate](../../../../src/lib/programs/ai-opt-in-gate.ts) consistently
+with store gate creation.
 
-`WizardSession` is the single source of truth for every decision the wizard needs: CLI args, detection results, OAuth credentials, lifecycle phase, and runtime display data.
+`WizardRouter.resolve(session)` first checks the overlay stack, then returns the
+first visible, incomplete screen. It also handles the failed-authentication
+outro case. Follow this method and the
+[router tests](../../../../src/ui/tui/__tests__/router.test.ts) for exact
+behavior; there is no program cursor or `next()` API.
 
-`buildSession(args)` creates a session from CLI args. Pre-TUI fields (`installDir`, `integration`, `frameworkConfig`) can be set directly. Reactive fields that affect screen resolution must go through store setters.
+The screen sequence is a presentation projection of the program. It is distinct
+from the agent execution sequence selected by the runner; see
+[wizard-development](../../wizard-development/SKILL.md) for that policy.
 
-Key enums (defined in `wizard-session.ts`):
-- `RunPhase` — lifecycle phase (Idle → Running → Completed | Error)
-- `OutroKind` — outro outcome (Success, Error, Cancel)
+## Gates and initialization
 
-## Router
+Read `ProgramStep` before adding asynchronous work:
 
-**Source of truth:** `src/ui/tui/router.ts` — read the flow arrays for current screen predicates.
+- `gate` supplies a blocking checkpoint, while `isComplete` determines when its
+  screen is finished. Separate them when those conditions differ.
+- `onInit` runs when the TUI starts rendering, before the real session is
+  assigned. Reserve it for work independent of that session.
+- `onReady` runs after the real session is assigned and is awaited in order.
 
-### Screen resolution
+[The store](../../../../src/ui/tui/store.ts) derives gate promises from the
+program. `getGate(stepId)` resolves once: a predicate becoming false later does
+not close it again. A missing gate returns a resolved promise.
+`waitUntil(predicate)` evaluates live state at the await point; use that
+distinction when a decision can change after startup.
 
-The `WizardRouter` has a `resolve(session)` method that walks the flow pipeline and returns the first incomplete screen:
+[startTUI](../../../../src/ui/tui/start-tui.ts) invokes `runInitHooks` after
+rendering starts. Merely constructing a store for a test or playground does not
+start those effects.
 
-```ts
-resolve(session: WizardSession): ScreenName {
-  if (overlays.length > 0) return top overlay;
-  for (entry of flow) {
-    if (entry.show && !entry.show(session)) continue;  // skip hidden
-    if (entry.isComplete && entry.isComplete(session)) continue;  // skip complete
-    return entry.screen;  // first incomplete = active
-  }
-  return last screen;  // all complete
-}
-```
+## Reactive mutations
 
-There is no cursor. No `advance()`. No `jumpTo()`. The screen is resolved fresh every render.
+The session is a nanostores map. Store setters update it and call
+`emitChange()`, which increments the React snapshot version, checks gates, and
+detects screen transitions. Consumers subscribe through
+`subscribe`/`getSnapshot` and `useSyncExternalStore`.
 
-### Flow definitions
+Display observations such as status messages, tasks, and event plans have
+separate store atoms. Reuse the existing setters (`pushStatus`, `syncTodos`,
+`setEventPlan`) for those updates. Do not mutate session fields behind the store
+after attaching the session.
 
-Flows are declarative arrays of `FlowEntry`:
+[InkUI](../../../../src/ui/tui/ink-ui.ts) translates `getUI()` calls into store
+operations. Business logic should use this interface rather than import the
+store; screens can use the store directly.
 
-```ts
-interface FlowEntry {
-  screen: Screen;
-  show?: (session: WizardSession) => boolean;      // skip if false
-  isComplete?: (session: WizardSession) => boolean; // resolved if true
-}
-```
+## Interaction requests and overlays
 
-See `router.ts` for the current wizard flow pipeline and `isComplete` predicates per screen.
+Screens own input handling, while `WizardUI` exposes typed interaction requests.
+`requestQuestion` opens the `WizardAsk` overlay and resolves with answers;
+`showTaskNotice` opens an optional-task notice and resolves with the decision.
+Their cancellation methods settle pending requests and dismiss the corresponding
+overlay. Use the established methods rather than pushing a question overlay
+without its pending state or promise.
 
-### Enums
+Read [WizardAskScreen](../../../../src/ui/tui/screens/WizardAskScreen.tsx),
+[TaskNoticeScreen](../../../../src/ui/tui/screens/TaskNoticeScreen.tsx), and the
+matching store methods before changing their lifecycle.
+[LoggingUI](../../../../src/ui/logging-ui.ts) rejects question requests,
+declines optional task notices, and leaves the manual-auth-code promise pending;
+it cannot collect terminal input.
 
-See `router.ts` for current values:
-- `Screen` — flow screen names
-- `Overlay` — interrupt screen names
-- `Flow` — named flow pipelines
+`Overlay` lives in the router; `ScreenName` is `ScreenId | Overlay`. Store
+`pushOverlay`/`popOverlay` wrappers notify subscribers and preserve transition
+direction. Their use for interrupts is separate from program progression. Choose
+actual overlay values from the enum; health checks are program screens.
 
-### Overlays
+## Components and services
 
-Overlays are interrupts — they push on top of the flow and pop to resume:
+[App](../../../../src/ui/tui/App.tsx) creates the service bundle and screen
+registry, then renders
+[ScreenContainer](../../../../src/ui/tui/primitives/ScreenContainer.tsx). The
+registry injects services where needed, such as the
+[MCP installer](../../../../src/ui/tui/services/mcp-installer.ts). Prefer this
+boundary when a screen needs external operations rather than coupling a new
+component to step internals.
 
-```ts
-store.pushOverlay(Overlay.Outage);  // outage screen appears
-store.popOverlay();                  // flow screen resumes
-```
-
-Overlays don't affect the flow. They're orthogonal.
-
-### Adding a screen
-
-1. Add to `Screen` enum in `router.ts`
-2. Add a `FlowEntry` to the flow array with an `isComplete` predicate
-3. Create the component in `screens/`
-4. Register in `screen-registry.tsx`
-
-No other files change.
-
-## Store
-
-**Source of truth:** `src/ui/tui/store.ts` — read the class for current setters, atoms, and accessors.
-
-`WizardStore` uses nanostores atoms internally and exposes `subscribe()`/`getSnapshot()` for React's `useSyncExternalStore`.
-
-### Pattern: session setters
-
-Every session mutation that affects screen resolution goes through an explicit setter. Each setter mutates the field and calls `emitChange()`, which bumps a version counter and triggers React re-renders. On the next render, `store.currentScreen` calls `router.resolve(session)`.
-
-Read the "Session setters" section of `store.ts` for the current list.
-
-### Pattern: observation state
-
-Agent-produced data (not part of session flow) is stored in separate atoms on the store:
-
-- `$statusMessages` / `pushStatus()` — agent log lines
-- `$tasks` / `syncTodos()`, `setTasks()` — agent task progress
-- `$eventPlan` / `setEventPlan()` — planned analytics events from `.posthog-events.json`
-
-These follow the same pattern: private atom → public getter → public setter that calls `emitChange()`.
-
-## WizardUI interface
-
-**Source of truth:** `src/ui/wizard-ui.ts` — read the interface for current methods.
-
-The bridge between business logic and the store. Business logic calls `getUI()` methods, which translate to store setters in the TUI implementation (`InkUI` in `src/ui/tui/ink-ui.ts`).
-
-Two categories of methods:
-- **Session-mutating** — trigger screen resolution (e.g., `startRun()`, `setCredentials()`, `outro()`)
-- **Observation** — display-only updates (e.g., `pushStatus()`, `syncTodos()`, `setEventPlan()`)
-
-There are NO prompt methods. The TUI screens own all user input.
-
-Both `InkUI` (TUI) and `LoggingUI` (`src/ui/logging-ui.ts`, CI mode) implement this interface.
-
-## Screen registry
-
-**Source of truth:** `src/ui/tui/screen-registry.tsx`
-
-Maps screen names to React components. App.tsx calls the factory. Adding a screen to the registry requires no changes to App.tsx.
-
-## Services
-
-**Source of truth:** `src/ui/tui/services/`
-
-Screens receive services via props instead of importing business logic. Services are created in the registry and injected into screens. Testable, swappable, no dynamic imports in React components.
-
-## Error boundaries
-
-`ScreenContainer` wraps every screen in a `ScreenErrorBoundary`. On crash:
-1. Sets `outroData` with error message
-2. Sets `runPhase = Error`
-3. Router resolves to Outro
-
-See `src/ui/tui/primitives/ScreenErrorBoundary.tsx`.
-
-## Dark mode
-
-`start-tui.ts` forces a black terminal background via ANSI escape codes on startup and resets on exit.
-
-## Data flow summary
-
-```
-Business logic         →  getUI().setX()
-  → InkUI              →  store.setX()
-    → Store             →  atom.set(value); emitChange()
-      → React re-render →  store.currentScreen → router.resolve(session)
-        → Router        →  walks flow, returns first incomplete screen
-```
+`ScreenContainer` owns transitions, shared keyboard hints, viewport handling,
+and
+[ScreenErrorBoundary](../../../../src/ui/tui/primitives/ScreenErrorBoundary.tsx).
+The boundary records an error outro and run phase on render failure. When
+changing completion predicates, verify that failure and dismissal remain
+reachable; the boundary does not replace those predicates.

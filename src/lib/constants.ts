@@ -5,32 +5,27 @@
 import { VERSION } from './version';
 
 // ── Models ──────────────────────────────────────────────────────────
-
-/**
- * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
- * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
- */
-export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
+// Coordinate IDs/efforts with the mint allowlists and gateway transport/required prompt policy; see agent/runner/README.md.
 
 /** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
 
 /**
- * Cheaper, faster model for mechanical agent work (e.g. repo classification
- * during source-map detection). Passed via AgentConfig.modelOverride.
+ * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
+ * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
  */
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const DEFAULT_AGENT_MODEL = SONNET_5_MODEL;
 
-/** Undated haiku, for scan triage — the alias tracks the current 4.5 release rather than pinning one. */
+/** Undated haiku, for scan triage. The alias tracks the current 4.5 release rather than pinning one. */
 export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
 
 /**
- * Larger model for planning / hard work. Named the switchboard could route to
- * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ * Cheaper, faster model for mechanical agent work (e.g. repo classification
+ * during source-map detection). Passed via AgentConfig.modelOverride.
  */
-export const OPUS_MODEL = 'claude-opus-4-8';
+export const HAIKU_MODEL = HAIKU_TRIAGE_MODEL;
 
-// The only openai models the wizard runs.
+// Locally supported OpenAI models; constants alone do not authorize gateway use.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
 export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
 export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
@@ -307,13 +302,6 @@ export function wizardUserAgentForProgram(programId?: string): string {
     ? `${WIZARD_USER_AGENT}; program: ${programId}`
     : WIZARD_USER_AGENT;
 }
-
-// ── HTTP headers ─────────────────────────────────────────────────────
-
-/** Header prefix for PostHog properties (e.g. X-POSTHOG-PROPERTY-VARIANT). */
-export const POSTHOG_PROPERTY_HEADER_PREFIX = 'X-POSTHOG-PROPERTY-';
-/** Header prefix for PostHog feature flags. */
-export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 
 // ── Timeouts ─────────────────────────────────────────────────────────
 

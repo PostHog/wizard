@@ -22,7 +22,7 @@ import type { SettingsConflict } from '@lib/agent/claude-settings';
 const ALL_PATHS_ENV: NodeJS.ProcessEnv = {
   // — gateway routing the wizard pins (STRIPPED from the inherited env and
   //   re-injected fresh at the spawn site, so a user shell value can't leak in) —
-  ANTHROPIC_BASE_URL: 'https://gateway.us.posthog.com/wizard',
+  ANTHROPIC_BASE_URL: 'https://ai-gateway.us.posthog.com',
   ANTHROPIC_AUTH_TOKEN: 'phx_gateway',
   CLAUDE_CODE_OAUTH_TOKEN: 'phx_gateway',
   ANTHROPIC_CUSTOM_HEADERS: 'x-posthog-use-bedrock-fallback=true',

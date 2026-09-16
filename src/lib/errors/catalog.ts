@@ -232,6 +232,19 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description: 'The orchestrator plan failed the sink coverage invariant.',
   },
+  [ErrorCodes.GatewayMintRefused]: {
+    group: 'gateway',
+    // 429 clears with the daily window, 401 with a fresh login, 403 never.
+    retry: 'case-by-case',
+    description:
+      'The PostHog backend refused to mint a gateway token for this run.',
+  },
+  [ErrorCodes.GatewayMintFailed]: {
+    group: 'gateway',
+    retry: 'yes',
+    description:
+      'The PostHog backend could not mint a gateway token: unreachable, a 5xx, or an unusable response.',
+  },
   [ErrorCodes.SettingsUnfixableConflict]: {
     group: 'settings',
     retry: 'no',

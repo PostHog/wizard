@@ -89,22 +89,6 @@ export async function detectRegion(
   );
 }
 
-export const getLlmGatewayUrl = (host: string) => {
-  if (host.includes('host.docker.internal')) {
-    return 'http://host.docker.internal:3308/wizard';
-  }
-
-  if (host.includes('localhost')) {
-    return 'http://localhost:3308/wizard';
-  }
-
-  if (host.includes('eu.posthog.com') || host.includes('eu.i.posthog.com')) {
-    return 'https://gateway.eu.posthog.com/wizard';
-  }
-
-  return 'https://gateway.us.posthog.com/wizard';
-};
-
 /** Region-agnostic prod OAuth server. Resolves to the right region server-side. */
 const PROD_OAUTH_URL = 'https://oauth.posthog.com';
 

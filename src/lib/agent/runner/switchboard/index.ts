@@ -1,11 +1,4 @@
-/**
- * The switchboard — where a program's `(sequence, harness, model)` binding is
- * resolved. Two independent middleware chains, one per axis: CLI wins over
- * PostHog flag wins over per-program binding wins over `DEFAULT_BINDING`.
- *
- * Layout: `index.ts` (shared machinery + composer), `harness.ts`, `sequence.ts`.
- * Model ids are gateway strings — add new ones as constants in `@lib/constants`.
- */
+// Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
 import {
   DEFAULT_AGENT_MODEL,
@@ -109,11 +102,12 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-/** Default binding. Every program points here until it overrides. */
+// Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
 export const DEFAULT_BINDING: ProgramBinding = {
   sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: DEFAULT_AGENT_MODEL,
+  harness: Harness.pi,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
 };
 
 /**
@@ -152,6 +146,14 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'replay-vision': {
     sequence: Sequence.orchestrator,
     harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
+  // Orchestrator on pi, like metrics. The binding routes only; every stage's
+  // model and effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
+  'error-tracking': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
     model: DEFAULT_AGENT_MODEL,
   },
   'ai-observability': {

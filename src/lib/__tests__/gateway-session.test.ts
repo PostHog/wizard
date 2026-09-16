@@ -3,16 +3,27 @@ import {
   GatewayMintFailed,
   GatewayMintRefused,
   buildWizardPropertiesBlob,
+  configureGatewayCredentialsForCI,
+  configureGatewayFromCIEnvironment,
   gatewayAuth,
+  isPastRefresh,
   isTrustedGatewayUrl,
   resetGatewaySession,
 } from '@lib/gateway-session';
 import type { HostResolution } from '@lib/host-resolution';
+import { ErrorCodes } from '@lib/errors';
+import { WizardError } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+
+vi.mock('@lib/health-checks/endpoints', () => ({
+  checkLlmGatewayHealth: vi.fn(),
+}));
 
 vi.mock('@utils/analytics', () => ({
-  analytics: { setTag: vi.fn(), captureException: vi.fn() },
+  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
 }));
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
@@ -34,10 +45,7 @@ const renderArg = (a: unknown): string => {
 const loggedLines = () =>
   vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
-const host = {
-  apiHost: 'https://us.posthog.com',
-  gatewayUrl: 'https://gateway.us.posthog.com/wizard',
-} as unknown as HostResolution;
+const host = { apiHost: 'https://us.posthog.com' } as unknown as HostResolution;
 
 describe('gatewayAuth', () => {
   const fetchMock = vi.fn();
@@ -45,7 +53,10 @@ describe('gatewayAuth', () => {
   beforeEach(() => {
     resetGatewaySession();
     fetchMock.mockReset();
-    vi.mocked(analytics.setTag).mockClear();
+    vi.mocked(checkLlmGatewayHealth)
+      .mockReset()
+      .mockResolvedValue({ status: ServiceHealthStatus.Healthy });
+    vi.mocked(analytics.wizardCapture).mockClear();
     vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -54,26 +65,105 @@ describe('gatewayAuth', () => {
     vi.unstubAllGlobals();
   });
 
-  it('resolves the v2 posture from a mint response and caches it', async () => {
+  it('uses the supplied CI bearer across programs and time without minting', async () => {
+    configureGatewayCredentialsForCI(
+      ' opaque-ci-token ',
+      42,
+      'https://ai-gateway.us.posthog.com/',
+    );
+    const auth = {
+      token: 'opaque-ci-token',
+      teamId: 42,
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      refreshAtMs: Infinity,
+    };
+    const results = await Promise.all(
+      ['integration', 'audit', undefined].map((program) =>
+        gatewayAuth(host, 'phx_project', program),
+      ),
+    );
+    expect(results).toEqual([auth, auth, auth]);
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Number.MAX_SAFE_INTEGER);
+    try {
+      expect(await gatewayAuth(host, 'phx_project', 'integration')).toEqual(
+        auth,
+      );
+      expect(isPastRefresh(auth)).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['', 42, 'https://ai-gateway.us.posthog.com'],
+    ['token', 0, 'https://ai-gateway.us.posthog.com'],
+    ['token', 1.5, 'https://ai-gateway.us.posthog.com'],
+    ['token', NaN, 'https://ai-gateway.us.posthog.com'],
+    ['token', 42, 'https://untrusted.example'],
+    ['token', 42, 'https://ai-gateway.us.posthog.com/v1'],
+    ['token', 42, 'https://gateway.us.posthog.com'],
+    ['token', 42, 'https://gateway.eu.posthog.com'],
+    ['token', 42, 'ftp://localhost'],
+  ] as const)(
+    'rejects invalid CI gateway configuration',
+    (token, projectId, url) => {
+      expect(() =>
+        configureGatewayCredentialsForCI(token, projectId, url),
+      ).toThrow();
+    },
+  );
+
+  it('rejects direct CI gateway auth in production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.resetModules();
+    try {
+      const prod = await import('@lib/gateway-session');
+      expect(() =>
+        prod.configureGatewayCredentialsForCI(
+          'token',
+          42,
+          'https://ai-gateway.us.posthog.com',
+        ),
+      ).toThrow('non-production');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
+  it('requires an explicit gateway token file for CI', () => {
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', '');
+    try {
+      expect(() => configureGatewayFromCIEnvironment(42, 'us')).toThrow(
+        'WIZARD_CI_GATEWAY_TOKEN_FILE is required',
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('resolves auth from a mint response and caches it', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
           team_id: 42,
         }),
     });
 
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth).toEqual({
-      gatewayUrl: 'https://gateway.us.posthog.com',
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
       token: 'phe_minted',
-      edition: 'v2',
       teamId: 42,
+      refreshAtMs: expect.any(Number),
     });
-    expect(analytics.setTag).toHaveBeenCalledWith('gateway_edition', 'v2');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://us.posthog.com/api/wizard/gateway_token/',
       expect.objectContaining({
@@ -87,7 +177,40 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache, so no second mint.
     await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(
+      'https://ai-gateway.us.posthog.com',
+    );
   });
+
+  it.each([ServiceHealthStatus.Down, ServiceHealthStatus.NoConnection])(
+    'reports gateway %s without exposing diagnostics or caching auth',
+    async (status) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'https://ai-gateway.us.posthog.com',
+          }),
+      });
+      vi.mocked(checkLlmGatewayHealth).mockResolvedValueOnce({
+        status,
+        error: 'private dependency details',
+      });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toMatchObject({
+        name: 'WizardError',
+        code: ErrorCodes.EnvServiceOutage,
+        message:
+          'The PostHog AI gateway is unavailable. Please try again later.',
+      });
+      await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(checkLlmGatewayHealth).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('records a successful mint without ever logging the token', async () => {
     fetchMock.mockResolvedValue({
@@ -96,7 +219,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_secret_value',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
           team_id: 42,
         }),
     });
@@ -155,14 +278,6 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('caches the legacy fallback instead of re-minting per caller', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 404 });
-
-    await gatewayAuth(host, 'pha_oauth', 'integration');
-    await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
   // Every field except the one under test is valid, so the named guard is the
   // sole reason the call fails. Filling the others with junk (an unparseable
   // expiry, say) makes the TTL guard throw first and every case pass for the
@@ -209,31 +324,89 @@ describe('gatewayAuth', () => {
     [429, 'daily run limit'],
     [400, 'exactly one project'],
     [403, 'access to this project'],
+  ])('refuses the run on HTTP %i', async (status, fragment) => {
+    fetchMock.mockResolvedValue({ ok: false, status });
+    // A refusal is the mint enforcing a limit; the run must not proceed
+    // without it.
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      new RegExp(String(fragment), 'i'),
+    );
+  });
+
+  it('shows the server detail on a refusal when it sends one', async () => {
+    // The blocklist's 403 names the contact address; the fixed message would
+    // tell a banned user to re-authenticate instead.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          detail: 'This account is blocked. Contact wizard@posthog.com.',
+        }),
+    });
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      'Contact wizard@posthog.com',
+    );
+  });
+
+  it('keeps the fixed message when the detail is only control characters', async () => {
+    // Pins both the C1 arm and the trim running after the substitution: either
+    // one reverted leaves a run of spaces as the user-facing message.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ detail: '\u0007\u009b\u001b' }),
+    });
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      /access to this project/i,
+    );
+  });
+
+  it('strips control characters before the detail reaches the terminal', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({ detail: 'Upgrade\u001b[2J\u0007 the wizard.' }),
+    });
+    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
+      'Upgrade [2J  the wizard.',
+    );
+  });
+
+  it.each([
+    ['not an object', () => Promise.resolve('nope')],
+    ['an empty detail', () => Promise.resolve({ detail: '   ' })],
+    ['an unparseable body', () => Promise.reject(new SyntaxError('bad json'))],
+    ['an oversized detail', () => Promise.resolve({ detail: 'x'.repeat(501) })],
   ])(
-    'refuses rather than falling back on HTTP %i',
-    async (status, fragment) => {
-      fetchMock.mockResolvedValue({ ok: false, status });
-      // Falling back would put the run on the legacy gateway, which enforces none
-      // of the limits these statuses represent.
+    'keeps the fixed message when the refusal body is %s',
+    async (_label, json) => {
+      fetchMock.mockResolvedValue({ ok: false, status: 403, json });
       await expect(
         gatewayAuth(host, 'pha_oauth', 'integration'),
-      ).rejects.toThrow(new RegExp(String(fragment), 'i'));
+      ).rejects.toThrow(/access to this project/i);
     },
   );
 
-  it.each([404, 401])(
-    'stays on the existing gateway on HTTP %i',
-    async (status) => {
+  it.each([
+    [401, /re-authenticate with `npx @posthog\/wizard@latest`/i],
+    [404, /does not issue gateway tokens/i],
+  ])(
+    'refuses with a status-specific message on HTTP %i',
+    async (status, message) => {
       fetchMock.mockResolvedValue({ ok: false, status });
-      // 404 is the staged-rollout switch, so removing it would make the flip
-      // all-or-nothing. 401 covers a credential the mint cannot authenticate,
-      // such as the API key CI runs with.
-      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-      expect(auth.edition).toBe('legacy');
-      expect(analytics.setTag).toHaveBeenCalledWith(
-        'gateway_edition',
-        'legacy',
-      );
+      // Neither status has a fallback: 401 is a credential the mint does not
+      // accept, 404 an instance without the mint endpoint. A run that proceeded
+      // past either would be on a path enforcing none of the mint's limits.
+      const err: unknown = await gatewayAuth(
+        host,
+        'pha_oauth',
+        'integration',
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(GatewayMintRefused);
+      expect((err as GatewayMintRefused).status).toBe(status);
+      expect((err as GatewayMintRefused).message).toMatch(message);
     },
   );
 
@@ -248,6 +421,147 @@ describe('gatewayAuth', () => {
       ).rejects.toBeInstanceOf(GatewayMintFailed);
     },
   );
+
+  it('reads the outcome from the DRF body code and shows its detail', async () => {
+    // The exact shape the backend's exception handler writes for a refusal.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          type: 'permission_denied',
+          code: 'blocked',
+          detail: 'This account is blocked. Contact wizard@posthog.com.',
+          attr: null,
+        }),
+    });
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'audit').catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(GatewayMintRefused);
+    expect((err as GatewayMintRefused).outcome).toBe('blocked');
+    expect((err as GatewayMintRefused).message).toContain(
+      'Contact wizard@posthog.com',
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint refused',
+      { status: 403, outcome: 'blocked', program: 'audit' },
+    );
+  });
+
+  it.each([
+    [
+      'code wins over outcome',
+      { code: 'blocked', outcome: 'throttled' },
+      'blocked',
+    ],
+    [
+      'outcome carries it when code is absent',
+      { outcome: 'throttled' },
+      'throttled',
+    ],
+    [
+      'an empty code does not shadow outcome',
+      { code: '  ', outcome: 'throttled' },
+      'throttled',
+    ],
+    [
+      'a control-only code does not shadow outcome',
+      { code: '\u0007', outcome: 'throttled' },
+      'throttled',
+    ],
+  ])('resolves the outcome when %s', async (_label, body, want) => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve(body),
+    });
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'audit').catch(
+      (e: unknown) => e,
+    );
+    expect((err as GatewayMintRefused).outcome).toBe(want);
+  });
+
+  it('captures a refusal with its status, outcome and program', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          detail: 'This account is blocked.',
+          outcome: 'blocked',
+        }),
+    });
+    // The backend's own denial event has no run id, so this client event is
+    // what joins a refusal to the session.
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'audit').catch(
+      (e: unknown) => e,
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint refused',
+      { status: 403, outcome: 'blocked', program: 'audit' },
+    );
+    expect((err as GatewayMintRefused).outcome).toBe('blocked');
+  });
+
+  it.each([
+    ['absent', () => Promise.resolve({ detail: 'Limit reached.' })],
+    ['not a string', () => Promise.resolve({ outcome: 429 })],
+    ['a non-string code', () => Promise.resolve({ code: 403 })],
+    ['oversized', () => Promise.resolve({ outcome: 'x'.repeat(65) })],
+    ['unparseable', () => Promise.reject(new SyntaxError('bad json'))],
+  ])(
+    'captures a refusal with no outcome when the body has one that is %s',
+    async (_label, json) => {
+      fetchMock.mockResolvedValue({ ok: false, status: 429, json });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintRefused);
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'gateway mint refused',
+        { status: 429, outcome: undefined, program: 'integration' },
+      );
+    },
+  );
+
+  it('does not capture a mint failure as a refusal', async () => {
+    // A 5xx is the mint being unavailable, not a decision about this run.
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintFailed);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+  });
+
+  it('throws coded WizardErrors so the runners can name the failure', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ outcome: 'blocked' }),
+    });
+    const refused: unknown = await gatewayAuth(
+      host,
+      'pha_oauth',
+      'integration',
+    ).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(WizardError);
+    expect((refused as WizardError).code).toBe(ErrorCodes.GatewayMintRefused);
+    // The context is what wizardAbort attaches to the captured exception.
+    expect((refused as WizardError).context).toEqual({
+      status: 403,
+      outcome: 'blocked',
+    });
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
+    const failed: unknown = await gatewayAuth(
+      host,
+      'pha_oauth',
+      'integration',
+    ).catch((e: unknown) => e);
+    expect(failed).toBeInstanceOf(WizardError);
+    expect((failed as WizardError).code).toBe(ErrorCodes.GatewayMintFailed);
+  });
 
   it('surfaces a refusal through the transport catch', async () => {
     // The refusal is thrown from inside the try that wraps fetch, so a catch that
@@ -265,17 +579,20 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
 
     await gatewayAuth(host, 'pha_oauth', 'audit');
 
     // The backend pins `wizard:<program>` from this field; without it the mint
-    // has nothing to attribute the run to and refuses.
+    // has nothing to attribute the run to and refuses. The flag is what tells
+    // it this build reads a refusal rather than falling back on a 404.
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ body: JSON.stringify({ program: 'audit' }) }),
+      expect.objectContaining({
+        body: JSON.stringify({ program: 'audit', reads_refusal_reason: true }),
+      }),
     );
   });
 
@@ -295,7 +612,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
 
@@ -353,7 +670,7 @@ describe('gatewayAuth', () => {
             Promise.resolve({
               token: 'phe_minted',
               expires_at: new Date(Date.now() + ttlMs).toISOString(),
-              gateway_url: 'https://gateway.us.posthog.com',
+              gateway_url: 'https://ai-gateway.us.posthog.com',
             }),
         }),
       );
@@ -375,6 +692,31 @@ describe('gatewayAuth', () => {
     }
   });
 
+  it('sets the refresh instant at the refresh fraction of the token life', async () => {
+    vi.useFakeTimers();
+    try {
+      const ttlMs = 60 * 60 * 1000;
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + ttlMs).toISOString(),
+            gateway_url: 'https://ai-gateway.us.posthog.com',
+          }),
+      });
+      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(auth.refreshAtMs).toBe(Date.now() + ttlMs * 0.8);
+      // A 401 before this instant is a bad credential; after it, an aged
+      // bearer that one re-mint recovers.
+      expect(isPastRefresh(auth)).toBe(false);
+      vi.setSystemTime(Date.now() + ttlMs * 0.8);
+      expect(isPastRefresh(auth)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('retries cleanly after a failed mint rather than wedging the session', async () => {
     // A rejected resolve must leave neither a cached posture nor a claimed
     // in-flight slot behind, or one transient 503 wedges the run for the
@@ -390,7 +732,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_after_retry',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
@@ -410,31 +752,27 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses a gateway url outside the trusted origins', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          token: 'phe_x',
-          expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://evil.example.com',
-        }),
-    });
-    await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ).rejects.toBeInstanceOf(GatewayMintFailed);
-  });
-
-  it('falls back to the legacy posture when the backend does not mint', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 404 });
-
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-    expect(auth).toEqual({
-      gatewayUrl: host.gatewayUrl,
-      token: 'pha_oauth',
-      edition: 'legacy',
-    });
-  });
+  it.each([
+    'https://evil.example.com',
+    'https://gateway.us.posthog.com',
+    'https://gateway.eu.posthog.com',
+  ])(
+    'refuses an untrusted or retired minted gateway %s',
+    async (gatewayUrl) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_x',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: gatewayUrl,
+          }),
+      });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintFailed);
+    },
+  );
 
   it('fails the run on a transport failure', async () => {
     fetchMock.mockRejectedValue(new Error('network down'));
@@ -466,6 +804,7 @@ describe('buildWizardPropertiesBlob', () => {
       ),
     );
     expect(blob).toEqual({
+      ai_product: 'wizard',
       team_id: 42,
       run_id: 'r1',
       integration: 'nextjs',
@@ -495,6 +834,12 @@ describe('isTrustedGatewayUrl', () => {
   });
 
   it.each([
+    'https://gateway.us.posthog.com',
+    'https://gateway.eu.posthog.com',
+    'https://gateway.us.posthog.com/wizard',
+    'https://gateway.eu.posthog.com/wizard',
+    'https://us.posthog.com',
+    'https://ai-gateway.us.posthog.com:444',
     'https://evil.example.com',
     'http://ai-gateway.us.posthog.com',
     'not-a-url',

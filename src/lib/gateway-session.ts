@@ -2,26 +2,34 @@
  * Gateway auth for a wizard run: a `phe_` scoped token the backend mints, with
  * pinned attribution, a spend cap and an expiry.
  *
- * A 404 resolves to the legacy posture (OAuth token, Python gateway); every
- * other failure throws, because the legacy path enforces none of those, so a
- * silent downgrade spends unattributed money to hide an outage.
+ * Every mint failure throws: a silent downgrade would spend uncapped,
+ * unattributed money to hide an outage.
  */
 
+import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { WizardError } from '@utils/wizard-abort';
+import { ErrorCodes } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
-
-export type GatewayEdition = 'legacy' | 'v2';
+import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import type { CloudRegion } from '@utils/types';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
   gatewayUrl: string;
-  /** Bearer for the gateway: a minted `phe_` (v2) or the OAuth token (legacy). */
+  /** Gateway bearer, minted normally or supplied directly by CI. */
   token: string;
-  /** Selects the header shape: one properties blob (v2) or per-key headers. */
-  edition: GatewayEdition;
-  /** The team the mint verified; rides the blob so dashboards keep a breakdown. */
+  /** Team verified by the mint, or explicitly supplied for CI attribution. */
   teamId?: number;
+  /**
+   * Instant past which a 401 on this bearer is age rather than a bad
+   * credential: the cache re-mints past it, and a session still holding the
+   * old bearer may re-mint once. Before it the mint has to be trusted.
+   */
+  refreshAtMs: number;
 }
 
 interface CachedAuth {
@@ -37,19 +45,66 @@ let cached: CachedAuth | null = null;
  * task at once, and each would otherwise take its own token and its own cap.
  */
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
+let ciAuth: GatewayAuth | null = null;
+
+// Snapshot CI supplies a gateway bearer without minting or re-minting.
+export function configureGatewayCredentialsForCI(
+  token: string,
+  projectId: number,
+  gatewayUrl: string,
+): void {
+  if (IS_PRODUCTION_BUILD)
+    throw new Error('CI gateway auth requires a non-production build');
+  if (!token.trim() || !Number.isSafeInteger(projectId) || projectId <= 0) {
+    throw new Error('CI gateway auth requires a token and valid project ID');
+  }
+  if (
+    !/^https?:\/\//.test(gatewayUrl) ||
+    !isTrustedGatewayUrl(gatewayUrl, '')
+  ) {
+    throw new Error('CI gateway auth requires a trusted gateway origin');
+  }
+  resetGatewaySession();
+  ciAuth = {
+    token: token.trim(),
+    teamId: projectId,
+    gatewayUrl: gatewayUrl.replace(/\/+$/, ''),
+    refreshAtMs: Infinity,
+  };
+}
+
+export function configureGatewayFromCIEnvironment(
+  projectId: number,
+  region: CloudRegion,
+): void {
+  if (IS_PRODUCTION_BUILD)
+    throw new Error('CI gateway auth requires a non-production build');
+  const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
+  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
+  const token = readFileSync(path, 'utf8');
+  delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
+  configureGatewayCredentialsForCI(
+    token,
+    projectId,
+    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
+      `https://ai-gateway.${region}.posthog.com`,
+  );
+}
 
 /**
- * Adoption floor. The anthropic subprocess holds its credential for the whole
- * session, so a token below this 401s mid-run.
+ * Adoption floor. The anthropic subprocess holds its credential until a 401
+ * forces a re-mint, so a token below this would churn mints.
  */
 const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 /** Re-resolve at this fraction of the token's life, leaving a usable remainder. */
 const REFRESH_AT_FRACTION = 0.8;
-/** How long a legacy fallback sticks before the mint endpoint is retried. */
-const LEGACY_RETRY_MS = 10 * 60 * 1000;
 // Exceeds the backend's own 10s gateway timeout: a slow mint that lands after the
 // CLI hangs up spends a daily mint and orphans a live token.
 const MINT_TIMEOUT_MS = 20_000;
+/** Longer than any refusal the mint writes; a body past this is not a message. */
+const MAX_REFUSAL_DETAIL_LENGTH = 500;
+/** Outcomes are short snake_case labels; anything longer is not one. */
+const MAX_REFUSAL_OUTCOME_LENGTH = 64;
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
@@ -57,6 +112,7 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
+  if (ciAuth) return ciAuth;
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
   const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
@@ -88,12 +144,13 @@ async function resolveGatewayAuth(
     );
   }
   const minted = await mintGatewayToken(host, accessToken, program);
-  if (!minted) {
-    // The mint is not enabled here, or does not recognise this credential.
-    analytics.setTag('gateway_edition', 'legacy');
-    const auth = legacyAuth(host, accessToken);
-    cached = { key, auth, staleAtMs: Date.now() + LEGACY_RETRY_MS };
-    return auth;
+  const health = await checkLlmGatewayHealth(minted.gatewayUrl);
+  if (health.status !== ServiceHealthStatus.Healthy) {
+    throw new WizardError(
+      'The PostHog AI gateway is unavailable. Please try again later.',
+      undefined,
+      ErrorCodes.EnvServiceOutage,
+    );
   }
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
@@ -108,8 +165,7 @@ async function resolveGatewayAuth(
     );
   }
   const staleAtMs = Date.now() + ttlMs * REFRESH_AT_FRACTION;
-  analytics.setTag('gateway_edition', 'v2');
-  // Only failures and fallbacks are logged otherwise, so a successful run leaves no
+  // Only failures are logged otherwise, so a successful run leaves no
   // local trace. Never log the token itself.
   logToFile(
     `[gateway] minted a scoped token: program=${program} team=${
@@ -119,27 +175,28 @@ async function resolveGatewayAuth(
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
-    edition: 'v2',
     teamId: minted.teamId,
+    refreshAtMs: staleAtMs,
   };
   cached = { key, auth, staleAtMs };
   return auth;
-}
-
-/** The legacy posture: the user's OAuth token against the Python gateway. */
-function legacyAuth(host: HostResolution, accessToken: string): GatewayAuth {
-  return { gatewayUrl: host.gatewayUrl, token: accessToken, edition: 'legacy' };
 }
 
 /** Test hook: drop the cached auth so the next call re-resolves. */
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
+  ciAuth = null;
+}
+
+/** Whether a 401 on this bearer may be age (past its refresh instant) rather than a bad credential. */
+export function isPastRefresh(auth: GatewayAuth, now = Date.now()): boolean {
+  return now >= auth.refreshAtMs;
 }
 
 /**
  * Whether a server-supplied origin may receive a bearer and prompt content:
- * https (loopback excepted), and either a posthog.com host or the one the run
+ * https (loopback excepted), and either a current cloud gateway or the host the run
  * authenticated against.
  */
 export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
@@ -167,7 +224,12 @@ export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
   // Loopback is the dev gateway, and is the one case allowed over http.
   if (localhost) return true;
   if (url.protocol !== 'https:') return false;
-  if (url.hostname.endsWith('.posthog.com')) return true;
+  if (url.hostname.endsWith('.posthog.com')) {
+    return (
+      url.origin === 'https://ai-gateway.us.posthog.com' ||
+      url.origin === 'https://ai-gateway.eu.posthog.com'
+    );
+  }
   try {
     return url.hostname === new URL(apiHost).hostname;
   } catch {
@@ -184,16 +246,20 @@ interface MintedToken {
 
 /**
  * A deliberate refusal from the mint endpoint, as opposed to the mint being
- * unavailable. Thrown rather than folded into the legacy fallback, so the run
- * stops instead of proceeding without the controls the refusal was enforcing.
+ * unavailable. Thrown so the run stops instead of proceeding without the
+ * controls the refusal was enforcing. A WizardError, so the runners print its
+ * message as-is and `wizardAbort` resolves its code.
  */
-export class GatewayMintRefused extends Error {
+export class GatewayMintRefused extends WizardError {
   readonly status: number;
+  /** The backend's refusal outcome (`blocked`, `throttled`, ...), when it sent one. */
+  readonly outcome?: string;
 
-  constructor(status: number, message: string) {
-    super(message);
+  constructor(status: number, message: string, outcome?: string) {
+    super(message, { status, outcome }, ErrorCodes.GatewayMintRefused);
     this.name = 'GatewayMintRefused';
     this.status = status;
+    this.outcome = outcome;
   }
 }
 
@@ -201,33 +267,91 @@ export class GatewayMintRefused extends Error {
  * The mint could not produce a usable credential: unreachable, a 5xx, or a
  * response the client cannot use.
  */
-export class GatewayMintFailed extends Error {
+export class GatewayMintFailed extends WizardError {
   constructor(message: string) {
-    super(message);
+    super(message, undefined, ErrorCodes.GatewayMintFailed);
     this.name = 'GatewayMintFailed';
   }
 }
 
 /**
  * Whether a mint status means "refused this run" rather than "not available".
- * These are the statuses the endpoint returns after it has authenticated the
- * caller: 429 the daily run limit, 403 revoked project access, 400 a login
- * covering more than one project. 404 and 401 fall back instead.
+ * 429 the daily run limit, 403 revoked project access, 400 a login covering
+ * more than one project, 401 a credential the mint does not accept, 404 an
+ * instance without the mint endpoint.
  */
 function isMintRefusal(status: number): boolean {
-  return status === 400 || status === 403 || status === 429;
+  return (
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 429
+  );
 }
 
-function mintRefusalMessage(status: number): string {
+interface MintRefusal {
+  detail?: string;
+  outcome?: string;
+}
+
+/**
+ * The server's own reason for a refusal, when it sent one. DRF answers every
+ * refusal as `{"detail": "...", "code": "<outcome>"}`; the blocklist's detail
+ * names the contact address, which the fixed messages below cannot. `code` is
+ * the backend's own label for the refusal (`outcome` on older backends) and
+ * rides the client event.
+ */
+function cleanRefusalText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  // Not because the server sends escapes, but because this string is printed
+  // straight to a terminal: sanitizing at the boundary means no later message
+  // can move the cursor or repaint the screen.
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
+}
+
+async function readRefusal(resp: Response): Promise<MintRefusal> {
+  try {
+    const body = (await resp.json()) as {
+      detail?: unknown;
+      code?: unknown;
+      outcome?: unknown;
+    };
+    const detail = cleanRefusalText(body?.detail);
+    // The DRF handler flattens a dict detail, so the outcome rides as `code`.
+    // A `code` that cleans to nothing does not shadow a usable `outcome`.
+    const outcome =
+      cleanRefusalText(body?.code) || cleanRefusalText(body?.outcome);
+    return {
+      detail:
+        detail.length > 0 && detail.length <= MAX_REFUSAL_DETAIL_LENGTH
+          ? detail
+          : undefined,
+      outcome:
+        outcome.length > 0 && outcome.length <= MAX_REFUSAL_OUTCOME_LENGTH
+          ? outcome
+          : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function mintRefusalMessage(status: number, detail?: string): string {
+  if (detail) return detail;
   switch (status) {
     case 429:
       return 'This wizard program has used its daily run limit. Try again tomorrow.';
     case 403:
       return 'Your access to this project has changed. Re-authenticate and try again.';
     case 400:
-      // The only 400 the mint answers is the exactly-one-project check; an
-      // unrecognised program is a 404 and falls back instead.
+      // The only 400 the mint answers is the exactly-one-project check.
       return 'Your PostHog login must cover exactly one project. Re-authenticate and try again.';
+    case 401:
+      return 'PostHog did not accept this login. Re-authenticate with `npx @posthog/wizard@latest`.';
+    case 404:
+      return 'This PostHog instance does not issue gateway tokens. Upgrade with `npx @posthog/wizard@latest` and try again.';
     default:
       return 'The PostHog gateway refused this run.';
   }
@@ -237,7 +361,7 @@ async function mintGatewayToken(
   host: HostResolution,
   accessToken: string,
   program: string,
-): Promise<MintedToken | null> {
+): Promise<MintedToken> {
   try {
     const resp = await fetch(`${host.apiHost}/api/wizard/gateway_token/`, {
       method: 'POST',
@@ -245,27 +369,32 @@ async function mintGatewayToken(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ program }),
+      // The flag tells the server this build reads a refusal, so it may answer
+      // with the reason. A build that omits it gets a 404, which is its signal
+      // to fall back to the legacy gateway.
+      body: JSON.stringify({ program, reads_refusal_reason: true }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {
       if (isMintRefusal(resp.status)) {
+        const refusal = await readRefusal(resp);
         logToFile(
-          `[gateway] mint refused with HTTP ${resp.status}; failing the run`,
+          `[gateway] mint refused with HTTP ${resp.status} (${
+            refusal.outcome ?? 'no outcome'
+          }); failing the run`,
         );
+        // The terminal denial event for this run. The backend's own event has
+        // no run id, so this is what joins a refusal to the session.
+        analytics.wizardCapture('gateway mint refused', {
+          status: resp.status,
+          outcome: refusal.outcome,
+          program,
+        });
         throw new GatewayMintRefused(
           resp.status,
-          mintRefusalMessage(resp.status),
+          mintRefusalMessage(resp.status, refusal.detail),
+          refusal.outcome,
         );
-      }
-      if (resp.status === 404 || resp.status === 401) {
-        // 404 is the rollout switch. 401 is a credential the mint does not
-        // recognise, an API key rather than an OAuth login; the legacy gateway
-        // authenticates it separately, so falling back grants nothing.
-        logToFile(
-          `[gateway] mint unavailable for this credential (HTTP ${resp.status}); staying on the existing gateway`,
-        );
-        return null;
       }
       logToFile(
         `[gateway] mint failed with HTTP ${resp.status}; failing the run`,
@@ -308,7 +437,7 @@ async function mintGatewayToken(
     };
   } catch (e) {
     // Decisions and failures both pass through: this catch exists for transport
-    // errors, and folding the others into it would restore the downgrade.
+    // errors, and folding the others into it would lose the reason.
     if (e instanceof GatewayMintRefused || e instanceof GatewayMintFailed)
       throw e;
     logToFile(
@@ -332,7 +461,10 @@ export function buildWizardPropertiesBlob(
   wizardFlags: Record<string, string>,
   teamId?: number,
 ): string {
-  const props: Record<string, string | number> = {};
+  // The gateway pins `$ai_product` to `wizard:<program>`, and rejects a legacy
+  // product override on a scoped token, so the unprefixed key every cost and
+  // error consumer reads is only present if this blob declares it.
+  const props: Record<string, string | number> = { ai_product: 'wizard' };
   if (teamId !== undefined) props.team_id = teamId;
   for (const [key, value] of Object.entries(wizardMetadata)) {
     props[stripPropertyPrefix(key)] = value;

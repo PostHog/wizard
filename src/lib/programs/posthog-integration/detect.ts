@@ -31,6 +31,7 @@ import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
 } from '@lib/programs/warehouse-source/detect';
+import { findPackageJsons } from '@lib/programs/shared/package-scanning';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -84,6 +85,7 @@ export async function detectPostHogIntegration(
   }
 
   detectWarehouseSourcesForSuggestion(ctx, installDir);
+  detectExistingPostHog(ctx, installDir);
 
   ctx.setDetectionComplete();
 }
@@ -250,4 +252,21 @@ export function reportWarehouseSourcesDetected(
   // scan that ran. Decline rate comes from 'intro menu selected' instead.
 
   return true;
+}
+
+/** Dependency-level signal, not a verified install. A failed scan reports false. */
+export function detectExistingPostHog(
+  ctx: Pick<ProgramReadyContext, 'setPosthogSdkDetected'>,
+  installDir: string,
+): void {
+  try {
+    const pkgJsons = findPackageJsons(installDir);
+    ctx.setPosthogSdkDetected(pkgJsons.some((p) => p.posthogSdks.length > 0));
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectExistingPosthog' },
+    );
+    ctx.setPosthogSdkDetected(false);
+  }
 }

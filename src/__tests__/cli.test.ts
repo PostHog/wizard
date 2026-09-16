@@ -446,6 +446,36 @@ describe('CLI argument parsing', () => {
 
       expect(mockStreamAttach).not.toHaveBeenCalled();
     });
+
+    // The CI bot authenticates with a wizard-app pha_ token, the same
+    // credential headless takes. Either key reaches buildSession untouched and
+    // neither draws the unexpected-prefix warning.
+    test.each(['phx_ci_key', 'pha_ci_bot_token'])(
+      'accepts %s without a prefix warning',
+      async (apiKey) => {
+        const log = vi
+          .spyOn(console, 'log')
+          .mockImplementation(() => undefined);
+        try {
+          await runCLI([
+            '--ci',
+            '--api-key',
+            apiKey,
+            '--install-dir',
+            '/tmp/test',
+          ]);
+
+          expect(process.exit).not.toHaveBeenCalledWith(1);
+          expect(getLastBuildSessionArgs().apiKey).toBe(apiKey);
+          const lines = log.mock.calls.map((c) => c.map(String).join(' '));
+          expect(lines.some((l) => l.includes('does not start with'))).toBe(
+            false,
+          );
+        } finally {
+          log.mockRestore();
+        }
+      },
+    );
   });
 
   // The experimental headless flag is the published-build sibling of --ci: it

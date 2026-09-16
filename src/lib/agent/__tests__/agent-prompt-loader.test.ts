@@ -36,7 +36,7 @@ describe('parseAgentPrompt', () => {
 type: instrument-events
 model_pi: openai/gpt-5.6-terra     # per-profile model targets
 effort_pi: medium
-model_sdk: claude-sonnet-4-6
+model_sdk: claude-sonnet-5
 skills: [instrument-events]
 allowedTools: [Read, Edit, Grep, Glob, Bash]
 disallowedTools: [enqueue_task]
@@ -52,7 +52,7 @@ Add at least one capture call.
     expect(p.type).toBe('instrument-events');
     expect(p.modelPi).toBe('openai/gpt-5.6-terra');
     expect(p.effortPi).toBe('medium');
-    expect(p.modelSdk).toBe('claude-sonnet-4-6');
+    expect(p.modelSdk).toBe('claude-sonnet-5');
     expect(p.skills).toEqual(['instrument-events']);
     expect(p.allowedTools).toEqual(['Read', 'Edit', 'Grep', 'Glob', 'Bash']);
     expect(p.disallowedTools).toEqual(['enqueue_task']);
@@ -86,7 +86,7 @@ Connect the sources.
       effort: 'medium',
     });
     expect(promptModelFor(p, 'anthropic')).toEqual({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       effort: undefined,
     });
   });
@@ -281,7 +281,7 @@ describe('buildRegistry', () => {
         flow: 'f',
         modelPi: 'openai/gpt-5.6-terra',
         effortPi: 'medium',
-        modelSdk: 'claude-sonnet-4-6',
+        modelSdk: 'claude-sonnet-5',
       }),
       prompt({ type: 'install', flow: 'f', modelPi: 'openai/gpt-5.6-luna' }),
     ];
@@ -294,7 +294,7 @@ describe('buildRegistry', () => {
     expect(registry.get('review')).toMatchObject({
       modelPi: 'openai/gpt-5.6-sol',
       effortPi: 'medium',
-      modelSdk: 'claude-sonnet-4-6',
+      modelSdk: 'claude-sonnet-5',
     });
     expect(registry.seed).toMatchObject({
       modelPi: 'openai/gpt-5.6-terra',
@@ -324,7 +324,7 @@ describe('resolveTask', () => {
     runnerSeeded: false,
     modelPi: 'openai/gpt-5.6-luna',
     effortPi: 'low',
-    modelSdk: 'claude-haiku-4-5-20251001',
+    modelSdk: 'claude-haiku-4-5',
     skills: ['instrument-events'],
     allowedTools: ['Read', 'Edit'],
     disallowedTools: ['enqueue_task'],
@@ -356,7 +356,7 @@ describe('resolveTask', () => {
       effort: 'low',
     });
     expect(taskModelSpec(registry, task, 'anthropic').model).toBe(
-      'claude-haiku-4-5-20251001',
+      'claude-haiku-4-5',
     );
   });
 
