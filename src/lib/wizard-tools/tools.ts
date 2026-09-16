@@ -335,6 +335,42 @@ export function normaliseAskSubject(subject?: string): string {
   return trimmed.slice(0, ASK_SUBJECT_MAX_LENGTH);
 }
 
+/** The question kinds the ask overlay can render. */
+export type AskQuestionKind = 'single' | 'multi' | 'text';
+
+/**
+ * The `wizard_ask` `kind` field description, shared by both harness facades so
+ * the inferred default cannot drift between them.
+ */
+export const WIZARD_ASK_KIND_DESCRIPTION =
+  "'single' = pick one option, 'multi' = pick any, 'text' = free-form " +
+  'single-line answer. Optional: omit it and the kind follows the question — ' +
+  "'single' when you pass options, 'text' when you do not, which is what a " +
+  'credential question wants.';
+
+/**
+ * Fill in the `kind` of every question that arrived without one.
+ *
+ * The field used to be required, and both harnesses validate a call before this
+ * handler sees it — pi against the typebox schema, the MCP SDK against the zod
+ * one — so a call that omitted it was rejected upstream and the agent spent a
+ * turn recovering from a validation error rather than asking its question.
+ * Accepting the omission costs nothing, because `options` already says which
+ * kind was meant, and a question carrying none is free text — which is what a
+ * credential question wants, and the case an agent is most likely to send bare.
+ *
+ * Options imply `single`, never `multi`: omitting `kind` expresses no intent to
+ * accept more than one answer.
+ */
+export function resolveAskQuestionKinds<
+  Q extends { kind?: AskQuestionKind; options?: readonly unknown[] },
+>(questions: readonly Q[]): (Q & { kind: AskQuestionKind })[] {
+  return questions.map((q) => ({
+    ...q,
+    kind: q.kind ?? (q.options && q.options.length > 0 ? 'single' : 'text'),
+  }));
+}
+
 /**
  * The `wizard_ask` `sensitive` field description, shared by both harness facades
  * (the zod schema in `./mcp` and the typebox mirror in `harness/pi/tools.ts`) so

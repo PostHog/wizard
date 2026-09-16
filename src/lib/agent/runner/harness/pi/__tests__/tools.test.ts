@@ -19,6 +19,7 @@ import {
   ASK_BATCH_THRESHOLD,
   ASK_CANCELLED_NOTE,
   ASK_TIMED_OUT_NOTE,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -158,6 +159,43 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     });
     expect(textOf(result)).toMatch(/Only kind="text" answers can be sensitive/);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('vaults a credential question that arrived without a kind', async () => {
+    // A credential question is the one most likely to arrive bare, and
+    // `sensitive` is legal only on `text`. Inferring the kind lets it through;
+    // the schema used to reject the call before this handler ran.
+    const { wizardAsk, request } = makeTools({ password: SECRET });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'password', prompt: 'Database password', sensitive: true },
+      ],
+      subject: 'Postgres',
+    });
+    expect(request.mock.calls[0][0].questions[0].kind).toBe('text');
+    const body = textOf(result);
+    expect(body).not.toContain(SECRET);
+    const { answers } = JSON.parse(body) as {
+      answers: { password: { secretRef: string } };
+    };
+    expect(answers.password.secretRef).toMatch(/^secret:/);
+  });
+
+  it('sends a kind-less question with options to the overlay as a picker', async () => {
+    const { wizardAsk, request } = makeTools({ auth: 'oauth' });
+    await call(wizardAsk, {
+      questions: [
+        {
+          id: 'auth',
+          prompt: 'How do you want to authenticate?',
+          options: [
+            { label: 'OAuth', value: 'oauth' },
+            { label: 'API key', value: 'key' },
+          ],
+        },
+      ],
+    });
+    expect(request.mock.calls[0][0].questions[0].kind).toBe('single');
   });
 
   it('carries the shared secretRef guidance (parity with the MCP server)', () => {
@@ -305,6 +343,28 @@ describe('pi wizard_ask — the batching guard counts per subject', () => {
       }
     ).parameters.properties;
     expect(params.subject?.description).toBe(WIZARD_ASK_SUBJECT_DESCRIPTION);
+  });
+
+  it('declares kind optional, with the shared guidance on what omitting it means', () => {
+    const { wizardAsk } = makeTools({});
+    const question = (
+      wizardAsk as unknown as {
+        parameters: {
+          properties: {
+            questions: {
+              items: {
+                required?: string[];
+                properties: { kind: { description?: string } };
+              };
+            };
+          };
+        };
+      }
+    ).parameters.properties.questions.items;
+    expect(question.required ?? []).not.toContain('kind');
+    expect(question.properties.kind.description).toBe(
+      WIZARD_ASK_KIND_DESCRIPTION,
+    );
   });
 
   it('shares one tool description with the MCP server', () => {
