@@ -111,9 +111,9 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
   });
 
   it('vaults a credential question that arrived without a kind', async () => {
-    // pi does not validate tool arguments, so a `sensitive` question with no
-    // kind used to fail the per-kind check and take the whole call with it —
-    // the user was never asked for the credential the step stopped to collect.
+    // A credential question is the one most likely to arrive bare, and
+    // `sensitive` is legal only on `text`. Inferring the kind lets it through;
+    // the schema used to reject the call before this handler ran.
     const { wizardAsk, request } = makeTools({ password: SECRET });
     const result = await call(wizardAsk, {
       questions: [

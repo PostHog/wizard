@@ -351,14 +351,16 @@ export const WIZARD_ASK_KIND_DESCRIPTION =
 /**
  * Fill in the `kind` of every question that arrived without one.
  *
- * The field was declared required and nothing could enforce it: pi hands tool
- * arguments over unvalidated. So a question with no kind either lost the whole
- * call — a credential question also carries `sensitive: true`, which is legal
- * only on `text`, so the per-kind check refused it and no question reached the
- * user — or sailed through to the overlay, which renders an input for the kinds
- * it knows and nothing at all for one it does not, leaving a prompt the user can
- * only dismiss. Both cost the step the very answer it stopped to collect, and
- * `options` already says which kind was meant.
+ * The field used to be required, and both harnesses validate a call before this
+ * handler sees it — pi against the typebox schema, the MCP SDK against the zod
+ * one — so a call that omitted it was rejected upstream and the agent spent a
+ * turn recovering from a validation error rather than asking its question.
+ * Accepting the omission costs nothing, because `options` already says which
+ * kind was meant, and a question carrying none is free text — which is what a
+ * credential question wants, and the case an agent is most likely to send bare.
+ *
+ * Options imply `single`, never `multi`: omitting `kind` expresses no intent to
+ * accept more than one answer.
  */
 export function resolveAskQuestionKinds<
   Q extends { kind?: AskQuestionKind; options?: readonly unknown[] },
