@@ -48,7 +48,8 @@ describe('createWizardAskBridge', () => {
     resolveAnswers({ goal: 'Help users find the export button' });
 
     await expect(requestPromise).resolves.toEqual({
-      goal: 'Help users find the export button',
+      answers: { goal: 'Help users find the export button' },
+      timedOut: false,
     });
   });
 
@@ -167,6 +168,25 @@ describe('createWizardAskBridge', () => {
     });
   });
 
+  it('reports a user-dismissed ask as cancelled but not timed out', async () => {
+    // The two arrive identically in `answers`, so `timedOut` is the only thing
+    // that tells the tool facades a decline from an unattended terminal.
+    const bridge = createWizardAskBridge({
+      getSource: () => 'product-tours',
+      showQuestion: () => Promise.resolve({ host: CANCELLED_SENTINEL }),
+      timeoutMs: 60_000,
+    });
+
+    await expect(
+      bridge.request({
+        questions: [{ id: 'host', prompt: 'Host?', kind: 'text' }],
+      }),
+    ).resolves.toEqual({
+      answers: { host: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+  });
+
   describe('isFullyCancelled', () => {
     // Gates the per-run cap refund in wizard-tools: a fully cancelled ask must
     // not burn a wizard_ask slot, while any real answer must still count.
@@ -214,8 +234,11 @@ describe('createWizardAskBridge', () => {
         vi.advanceTimersByTime(1000);
 
         await expect(promise).resolves.toEqual({
-          goal: CANCELLED_SENTINEL,
-          audience: CANCELLED_SENTINEL,
+          answers: {
+            goal: CANCELLED_SENTINEL,
+            audience: CANCELLED_SENTINEL,
+          },
+          timedOut: true,
         });
 
         // Without this, the host's pending-question state survives the

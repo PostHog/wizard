@@ -5,7 +5,9 @@ import * as path from 'path';
 import { zipSync } from 'fflate';
 import {
   ASK_BATCH_THRESHOLD,
+  ASK_CANCELLED_NOTE,
   ASK_SUBJECT_UNSPECIFIED,
+  ASK_TIMED_OUT_NOTE,
   DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
@@ -17,6 +19,7 @@ import {
   createAskAccounting,
   downloadSkill,
   ensureGitignoreCoverage,
+  describeAskCancellation,
   evaluateAskCap,
   fetchSkillMenu,
   mergeEnvValues,
@@ -967,6 +970,13 @@ describe('wizard_ask shared descriptions', () => {
     );
   });
 
+  it('points the agent at the cancellation envelope rather than the answer values', () => {
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/`cancelled` object/);
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(
+      /instead of inspecting the answer values/,
+    );
+  });
+
   it('names the kind that an omitted `kind` falls back to', () => {
     expect(WIZARD_ASK_KIND_DESCRIPTION).toMatch(/Optional/);
     expect(WIZARD_ASK_KIND_DESCRIPTION).toMatch(/'text' when you do not/);
@@ -976,6 +986,55 @@ describe('wizard_ask shared descriptions', () => {
     expect(WIZARD_ASK_SUBJECT_DESCRIPTION).toMatch(/Postgres/);
     expect(WIZARD_ASK_SUBJECT_DESCRIPTION).toMatch(/consecutive calls/i);
     expect(WIZARD_ASK_SUBJECT_DESCRIPTION).toMatch(/Omit it/);
+  });
+});
+
+describe('describeAskCancellation', () => {
+  const CANCELLED = '__cancelled__';
+
+  it('is undefined when every question was answered', () => {
+    expect(
+      describeAskCancellation(
+        { host: 'db.example.com', ssl: ['require'] },
+        false,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('names the uncollected questions and reads a dismissal as a decline', () => {
+    expect(
+      describeAskCancellation({ host: CANCELLED, password: CANCELLED }, false),
+    ).toEqual({
+      reason: 'user-cancelled',
+      questionIds: ['host', 'password'],
+      note: ASK_CANCELLED_NOTE,
+    });
+  });
+
+  it('separates a timed-out prompt from a dismissed one', () => {
+    expect(describeAskCancellation({ host: CANCELLED }, true)).toEqual({
+      reason: 'timed-out',
+      questionIds: ['host'],
+      note: ASK_TIMED_OUT_NOTE,
+    });
+  });
+
+  it('reports a partly answered ask, and never counts a vaulted answer as cancelled', () => {
+    expect(
+      describeAskCancellation(
+        {
+          host: 'db.example.com',
+          password: { secretRef: 'secret:abc' },
+          tunnel: CANCELLED,
+        },
+        false,
+      ),
+    ).toMatchObject({ reason: 'user-cancelled', questionIds: ['tunnel'] });
+  });
+
+  it('tells a dismissal to fall back and a timeout to stop asking', () => {
+    expect(ASK_CANCELLED_NOTE).toMatch(/do not re-ask/i);
+    expect(ASK_TIMED_OUT_NOTE).toMatch(/stop asking/i);
   });
 });
 
