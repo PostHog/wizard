@@ -7,7 +7,9 @@
 #      with the tailored "CI mode is not currently supported" error and a
 #      non-zero exit. Guards against a future change that re-enables --ci in
 #      published builds without anyone noticing.
-#   3. In production builds, the experimental headless flag IS accepted (the
+#   3. undici stays out of the static import graph, so the Node version
+#      preflight still runs on a runtime undici cannot load on.
+#   4. In production builds, the experimental headless flag IS accepted (the
 #      non-interactive published-build path) — it must not be rejected as an
 #      unknown argument. It is intentionally undocumented; this check only keeps
 #      the published binary from silently dropping the flag the cloud runs need.
@@ -23,7 +25,16 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
   exit 1
 }
 
-# ── 2. CI flag overrides physically absent from production builds ───────────
+# ── 2. undici loads lazily, after the Node version preflight ─────────────────
+# undici 8.5.0 throws `webidl.util.markAsUncloneable is not a function` on load
+# below Node 22.10. A static import runs before any statement in the entry, so
+# it would crash the binary before the preflight can print the upgrade message.
+if grep -qE '^import[^(]*undici' "$DIST_BIN"; then
+  echo 'Smoke test failed: undici is statically imported, so it loads before the Node version preflight' >&2
+  exit 1
+fi
+
+# ── 3. CI flag overrides physically absent from production builds ───────────
 # The override path (src/utils/ci-flag-overrides.ts) is dead code in published
 # builds and tsdown strips it; its env var name appearing in dist/*.js means
 # dead-code elimination regressed and a prod surface leaked. Sourcemaps keep
@@ -58,7 +69,7 @@ else
   done
 fi
 
-# ── 3. --ci rejected in production builds ────────────────────────────────────
+# ── 4. --ci rejected in production builds ────────────────────────────────────
 # build:ci sets WIZARD_BUILD_NODE_ENV=ci → --ci stays enabled → skip the check.
 if [ "${WIZARD_BUILD_NODE_ENV:-production}" = "ci" ]; then
   exit 0
@@ -81,7 +92,7 @@ if ! echo "$output" | grep -qi 'CI mode is not currently supported'; then
   exit 1
 fi
 
-# ── 4. Experimental headless flag accepted in production builds ──────────────
+# ── 5. Experimental headless flag accepted in production builds ──────────────
 # The non-interactive path for published builds (cloud / CI runs). yargs must
 # not reject the flag, and it must not fall through to the --ci rejection. With
 # no api-key the run exits fast on "Headless mode requires --api-key" — all this
