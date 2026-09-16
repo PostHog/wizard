@@ -38,6 +38,24 @@ export function handleAskKey(
 }
 
 /**
+ * What pressing Esc actually does, phrased for the footer hint.
+ *
+ * Esc declines the *whole* request — {@link WizardStore.cancelPendingQuestion}
+ * builds a cancelled answer for every question, so the ones already typed are
+ * discarded too. The footer used to label that "skip", which on a multi-question
+ * request reads as "skip this field": the warehouse task walks a source's
+ * credentials one field at a time, several of them optional, and a user who
+ * pressed Esc to pass on an optional field instead threw away the whole source
+ * and dropped the agent onto its browser-handoff fallback. Naming the scope
+ * costs a few characters and makes the destructive key read as destructive.
+ */
+export function askEscapeHint(total: number, answered: number): string {
+  if (total <= 1) return 'skip';
+  if (answered <= 0) return `skip all ${total} questions`;
+  return `skip all ${total} questions, discarding the ${answered} you answered`;
+}
+
+/**
  * Whether an answer would leave a required question effectively unanswered.
  *
  * The `wizard_ask` schema marks fields `required` (defaulting to true), but the
@@ -170,6 +188,11 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
 
   const total = pending.questions.length;
   const progress = total > 1 ? `Question ${index + 1} of ${total}` : null;
+  const escapeHint = askEscapeHint(total, index);
+  // An optional text field already accepts an empty Enter (see
+  // `isRequiredButEmpty`) — it just never said so, leaving Esc as the only
+  // visible exit from a question the user did not want to answer.
+  const canSkipOne = question.kind === 'text' && question.required === false;
 
   const submit = (value: string | string[]) => {
     // Don't let a required field go through empty — it would reach the agent as
@@ -246,13 +269,21 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
         <Box marginTop={1}>
           <Text color={Colors.accent}>
             {Icons.warning} This field is required — type an answer, or press
-            ESC to skip.
+            ESC to {escapeHint}.
+          </Text>
+        </Box>
+      )}
+      {canSkipOne && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            Optional — press <Text color={Colors.accent}>ENTER</Text> on an
+            empty answer to skip just this one.
           </Text>
         </Box>
       )}
       <Box marginTop={1}>
         <Text dimColor>
-          <Text color={Colors.accent}>ESC</Text> skip
+          <Text color={Colors.accent}>ESC</Text> {escapeHint}
         </Text>
       </Box>
     </ModalOverlay>
