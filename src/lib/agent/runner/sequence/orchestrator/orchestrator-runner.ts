@@ -65,7 +65,10 @@ import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  createWizardAskBridge,
+  LONGER_ASK_TIMEOUT_MS,
+} from '@lib/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
@@ -192,16 +195,9 @@ function resolveReferenceSkillId(
 }
 
 /**
- * A task that asks the user waits on a person, not on a model: long enough to
- * open a database console or mint a restricted API key. The drain waits it out
- * — the executor holds the task's promise — so the only real limit is this one.
- */
-const TASK_ASK_TIMEOUT_MS = 20 * 60 * 1000;
-
-/**
  * How long an optional step's notice waits for an answer.
  *
- * Much shorter than the ask timeout above, because it is asking for something
+ * Much shorter than LONGER_ASK_TIMEOUT_MS, because it is asking for something
  * much smaller: one keypress to accept or decline, not "go mint a restricted
  * Stripe key". It cannot be unbounded either — the notice is a modal, and a run
  * that stops forever behind one nobody is looking at is worse than one that
@@ -220,7 +216,7 @@ export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
  *
  * Skip is the right default on a timeout: continuing would send the step on to
  * ask for credentials that the same absent user cannot supply either, burning
- * {@link TASK_ASK_TIMEOUT_MS} per question before falling back to the same
+ * {@link LONGER_ASK_TIMEOUT_MS} per question before falling back to the same
  * links declining gives immediately.
  */
 export async function offerSeededTask(
@@ -724,7 +720,7 @@ export async function runOrchestrator(
   if (askingTypes.length > 0) {
     analytics.wizardCapture('orchestrator awaits user', {
       task_types: askingTypes,
-      ask_timeout_ms: TASK_ASK_TIMEOUT_MS,
+      ask_timeout_ms: LONGER_ASK_TIMEOUT_MS,
     });
   }
 
@@ -748,7 +744,9 @@ export async function runOrchestrator(
         },
         cancelQuestion: () => getUI().cancelPendingQuestion(),
         richLinks: config.richLinks ?? false,
-        timeoutMs: TASK_ASK_TIMEOUT_MS,
+        // A task ask waits on a person, and the drain waits it out — the
+        // executor holds the task's promise — so this is the only real limit.
+        timeoutMs: LONGER_ASK_TIMEOUT_MS,
       });
 
   const spinner = getUI().spinner();
