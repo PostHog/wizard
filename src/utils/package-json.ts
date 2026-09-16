@@ -42,6 +42,21 @@ export function hasDeclaredDependency(
   return getDeclaredVersion(packageName, packageJson) !== undefined;
 }
 
+/**
+ * True when the project pins any dependency version through an `overrides`
+ * (npm/bun), `resolutions` (yarn), or `pnpm.overrides` block. An override that
+ * pins a package the install also pulls in makes npm refuse the whole install
+ * with `EOVERRIDE`, so the installer uses this to gate its recovery retry.
+ */
+export function hasDependencyOverrides(packageJson: PackageJson): boolean {
+  const blocks = [
+    packageJson.overrides,
+    packageJson.resolutions,
+    packageJson.pnpm?.overrides,
+  ];
+  return blocks.some((block) => block && Object.keys(block).length > 0);
+}
+
 export function findDeclaredPackage(
   packageNamesList: string[],
   packageJson: PackageJson,
