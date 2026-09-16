@@ -18,6 +18,7 @@ import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
+import { getProgramConfig } from '@lib/programs/program-registry';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -92,6 +93,94 @@ describe('WizardStore', () => {
       const store = createStore();
       expect(store.getVersion()).toBe(0);
       expect(store.getSnapshot()).toBe(0);
+    });
+
+    // Runs another command in this session; nothing has happened yet to unwind.
+    describe('switchProgram', () => {
+      it('makes the chosen program the active one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.activeProgram).toBe(Program.Metrics);
+      });
+
+      it('routes to the new program instead of finishing the old one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+      });
+
+      // Every program gates its intro on the same flag, so a stale one skips it.
+      it('does not carry the old confirmation into the new intro', () => {
+        const store = createStore();
+        store.completeSetup();
+        expect(store.session.setupConfirmed).toBe(true);
+
+        store.switchProgram(Program.Metrics);
+
+        expect(store.session.setupConfirmed).toBe(false);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+      });
+
+      // Already resolved for the program we left, so reusing them skips screens.
+      it('reopens the gates for the new program', async () => {
+        const store = createStore();
+        const before = store.getGate('intro');
+        store.completeSetup();
+        await expect(before).resolves.toBeUndefined();
+
+        store.switchProgram(Program.Metrics);
+
+        const after = store.getGate('intro');
+        expect(after).not.toBe(before);
+        await expect(
+          Promise.race([after, Promise.resolve('pending')]),
+        ).resolves.toBe('pending');
+      });
+
+      // Dropping the promise the runner is parked on strands it, silently.
+      it('releases callers parked on the old gates', async () => {
+        const store = createStore();
+        const parked = store.getGate('intro');
+
+        store.switchProgram(Program.Metrics);
+
+        await expect(parked).resolves.toBeUndefined();
+      });
+
+      it('reports screens under the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.analyticsProgramId).toBe(Program.Metrics);
+      });
+
+      // The run-level tag is stamped once at launch, so events after the
+      // switch would otherwise still carry the program the run started as.
+      it('retags the run with the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(analytics.setTag).toHaveBeenCalledWith(
+          'program_id',
+          Program.Metrics,
+        );
+      });
+
+      it('follows the new program for label and skill', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.session.programLabel).toBe(Program.Metrics);
+        expect(store.session.skillId).toBe(
+          getProgramConfig(Program.Metrics).skillId ?? null,
+        );
+      });
+
+      // Re-selecting the running program must not discard a fresh confirmation.
+      it('leaves the session alone when the program is unchanged', () => {
+        const store = createStore();
+        store.completeSetup();
+        store.switchProgram(Program.PostHogIntegration);
+        expect(store.session.setupConfirmed).toBe(true);
+        expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+      });
     });
   });
 
@@ -309,6 +398,13 @@ describe('WizardStore', () => {
       expect(store.session.detectionComplete).toBe(false);
       store.setDetectionComplete();
       expect(store.session.detectionComplete).toBe(true);
+    });
+
+    it('setPosthogSdkDetected stores the verdict', () => {
+      const store = createStore();
+      expect(store.session.posthogSdkDetected).toBe(false);
+      store.setPosthogSdkDetected(true);
+      expect(store.session.posthogSdkDetected).toBe(true);
     });
 
     it('setDetectedFramework sets the label', () => {

@@ -83,6 +83,8 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.SelfDrivingIntegrationDetect,
   ScreenId.SelfDrivingHandoff,
+  // The e2e host injects the pick, as it does for self-driving's detect screen.
+  ScreenId.ErrorTrackingDetect,
   Overlay.ManagedSettings,
   Overlay.AuthError,
   Overlay.SessionTimeout,
@@ -108,6 +110,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.AgentSkillIntro]: [confirmSetupAction],
   [ScreenId.AiObservabilityIntro]: [confirmSetupAction],
   [ScreenId.MetricsIntro]: [confirmSetupAction],
+  [ScreenId.ErrorTrackingIntro]: [confirmSetupAction],
   [ScreenId.AuditIntro]: [confirmSetupAction],
   [ScreenId.DoctorIntro]: [confirmSetupAction],
   [ScreenId.WarehouseIntro]: [confirmSetupAction],
@@ -205,6 +208,18 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       id: 'dismiss_outro',
       description: 'Dismiss the outro and advance to the MCP step.',
       apply: (store) => store.setOutroDismissed(),
+    },
+  ],
+  [ScreenId.MintFailure]: [
+    {
+      id: 'continue_setup',
+      description: 'Continue to MCP and Slack after the skill is saved.',
+      apply: (store) => store.setMintHandoff('continue'),
+    },
+    {
+      id: 'dismiss_outro',
+      description: 'Exit the wizard from the mint failure screen.',
+      apply: (store) => store.setMintHandoff('exit'),
     },
   ],
 

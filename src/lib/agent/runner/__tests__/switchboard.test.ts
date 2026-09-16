@@ -68,6 +68,7 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       if (program === 'error-tracking-upload-source-maps') continue; // pinned below
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
+      if (program === 'error-tracking') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
@@ -112,6 +113,17 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'binds error-tracking to the orchestrator on pi; stage models come from the flow frontmatter',
+      ctx: { program: 'error-tracking', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
         model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
@@ -223,7 +235,7 @@ describe('switchboard composed clamp', () => {
       };
       // The flag routes posthog-integration's harness to pi; the composed
       // clamp holds every sequence at linear — the orchestrator bindings
-      // (metrics, replay-vision) included; other axes keep their bindings.
+      // (metrics, replay-vision, error-tracking) included; other axes keep their bindings.
       expect(resolveBinding(ctx)).toEqual(
         program === 'ai-observability'
           ? {
@@ -232,7 +244,7 @@ describe('switchboard composed clamp', () => {
               model: SONNET_5_MODEL,
               thinkingLevel: undefined,
             }
-          : program === 'metrics'
+          : program === 'metrics' || program === 'error-tracking'
           ? {
               ...DEFAULT_RESOLVED,
               model: DEFAULT_AGENT_MODEL,

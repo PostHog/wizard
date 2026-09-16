@@ -26,6 +26,8 @@ import {
   WIZARD_TOOL_NAMES,
   checkEnvKeys as checkEnvKeysCore,
   createAskAccounting,
+  describeAskCancellation,
+  ensureGitignoreCoverage,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
@@ -33,6 +35,7 @@ import {
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
   vaultSensitiveAnswers,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
@@ -209,14 +212,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       ),
     }),
     async execute(_id, args) {
-      const forbidden = Object.keys(args.values).find(
-        (k) => k.toUpperCase() === 'POSTHOG_KEY',
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
       );
-      if (forbidden) {
-        return text(
-          `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
-        );
-      }
+      if (keyRefusal) return text(keyRefusal);
       // Resolve secret refs host-side; the value never reaches the agent.
       const resolution = resolveEnvSecretRefs(args.values, secretVault);
       if (!resolution.ok) {
@@ -241,6 +241,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(resolved, merged, 'utf8');
+      // Same post-write pass as the MCP facade: a credential file the
+      // project does not ignore yet gets committed by the next `git add`.
+      ensureGitignoreCoverage(workingDirectory, path.basename(resolved));
       logToFile(
         `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(
           ',',
@@ -376,7 +379,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       // mutate files while it's waiting on the user's answer.
       onAskPendingChange?.(true);
       try {
-        const answers = await askBridge.request({
+        const { answers, timedOut } = await askBridge.request({
           questions: args.questions,
           subject: normaliseAskSubject(args.subject),
         });
@@ -388,12 +391,23 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           answers,
           secretVault,
         );
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the MCP facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
         logToFile(
           `[pi] wizard_ask: resolved ${
             Object.keys(answers).length
-          } answer(s) for ${args.questions.length} question(s)`,
+          } answer(s) for ${args.questions.length} question(s)${
+            cancelled ? `, cancelled: ${cancelled.reason}` : ''
+          }`,
         );
-        return text(JSON.stringify({ answers: sanitised }, null, 2));
+        return text(
+          JSON.stringify(
+            { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+            null,
+            2,
+          ),
+        );
       } catch (err) {
         askAccounting.refund(args.subject);
         const message = err instanceof Error ? err.message : String(err);

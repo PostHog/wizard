@@ -4,7 +4,7 @@
  * value — and set_env_values resolves refs host-side into the .env file.
  */
 import { mkdtempSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -17,6 +17,8 @@ import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 import {
   ASK_BATCH_THRESHOLD,
+  ASK_CANCELLED_NOTE,
+  ASK_TIMED_OUT_NOTE,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -27,8 +29,9 @@ const SECRET = 'phx_live_zendesk_token_123';
 const makeTools = (
   answers: Record<string, string | string[]>,
   maxQuestions?: number,
+  timedOut = false,
 ) => {
-  const request = vi.fn().mockResolvedValue(answers);
+  const request = vi.fn().mockResolvedValue({ answers, timedOut });
   const workingDirectory = mkdtempSync(join(tmpdir(), 'pi-tools-vault-'));
   const tools = createWizardPiTools({
     workingDirectory,
@@ -90,6 +93,54 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
       answers: { token: string };
     };
     expect(answers.token).toBe(CANCELLED_SENTINEL);
+  });
+
+  it('names the cancellation explicitly instead of leaving the sentinel to be read', async () => {
+    // The agent's only signal used to be the sentinel string inside `answers`,
+    // which says neither "this was not collected" nor who ended the prompt.
+    const { wizardAsk } = makeTools({
+      host: CANCELLED_SENTINEL,
+      password: CANCELLED_SENTINEL,
+    });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'host', prompt: 'Host', kind: 'text' },
+        { id: 'password', prompt: 'Password', kind: 'text', sensitive: true },
+      ],
+      subject: 'Postgres',
+    });
+    const { cancelled } = JSON.parse(textOf(result)) as {
+      cancelled: { reason: string; questionIds: string[]; note: string };
+    };
+    expect(cancelled.reason).toBe('user-cancelled');
+    expect(cancelled.questionIds).toEqual(['host', 'password']);
+    expect(cancelled.note).toBe(ASK_CANCELLED_NOTE);
+  });
+
+  it('distinguishes a timed-out prompt from a dismissed one', async () => {
+    // A timeout means nobody is reading the terminal, so every later prompt in
+    // the run costs another full timeout before it fails the same way.
+    const { wizardAsk } = makeTools(
+      { host: CANCELLED_SENTINEL },
+      undefined,
+      true,
+    );
+    const result = await call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Host', kind: 'text' }],
+    });
+    const { cancelled } = JSON.parse(textOf(result)) as {
+      cancelled: { reason: string; note: string };
+    };
+    expect(cancelled.reason).toBe('timed-out');
+    expect(cancelled.note).toBe(ASK_TIMED_OUT_NOTE);
+  });
+
+  it('carries no cancellation envelope when every question was answered', async () => {
+    const { wizardAsk } = makeTools({ host: 'db.example.com' });
+    const result = await call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Host', kind: 'text' }],
+    });
+    expect(JSON.parse(textOf(result))).not.toHaveProperty('cancelled');
   });
 
   it('still rejects sensitive=true on non-text kinds', async () => {
@@ -287,6 +338,91 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
   });
 
+  it('gitignores the env file it just wrote, like the MCP facade does', async () => {
+    // An iOS/Android project's .gitignore lists xcuserdata or build/, never
+    // .env — so without this pass the personal API key the flow writes is
+    // staged by the next `git add`.
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(join(workingDirectory, '.gitignore'), 'xcuserdata/\n');
+
+    await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_CLI_HOST: 'https://us.posthog.com' },
+    });
+
+    const gitignore = await readFile(
+      join(workingDirectory, '.gitignore'),
+      'utf8',
+    );
+    expect(gitignore.split('\n')).toContain('.env');
+    expect(gitignore).toContain('xcuserdata/');
+  });
+
+  it('refuses POSTHOG_KEY in a project that does not read it', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('is not a valid PostHog env var name');
+    await expect(
+      readFile(join(workingDirectory, '.env'), 'utf8'),
+    ).rejects.toThrow();
+  });
+
+  it('keeps POSTHOG_KEY when the project code already reads it', async () => {
+    // Refusing here forces a rename of working code, and a deploy step that
+    // still passes POSTHOG_KEY then starts the app with an empty token.
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await mkdir(join(workingDirectory, 'src'));
+    await writeFile(
+      join(workingDirectory, 'src', 'index.ts'),
+      "const client = new PostHog(process.env.POSTHOG_KEY ?? '');\n",
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('Wrote 1 key(s)');
+    expect(await readFile(join(workingDirectory, '.env'), 'utf8')).toMatch(
+      /^POSTHOG_KEY=.*phc_test/m,
+    );
+  });
+
+  it('keeps POSTHOG_KEY when only a startup script reads it', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(
+      join(workingDirectory, 'start.sh'),
+      '#!/bin/sh\nAPP_TOKEN="$POSTHOG_KEY" exec ./server\n',
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('Wrote 1 key(s)');
+  });
+
+  it('does not count NEXT_PUBLIC_POSTHOG_KEY as a read of POSTHOG_KEY', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(
+      join(workingDirectory, 'providers.tsx'),
+      'posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!);\n',
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('is not a valid PostHog env var name');
+  });
+
   it('mixed values map: literal + secretRef written together, secret still never in output', async () => {
     const { wizardAsk, setEnvValues, workingDirectory } = makeTools({
       token: SECRET,
@@ -400,9 +536,11 @@ describe('pi task wiring — wizard_ask pauses Write/Edit', () => {
     let release!: (answers: Record<string, string>) => void;
     const request = vi.fn(
       () =>
-        new Promise<Record<string, string>>((resolve) => {
-          release = resolve;
-        }),
+        new Promise<{ answers: Record<string, string>; timedOut: boolean }>(
+          (resolve) => {
+            release = (answers) => resolve({ answers, timedOut: false });
+          },
+        ),
     );
     const [wizardAsk] = createWizardPiTools({
       workingDirectory: mkdtempSync(join(tmpdir(), 'pi-ask-pause-')),

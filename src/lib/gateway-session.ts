@@ -196,7 +196,7 @@ export function isPastRefresh(auth: GatewayAuth, now = Date.now()): boolean {
 
 /**
  * Whether a server-supplied origin may receive a bearer and prompt content:
- * https (loopback excepted), and either a posthog.com host or the one the run
+ * https (loopback excepted), and either a current cloud gateway or the host the run
  * authenticated against.
  */
 export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
@@ -224,7 +224,12 @@ export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
   // Loopback is the dev gateway, and is the one case allowed over http.
   if (localhost) return true;
   if (url.protocol !== 'https:') return false;
-  if (url.hostname.endsWith('.posthog.com')) return true;
+  if (url.hostname.endsWith('.posthog.com')) {
+    return (
+      url.origin === 'https://ai-gateway.us.posthog.com' ||
+      url.origin === 'https://ai-gateway.eu.posthog.com'
+    );
+  }
   try {
     return url.hostname === new URL(apiHost).hostname;
   } catch {
