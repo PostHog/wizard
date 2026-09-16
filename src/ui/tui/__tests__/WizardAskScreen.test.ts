@@ -24,6 +24,7 @@ import {
   askEscapeHint,
   handleAskKey,
   isRequiredButEmpty,
+  shouldMaskAnswer,
 } from '@ui/tui/screens/WizardAskScreen';
 
 const pending = {
@@ -76,6 +77,22 @@ describe('askEscapeHint', () => {
     expect(askEscapeHint(5, 4)).toBe(
       'skip all 5 questions, discarding the 4 you answered',
     );
+  });
+});
+
+describe('shouldMaskAnswer', () => {
+  it('masks a text answer the agent asked to vault', () => {
+    expect(shouldMaskAnswer({ kind: 'text', sensitive: true })).toBe(true);
+  });
+
+  it('leaves an ordinary text answer visible', () => {
+    expect(shouldMaskAnswer({ kind: 'text' })).toBe(false);
+    expect(shouldMaskAnswer({ kind: 'text', sensitive: false })).toBe(false);
+  });
+
+  it('never masks a picker, which has nothing to type', () => {
+    expect(shouldMaskAnswer({ kind: 'single', sensitive: true })).toBe(false);
+    expect(shouldMaskAnswer({ kind: 'multi', sensitive: true })).toBe(false);
   });
 });
 
