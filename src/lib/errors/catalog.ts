@@ -196,6 +196,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'yes',
     description: 'The agent hit an API error other than a rate limit.',
   },
+  [ErrorCodes.AgentModuleMissing]: {
+    group: 'agent',
+    retry: 'no',
+    description:
+      'A wizard dependency was absent from the npx download. The user must delete the npx cache and run again.',
+  },
   [ErrorCodes.AgentYaraViolation]: {
     group: 'agent',
     retry: 'no',

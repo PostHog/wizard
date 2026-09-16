@@ -6,6 +6,7 @@ export const AGENT_ERROR_CODE: Record<AgentErrorType, ErrorCode> = {
   [AgentErrorType.RESOURCE_MISSING]: ErrorCodes.AgentResourceMissing,
   [AgentErrorType.RATE_LIMIT]: ErrorCodes.AgentRateLimit,
   [AgentErrorType.API_ERROR]: ErrorCodes.AgentApiError,
+  [AgentErrorType.MODULE_MISSING]: ErrorCodes.AgentModuleMissing,
   [AgentErrorType.YARA_VIOLATION]: ErrorCodes.AgentYaraViolation,
   [AgentErrorType.ABORT]: ErrorCodes.AgentAbort,
   [AgentErrorType.NO_PROGRESS]: ErrorCodes.AgentNoProgress,
