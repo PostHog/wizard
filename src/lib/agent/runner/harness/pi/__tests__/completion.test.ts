@@ -1,4 +1,4 @@
-import { completionFailure } from '../completion';
+import { completionFailure, runErrorType } from '../completion';
 import { AgentErrorType } from '@lib/agent/signals';
 
 describe('completionFailure', () => {
@@ -38,5 +38,22 @@ describe('completionFailure', () => {
         completionFailure({ toolCalls: 5, openTasks: false }),
       ).toBeUndefined();
     });
+  });
+});
+
+describe('runErrorType', () => {
+  it('reads a rate limit out of the thrown message', () => {
+    expect(runErrorType('429 Too Many Requests')).toBe(
+      AgentErrorType.RATE_LIMIT,
+    );
+    expect(runErrorType('Gateway rate limit exceeded')).toBe(
+      AgentErrorType.RATE_LIMIT,
+    );
+    expect(runErrorType('RATE LIMIT reached')).toBe(AgentErrorType.RATE_LIMIT);
+  });
+
+  it('falls back to a generic API error', () => {
+    expect(runErrorType('socket hang up')).toBe(AgentErrorType.API_ERROR);
+    expect(runErrorType('')).toBe(AgentErrorType.API_ERROR);
   });
 });
