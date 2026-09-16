@@ -30,8 +30,9 @@ export const ErrorTrackingIntroScreen = ({
     <Box flexDirection="column" width={56}>
       <Box marginBottom={1}>
         <Text>
-          The Wizard is an agent, it's here to help you setup PostHog. Its code is open
-          source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
+          The Wizard is an agent, it's here to help you setup PostHog. Its code
+          is open source:{' '}
+          <Text color="cyan">https://github.com/PostHog/wizard</Text>
         </Text>
       </Box>
 
@@ -41,10 +42,9 @@ export const ErrorTrackingIntroScreen = ({
           error-tracking
         </Text>{' '}
         program makes uncaught errors reach PostHog with readable stack traces.
-        It installs and initializes the PostHog, wires up exception capture,
-        and sets up source-map uploading when necessary. In PostHog, 
-        you can analyze these errors and have agents proactively suggest
-        fixes in self-driving.
+        It installs and initializes the PostHog, wires up exception capture, and
+        sets up source-map uploading when necessary. In PostHog, you can analyze
+        these errors and have agents proactively suggest fixes in self-driving.
       </Text>
       <Box marginTop={1}>
         <SkillSourceInfo
