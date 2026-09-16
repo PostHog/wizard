@@ -117,9 +117,7 @@ export function runNonInteractive(
     const env = readEnvironment();
     const apiKey =
       (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined;
-    const installDir = path.isAbsolute(options.installDir as string)
-      ? (options.installDir as string)
-      : path.join(process.cwd(), options.installDir as string);
+    const installDir = path.resolve(options.installDir as string);
 
     const session = buildSession({
       debug: options.debug as boolean | undefined,

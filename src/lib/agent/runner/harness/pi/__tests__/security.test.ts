@@ -580,6 +580,21 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
     }
   });
 
+  test('a non-canonical working directory does not block in-project deletes', async () => {
+    const trailing = await evaluateToolCall(
+      'bash',
+      { command: 'rm src/tmp/plan.json' },
+      { workingDirectory: `${ROOT}${path.sep}` },
+    );
+    expect(trailing.block).toBe(false);
+    const escape = await evaluateToolCall(
+      'bash',
+      { command: 'rm ../outside.txt' },
+      { workingDirectory: `${ROOT}${path.sep}` },
+    );
+    expect(escape.block).toBe(true);
+  });
+
   test('can NEVER resolve outside the project root', async () => {
     for (const c of [
       'rm /etc/passwd', // absolute

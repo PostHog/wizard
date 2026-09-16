@@ -17,7 +17,7 @@ import { classifyRunFailure, emitWizardError } from '@lib/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -81,7 +81,9 @@ export function runWizard(
 
   void (async () => {
     try {
-      const installDir = (options.installDir as string) || process.cwd();
+      const installDir = resolve(
+        (options.installDir as string) || process.cwd(),
+      );
 
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
