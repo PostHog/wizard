@@ -20,6 +20,7 @@ import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
+  provisionedAccount?: boolean;
   /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
   refreshToken?: string;
   /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
@@ -106,6 +107,7 @@ export enum OutroKind {
 
 export interface OutroData {
   kind: OutroKind;
+  handoffReason?: 'provisioned_account';
   /** Main headline (green check for Success, red X for Error, etc.) */
   message?: string;
   /** Free-form body text shown under the headline. Use \n for paragraph breaks. */

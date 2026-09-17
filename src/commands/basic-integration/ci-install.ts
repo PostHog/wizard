@@ -7,6 +7,9 @@ import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { ErrorCodes, type ErrorCode } from '@lib/errors';
 import { emitWizardError } from '@lib/errors';
+import type { Credentials } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
+import type { ProvisioningResult } from '@utils/provisioning';
 
 type Options = Arguments & {
   region?: string;
@@ -17,6 +20,7 @@ type Options = Arguments & {
   email?: string;
   name?: string;
   projectId?: string;
+  provisionedCredentials?: Credentials;
 };
 
 /**
@@ -79,8 +83,15 @@ function runNonInteractiveInstall(
         );
       }
       const provisioned = await provisionForSignup(options);
-      options.apiKey = provisioned.personalApiKey;
+      options.apiKey = provisioned.accessToken;
       if (options.projectId == null) options.projectId = provisioned.projectId;
+      options.provisionedCredentials = {
+        accessToken: provisioned.accessToken,
+        projectApiKey: provisioned.projectApiKey,
+        projectId: Number(provisioned.projectId),
+        host: HostResolution.fromApiHost(provisioned.host),
+        provisionedAccount: true,
+      };
     }
     runWizard(posthogIntegrationConfig, options);
   })().catch((error: unknown) => {
@@ -136,7 +147,7 @@ function warnOnUnexpectedKeyPrefix(apiKey: string | undefined): void {
  */
 async function provisionForSignup(
   options: Options,
-): Promise<{ personalApiKey: string; projectId: string }> {
+): Promise<ProvisioningResult> {
   setUI(new LoggingUI());
   getUI().intro('PostHog Wizard');
   const signupRegion = ((options.region as string) || 'us').toUpperCase() as
@@ -162,19 +173,6 @@ async function provisionForSignup(
     throw error;
   }
 
-  if (!result.personalApiKey) {
-    getUI().log.error(
-      'Provisioning succeeded but no personal API key was returned — cannot continue install.',
-    );
-    throw new Error('provisioning returned no personal API key');
-  }
-
   getUI().log.success('Account ready.');
-  getUI().log.info(`  Project API Key:  ${result.projectApiKey}`);
-  getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
-  getUI().log.info(`  Host:             ${result.host}`);
-  return {
-    personalApiKey: result.personalApiKey,
-    projectId: result.projectId,
-  };
+  return result;
 }

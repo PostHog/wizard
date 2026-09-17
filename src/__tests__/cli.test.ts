@@ -93,11 +93,23 @@ vi.mock('../lib/detection/index', () => ({
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('../utils/analytics', () => ({
-  analytics: { setTag: vi.fn() },
+  analytics: {
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 vi.mock('../utils/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
+}));
+vi.mock('../lib/provisioned-account-handoff', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../lib/provisioned-account-handoff')
+  >()),
+  saveProvisionedAccountSkills: vi.fn().mockResolvedValue({
+    path: '/tmp/test/.posthog/setup/README.md',
+    skillsIncluded: true,
+  }),
 }));
 vi.mock('../lib/agent/agent-runner', () => ({
   runAgent: vi.fn().mockResolvedValue(undefined),
@@ -677,18 +689,37 @@ describe('CLI argument parsing', () => {
       expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
     });
 
-    test('provisions a new account and feeds personalApiKey into the CI flow', async () => {
-      mockProvisionNewAccountCli.mockResolvedValue(successResult);
-      await runCISignup();
-      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
-        'new@example.com',
-        '',
-        'US',
-        { baseUrl: undefined },
-      );
-      const args = getLastBuildSessionArgs();
-      expect(args.apiKey).toBe('phx_from_signup');
-    });
+    test.each([false, true])(
+      'provisions a new account and saves skills without inference (headless: %s)',
+      async (headless) => {
+        mockProvisionNewAccountCli.mockResolvedValue(successResult);
+        const { HEADLESS_FLAG } = await import('../lib/headless-mode');
+        await runCISignup(headless ? [`--${HEADLESS_FLAG}`] : []);
+        expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
+          'new@example.com',
+          '',
+          'US',
+          { baseUrl: undefined },
+        );
+        const { saveProvisionedAccountSkills } = await import(
+          '../lib/provisioned-account-handoff'
+        );
+        expect(saveProvisionedAccountSkills).toHaveBeenCalled();
+        const { runAgent } = await import('../lib/agent/agent-runner');
+        expect(runAgent).not.toHaveBeenCalled();
+        const { wizardAbort } = await import('../utils/wizard-abort');
+        expect(wizardAbort).toHaveBeenCalledWith(
+          expect.objectContaining({
+            exitCode: 0,
+            outroData: expect.objectContaining({
+              message: expect.stringContaining(
+                '/tmp/test/.posthog/setup/README.md',
+              ),
+            }),
+          }),
+        );
+      },
+    );
 
     test('forwards --name to provisionNewAccount', async () => {
       mockProvisionNewAccountCli.mockResolvedValue(successResult);
@@ -720,14 +751,65 @@ describe('CLI argument parsing', () => {
       expect(mockBuildSessionCli).not.toHaveBeenCalled();
     });
 
-    test('exits non-zero when provisioning returns no personal API key', async () => {
+    test('saves setup instructions when provisioning returns no personal API key', async () => {
       mockProvisionNewAccountCli.mockResolvedValue({
         ...successResult,
         personalApiKey: undefined,
       });
       await runCISignup();
-      expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockBuildSessionCli).not.toHaveBeenCalled();
+      const { saveProvisionedAccountSkills } = await import(
+        '../lib/provisioned-account-handoff'
+      );
+      expect(saveProvisionedAccountSkills).toHaveBeenCalled();
+      const { runAgent } = await import('../lib/agent/agent-runner');
+      expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    test('hands an existing provisioned account back to its own agent in headless mode', async () => {
+      const { runAgent } = await import('../lib/agent/agent-runner');
+      const { GatewayMintRefused } = await import('../lib/gateway-session');
+      const { HostResolution } = await import('../lib/host-resolution');
+      const { HEADLESS_FLAG } = await import('../lib/headless-mode');
+      vi.mocked(runAgent).mockImplementationOnce((_config, session) => {
+        session.credentials = {
+          accessToken: 'pha_private',
+          projectApiKey: 'phc_capture',
+          projectId: 42,
+          host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+        };
+        return Promise.reject(
+          new GatewayMintRefused(
+            403,
+            'Use your own agent.',
+            'provisioned_account_gateway_disabled',
+          ),
+        );
+      });
+      mockBuildSessionCli.mockImplementationOnce(
+        (args: Record<string, unknown>) => ({ ...args, frameworkContext: {} }),
+      );
+      await runCLI([
+        `--${HEADLESS_FLAG}`,
+        '--api-key',
+        'pha_private',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+      await vi.waitFor(async () => {
+        const { wizardAbort } = await import('../utils/wizard-abort');
+        expect(wizardAbort).toHaveBeenCalledWith(
+          expect.objectContaining({ exitCode: 0 }),
+        );
+      });
+      const { saveProvisionedAccountSkills } = await import(
+        '../lib/provisioned-account-handoff'
+      );
+      expect(saveProvisionedAccountSkills).toHaveBeenCalledWith(
+        expect.objectContaining({
+          credentials: expect.objectContaining({ projectId: 42 }),
+        }),
+        expect.anything(),
+      );
     });
 
     test('existing --api-key takes precedence over --signup', async () => {

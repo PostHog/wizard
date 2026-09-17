@@ -19,16 +19,21 @@ import { markGrantRevoked } from '@lib/auth-session-state';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
+import { ProvisionedAccountHandoff } from '@lib/provisioned-account-handoff';
 
 export async function authenticate(
   session: WizardSession,
   programId: ProgramId,
 ): Promise<void> {
+  if (session.credentials?.provisionedAccount) {
+    throw new ProvisionedAccountHandoff();
+  }
   if (session.credentials) return;
 
   logToFile('[agent-runner] starting OAuth');
   const {
     projectApiKey,
+    provisionedAccount,
     host,
     accessToken,
     refreshToken,
@@ -53,6 +58,7 @@ export async function authenticate(
 
   session.credentials = {
     accessToken,
+    provisionedAccount,
     refreshToken,
     expiresAt,
     oauthClientId,
@@ -73,6 +79,7 @@ export async function authenticate(
   // target the individual user and not just $app_name.
   if (user) analytics.identifyUser(user);
   analytics.setGroups(groupsFromUser(user, host.apiHost));
+  if (provisionedAccount) throw new ProvisionedAccountHandoff();
 }
 
 // Below this remaining lifetime a run risks outliving its token; just-minted and 7-day tokens skip.

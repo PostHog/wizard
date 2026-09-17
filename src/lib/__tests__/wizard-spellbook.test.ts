@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { HostResolution } from '../host-resolution';
 import { Integration } from '../constants';
 import type { ProgramConfig } from '../programs/program-step';
 import { buildSession } from '../wizard-session';
@@ -75,6 +76,45 @@ describe('writeWizardSpellbook', () => {
     expect(readme).toContain(program.description);
     expect(readme).toContain(`[${skill.id}](skills/${skill.id}/SKILL.md)`);
     expect(readme).not.toMatch(/secret/);
+  });
+
+  it('keeps provisioned project config separate from reusable skills and private credentials', async () => {
+    const session = buildSession({ installDir });
+    session.integration = Integration.nextjs;
+    session.credentials = {
+      projectApiKey: 'phc_capture',
+      accessToken: 'pha_private',
+      refreshToken: 'phr_private',
+      host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+      projectId: 42,
+    };
+    vi.mocked(fetchSkillMenu).mockResolvedValue({
+      categories: { integration: [skill] },
+    });
+    const result = await writeWizardSpellbook(session, program, {
+      project: session.credentials,
+    });
+    const directory = path.dirname(result.path);
+    const readme = await fs.readFile(result.path, 'utf8');
+    const config = await fs.readFile(
+      path.join(directory, 'project.json'),
+      'utf8',
+    );
+    expect(JSON.parse(config)).toEqual({
+      projectApiKey: 'phc_capture',
+      host: 'https://eu.i.posthog.com',
+      projectId: 42,
+    });
+    expect(readme).toContain('project.json');
+    expect(readme).not.toMatch(/phc_capture|pha_private|phr_private/);
+    expect(config).not.toMatch(/pha_private|phr_private/);
+    expect(
+      await fs.readFile(path.join(directory, '.gitignore'), 'utf8'),
+    ).toContain('project.json');
+    expect(
+      (await fs.stat(path.join(directory, 'project.json'))).mode & 0o777,
+    ).toBe(0o600);
+    expect(downloadSkill).toHaveBeenCalledOnce();
   });
 
   it('still leaves usable instructions when the menu or download fails', async () => {

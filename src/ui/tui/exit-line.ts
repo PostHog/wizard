@@ -15,7 +15,11 @@
 
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
-import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
+import {
+  isRunFailure,
+  isProvisionedAccountSetup,
+  MINT_FAILURE_CONTACT,
+} from '@ui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
 import { getLogFilePath } from '@utils/debug';
 
@@ -70,6 +74,16 @@ export function getExitLine(store: WizardStore): string {
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
+
+  if (isProvisionedAccountSetup(store.session)) {
+    return [
+      'Your PostHog account is ready. Continue setup in your coding agent.',
+      store.session.spellbook &&
+        `Ask your agent to read and follow:\n${store.session.spellbook.path}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
 
   if (isRunFailure(store.session)) {
     const spellbook = store.session.spellbook;

@@ -8,6 +8,12 @@ export const MINT_FAILURE_BODY =
 export const MINT_FAILURE_CONTACT =
   'Email wizard@posthog.com and tell us what happened. Please attach this log:';
 
+export function isProvisionedAccountSetup(
+  session: Pick<WizardSession, 'outroData'>,
+): boolean {
+  return session.outroData?.handoffReason === 'provisioned_account';
+}
+
 /** The agent run ended in an error, whatever the reason. Login failures also
  *  set an error outro but never had credentials, so they stay on the outro. */
 export function isRunFailure(

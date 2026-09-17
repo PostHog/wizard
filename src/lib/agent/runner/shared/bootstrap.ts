@@ -112,6 +112,8 @@ export async function bootstrapProgram(
       `posthog=${session.baseUrl ?? 'region-resolved'}`,
   );
 
+  if (session.signup) await authenticate(session, programConfig.id);
+
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs that declare a health-check screen get pre-flight checks;
   // for everything else the checks never fire and never block.

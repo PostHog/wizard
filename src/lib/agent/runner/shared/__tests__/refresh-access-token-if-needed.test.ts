@@ -1,19 +1,30 @@
-import { refreshAccessTokenIfNeeded } from '../authenticate';
+import { authenticate, refreshAccessTokenIfNeeded } from '../authenticate';
+import { getOrAskForProjectData } from '@utils/setup-utils';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
 import { isGrantRevoked, resetAuthSessionState } from '@lib/auth-session-state';
 import type { WizardSession, Credentials } from '@lib/wizard-session';
 
+vi.mock('@utils/setup-utils', () => ({ getOrAskForProjectData: vi.fn() }));
 vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn() },
+  analytics: {
+    wizardCapture: vi.fn(),
+    identifyUser: vi.fn(),
+    setGroups: vi.fn(),
+  },
   groupsFromUser: vi.fn(),
 }));
 
 const setAccessToken = vi.fn();
 vi.mock('@ui', () => ({
-  getUI: () => ({ setAccessToken }),
+  getUI: () => ({
+    setAccessToken,
+    setCredentials: vi.fn(),
+    setRoleAtOrganization: vi.fn(),
+    setApiUser: vi.fn(),
+  }),
 }));
 
 const mockedRefresh = refreshAccessToken as Mock;
@@ -140,4 +151,33 @@ describe('refreshAccessTokenIfNeeded', () => {
 
     expect(isGrantRevoked()).toBe(false);
   });
+});
+
+it('hands off only newly provisioned credentials, preserving the project for the user agent', async () => {
+  const result = {
+    projectApiKey: 'phc_capture',
+    accessToken: 'pha_private',
+    projectId: 42,
+    host: { apiHost: 'https://us.i.posthog.com' },
+    provisionedAccount: true,
+  };
+  vi.mocked(getOrAskForProjectData).mockResolvedValue(result as never);
+  const session = sessionWith(null);
+  session.signup = true;
+  await expect(
+    authenticate(session, 'posthog-integration'),
+  ).rejects.toMatchObject({ name: 'ProvisionedAccountHandoff' });
+  expect(session.credentials?.projectApiKey).toBe('phc_capture');
+  await expect(
+    authenticate(session, 'posthog-integration'),
+  ).rejects.toMatchObject({ name: 'ProvisionedAccountHandoff' });
+  vi.mocked(getOrAskForProjectData).mockResolvedValue({
+    ...result,
+    provisionedAccount: undefined,
+  } as never);
+  const existing = sessionWith(null);
+  existing.signup = true;
+  await expect(
+    authenticate(existing, 'posthog-integration'),
+  ).resolves.toBeUndefined();
 });
