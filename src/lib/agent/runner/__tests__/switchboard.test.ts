@@ -75,13 +75,13 @@ describe('switchboard PROGRAM_BINDINGS', () => {
 
   runBindingCases([
     {
-      name: 'binds ai-observability to anthropic + sonnet 5',
+      name: 'binds ai-observability to pi + terra high',
       ctx: { program: 'ai-observability', flags: {} },
       binding: {
         sequence: Sequence.linear,
-        harness: Harness.anthropic,
-        model: SONNET_5_MODEL,
-        thinkingLevel: undefined,
+        harness: Harness.pi,
+        model: GPT5_6_TERRA_MODEL,
+        thinkingLevel: 'high',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -240,9 +240,8 @@ describe('switchboard composed clamp', () => {
         program === 'ai-observability'
           ? {
               ...DEFAULT_RESOLVED,
-              harness: Harness.anthropic,
-              model: SONNET_5_MODEL,
-              thinkingLevel: undefined,
+              model: GPT5_6_TERRA_MODEL,
+              thinkingLevel: 'high',
             }
           : program === 'metrics' || program === 'error-tracking'
           ? {

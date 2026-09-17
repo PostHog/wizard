@@ -3,7 +3,7 @@
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
-  SONNET_5_MODEL,
+  GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
 } from '@lib/constants';
@@ -158,8 +158,9 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   },
   'ai-observability': {
     sequence: Sequence.linear,
-    harness: Harness.anthropic,
-    model: SONNET_5_MODEL,
+    harness: Harness.pi,
+    model: GPT5_6_TERRA_MODEL,
+    thinkingLevel: 'high',
   },
   slack: DEFAULT_BINDING,
 };
