@@ -14,7 +14,11 @@ import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@lib/errors';
-import { isRunFailure } from '@ui/mint-failure';
+import { isRunFailure, isProvisionedAccountSetup } from '@ui/mint-failure';
+import {
+  isProvisionedAccountHandoff,
+  provisionedAccountOutro,
+} from '@lib/provisioned-account-handoff';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
@@ -219,41 +223,46 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.run || s.targetDir)) {
-        // A composed program: its step list splices in run steps that carry
-        // their own agent (self-driving runs the integration before its own
-        // run), or scopes its own run to a picked project (error-tracking).
-        // Walk the list once, advancing each step to completion.
-        for (const step of config.steps) {
-          if (step.screenId === 'outro') break; // run-completion wait owns it
-          if (shown(step)) await advanceStep(step, activeTui.store, config);
-        }
-      } else if (skipAgent) {
-        const { getOrAskForProjectData } = await import('@utils/setup-utils');
-        const { projectApiKey, host, accessToken, projectId } =
-          await getOrAskForProjectData({
-            signup: session.signup,
-            ci: session.ci,
-            apiKey: session.apiKey,
-            projectId: session.projectId,
-            baseUrl: session.baseUrl,
-            programId: config.id,
+      const composed = config.steps.some((s) => s.run || s.targetDir);
+      try {
+        if (composed) {
+          // A composed program: its step list splices in run steps that carry
+          // their own agent (self-driving runs the integration before its own
+          // run), or scopes its own run to a picked project (error-tracking).
+          // Walk the list once, advancing each step to completion.
+          for (const step of config.steps) {
+            if (step.screenId === 'outro') break; // run-completion wait owns it
+            if (shown(step)) await advanceStep(step, activeTui.store, config);
+          }
+        } else if (skipAgent) {
+          const { getOrAskForProjectData } = await import('@utils/setup-utils');
+          const { projectApiKey, host, accessToken, projectId } =
+            await getOrAskForProjectData({
+              signup: session.signup,
+              ci: session.ci,
+              apiKey: session.apiKey,
+              projectId: session.projectId,
+              baseUrl: session.baseUrl,
+              programId: config.id,
+            });
+          activeTui.store.setCredentials({
+            accessToken,
+            projectApiKey,
+            host,
+            projectId,
           });
-        activeTui.store.setCredentials({
-          accessToken,
-          projectApiKey,
-          host,
-          projectId,
-        });
-      } else {
-        try {
+        } else {
           await runAgent(config, activeTui.store.session);
-        } catch (error) {
-          // The run threw before its own error handling rendered an outro.
-          // Show the handoff screen and let the user's agent take over.
+        }
+      } catch (error) {
+        runCleanups();
+        if (isProvisionedAccountHandoff(error)) {
+          activeTui.store.setOutroData(provisionedAccountOutro());
+        } else if (composed || skipAgent) {
+          throw error;
+        } else {
           const failure = classifyRunFailure(error);
           logToFile('[run-wizard] run failed, handing off:', error);
-          runCleanups();
           analytics.captureException(
             error instanceof Error ? error : new Error(String(error)),
             { error_code: failure.code },
@@ -268,6 +277,7 @@ export function runWizard(
 
       const runFailed = isRunFailure(activeTui.store.session);
       await activeTui.store.waitUntil((s) => {
+        if (isProvisionedAccountSetup(s)) return s.mintHandoff !== null;
         if (s.mintHandoff === 'exit') return true;
         if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
@@ -278,6 +288,8 @@ export function runWizard(
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
       if (runFailed) await analytics.shutdown('error');
+      else if (isProvisionedAccountSetup(activeTui.store.session))
+        await analytics.shutdown('success');
       activeTui.unmount();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {

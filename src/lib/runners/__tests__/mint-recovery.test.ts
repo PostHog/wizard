@@ -8,8 +8,14 @@ import { setUI } from '@ui';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { ScreenId } from '@ui/tui/router';
 import { HostResolution } from '@lib/host-resolution';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { GatewayMintRefused } from '@lib/gateway-session';
+import { ProvisionedAccountHandoff } from '@lib/provisioned-account-handoff';
 import { analytics } from '@utils/analytics';
 
+vi.mock('@lib/agent/runner/shared/authenticate', () => ({
+  authenticate: vi.fn(),
+}));
 vi.mock('@lib/agent/agent-runner', () => ({ runAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@lib/local-dev', async (original) => ({
@@ -94,5 +100,64 @@ it.each(['continue', 'exit'] as const)(
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
     expect(unmount).toHaveBeenCalledOnce();
     expect(analytics.shutdown).toHaveBeenCalledWith('error');
+  },
+);
+
+it.each(['new signup', 'existing provisioned account', 'composed signup'])(
+  'finishes %s with an intentional handoff and a successful exit',
+  async (scenario) => {
+    const store = new WizardStore();
+    setUI(new InkUI(store));
+    vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+    vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+    const unmount = vi.fn();
+    vi.mocked(startTUI).mockReturnValue({
+      store,
+      unmount,
+      waitForSetup: () => Promise.resolve(),
+    });
+    const handoff = () => {
+      store.setCredentials({
+        accessToken: 'pha_private',
+        projectApiKey: 'phc_capture',
+        host: HostResolution.fromApiHost('https://us.i.posthog.com'),
+        projectId: 42,
+      });
+      return Promise.reject(
+        scenario === 'existing provisioned account'
+          ? new GatewayMintRefused(
+              403,
+              'Use your own agent.',
+              'provisioned_account_gateway_disabled',
+            )
+          : new ProvisionedAccountHandoff(),
+      );
+    };
+    vi.mocked(runAgent).mockImplementation(handoff);
+    vi.mocked(authenticate).mockImplementation(handoff);
+    const nextRun = vi.fn();
+    const config =
+      scenario === 'composed signup'
+        ? {
+            ...posthogIntegrationConfig,
+            steps: [
+              { id: 'auth', label: 'Auth', screenId: 'auth' },
+              { id: 'run', label: 'Run', screenId: 'run', run: nextRun },
+            ],
+          }
+        : posthogIntegrationConfig;
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    runWizard(config, { installDir: '/tmp/handoff-test', telemetry: false });
+    await vi.waitFor(() =>
+      expect(store.currentScreen).toBe(ScreenId.MintFailure),
+    );
+    expect(store.session.outroData?.handoffReason).toBe('provisioned_account');
+    store.setMintHandoff('continue');
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(nextRun).not.toHaveBeenCalled();
+    expect(analytics.captureException).not.toHaveBeenCalled();
+    expect(analytics.shutdown).toHaveBeenCalledWith('success');
   },
 );

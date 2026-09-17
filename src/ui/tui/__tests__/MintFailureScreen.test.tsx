@@ -24,7 +24,7 @@ const saved = {
 };
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
-function setup() {
+function setup(provisioned = false) {
   const store = new WizardStore();
   store.setCredentials({
     accessToken: 'tok',
@@ -32,7 +32,11 @@ function setup() {
     host: HostResolution.fromApiHost('https://app.posthog.com'),
     projectId: 1,
   });
-  store.setOutroData({ kind: OutroKind.Error, message: 'agent failed' });
+  store.setOutroData(
+    provisioned
+      ? { kind: OutroKind.Success, handoffReason: 'provisioned_account' }
+      : { kind: OutroKind.Error, message: 'agent failed' },
+  );
   const services: MintFailureServices = {
     leaveSpellbook: vi.fn().mockResolvedValue(saved),
     openAgent: vi.fn().mockResolvedValue(undefined),
@@ -114,4 +118,16 @@ it('exits without saving or launching', async () => {
   expect(store.session.mintHandoff).toBe('exit');
   expect(services.leaveSpellbook).not.toHaveBeenCalled();
   expect(services.openAgent).not.toHaveBeenCalled();
+});
+
+it('offers provisioned accounts their own agent and exits after saving the skill', async () => {
+  const { app, store, choose } = setup(true);
+  await delay();
+  expect(app.lastFrame()).toContain('Continue setup in your coding agent');
+  expect(app.lastFrame()).not.toContain('Report this issue');
+  expect(app.lastFrame()).not.toContain('busy');
+  await choose(0);
+  expect(app.lastFrame()).toContain(saved.path);
+  await choose(0);
+  expect(store.router.resolve(store.session)).toBe(ScreenId.Exit);
 });

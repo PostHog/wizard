@@ -170,15 +170,16 @@ Ownership is by directory. Programs not listed above
 `team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
 not a merge gate.
 
-## Headless signup + install (agents / CI)
+## Signup with your own coding agent
 
 > ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
 > This flow works in development builds only.
 
 For a fully non-interactive first-run (no existing PostHog account, no TTY,
 no browser), combine `--ci --signup --email`. The wizard provisions a new
-account, uses the returned personal API key to run the normal CI install,
-and wires PostHog into the project at `--install-dir`:
+account and saves installation skills at `--install-dir`. It prints the
+instructions file for your own coding agent to follow. Accounts created
+through the wizard use your agent's inference rather than PostHog-funded inference:
 
 ```bash
 npx @posthog/wizard@latest --ci --signup \
@@ -188,6 +189,11 @@ npx @posthog/wizard@latest --ci --signup \
 
 Optional flags: `--name "Your Name"`, `--region eu` (default `us`),
 `--integration nextjs` (else auto-detected).
+
+Interactive `--signup --email you@example.com` offers the same skills with
+options to open them in Claude Code or Codex. The handoff saves the SDK project
+token, host, and project ID in a separate, gitignored `project.json`. OAuth
+tokens and personal API keys are excluded from the saved files.
 
 ### Provision only
 

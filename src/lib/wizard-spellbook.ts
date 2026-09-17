@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from './constants';
 import type { ProgramConfig } from './programs/program-step';
-import type { WizardSession } from './wizard-session';
+import type { Credentials, WizardSession } from './wizard-session';
 import {
   downloadSkill,
   fetchSkillMenu,
@@ -56,6 +56,7 @@ function spellbookText(
   session: SpellbookSession,
   program: ProgramConfig,
   skills: SkillEntry[],
+  hasProject = false,
 ): string {
   const framework = session.frameworkConfig?.metadata;
   const runDocs =
@@ -76,7 +77,9 @@ function spellbookText(
     '',
     'Inspect the existing project and its instructions before making changes. Check what has already been done, complete the requested task within its stated scope, then run the relevant checks and explain any remaining manual steps.',
     '',
-    'Use your own coding agent and its authentication. The Wizard could not continue its inference session. No Wizard credentials are included; ask the user for any credentials the task requires and keep them out of source code.',
+    hasProject
+      ? 'Use your own coding agent and its authentication. Read the SDK project token, host, and project ID from project.json beside this file. Configure the SDK using those values and the framework instructions below. The SDK token is for event capture, not PostHog API access. No personal API key or OAuth credentials are included. Authenticate separately for any PostHog API operations.'
+      : 'Use your own coding agent and its authentication. The Wizard could not continue its inference session. No Wizard credentials are included; ask the user for any credentials the task requires and keep them out of source code.',
     '',
     '## Setup instructions',
     '',
@@ -104,19 +107,51 @@ function spellbookText(
 export async function writeWizardSpellbook(
   session: SpellbookSession,
   program: ProgramConfig,
+  options: {
+    project?: Pick<Credentials, 'projectApiKey' | 'host' | 'projectId'>;
+  } = {},
 ): Promise<WizardSpellbook> {
   const parent = path.join(session.installDir, '.posthog');
   await fs.mkdir(parent, { recursive: true });
   const directory = await fs.mkdtemp(path.join(parent, 'wizard-spellbook-'));
   const readme = path.join(directory, 'README.md');
-  await fs.writeFile(readme, spellbookText(session, program, []));
+  if (options.project) {
+    await fs.writeFile(path.join(directory, '.gitignore'), 'project.json\n');
+    await fs.writeFile(
+      path.join(directory, 'project.json'),
+      JSON.stringify(
+        {
+          projectApiKey: options.project.projectApiKey,
+          host: options.project.host.apiHost,
+          projectId: options.project.projectId,
+        },
+        null,
+        2,
+      ) + '\n',
+      { mode: 0o600 },
+    );
+  }
+  await fs.writeFile(
+    readme,
+    spellbookText(session, program, [], !!options.project),
+  );
 
   const menu = await fetchSkillMenu(getSkillsBaseUrl(), {
     timeoutMs: 10_000,
     maxAttempts: 1,
   });
   const installed: SkillEntry[] = [];
-  for (const skill of menu ? selectSkills(menu, session, program) : []) {
+  const selected = menu ? selectSkills(menu, session, program) : [];
+  if (menu && options.project && session.integration) {
+    for (const skill of selectSkills(menu, session, {
+      ...program,
+      skillId: session.integration,
+    })) {
+      if (!selected.some((entry) => entry.id === skill.id))
+        selected.push(skill);
+    }
+  }
+  for (const skill of selected) {
     const result = await downloadSkill(skill, directory, {
       skillsRoot: 'skills',
       triage: undefined,
@@ -130,6 +165,9 @@ export async function writeWizardSpellbook(
       });
     }
   }
-  await fs.writeFile(readme, spellbookText(session, program, installed));
+  await fs.writeFile(
+    readme,
+    spellbookText(session, program, installed, !!options.project),
+  );
   return { path: readme, skillsIncluded: installed.length > 0 };
 }

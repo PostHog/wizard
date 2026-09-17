@@ -13,7 +13,7 @@
  */
 
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
-import { isRunFailure } from '@ui/mint-failure';
+import { isRunFailure, isProvisionedAccountSetup } from '@ui/mint-failure';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
@@ -71,6 +71,9 @@ export class WizardRouter {
     // A failed agent run interrupts every program until the user leaves the
     // handoff screen: exit, or continue through the post-run steps.
     const runFailed = isRunFailure(session);
+    if (isProvisionedAccountSetup(session)) {
+      return session.mintHandoff ? ScreenId.Exit : ScreenId.MintFailure;
+    }
     if (runFailed && session.mintHandoff === 'exit') return ScreenId.Exit;
     if (runFailed && !session.mintHandoff) return ScreenId.MintFailure;
 

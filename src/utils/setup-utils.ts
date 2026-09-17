@@ -44,6 +44,7 @@ import { wizardAbort } from './wizard-abort';
 import { OutroKind } from '@lib/wizard-session';
 
 interface ProjectData {
+  provisionedAccount?: boolean;
   projectApiKey: string;
   accessToken: string;
   /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
@@ -429,6 +430,7 @@ export async function getOrAskForProjectData(
   },
 ): Promise<{
   host: HostResolution;
+  provisionedAccount?: boolean;
   projectApiKey: string;
   accessToken: string;
   /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
@@ -505,6 +507,7 @@ export async function getOrAskForProjectData(
 
   const {
     host,
+    provisionedAccount,
     projectApiKey,
     accessToken,
     refreshToken,
@@ -542,6 +545,7 @@ ${cloudUrl}/settings/project#variables`);
 
   return {
     accessToken,
+    provisionedAccount,
     refreshToken,
     expiresAt,
     oauthClientId,
@@ -763,6 +767,7 @@ async function askForProvisioningSignup(
 
     return {
       accessToken: result.accessToken,
+      provisionedAccount: true,
       refreshToken: result.refreshToken,
       expiresAt: result.expiresAt,
       oauthClientId: result.oauthClientId,

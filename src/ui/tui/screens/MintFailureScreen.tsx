@@ -8,7 +8,12 @@ import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
   MINT_FAILURE_CONTACT,
+  isProvisionedAccountSetup,
 } from '@ui/mint-failure';
+import {
+  PROVISIONED_ACCOUNT_HANDOFF_MESSAGE,
+  PROVISIONED_ACCOUNT_HANDOFF_BODY,
+} from '@lib/provisioned-account-handoff';
 import type { WizardSpellbook } from '@lib/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
 
@@ -46,6 +51,7 @@ export function MintFailureScreen({
   const [report, setReport] = useState(false);
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
   const { spellbook } = store.session;
+  const provisioned = isProvisionedAccountSetup(store.session);
 
   const select = async (action: Action) => {
     if (busy.current) return;
@@ -102,7 +108,9 @@ export function MintFailureScreen({
         { label: 'Save skill', value: 'save' },
         { label: 'Open in Claude Code', value: 'claude' },
         { label: 'Open in Codex', value: 'codex' },
-        { label: 'Report this issue', value: 'report' },
+        ...(!provisioned
+          ? [{ label: 'Report this issue', value: 'report' as const }]
+          : []),
         { label: 'Exit', value: 'exit' },
       ];
 
@@ -119,7 +127,13 @@ export function MintFailureScreen({
         alignItems="center"
       >
         <Text bold>
-          <Mark /> {spellbook ? 'Skill saved' : MINT_FAILURE_MESSAGE} 🦔
+          <Mark />{' '}
+          {spellbook
+            ? 'Skill saved'
+            : provisioned
+            ? PROVISIONED_ACCOUNT_HANDOFF_MESSAGE
+            : MINT_FAILURE_MESSAGE}{' '}
+          🦔
         </Text>
         <Box marginTop={1}>
           <Text>
@@ -129,6 +143,8 @@ export function MintFailureScreen({
                 : 'The skill could not be downloaded. This file has instructions and links for your agent.'
               : report
               ? MINT_FAILURE_CONTACT
+              : provisioned
+              ? PROVISIONED_ACCOUNT_HANDOFF_BODY
               : MINT_FAILURE_BODY}
           </Text>
         </Box>

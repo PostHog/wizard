@@ -55,6 +55,8 @@ import { MintFailureScreen } from './screens/MintFailureScreen.js';
 import type { MintFailureServices } from './screens/MintFailureScreen.js';
 import { openCodingAgent } from './services/coding-agent-launcher.js';
 import { writeWizardSpellbook } from '@lib/wizard-spellbook';
+import { saveProvisionedAccountSkills } from '@lib/provisioned-account-handoff';
+import { isProvisionedAccountSetup } from '@ui/mint-failure';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
@@ -78,7 +80,9 @@ export function createServices(store: WizardStore): ScreenServices {
     openAgent: (agent, spellbookPath) =>
       openCodingAgent(agent, store.session.installDir, spellbookPath),
     leaveSpellbook: () =>
-      writeWizardSpellbook(
+      (isProvisionedAccountSetup(store.session)
+        ? saveProvisionedAccountSkills
+        : writeWizardSpellbook)(
         store.session,
         getProgramConfig(store.router.activeProgram),
       ),

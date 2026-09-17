@@ -19,7 +19,17 @@ import {
   detectErrorCode,
   emitWizardError,
 } from '@lib/errors';
-import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
+import type {
+  Credentials,
+  OutroData,
+  RunPhase as RunPhaseT,
+} from '@lib/wizard-session';
+import {
+  ProvisionedAccountHandoff,
+  isProvisionedAccountHandoff,
+  provisionedAccountOutro,
+  saveProvisionedAccountSkills,
+} from '@lib/provisioned-account-handoff';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -146,6 +156,8 @@ export function runNonInteractive(
       region: (options.region ?? env.region) as CloudRegion | undefined,
     });
     session.programLabel = config.id;
+    session.credentials =
+      (options.provisionedCredentials as Credentials | undefined) ?? null;
     if (config.skillId) {
       session.skillId = config.skillId;
     }
@@ -217,6 +229,9 @@ export function runNonInteractive(
     };
 
     try {
+      if (session.credentials?.provisionedAccount) {
+        throw new ProvisionedAccountHandoff();
+      }
       if (mode === 'ci') {
         const { configureGatewayFromCIEnvironment } = await import(
           '@lib/gateway-session'
@@ -319,6 +334,17 @@ export function runNonInteractive(
       await runAgent(config, session);
       await settleStream(RunPhase.Completed);
     } catch (error) {
+      if (isProvisionedAccountHandoff(error)) {
+        const saved = await saveProvisionedAccountSkills(session, config);
+        const outro = {
+          ...provisionedAccountOutro(),
+          message: `Setup instructions saved. Ask your coding agent to read and follow:\n${saved.path}`,
+        };
+        await settleStream(RunPhase.Completed, outro);
+        await analytics.shutdown('success');
+        await wizardAbort({ exitCode: 0, outroData: outro });
+        return;
+      }
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorStack =
