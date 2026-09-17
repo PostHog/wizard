@@ -11,7 +11,7 @@ import fs from 'fs';
 import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { readProjectFile } from '@utils/bounded-fs';
+import { readProjectFile, walkProjectFiles } from '@utils/bounded-fs';
 import {
   collectProjectEnvKeys,
   isTemplateEnvFileName,
@@ -335,6 +335,42 @@ export function normaliseAskSubject(subject?: string): string {
   return trimmed.slice(0, ASK_SUBJECT_MAX_LENGTH);
 }
 
+/** The question kinds the ask overlay can render. */
+export type AskQuestionKind = 'single' | 'multi' | 'text';
+
+/**
+ * The `wizard_ask` `kind` field description, shared by both harness facades so
+ * the inferred default cannot drift between them.
+ */
+export const WIZARD_ASK_KIND_DESCRIPTION =
+  "'single' = pick one option, 'multi' = pick any, 'text' = free-form " +
+  'single-line answer. Optional: omit it and the kind follows the question — ' +
+  "'single' when you pass options, 'text' when you do not, which is what a " +
+  'credential question wants.';
+
+/**
+ * Fill in the `kind` of every question that arrived without one.
+ *
+ * The field used to be required, and both harnesses validate a call before this
+ * handler sees it — pi against the typebox schema, the MCP SDK against the zod
+ * one — so a call that omitted it was rejected upstream and the agent spent a
+ * turn recovering from a validation error rather than asking its question.
+ * Accepting the omission costs nothing, because `options` already says which
+ * kind was meant, and a question carrying none is free text — which is what a
+ * credential question wants, and the case an agent is most likely to send bare.
+ *
+ * Options imply `single`, never `multi`: omitting `kind` expresses no intent to
+ * accept more than one answer.
+ */
+export function resolveAskQuestionKinds<
+  Q extends { kind?: AskQuestionKind; options?: readonly unknown[] },
+>(questions: readonly Q[]): (Q & { kind: AskQuestionKind })[] {
+  return questions.map((q) => ({
+    ...q,
+    kind: q.kind ?? (q.options && q.options.length > 0 ? 'single' : 'text'),
+  }));
+}
+
 /**
  * The `wizard_ask` `sensitive` field description, shared by both harness facades
  * (the zod schema in `./mcp` and the typebox mirror in `harness/pi/tools.ts`) so
@@ -389,8 +425,76 @@ export const WIZARD_ASK_TOOL_DESCRIPTION =
   'one call per data-warehouse source, one call per integration step — is ' +
   'expected and is never blocked, because the batching guard counts consecutive ' +
   'calls per subject. A fully cancelled or timed-out response does NOT count ' +
-  'against the per-run cap — treat it as "the user declined" and fall back ' +
-  'gracefully (e.g. hand over a deep link) without worrying about a wasted call.';
+  'against the per-run cap, so nothing is wasted. When a field is not ' +
+  'collected the result carries a `cancelled` object naming those question ' +
+  'ids, whether the user dismissed the prompt or it timed out, and what to do ' +
+  'next: read that instead of inspecting the answer values, and fall back ' +
+  'gracefully (e.g. hand over a deep link) rather than re-asking.';
+
+/**
+ * Guidance returned with a `wizard_ask` result when the user dismissed the
+ * prompt. Shared by both harness facades, like the descriptions above.
+ *
+ * Deliberately says nothing about how the caller reports its own outcome:
+ * `wizard_ask` serves programs with no task queue as well as the orchestrator's
+ * seeded ones, so the note covers the ask and only the ask.
+ */
+export const ASK_CANCELLED_NOTE =
+  'The user dismissed this prompt, so none of these fields were collected. ' +
+  'Read it as a decline for this subject: do not re-ask the same questions. ' +
+  'Fall back to a route that needs no answer from them (for example, hand ' +
+  'them a link to finish it themselves) and carry on with the rest of your ' +
+  'work. Asking about a different subject is still fine.';
+
+/**
+ * Guidance returned with a `wizard_ask` result when the prompt timed out.
+ *
+ * A timeout is not one decline: it says nobody is reading the terminal, and
+ * every later prompt in the run will end the same way after the same wait.
+ * Naming that is the difference between falling back once and stopping the run
+ * behind one unattended prompt per remaining item.
+ */
+export const ASK_TIMED_OUT_NOTE =
+  'This prompt timed out with no answer, so the user is most likely away from ' +
+  'the terminal. Read it as a decline, and expect any further prompt in this ' +
+  'run to time out the same way after the same wait: stop asking and finish ' +
+  'without them — hand over links for everything still outstanding — rather ' +
+  'than opening another prompt.';
+
+/**
+ * The explicit outcome returned alongside `answers` when an ask collected
+ * nothing for one or more of its questions.
+ *
+ * Cancelled fields arrive inside `answers` as the {@link CANCELLED_SENTINEL}
+ * string, which an agent can only recognise if it already knows the sentinel,
+ * and which says nothing about who ended the prompt. Both facades return this
+ * envelope so the outcome is stated rather than encoded in an answer value.
+ */
+export type AskCancellation = {
+  reason: 'user-cancelled' | 'timed-out';
+  /** Ids of the questions that came back uncollected. */
+  questionIds: string[];
+  /** What the agent should do next, given the reason. */
+  note: string;
+};
+
+/**
+ * Describe an ask's cancelled fields, or `undefined` when every question was
+ * answered. `timedOut` comes from the ask bridge — it is the only thing that
+ * tells a dismissed prompt from an unattended one.
+ */
+export function describeAskCancellation(
+  answers: Record<string, string | string[] | { secretRef: string }>,
+  timedOut: boolean,
+): AskCancellation | undefined {
+  const questionIds = Object.entries(answers)
+    .filter(([, value]) => value === CANCELLED_SENTINEL)
+    .map(([id]) => id);
+  if (questionIds.length === 0) return undefined;
+  return timedOut
+    ? { reason: 'timed-out', questionIds, note: ASK_TIMED_OUT_NOTE }
+    : { reason: 'user-cancelled', questionIds, note: ASK_CANCELLED_NOTE };
+}
 
 export type AskCapDecision =
   | { kind: 'ok' }
@@ -758,6 +862,49 @@ export function templateEnvWriteRefusal(resolvedPath: string): string | null {
     `a credential written there would be published with the repository. ` +
     `Write to .env or .env.local instead (it is created if missing). ` +
     `If you only mean to document the key name, edit the template directly.`
+  );
+}
+
+/** Whole-word, so `NEXT_PUBLIC_POSTHOG_KEY` (`_` is a word character) does not count. */
+const LEGACY_KEY_USE = /\bPOSTHOG_KEY\b/;
+
+/** Files where a project reads or defines an env var: source, config, env, shell and build files. */
+const LEGACY_KEY_SCAN_FILE =
+  /^(\.env.*|Dockerfile.*|Makefile|Procfile|package\.json|app\.json|eas\.json|.*\.[cm]?[jt]sx?|.*\.(vue|svelte|astro|py|rb|php|go|rs|exs?|java|kts?|swift|dart|cs|ya?ml|toml|sh|bash|gradle|properties|xcconfig|plist))$/;
+
+function projectReadsLegacyKey(workingDirectory: string): boolean {
+  let found = false;
+  walkProjectFiles(
+    workingDirectory,
+    (name, fullPath) => {
+      if (found || !LEGACY_KEY_SCAN_FILE.test(name)) return;
+      const content = readProjectFile(fullPath);
+      if (content !== null && LEGACY_KEY_USE.test(content)) found = true;
+    },
+    6,
+  );
+  return found;
+}
+
+/**
+ * `set_env_values`' refusal for the legacy `POSTHOG_KEY` name, or null. Shared
+ * by both facades so the two cannot disagree about it.
+ *
+ * `POSTHOG_KEY` is the old name for the project token, so a new project gets
+ * the canonical one (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN). A project whose
+ * code already reads `POSTHOG_KEY` keeps it: refusing there forces a rename of
+ * working code, and every deploy step and CI secret that still passes the old
+ * name then starts the app with an empty token.
+ */
+export function legacyKeyNameRefusal(
+  workingDirectory: string,
+  keys: readonly string[],
+): string | null {
+  const key = keys.find((k) => k.toUpperCase() === 'POSTHOG_KEY');
+  if (!key || projectReadsLegacyKey(workingDirectory)) return null;
+  return (
+    `Error: "${key}" is not a valid PostHog env var name. Use the key name from your framework's integration guide (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN). ` +
+    `POSTHOG_KEY is accepted only when the project already reads it.`
   );
 }
 

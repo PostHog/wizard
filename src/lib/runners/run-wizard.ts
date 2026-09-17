@@ -8,12 +8,15 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
-import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@lib/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@lib/errors';
+import { isRunFailure } from '@ui/mint-failure';
+import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
@@ -216,10 +219,11 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.run)) {
+      if (config.steps.some((s) => s.run || s.targetDir)) {
         // A composed program: its step list splices in run steps that carry
         // their own agent (self-driving runs the integration before its own
-        // run). Walk the list once, advancing each step to completion.
+        // run), or scopes its own run to a picked project (error-tracking).
+        // Walk the list once, advancing each step to completion.
         for (const step of config.steps) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
           if (shown(step)) await advanceStep(step, activeTui.store, config);
@@ -242,33 +246,40 @@ export function runWizard(
           projectId,
         });
       } else {
-        await runAgent(config, activeTui.store.session);
+        try {
+          await runAgent(config, activeTui.store.session);
+        } catch (error) {
+          // The run threw before its own error handling rendered an outro.
+          // Show the handoff screen and let the user's agent take over.
+          const failure = classifyRunFailure(error);
+          logToFile('[run-wizard] run failed, handing off:', error);
+          runCleanups();
+          analytics.captureException(
+            error instanceof Error ? error : new Error(String(error)),
+            { error_code: failure.code },
+          );
+          getUI().outroError({
+            kind: OutroKind.Error,
+            errorCode: failure.code,
+            message: failure.message,
+          });
+        }
       }
 
-      const isDone = (): boolean =>
-        skipAgent
-          ? activeTui.store.session.outroDismissed
-          : activeTui.store.session.skillsComplete;
-
-      await new Promise<void>((resolve) => {
-        const unsub = activeTui.store.subscribe(() => {
-          if (isDone()) {
-            unsub();
-            resolve();
-          }
-        });
-        if (isDone()) {
-          unsub();
-          resolve();
-        }
+      const runFailed = isRunFailure(activeTui.store.session);
+      await activeTui.store.waitUntil((s) => {
+        if (s.mintHandoff === 'exit') return true;
+        if (skipAgent && !runFailed) return s.outroDismissed;
+        return s.skillsComplete;
       });
 
       exitInProgress = true;
       await activeStream.shutdown(2000);
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
+      if (runFailed) await analytics.shutdown('error');
       activeTui.unmount();
-      process.exit(0);
+      process.exit(runFailed ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);

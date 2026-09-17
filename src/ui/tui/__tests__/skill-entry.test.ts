@@ -32,6 +32,22 @@ describe('resolveSkillEntry', () => {
     expect(resolveSkillEntry(MENU, 'nextjs')).toBeNull();
   });
 
+  it('matches an expanded bundle by its group id', () => {
+    // The menu replaces a bundle with per-framework entries, so no entry keeps
+    // the bundle id. Every one of them carries the bundle's download URL.
+    const group = 'integration-v2-error-tracking-step';
+    const bundled = {
+      id: `${group}-django`,
+      group,
+      bundle: true,
+      downloadUrl: `https://example.com/${group}.json`,
+    } as SkillEntry;
+
+    expect(resolveSkillEntry([...MENU, bundled], group)?.downloadUrl).toBe(
+      `https://example.com/${group}.json`,
+    );
+  });
+
   it('returns null when nothing matches', () => {
     expect(resolveSkillEntry(MENU, 'cobol')).toBeNull();
   });

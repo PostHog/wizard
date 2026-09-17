@@ -25,9 +25,9 @@ import { CONTEXT_MILL_RELEASES_URL, getSkillsBaseUrl } from '@lib/constants';
  * under prefixed ids ('integration-python'); frameworks with variants
  * publish several ('integration-nextjs-app-router', '-pages-router').
  * Match chain: exact id → `integration-<id>` → unique
- * `integration-<id>-*` prefix. Ambiguous variants (≥2 prefix matches)
- * return null — the caller should point at the skills repo instead of
- * guessing the wrong variant.
+ * `integration-<id>-*` prefix → bundle group. Ambiguous variants (≥2 prefix
+ * matches) return null — the caller should point at the skills repo instead
+ * of guessing the wrong variant.
  */
 export function resolveSkillEntry(
   entries: SkillEntry[],
@@ -42,7 +42,12 @@ export function resolveSkillEntry(
   const variants = entries.filter((s) =>
     s.id.startsWith(`integration-${skillId}-`),
   );
-  return variants.length === 1 ? variants[0] : null;
+  if (variants.length === 1) return variants[0];
+  if (variants.length > 1) return null;
+
+  // The menu expands a bundle into per-framework entries that all carry the
+  // bundle's group and download URL, so the bundle id matches only by group.
+  return entries.find((s) => s.bundle && s.group === skillId) ?? null;
 }
 
 export function useSkillEntry(skillId: string | null): {

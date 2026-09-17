@@ -3,6 +3,7 @@
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
 } from '@lib/constants';
@@ -147,11 +148,19 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     harness: Harness.anthropic,
     model: DEFAULT_AGENT_MODEL,
   },
+  // Orchestrator on pi, like metrics. The binding routes only; every stage's
+  // model and effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
+  'error-tracking': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
+    model: GPT5_6_TERRA_MODEL,
+    thinkingLevel: 'high',
   },
   slack: DEFAULT_BINDING,
 };

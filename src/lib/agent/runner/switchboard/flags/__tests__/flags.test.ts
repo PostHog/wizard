@@ -276,12 +276,12 @@ describe('isolation — everything on at once', () => {
         expect(resolved).toEqual({
           sequence: Sequence.linear,
           harness: Harness.pi,
-          model: GPT5_6_SOL_MODEL,
-          thinkingLevel: 'medium',
+          model: GPT5_6_TERRA_MODEL,
+          thinkingLevel: 'high',
         });
-      } else if (program === 'metrics') {
-        // Orchestrator + pi from its OWN binding, not the flag; stage models
-        // are pinned context-mill side in the flow frontmatter.
+      } else if (program === 'metrics' || program === 'error-tracking') {
+        // Orchestrator + pi from their OWN bindings, not the flag; stage
+        // models are pinned context-mill side in the flow frontmatter.
         expect(resolved).toEqual({
           ...ORCHESTRATOR_PI_DEFAULT,
           model: DEFAULT_AGENT_MODEL,

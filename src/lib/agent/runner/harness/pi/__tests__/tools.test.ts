@@ -4,7 +4,7 @@
  * value — and set_env_values resolves refs host-side into the .env file.
  */
 import { mkdtempSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -17,6 +17,9 @@ import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 import {
   ASK_BATCH_THRESHOLD,
+  ASK_CANCELLED_NOTE,
+  ASK_TIMED_OUT_NOTE,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -27,8 +30,9 @@ const SECRET = 'phx_live_zendesk_token_123';
 const makeTools = (
   answers: Record<string, string | string[]>,
   maxQuestions?: number,
+  timedOut = false,
 ) => {
-  const request = vi.fn().mockResolvedValue(answers);
+  const request = vi.fn().mockResolvedValue({ answers, timedOut });
   const workingDirectory = mkdtempSync(join(tmpdir(), 'pi-tools-vault-'));
   const tools = createWizardPiTools({
     workingDirectory,
@@ -92,6 +96,54 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     expect(answers.token).toBe(CANCELLED_SENTINEL);
   });
 
+  it('names the cancellation explicitly instead of leaving the sentinel to be read', async () => {
+    // The agent's only signal used to be the sentinel string inside `answers`,
+    // which says neither "this was not collected" nor who ended the prompt.
+    const { wizardAsk } = makeTools({
+      host: CANCELLED_SENTINEL,
+      password: CANCELLED_SENTINEL,
+    });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'host', prompt: 'Host', kind: 'text' },
+        { id: 'password', prompt: 'Password', kind: 'text', sensitive: true },
+      ],
+      subject: 'Postgres',
+    });
+    const { cancelled } = JSON.parse(textOf(result)) as {
+      cancelled: { reason: string; questionIds: string[]; note: string };
+    };
+    expect(cancelled.reason).toBe('user-cancelled');
+    expect(cancelled.questionIds).toEqual(['host', 'password']);
+    expect(cancelled.note).toBe(ASK_CANCELLED_NOTE);
+  });
+
+  it('distinguishes a timed-out prompt from a dismissed one', async () => {
+    // A timeout means nobody is reading the terminal, so every later prompt in
+    // the run costs another full timeout before it fails the same way.
+    const { wizardAsk } = makeTools(
+      { host: CANCELLED_SENTINEL },
+      undefined,
+      true,
+    );
+    const result = await call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Host', kind: 'text' }],
+    });
+    const { cancelled } = JSON.parse(textOf(result)) as {
+      cancelled: { reason: string; note: string };
+    };
+    expect(cancelled.reason).toBe('timed-out');
+    expect(cancelled.note).toBe(ASK_TIMED_OUT_NOTE);
+  });
+
+  it('carries no cancellation envelope when every question was answered', async () => {
+    const { wizardAsk } = makeTools({ host: 'db.example.com' });
+    const result = await call(wizardAsk, {
+      questions: [{ id: 'host', prompt: 'Host', kind: 'text' }],
+    });
+    expect(JSON.parse(textOf(result))).not.toHaveProperty('cancelled');
+  });
+
   it('still rejects sensitive=true on non-text kinds', async () => {
     const { wizardAsk, request } = makeTools({});
     const result = await call(wizardAsk, {
@@ -107,6 +159,43 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     });
     expect(textOf(result)).toMatch(/Only kind="text" answers can be sensitive/);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('vaults a credential question that arrived without a kind', async () => {
+    // A credential question is the one most likely to arrive bare, and
+    // `sensitive` is legal only on `text`. Inferring the kind lets it through;
+    // the schema used to reject the call before this handler ran.
+    const { wizardAsk, request } = makeTools({ password: SECRET });
+    const result = await call(wizardAsk, {
+      questions: [
+        { id: 'password', prompt: 'Database password', sensitive: true },
+      ],
+      subject: 'Postgres',
+    });
+    expect(request.mock.calls[0][0].questions[0].kind).toBe('text');
+    const body = textOf(result);
+    expect(body).not.toContain(SECRET);
+    const { answers } = JSON.parse(body) as {
+      answers: { password: { secretRef: string } };
+    };
+    expect(answers.password.secretRef).toMatch(/^secret:/);
+  });
+
+  it('sends a kind-less question with options to the overlay as a picker', async () => {
+    const { wizardAsk, request } = makeTools({ auth: 'oauth' });
+    await call(wizardAsk, {
+      questions: [
+        {
+          id: 'auth',
+          prompt: 'How do you want to authenticate?',
+          options: [
+            { label: 'OAuth', value: 'oauth' },
+            { label: 'API key', value: 'key' },
+          ],
+        },
+      ],
+    });
+    expect(request.mock.calls[0][0].questions[0].kind).toBe('single');
   });
 
   it('carries the shared secretRef guidance (parity with the MCP server)', () => {
@@ -256,6 +345,28 @@ describe('pi wizard_ask — the batching guard counts per subject', () => {
     expect(params.subject?.description).toBe(WIZARD_ASK_SUBJECT_DESCRIPTION);
   });
 
+  it('declares kind optional, with the shared guidance on what omitting it means', () => {
+    const { wizardAsk } = makeTools({});
+    const question = (
+      wizardAsk as unknown as {
+        parameters: {
+          properties: {
+            questions: {
+              items: {
+                required?: string[];
+                properties: { kind: { description?: string } };
+              };
+            };
+          };
+        };
+      }
+    ).parameters.properties.questions.items;
+    expect(question.required ?? []).not.toContain('kind');
+    expect(question.properties.kind.description).toBe(
+      WIZARD_ASK_KIND_DESCRIPTION,
+    );
+  });
+
   it('shares one tool description with the MCP server', () => {
     const { wizardAsk } = makeTools({});
     expect((wizardAsk as unknown as { description: string }).description).toBe(
@@ -285,6 +396,91 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     expect(textOf(written)).not.toContain(SECRET);
     const env = await readFile(join(workingDirectory, '.env'), 'utf8');
     expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
+  });
+
+  it('gitignores the env file it just wrote, like the MCP facade does', async () => {
+    // An iOS/Android project's .gitignore lists xcuserdata or build/, never
+    // .env — so without this pass the personal API key the flow writes is
+    // staged by the next `git add`.
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(join(workingDirectory, '.gitignore'), 'xcuserdata/\n');
+
+    await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_CLI_HOST: 'https://us.posthog.com' },
+    });
+
+    const gitignore = await readFile(
+      join(workingDirectory, '.gitignore'),
+      'utf8',
+    );
+    expect(gitignore.split('\n')).toContain('.env');
+    expect(gitignore).toContain('xcuserdata/');
+  });
+
+  it('refuses POSTHOG_KEY in a project that does not read it', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('is not a valid PostHog env var name');
+    await expect(
+      readFile(join(workingDirectory, '.env'), 'utf8'),
+    ).rejects.toThrow();
+  });
+
+  it('keeps POSTHOG_KEY when the project code already reads it', async () => {
+    // Refusing here forces a rename of working code, and a deploy step that
+    // still passes POSTHOG_KEY then starts the app with an empty token.
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await mkdir(join(workingDirectory, 'src'));
+    await writeFile(
+      join(workingDirectory, 'src', 'index.ts'),
+      "const client = new PostHog(process.env.POSTHOG_KEY ?? '');\n",
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('Wrote 1 key(s)');
+    expect(await readFile(join(workingDirectory, '.env'), 'utf8')).toMatch(
+      /^POSTHOG_KEY=.*phc_test/m,
+    );
+  });
+
+  it('keeps POSTHOG_KEY when only a startup script reads it', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(
+      join(workingDirectory, 'start.sh'),
+      '#!/bin/sh\nAPP_TOKEN="$POSTHOG_KEY" exec ./server\n',
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('Wrote 1 key(s)');
+  });
+
+  it('does not count NEXT_PUBLIC_POSTHOG_KEY as a read of POSTHOG_KEY', async () => {
+    const { setEnvValues, workingDirectory } = makeTools({});
+    await writeFile(
+      join(workingDirectory, 'providers.tsx'),
+      'posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!);\n',
+    );
+
+    const result = await call(setEnvValues, {
+      filePath: '.env',
+      values: { POSTHOG_KEY: 'phc_test' },
+    });
+
+    expect(textOf(result)).toContain('is not a valid PostHog env var name');
   });
 
   it('mixed values map: literal + secretRef written together, secret still never in output', async () => {
@@ -400,9 +596,11 @@ describe('pi task wiring — wizard_ask pauses Write/Edit', () => {
     let release!: (answers: Record<string, string>) => void;
     const request = vi.fn(
       () =>
-        new Promise<Record<string, string>>((resolve) => {
-          release = resolve;
-        }),
+        new Promise<{ answers: Record<string, string>; timedOut: boolean }>(
+          (resolve) => {
+            release = (answers) => resolve({ answers, timedOut: false });
+          },
+        ),
     );
     const [wizardAsk] = createWizardPiTools({
       workingDirectory: mkdtempSync(join(tmpdir(), 'pi-ask-pause-')),

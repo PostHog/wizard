@@ -44,18 +44,22 @@ import {
   downloadSkill,
   ensureGitignoreCoverage,
   createAskAccounting,
+  describeAskCancellation,
   fetchSkillMenu,
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
   normaliseAskSubject,
   readLedger,
+  resolveAskQuestionKinds,
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
   vaultSensitiveAnswers,
   writeLedgerAtomic,
   type SkillEntry,
   AUDIT_STATUSES,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -230,18 +234,13 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       filePath: string;
       values: Record<string, string | { secretRef: string }>;
     }) => {
-      // Block the wrong key name — the correct key is NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN or similar
-      const forbidden = Object.keys(args.values).find(
-        (k) => k.toUpperCase() === 'POSTHOG_KEY',
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
       );
-      if (forbidden) {
+      if (keyRefusal) {
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Error: "${forbidden}" is not a valid PostHog env var name. Use the project-specific key name from your framework's integration guide (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: keyRefusal }],
           isError: true,
         };
       }
@@ -613,9 +612,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     prompt: z.string().min(1).describe('Question text shown to the user'),
     kind: z
       .enum(['single', 'multi', 'text'])
-      .describe(
-        "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
-      ),
+      .optional()
+      .describe(WIZARD_ASK_KIND_DESCRIPTION),
     options: z
       .array(
         z.object({
@@ -651,7 +649,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       questions: Array<{
         id: string;
         prompt: string;
-        kind: 'single' | 'multi' | 'text';
+        kind?: 'single' | 'multi' | 'text';
         options?: { label: string; value: string }[];
         required?: boolean;
         sensitive?: boolean;
@@ -689,9 +687,13 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
+      // A question with no kind takes the one its options imply, so the
+      // overlay always has an input to render. See resolveAskQuestionKinds.
+      const questions = resolveAskQuestionKinds(args.questions);
+
       // Validate that single/multi questions include options. The schema
       // alone can't enforce a per-kind requirement.
-      for (const q of args.questions) {
+      for (const q of questions) {
         if (
           (q.kind === 'single' || q.kind === 'multi') &&
           (!q.options || q.options.length === 0)
@@ -720,7 +722,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }
 
       const ids = new Set<string>();
-      for (const q of args.questions) {
+      for (const q of questions) {
         if (ids.has(q.id)) {
           return {
             content: [
@@ -738,8 +740,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       askAccounting.record(args.subject);
 
       try {
-        const answers = await askBridge.request({
-          questions: args.questions,
+        const { answers, timedOut } = await askBridge.request({
+          questions,
           subject: normaliseAskSubject(args.subject),
         });
 
@@ -754,21 +756,29 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
         // Sensitive answers go to the vault; the agent sees an opaque ref.
         const sanitised = vaultSensitiveAnswers(
-          args.questions,
+          questions,
           answers,
           secretVault,
         );
 
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the pi facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
+
         logToFile(
           `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
             args.questions.length
-          } question(s)`,
+          } question(s)${cancelled ? `, cancelled: ${cancelled.reason}` : ''}`,
         );
         return {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify({ answers: sanitised }, null, 2),
+              text: JSON.stringify(
+                { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+                null,
+                2,
+              ),
             },
           ],
         };

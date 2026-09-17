@@ -26,14 +26,19 @@ import {
   WIZARD_TOOL_NAMES,
   checkEnvKeys as checkEnvKeysCore,
   createAskAccounting,
+  describeAskCancellation,
+  ensureGitignoreCoverage,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
   normaliseAskSubject,
+  resolveAskQuestionKinds,
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
   vaultSensitiveAnswers,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -209,14 +214,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       ),
     }),
     async execute(_id, args) {
-      const forbidden = Object.keys(args.values).find(
-        (k) => k.toUpperCase() === 'POSTHOG_KEY',
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
       );
-      if (forbidden) {
-        return text(
-          `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
-        );
-      }
+      if (keyRefusal) return text(keyRefusal);
       // Resolve secret refs host-side; the value never reaches the agent.
       const resolution = resolveEnvSecretRefs(args.values, secretVault);
       if (!resolution.ok) {
@@ -241,6 +243,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(resolved, merged, 'utf8');
+      // Same post-write pass as the MCP facade: a credential file the
+      // project does not ignore yet gets committed by the next `git add`.
+      ensureGitignoreCoverage(workingDirectory, path.basename(resolved));
       logToFile(
         `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(
           ',',
@@ -286,16 +291,15 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           prompt: Type.String({
             description: 'Question text shown to the user',
           }),
-          kind: Type.Union(
-            [
-              Type.Literal('single'),
-              Type.Literal('multi'),
-              Type.Literal('text'),
-            ],
-            {
-              description:
-                "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
-            },
+          kind: Type.Optional(
+            Type.Union(
+              [
+                Type.Literal('single'),
+                Type.Literal('multi'),
+                Type.Literal('text'),
+              ],
+              { description: WIZARD_ASK_KIND_DESCRIPTION },
+            ),
           ),
           options: Type.Optional(
             Type.Array(
@@ -348,9 +352,13 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         return text(cap.message);
       }
 
+      // A question with no kind takes the one its options imply, so the
+      // overlay always has an input to render. See resolveAskQuestionKinds.
+      const questions = resolveAskQuestionKinds(args.questions);
+
       // The schema can't enforce per-kind requirements or unique ids.
       const ids = new Set<string>();
-      for (const q of args.questions) {
+      for (const q of questions) {
         if ((q.kind === 'single' || q.kind === 'multi') && !q.options?.length) {
           return text(
             `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
@@ -376,24 +384,35 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       // mutate files while it's waiting on the user's answer.
       onAskPendingChange?.(true);
       try {
-        const answers = await askBridge.request({
-          questions: args.questions,
+        const { answers, timedOut } = await askBridge.request({
+          questions,
           subject: normaliseAskSubject(args.subject),
         });
         if (isFullyCancelled(answers)) askAccounting.refund(args.subject);
         // Sensitive answers go to the vault; the agent sees an opaque ref
         // (same contract as the MCP wizard_ask).
         const sanitised = vaultSensitiveAnswers(
-          args.questions,
+          questions,
           answers,
           secretVault,
         );
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the MCP facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
         logToFile(
           `[pi] wizard_ask: resolved ${
             Object.keys(answers).length
-          } answer(s) for ${args.questions.length} question(s)`,
+          } answer(s) for ${args.questions.length} question(s)${
+            cancelled ? `, cancelled: ${cancelled.reason}` : ''
+          }`,
         );
-        return text(JSON.stringify({ answers: sanitised }, null, 2));
+        return text(
+          JSON.stringify(
+            { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+            null,
+            2,
+          ),
+        );
       } catch (err) {
         askAccounting.refund(args.subject);
         const message = err instanceof Error ? err.message : String(err);
