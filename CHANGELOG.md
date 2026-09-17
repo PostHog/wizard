@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.75.0](https://github.com/PostHog/wizard/compare/v2.74.1...v2.75.0) (2026-09-17)
+
+
+### Features
+
+* add friendly mint failure recovery ([#1238](https://github.com/PostHog/wizard/issues/1238)) ([7aaf21c](https://github.com/PostHog/wizard/commit/7aaf21c0080f7bbe1a82362189844d820d5aa250))
+* **error-tracking:** add the error-tracking program on the orchestrator flow ([#1185](https://github.com/PostHog/wizard/issues/1185)) ([632b80a](https://github.com/PostHog/wizard/commit/632b80aa2aa149884b86d4a98a60c7f00e13597d))
+* move AI Observability to Sol medium ([#1255](https://github.com/PostHog/wizard/issues/1255)) ([ad5a8bf](https://github.com/PostHog/wizard/commit/ad5a8bfd1135a0b5398907ae351426c8f72b88e4))
+* **posthog-integration:** detect existing PostHog, surface the other commands ([#1190](https://github.com/PostHog/wizard/issues/1190)) ([1b34483](https://github.com/PostHog/wizard/commit/1b344836e9b186b7da96ddd9f992a3337136e845))
+
+
+### Bug Fixes
+
+* finish legacy gateway cleanup ([#1250](https://github.com/PostHog/wizard/issues/1250)) ([e88050d](https://github.com/PostHog/wizard/commit/e88050da988309f61049d8acb40f55ee7df4e81f))
+* **oauth:** explain oversized browser headers ([#1253](https://github.com/PostHog/wizard/issues/1253)) ([be2bcd2](https://github.com/PostHog/wizard/commit/be2bcd2870a3362bc471f2633099b91b0ac0e7e7))
+* **orchestrator:** carry the data-source next steps onto the outro ([#1234](https://github.com/PostHog/wizard/issues/1234)) ([d254f3a](https://github.com/PostHog/wizard/commit/d254f3aa919d1b8c5830ebc3b1f15b8bcaf376c5))
+* **orchestrator:** don't report a declined task as a started task ([#1216](https://github.com/PostHog/wizard/issues/1216)) ([a7b77e6](https://github.com/PostHog/wizard/commit/a7b77e65b72817ed080a5c3f2ba7544019eb33ae))
+* **orchestrator:** name complete_task's nested handoff in its description ([#1220](https://github.com/PostHog/wizard/issues/1220)) ([fe9751e](https://github.com/PostHog/wizard/commit/fe9751ebf25dca1c5c2134771f6b4d920e5073d1))
+* **pi:** name why an agent run aborted ([#1249](https://github.com/PostHog/wizard/issues/1249)) ([24d39a3](https://github.com/PostHog/wizard/commit/24d39a3ecf0371cac50cf0e72021188b3380c4de))
+* separate CI gateway and PostHog credentials ([#1240](https://github.com/PostHog/wizard/issues/1240)) ([662f54d](https://github.com/PostHog/wizard/commit/662f54da548b3851f26b201f9c06c9ddf8e5b344))
+* **tui:** mask a vaulted answer as the user types it ([#1248](https://github.com/PostHog/wizard/issues/1248)) ([a490788](https://github.com/PostHog/wizard/commit/a4907889199878a2868cf21eff10fd21e3735efe))
+* **tui:** name what Esc discards in the ask overlay ([#1208](https://github.com/PostHog/wizard/issues/1208)) ([a56d03b](https://github.com/PostHog/wizard/commit/a56d03b9f443a2806596679d7eaaeed9bed1e348))
+* **warehouse:** give the standalone command the same credential ask timeout ([#1214](https://github.com/PostHog/wizard/issues/1214)) ([a23f6dc](https://github.com/PostHog/wizard/commit/a23f6dc46141ea1d315279555625b299f58ebeda))
+* **wizard-ask:** infer a question's kind when a call omits it ([#1258](https://github.com/PostHog/wizard/issues/1258)) ([7938a50](https://github.com/PostHog/wizard/commit/7938a50b04c39c33f18fd7b16198fcfc3ce0e165))
+* **wizard-ask:** return an explicit cancellation outcome, not a sentinel ([#1218](https://github.com/PostHog/wizard/issues/1218)) ([f3343b2](https://github.com/PostHog/wizard/commit/f3343b24ededa50fd707fdac99e8a88f6850fabd))
+
 ## [2.74.1](https://github.com/PostHog/wizard/compare/v2.74.0...v2.74.1) (2026-09-10)
 
 
