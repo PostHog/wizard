@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.76.0](https://github.com/PostHog/wizard/compare/v2.75.0...v2.76.0) (2026-09-18)
+
+
+### Features
+
+* **audit:** stream audit progress as areas on the headless path ([#1263](https://github.com/PostHog/wizard/issues/1263)) ([b300b40](https://github.com/PostHog/wizard/commit/b300b40182b20b64f08402db769dcf7c8a45ce76))
+
 ## [2.75.0](https://github.com/PostHog/wizard/compare/v2.74.1...v2.75.0) (2026-09-17)
 
 
