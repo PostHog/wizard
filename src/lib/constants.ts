@@ -86,6 +86,7 @@ export enum Integration {
   flask = 'flask',
   fastapi = 'fastapi',
   laravel = 'laravel',
+  wordpress = 'wordpress',
   sveltekit = 'sveltekit',
   flutter = 'flutter',
   kmp = 'kmp',
