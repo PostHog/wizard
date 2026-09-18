@@ -24,7 +24,7 @@ import {
 } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
-import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent-signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';

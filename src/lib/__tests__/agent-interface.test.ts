@@ -10,7 +10,7 @@ import {
   reportMcpSetup,
 } from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
-import { RESUME_INSTRUCTION } from '@lib/agent/signals';
+import { RESUME_INSTRUCTION } from '@lib/agent-signals';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { Sequence } from '@lib/constants';

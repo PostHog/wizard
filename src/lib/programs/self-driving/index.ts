@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/program-run';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';

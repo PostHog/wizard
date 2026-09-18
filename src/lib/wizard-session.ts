@@ -14,7 +14,7 @@ import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
 import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/claude-settings';
+import type { SettingsConflict } from './claude-settings';
 import type { ApiUser, ApiProject } from './api';
 import type { HostResolution } from './host-resolution';
 

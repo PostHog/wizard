@@ -1,5 +1,30 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`health check declared per program > matches the golden 1`] = `
+{
+  "agent-skill": true,
+  "ai-observability": true,
+  "audit": true,
+  "error-tracking": true,
+  "error-tracking-upload-source-maps": false,
+  "events-audit": true,
+  "mcp-add": false,
+  "mcp-analytics": true,
+  "mcp-remove": false,
+  "mcp-tutorial": false,
+  "metrics": true,
+  "migration": true,
+  "posthog-doctor": true,
+  "posthog-integration": true,
+  "replay-vision": true,
+  "revenue-analytics-setup": true,
+  "self-driving": true,
+  "slack": false,
+  "warehouse-source": false,
+  "web-analytics-doctor": true,
+}
+`;
+
 exports[`post-auth gate ids per program > match the golden 1`] = `
 {
   "agent-skill": [],

@@ -1,5 +1,5 @@
-import { AgentSignals } from '@lib/agent/agent-interface';
-import type { PromptContext } from '@lib/agent/agent-runner';
+import { AgentSignals } from '@lib/agent-signals';
+import type { PromptContext } from '@lib/program-run';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 /**

@@ -8,7 +8,7 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@lib/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type { Credentials, TaskNotice } from '@lib/wizard-session';
@@ -85,6 +85,9 @@ export interface AuthErrorDetail {
 }
 
 export interface WizardUI {
+  /** True when a person can answer prompts through this UI. */
+  readonly interactive: boolean;
+
   // ── Lifecycle messages ────────────────────────────────────────────
   intro(message: string): void;
   /** Success outro with a plain text message. */

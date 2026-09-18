@@ -3,7 +3,7 @@ import {
   pricePerMtokForModel,
   formatTokenCount,
   formatCostUsd,
-} from '@lib/agent/token-pricing';
+} from '@lib/token-pricing';
 
 describe('pricePerMtokForModel', () => {
   it('defaults to Sonnet pricing (DEFAULT_AGENT_MODEL) when no model is given', () => {

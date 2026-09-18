@@ -43,7 +43,7 @@ import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRunConfig } from '@lib/program-run';
 import type { BootstrapResult, ProgramRun } from '../../shared/types';
 import {
   areSeededTasksEnabled,
@@ -430,7 +430,7 @@ export function displayOrder(
 export async function runOrchestrator(
   session: WizardSession,
   config: ProgramRun,
-  programConfig: ProgramConfig,
+  programConfig: ProgramRunConfig,
   boot: BootstrapResult,
 ): Promise<void> {
   const runId = randomUUID();

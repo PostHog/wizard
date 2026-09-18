@@ -20,7 +20,7 @@ import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   classifySettingsConflicts,
-} from '@lib/agent/claude-settings';
+} from '@lib/claude-settings';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
@@ -36,32 +36,13 @@ import { CallType, getSkillsBaseUrl, IS_DEV } from '@lib/constants';
 import { VERSION } from '@lib/version';
 import { mcpUrlFor } from '@lib/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRunConfig } from '@lib/program-run';
+import { shouldDisableAsk } from '@lib/ask-policy';
+
+export { shouldDisableAsk };
 import type { ProgramRun, BootstrapResult } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Decide whether the `wizard_ask` overlay should be wired for this run.
- * Disabled in non-interactive modes (CI, signup) — there's no human to
- * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
- * the program's `disallowedTools` so the SDK rejects calls outright.
- * Extracted so the policy can be unit-tested directly.
- *
- * `session.e2eAsk` is the one escape hatch. The e2e harness runs a `ci`
- * session, but it does have an answerer — the driver loop answers each
- * `wizard_ask` batch from the program's e2e profile. Without the flag the
- * agent-in-the-loop layer (the ask bridge in both sequence arms, and the
- * orchestrator's seeded warehouse task) stays unreachable from a test.
- *
- * Only the e2e TUI host sets the flag, from the `E2E_ASK` env var. No CLI flag
- * populates it, so plain `--ci` and `--signup` runs behave exactly as before.
- */
-export function shouldDisableAsk(
-  session: Pick<WizardSession, 'ci' | 'signup' | 'e2eAsk'>,
-): boolean {
-  return (session.ci || session.signup) && !session.e2eAsk;
-}
 
 export function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
@@ -87,7 +68,7 @@ export function sessionToOptions(session: WizardSession): WizardRunOptions {
 export async function bootstrapProgram(
   session: WizardSession,
   config: ProgramRun,
-  programConfig: ProgramConfig,
+  programConfig: ProgramRunConfig,
 ): Promise<BootstrapResult> {
   // 1. Init logging + debug
   initLogFile();
@@ -115,9 +96,7 @@ export async function bootstrapProgram(
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs that declare a health-check screen get pre-flight checks;
   // for everything else the checks never fire and never block.
-  const hasHealthCheckScreen = programConfig.steps.some(
-    (s) => s.screenId === 'health-check',
-  );
+  const hasHealthCheckScreen = programConfig.healthCheckDeclared ?? false;
   if (session.readinessResult) {
     logToFile(
       `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +
@@ -269,17 +248,11 @@ export async function bootstrapProgram(
   // Park for any interactive step the user must complete AFTER authenticating
   // but BEFORE the agent runs — e.g. the source-maps project picker, which
   // needs credentials to scan and writes its choice to frameworkContext that
-  // the run prompt reads. Generic: await every gated step between auth and run.
-  const authIndex = programConfig.steps.findIndex((s) => s.screenId === 'auth');
-  const runIndex = programConfig.steps.findIndex((s) => s.screenId === 'run');
-  if (authIndex !== -1 && runIndex > authIndex) {
-    for (const step of programConfig.steps.slice(authIndex + 1, runIndex)) {
-      if (step.gate) {
-        logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
-        await getUI().waitForGate(step.id);
-        logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
-      }
-    }
+  // the run prompt reads. The flow layer names them in `postAuthGateIds`.
+  for (const id of programConfig.postAuthGateIds ?? []) {
+    logToFile(`[agent-runner] awaiting post-auth gate: ${id}`);
+    await getUI().waitForGate(id);
+    logToFile(`[agent-runner] post-auth gate cleared: ${id}`);
   }
 
   // Feature flags. Both arms need these, and the fork decision reads the flags.

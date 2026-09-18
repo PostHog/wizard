@@ -1,5 +1,5 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { LONGER_ASK_TIMEOUT_MS } from '@lib/wizard-ask-bridge';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';

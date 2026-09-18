@@ -11,7 +11,7 @@ import {
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from './wizard-ui';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@lib/claude-settings';
 import type { ApiUser } from '@lib/api';
 import { OAUTH_TIMEOUT_MS } from '@lib/constants';
 import {
@@ -28,6 +28,7 @@ import type {
 } from '@lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
+  readonly interactive = false;
   intro(message: string): void {
     console.log(`┌  ${message}`);
   }

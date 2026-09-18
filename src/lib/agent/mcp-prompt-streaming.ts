@@ -18,7 +18,7 @@ import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { gatewayAuth } from '@lib/gateway-session';
 import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';
-import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
+import { sanitizeAgentSubprocessEnv } from '@lib/agent-env-isolation';
 import { createIsolatedAgentConfigDir } from '@lib/agent/stored-login';
 import { analytics } from '@utils/analytics';
 

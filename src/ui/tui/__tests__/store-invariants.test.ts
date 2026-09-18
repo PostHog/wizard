@@ -32,7 +32,7 @@ import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@lib/claude-settings';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {

@@ -8,6 +8,7 @@ export {
   runProgram,
   shouldDisableAsk,
   type ProgramRun,
+  type ProgramRunConfig,
   type BootstrapResult,
   type AbortCase,
   type PromptContext,

@@ -2,7 +2,7 @@
  * Unified program runner — dispatcher.
  *
  * Single configurable pipeline for all programs. Each program
- * provides a ProgramRun (via the `run` field on ProgramConfig)
+ * provides a ProgramRun (via the `run` field on ProgramRunConfig)
  * that controls:
  *   - Whether a skill is pre-installed or discovered at runtime
  *   - How the agent prompt is built
@@ -25,7 +25,7 @@ import {
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { getUI } from '../../../ui';
-import type { ProgramConfig } from '../../programs/program-step';
+import type { ProgramRunConfig } from '@lib/program-run';
 import type { ProgramRun, BootstrapResult } from './shared/types';
 import { bootstrapProgram } from './shared/bootstrap';
 import {
@@ -40,6 +40,7 @@ import { registerCleanup } from '../../../utils/wizard-abort';
 
 export type {
   ProgramRun,
+  ProgramRunConfig,
   BootstrapResult,
   AbortCase,
   PromptContext,
@@ -48,11 +49,11 @@ export type {
 export { shouldDisableAsk } from './shared/bootstrap';
 
 /**
- * Resolve a ProgramConfig's agent run definition and execute the pipeline.
+ * Resolve a ProgramRunConfig's agent run definition and execute the pipeline.
  * Entry point for bin.ts — handles buildRunConfig, bootstrap, and (future) run field.
  */
 export async function runAgent(
-  programConfig: ProgramConfig,
+  programConfig: ProgramRunConfig,
   session: WizardSession,
   options: { composed?: boolean } = {},
 ): Promise<void> {
@@ -89,7 +90,7 @@ export async function runAgent(
 export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
-  programConfig: ProgramConfig,
+  programConfig: ProgramRunConfig,
   options: { composed?: boolean } = {},
 ): Promise<void> {
   const boot = await bootstrapProgram(session, config, programConfig);
@@ -136,7 +137,7 @@ export async function runProgram(
  */
 function resolveProgramRunner(
   session: WizardSession,
-  programConfig: ProgramConfig,
+  programConfig: ProgramRunConfig,
   boot: BootstrapResult,
   composed: boolean,
 ): ProgramBinding {

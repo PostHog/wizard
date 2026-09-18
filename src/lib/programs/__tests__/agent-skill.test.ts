@@ -3,7 +3,7 @@ import {
   AGENT_SKILL_STEPS,
   type SkillProgramOptions,
 } from '@lib/programs/agent-skill/index';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/program-run';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
 

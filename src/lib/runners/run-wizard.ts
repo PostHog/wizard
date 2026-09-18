@@ -3,6 +3,7 @@ import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { runConfigFor } from '@lib/programs/run-config';
 import { getAuditChecks } from '@lib/programs/audit/types';
 import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -57,10 +58,17 @@ async function advanceStep(
     await authenticate(store.session, config.id);
     maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
-    await step.run(await prepareRunSession(step, store.session));
+    await runAgent(
+      runConfigFor(getProgramConfig(step.run.programId)),
+      await prepareRunSession(step, store.session),
+      { composed: true },
+    );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runAgent(config, await prepareRunSession(step, store.session));
+    await runAgent(
+      runConfigFor(config),
+      await prepareRunSession(step, store.session),
+    );
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -262,7 +270,7 @@ export function runWizard(
         });
       } else {
         try {
-          await runAgent(config, activeTui.store.session);
+          await runAgent(runConfigFor(config), activeTui.store.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.

@@ -35,7 +35,7 @@ import {
   buildSession,
   type TaskNotice,
 } from '@lib/wizard-session';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@lib/claude-settings';
 import {
   WizardReadiness,
   getBlockingServiceKeys,
@@ -59,7 +59,7 @@ import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
-import { computeTokenCostUsd } from '@lib/agent/token-pricing';
+import { computeTokenCostUsd } from '@lib/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };

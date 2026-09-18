@@ -13,7 +13,7 @@ import type {
   TokenUsageDelta,
 } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@lib/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
@@ -33,6 +33,7 @@ function stripAnsi(s: string): string {
 }
 
 export class InkUI implements WizardUI {
+  readonly interactive = true;
   constructor(private store: WizardStore) {}
 
   intro(message: string): void {
