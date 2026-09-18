@@ -18,6 +18,8 @@ export const ErrorCodes = {
   AuthProjectFetchFailed: 'PHW_AUTH_PROJECT_FETCH_FAILED',
   EnvLocalServicesDown: 'PHW_ENV_LOCAL_SERVICES_DOWN',
   EnvServiceOutage: 'PHW_ENV_SERVICE_OUTAGE',
+  /** A `--ci` run started without the gateway token secret in its environment. */
+  EnvMissingCiToken: 'PHW_ENV_MISSING_CI_TOKEN',
   DetectBadDirectory: 'PHW_DETECT_BAD_DIRECTORY',
   DetectNoFramework: 'PHW_DETECT_NO_FRAMEWORK',
   DetectUnsupportedVersion: 'PHW_DETECT_UNSUPPORTED_VERSION',
