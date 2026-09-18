@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+
+
+                                                  ███ PostHog Wizard 🦔
+
+                          We'll use .env* file contents will not leave your machine.lf-driving.
+
+
+                                           Let's set up PostHog Self-driving.
+
+                  PostHog watches how people really use your product, finds issues, and proposes fixes.
+
+                        An agent wAbout 10 minutes, with a few questions along the way.our scouts.
+                                   Agents charge a flat $15 per pull request they ship.
+                                                    Directory ✔ /app
+
+                                                ▸ Continue
+                                                  More info
+                                                  Privacy & data
+                                                  Cancel
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

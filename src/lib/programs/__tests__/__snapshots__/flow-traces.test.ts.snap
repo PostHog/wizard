@@ -1,0 +1,1104 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`flow traces per program > agent-skill (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "agent-skill-intro",
+      "program": "agent-skill",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "agent-skill",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "agent-skill",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "agent-skill",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "agent-skill",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "agent-skill",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "agent-skill",
+    },
+  ],
+  "program": "agent-skill",
+  "screens": [
+    "agent-skill-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > ai-observability (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "ai-observability-intro",
+      "program": "ai-observability",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "ai-observability",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "ai-observability",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "ai-observability",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "ai-observability",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "ai-observability",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "ai-observability",
+    },
+  ],
+  "program": "ai-observability",
+  "screens": [
+    "ai-observability-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > audit (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "audit-intro",
+      "program": "audit",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "audit",
+    },
+    {
+      "event": "screen audit-run",
+      "from": "auth",
+      "program": "audit",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "audit-run",
+      "program": "audit",
+    },
+    {
+      "event": "screen audit-run",
+      "from": "ai-opt-in",
+      "program": "audit",
+    },
+    {
+      "event": "screen audit-outro",
+      "from": "audit-run",
+      "program": "audit",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "audit-outro",
+      "program": "audit",
+    },
+  ],
+  "program": "audit",
+  "screens": [
+    "audit-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "audit-run",
+    "audit-outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > error-tracking (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "error-tracking-intro",
+      "program": "error-tracking",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "error-tracking",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "error-tracking",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "error-tracking",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "error-tracking",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "error-tracking",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "error-tracking",
+    },
+  ],
+  "program": "error-tracking",
+  "screens": [
+    "error-tracking-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > error-tracking-upload-source-maps (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen auth",
+      "from": "source-maps-intro",
+      "program": "error-tracking-upload-source-maps",
+    },
+    {
+      "event": "screen source-maps-detect",
+      "from": "auth",
+      "program": "error-tracking-upload-source-maps",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "source-maps-detect",
+      "program": "error-tracking-upload-source-maps",
+    },
+    {
+      "event": "screen source-maps-detect",
+      "from": "ai-opt-in",
+      "program": "error-tracking-upload-source-maps",
+    },
+    {
+      "event": "screen run",
+      "from": "source-maps-detect",
+      "program": "error-tracking-upload-source-maps",
+    },
+    {
+      "event": "screen source-maps-outro",
+      "from": "run",
+      "program": "error-tracking-upload-source-maps",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "source-maps-outro",
+      "program": "error-tracking-upload-source-maps",
+    },
+  ],
+  "program": "error-tracking-upload-source-maps",
+  "screens": [
+    "source-maps-intro",
+    "auth",
+    "ai-opt-in",
+    "source-maps-detect",
+    "run",
+    "source-maps-outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > events-audit (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "audit-intro",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen audit-run",
+      "from": "auth",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "audit-run",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen audit-run",
+      "from": "ai-opt-in",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen mcp",
+      "from": "audit-run",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen audit-outro",
+      "from": "mcp",
+      "program": "events-audit",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "audit-outro",
+      "program": "events-audit",
+    },
+  ],
+  "program": "events-audit",
+  "screens": [
+    "audit-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "audit-run",
+    "mcp",
+    "audit-outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > mcp-add (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen exit",
+      "from": "mcp-add",
+      "program": "mcp-add",
+    },
+  ],
+  "program": "mcp-add",
+  "screens": [
+    "mcp-add",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > mcp-analytics (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "agent-skill-intro",
+      "program": "mcp-analytics",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "mcp-analytics",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "mcp-analytics",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "mcp-analytics",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "mcp-analytics",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "mcp-analytics",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "mcp-analytics",
+    },
+  ],
+  "program": "mcp-analytics",
+  "screens": [
+    "agent-skill-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > mcp-remove (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen exit",
+      "from": "mcp-remove",
+      "program": "mcp-remove",
+    },
+  ],
+  "program": "mcp-remove",
+  "screens": [
+    "mcp-remove",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > mcp-tutorial (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen slack-connect",
+      "from": "mcp-suggested-prompts",
+      "program": "mcp-tutorial",
+    },
+    {
+      "event": "screen exit",
+      "from": "slack-connect",
+      "program": "mcp-tutorial",
+    },
+  ],
+  "program": "mcp-tutorial",
+  "screens": [
+    "mcp-suggested-prompts",
+    "slack-connect",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > metrics (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "metrics-intro",
+      "program": "metrics",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "metrics",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "metrics",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "metrics",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "metrics",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "metrics",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "metrics",
+    },
+  ],
+  "program": "metrics",
+  "screens": [
+    "metrics-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > migration (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "migration-intro",
+      "program": "migration",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "migration",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "migration",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "migration",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "migration",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "migration",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "migration",
+    },
+  ],
+  "program": "migration",
+  "screens": [
+    "migration-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > posthog-doctor (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "doctor-intro",
+      "program": "posthog-doctor",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "posthog-doctor",
+    },
+    {
+      "event": "screen doctor-report",
+      "from": "auth",
+      "program": "posthog-doctor",
+    },
+    {
+      "event": "screen outro",
+      "from": "doctor-report",
+      "program": "posthog-doctor",
+    },
+    {
+      "event": "screen exit",
+      "from": "outro",
+      "program": "posthog-doctor",
+    },
+  ],
+  "program": "posthog-doctor",
+  "screens": [
+    "doctor-intro",
+    "health-check",
+    "auth",
+    "doctor-report",
+    "outro",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > posthog-integration (nextjs, with a setup question) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "intro",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen setup",
+      "from": "health-check",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen auth",
+      "from": "setup",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen mcp",
+      "from": "outro",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen slack-connect",
+      "from": "mcp",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "slack-connect",
+      "program": "posthog-integration",
+    },
+  ],
+  "program": "posthog-integration",
+  "screens": [
+    "intro",
+    "health-check",
+    "setup",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "mcp",
+    "slack-connect",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > posthog-integration (no framework detected) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "intro",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen mcp",
+      "from": "outro",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen slack-connect",
+      "from": "mcp",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "slack-connect",
+      "program": "posthog-integration",
+    },
+  ],
+  "program": "posthog-integration",
+  "screens": [
+    "intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "mcp",
+    "slack-connect",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > posthog-integration (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "intro",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen mcp",
+      "from": "outro",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen slack-connect",
+      "from": "mcp",
+      "program": "posthog-integration",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "slack-connect",
+      "program": "posthog-integration",
+    },
+  ],
+  "program": "posthog-integration",
+  "screens": [
+    "intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "mcp",
+    "slack-connect",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > replay-vision (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "agent-skill-intro",
+      "program": "replay-vision",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "replay-vision",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "replay-vision",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "replay-vision",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "replay-vision",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "replay-vision",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "replay-vision",
+    },
+  ],
+  "program": "replay-vision",
+  "screens": [
+    "agent-skill-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > revenue-analytics-setup (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "revenue-intro",
+      "program": "revenue-analytics-setup",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "revenue-analytics-setup",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "revenue-analytics-setup",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "revenue-analytics-setup",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "revenue-analytics-setup",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "revenue-analytics-setup",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "revenue-analytics-setup",
+    },
+  ],
+  "program": "revenue-analytics-setup",
+  "screens": [
+    "revenue-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > self-driving (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen self-driving-integration-check",
+      "from": "self-driving-intro",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen health-check",
+      "from": "self-driving-integration-check",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen self-driving-handoff",
+      "from": "run",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen self-driving-github",
+      "from": "self-driving-handoff",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen run",
+      "from": "self-driving-github",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "self-driving",
+    },
+    {
+      "event": "screen exit",
+      "from": "outro",
+      "program": "self-driving",
+    },
+  ],
+  "program": "self-driving",
+  "screens": [
+    "self-driving-intro",
+    "self-driving-integration-check",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "self-driving-handoff",
+    "self-driving-github",
+    "run",
+    "outro",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > slack (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen exit",
+      "from": "slack-connect",
+      "program": "slack",
+    },
+  ],
+  "program": "slack",
+  "screens": [
+    "slack-connect",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > warehouse-source (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen auth",
+      "from": "warehouse-intro",
+      "program": "warehouse-source",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "warehouse-source",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "warehouse-source",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "warehouse-source",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "warehouse-source",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "warehouse-source",
+    },
+  ],
+  "program": "warehouse-source",
+  "screens": [
+    "warehouse-intro",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`flow traces per program > web-analytics-doctor (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "agent-skill-intro",
+      "program": "web-analytics-doctor",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "web-analytics-doctor",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "web-analytics-doctor",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "web-analytics-doctor",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "web-analytics-doctor",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "web-analytics-doctor",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "web-analytics-doctor",
+    },
+  ],
+  "program": "web-analytics-doctor",
+  "screens": [
+    "agent-skill-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
+exports[`headless walk analytics > audit: run phases without a TUI 1`] = `
+{
+  "events": [],
+  "program": "audit",
+  "screen": "audit-intro",
+}
+`;
+
+exports[`headless walk analytics > posthog-integration: run phases without a TUI 1`] = `
+{
+  "events": [],
+  "program": "posthog-integration",
+  "screen": "intro",
+}
+`;

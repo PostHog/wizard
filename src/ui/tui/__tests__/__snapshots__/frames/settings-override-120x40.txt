@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+
+                            ╭──────────────────────────────────────────────────────────────╮
+                            │                                                              │
+                            │                     ⚠ Settings conflict                      │
+                            │                                                              │
+                            │   Your settings file at /app/.claude/settings.json sets:     │
+                            │     • ANTHROPIC_BASE_URL                                     │
+                            │     • apiKeyHelper                                           │
+                            │                                                              │
+                            │   These settings override credentials and prevent the        │
+                            │   Wizard from reaching the PostHog LLM Gateway. We can       │
+                            │   back up the file and continue.                             │
+                            │                                                              │
+                            │   ────────────────────────────────────────────────────────   │
+                            │                                                              │
+                            │    Back up to .wizard-backup and continue?                   │
+                            │                                                              │
+                            │     ▸ Backup & continue [Enter]    Exit [Esc]                │
+                            │                                                              │
+                            ╰──────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+  ←→ switch  esc cancel  enter confirm
