@@ -20,7 +20,7 @@
  */
 
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun, AbortCase } from '@lib/agent/agent-runner';
+import type { ProgramRun, AbortCase } from '@lib/program-run';
 import { AGENT_SKILL_STEPS } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 

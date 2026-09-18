@@ -31,7 +31,7 @@ import {
   renderToolInventory,
 } from '@lib/agent/agent-prompt-loader';
 import { AgentErrorType } from '@lib/agent/agent-interface';
-import { REMARK_INSTRUCTION } from '@lib/agent/signals';
+import { REMARK_INSTRUCTION } from '@lib/agent-signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';

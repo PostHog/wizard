@@ -2,7 +2,7 @@ import {
   sanitizeAgentSubprocessEnv,
   isBlockedAgentEnvKey,
   BLOCKED_AGENT_ENV_KEYS,
-} from '@lib/agent/agent-env-isolation';
+} from '@lib/agent-env-isolation';
 
 describe('isBlockedAgentEnvKey', () => {
   it('blocks the direct API key that outranks the gateway auth token', () => {

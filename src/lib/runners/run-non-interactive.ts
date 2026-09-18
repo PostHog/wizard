@@ -8,6 +8,7 @@ import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import { runConfigFor } from '@lib/programs/run-config';
 import { getAuditChecks } from '@lib/programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
@@ -336,7 +337,7 @@ export function runNonInteractive(
       }
 
       const { runAgent } = await import('@lib/agent/agent-runner');
-      await runAgent(config, session);
+      await runAgent(runConfigFor(config), session);
       await settleStream(RunPhase.Completed);
     } catch (error) {
       const errorMessage =

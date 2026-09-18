@@ -9,7 +9,6 @@
 import { analytics } from './analytics';
 import { logToFile } from './debug';
 import { getUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@lib/errors';
 import { emitWizardError, sanitizeErrorDetail } from '@lib/errors';
@@ -124,8 +123,8 @@ export async function wizardAbort(
   await ui.waitForOutroDismissed();
 
   // 6. Emit the machine-readable error line for non-interactive hosts
-  //    (LoggingUI and its HeadlessUI subclass); the TUI never sees it.
-  if (code && ui instanceof LoggingUI) {
+  //    (console renderers); the TUI never sees it.
+  if (code && !ui.interactive) {
     emitWizardError({
       code,
       message: resolvedOutroData.message ?? message,

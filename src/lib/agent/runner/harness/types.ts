@@ -18,7 +18,7 @@
 import type { WizardSession } from '@lib/wizard-session';
 import type { AdditionalFeature } from '@lib/wizard-session';
 import type { Harness } from '@lib/constants';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRunConfig } from '@lib/program-run';
 import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';
@@ -46,7 +46,7 @@ export interface RunMiddleware {
 export interface BackendRunInputs {
   session: WizardSession;
   config: ProgramRun;
-  programConfig: ProgramConfig;
+  programConfig: ProgramRunConfig;
   boot: BootstrapResult;
   /** The fully assembled prompt. */
   prompt: string;
@@ -76,7 +76,7 @@ export type AgentResult = { error?: AgentErrorType; message?: string };
  */
 export interface TaskRunInputs {
   session: WizardSession;
-  programConfig: ProgramConfig;
+  programConfig: ProgramRunConfig;
   boot: BootstrapResult;
   /** The fully assembled per-task or seed prompt. */
   prompt: string;

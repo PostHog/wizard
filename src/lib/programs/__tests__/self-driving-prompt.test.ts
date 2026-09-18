@@ -1,5 +1,5 @@
 import { buildSelfDrivingPrompt } from '@lib/programs/self-driving/prompt';
-import type { PromptContext } from '@lib/agent/agent-runner';
+import type { PromptContext } from '@lib/program-run';
 import { HostResolution } from '@lib/host-resolution';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 

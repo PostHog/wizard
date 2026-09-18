@@ -1,10 +1,6 @@
-import type {
-  WizardSession,
-  DiscoveredFeature,
-  TaskNotice,
-} from '@lib/wizard-session';
+import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRunConfig } from '@lib/program-run';
 import type { Integration } from '@lib/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
@@ -76,13 +72,12 @@ export interface ProgramStep {
   screenId?: string;
 
   /**
-   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
-   * exports a self-contained run step and another imports it into its step list
-   * — e.g. posthog-integration exports a run step that runs its agent, and
-   * self-driving imports it before its own run step. Omit to run the host
-   * program's own agent (`config.run`).
+   * For a run step (`screenId: 'run'`): the program whose agent this step runs,
+   * composed into the host program's step list (self-driving runs the
+   * integration's agent before its own). The runner executes it in the step's
+   * `targetDir` after `onRunPrep`. Omit to run the host program's own agent.
    */
-  run?: (session: WizardSession) => Promise<void>;
+  run?: { programId: ProgramId };
 
   /**
    * For a run step: prepare a derived session before its agent runs — e.g.
@@ -199,7 +194,7 @@ export interface ProgramCliSurface {
  * Each program directory exports one of these. The system uses it
  * for CLI registration, sequence/step wiring, and skill bootstrap.
  */
-export interface ProgramConfig {
+export interface ProgramConfig extends ProgramRunConfig {
   /** CLI command name (e.g. 'revenue-analytics'). Omit for the default program. */
   command?: string;
   /**
@@ -211,38 +206,8 @@ export interface ProgramConfig {
   parentCommand?: string;
   /** CLI description shown in --help */
   description: string;
-  /** Unique program id — matches the Program enum value */
-  id: string;
-  /**
-   * Content-mill flow the orchestrator loads its agent prompts + step-skills
-   * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
-   * the content-mill flow name diverges from the program id.
-   */
-  agentFlow?: string;
-  /**
-   * Whether this program's agent run requires third-party AI services.
-   *
-   * When true (the default), the wizard checks
-   * `apiUser.organization.is_ai_data_processing_approved` after auth and
-   * renders `AiOptInRequiredScreen` if the org has not opted in. Matches
-   * Max's strict reading: only literal `true` proceeds.
-   *
-   * Opt out (set to `false`) for programs that don't run the agent —
-   * doctor, mcp install/remove/tutorial, source-map upload. The safe
-   * default is `true` so future programs gate by declaration.
-   */
-  requiresAi?: boolean;
-  /**
-   * Context-mill skill ID this program installs and runs. When present,
-   * bin.ts seeds `session.skillId` with this value before the TUI renders
-   * so intro screens can resolve skill metadata without waiting for the
-   * agent run.
-   */
-  skillId?: string;
   /** The ordered step list */
   steps: ProgramStep[];
-  /** Agent run config. Static object or async function for dynamic config. */
-  run?: ProgramRun | ((session: WizardSession) => Promise<ProgramRun>);
   /**
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
@@ -250,47 +215,8 @@ export interface ProgramConfig {
    * detection) that the TUI performs via step onReady callbacks.
    */
   ciPreRun?: (session: WizardSession) => Promise<void>;
-  /**
-   * Tasks the orchestrator queues itself, before the planner runs, from what
-   * the wizard detected. Their types are marked `runnerSeeded: true` in the
-   * agent prompt, so the planner never sees them: whether such a task runs is
-   * decided here, in code, not by a model that could invent it or forget it.
-   * Return an empty list to queue none.
-   */
-  seedTasks?: (session: WizardSession) => Array<{
-    type: string;
-    label?: string;
-    inputs?: Record<string, unknown>;
-    /**
-     * Shown before the run starts, letting the user decline the task. The
-     * program owns the words — the runner and the modal only carry them. A
-     * task without one is queued silently.
-     */
-    notice?: TaskNotice;
-  }>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
-  /**
-   * Path (relative to installDir) of the report file the program writes.
-   * Mirrors `run.reportFile` but lifted to the top level so UI screens can
-   * read it synchronously without resolving a deferred `run` function.
-   */
-  reportFile?: string;
-  /**
-   * Agent-authored event-plan artifact to mirror into the wizard session.
-   * Relative to `session.installDir`. Programs that do not produce an event
-   * plan leave this unset, so generic runner machinery does not inspect a
-   * stale or unrelated `.posthog-events.json` file.
-   */
-  eventPlanFile?: string;
-  /** Audit ledger to mirror into the session, relative to `installDir`. */
-  auditLedgerFile?: string;
-  /**
-   * Channel the task stream publishes this run under, when it differs from the
-   * program id. A family leaf runs on the generic skill program, so without
-   * this every `wizard audit <leaf>` would report as `agent-skill`.
-   */
-  streamWorkflowId?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
@@ -321,17 +247,6 @@ export interface ProgramConfig {
    * 'migrate-statsig'`).
    */
   mapCliOptions?: (argv: Record<string, unknown>) => Record<string, unknown>;
-  /**
-   * Extra tool names added on top of BASE_ALLOWED_TOOLS for this program's
-   * agent run. Use for tools that only this program needs.
-   */
-  allowedTools?: readonly string[];
-  /**
-   * Tool names removed from BASE_ALLOWED_TOOLS for this program's agent
-   * run. Use to forbid a base tool — e.g. `['Agent']` to block subagent
-   * dispatch in a program whose steps are explicitly single-agent.
-   */
-  disallowedTools?: readonly string[];
   /**
    * Declares this program's place in the wizard CLI surface. See
    * `ProgramCliSurface` for semantics.

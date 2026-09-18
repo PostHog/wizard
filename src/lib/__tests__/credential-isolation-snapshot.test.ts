@@ -13,9 +13,9 @@
  * isolation surface — a diff here means a credential path changed disposition.
  */
 
-import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
-import { classifySettingsConflicts } from '@lib/agent/claude-settings';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import { sanitizeAgentSubprocessEnv } from '@lib/agent-env-isolation';
+import { classifySettingsConflicts } from '@lib/claude-settings';
+import type { SettingsConflict } from '@lib/claude-settings';
 
 // Every env-based avenue (one key each), plus the gateway routing and benign
 // env that must survive. Grouped by avenue for readability; the snapshot sorts.

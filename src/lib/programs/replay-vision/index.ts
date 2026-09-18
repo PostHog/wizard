@@ -1,4 +1,4 @@
-import type { AbortCase } from '@lib/agent/agent-runner';
+import type { AbortCase } from '@lib/program-run';
 import { Integration } from '@lib/constants';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';

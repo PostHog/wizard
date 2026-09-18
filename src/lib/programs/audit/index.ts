@@ -3,7 +3,7 @@ import {
   createSkillProgram,
 } from '@lib/programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';

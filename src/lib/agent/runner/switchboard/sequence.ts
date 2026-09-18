@@ -13,7 +13,7 @@ import {
 } from './flags';
 import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRunConfig } from '@lib/program-run';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
@@ -32,7 +32,7 @@ export interface SequenceRunner {
   run(
     session: WizardSession,
     config: ProgramRun,
-    programConfig: ProgramConfig,
+    programConfig: ProgramRunConfig,
     boot: BootstrapResult,
     /** Composed sub-run (integration inside self-driving); linear-only. */
     composed: boolean,

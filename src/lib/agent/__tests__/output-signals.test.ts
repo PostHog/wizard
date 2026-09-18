@@ -1,5 +1,5 @@
 import { AgentOutputSignals } from '@lib/agent/output-signals';
-import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent-signals';
 
 describe('REMARK_INSTRUCTION', () => {
   it('carries the marker but no literal placeholder a model could echo', () => {

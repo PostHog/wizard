@@ -9,7 +9,7 @@ import type { WizardSession } from '../../../wizard-session';
 import { OutroKind } from '../../../wizard-session';
 import { getUI } from '../../../../ui';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
-import { restoreClaudeSettings } from '../../claude-settings';
+import { restoreClaudeSettings } from '@lib/claude-settings';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
 import {
@@ -26,7 +26,7 @@ import {
 } from '../../../yara-hooks';
 import { installSkillById } from '../../../wizard-tools';
 import { createWizardAskBridge } from '../../../wizard-ask-bridge';
-import type { ProgramConfig } from '../../../programs/program-step';
+import type { ProgramRunConfig } from '@lib/program-run';
 import { assemblePrompt } from '../../agent-prompt';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { abortOnInstallFailure } from '../shared/errors';
@@ -36,7 +36,7 @@ import { resolveHarness, getHarness } from '../switchboard';
 export async function runLinearProgram(
   session: WizardSession,
   config: ProgramRun,
-  programConfig: ProgramConfig,
+  programConfig: ProgramRunConfig,
   boot: BootstrapResult,
   composed = false,
 ): Promise<void> {

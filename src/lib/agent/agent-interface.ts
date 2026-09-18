@@ -53,28 +53,28 @@ import {
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
-} from './signals';
+} from '@lib/agent-signals';
 import { classifyAuthFailure } from '@lib/errors';
 import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
-export { AgentSignals, AgentErrorType } from './signals';
-export type { AgentSignal } from './signals';
+export { AgentSignals, AgentErrorType } from '@lib/agent-signals';
+export type { AgentSignal } from '@lib/agent-signals';
 export { AgentOutputSignals } from './output-signals';
 import {
   checkAllSettingsConflicts,
   type SettingsConflict,
   type SettingsConflictSource,
-} from './claude-settings';
+} from '@lib/claude-settings';
 import {
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,
   claudeConfigDir,
   createIsolatedAgentConfigDir,
 } from './stored-login';
-import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
+import { sanitizeAgentSubprocessEnv } from '@lib/agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
