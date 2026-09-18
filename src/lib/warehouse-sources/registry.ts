@@ -67,9 +67,14 @@ const CORE_SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
   {
+    // BigQuery authenticates with a Google Cloud service-account JSON key
+    // file, like Firebase above — the source's only required credential field
+    // is a file upload, and the terminal prompt collects single-line text, so
+    // there is no in-cli path that can accept it. Deep-link to the app's
+    // new-source form instead of dead-ending on an unpasteable credential.
     kind: 'BigQuery',
     label: 'BigQuery',
-    mode: 'in-cli',
+    mode: 'deep-link',
     signals: {
       npm: ['@google-cloud/bigquery'],
       python: ['google-cloud-bigquery'],

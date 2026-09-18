@@ -116,6 +116,15 @@ describe('detectWarehouseSources', () => {
     expect(firebase.mode).toBe('deep-link');
   });
 
+  it('detects BigQuery as a deep-link source (service-account key file)', () => {
+    writePackageJson(tmpDir, { '@google-cloud/bigquery': '^7.0.0' });
+    const [bigquery] = detectWarehouseSources(tmpDir);
+    expect(bigquery.kind).toBe('BigQuery');
+    // Same reason as Firebase: the only required credential is a JSON key
+    // file upload, which the single-line terminal prompt cannot collect.
+    expect(bigquery.mode).toBe('deep-link');
+  });
+
   it('detects Slack and GitHub as deep-link OAuth sources', () => {
     writePackageJson(tmpDir, {
       '@slack/web-api': '^7.0.0',
