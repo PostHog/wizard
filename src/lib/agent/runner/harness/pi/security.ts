@@ -135,8 +135,11 @@ function isDeletableProjectFile(
   if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
   if (p.basename(target).startsWith('.env')) return false; // secrets
 
-  const resolved = p.resolve(root, target);
-  return resolved !== root && resolved.startsWith(root + p.sep);
+  const canonicalRoot = p.resolve(root);
+  const resolved = p.resolve(canonicalRoot, target);
+  return (
+    resolved !== canonicalRoot && resolved.startsWith(canonicalRoot + p.sep)
+  );
 }
 
 /**
