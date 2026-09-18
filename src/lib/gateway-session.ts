@@ -79,8 +79,17 @@ export function configureGatewayFromCIEnvironment(
 ): void {
   if (IS_PRODUCTION_BUILD)
     throw new Error('CI gateway auth requires a non-production build');
+  // The read below consumes the env var, so once this process is configured a
+  // second call must not report a spent secret as a missing one.
+  if (ciAuth) return;
   const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
-  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
+  if (!path) {
+    throw new WizardError(
+      'Set WIZARD_CI_GATEWAY_TOKEN_FILE to a file holding an already-issued gateway token. See the credential setup in docs/local-dev.md.',
+      undefined,
+      ErrorCodes.EnvMissingCiToken,
+    );
+  }
   const token = readFileSync(path, 'utf8');
   delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
   configureGatewayCredentialsForCI(

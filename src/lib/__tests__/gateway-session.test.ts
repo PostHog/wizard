@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { inspect } from 'node:util';
 import {
   GatewayMintFailed,
@@ -134,12 +137,36 @@ describe('gatewayAuth', () => {
     }
   });
 
-  it('requires an explicit gateway token file for CI', () => {
+  it('names the missing token file variable as a coded setup failure', () => {
     vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', '');
     try {
       expect(() => configureGatewayFromCIEnvironment(42, 'us')).toThrow(
-        'WIZARD_CI_GATEWAY_TOKEN_FILE is required',
+        expect.objectContaining({
+          code: ErrorCodes.EnvMissingCiToken,
+          message: expect.stringMatching(
+            /WIZARD_CI_GATEWAY_TOKEN_FILE.*docs\/local-dev\.md/,
+          ),
+        }),
       );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('keeps the CI bearer on a repeat call that no longer sees the token file', async () => {
+    const tokenFile = join(mkdtempSync(join(tmpdir(), 'wizard-ci-')), 'token');
+    writeFileSync(tokenFile, 'phe_ci_token');
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
+    vi.stubEnv('WIZARD_CI_GATEWAY_URL', 'https://ai-gateway.us.posthog.com');
+    try {
+      configureGatewayFromCIEnvironment(42, 'us');
+      configureGatewayFromCIEnvironment(42, 'us');
+      expect(await gatewayAuth(host, 'phx_project', 'integration')).toEqual({
+        token: 'phe_ci_token',
+        teamId: 42,
+        gatewayUrl: 'https://ai-gateway.us.posthog.com',
+        refreshAtMs: Infinity,
+      });
     } finally {
       vi.unstubAllEnvs();
     }
