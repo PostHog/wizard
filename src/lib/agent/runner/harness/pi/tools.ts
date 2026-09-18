@@ -19,12 +19,22 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import {
+  AUDIT_ADD_CHECKS_DESCRIPTION,
+  AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_SEED_CHECKS_DESCRIPTION,
+  AUDIT_SEED_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_STATUSES,
   CHECK_ENV_KEYS_DESCRIPTION,
   CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
   WIZARD_TOOL_NAMES,
+  addAuditChecks,
   checkEnvKeys as checkEnvKeysCore,
+  resolveAuditChecks,
+  seedAuditChecks,
   createAskAccounting,
   describeAskCancellation,
   ensureGitignoreCoverage,
@@ -52,6 +62,9 @@ import {
   publishHandoff,
 } from '@lib/wizard-tools/handoff';
 import { createSecretVault } from '@lib/secret-vault';
+import { AUDIT_CHECKS_FILE } from '@lib/programs/audit/types';
+import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
+import { makeMutex } from '@utils/atomic-ledger';
 import { withMode } from './index';
 import {
   detectNodePackageManagers,
@@ -257,6 +270,109 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
+  // ── Audit ledger ────────────────────────────────────────────────────
+  // Native mirror of the three MCP audit tools; pi mounts no MCP server, so
+  // without these an audit cannot move a check off pending. Descriptions and
+  // write semantics come from the shared helpers, so the facades cannot drift.
+  const auditLedgerPath = path.join(workingDirectory, AUDIT_CHECKS_FILE);
+  const auditMutex = makeMutex();
+  const auditStatus = Type.Union(
+    AUDIT_STATUSES.map((s) => Type.Literal(s)),
+    { description: 'Check outcome' },
+  );
+  const auditCheck = Type.Object({
+    id: Type.String({ description: 'Stable kebab-case check id' }),
+    area: Type.String({ description: 'Short group name, e.g. Installation' }),
+    label: Type.String({ description: 'Short human name for the check' }),
+    status: auditStatus,
+    file: Type.Optional(Type.String({ description: 'Optional path:line' })),
+    details: Type.Optional(
+      Type.String({ description: 'Optional one-line explanation' }),
+    ),
+  });
+
+  const auditSeedChecks = defineTool({
+    name: 'audit_seed_checks',
+    label: 'Seed audit checks',
+    description: AUDIT_SEED_CHECKS_DESCRIPTION,
+    promptSnippet:
+      'audit_seed_checks(checks) — write the full pending checklist to the audit ledger',
+    parameters: Type.Object({
+      checks: Type.Array(auditCheck, {
+        description: AUDIT_SEED_CHECKS_PARAM_DESCRIPTION,
+      }),
+    }),
+    execute: (_id, args) =>
+      auditMutex(() => {
+        const result = seedAuditChecks(
+          auditLedgerPath,
+          args.checks as AuditCheck[],
+        );
+        logToFile(`[pi] audit_seed_checks: ${result.message}`);
+        return text(result.message);
+      }),
+  });
+
+  const auditAddChecks = defineTool({
+    name: 'audit_add_checks',
+    label: 'Add audit checks',
+    description: AUDIT_ADD_CHECKS_DESCRIPTION,
+    promptSnippet:
+      'audit_add_checks(checks) — append runtime-discovered checks to the ledger',
+    parameters: Type.Object({
+      checks: Type.Array(auditCheck, {
+        minItems: 1,
+        description: AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
+      }),
+    }),
+    execute: (_id, args) =>
+      auditMutex(() => {
+        const result = addAuditChecks(
+          auditLedgerPath,
+          args.checks as AuditCheck[],
+        );
+        logToFile(`[pi] audit_add_checks: ${result.message}`);
+        return text(result.message);
+      }),
+  });
+
+  const auditResolveChecks = defineTool({
+    name: 'audit_resolve_checks',
+    label: 'Resolve audit checks',
+    description: AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+    promptSnippet:
+      'audit_resolve_checks(updates) — patch each check by id as you finish it',
+    parameters: Type.Object({
+      updates: Type.Array(
+        Type.Object({
+          id: Type.String({ description: 'Existing check id' }),
+          status: auditStatus,
+          file: Type.Optional(
+            Type.String({ description: 'Optional path:line' }),
+          ),
+          details: Type.Optional(
+            Type.String({ description: 'Optional one-line explanation' }),
+          ),
+        }),
+        { minItems: 1, description: AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION },
+      ),
+    }),
+    execute: (_id, args) =>
+      auditMutex(() => {
+        const result = resolveAuditChecks(
+          auditLedgerPath,
+          args.updates as Array<{
+            id: string;
+            status: AuditStatus;
+            file?: string;
+            details?: string;
+          }>,
+        );
+        logToFile(`[pi] audit_resolve_checks: ${result.message}`);
+        return text(result.message);
+      }),
+  });
+
   const detectPm = defineTool({
     name: 'detect_package_manager',
     label: 'Detect package manager',
@@ -449,6 +565,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     checkEnvKeys,
     setEnvValues,
     detectPm,
+    // Parallel: the mutex serializes the writes, so a subagent fan-out is safe.
+    withMode(auditSeedChecks, 'parallel'),
+    withMode(auditAddChecks, 'parallel'),
+    withMode(auditResolveChecks, 'parallel'),
     // Sequential: it mutates the store's handoff state.
     withMode(publishHandoffTool, 'sequential'),
   ];

@@ -107,7 +107,15 @@ const ALWAYS_ON_WIZARD_TOOLS = [
   'publish_handoff',
 ];
 
-const OPT_IN_WIZARD_TOOLS = ['wizard_ask', 'load_skill_menu', 'install_skill'];
+const OPT_IN_WIZARD_TOOLS = [
+  'wizard_ask',
+  'load_skill_menu',
+  'install_skill',
+  // Audit programs only: they declare the ledger tools on `allowedTools`.
+  'audit_seed_checks',
+  'audit_add_checks',
+  'audit_resolve_checks',
+];
 
 export function allowedPiWizardTools(
   allowedTools: readonly string[] | undefined,

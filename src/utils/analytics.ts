@@ -51,6 +51,9 @@ export function sessionProperties(
 
   return {
     integration: session.integration,
+    // Discriminates a family leaf: `command` is the first positional, so every
+    // `wizard audit <leaf>` reports the same `audit`.
+    skill_id: session.skillId,
     detected_framework: session.detectedFrameworkLabel,
     typescript: session.typescript,
     project_id: session.credentials?.projectId,

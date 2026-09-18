@@ -97,8 +97,8 @@ aliases.
 
 | Subcommand                    | What it audits                                       |
 | ----------------------------- | ---------------------------------------------------- |
-| `wizard audit events`         | event capture quality + cost (**default** leaf)      |
-| `wizard audit all`            | comprehensive audit across every area                |
+| `wizard audit events`         | event capture quality + cost                        |
+| `wizard audit all`            | comprehensive audit across every area (**default**) |
 | `wizard audit autocapture`    | autocapture setup + cost                             |
 | `wizard audit feature-flags`  | feature flag usage + cost                            |
 | `wizard audit identify`       | `$identify` implementation                           |

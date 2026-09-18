@@ -127,6 +127,25 @@ describe('dispatchFamily', () => {
     expect(opts).toMatchObject({ debug: true });
   });
 
+  test('an audit leaf publishes under the family, not under agent-skill', async () => {
+    // A leaf runs on the generic skill program, whose id is `agent-skill`, so
+    // without the override every audit would share one indistinguishable
+    // channel with every other `wizard skill` run. skill_id discriminates.
+    mockMenu([
+      entry({
+        skillId: 'audit-events',
+        command: 'events',
+        parentCommand: 'audit',
+      }),
+    ]);
+    await dispatchFamily('audit', makeArgv({ skill: 'events' }));
+    const [config] = mockRunWizard.mock.calls[0] as [
+      { id?: string; streamWorkflowId?: string },
+    ];
+    expect(config.id).toBe('agent-skill');
+    expect(config.streamWorkflowId).toBe('audit');
+  });
+
   test('routes through runWizardCI when --ci is set', async () => {
     mockMenu([
       entry({

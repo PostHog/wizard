@@ -28,6 +28,8 @@ import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@lib/local-dev';
 import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
 import { runAgent } from '@lib/agent/agent-runner';
+import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
+import { getAuditChecks } from '@lib/programs/audit/types';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
@@ -54,6 +56,16 @@ import {
   buildE2eResult,
   readReportFile,
 } from '@e2e-harness/e2e-result';
+
+/** Cheap 32-bit FNV-1a, to fold framework-context values into a signature. */
+function digest(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -233,6 +245,25 @@ async function main() {
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
   });
+  // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
+  const streamLog = createFileDestination(process.env.TASK_STREAM_LOG ?? '');
+  if (streamLog) {
+    const stream = new TaskStreamPush({
+      store,
+      programId,
+      destinations: [streamLog],
+      eventPlanPath: programConfig.eventPlanFile
+        ? join(store.session.installDir, programConfig.eventPlanFile)
+        : undefined,
+      auditChecks: programConfig.auditLedgerFile
+        ? () => getAuditChecks(store.session)
+        : undefined,
+    });
+    stream.attach();
+    process.on('exit', () => void stream.shutdown(0));
+    mark(`task stream dump → ${streamLog.path}`);
+  }
+
   // Optional skip-ahead: pre-resolve the self-driving integration check so its
   // screen never shows (INTEGRATE=true integrates first; false = already set up).
   if (process.env.INTEGRATE === 'true' || process.env.INTEGRATE === 'false') {
@@ -429,10 +460,9 @@ async function main() {
         overlay: store.router.hasOverlay,
         tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
         phase: store.session.runPhase,
-        // Snap on within-screen state too: when a screen publishes new
-        // framework-context (e.g. the detector's projects), so the picker frame
-        // is captured, not just the loading state. Generic — keys, not values.
-        ctx: Object.keys(store.session.frameworkContext).sort().join(','),
+        // Values, not just keys: a screen rerendering from an artifact updated
+        // in place (the audit ledger) keeps its key and would snap once, empty.
+        ctx: digest(JSON.stringify(store.session.frameworkContext)),
       });
     const snap = (): Promise<void> => {
       const sig = signature();

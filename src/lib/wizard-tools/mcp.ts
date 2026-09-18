@@ -39,8 +39,7 @@ import {
   CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
   ENV_FILE_PATH_DESCRIPTION,
   SERVER_NAME,
-  appendAuditChecksToLedger,
-  applyAuditUpdates,
+  addAuditChecks,
   downloadSkill,
   ensureGitignoreCoverage,
   createAskAccounting,
@@ -49,15 +48,21 @@ import {
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
   normaliseAskSubject,
-  readLedger,
   resolveAskQuestionKinds,
+  resolveAuditChecks,
   resolveEnvPath,
   resolveEnvSecretRefs,
+  seedAuditChecks,
   templateEnvWriteRefusal,
   legacyKeyNameRefusal,
   vaultSensitiveAnswers,
-  writeLedgerAtomic,
   type SkillEntry,
+  AUDIT_ADD_CHECKS_DESCRIPTION,
+  AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_SEED_CHECKS_DESCRIPTION,
+  AUDIT_SEED_CHECKS_PARAM_DESCRIPTION,
   AUDIT_STATUSES,
   WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
@@ -472,23 +477,18 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const auditSeedChecks = tool(
     'audit_seed_checks',
-    'Seed the audit ledger at .posthog-audit-checks.json with the full set of pending checks. Call this once at the start of the audit. Atomically replaces any existing ledger.',
+    AUDIT_SEED_CHECKS_DESCRIPTION,
     {
       checks: z
         .array(auditCheckSchema)
-        .describe('Full pending checklist to write to the ledger'),
+        .describe(AUDIT_SEED_CHECKS_PARAM_DESCRIPTION),
     },
     async (args: { checks: AuditCheck[] }) => {
       return auditMutex(() => {
-        writeLedgerAtomic(auditLedgerPath, args.checks);
+        const result = seedAuditChecks(auditLedgerPath, args.checks);
         logToFile(`audit_seed_checks: wrote ${args.checks.length} entries`);
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Seeded ${args.checks.length} audit checks.`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: result.message }],
         };
       });
     },
@@ -498,51 +498,20 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const auditAddChecks = tool(
     'audit_add_checks',
-    'Append one or more pending checks to the existing audit ledger at .posthog-audit-checks.json. Call audit_seed_checks first. Atomically rejects duplicate ids without changing the ledger.',
+    AUDIT_ADD_CHECKS_DESCRIPTION,
     {
       checks: z
         .array(auditCheckSchema)
         .min(1)
-        .describe('Additional checks to append to the existing ledger'),
+        .describe(AUDIT_ADD_CHECKS_PARAM_DESCRIPTION),
     },
     async (args: { checks: AuditCheck[] }) => {
       return auditMutex(() => {
-        const result = appendAuditChecksToLedger(auditLedgerPath, args.checks);
-
-        if (!result.ok) {
-          if (result.reason === 'missing-ledger') {
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: 'Error: audit ledger does not exist. Run audit_seed_checks first.',
-                },
-              ],
-              isError: true,
-            };
-          }
-
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `Error: duplicate check id(s): ${result.ids.join(
-                  ', ',
-                )}. Check ids must be unique.`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        logToFile(`audit_add_checks: added ${result.added} entries`);
+        const result = addAuditChecks(auditLedgerPath, args.checks);
+        logToFile(`audit_add_checks: ${result.message}`);
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Added ${result.added} audit check(s).`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: result.message }],
+          ...(result.ok ? {} : { isError: true }),
         };
       });
     },
@@ -552,12 +521,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const auditResolveChecks = tool(
     'audit_resolve_checks',
-    "Resolve one or more audit checks by id. Patches each entry's status (and optional file/details) and writes the ledger back atomically. Concurrent calls serialize.",
+    AUDIT_RESOLVE_CHECKS_DESCRIPTION,
     {
       updates: z
         .array(auditUpdateSchema)
         .min(1)
-        .describe('Patches to apply, keyed by check id'),
+        .describe(AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION),
     },
     async (args: {
       updates: Array<{
@@ -568,35 +537,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }>;
     }) => {
       return auditMutex(() => {
-        const current = readLedger(auditLedgerPath);
-        const { next, unknown } = applyAuditUpdates(current, args.updates);
-
-        if (unknown.length > 0) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `Error: unknown check id(s): ${unknown.join(
-                  ', ',
-                )}. Run audit_seed_checks first or check the id.`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        writeLedgerAtomic(auditLedgerPath, next);
-        logToFile(
-          `audit_resolve_checks: applied ${args.updates.length} update(s)`,
-        );
-
+        const result = resolveAuditChecks(auditLedgerPath, args.updates);
+        logToFile(`audit_resolve_checks: ${result.message}`);
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Resolved ${args.updates.length} check(s).`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: result.message }],
+          ...(result.ok ? {} : { isError: true }),
         };
       });
     },

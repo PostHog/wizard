@@ -321,6 +321,7 @@ export function decideE2eAction(
 
     case ScreenId.Outro:
     case ScreenId.SourceMapsOutro:
+    case ScreenId.AuditOutro:
       return { action: { id: 'dismiss_outro' } };
 
     case ScreenId.Mcp:

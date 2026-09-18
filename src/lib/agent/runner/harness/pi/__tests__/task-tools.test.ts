@@ -115,3 +115,17 @@ describe('fenceDisallowList', () => {
     expect(fenceDisallowList(undefined)).toEqual([]);
   });
 });
+
+describe('audit ledger tools on pi', () => {
+  it('grants them only to a task that asked, under either name form', () => {
+    expect(allowedPiWizardTools(['Read']).has('audit_resolve_checks')).toBe(
+      false,
+    );
+    const granted = allowedPiWizardTools([
+      'mcp__wizard-tools__audit_seed_checks',
+      'audit_add_checks',
+      'mcp__wizard-tools__audit_resolve_checks',
+    ]);
+    expect([...granted].filter((t) => t.startsWith('audit_'))).toHaveLength(3);
+  });
+});
