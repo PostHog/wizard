@@ -5,7 +5,9 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noFallthroughCasesInSwitch": true,
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "target": "ES2022",
@@ -18,15 +20,54 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "paths": {
-      "@env": ["./src/env.ts"],
-      "@lib/*": ["./src/lib/*"],
-      "@e2e-harness/*": ["./e2e-harness/*"],
-      "@utils/*": ["./src/utils/*"],
-      "@ui": ["./src/ui/index.ts"],
-      "@ui/*": ["./src/ui/*"],
-      "@steps": ["./src/steps/index.ts"],
-      "@steps/*": ["./src/steps/*"],
-      "@frameworks/*": ["./src/frameworks/*"]
+      "@env": [
+        "./src/env.ts"
+      ],
+      "@lib/*": [
+        "./src/lib/*"
+      ],
+      "@e2e-harness/*": [
+        "./e2e-harness/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@ui": [
+        "./src/ui/index.ts"
+      ],
+      "@ui/*": [
+        "./src/ui/*"
+      ],
+      "@steps": [
+        "./src/steps/index.ts"
+      ],
+      "@steps/*": [
+        "./src/steps/*"
+      ],
+      "@frameworks/*": [
+        "./src/frameworks/*"
+      ],
+      "@store": [
+        "./src/store/index.ts"
+      ],
+      "@store/types": [
+        "./src/store/types.ts"
+      ],
+      "@agent": [
+        "./src/agent/index.ts"
+      ],
+      "@agent/types": [
+        "./src/agent/types.ts"
+      ],
+      "@tui": [
+        "./src/tui/index.ts"
+      ],
+      "@tui/types": [
+        "./src/tui/types.ts"
+      ],
+      "@cli/*": [
+        "./src/cli/*"
+      ]
     }
   }
 }
