@@ -1,0 +1,86 @@
+name: 'Surfaces'
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  architecture:
+    name: Architecture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.34.5
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/generate-version.cjs
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test:arch
+
+  surface:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [store, agent, tui, cli, harness]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.34.5
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/generate-version.cjs
+      - run: pnpm test:${{ matrix.project }} --coverage
+      - uses: codecov/codecov-action@13ce06bfc6bbe3ecf90edbbf1bc32fe5978ca1d3 # pin@v5.3.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          flags: ${{ matrix.project }}
+
+  bundle:
+    name: Bundle audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.34.5
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Production build and smoke test
+        run: pnpm build
+      - name: Production chunk manifest
+        run:
+          npx tsx scripts/chunk-manifest.no-jest.ts dist >
+          chunk-manifest.prod.json
+      - name: CI build and smoke test
+        run: pnpm build:ci
+      - name: CI chunk manifest
+        run:
+          npx tsx scripts/chunk-manifest.no-jest.ts dist >
+          chunk-manifest.ci.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: chunk-manifests-${{ github.sha }}
+          path: chunk-manifest.*.json

@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+
+
+
+                      ╭──────────────────────────────────────────────────────────────────────────╮
+                      │                                                                          │
+                      │                        Connect your data sources                         │
+                      │                                                                          │
+                      │   We detected warehouse sources in this project.                         │
+                      │                                                                          │
+                      │     Postgres, Stripe                                                     │
+                      │                                                                          │
+                      │   ────────────────────────────────────────────────────────────────────   │
+                      │                                                                          │
+                      │    Connect these during setup?                                           │
+                      │                                                                          │
+                      │     ▸ Continue [Enter]    Skip [Esc]                                     │
+                      │                                                                          │
+                      ╰──────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+
+  ←→ switch  esc cancel  enter confirm

@@ -29,6 +29,40 @@ function resolveTsForJs(): Plugin {
   };
 }
 
+// Per-surface Vitest projects keyed by today's directories. Each project runs
+// alone with `vitest run --project <name>`; `vitest run` runs them all.
+const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
+const AGENT_TESTS = [
+  `src/lib/agent/**/${TESTS}`,
+  `src/lib/middleware/**/${TESTS}`,
+  'src/lib/__tests__/agent-*.test.ts',
+  'src/lib/__tests__/gateway-session.test.ts',
+  'src/lib/__tests__/wizard-can-use-tool.test.ts',
+  'src/lib/__tests__/yara-*.test.ts',
+];
+const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
+const CLI_TESTS = [
+  `src/commands/**/${TESTS}`,
+  `src/lib/runners/${TESTS}`,
+  'src/__tests__/*cli*.test.ts',
+  'src/__tests__/wizard.test.ts',
+  'src/__tests__/headless-scope.test.ts',
+];
+const HARNESS_TESTS = [`e2e-harness/${TESTS}`];
+const ARCH_TESTS = ['src/__tests__/architecture/**/*.{ts,tsx}'];
+const EXCLUDE = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/e2e-tests/**',
+  '**/*.no-jest.*',
+  '**/*.d.ts',
+];
+
+const project = (name: string, include: string[], exclude: string[] = []) => ({
+  extends: true as const,
+  test: { name, include, exclude: [...EXCLUDE, ...exclude] },
+});
+
 export default defineConfig({
   plugins: [resolveTsForJs()],
   // The source targets the React 19 automatic JSX runtime (tsconfig
@@ -63,17 +97,17 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      '**/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}',
-      '**/__tests__/**/*.{js,jsx,ts,tsx}',
-      '**/*.{test,spec}.{js,jsx,ts,tsx}',
-    ],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/e2e-tests/**',
-      '**/*.no-jest.*',
-      '**/*.d.ts',
+    projects: [
+      project('agent', AGENT_TESTS),
+      project('tui', TUI_TESTS),
+      project('cli', CLI_TESTS),
+      project('harness', HARNESS_TESTS),
+      project('architecture', ARCH_TESTS),
+      project(
+        'store',
+        [`src/**/${TESTS}`],
+        [...AGENT_TESTS, ...TUI_TESTS, ...CLI_TESTS, ...ARCH_TESTS],
+      ),
     ],
     coverage: {
       provider: 'v8',

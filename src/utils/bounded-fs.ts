@@ -143,7 +143,7 @@ export async function boundedGlob(
     ignore: [...PROJECT_IGNORE_GLOBS, ...(options.extraIgnore ?? [])],
     suppressErrors: true,
     followSymbolicLinks: false,
-  });
+  }) as NodeJS.ReadableStream & { destroy(): void };
 
   const matches: string[] = [];
   return new Promise((resolve) => {

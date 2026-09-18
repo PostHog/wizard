@@ -55,6 +55,7 @@ describe('getOrAskForProjectData CI region', () => {
 
   it('uses the provided region and never probes @me for it', async () => {
     const result = await getOrAskForProjectData({
+      signup: false,
       ci: true,
       apiKey: 'phx_test',
       projectId: 123,
@@ -76,6 +77,7 @@ describe('getOrAskForProjectData CI region', () => {
     mockedDetect.mockResolvedValue('us');
 
     await getOrAskForProjectData({
+      signup: false,
       ci: true,
       apiKey: 'phx_test',
       projectId: 123,

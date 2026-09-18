@@ -17,6 +17,7 @@ real ink render) and is driven purely by store state manipulation; a PTY parent
 | **`tui-host.no-jest.ts`** | Real TUI host: `MODE=fixed` follows a profile; `MODE=serve` accepts socket commands. | `APP_DIR`, `PROJECT_ID`, key for a full run, `SNAP_CTRL`; run under a PTY, with `CONTROL_SOCK` in serve mode |
 | **`tui-snapshots.no-jest.ts`** | Runs the fixed host and saves colored `SNAP_OUT/NN-<screen>.ans` frames, including within-screen progress. | `SNAP_OUT`, `APP_DIR`, `PROJECT_ID`, `POSTHOG_KEY_FILE` or `POSTHOG_PERSONAL_API_KEY` |
 | **`wizard-ci-mcp.no-jest.ts`** | Stdio MCP server: `open_app`, `read_state`, `perform_action`, `render_screen`, `run_agent`. Screen output is plain text. | Spawns the host; `open_app` requires `appDir` and `projectId`, with optional `keyFile`, `apiKey`, `region` |
+| **`chunk-manifest.no-jest.ts`** | Prints a structural manifest of `dist/`: per chunk, the source files it contains and the chunks it imports, hash suffixes stripped. Baselines live in `scripts/__fixtures__/chunk-manifest.{prod,ci}.json`. | A built `dist/` |
 | **`wizard-ci-explore.no-jest.ts`** | `pnpm wizard-ci-explore`: opens an app, confirms setup, reads state, prints one frame, and exits. It does not run the agent. | `APP_DIR`, `PROJECT_ID`; optional `POSTHOG_KEY_FILE` |
 
 > You usually don't call these directly — `pnpm wizard-ci-snapshots` (in
