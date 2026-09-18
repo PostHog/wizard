@@ -71,6 +71,7 @@ function configForCliEntry(entry: CliEntry, family: string): ProgramConfig {
     ...(family === 'audit'
       ? {
           auditLedgerFile: AUDIT_CHECKS_FILE,
+          streamWorkflowId: family,
           allowedTools: [
             ...(agentSkillConfig.allowedTools ?? []),
             WIZARD_TOOL_NAMES.auditSeedChecks,
