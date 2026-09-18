@@ -2,7 +2,6 @@ import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { getProgramConfig, Program } from '@lib/programs/program-registry';
 import { metricsConfig } from '@lib/programs/metrics/index';
 import type { ProgramRun } from '@lib/agent/agent-runner';
-import type { WizardSession } from '@lib/wizard-session';
 
 import { metricsCommand } from '../../../commands/metrics';
 
@@ -38,7 +37,7 @@ describe('metrics program', () => {
     const run = staticRun(metricsConfig);
     expect(run.skillId).toBeUndefined();
 
-    const prompt = run.customPrompt?.({} as WizardSession);
+    const prompt = run.customPrompt?.({} as never);
     expect(prompt).toContain('load_skill_menu');
     expect(prompt).toContain('"metrics"');
     // Every published variant the prompt teaches the agent to choose from.

@@ -251,7 +251,7 @@ describe('WizardCiDriver — source-maps project pick', () => {
     store.setCredentials({
       accessToken: 'phx_x',
       projectApiKey: 'phc_x',
-      host: 'https://us.posthog.com',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
       projectId: 1,
     });
   }

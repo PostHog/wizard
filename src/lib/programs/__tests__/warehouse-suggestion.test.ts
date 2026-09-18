@@ -78,7 +78,7 @@ describe('outro suggestion', () => {
     const s = sessionWith([POSTGRES, STRIPE]);
     const runDef = await resolveRun(s);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+    const outro = runDef.buildOutroData!(s, CREDENTIALS as any)!;
     const text = outro.nextSteps!.items.join('\n');
 
     // The project segment and the kind are what land the user on the source's
@@ -100,7 +100,7 @@ describe('outro suggestion', () => {
     const s = sessionWith(many);
     const runDef = await resolveRun(s);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+    const outro = runDef.buildOutroData!(s, CREDENTIALS as any)!;
     const links = outro.nextSteps!.items.filter((i) =>
       i.includes('new-source'),
     );
@@ -113,7 +113,7 @@ describe('outro suggestion', () => {
     const s = sessionWith([]);
     const runDef = await resolveRun(s);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+    const outro = runDef.buildOutroData!(s, CREDENTIALS as any)!;
 
     expect(outro.nextSteps).toBeUndefined();
   });
@@ -123,7 +123,7 @@ describe('outro suggestion', () => {
       const s = sessionWith(sources);
       const runDef = await resolveRun(s);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const outro = runDef.buildOutroData!(s, CREDENTIALS as any);
+      const outro = runDef.buildOutroData!(s, CREDENTIALS as any)!;
 
       expect(outro.message).toBe('Successfully installed PostHog!');
       expect(outro.changes).toContain('Added PostHog provider');

@@ -59,7 +59,9 @@ export async function setupPostHogMcp(opts: {
 
   // The adapter ships raw TypeScript; loading through jiti is its documented requirement.
   const jiti = createJiti(import.meta.url);
-  const mod = await jiti.import('pi-mcp-adapter');
+  const mod = await jiti.import<{
+    createMcpAdapter: (options: unknown) => PostHogMcpSetup['extensionFactory'];
+  }>('pi-mcp-adapter');
   const extensionFactory = mod.createMcpAdapter({
     config: {
       mcpServers: {

@@ -23,7 +23,7 @@ export const MetricsIntroScreen = ({ store }: MetricsIntroScreenProps) => {
   // kubernetes, other), so there's no pre-seeded skillId here. Fall back to
   // the group id for the "more info" lookup.
   const skillId = session.skillId ?? 'metrics';
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId);
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>

@@ -920,7 +920,12 @@ describe('resolveAskQuestionKinds', () => {
   it('reads a kind-less question as free text, which is what a credential is', () => {
     expect(
       resolveAskQuestionKinds([
-        { id: 'password', prompt: 'Database password', sensitive: true },
+        { id: 'password', prompt: 'Database password', sensitive: true } as {
+          kind?: undefined;
+          id: string;
+          prompt: string;
+          sensitive: boolean;
+        },
       ]),
     ).toEqual([
       {
