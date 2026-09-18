@@ -286,6 +286,12 @@ export interface ProgramConfig {
   /** Audit ledger to mirror into the session, relative to `installDir`. */
   auditLedgerFile?: string;
   /**
+   * Channel the task stream publishes this run under, when it differs from the
+   * program id. A family leaf runs on the generic skill program, so without
+   * this every `wizard audit <leaf>` would report as `agent-skill`.
+   */
+  streamWorkflowId?: string;
+  /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
    * Programs that ship a custom RunScreen variant (audit) or skip the

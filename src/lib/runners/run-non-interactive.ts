@@ -207,7 +207,7 @@ export function runNonInteractive(
       setUI(new HeadlessUI(headlessStore));
       taskStream = new TaskStreamPush({
         store: headlessStore,
-        programId: config.id,
+        programId: config.streamWorkflowId ?? config.id,
         destinations,
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)

@@ -214,7 +214,7 @@ export function runWizard(
       const taskStreamEnabled = destinations.length > 0;
       const activeStream = new TaskStreamPush({
         store: activeTui.store,
-        programId: config.id,
+        programId: config.streamWorkflowId ?? config.id,
         destinations,
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
