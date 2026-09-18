@@ -18,6 +18,7 @@ import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Integration } from '@lib/constants';
+import { HostResolution } from '@lib/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import {
@@ -89,7 +90,7 @@ function traceFlow(
       store.setCredentials({
         accessToken: 'phx_x',
         projectApiKey: 'phc_x',
-        host: 'https://us.posthog.com',
+        host: HostResolution.fromApiHost('https://us.posthog.com'),
         projectId: 1,
       });
     } else if (screen === ScreenId.SelfDrivingGithub) {
