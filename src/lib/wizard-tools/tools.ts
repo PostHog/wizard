@@ -1129,6 +1129,80 @@ export type AppendAuditChecksResult =
   | { ok: false; reason: 'missing-ledger' }
   | { ok: false; reason: 'duplicate-ids'; ids: string[] };
 
+// Shared by both facades (MCP server, pi native tools) so neither can drift.
+export const AUDIT_SEED_CHECKS_DESCRIPTION =
+  'Seed the audit ledger at .posthog-audit-checks.json with the full set of pending checks. Call this once at the start of the audit. Atomically replaces any existing ledger.';
+export const AUDIT_SEED_CHECKS_PARAM_DESCRIPTION =
+  'Full pending checklist to write to the ledger';
+export const AUDIT_ADD_CHECKS_DESCRIPTION =
+  'Append one or more pending checks to the existing audit ledger at .posthog-audit-checks.json. Call audit_seed_checks first. Atomically rejects duplicate ids without changing the ledger.';
+export const AUDIT_ADD_CHECKS_PARAM_DESCRIPTION =
+  'Additional checks to append to the existing ledger';
+export const AUDIT_RESOLVE_CHECKS_DESCRIPTION =
+  "Resolve one or more audit checks by id. Patches each entry's status (and optional file/details) and writes the ledger back atomically. Concurrent calls serialize.";
+export const AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION =
+  'Patches to apply, keyed by check id';
+
+/** Outcome of a ledger mutation, with the agent-facing message. */
+export interface AuditLedgerResult {
+  ok: boolean;
+  message: string;
+}
+
+/** The three ledger mutations. The caller owns serialization (a mutex). */
+export function seedAuditChecks(
+  targetPath: string,
+  checks: AuditCheck[],
+): AuditLedgerResult {
+  writeLedgerAtomic(targetPath, checks);
+  return { ok: true, message: `Seeded ${checks.length} audit checks.` };
+}
+
+export function addAuditChecks(
+  targetPath: string,
+  checks: AuditCheck[],
+): AuditLedgerResult {
+  const result = appendAuditChecksToLedger(targetPath, checks);
+  if (result.ok) {
+    return { ok: true, message: `Added ${result.added} audit check(s).` };
+  }
+  if (result.reason === 'missing-ledger') {
+    return {
+      ok: false,
+      message:
+        'Error: audit ledger does not exist. Run audit_seed_checks first.',
+    };
+  }
+  return {
+    ok: false,
+    message: `Error: duplicate check id(s): ${result.ids.join(
+      ', ',
+    )}. Check ids must be unique.`,
+  };
+}
+
+export function resolveAuditChecks(
+  targetPath: string,
+  updates: Array<{
+    id: string;
+    status: AuditStatus;
+    file?: string;
+    details?: string;
+  }>,
+): AuditLedgerResult {
+  const { next, unknown } = applyAuditUpdates(readLedger(targetPath), updates);
+  if (unknown.length > 0) {
+    return {
+      ok: false,
+      message: `Error: unknown check id(s): ${unknown.join(
+        ', ',
+      )}. Run audit_seed_checks first or check the id.`,
+    };
+  }
+  writeLedgerAtomic(targetPath, next);
+  return { ok: true, message: `Resolved ${updates.length} check(s).` };
+}
+
 export function appendAuditChecksToLedger(
   targetPath: string,
   additions: AuditCheck[],

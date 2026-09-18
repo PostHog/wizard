@@ -283,6 +283,8 @@ export interface ProgramConfig {
    * stale or unrelated `.posthog-events.json` file.
    */
   eventPlanFile?: string;
+  /** Audit ledger to mirror into the session, relative to `installDir`. */
+  auditLedgerFile?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.

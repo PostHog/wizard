@@ -3,6 +3,7 @@ import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { getAuditChecks } from '@lib/programs/audit/types';
 import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
@@ -88,6 +89,9 @@ export function runWizard(
       const { TaskStreamPush } = await import('@lib/task-stream/index');
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
+      );
+      const { createFileDestination } = await import(
+        '@lib/task-stream/destinations/file'
       );
 
       // Before the TUI mounts: once Ink owns the alt screen, anything written
@@ -194,18 +198,29 @@ export function runWizard(
       // for the launch program would report the whole run under a program the
       // user left on the intro screen. Nothing before this point produces a
       // task to push.
-      const taskStreamEnabled = !session.noTelemetry;
+      // Consent gates the push, not the dump: `--no-telemetry` still logs.
+      const fileDestination = createFileDestination(options.taskStreamLog);
+      const destinations = [
+        ...(session.noTelemetry
+          ? []
+          : [
+              new PostHogDestination({
+                getCredentials: () => activeTui.store.session.credentials,
+                onError: (err) => logToFile('[task-stream-push]', err.message),
+              }),
+            ]),
+        ...(fileDestination ? [fileDestination] : []),
+      ];
+      const taskStreamEnabled = destinations.length > 0;
       const activeStream = new TaskStreamPush({
         store: activeTui.store,
         programId: config.id,
-        destinations: [
-          new PostHogDestination({
-            getCredentials: () => activeTui.store.session.credentials,
-            onError: (err) => logToFile('[task-stream-push]', err.message),
-          }),
-        ],
+        destinations,
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
+          : undefined,
+        auditChecks: config.auditLedgerFile
+          ? () => getAuditChecks(activeTui.store.session)
           : undefined,
         enabled: taskStreamEnabled,
       });

@@ -28,6 +28,13 @@ describe('AUDIT_SEED_CHECKS', () => {
     expect(AUDIT_SEED_CHECKS[sweep].area).toBe('Live Data');
   });
 
+  it('seeds every id the audit skill resolves', () => {
+    // A batch resolve rejects atomically, so one missing row discards the call.
+    expect(ids(AUDIT_SEED_CHECKS)).toEqual(
+      expect.arrayContaining(['init-correct', 'init-not-duplicated']),
+    );
+  });
+
   it('fits every area in the checks viewer column', () => {
     // Area is the one hard constraint: computeLayout pins it to a fixed
     // COL_AREA_WIDTH that never flexes, so a longer area name is truncated at

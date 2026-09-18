@@ -5,6 +5,7 @@
  */
 import { mkdtempSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -654,6 +655,52 @@ describe('pi task tool grant — the names the inventory shows', () => {
     expect([...allowedOrchestratorTools(['enqueue_task'])].sort()).toEqual([
       'complete_task',
       'read_handoffs',
+    ]);
+  });
+});
+
+/** pi mounts no MCP server, so these native tools are the only ledger writer. */
+describe('audit ledger tools', () => {
+  it('seeds, resolves by id, and appends, at the path the watcher reads', async () => {
+    const workingDirectory = mkdtempSync(join(tmpdir(), 'pi-audit-ledger-'));
+    const tools = createWizardPiTools({
+      workingDirectory,
+      skillsBaseUrl: 'http://localhost:0',
+      triageProvider: undefined,
+    });
+    const tool = (name: string) => {
+      const found = tools.find((t) => t.name === name);
+      if (!found) throw new Error(`${name} not registered`);
+      return found;
+    };
+    const ledger = () =>
+      JSON.parse(
+        readFileSync(
+          join(workingDirectory, '.posthog-audit-checks.json'),
+          'utf8',
+        ),
+      ) as Array<{ id: string; status: string }>;
+    const check = (id: string) => ({
+      id,
+      area: 'Installation',
+      label: id,
+      status: 'pending' as const,
+    });
+
+    await tool('audit_seed_checks').execute('1', {
+      checks: [check('sdk-installed'), check('init-correct')],
+    } as never);
+    await tool('audit_resolve_checks').execute('2', {
+      updates: [{ id: 'sdk-installed', status: 'pass' }],
+    } as never);
+    await tool('audit_add_checks').execute('3', {
+      checks: [check('live-data-source-maps')],
+    } as never);
+
+    expect(ledger().map((c) => [c.id, c.status])).toEqual([
+      ['sdk-installed', 'pass'],
+      ['init-correct', 'pending'],
+      ['live-data-source-maps', 'pending'],
     ]);
   });
 });

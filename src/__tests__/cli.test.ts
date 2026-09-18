@@ -10,15 +10,22 @@ const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
 // Headless-only machinery, stubbed so the headless path doesn't construct a
 // real WizardStore (which would re-call the mocked buildSession) or open a real
 // network stream. The spies assert the stream is wired in headless and not CI.
-const { mockStreamAttach, mockStreamShutdown } = vi.hoisted(() => ({
-  mockStreamAttach: vi.fn(),
-  mockStreamShutdown: vi.fn(),
-}));
+const { mockStreamAttach, mockStreamShutdown, mockStreamDestinations } =
+  vi.hoisted(() => ({
+    mockStreamAttach: vi.fn(),
+    mockStreamShutdown: vi.fn(),
+    // Which destinations each run wired up, by name. The CI contract is about
+    // destinations, not about whether a stream exists.
+    mockStreamDestinations: vi.fn(),
+  }));
 vi.mock('../lib/task-stream/index', () => ({
   // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
   // interactive runWizard's dangling SIGTERM handler — which calls
   // shutdown().catch() and outlives these tests — never hits undefined.catch.
   TaskStreamPush: class {
+    constructor(opts: { destinations: Array<{ name: string }> }) {
+      mockStreamDestinations(opts.destinations.map((d) => d.name));
+    }
     attach() {
       mockStreamAttach();
     }
@@ -27,7 +34,13 @@ vi.mock('../lib/task-stream/index', () => ({
       return Promise.resolve();
     }
   },
-  PostHogDestination: class {},
+  PostHogDestination: class {
+    readonly name = 'posthog';
+  },
+  createFileDestination: (value: unknown) =>
+    value === undefined || value === null || value === false
+      ? null
+      : { name: 'file', path: '/tmp/task-stream.jsonl' },
 }));
 vi.mock('../ui/tui/store', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ui/tui/store')>()),
@@ -435,7 +448,9 @@ describe('CLI argument parsing', () => {
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
     });
 
-    test('does not stream wizard-session state in CI', async () => {
+    // CI dumps the stream to a local file and never pushes: a CI run is
+    // synthetic, so a push would create a session row in a real project.
+    test('dumps the wizard-session stream locally and never pushes in CI', async () => {
       await runCLI([
         '--ci',
         '--api-key',
@@ -444,7 +459,8 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      expect(mockStreamAttach).not.toHaveBeenCalled();
+      expect(mockStreamAttach).toHaveBeenCalled();
+      expect(mockStreamDestinations).toHaveBeenCalledWith(['file']);
     });
 
     // The CI bot authenticates with a wizard-app pha_ token, the same
@@ -544,6 +560,8 @@ describe('CLI argument parsing', () => {
 
       expect(mockStreamAttach).toHaveBeenCalled();
       expect(mockStreamShutdown).toHaveBeenCalled();
+      // Headless is the surface the web app watches, so it pushes.
+      expect(mockStreamDestinations).toHaveBeenCalledWith(['posthog']);
     });
 
     test('does not require --region when headless is set', async () => {

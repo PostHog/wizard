@@ -8,6 +8,7 @@ import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import { getAuditChecks } from '@lib/programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
@@ -173,35 +174,54 @@ export function runNonInteractive(
     // Headless streams run state to the PostHog backend so the web app can show
     // live progress. Reuses the interactive TaskStreamPush + WizardStore (no Ink
     // render): HeadlessUI keeps LoggingUI's output and feeds task updates into
-    // the store; this runner drives the phase transitions. CI does not stream.
+    // the store; this runner drives the phase transitions. Headless pushes to
+    // PostHog (the web app is that run's only UI); `--ci` is synthetic, so it
+    // dumps locally and pushes nothing. Telemetry consent gates the push only.
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
-    if (mode === 'headless') {
+    {
       const { WizardStore } = await import('@ui/tui/store');
       const { HeadlessUI } = await import('@ui/headless-ui');
-      const { TaskStreamPush, PostHogDestination } = await import(
-        '@lib/task-stream/index'
-      );
+      const { TaskStreamPush, PostHogDestination, createFileDestination } =
+        await import('@lib/task-stream/index');
 
-      store = new WizardStore(config.id);
-      store.session = session;
-      setUI(new HeadlessUI(store));
+      // `''` resolves to the default path, so `--ci` always dumps.
+      const logTarget =
+        mode === 'ci' ? options.taskStreamLog ?? '' : options.taskStreamLog;
+      const fileDestination = createFileDestination(logTarget);
+      const posthogDestination =
+        mode === 'headless' && !session.noTelemetry
+          ? new PostHogDestination({
+              getCredentials: () => session.credentials,
+              onError: (e) => logToFile('[headless task-stream]', e.message),
+            })
+          : null;
+      const destinations = [
+        ...(posthogDestination ? [posthogDestination] : []),
+        ...(fileDestination ? [fileDestination] : []),
+      ];
+
+      const headlessStore = new WizardStore(config.id);
+      store = headlessStore;
+      headlessStore.session = session;
+      setUI(new HeadlessUI(headlessStore));
       taskStream = new TaskStreamPush({
-        store,
+        store: headlessStore,
         programId: config.id,
-        destinations: [
-          new PostHogDestination({
-            getCredentials: () => session.credentials,
-            onError: (e) => logToFile('[headless task-stream]', e.message),
-          }),
-        ],
+        destinations,
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
           : undefined,
-        enabled: !session.noTelemetry,
+        auditChecks: config.auditLedgerFile
+          ? () => getAuditChecks(headlessStore.session)
+          : undefined,
+        enabled: destinations.length > 0,
       });
       taskStream.attach();
-      store.setRunPhase(RunPhase.Running);
+      headlessStore.setRunPhase(RunPhase.Running);
+      if (fileDestination) {
+        logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
+      }
     }
 
     // wizardAbort exits via process.exit, so flush the terminal phase before any
