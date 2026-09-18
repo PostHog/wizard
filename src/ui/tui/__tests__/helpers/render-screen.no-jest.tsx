@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { ScreenContainer } from '@ui/tui/primitives/ScreenContainer';
 import { createScreens, type ScreenServices } from '@ui/tui/screen-registry';
 import type { WizardStore } from '@ui/tui/store';
+import { UiStore } from '@ui/tui/ui-store';
 
 export interface TerminalSize {
   columns: number;
@@ -39,7 +40,11 @@ export function screenShell(
   services: ScreenServices,
 ): ReactNode {
   return (
-    <ScreenContainer store={store} screens={createScreens(store, services)} />
+    <ScreenContainer
+      store={store}
+      ui={new UiStore(store)}
+      screens={createScreens(store, services)}
+    />
   );
 }
 

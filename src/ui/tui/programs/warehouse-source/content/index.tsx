@@ -4,4 +4,4 @@
  * narrative grows its own diagrams or talking points.
  */
 
-export { getContentBlocks } from '@lib/programs/agent-skill/content/index';
+export { getContentBlocks } from '@ui/tui/programs/agent-skill/content/index';

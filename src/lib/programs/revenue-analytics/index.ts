@@ -2,7 +2,6 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { REVENUE_ANALYTICS_PROGRAM } from './steps.js';
 import { REVENUE_ABORT_CASES } from './detect.js';
-import { getContentBlocks } from './content/index.js';
 
 export const revenueAnalyticsConfig: ProgramConfig = {
   command: 'revenue-analytics',
@@ -10,7 +9,6 @@ export const revenueAnalyticsConfig: ProgramConfig = {
   id: 'revenue-analytics-setup',
   skillId: 'revenue-analytics-setup',
   steps: REVENUE_ANALYTICS_PROGRAM,
-  getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   run: {

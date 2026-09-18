@@ -23,9 +23,10 @@ import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
 import { OutroKind } from '@lib/wizard-session';
+import { flowFor } from '@lib/programs/flow-for';
 
 function freshStore(): WizardStore {
-  const store = new WizardStore(Program.PostHogIntegration);
+  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
   // Headless: a real store + InkUI (which only forwards to the store), no Ink
   // render. setUI so any getUI() path the store touches resolves.
   setUI(new InkUI(store));
@@ -199,7 +200,7 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
 
 describe('WizardCiDriver — self-driving integration check', () => {
   function selfDrivingStore(): WizardStore {
-    const store = new WizardStore(Program.SelfDriving);
+    const store = new WizardStore(flowFor(Program.SelfDriving).flow);
     setUI(new InkUI(store));
     store.session = buildSession({ installDir: '/tmp/ci-driver-sd', ci: true });
     return store;
@@ -239,7 +240,9 @@ describe('WizardCiDriver — self-driving integration check', () => {
 
 describe('WizardCiDriver — source-maps project pick', () => {
   function sourceMapsStore(): WizardStore {
-    const store = new WizardStore(Program.ErrorTrackingUploadSourceMaps);
+    const store = new WizardStore(
+      flowFor(Program.ErrorTrackingUploadSourceMaps).flow,
+    );
     setUI(new InkUI(store));
     store.session = buildSession({ installDir: '/tmp/ci-driver-sm', ci: true });
     return store;

@@ -5,7 +5,7 @@ import { Integration } from '@lib/constants';
 import type { AgenticDetectionReport } from '@lib/detection/agentic';
 import { detectFramework } from '@lib/detection/index';
 import { ErrorCodes } from '@lib/errors';
-import { ERROR_TRACKING_TIPS } from '@lib/programs/error-tracking/content/tips';
+import { ERROR_TRACKING_TIPS } from '@ui/tui/programs/error-tracking/content/tips';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,
   toErrorTrackingReport,

@@ -22,7 +22,6 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, AbortCase } from '@lib/program-run';
 import { AGENT_SKILL_STEPS } from './steps.js';
-import { getContentBlocks } from './content/index.js';
 
 export interface SkillProgramOptions {
   /** Context-mill skill ID to install */
@@ -58,7 +57,6 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
     skillId: opts.skillId,
     steps: AGENT_SKILL_STEPS,
     reportFile: opts.reportFile,
-    getContentBlocks,
     run: {
       skillId: opts.skillId,
       integrationLabel: opts.integrationLabel,

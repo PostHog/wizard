@@ -16,6 +16,7 @@ import {
 } from '@ui/tui/hooks/useKeyBindings';
 import type { WizardStore } from '@ui/tui/store';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@ui/tui/constants';
+import { useUiStore } from '@ui/tui/hooks/useUiStore';
 
 // Re-exported so existing importers (e.g. LearnCard) keep their path.
 export { COLLAPSED_COUNT, EXPANDED_COUNT };
@@ -39,13 +40,13 @@ export const TabContainer = ({
   tabs,
   statusMessage,
   expandableStatus = false,
-  store,
 }: TabContainerProps) => {
   const [activeTab, setActiveTab] = useState(0);
   // Fallback to local state when no store is provided
   const [localExpanded, setLocalExpanded] = useState(false);
 
-  const statusExpanded = store ? store.statusExpanded : localExpanded;
+  const ui = useUiStore();
+  const statusExpanded = ui ? ui.statusExpanded : localExpanded;
 
   const bindings = useMemo<KeyBinding[]>(() => {
     const b: KeyBinding[] = [
@@ -70,8 +71,8 @@ export const TabContainer = ({
         action: 'toggle status',
         priority: 12,
         handler: () => {
-          if (store) {
-            store.toggleStatusExpanded();
+          if (ui) {
+            ui.toggleStatusExpanded();
           } else {
             setLocalExpanded((prev) => !prev);
           }
@@ -79,7 +80,7 @@ export const TabContainer = ({
       });
     }
     return b;
-  }, [tabs.length, expandableStatus, store]);
+  }, [tabs.length, expandableStatus, ui]);
 
   useKeyBindings('tab-container', bindings);
 

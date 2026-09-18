@@ -1,11 +1,12 @@
-import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { WizardSession } from '@lib/wizard-session';
+import type {
+  FlowStep,
+  StoreInitContext,
+  ProgramReadyContext,
+} from '@lib/flow';
+
+export type { StoreInitContext, ProgramReadyContext };
 import type { ProgramRunConfig } from '@lib/program-run';
-import type { Integration } from '@lib/constants';
-import type { FrameworkConfig } from '@lib/framework-config';
-import type { ContentBlock } from '@ui/tui/primitives/index';
-import type { WizardStore } from '@ui/tui/store';
-import type { Tip } from '@ui/tui/components/TipsCard';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';
@@ -21,56 +22,7 @@ import type { ProgramId } from './program-registry.js';
  * The PostHog integration program is one ordered list of steps.
  * Other programs (e.g. revenue analytics) register a different step list.
  */
-/**
- * Context passed to onInit callbacks — fires when the TUI starts
- * rendering, before bin.ts has assigned the real session.
- */
-export interface StoreInitContext {
-  readonly session: WizardSession;
-  readonly setReadinessResult: (result: WizardReadinessResult | null) => void;
-  readonly setFrameworkContext: (key: string, value: unknown) => void;
-  readonly emitChange: () => void;
-}
-
-/**
- * Context passed to onReady callbacks — fires after bin.ts has assigned
- * the real session, so reading `session.installDir` returns the target
- * project. Use for async pre-program work like prerequisite detection.
- */
-export interface ProgramReadyContext {
-  readonly session: WizardSession;
-  readonly setFrameworkContext: (key: string, value: unknown) => void;
-
-  // Detection-specific methods — used by core-integration's detect step
-  readonly setFrameworkConfig: (
-    integration: Integration,
-    config: FrameworkConfig,
-  ) => void;
-  readonly setDetectedFramework: (label: string) => void;
-  readonly setSkillId: (skillId: string | null) => void;
-  readonly setUnsupportedVersion: (info: {
-    current: string;
-    minimum: string;
-    docsUrl: string;
-  }) => void;
-  readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
-  readonly setDetectionComplete: () => void;
-  readonly setPosthogSdkDetected: (detected: boolean) => void;
-}
-
-export interface ProgramStep {
-  /** Unique identifier for this step */
-  id: string;
-
-  /** Human-readable label for progress display */
-  label: string;
-
-  /**
-   * TUI screen this step owns, if any.
-   * Matches the ScreenId enum values (e.g. 'intro', 'run', 'outro').
-   */
-  screenId?: string;
-
+export interface ProgramStep extends FlowStep {
   /**
    * For a run step (`screenId: 'run'`): the program whose agent this step runs,
    * composed into the host program's step list (self-driving runs the
@@ -93,51 +45,6 @@ export interface ProgramStep {
    * dir for that run only. Defaults to `session.installDir`.
    */
   targetDir?: (session: WizardSession) => string;
-
-  /**
-   * Whether this step should be visible in the current program.
-   * If omitted, the step is always visible.
-   */
-  show?: (session: WizardSession) => boolean;
-
-  /**
-   * Exit condition for the screen. Router advances when true.
-   * Defaults to `gate` if unset.
-   */
-  isComplete?: (session: WizardSession) => boolean;
-
-  /**
-   * Define a gate if your screen needs to await user interactions.
-   * bin.ts can `await store.getGate(stepId)` to pause until the
-   * predicate becomes true.
-   */
-  gate?: (session: WizardSession) => boolean;
-
-  /**
-   * Called once when the TUI starts rendering, with the default
-   * session. Use for session-independent fire-and-forget work that
-   * should start as early as possible (e.g. health check kicked off
-   * while the user is still reading the intro screen). Never fires for
-   * a store that isn't rendering screens (tests, playground).
-   */
-  onInit?: (ctx: StoreInitContext) => void;
-
-  /**
-   * Called once after bin.ts has assigned the real session to the store,
-   * before any gate is awaited. Awaited in sequence with other steps'
-   * onReady callbacks. Use for session-dependent pre-program work like
-   * scanning the installDir for prerequisites. May be sync or async.
-   */
-  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
-
-  /**
-   * Report this step's analytics under a different program than its host, for
-   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
-   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
-   * sequences still follow the host. Matched by `screenId`, so headless steps
-   * are unaffected.
-   */
-  reportsAsProgramId?: ProgramId;
 }
 
 /**
@@ -218,22 +125,6 @@ export interface ProgramConfig extends ProgramRunConfig {
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
-   * LearnCard deck rendered in the shared `RunScreen` while the agent
-   * runs. Lives at `<program>/content/index.tsx` by convention.
-   * Programs that ship a custom RunScreen variant (audit) or skip the
-   * run step (posthog-doctor) leave this unset.
-   */
-  getContentBlocks?: (store?: WizardStore) => ContentBlock[];
-  /**
-   * Tips shown in the run screen's right pane (the `Tips` sidebar) once
-   * the LearnCard finishes. Lets a program supply its own explainer copy
-   * (e.g. self-driving explaining what signal sources and scouts are)
-   * instead of the generic onboarding deck. Unset → `RunScreen` falls back
-   * to `DEFAULT_TIPS`, so every other program is unaffected. Lives at
-   * `<program>/content/tips.ts` by convention.
-   */
-  getTips?: (store?: WizardStore) => Tip[];
-  /**
    * Subcommand-specific CLI options. Spread into yargs `.options(...)` when the
    * program's subcommand is registered. Program-specific knowledge stays in
    * the program config, not in bin.ts. Typed as `unknown` to avoid pulling a
@@ -252,38 +143,4 @@ export interface ProgramConfig extends ProgramRunConfig {
    * `ProgramCliSurface` for semantics.
    */
   cli?: ProgramCliSurface;
-}
-
-/**
- * Project program steps into the narrower Screen shape the router consumes.
- *
- * Two things happen here:
- *   1. Headless steps (no `screenId`) are filtered out. The router walks
- *      visible screens; gate-only steps like `detect` are store concerns.
- *   2. The step is narrowed to just { id, show, isComplete } — the
- *      router has no business touching gate, onInit, or label.
- *
- * This intentional separation keeps the router focused on one question:
- * "Which screen should be rendered right now?"
- */
-export function createProgramSequence(steps: ProgramStep[]): Array<{
-  id: string;
-  show?: (session: WizardSession) => boolean;
-  isComplete?: (session: WizardSession) => boolean;
-}> {
-  const entries = steps
-    .filter((step) => step.screenId != null)
-    .map((step) => ({
-      id: step.screenId!,
-      show: step.show,
-      // `isComplete` defaults to `gate` — for most steps they're the same
-      // predicate (e.g. intro: setupConfirmed unblocks bin.ts AND finishes
-      // the screen). Only override when the two conditions diverge.
-      isComplete: step.isComplete ?? step.gate,
-    }));
-
-  // Every program ends with the exit screen.
-  entries.push({ id: 'exit', show: undefined, isComplete: undefined });
-
-  return entries;
 }

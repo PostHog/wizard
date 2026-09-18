@@ -2,7 +2,7 @@
  * LearnCard — Generic render shell for an animated content deck.
  *
  * Program-owned. Callers pass the script via `blocks`. The script lives
- * under `src/lib/programs/<name>/content/`. The shell handles
+ * under `src/ui/tui/programs/<name>/content/`. The shell handles
  * dimension tracking, status-bar height math, and the `display="none"`
  * clamp on narrow terminals.
  */
@@ -17,6 +17,7 @@ import {
   COLLAPSED_COUNT,
   EXPANDED_COUNT,
 } from '@ui/tui/primitives/TabContainer';
+import { useUiStore } from '@ui/tui/hooks/useUiStore';
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;
@@ -32,11 +33,12 @@ interface LearnCardProps {
 
 export const LearnCard = ({ store, blocks, onComplete }: LearnCardProps) => {
   const [columns, rows] = useStdoutDimensions();
+  const ui = useUiStore();
 
   // Dynamic status bar height: messages + border when present
   const hasStatus = store ? store.statusMessages.length > 0 : false;
   const statusBarRows = hasStatus
-    ? (store?.statusExpanded ? EXPANDED_COUNT : COLLAPSED_COUNT) + 1
+    ? (ui?.statusExpanded ? EXPANDED_COUNT : COLLAPSED_COUNT) + 1
     : 0;
 
   const contentHeight = rows - FIXED_CHROME - statusBarRows;
@@ -64,8 +66,8 @@ export const LearnCard = ({ store, blocks, onComplete }: LearnCardProps) => {
         maxHeight={maxHeight}
         availableWidth={paneWidth}
         startDelay={2000}
-        initialBlockIdx={store?.learnCardBlockIdx ?? 0}
-        onBlockChange={(idx) => store?.setLearnCardBlockIdx(idx)}
+        initialBlockIdx={ui?.learnCardBlockIdx ?? 0}
+        onBlockChange={(idx) => ui?.setLearnCardBlockIdx(idx)}
         onSequenceComplete={onComplete}
       />
     </Box>

@@ -9,6 +9,8 @@ import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { ScreenId } from '@ui/tui/router';
 import { HostResolution } from '@lib/host-resolution';
 import { analytics } from '@utils/analytics';
+import { flowFor } from '@lib/programs/flow-for';
+import { Program } from '@lib/programs/program-registry';
 
 vi.mock('@lib/agent/agent-runner', () => ({ runAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
@@ -47,7 +49,7 @@ afterEach(() => {
 it.each(['continue', 'exit'] as const)(
   'catches a failed run, shows the handoff screen, and exits 1 after %s',
   async (action) => {
-    const store = new WizardStore();
+    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
     setUI(new InkUI(store));
     vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
     vi.spyOn(store, 'getGate').mockResolvedValue(undefined);

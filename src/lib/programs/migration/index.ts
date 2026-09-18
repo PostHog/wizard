@@ -2,7 +2,6 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { AbortCase } from '@lib/program-run';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { MIGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from './content/index.js';
 
 const MIGRATION_REPORT_FILE = 'migration-report.md';
 
@@ -31,7 +30,6 @@ export const migrationConfig: ProgramConfig = {
   skillId: DEFAULT_MIGRATE_SKILL_ID,
   steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
-  getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   run: {

@@ -1,9 +1,16 @@
-import {
-  createProgramSequence,
-  type ProgramStep,
-} from '@lib/programs/program-step';
+import type { ProgramStep } from '@lib/programs/program-step';
+import type { Flow } from '@lib/flow';
+import { flowEntries } from '@lib/flow-resolution';
 
-describe('createProgramSequence', () => {
+const flowOf = (steps: ProgramStep[]): Flow => ({
+  programId: 'posthog-integration',
+  skillId: null,
+  steps,
+});
+const createProgramSequence = (steps: ProgramStep[]) =>
+  flowEntries(flowOf(steps));
+
+describe('flowEntries', () => {
   it('filters out headless steps and keeps only screen-bearing ones', () => {
     const steps: ProgramStep[] = [
       { id: 'detect', label: 'Detecting' }, // headless

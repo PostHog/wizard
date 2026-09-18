@@ -80,7 +80,7 @@ export function createServices(store: WizardStore): ScreenServices {
     leaveSpellbook: () =>
       writeWizardSpellbook(
         store.session,
-        getProgramConfig(store.router.activeProgram),
+        getProgramConfig(store.activeProgram),
       ),
     mcpInstaller: createMcpInstaller(),
     mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),

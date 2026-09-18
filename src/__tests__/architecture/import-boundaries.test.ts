@@ -24,11 +24,7 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
       'tui',
       (p) =>
         p.startsWith('src/ui/tui/') ||
-        p === 'src/ui/logging-ui.ts' ||
-        p === 'src/ui/headless-ui.ts' ||
-        p === 'src/commands/factories/family-picker.tsx' ||
-        /^src\/lib\/programs\/[^/]+\/content\//.test(p) ||
-        /^src\/lib\/programs\/[^/]+\/tips\.ts$/.test(p),
+        p === 'src/commands/factories/family-picker.tsx',
     ],
     [
       'cli',
@@ -404,7 +400,9 @@ describe('surface classification', () => {
       'tui',
     );
     expect(
-      classifySurface('src/lib/programs/posthog-integration/content/index.tsx'),
+      classifySurface(
+        'src/ui/tui/programs/posthog-integration/content/index.tsx',
+      ),
     ).toBe('tui');
     expect(
       classifySurface('src/lib/programs/posthog-integration/index.ts'),

@@ -35,10 +35,11 @@ import type { ProgressItem, TabDefinition } from '@ui/tui/primitives/index';
 import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { PROGRAM_PRESENTATION } from '@ui/tui/programs/presentation';
+import { getContentBlocks as getSkillContentBlocks } from '@ui/tui/programs/agent-skill/content/index';
 import { Colors } from '@ui/tui/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
+import { useUiStore } from '@ui/tui/hooks/useUiStore';
 
 const STAGE_CYCLE: AgentPhase[] = [
   AgentPhase.CodebaseScan,
@@ -221,20 +222,21 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
     status: t.status,
   }));
 
+  const ui = useUiStore();
   const learnBlocks = useMemo(() => {
     const getBlocks =
-      getProgramConfig(store.router.activeProgram).getContentBlocks ??
+      PROGRAM_PRESENTATION[store.activeProgram]?.getContentBlocks ??
       getSkillContentBlocks;
     return getBlocks(store);
   }, [store]);
 
-  const leftPane = store.learnCardComplete ? (
+  const leftPane = ui?.learnCardComplete ? (
     <TipsCard store={store} />
   ) : (
     <LearnCard
       store={store}
       blocks={learnBlocks}
-      onComplete={() => store.setLearnCardComplete()}
+      onComplete={() => ui?.setLearnCardComplete()}
     />
   );
 

@@ -44,7 +44,7 @@ vi.mock('@ui', () => ({
   getUI: () => mockCliAddUi,
   setUI: mockCliAddSetUI,
 }));
-vi.mock('@ui/logging-ui', () => ({
+vi.mock('@ui/tui/console/logging-ui', () => ({
   LoggingUI: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({

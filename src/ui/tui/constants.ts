@@ -1,9 +1,8 @@
 /**
- * Status-bar window sizes. How many status lines the bar shows collapsed vs
- * expanded. Kept in a dependency-free module so both the renderer
- * (TabContainer) and the store (which caps retained history to the window)
- * share one definition.
+ * Status-bar window sizes: how many status lines the bar shows collapsed vs
+ * expanded. The expanded window equals the store's retention cap.
  */
+import { MAX_STATUS_MESSAGES } from './store.js';
 
 export const COLLAPSED_COUNT = 2;
-export const EXPANDED_COUNT = 10;
+export const EXPANDED_COUNT = MAX_STATUS_MESSAGES;

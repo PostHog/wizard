@@ -7,7 +7,7 @@
  */
 
 import type { ReactNode, ReactElement } from 'react';
-import { getContentBlocks } from '@lib/programs/self-driving/content/index';
+import { getContentBlocks } from '@ui/tui/programs/self-driving/content/index';
 
 /** paneWidth in LearnCard at 80 cols: (min(120, 80) - 2) / 2 - 2 */
 const PANE_WIDTH_80COL = 37;

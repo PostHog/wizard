@@ -156,9 +156,7 @@ export const McpSuggestedPromptsScreen = ({
   // all-set screen with the login commands, no surprise OAuth. The tutorial
   // stays reachable via `wizard mcp tutorial`.
   const [phase, setPhase] = useState<Phase>(
-    store.router.activeProgram === Program.McpTutorial
-      ? Phase.Choose
-      : Phase.Goodbye,
+    store.activeProgram === Program.McpTutorial ? Phase.Choose : Phase.Goodbye,
   );
   // The scout's read of the project, set in the Scouting phase. Drives the
   // data-aware picker, greeting flavor, and Goodbye samples. Null until the

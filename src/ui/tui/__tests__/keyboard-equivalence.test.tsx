@@ -8,12 +8,11 @@ import { render, cleanup } from 'ink-testing-library';
 import {
   WizardStore,
   Program,
-  ScreenId,
-  Overlay,
   RunPhase,
   McpOutcome,
   type ProgramId,
 } from '../store';
+import { ScreenId, Overlay } from '../router';
 import { InkUI } from '../ink-ui';
 import { setUI } from '@ui/index';
 import {
@@ -34,6 +33,8 @@ import {
   type ScreenServices,
 } from '../screen-registry';
 import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
+import { flowFor } from '@lib/programs/flow-for';
+import { UiStore } from '../ui-store';
 
 vi.mock('ink', () =>
   vi.importActual('../../../../node_modules/ink/build/index.js'),
@@ -360,7 +361,7 @@ const PAIRS: Pair[] = [
 ];
 
 function makeStore(pair: Pair): WizardStore {
-  const store = new WizardStore(pair.program);
+  const store = new WizardStore(flowFor(pair.program).flow);
   store.version = '0.0.0-test';
   setUI(new InkUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
@@ -386,7 +387,7 @@ function snap(store: WizardStore): Snap {
   }
   return {
     screen: store.currentScreen,
-    overlay: store.router.hasOverlay,
+    overlay: store.hasInterrupt,
     session,
   };
 }
@@ -410,7 +411,7 @@ async function driveKeyboard(pair: Pair): Promise<Record<string, unknown>> {
   const services = { ...createServices(store), mcpInstaller: fakeInstaller };
   const screens = createScreens(store, services);
   const { stdin, unmount } = render(
-    <ScreenContainer store={store} screens={screens} />,
+    <ScreenContainer store={store} ui={new UiStore(store)} screens={screens} />,
   );
   await tick(60);
   expect(store.currentScreen).toBe(pair.screen);

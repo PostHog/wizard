@@ -5,15 +5,18 @@
 import { render } from 'ink';
 import { createElement } from 'react';
 import { WizardStore } from '@ui/tui/store';
+import { UiStore } from '@ui/tui/ui-store';
 import { PlaygroundApp } from './PlaygroundApp.js';
 import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
+import { flowFor } from '@lib/programs/flow-for';
+import { Program } from '@lib/programs/program-registry';
 
 export function startPlayground(version: string): void {
   enterDarkTerminal();
 
-  const store = new WizardStore();
+  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
   store.version = version;
 
   // Pre-fill session so the router skips health-check, auth, and setup,
@@ -34,7 +37,7 @@ export function startPlayground(version: string): void {
   });
 
   const { unmount, waitUntilExit } = render(
-    createElement(PlaygroundApp, { store }),
+    createElement(PlaygroundApp, { store, ui: new UiStore(store) }),
   );
 
   void waitUntilExit().then(() => {

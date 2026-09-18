@@ -7,6 +7,7 @@
 
 import { ScreenContainer, TabContainer } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
+import type { UiStore } from '@ui/tui/ui-store';
 import { WelcomeDemo } from './demos/WelcomeDemo.js';
 import { LayoutDemo } from './demos/LayoutDemo.js';
 import { InputDemo } from './demos/InputDemo.js';
@@ -28,9 +29,10 @@ import { ViewportGuardDemo } from './demos/ViewportGuardDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
+  ui: UiStore;
 }
 
-export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
+export const PlaygroundApp = ({ store, ui }: PlaygroundAppProps) => {
   const tabs = [
     { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
     { id: 'input', label: 'Input', component: <InputDemo /> },
@@ -107,6 +109,7 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
   return (
     <ScreenContainer
       store={store}
+      ui={ui}
       screens={{
         intro: <WelcomeDemo store={store} />,
         run: (

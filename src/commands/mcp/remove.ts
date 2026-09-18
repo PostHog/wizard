@@ -1,6 +1,6 @@
 import type { Arguments } from 'yargs';
 import { setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@ui/tui/console/logging-ui';
 import { headlessOption, isHeadless } from '@lib/headless-mode';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';

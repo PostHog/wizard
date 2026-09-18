@@ -9,6 +9,8 @@ import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
 import { OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
 import { ScreenId } from '../router';
+import { flowFor } from '@lib/programs/flow-for';
+import { Program } from '@lib/programs/program-registry';
 
 vi.mock('ink', () =>
   vi.importActual('../../../../node_modules/ink/build/index.js'),
@@ -25,7 +27,7 @@ const saved = {
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 function setup() {
-  const store = new WizardStore();
+  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
   store.setCredentials({
     accessToken: 'tok',
     projectApiKey: 'pk',
@@ -83,7 +85,7 @@ it('reports the log, saves the skill, then continues setup', async () => {
   expect(store.session.mintHandoff).toBeNull();
   await choose(0);
   expect(store.session.mintHandoff).toBe('continue');
-  expect(store.router.resolve(store.session)).toBe(ScreenId.Mcp);
+  expect(store.currentScreen).toBe(ScreenId.Mcp);
 });
 
 it.each(['save', 'open'] as const)(

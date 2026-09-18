@@ -6,7 +6,28 @@ import {
 } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
-import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
+import { ScreenId, Overlay, Program, type ProgramId } from '@ui/tui/router';
+import { flowEntries, resolveActiveScreen } from '@lib/flow-resolution';
+import { flowFor } from '@lib/programs/flow-for';
+import type { WizardSession } from '@lib/wizard-session';
+import type { Interrupt } from '@lib/interrupts';
+
+/** The old router surface over the pure resolver, so the cases port as-is. */
+function routerFor(program: ProgramId) {
+  const flow = flowFor(program).flow;
+  const interrupts: Interrupt[] = [];
+  return {
+    pushOverlay: (interrupt: Interrupt) => void interrupts.push(interrupt),
+    popOverlay: () => void interrupts.pop(),
+    resolve: (session: WizardSession) =>
+      resolveActiveScreen(flow, session, interrupts),
+    get activeScreen() {
+      return interrupts.length > 0
+        ? interrupts[interrupts.length - 1]
+        : flowEntries(flow)[0].id;
+    },
+  };
+}
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
@@ -28,11 +49,11 @@ function failedRunSession() {
   return session;
 }
 
-describe('WizardRouter', () => {
+describe('flow resolution', () => {
   it.each(PROGRAM_REGISTRY.map((program) => program.id))(
     'shows a failed run over every step and overlay in %s',
     (program) => {
-      const router = new WizardRouter(program);
+      const router = routerFor(program);
       router.pushOverlay(Overlay.WizardAsk);
       const session = failedRunSession();
       session.outroDismissed = true;
@@ -41,7 +62,7 @@ describe('WizardRouter', () => {
   );
 
   it('continues a failed run through the post-run steps, then exits', () => {
-    const router = new WizardRouter(Program.SelfDriving);
+    const router = routerFor(Program.SelfDriving);
     const session = failedRunSession();
     session.mintHandoff = 'continue';
     expect(router.resolve(session)).toBe(ScreenId.Mcp);
@@ -57,7 +78,7 @@ describe('WizardRouter', () => {
 
   describe('resolve', () => {
     it('returns the first incomplete visible screen for the wizard flow', () => {
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       expect(router.resolve(session)).toBe(ScreenId.Intro);
@@ -79,7 +100,7 @@ describe('WizardRouter', () => {
     });
 
     it('skips the setup screen when there are no unanswered framework questions', () => {
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -106,7 +127,7 @@ describe('WizardRouter', () => {
     // step never completes — without the reroute the auth spinner stays up
     // and that wait deadlocks.
     it('routes a failed login to the error outro instead of parking on auth', () => {
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -126,7 +147,7 @@ describe('WizardRouter', () => {
     });
 
     it('returns the last flow screen when every entry is complete', () => {
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -149,7 +170,7 @@ describe('WizardRouter', () => {
     });
 
     it('gives the topmost overlay precedence over the flow screen', () => {
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       router.pushOverlay(Overlay.SettingsOverride);
@@ -165,7 +186,7 @@ describe('WizardRouter', () => {
       // On OAuth timeout the user has no credentials, so the auth step's
       // isComplete gate never passes and resolve() is pinned on Auth. The
       // overlay must take precedence, otherwise the spinner shows forever.
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -183,13 +204,13 @@ describe('WizardRouter', () => {
 
   describe('activeScreen', () => {
     it('defaults to the first screen in the active flow', () => {
-      const router = new WizardRouter(Program.McpRemove);
+      const router = routerFor(Program.McpRemove);
 
       expect(router.activeScreen).toBe(ScreenId.McpRemove);
     });
 
     it('returns the top overlay when overlays are active', () => {
-      const router = new WizardRouter(Program.PostHogIntegration);
+      const router = routerFor(Program.PostHogIntegration);
 
       router.pushOverlay(Overlay.ManagedSettings);
 
@@ -199,12 +220,12 @@ describe('WizardRouter', () => {
 
   describe('McpAdd flow', () => {
     it('starts at McpAdd', () => {
-      const router = new WizardRouter(Program.McpAdd);
+      const router = routerFor(Program.McpAdd);
       expect(router.activeScreen).toBe(ScreenId.McpAdd);
     });
 
     it('exits after install when MCP install was skipped', () => {
-      const router = new WizardRouter(Program.McpAdd);
+      const router = routerFor(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Skipped;
@@ -215,7 +236,7 @@ describe('WizardRouter', () => {
     });
 
     it('advances to SlackConnect after a successful install', () => {
-      const router = new WizardRouter(Program.McpAdd);
+      const router = routerFor(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Installed;
@@ -226,7 +247,7 @@ describe('WizardRouter', () => {
     });
 
     it('advances to McpSuggestedPrompts once the Slack step is dismissed', () => {
-      const router = new WizardRouter(Program.McpAdd);
+      const router = routerFor(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Installed;
@@ -236,7 +257,7 @@ describe('WizardRouter', () => {
     });
 
     it('exits once the tutorial step is dismissed', () => {
-      const router = new WizardRouter(Program.McpAdd);
+      const router = routerFor(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Installed;
@@ -247,7 +268,7 @@ describe('WizardRouter', () => {
     });
 
     it('skips the Slack step when MCP install was skipped', () => {
-      const router = new WizardRouter(Program.McpAdd);
+      const router = routerFor(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Skipped;
@@ -266,7 +287,7 @@ describe('WizardRouter', () => {
     }
 
     it('asks "set up PostHog?" when none detected and undecided', () => {
-      const router = new WizardRouter(Program.SelfDriving);
+      const router = routerFor(Program.SelfDriving);
       const session = confirmed(); // integrate null, postHogPresent unset
       expect(router.resolve(session)).toBe(
         ScreenId.SelfDrivingIntegrationCheck,
@@ -274,14 +295,14 @@ describe('WizardRouter', () => {
     });
 
     it('skips the question when PostHog is already detected', () => {
-      const router = new WizardRouter(Program.SelfDriving);
+      const router = routerFor(Program.SelfDriving);
       const session = confirmed();
       session.frameworkContext.postHogPresent = true;
       expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
     });
 
     it('skips the question when --integrate pre-decided it', () => {
-      const router = new WizardRouter(Program.SelfDriving);
+      const router = routerFor(Program.SelfDriving);
       const session = confirmed();
       session.integrate = true;
       expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
@@ -305,7 +326,7 @@ describe('WizardRouter', () => {
     }
 
     it('shows the detect+pick screen after auth, before a project is picked', () => {
-      const router = new WizardRouter(Program.SelfDriving);
+      const router = routerFor(Program.SelfDriving);
       const session = readyToIntegrate(); // integration still null
       expect(router.resolve(session)).toBe(
         ScreenId.SelfDrivingIntegrationDetect,
@@ -313,7 +334,7 @@ describe('WizardRouter', () => {
     });
 
     it('advances to the integration run once a project is picked', () => {
-      const router = new WizardRouter(Program.SelfDriving);
+      const router = routerFor(Program.SelfDriving);
       const session = readyToIntegrate();
       session.integration = Integration.javascriptNode; // picked
       session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.javascriptNode];
@@ -341,12 +362,12 @@ describe('WizardRouter', () => {
     }
 
     it('shows the project picker after login, before a project is picked', () => {
-      const router = new WizardRouter(Program.ErrorTracking);
+      const router = routerFor(Program.ErrorTracking);
       expect(router.resolve(loggedIn())).toBe(ScreenId.ErrorTrackingDetect);
     });
 
     it('advances to the run once a project is picked', () => {
-      const router = new WizardRouter(Program.ErrorTracking);
+      const router = routerFor(Program.ErrorTracking);
       const session = loggedIn();
       session.integration = Integration.nextjs;
       session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.nextjs];

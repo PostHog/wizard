@@ -97,7 +97,8 @@ vi.mock('@lib/programs/posthog-doctor/fetch', () => ({
   ]),
 }));
 
-import { WizardStore, TaskStatus, type ScreenName } from '@ui/tui/store';
+import { WizardStore, TaskStatus } from '@ui/tui/store';
+import type { ScreenName } from '@ui/tui/router';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { ScreenId, Overlay } from '@ui/tui/router';
@@ -128,6 +129,7 @@ import {
   screenShell,
   type TerminalSize,
 } from './helpers/render-screen.no-jest';
+import { flowFor } from '@lib/programs/flow-for';
 
 const SIZES: TerminalSize[] = [
   { columns: 120, rows: 40 },
@@ -203,7 +205,7 @@ const inertPromptsServices = {
 } as unknown as McpSuggestedPromptsServices;
 
 function makeStore(program: ProgramId): WizardStore {
-  const store = new WizardStore(program);
+  const store = new WizardStore(flowFor(program).flow);
   setUI(new InkUI(store));
   store.version = '0.0.0-test';
   store.session = buildSession({ installDir: '/app' });

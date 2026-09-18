@@ -10,8 +10,8 @@
  * Arrow keys are reserved for the playground's tab switcher, so this demo
  * uses letter keys.
  *
- * Decks are pulled from `PROGRAM_REGISTRY` so every program that ships a
- * deck is reviewable here. Migration also gets per-variant entries (one
+ * Decks are pulled from `PROGRAM_PRESENTATION` so every program that ships
+ * a deck is reviewable here. Migration also gets per-variant entries (one
  * per `--product=<id>` choice) so the variant composer in
  * `migration/content/index.tsx` can be exercised side-by-side with the
  * generic deck.
@@ -29,6 +29,7 @@ import type { ContentBlock, ProgressItem } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
 import type { WizardStore } from '@ui/tui/store';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { PROGRAM_PRESENTATION } from '@ui/tui/programs/presentation';
 import { AUDIT_AREA_SLIDES } from '@ui/tui/screens/audit/slides/index';
 import type { AreaSlide } from '@ui/tui/screens/audit/slides/shared';
 
@@ -94,7 +95,9 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
     // name (e.g. agent-skill's "Running the <skill> skill...") render the
     // real value instead of "unknown".
     for (const program of PROGRAM_REGISTRY) {
-      if (!program.getContentBlocks) continue;
+      const getContentBlocks =
+        PROGRAM_PRESENTATION[program.id]?.getContentBlocks;
+      if (!getContentBlocks) continue;
       const stub = program.skillId
         ? withSessionOverride(store, { skillId: program.skillId })
         : store;
@@ -103,7 +106,7 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
         label: `${program.id} (${program.command ?? 'default'})${
           program.skillId ? ` · skill: ${program.skillId}` : ''
         }`,
-        blocks: program.getContentBlocks(stub),
+        blocks: getContentBlocks(stub),
       });
     }
 

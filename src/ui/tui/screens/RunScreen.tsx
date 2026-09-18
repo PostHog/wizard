@@ -24,10 +24,11 @@ import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { PROGRAM_PRESENTATION } from '@ui/tui/programs/presentation';
+import { getContentBlocks as getSkillContentBlocks } from '@ui/tui/programs/agent-skill/content/index';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
+import { useUiStore } from '@ui/tui/hooks/useUiStore';
 
 interface RunScreenProps {
   store: WizardStore;
@@ -64,28 +65,27 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  // Each program owns its content deck (program/content/index.tsx)
-  // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
-  // agent-skill deck for runtime-created configs (e.g. `wizard skill <id>`)
-  // that aren't in the static registry.
-  const activeProgram = store.router.activeProgram;
+  // Programs without a deck get the agent-skill one (e.g. `wizard skill <id>`).
+  const ui = useUiStore();
+  const activeProgram = store.activeProgram;
   const learnBlocks = useMemo(() => {
     const getBlocks =
-      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
+      PROGRAM_PRESENTATION[activeProgram]?.getContentBlocks ??
+      getSkillContentBlocks;
     return getBlocks(store);
   }, [store, activeProgram]);
 
   // Program-supplied tips for the right pane; undefined falls back to
   // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
-  const programTips = getProgramConfig(activeProgram).getTips?.(store);
+  const programTips = PROGRAM_PRESENTATION[activeProgram]?.getTips?.(store);
 
-  const leftPane = store.learnCardComplete ? (
+  const leftPane = ui?.learnCardComplete ? (
     <TipsCard store={store} tips={programTips} />
   ) : (
     <LearnCard
       store={store}
       blocks={learnBlocks}
-      onComplete={() => store.setLearnCardComplete()}
+      onComplete={() => ui?.setLearnCardComplete()}
     />
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;

@@ -1,6 +1,6 @@
 import type { Arguments } from 'yargs';
 import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@ui/tui/console/logging-ui';
 import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';

@@ -6,7 +6,7 @@ import {
 } from '@lib/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@ui/tui/console/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { runConfigFor } from '@lib/programs/run-config';
 import { getAuditChecks } from '@lib/programs/audit/types';
@@ -22,6 +22,7 @@ import {
   emitWizardError,
 } from '@lib/errors';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
+import { flowFor } from '@lib/programs/flow-for';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -182,7 +183,7 @@ export function runNonInteractive(
     let taskStream: TaskStreamPush | null = null;
     {
       const { WizardStore } = await import('@ui/tui/store');
-      const { HeadlessUI } = await import('@ui/headless-ui');
+      const { HeadlessUI } = await import('@ui/tui/console/headless-ui');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await import('@lib/task-stream/index');
 
@@ -202,7 +203,7 @@ export function runNonInteractive(
         ...(fileDestination ? [fileDestination] : []),
       ];
 
-      const headlessStore = new WizardStore(config.id);
+      const headlessStore = new WizardStore(flowFor(config.id).flow);
       store = headlessStore;
       headlessStore.session = session;
       setUI(new HeadlessUI(headlessStore));
