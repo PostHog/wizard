@@ -15,6 +15,7 @@ import {
 } from '@lib/programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { WizardStore } from '@ui/tui/store';
+import { PROGRAM_PRESENTATION } from '@ui/tui/programs/presentation';
 import { SOURCE_DETECTORS } from '@lib/warehouse-sources/registry';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
@@ -26,6 +27,7 @@ import { Integration } from '@lib/constants';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
+import { flowFor } from '@lib/programs/flow-for';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
@@ -131,7 +133,7 @@ describe('the detect step does not leak into the composed integration run', () =
   afterEach(() => cleanup(tmpDir));
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
-    const store = new WizardStore('self-driving');
+    const store = new WizardStore(flowFor('self-driving').flow);
     store.session = buildSession({ installDir: tmpDir });
     await store.runReadyHooks();
 
@@ -189,7 +191,8 @@ describe('selfDrivingConfig', () => {
   });
 
   it('ships its own Learn deck ending on the self-driving closer', () => {
-    const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
+    const blocks =
+      PROGRAM_PRESENTATION['self-driving']?.getContentBlocks?.() ?? [];
     expect(blocks.length).toBeGreaterThan(0);
     const last = blocks[blocks.length - 1];
     expect(

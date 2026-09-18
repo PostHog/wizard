@@ -1,12 +1,14 @@
 import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
 import { WizardReadiness } from '@lib/health-checks/readiness';
-import { PROGRAM_SEQUENCES, ScreenId } from '@ui/tui/screen-sequences';
+import { ScreenId } from '@ui/tui/screen-sequences';
+import { flowEntries } from '@lib/flow-resolution';
+import { flowFor } from '@lib/programs/flow-for';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 
+const sequenceOf = (program: ProgramId) => flowEntries(flowFor(program).flow);
+
 function getEntry(program: ProgramId, id: ScreenId) {
-  const entry = PROGRAM_SEQUENCES[program].find(
-    (candidate) => candidate.id === id,
-  );
+  const entry = sequenceOf(program).find((candidate) => candidate.id === id);
   if (!entry) {
     throw new Error(`Missing program entry for ${program}:${id}`);
   }
@@ -102,7 +104,7 @@ describe('PROGRAM_SEQUENCES', () => {
 
   describe('Source maps flow', () => {
     const sourceMapsScreens = () =>
-      PROGRAM_SEQUENCES[Program.ErrorTrackingUploadSourceMaps].map((s) => s.id);
+      sequenceOf(Program.ErrorTrackingUploadSourceMaps).map((s) => s.id);
 
     it('logs in, then detects: intro → auth → detect → run, no health-check', () => {
       const screens = sourceMapsScreens();
@@ -191,7 +193,7 @@ describe('PROGRAM_SEQUENCES', () => {
     it('is omitted entirely from programs with requiresAi: false', () => {
       // posthog-doctor sets requiresAi: false — withAiOptInGate should skip
       // injection so the gate never appears in the sequence.
-      const entry = PROGRAM_SEQUENCES[Program.PosthogDoctor].find(
+      const entry = sequenceOf(Program.PosthogDoctor).find(
         (e) => e.id === ScreenId.AiOptIn,
       );
       expect(entry).toBeUndefined();
@@ -288,7 +290,7 @@ describe('PROGRAM_SEQUENCES', () => {
       // after the tutorial would also bury Slack discovery behind a tutorial
       // dismissal screen.
       it('runs install → slack-connect → mcp-suggested-prompts', () => {
-        const order = PROGRAM_SEQUENCES[Program.McpAdd]
+        const order = sequenceOf(Program.McpAdd)
           .map((entry) => entry.id)
           .filter((id) => id !== ScreenId.Exit);
 

@@ -2,6 +2,8 @@ import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@lib/host-resolution';
+import { flowFor } from '@lib/programs/flow-for';
+import { UiStore } from '@ui/tui/ui-store';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -20,14 +22,25 @@ const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 function storeWithOutro(
   data: Parameters<WizardStore['setOutroData']>[0],
 ): WizardStore {
-  const store = new WizardStore(Program.PostHogIntegration);
+  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
   store.setOutroData(data);
   return store;
 }
 
+const uiFor = new WeakMap<WizardStore, UiStore>();
+function uiOf(store: WizardStore): UiStore {
+  let ui = uiFor.get(store);
+  if (!ui) {
+    ui = new UiStore(store);
+    uiFor.set(store, ui);
+  }
+  return ui;
+}
+const exitLine = (store: WizardStore) => getExitLine(store, uiOf(store));
+
 /** Force `tokenHudVisible` to `visible`, regardless of its IS_DEV default. */
 function setHudVisible(store: WizardStore, visible: boolean): void {
-  if (store.tokenHudVisible !== visible) store.toggleTokenHud();
+  if (uiOf(store).tokenHudVisible !== visible) uiOf(store).toggleTokenHud();
 }
 
 describe('getExitLine', () => {
@@ -41,7 +54,7 @@ describe('getExitLine', () => {
       projectId: 1,
     });
     store.setSpellbook({ path, skillsIncluded: true });
-    const line = stripAnsi(getExitLine(store));
+    const line = stripAnsi(exitLine(store));
     const lines = line.split('\n');
     expect(line).toContain('Setup has not been completed.');
     expect(line).toContain('Point your agent at this skill');
@@ -56,7 +69,7 @@ describe('getExitLine', () => {
     const prompt =
       'Read `posthog-setup-report.md` and work through the checklist.';
     const line = stripAnsi(
-      getExitLine(
+      exitLine(
         storeWithOutro({
           kind: OutroKind.Success,
           message: 'Successfully installed PostHog!',
@@ -74,7 +87,7 @@ describe('getExitLine', () => {
 
   it('omits the handoff block when no prompt is set', () => {
     const line = stripAnsi(
-      getExitLine(
+      exitLine(
         storeWithOutro({
           kind: OutroKind.Success,
           message: 'Successfully installed PostHog!',
@@ -89,7 +102,7 @@ describe('getExitLine', () => {
 
   it('echoes the primary link and next-steps so they survive in scrollback', () => {
     const line = stripAnsi(
-      getExitLine(
+      exitLine(
         storeWithOutro({
           kind: OutroKind.Success,
           message: 'Self-driving is on.',
@@ -119,7 +132,7 @@ describe('getExitLine', () => {
 
   it('appends the report suffix when the message does not already mention it', () => {
     const line = stripAnsi(
-      getExitLine(
+      exitLine(
         storeWithOutro({
           kind: OutroKind.Success,
           message: 'Done!',
@@ -132,14 +145,14 @@ describe('getExitLine', () => {
 
   it('falls back to a default headline when the outro has no message', () => {
     const line = stripAnsi(
-      getExitLine(storeWithOutro({ kind: OutroKind.Success })),
+      exitLine(storeWithOutro({ kind: OutroKind.Success })),
     );
     expect(line).toMatch(/completed successfully\.$/);
   });
 
   it('renders a plain "exited" line for non-success outcomes', () => {
     const line = stripAnsi(
-      getExitLine(storeWithOutro({ kind: OutroKind.Error, message: 'boom' })),
+      exitLine(storeWithOutro({ kind: OutroKind.Error, message: 'boom' })),
     );
     expect(line).toMatch(/exited\.$/);
     expect(line).not.toContain('coding agent');
@@ -161,7 +174,7 @@ describe('getExitLine', () => {
         cacheCreation1h: 0,
       });
 
-      const line = stripAnsi(getExitLine(store));
+      const line = stripAnsi(exitLine(store));
 
       expect(line).toContain('Cost (estimate): $3.00');
       expect(line).toContain('in 1.00M');
@@ -183,7 +196,7 @@ describe('getExitLine', () => {
       });
       store.setFinalTokenCostUsd(1.5);
 
-      const line = stripAnsi(getExitLine(store));
+      const line = stripAnsi(exitLine(store));
 
       expect(line).toContain('Final cost: $1.50');
     });
@@ -200,7 +213,7 @@ describe('getExitLine', () => {
         cacheCreation1h: 0,
       });
 
-      const line = stripAnsi(getExitLine(store));
+      const line = stripAnsi(exitLine(store));
 
       expect(line).toMatch(/exited\./);
       expect(line).toContain('Cost (estimate): $3.00');
@@ -213,7 +226,7 @@ describe('getExitLine', () => {
       });
       setHudVisible(store, true);
 
-      const line = stripAnsi(getExitLine(store));
+      const line = stripAnsi(exitLine(store));
 
       expect(line).not.toContain('Cost');
     });
@@ -236,7 +249,7 @@ describe('getExitLine', () => {
         cacheCreation1h: 0,
       });
 
-      const line = stripAnsi(getExitLine(store));
+      const line = stripAnsi(exitLine(store));
 
       expect(line).not.toContain('Cost');
     });

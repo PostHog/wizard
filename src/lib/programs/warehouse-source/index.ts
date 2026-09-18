@@ -7,7 +7,6 @@ import {
   WAREHOUSE_ABORT_CASES,
   getDetectedWarehouseSources,
 } from './detect.js';
-import { getContentBlocks } from './content/index.js';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
@@ -47,7 +46,6 @@ export const warehouseSourceConfig: ProgramConfig = {
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
   steps: WAREHOUSE_SOURCE_PROGRAM,
-  getContentBlocks,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
   run: (session: WizardSession): Promise<ProgramRun> =>

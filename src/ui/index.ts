@@ -1,12 +1,9 @@
-/**
- * UI singleton — provides getUI() and setUI() for the wizard.
- * Default: LoggingUI. Swap to InkUI at startup for TUI mode.
- */
+// UI singleton. The default renders nothing; hosts install their own renderer.
 
 import type { WizardUI } from './wizard-ui';
-import { LoggingUI } from './logging-ui';
+import { NullUI } from './null-ui';
 
-let currentUI: WizardUI = new LoggingUI();
+let currentUI: WizardUI = new NullUI();
 
 export function getUI(): WizardUI {
   return currentUI;

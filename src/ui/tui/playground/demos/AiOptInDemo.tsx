@@ -17,6 +17,8 @@ import { Box, Text } from 'ink';
 import { WizardStore } from '@ui/tui/store';
 import { AiOptInRequiredScreen } from '@ui/tui/screens/AiOptInRequiredScreen';
 import { HostResolution } from '@lib/host-resolution';
+import { flowFor } from '@lib/programs/flow-for';
+import { Program } from '@lib/programs/program-registry';
 
 type Variant = 'admin' | 'non-admin';
 
@@ -26,7 +28,7 @@ interface AiOptInDemoProps {
 
 export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
   const [store] = useState(() => {
-    const s = new WizardStore();
+    const s = new WizardStore(flowFor(Program.PostHogIntegration).flow);
     s.setCredentials({
       accessToken: 'demo-fake-token',
       projectApiKey: 'demo-fake-project-key',

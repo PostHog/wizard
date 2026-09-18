@@ -465,7 +465,7 @@ async function main() {
     const signature = () =>
       JSON.stringify({
         screen: store.currentScreen,
-        overlay: store.router.hasOverlay,
+        overlay: store.hasInterrupt,
         tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
         phase: store.session.runPhase,
         // Values, not just keys: a screen rerendering from an artifact updated

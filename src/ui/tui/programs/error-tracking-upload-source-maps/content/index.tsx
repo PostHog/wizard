@@ -5,7 +5,7 @@
  * It educates the user on what source maps are and why uploading them
  * matters, built around a before/after stack-trace contrast: a minified
  * production trace nobody can read, then the same trace resolved back to
- * real source. Program-owned; wired onto the program's getContentBlocks.
+ * real source. Wired onto the program's entry in `PROGRAM_PRESENTATION`.
  *
  * Lines stay narrow (~36 cols) because this renders in the left half of a
  * split pane — see LearnCard's paneWidth math.

@@ -24,7 +24,6 @@ import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-sou
 import { errorTrackingConfig } from './error-tracking/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
-import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
 import {
   mcpAddConfig,
   mcpRemoveConfig,
@@ -50,7 +49,6 @@ export const agentSkillConfig: ProgramConfig = {
   id: 'agent-skill',
   description: 'Run an arbitrary context-mill skill',
   steps: AGENT_SKILL_STEPS,
-  getContentBlocks: agentSkillContentBlocks,
   allowedTools: ['Agent'],
   run: (session) => {
     const skillId = session.skillId ?? 'agent-skill';

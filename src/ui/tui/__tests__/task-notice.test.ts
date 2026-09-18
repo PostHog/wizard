@@ -15,7 +15,10 @@ vi.mock('../../../utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-import { WizardStore, Overlay } from '@ui/tui/store';
+import { WizardStore } from '@ui/tui/store';
+import { Overlay } from '@ui/tui/router';
+import { flowFor } from '@lib/programs/flow-for';
+import { Program } from '@lib/programs/program-registry';
 
 const NOTICE: TaskNotice = {
   title: 'Connect your data sources',
@@ -33,14 +36,14 @@ const NOTICE: TaskNotice = {
 
 describe('task notice', () => {
   it('resolves true when kept and false when skipped, closing the overlay', async () => {
-    const store = new WizardStore();
+    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
 
     const kept = store.showTaskNotice(NOTICE);
-    expect(store.router.resolve(store.session)).toBe(Overlay.TaskNotice);
+    expect(store.currentScreen).toBe(Overlay.TaskNotice);
     store.resolveTaskNotice(true);
     await expect(kept).resolves.toBe(true);
     expect(store.session.taskNotice).toBeNull();
-    expect(store.router.resolve(store.session)).not.toBe(Overlay.TaskNotice);
+    expect(store.currentScreen).not.toBe(Overlay.TaskNotice);
 
     const skipped = store.showTaskNotice(NOTICE);
     store.resolveTaskNotice(false);
@@ -48,7 +51,7 @@ describe('task notice', () => {
   });
 
   it('leaves no notice behind for the next step to inherit', () => {
-    const store = new WizardStore();
+    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
     expect(store.session.taskNotice).toBeNull();
   });
 });

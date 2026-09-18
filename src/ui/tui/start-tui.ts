@@ -10,12 +10,14 @@ import { render } from 'ink';
 import { createElement } from 'react';
 import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
+import { UiStore } from './ui-store.js';
 import { setUI } from '@ui/index';
 import { App } from './App.js';
 import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { getExitLine } from './exit-line.js';
+import { flowFor } from '@lib/programs/flow-for';
 
 export { releaseTerminal };
 
@@ -29,14 +31,15 @@ export function startTUI(
 } {
   enterDarkTerminal();
 
-  const store = new WizardStore(program);
+  const store = new WizardStore(flowFor(program).flow);
   store.version = version;
+  const ui = new UiStore(store);
 
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
   const { unmount: inkUnmount, waitUntilExit } = render(
-    createElement(App, { store }),
+    createElement(App, { store, ui }),
   );
 
   analytics.setTag('program_id', program);
@@ -70,7 +73,7 @@ export function startTUI(
     );
     inkUnmount();
     releaseTerminal();
-    process.stdout.write(getExitLine(store) + '\n');
+    process.stdout.write(getExitLine(store, ui) + '\n');
   };
   process.on('exit', cleanup);
 

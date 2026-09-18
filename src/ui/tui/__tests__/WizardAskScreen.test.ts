@@ -26,6 +26,8 @@ import {
   isRequiredButEmpty,
   shouldMaskAnswer,
 } from '@ui/tui/screens/WizardAskScreen';
+import { flowFor } from '@lib/programs/flow-for';
+import { Program } from '@lib/programs/program-registry';
 
 const pending = {
   id: 'req-1',
@@ -51,7 +53,7 @@ describe('handleAskKey', () => {
   });
 
   it('declines the whole request end-to-end so the task can fall back', async () => {
-    const store = new WizardStore();
+    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
     const answers = store.requestQuestion(pending);
 
     handleAskKey({ escape: true }, store);

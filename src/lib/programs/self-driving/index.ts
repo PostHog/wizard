@@ -15,9 +15,7 @@ import {
   NO_DEFAULT_LIMIT,
   PRICE_PER_PR_USD,
   PRICING_LONG,
-} from './content/pricing.js';
-import { getTips } from './content/tips.js';
-import { getContentBlocks } from './content/index.js';
+} from '@ui/tui/programs/self-driving/content/pricing.js';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
@@ -128,8 +126,6 @@ export const selfDrivingConfig: ProgramConfig = {
   }),
   steps: SELF_DRIVING_PROGRAM,
   run: buildRun,
-  getTips,
-  getContentBlocks,
 };
 
 export { SELF_DRIVING_PROGRAM } from './steps.js';

@@ -6,8 +6,8 @@ import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
  * loop). The learn deck (`./index.tsx`) carries the teaching; these stay
  * one to two lines each so the pane never overflows.
  *
- * Product knowledge lives here in the program, not in the generic
- * `TipsCard`. Wired onto the program's `getTips`.
+ * Product knowledge lives here, not in the generic `TipsCard`. Wired
+ * onto the program's entry in `PROGRAM_PRESENTATION`.
  */
 
 import type { Tip } from '@ui/tui/components/TipsCard';

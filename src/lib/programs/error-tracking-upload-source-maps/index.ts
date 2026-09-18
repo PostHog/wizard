@@ -13,7 +13,6 @@ import {
   VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
-import { getContentBlocks } from './content/index.js';
 import { getUI } from '@ui';
 import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-preinstall';
 
@@ -38,7 +37,6 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   requiresAi: true,
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: REPORT_FILE,
-  getContentBlocks,
   requires: ['posthog-integration'],
 
   run: (_session: WizardSession): Promise<ProgramRun> => {

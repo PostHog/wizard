@@ -102,10 +102,10 @@ export class WizardCiDriver {
   /** Snapshot the committed state plus the derived screen. */
   readState(): CiState {
     const s = this.store.session;
-    const screen = this.store.currentScreen;
+    const screen = this.store.currentScreen as ScreenName;
     return {
       currentScreen: screen,
-      hasOverlay: this.store.router.hasOverlay,
+      hasOverlay: this.store.hasInterrupt,
       runPhase: s.runPhase,
       session: {
         installDir: s.installDir,
@@ -148,11 +148,13 @@ export class WizardCiDriver {
 
   /** Exposed through read_state.actions; there is no list_actions MCP tool. */
   listActions(): ActionView[] {
-    return actionsForScreen(this.store.currentScreen).map((a) => ({
-      id: a.id,
-      description: a.description,
-      ...(a.params ? { params: a.params } : {}),
-    }));
+    return actionsForScreen(this.store.currentScreen as ScreenName).map(
+      (a) => ({
+        id: a.id,
+        description: a.description,
+        ...(a.params ? { params: a.params } : {}),
+      }),
+    );
   }
 
   /**
@@ -164,7 +166,7 @@ export class WizardCiDriver {
     actionId: string,
     params: Record<string, unknown> = {},
   ): CiState {
-    const screen = this.store.currentScreen;
+    const screen = this.store.currentScreen as ScreenName;
     const action = actionsForScreen(screen).find((a) => a.id === actionId);
     if (!action) throw new UnknownActionError(actionId, screen);
     action.apply(this.store, params); // may throw MissingParamError

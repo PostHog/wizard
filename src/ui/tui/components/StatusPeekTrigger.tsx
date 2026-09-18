@@ -8,29 +8,31 @@
 import { Text } from 'ink';
 import { useEffect } from 'react';
 import type { WizardStore } from '@ui/tui/store';
+import { useUiStore } from '@ui/tui/hooks/useUiStore';
 
 let peekedOnce = false;
 
 interface StatusPeekTriggerProps {
+  /** Accepted for the content decks that pass it; presentation reads the UiStore. */
   store?: WizardStore;
   /** How long the status bar stays expanded, in ms. */
   duration?: number;
 }
 
 export const StatusPeekTrigger = ({
-  store,
   duration = 10000,
 }: StatusPeekTriggerProps) => {
+  const ui = useUiStore();
   useEffect(() => {
     if (peekedOnce) return;
     peekedOnce = true;
-    store?.setStatusExpanded(true);
+    ui?.setStatusExpanded(true);
     // No cleanup — the store call is safe after unmount and the component
     // may be evicted before the timer fires (non-persist NodeBlock).
     setTimeout(() => {
-      store?.setStatusExpanded(false);
+      ui?.setStatusExpanded(false);
     }, duration);
-  }, [store, duration]);
+  }, [ui, duration]);
 
   return <Text>You can view the Wizard&apos;s status below.</Text>;
 };

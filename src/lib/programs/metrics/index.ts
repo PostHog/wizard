@@ -1,6 +1,5 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
-import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
 
 const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
@@ -29,7 +28,6 @@ export const metricsConfig: ProgramConfig = {
   agentFlow: 'metrics',
   steps: METRICS_STEPS,
   reportFile: METRICS_REPORT_FILE,
-  getContentBlocks,
   run: {
     integrationLabel: 'metrics',
     // No `skillId`: the agent must load the menu and install the right

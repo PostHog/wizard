@@ -18,6 +18,7 @@ import { OutroKind } from '@lib/wizard-session';
 import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@lib/token-pricing';
 import { getLogFilePath } from '@utils/debug';
+import type { UiStore } from './ui-store.js';
 
 const RESET_ATTRS = '\x1b[0m';
 const GREEN = '\x1b[32m';
@@ -26,7 +27,7 @@ const DIM = '\x1b[2m';
 
 /**
  * Mirrors the hidden Ctrl+T HUD's tally into post-exit scrollback — but only
- * when the HUD is actually visible at exit (`store.tokenHudVisible`, which
+ * when the HUD is actually visible at exit (`ui.tokenHudVisible`, which
  * defaults on in dev/test and off in production; `useDismissOnAnyKey`
  * already keeps Ctrl+T from also dismissing the outro screen underneath
  * it). A production run where the user never toggled it on shouldn't have a
@@ -34,8 +35,8 @@ const DIM = '\x1b[2m';
  * HUD is hidden, or the run never produced any usage (e.g. non-agent
  * programs).
  */
-function tokenCostLine(store: WizardStore): string | null {
-  if (!store.tokenHudVisible) return null;
+function tokenCostLine(store: WizardStore, ui: UiStore): string | null {
+  if (!ui.tokenHudVisible) return null;
   const usage = store.tokenUsage;
   if (totalTokenCount(usage) === 0) return null;
 
@@ -65,10 +66,10 @@ function mcpLoginBlock(store: WizardStore): string | null {
   );
 }
 
-export function getExitLine(store: WizardStore): string {
+export function getExitLine(store: WizardStore, ui: UiStore): string {
   const outro = store.session.outroData;
   const label = store.session.programLabel ?? 'Wizard';
-  const costLine = tokenCostLine(store);
+  const costLine = tokenCostLine(store, ui);
   const loginBlock = mcpLoginBlock(store);
 
   if (isRunFailure(store.session)) {

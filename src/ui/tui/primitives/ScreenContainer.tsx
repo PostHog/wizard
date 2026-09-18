@@ -22,11 +22,10 @@ import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
-import {
-  ViewportTooSmall,
-  isViewportTooSmall,
-} from './ViewportTooSmall.js';
+import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
 import type { WizardStore } from '@ui/tui/store';
+import type { UiStore } from '@ui/tui/ui-store';
+import { UiStoreContext } from '@ui/tui/hooks/useUiStore';
 
 const MIN_WIDTH = 80;
 export const MAX_WIDTH = 120;
@@ -39,15 +38,20 @@ function getContentWidth(terminalColumns: number): number {
 
 interface ScreenContainerProps {
   store: WizardStore;
+  ui: UiStore;
   screens: Record<string, ReactNode>;
 }
 
-export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
+export const ScreenContainer = ({
+  store,
+  ui,
+  screens,
+}: ScreenContainerProps) => {
   const [columns, rows] = useStdoutDimensions();
   const { stdout } = useStdout();
   useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.getSnapshot(),
+    (cb) => ui.subscribe(cb),
+    () => ui.getSnapshot(),
   );
 
   // Hidden shortcut: Ctrl+T toggles the token/cost HUD. Deliberately not
@@ -55,12 +59,12 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   // Mounted here (not on any individual screen) so it works everywhere —
   // ScreenContainer is the one component alive for the whole process.
   useInput((input, key) => {
-    if (key.ctrl && input === 't') store.toggleTokenHud();
+    if (key.ctrl && input === 't') ui.toggleTokenHud();
   });
 
   const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
-  const hudVisible = store.tokenHudVisible;
+  const hudVisible = ui.tokenHudVisible;
   // Text width inside TokenCostHud's own paddingX={1} (1 column each side).
   const hudContentWidth = Math.max(1, width - 2);
   // 1 row when the "Ctrl+T to hide" hint fits on the cost line's row, 2 when
@@ -73,7 +77,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
     : 0;
   const contentHeight = Math.max(5, rows - 3 - hudRows);
   const contentAreaWidth = Math.max(10, width - 2);
-  const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
+  const direction = ui.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
 
   // Too small to lay out: hide the screens rather than unmounting them. Yoga
@@ -88,8 +92,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   // Only enforced on a real terminal: with stdout piped there are no
   // dimensions to read (useStdoutDimensions substitutes 80×24) and no window
   // for anyone to resize, so nagging would be both wrong and unactionable.
-  const tooSmall =
-    Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
+  const tooSmall = Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
 
   const inner = (
     <Box
@@ -141,7 +144,9 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
       justifyContent="flex-start"
     >
       {tooSmall && <ViewportTooSmall columns={columns} rows={rows} />}
-      <KeyboardHintsProvider>{inner}</KeyboardHintsProvider>
+      <UiStoreContext.Provider value={ui}>
+        <KeyboardHintsProvider>{inner}</KeyboardHintsProvider>
+      </UiStoreContext.Provider>
     </Box>
   );
 };

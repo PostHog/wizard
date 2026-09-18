@@ -2,7 +2,7 @@
 
 import type { WizardStore } from '@ui/tui/store';
 import type { ContentBlock } from '@ui/tui/primitives/content-types';
-import { buildSourceMapsDeck } from '@lib/programs/error-tracking-upload-source-maps/content/index';
+import { buildSourceMapsDeck } from '@ui/tui/programs/error-tracking-upload-source-maps/content/index';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
   buildSourceMapsDeck(store, {

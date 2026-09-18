@@ -1,6 +1,5 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
-import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
 
 const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'ai-observability-intro' } : step,
@@ -24,7 +23,6 @@ export const aiObservabilityConfig: ProgramConfig = {
   id: 'ai-observability',
   steps: AI_OBSERVABILITY_STEPS,
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
-  getContentBlocks,
   run: {
     integrationLabel: 'ai-observability',
     // No `skillId`: linear.ts skips its pre-install step (see the gate on

@@ -3,7 +3,8 @@
  * by walking each program's steps through the store with a generic advance per
  * screen. Baseline for the surface split: must stay byte identical.
  */
-import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@ui/tui/store';
+import { WizardStore, RunPhase, McpOutcome } from '@ui/tui/store';
+import { ScreenId } from '@ui/tui/router';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import {
@@ -24,6 +25,7 @@ import {
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '../self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '../error-tracking/detect-agentic';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '../error-tracking-upload-source-maps/detect';
+import { flowFor } from '@lib/programs/flow-for';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -57,7 +59,7 @@ function screenEvents(): ScreenEvent[] {
 const NODE = FRAMEWORK_REGISTRY[Integration.javascriptNode];
 
 function createStore(program: ProgramId, integration: Integration | null) {
-  const store = new WizardStore(program);
+  const store = new WizardStore(flowFor(program).flow);
   setUI(new InkUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
   if (integration) {
@@ -111,7 +113,7 @@ function advance(store: WizardStore, screen: string): boolean {
       return true;
     case ScreenId.Run:
     case ScreenId.AuditRun: {
-      const steps = getProgramConfig(store.router.activeProgram).steps;
+      const steps = getProgramConfig(store.activeProgram).steps;
       const runStep = steps.find(
         (st) =>
           st.screenId === screen &&
@@ -183,7 +185,7 @@ function trace(program: ProgramId, integration: Integration | null) {
   const screens: string[] = [];
   let stoppedOn: string | null = null;
   for (let guard = 0; guard < 40; guard++) {
-    const screen = store.router.resolve(store.session);
+    const screen = store.currentScreen;
     screens.push(screen);
     if (screen === ScreenId.Exit) break;
     if (!advance(store, screen)) {
@@ -215,7 +217,7 @@ describe('headless walk analytics', () => {
   for (const program of ['posthog-integration', 'audit'] as ProgramId[]) {
     it(`${program}: run phases without a TUI`, () => {
       wizardCapture.mockClear();
-      const store = new WizardStore(program);
+      const store = new WizardStore(flowFor(program).flow);
       setUI(new InkUI(store));
       store.session = buildSession({ installDir: '/app', ci: true });
       store.setRunPhase(RunPhase.Running);
@@ -223,7 +225,7 @@ describe('headless walk analytics', () => {
       store.setRunPhase(RunPhase.Completed);
       expect({
         program,
-        screen: store.router.resolve(store.session),
+        screen: store.currentScreen,
         events: screenEvents(),
       }).toMatchSnapshot();
     });

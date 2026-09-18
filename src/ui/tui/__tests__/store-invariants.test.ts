@@ -1,5 +1,5 @@
 /**
- * Behaviour baseline for WizardStore + WizardRouter, taken before a refactor.
+ * Behaviour baseline for WizardStore and flow resolution, taken before a refactor.
  * Every expectation here pins what the code does today, exceptions included.
  */
 
@@ -8,12 +8,10 @@ import {
   TaskStatus,
   Program,
   type ProgramId,
-  ScreenId,
-  Overlay,
   RunPhase,
   McpOutcome,
-  type ScreenName,
 } from '@ui/tui/store';
+import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
 import {
   buildSession,
   AdditionalFeature,
@@ -25,7 +23,6 @@ import {
   type WizardSession,
 } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
-import { PROGRAM_SEQUENCES } from '@ui/tui/screen-sequences';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
@@ -33,6 +30,8 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import type { SettingsConflict } from '@lib/claude-settings';
+import { flowEntries, resolveActiveScreen } from '@lib/flow-resolution';
+import { flowFor } from '@lib/programs/flow-for';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -105,7 +104,7 @@ const aiUser = (approved: boolean): WizardSession['apiUser'] =>
   ({ organization: { is_ai_data_processing_approved: approved } } as never);
 
 function createStore(program?: ProgramId): WizardStore {
-  return new WizardStore(program);
+  return new WizardStore(flowFor(program ?? Program.PostHogIntegration).flow);
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -143,16 +142,6 @@ const MUTATIONS: MutationCase[] = [
   {
     name: 'setCurrentStage',
     invoke: (s) => s.setCurrentStage('stage'),
-    emits: 1,
-  },
-  {
-    name: 'toggleStatusExpanded',
-    invoke: (s) => s.toggleStatusExpanded(),
-    emits: 1,
-  },
-  {
-    name: 'setStatusExpanded',
-    invoke: (s) => s.setStatusExpanded(true),
     emits: 1,
   },
   { name: 'completeSetup', invoke: (s) => s.completeSetup(), emits: 1 },
@@ -426,22 +415,21 @@ const MUTATIONS: MutationCase[] = [
   },
   {
     name: 'switchProgram',
-    invoke: (s) => s.switchProgram(Program.Metrics),
+    invoke: (s) => s.switchProgram(flowFor(Program.Metrics).flow),
     emits: 1,
   },
   {
-    name: 'pushOverlay',
-    invoke: (s) => s.pushOverlay(Overlay.WizardAsk),
+    name: 'pushInterrupt',
+    invoke: (s) => s.pushInterrupt(Overlay.WizardAsk),
     emits: 1,
   },
   {
-    name: 'popOverlay',
-    prepare: (s) => s.pushOverlay(Overlay.WizardAsk),
-    invoke: (s) => s.popOverlay(),
+    name: 'popInterrupt',
+    prepare: (s) => s.pushInterrupt(Overlay.WizardAsk),
+    invoke: (s) => s.popInterrupt(),
     emits: 1,
   },
   { name: 'pushStatus', invoke: (s) => s.pushStatus('working'), emits: 1 },
-  { name: 'toggleTokenHud', invoke: (s) => s.toggleTokenHud(), emits: 1 },
   {
     name: 'addTokenUsage',
     invoke: (s) =>
@@ -484,16 +472,6 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   // Render-only cursor: the learn card drives its own re-render.
-  {
-    name: 'setLearnCardBlockIdx',
-    invoke: (s) => s.setLearnCardBlockIdx(2),
-    emits: 0,
-  },
-  {
-    name: 'setLearnCardComplete',
-    invoke: (s) => s.setLearnCardComplete(),
-    emits: 1,
-  },
   {
     name: 'syncTodos',
     invoke: (s) => s.syncTodos([{ content: 'a', status: 'pending' }]),
@@ -577,16 +555,9 @@ describe('store invariants', () => {
       const store = createStore();
       expect(
         countEmissions(store, () =>
-          store.switchProgram(Program.PostHogIntegration),
+          store.switchProgram(flowFor(Program.PostHogIntegration).flow),
         ),
       ).toBe(0);
-    });
-
-    it('setStatusExpanded to the current value notifies nothing', () => {
-      const store = createStore();
-      expect(countEmissions(store, () => store.setStatusExpanded(false))).toBe(
-        0,
-      );
     });
 
     it('setCurrentStage with the same stage notifies nothing', () => {
@@ -660,37 +631,20 @@ describe('store invariants', () => {
   describe('overlays are LIFO', () => {
     it('unwinds in reverse order back to the program screen', () => {
       const store = createStore();
-      expect(store.router.hasOverlay).toBe(false);
+      expect(store.hasInterrupt).toBe(false);
 
-      store.pushOverlay(Overlay.AuthError);
-      store.pushOverlay(Overlay.SessionTimeout);
-      expect(store.router.resolve(store.session)).toBe(Overlay.SessionTimeout);
-      expect(store.router.hasOverlay).toBe(true);
+      store.pushInterrupt(Overlay.AuthError);
+      store.pushInterrupt(Overlay.SessionTimeout);
+      expect(store.currentScreen).toBe(Overlay.SessionTimeout);
+      expect(store.hasInterrupt).toBe(true);
 
-      store.popOverlay();
-      expect(store.router.resolve(store.session)).toBe(Overlay.AuthError);
-      expect(store.router.hasOverlay).toBe(true);
+      store.popInterrupt();
+      expect(store.currentScreen).toBe(Overlay.AuthError);
+      expect(store.hasInterrupt).toBe(true);
 
-      store.popOverlay();
-      expect(store.router.hasOverlay).toBe(false);
-      expect(store.router.resolve(store.session)).toBe(ScreenId.Intro);
-    });
-
-    it('tracks the nav direction across emits and overlay moves', () => {
-      const store = createStore();
-      expect(store.lastNavDirection).toBeNull();
-
-      store.emitChange();
-      expect(store.lastNavDirection).toBe('push');
-
-      store.pushOverlay(Overlay.AuthError);
-      expect(store.lastNavDirection).toBe('push');
-
-      store.popOverlay();
-      expect(store.lastNavDirection).toBe('pop');
-
-      store.emitChange();
-      expect(store.lastNavDirection).toBe('push');
+      store.popInterrupt();
+      expect(store.hasInterrupt).toBe(false);
+      expect(store.currentScreen).toBe(ScreenId.Intro);
     });
   });
 
@@ -776,7 +730,13 @@ describe('store invariants', () => {
       const rand = mulberry32(SEED);
       const screens: ScreenName[] = [];
       for (let i = 0; i < SESSION_COUNT; i++) {
-        screens.push(store.router.resolve(randomSession(rand)));
+        screens.push(
+          resolveActiveScreen(
+            store.flow,
+            randomSession(rand),
+            [],
+          ) as ScreenName,
+        );
       }
       return screens;
     }
@@ -793,7 +753,7 @@ describe('store invariants', () => {
     );
 
     it.each(PROGRAM_IDS)('%s sequence ends on the exit screen', (program) => {
-      const sequence = PROGRAM_SEQUENCES[program];
+      const sequence = flowEntries(flowFor(program).flow);
       expect(sequence[sequence.length - 1].id).toBe(ScreenId.Exit);
     });
 

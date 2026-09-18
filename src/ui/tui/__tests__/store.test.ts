@@ -3,11 +3,10 @@ import {
   TaskStatus,
   Program,
   type ProgramId,
-  ScreenId,
-  Overlay,
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
+import { ScreenId, Overlay } from '@ui/tui/router';
 import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
@@ -19,6 +18,7 @@ import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { flowFor } from '@lib/programs/flow-for';
 
 vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
@@ -46,7 +46,7 @@ vi.mock('../../../lib/health-checks/readiness.js', () => ({
 }));
 
 function createStore(program?: ProgramId): WizardStore {
-  return new WizardStore(program);
+  return new WizardStore(flowFor(program ?? Program.PostHogIntegration).flow);
 }
 
 const wizardCaptureMock = analytics.wizardCapture as Mock;
@@ -81,12 +81,12 @@ describe('WizardStore', () => {
 
     it('defaults to Wizard flow', () => {
       const store = createStore();
-      expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+      expect(store.activeProgram).toBe(Program.PostHogIntegration);
     });
 
     it('accepts a custom flow', () => {
       const store = createStore(Program.McpAdd);
-      expect(store.router.activeProgram).toBe(Program.McpAdd);
+      expect(store.activeProgram).toBe(Program.McpAdd);
     });
 
     it('starts with version 0', () => {
@@ -99,14 +99,14 @@ describe('WizardStore', () => {
     describe('switchProgram', () => {
       it('makes the chosen program the active one', () => {
         const store = createStore();
-        store.switchProgram(Program.Metrics);
-        expect(store.router.activeProgram).toBe(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
+        expect(store.activeProgram).toBe(Program.Metrics);
       });
 
       it('routes to the new program instead of finishing the old one', () => {
         const store = createStore();
-        store.switchProgram(Program.Metrics);
-        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+        store.switchProgram(flowFor(Program.Metrics).flow);
+        expect(store.currentScreen).toBe(ScreenId.MetricsIntro);
       });
 
       // Every program gates its intro on the same flag, so a stale one skips it.
@@ -115,10 +115,10 @@ describe('WizardStore', () => {
         store.completeSetup();
         expect(store.session.setupConfirmed).toBe(true);
 
-        store.switchProgram(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
 
         expect(store.session.setupConfirmed).toBe(false);
-        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+        expect(store.currentScreen).toBe(ScreenId.MetricsIntro);
       });
 
       // Already resolved for the program we left, so reusing them skips screens.
@@ -128,7 +128,7 @@ describe('WizardStore', () => {
         store.completeSetup();
         await expect(before).resolves.toBeUndefined();
 
-        store.switchProgram(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
 
         const after = store.getGate('intro');
         expect(after).not.toBe(before);
@@ -142,14 +142,14 @@ describe('WizardStore', () => {
         const store = createStore();
         const parked = store.getGate('intro');
 
-        store.switchProgram(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
 
         await expect(parked).resolves.toBeUndefined();
       });
 
       it('reports screens under the new program', () => {
         const store = createStore();
-        store.switchProgram(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
         expect(store.analyticsProgramId).toBe(Program.Metrics);
       });
 
@@ -157,7 +157,7 @@ describe('WizardStore', () => {
       // switch would otherwise still carry the program the run started as.
       it('retags the run with the new program', () => {
         const store = createStore();
-        store.switchProgram(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
         expect(analytics.setTag).toHaveBeenCalledWith(
           'program_id',
           Program.Metrics,
@@ -166,7 +166,7 @@ describe('WizardStore', () => {
 
       it('follows the new program for label and skill', () => {
         const store = createStore();
-        store.switchProgram(Program.Metrics);
+        store.switchProgram(flowFor(Program.Metrics).flow);
         expect(store.session.programLabel).toBe(Program.Metrics);
         expect(store.session.skillId).toBe(
           getProgramConfig(Program.Metrics).skillId ?? null,
@@ -177,9 +177,9 @@ describe('WizardStore', () => {
       it('leaves the session alone when the program is unchanged', () => {
         const store = createStore();
         store.completeSetup();
-        store.switchProgram(Program.PostHogIntegration);
+        store.switchProgram(flowFor(Program.PostHogIntegration).flow);
         expect(store.session.setupConfirmed).toBe(true);
-        expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+        expect(store.activeProgram).toBe(Program.PostHogIntegration);
       });
     });
   });
@@ -711,52 +711,39 @@ describe('WizardStore', () => {
   // ── Overlay navigation ───────────────────────────────────────────
 
   describe('overlay navigation', () => {
-    it('pushOverlay shows the overlay over the current screen', () => {
+    it('pushInterrupt shows the overlay over the current screen', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
+      store.pushInterrupt(Overlay.SettingsOverride);
       expect(store.currentScreen).toBe(Overlay.SettingsOverride);
     });
 
-    it('popOverlay returns to the underlying screen', () => {
+    it('popInterrupt returns to the underlying screen', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      store.popOverlay();
+      store.pushInterrupt(Overlay.SettingsOverride);
+      store.popInterrupt();
       expect(store.currentScreen).toBe(ScreenId.Intro);
     });
 
-    it('pushOverlay emits change and increments version', () => {
+    it('pushInterrupt emits change and increments version', () => {
       const store = createStore();
       const cb = vi.fn();
       store.subscribe(cb);
 
-      store.pushOverlay(Overlay.SettingsOverride);
+      store.pushInterrupt(Overlay.SettingsOverride);
 
       expect(cb).toHaveBeenCalledTimes(1);
       expect(store.getVersion()).toBe(1);
     });
 
-    it('popOverlay emits change and increments version', () => {
+    it('popInterrupt emits change and increments version', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
+      store.pushInterrupt(Overlay.SettingsOverride);
 
       const cb = vi.fn();
       store.subscribe(cb);
-      store.popOverlay();
+      store.popInterrupt();
 
       expect(cb).toHaveBeenCalledTimes(1);
-    });
-
-    it('pushOverlay sets direction to push', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      expect(store.lastNavDirection).toBe('push');
-    });
-
-    it('popOverlay sets direction to pop', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      store.popOverlay();
-      expect(store.lastNavDirection).toBe('pop');
     });
   });
 
@@ -840,8 +827,8 @@ describe('WizardStore', () => {
     });
   });
 
-  describe('tokenUsage / toggleTokenHud (hidden Ctrl+T HUD)', () => {
-    it('starts at zero usage, and visible by default in dev/test (IS_DEV)', () => {
+  describe('tokenUsage (hidden Ctrl+T HUD)', () => {
+    it('starts at zero usage', () => {
       const store = createStore();
       expect(store.tokenUsage).toEqual({
         inputTokens: 0,
@@ -851,18 +838,6 @@ describe('WizardStore', () => {
         costUsd: 0,
         costIsFinal: false,
       });
-      // Defaults to IS_DEV, which is true under vitest (NODE_ENV=test) --
-      // see WizardStore's $tokenHudVisible doc comment.
-      expect(store.tokenHudVisible).toBe(true);
-    });
-
-    it('toggleTokenHud flips visibility each call, from whatever it started at', () => {
-      const store = createStore();
-      const initial = store.tokenHudVisible;
-      store.toggleTokenHud();
-      expect(store.tokenHudVisible).toBe(!initial);
-      store.toggleTokenHud();
-      expect(store.tokenHudVisible).toBe(initial);
     });
 
     it('addTokenUsage accumulates token counts and cost across calls', () => {
@@ -963,7 +938,6 @@ describe('WizardStore', () => {
       const versions: number[] = [];
       store.subscribe(() => versions.push(store.getSnapshot()));
 
-      store.toggleTokenHud();
       store.addTokenUsage({
         inputTokens: 1,
         outputTokens: 0,
@@ -973,7 +947,7 @@ describe('WizardStore', () => {
         cacheCreation1h: 0,
       });
 
-      expect(versions.length).toBe(2);
+      expect(versions.length).toBe(1);
     });
   });
 
@@ -1138,21 +1112,6 @@ describe('WizardStore', () => {
     });
   });
 
-  // ── Navigation direction ─────────────────────────────────────────
-
-  describe('lastNavDirection', () => {
-    it('starts as null', () => {
-      const store = createStore();
-      expect(store.lastNavDirection).toBeNull();
-    });
-
-    it('is set to push on emitChange', () => {
-      const store = createStore();
-      store.emitChange();
-      expect(store.lastNavDirection).toBe('push');
-    });
-  });
-
   // ── Concurrent / rapid-fire mutations ─────────────────────────────
 
   describe('concurrent mutations', () => {
@@ -1232,7 +1191,7 @@ describe('WizardStore', () => {
       });
 
       store.completeSetup(); // -> health-check
-      store.pushOverlay(Overlay.SettingsOverride); // -> settings-override
+      store.pushInterrupt(Overlay.SettingsOverride); // -> settings-override
       store.setCredentials({
         // -> settings-override (overlay still on top)
         accessToken: 'tok',
@@ -1240,7 +1199,7 @@ describe('WizardStore', () => {
         host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
-      store.popOverlay(); // -> health-check (readinessResult still null)
+      store.popInterrupt(); // -> health-check (readinessResult still null)
 
       expect(screens).toEqual([
         ScreenId.HealthCheck,
@@ -1365,9 +1324,9 @@ describe('WizardStore', () => {
       expect(cb).not.toHaveBeenCalled();
     });
 
-    it('popOverlay on empty stack does not crash', () => {
+    it('popInterrupt on empty stack does not crash', () => {
       const store = createStore();
-      expect(() => store.popOverlay()).not.toThrow();
+      expect(() => store.popInterrupt()).not.toThrow();
       expect(store.currentScreen).toBe(ScreenId.Intro);
     });
 

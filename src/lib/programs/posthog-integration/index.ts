@@ -23,7 +23,6 @@ import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { shouldDisableAsk } from '@lib/ask-policy';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
@@ -203,7 +202,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
-  getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents

@@ -2,7 +2,7 @@
  * WizardStore — Nanostore-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
  *
- * The active screen is derived from session state — WizardRouter walks
+ * The active screen is derived from session state: flow resolution walks
  * the flow and shows the first step whose `isComplete` is still false.
  *
  * Define a step `gate` if your screen needs to await user interactions.
@@ -41,28 +41,17 @@ import {
   getBlockingServiceKeys,
   type WizardReadinessResult,
 } from '@lib/health-checks/readiness';
-import {
-  WizardRouter,
-  type ScreenName,
-  ScreenId,
-  Overlay,
-  Program,
-  type ProgramId,
-} from './router.js';
+import { Interrupt } from '@lib/interrupts';
+import { resolveActiveScreen } from '@lib/flow-resolution';
+import type { Flow } from '@lib/flow';
+import { Program, type ProgramId } from '@lib/programs/program-registry';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type {
-  StoreInitContext,
-  ProgramReadyContext,
-} from '@lib/programs/program-step';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import type { StoreInitContext, ProgramReadyContext } from '@lib/flow';
 import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
-import { EXPANDED_COUNT } from '@ui/tui/constants';
-import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/token-pricing';
 
-export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
-export type { ScreenName, OutroData, WizardSession, ProgramId };
+export { TaskStatus, Program, RunPhase, McpOutcome };
+export type { OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
   label: string;
@@ -120,12 +109,8 @@ interface GateEntry {
   resolved: boolean;
 }
 
-/**
- * FIFO cap on retained status lines. The status bar is the only consumer and
- * renders at most EXPANDED_COUNT lines, so there is no reason to retain more —
- * the cap is tied to the window it feeds.
- */
-const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
+/** FIFO cap on retained status lines; the status bar's expanded window. */
+export const MAX_STATUS_MESSAGES = 10;
 
 // Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
@@ -153,37 +138,31 @@ export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
   private $statusMessages = atom<string[]>([]);
-  private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
   private $handoffText = atom<string | null>(null);
-  private $learnCardBlockIdx = atom(0);
-  private $learnCardComplete = atom(false);
   private $version = atom(0);
   private $currentStage = atom<{ stage: string; startedAt: number } | null>(
     null,
   );
   private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
-  // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
-  // contributors see it without needing to know the shortcut; defaults off
-  // for the published build, where it stays genuinely hidden. Still
-  // Ctrl+T-toggleable either way.
-  private $tokenHudVisible = atom(IS_DEV);
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
-  private _lastScreen: ScreenName | null = null;
+  private _lastScreen: string | null = null;
 
   /** Hooks run when transitioning onto a screen. */
-  private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
+  private _enterScreenHooks = new Map<string, (() => void)[]>();
 
   /** Gate promises derived from program step definitions. */
   private _gates = new Map<string, GateEntry>();
 
   version = '';
 
-  /** Navigation router — resolves active screen from session state. */
-  readonly router: WizardRouter;
+  /** The flow this store walks. Set by whoever composes the run. */
+  private _flow: Flow;
+  /** Interrupts take over the active screen until dismissed, last on top. */
+  private _interrupts: Interrupt[] = [];
 
   /** Blocks agent execution until the settings-override overlay is dismissed. */
   private _resolveSettingsOverride: (() => void) | null = null;
@@ -201,25 +180,14 @@ export class WizardStore {
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
     null;
 
-  constructor(program: ProgramId = Program.PostHogIntegration) {
-    this.router = new WizardRouter(program);
-    this._initFromProgram(program);
+  constructor(flow: Flow) {
+    this._flow = flow;
+    this._initGates(flow);
   }
 
-  /**
-   * Scan program steps for gate predicates and create gate promises.
-   *
-   * Steps are wrapped with withAiOptInGate so the injected ai-opt-in
-   * step's gate registers here — the agent runner awaits it (via
-   * WizardUI.waitForAiOptIn) before any source leaves the machine.
-   * Same wrapper screen-sequences.ts uses, so the gate and its screen
-   * can't drift apart.
-   */
-  private _initFromProgram(program: ProgramId): void {
-    const steps = withAiOptInGate(getProgramConfig(program));
-
-    // Create gate promises from steps that define them
-    for (const step of steps) {
+  /** Create one gate promise per step that declares a `gate` predicate. */
+  private _initGates(flow: Flow): void {
+    for (const step of flow.steps) {
       if (step.gate) {
         let resolve!: () => void;
         const promise = new Promise<void>((r) => {
@@ -242,7 +210,7 @@ export class WizardStore {
    * pre-flight, whose probes belong only to flows that show its screen.
    */
   runInitHooks(): void {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const steps = this._flow.steps;
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {
@@ -264,7 +232,7 @@ export class WizardStore {
    * need to know which program has which pre-flow work.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const steps = this._flow.steps;
     const ctx: ProgramReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
@@ -376,22 +344,6 @@ export class WizardStore {
     if (cur?.stage === stage) return;
     this.$currentStage.set({ stage, startedAt: Date.now() });
     this.emitChange();
-  }
-
-  get statusExpanded(): boolean {
-    return this.$statusExpanded.get();
-  }
-
-  toggleStatusExpanded(): void {
-    this.$statusExpanded.set(!this.$statusExpanded.get());
-    this.emitChange();
-  }
-
-  setStatusExpanded(expanded: boolean): void {
-    if (this.$statusExpanded.get() !== expanded) {
-      this.$statusExpanded.set(expanded);
-      this.emitChange();
-    }
   }
 
   // ── Session setters ─────────────────────────────────────────────
@@ -573,9 +525,9 @@ export class WizardStore {
 
     const hasReadOnly = conflicts.some((c) => !c.writable);
     if (hasReadOnly) {
-      this.pushOverlay(Overlay.ManagedSettings);
+      this.pushInterrupt(Interrupt.ManagedSettings);
     } else {
-      this.pushOverlay(Overlay.SettingsOverride);
+      this.pushInterrupt(Interrupt.SettingsOverride);
     }
 
     return new Promise((resolve) => {
@@ -594,7 +546,7 @@ export class WizardStore {
     user: string;
   }): Promise<void> {
     this.$session.setKey('portConflictProcess', processInfo);
-    this.pushOverlay(Overlay.PortConflict);
+    this.pushInterrupt(Interrupt.PortConflict);
     return new Promise((resolve) => {
       this._resolvePortConflict = resolve;
     });
@@ -603,7 +555,7 @@ export class WizardStore {
   /** Dismiss the port-conflict overlay and retry the OAuth port loop. */
   resolvePortConflict(): void {
     this.$session.setKey('portConflictProcess', null);
-    this.popOverlay();
+    this.popInterrupt();
     this._resolvePortConflict?.();
     this._resolvePortConflict = null;
   }
@@ -614,7 +566,7 @@ export class WizardStore {
    */
   showTaskNotice(notice: TaskNotice): Promise<boolean> {
     this.$session.setKey('taskNotice', notice);
-    this.pushOverlay(Overlay.TaskNotice);
+    this.pushInterrupt(Interrupt.TaskNotice);
     return new Promise((resolve) => {
       this._resolveTaskNotice = resolve;
     });
@@ -623,7 +575,7 @@ export class WizardStore {
   /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
   resolveTaskNotice(keep: boolean): void {
     this.$session.setKey('taskNotice', null);
-    this.popOverlay();
+    this.popInterrupt();
     this._resolveTaskNotice?.(keep);
     this._resolveTaskNotice = null;
   }
@@ -641,12 +593,12 @@ export class WizardStore {
 
   /** Open the manual OAuth code-entry overlay over the auth screen. */
   showManualAuthCode(): void {
-    this.pushOverlay(Overlay.ManualAuthCode);
+    this.pushInterrupt(Interrupt.ManualAuthCode);
   }
 
   /** Dismiss the manual OAuth code overlay without submitting. */
   dismissManualAuthCode(): void {
-    this.popOverlay();
+    this.popInterrupt();
   }
 
   /**
@@ -654,7 +606,7 @@ export class WizardStore {
    * resolve the in-flight OAuth flow so it can exchange the code for a token.
    */
   submitManualAuthCode(code: string): void {
-    this.popOverlay();
+    this.popInterrupt();
     this._resolveManualAuthCode?.(code);
     this._resolveManualAuthCode = null;
   }
@@ -673,7 +625,7 @@ export class WizardStore {
       );
     }
     this.$session.setKey('pendingQuestion', question);
-    this.pushOverlay(Overlay.WizardAsk);
+    this.pushInterrupt(Interrupt.WizardAsk);
     analytics.wizardCapture('wizard_ask shown', {
       source: question.source,
       question_count: question.questions.length,
@@ -692,7 +644,7 @@ export class WizardStore {
     const resolve = this._resolvePendingQuestion;
     this._resolvePendingQuestion = null;
     this.$session.setKey('pendingQuestion', null);
-    this.popOverlay();
+    this.popInterrupt();
     resolve?.(answers);
   }
 
@@ -718,7 +670,7 @@ export class WizardStore {
     if (ok) {
       this.$session.setKey('settingsOverrideKeys', null);
       this.$session.setKey('settingsConflicts', null);
-      this.popOverlay();
+      this.popInterrupt();
       this._resolveSettingsOverride?.();
       this._resolveSettingsOverride = null;
       this._backupAndFixSettings = null;
@@ -729,12 +681,12 @@ export class WizardStore {
   /** Push the auth-error overlay (no dismiss — user must exit). */
   showAuthError(detail?: AuthErrorDetail): void {
     this.$session.setKey('authErrorDetail', detail ?? null);
-    this.pushOverlay(Overlay.AuthError);
+    this.pushInterrupt(Interrupt.AuthError);
   }
 
   /** Push the session-timeout overlay (no dismiss — user must exit). */
   showSessionTimeout(): void {
-    this.pushOverlay(Overlay.SessionTimeout);
+    this.pushInterrupt(Interrupt.SessionTimeout);
   }
 
   addDiscoveredFeature(feature: DiscoveredFeature): void {
@@ -922,39 +874,48 @@ export class WizardStore {
     this.emitChange();
   }
 
-  switchProgram(program: ProgramId): void {
-    if (program === this.router.activeProgram) return;
+  switchProgram(flow: Flow): void {
+    if (flow.programId === this._flow.programId) return;
 
     // Flush unresolved promises so the wizard can advance
     for (const gate of this._gates.values()) gate.resolve();
     this._gates.clear();
 
-    this.router.setProgram(program);
-    this._initFromProgram(program);
+    this._interrupts = [];
+    this._flow = flow;
+    this._initGates(flow);
     // start-tui stamps this once at launch; without it here every event
     // after the switch still reports under the program the run started as.
-    analytics.setTag('program_id', program);
+    analytics.setTag('program_id', flow.programId);
 
-    const config = getProgramConfig(program);
     this.$session.setKey('setupConfirmed', false);
-    this.$session.setKey('programLabel', config.id);
-    this.$session.setKey('skillId', config.skillId ?? null);
+    this.$session.setKey('programLabel', flow.programId);
+    this.$session.setKey('skillId', flow.skillId);
     this.emitChange();
   }
 
   // ── Derived state ───────────────────────────────────────────────
 
-  /**
-   * The screen that should be rendered right now.
-   * Derived from session state via the router.
-   */
-  get currentScreen(): ScreenName {
-    return this.router.resolve(this.session);
+  get flow(): Flow {
+    return this._flow;
   }
 
-  /** Direction hint for screen transitions. */
-  get lastNavDirection(): 'push' | 'pop' | null {
-    return this.router.lastNavDirection;
+  /** The id of the active program. */
+  get activeProgram(): ProgramId {
+    return this._flow.programId;
+  }
+
+  /** The screen key that should be rendered right now, derived from state. */
+  get currentScreen(): string {
+    return resolveActiveScreen(this._flow, this.session, this._interrupts);
+  }
+
+  get hasInterrupt(): boolean {
+    return this._interrupts.length > 0;
+  }
+
+  get interruptDepth(): number {
+    return this._interrupts.length;
   }
 
   // ── Change notification ─────────────────────────────────────────
@@ -965,28 +926,25 @@ export class WizardStore {
 
   /**
    * Notify React that state has changed.
-   * The router re-resolves the active screen on next render.
+   * The active screen re-resolves on next render.
    * Gate predicates are checked and resolved if ready.
    */
   emitChange(): void {
-    this.router._setDirection('push');
     this.$version.set(this.$version.get() + 1);
     this._checkGates();
     this._detectTransition();
   }
 
-  // ── Overlay navigation ──────────────────────────────────────────
+  // ── Interrupts ──────────────────────────────────────────────────
 
-  pushOverlay(overlay: Overlay): void {
-    this.router._setDirection('push');
-    this.router.pushOverlay(overlay);
+  pushInterrupt(interrupt: Interrupt): void {
+    this._interrupts.push(interrupt);
     this.$version.set(this.$version.get() + 1);
     this._detectTransition();
   }
 
-  popOverlay(): void {
-    this.router._setDirection('pop');
-    this.router.popOverlay();
+  popInterrupt(): void {
+    this._interrupts.pop();
     this.$version.set(this.$version.get() + 1);
     this._detectTransition();
   }
@@ -997,7 +955,7 @@ export class WizardStore {
    * Register a callback to run when transitioning onto the given screen.
    * Fires after every transition that lands on this screen.
    */
-  onEnterScreen(screen: ScreenName, fn: () => void): void {
+  onEnterScreen(screen: string, fn: () => void): void {
     const list = this._enterScreenHooks.get(screen) ?? [];
     list.push(fn);
     this._enterScreenHooks.set(screen, list);
@@ -1008,26 +966,24 @@ export class WizardStore {
    * claims one, else the running program (also the fallback for overlays and
    * screens with no owning step).
    */
-  private _programIdForScreen(screen: ScreenName): ProgramId {
-    const program = this.router.activeProgram;
-    const step = getProgramConfig(program).steps.find(
-      (s) => s.screenId === screen,
-    );
+  private _programIdForScreen(screen: string): ProgramId {
+    const program = this._flow.programId;
+    const step = this._flow.steps.find((s) => s.screenId === screen);
     return step?.reportsAsProgramId ?? program;
   }
 
   /** The program the visible screen reports under; screens stamp this on their
    *  own events rather than relying on the run-level `program_id` tag. */
   get analyticsProgramId(): ProgramId {
-    return this._programIdForScreen(this.router.resolve(this.session));
+    return this._programIdForScreen(this.currentScreen);
   }
 
   /**
    * Detect screen transitions, run enter-screen hooks, and fire analytics.
-   * Called at the end of emitChange/pushOverlay/popOverlay.
+   * Called at the end of emitChange/pushInterrupt/popInterrupt.
    */
   private _detectTransition(): void {
-    const next = this.router.resolve(this.session);
+    const next = this.currentScreen;
     const prev = this._lastScreen;
     if (next !== prev) {
       // Every event carries the active TUI screen, filling the
@@ -1067,17 +1023,6 @@ export class WizardStore {
 
   get tokenUsage(): TokenUsageSnapshot {
     return this.$tokenUsage.get();
-  }
-
-  get tokenHudVisible(): boolean {
-    return this.$tokenHudVisible.get();
-  }
-
-  /** Hidden Ctrl+T shortcut — see ScreenContainer. Not registered as a
-   *  keyboard hint, so it never shows in the hints bar. */
-  toggleTokenHud(): void {
-    this.$tokenHudVisible.set(!this.$tokenHudVisible.get());
-    this.emitChange();
   }
 
   /**
@@ -1140,23 +1085,6 @@ export class WizardStore {
     if (this.$handoffText.get() === text) return;
     logToFile(`store.setHandoffText: ${text.length} chars`);
     this.$handoffText.set(text);
-    this.emitChange();
-  }
-
-  get learnCardBlockIdx(): number {
-    return this.$learnCardBlockIdx.get();
-  }
-
-  setLearnCardBlockIdx(idx: number): void {
-    this.$learnCardBlockIdx.set(idx);
-  }
-
-  get learnCardComplete(): boolean {
-    return this.$learnCardComplete.get();
-  }
-
-  setLearnCardComplete(): void {
-    this.$learnCardComplete.set(true);
     this.emitChange();
   }
 

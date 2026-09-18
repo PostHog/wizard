@@ -84,6 +84,11 @@ import { errorTrackingCommand } from './src/commands/error-tracking';
 import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/claude-settings';
+import { setUI } from './src/ui';
+import { LoggingUI } from './src/ui/tui/console/logging-ui';
+
+// The entry point owns the default renderer; @ui ships with none.
+setUI(new LoggingUI());
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and

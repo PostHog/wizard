@@ -34,6 +34,7 @@ import {
   introHeadline,
   introMenuOptions,
 } from '@ui/tui/posthog-integration-intro';
+import { flowFor } from '@lib/programs/flow-for';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
@@ -240,7 +241,7 @@ export const PostHogIntegrationIntroScreen = ({
         onSelect={(value) => {
           const id = Array.isArray(value) ? value[0] : value;
           analytics.wizardCapture('intro menu selected', { value: id, view });
-          store.switchProgram(id);
+          store.switchProgram(flowFor(id).flow);
         }}
       />
     );

@@ -1,5 +1,5 @@
-import { LoggingUI } from './logging-ui';
-import type { WizardStore } from './tui/store';
+import { LoggingUI } from './logging-ui.js';
+import type { WizardStore } from '@ui/tui/store';
 
 /**
  * `LoggingUI` plus it feeds run state into a `WizardStore` so the background
