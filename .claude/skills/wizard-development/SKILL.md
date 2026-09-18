@@ -71,6 +71,17 @@ safety prompt. Keep gateway policy owned there rather than copying it into
 skills. Do not infer per-model effort authorization merely from the local
 capabilities table.
 
+**The operator rank belongs to the gateway.** A request on a wizard-pinned token
+must never carry a `developer` message: on reasoning models that role supersedes
+an earlier `system` message, so it would outrank the gateway's operator prompt,
+and admission refuses the request with a bare `400` that names no reason. The
+gateway model spec therefore declares `compat: { supportsDeveloperRole: false }`
+([gateway.ts](../../../src/lib/agent/runner/harness/pi/gateway.ts)), which makes
+pi send the wizard's own instructions as `system` on both transports. A harness
+or SDK change that reintroduces the role breaks every run against a policy
+deploy, and the denial is deliberately undiagnosable from the response, so the
+guard is the model spec and its test, not error handling.
+
 ## Choose the extension surface
 
 - For a framework, follow
