@@ -7,6 +7,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { sleep } from '@lib/helper-functions';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { WizardError } from '@utils/wizard-abort';
@@ -99,8 +100,15 @@ const MIN_USABLE_TTL_MS = 2 * 60 * 1000;
 /** Re-resolve at this fraction of the token's life, leaving a usable remainder. */
 const REFRESH_AT_FRACTION = 0.8;
 // Exceeds the backend's own 10s gateway timeout: a slow mint that lands after the
-// CLI hangs up spends a daily mint and orphans a live token.
+// CLI hangs up spends a daily mint and orphans a live token. The whole mint,
+// retries included, shares this one budget.
 const MINT_TIMEOUT_MS = 20_000;
+/** Attempts counting the first, so a transient mint failure gets two retries. */
+const MINT_MAX_ATTEMPTS = 3;
+/** First backoff, doubling per retry, as in `fetch-retry`. */
+const MINT_BACKOFF_MS = 500;
+/** A retry needs this much of the mint budget left to be worth sleeping for. */
+const MIN_RETRY_BUDGET_MS = 1_000;
 /** Longer than any refusal the mint writes; a body past this is not a message. */
 const MAX_REFUSAL_DETAIL_LENGTH = 500;
 /** Outcomes are short snake_case labels; anything longer is not one. */
@@ -290,17 +298,57 @@ function isMintRefusal(status: number): boolean {
   );
 }
 
-interface MintRefusal {
+/**
+ * Whether a mint status is the endpoint being briefly unavailable rather than a
+ * decision about this run. A 503 here is routine: the backend answers one for
+ * any gateway transport failure, and the gateway answers one while a pod drains
+ * during a normal deploy or while its model catalog is unreadable. 408 asks for
+ * the retry outright.
+ */
+function isMintTransient(status: number): boolean {
+  return status >= 500 || status === 408;
+}
+
+/** The wait the server asked for, when it sent a readable one. */
+function retryAfterMs(resp: Response): number | null {
+  const value = resp.headers.get('retry-after');
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.ceil(seconds * 1000));
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : null;
+}
+
+/**
+ * How long to wait before re-minting, or null to stop trying. A wait that
+ * leaves no room for the attempt it precedes only makes the failure slower, so
+ * the deadline also caps an absurd `Retry-After`.
+ */
+function mintRetryDelayMs(
+  resp: Response,
+  attempt: number,
+  deadlineMs: number,
+): number | null {
+  if (attempt >= MINT_MAX_ATTEMPTS || !isMintTransient(resp.status))
+    return null;
+  const waitMs = retryAfterMs(resp) ?? MINT_BACKOFF_MS * 2 ** (attempt - 1);
+  return deadlineMs - (Date.now() + waitMs) >= MIN_RETRY_BUDGET_MS
+    ? waitMs
+    : null;
+}
+
+interface MintReason {
   detail?: string;
   outcome?: string;
 }
 
 /**
- * The server's own reason for a refusal, when it sent one. DRF answers every
- * refusal as `{"detail": "...", "code": "<outcome>"}`; the blocklist's detail
- * names the contact address, which the fixed messages below cannot. `code` is
- * the backend's own label for the refusal (`outcome` on older backends) and
- * rides the client event.
+ * The server's own reason for a non-ok answer, when it sent one. DRF answers
+ * every refusal as `{"detail": "...", "code": "<outcome>"}`; the blocklist's
+ * detail names the contact address, which the fixed messages below cannot.
+ * `code` is the backend's own label (`outcome` on older backends) and rides the
+ * client event. A failure carries its reason too, so the next 5xx is
+ * diagnosable from the message alone.
  */
 function cleanRefusalText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -311,7 +359,7 @@ function cleanRefusalText(value: unknown): string {
   return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
 }
 
-async function readRefusal(resp: Response): Promise<MintRefusal> {
+async function readMintReason(resp: Response): Promise<MintReason> {
   try {
     const body = (await resp.json()) as {
       detail?: unknown;
@@ -357,12 +405,28 @@ function mintRefusalMessage(status: number, detail?: string): string {
   }
 }
 
-async function mintGatewayToken(
+function mintFailureMessage(
+  status: number,
+  reason: MintReason,
+  attempts: number,
+): string {
+  const said = [reason.outcome, reason.detail].filter(Boolean).join(': ');
+  return `the PostHog gateway could not issue a token (HTTP ${status}${
+    said ? `: ${said}` : ''
+  }${attempts > 1 ? `, after ${attempts} attempts` : ''})`;
+}
+
+/**
+ * One ok mint response, re-asking a transient failure inside the mint budget.
+ * A refusal is a decision about this run, so it ends the attempts.
+ */
+async function mintRequest(
   host: HostResolution,
   accessToken: string,
   program: string,
-): Promise<MintedToken> {
-  try {
+): Promise<Response> {
+  const deadlineMs = Date.now() + MINT_TIMEOUT_MS;
+  for (let attempt = 1; ; attempt++) {
     const resp = await fetch(`${host.apiHost}/api/wizard/gateway_token/`, {
       method: 'POST',
       headers: {
@@ -373,36 +437,62 @@ async function mintGatewayToken(
       // with the reason. A build that omits it gets a 404, which is its signal
       // to fall back to the legacy gateway.
       body: JSON.stringify({ program, reads_refusal_reason: true }),
-      signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(Math.max(0, deadlineMs - Date.now())),
     });
-    if (!resp.ok) {
-      if (isMintRefusal(resp.status)) {
-        const refusal = await readRefusal(resp);
-        logToFile(
-          `[gateway] mint refused with HTTP ${resp.status} (${
-            refusal.outcome ?? 'no outcome'
-          }); failing the run`,
-        );
-        // The terminal denial event for this run. The backend's own event has
-        // no run id, so this is what joins a refusal to the session.
-        analytics.wizardCapture('gateway mint refused', {
-          status: resp.status,
-          outcome: refusal.outcome,
-          program,
-        });
-        throw new GatewayMintRefused(
-          resp.status,
-          mintRefusalMessage(resp.status, refusal.detail),
-          refusal.outcome,
-        );
-      }
+    if (resp.ok) return resp;
+    const reason = await readMintReason(resp);
+    if (isMintRefusal(resp.status)) {
       logToFile(
-        `[gateway] mint failed with HTTP ${resp.status}; failing the run`,
+        `[gateway] mint refused with HTTP ${resp.status} (${
+          reason.outcome ?? 'no outcome'
+        }); failing the run`,
       );
-      throw new GatewayMintFailed(
-        `the PostHog gateway could not issue a token (HTTP ${resp.status})`,
+      // The terminal denial event for this run. The backend's own event has
+      // no run id, so this is what joins a refusal to the session.
+      analytics.wizardCapture('gateway mint refused', {
+        status: resp.status,
+        outcome: reason.outcome,
+        program,
+      });
+      throw new GatewayMintRefused(
+        resp.status,
+        mintRefusalMessage(resp.status, reason.detail),
+        reason.outcome,
       );
     }
+    const waitMs = mintRetryDelayMs(resp, attempt, deadlineMs);
+    if (waitMs === null) {
+      logToFile(
+        `[gateway] mint failed with HTTP ${resp.status} (${
+          reason.outcome ?? 'no outcome'
+        }) on attempt ${attempt}; failing the run`,
+      );
+      throw new GatewayMintFailed(
+        mintFailureMessage(resp.status, reason, attempt),
+      );
+    }
+    logToFile(
+      `[gateway] mint answered HTTP ${resp.status} on attempt ${attempt}; re-minting in ${waitMs}ms`,
+    );
+    // Joins a recovered mint to the session, so a retry that saves a run is
+    // measurable against the failures that still end one.
+    analytics.wizardCapture('gateway mint retried', {
+      status: resp.status,
+      outcome: reason.outcome,
+      attempt,
+      program,
+    });
+    await sleep(waitMs);
+  }
+}
+
+async function mintGatewayToken(
+  host: HostResolution,
+  accessToken: string,
+  program: string,
+): Promise<MintedToken> {
+  try {
+    const resp = await mintRequest(host, accessToken, program);
     const body = (await resp.json()) as {
       token?: string;
       expires_at?: string;

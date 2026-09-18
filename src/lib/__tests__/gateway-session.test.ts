@@ -47,6 +47,39 @@ const loggedLines = () =>
 
 const host = { apiHost: 'https://us.posthog.com' } as unknown as HostResolution;
 
+/** A transient mint answer, shaped the way `fetch` returns one. */
+const unavailable = (
+  status = 503,
+  init: { retryAfter?: string; body?: unknown } = {},
+) => ({
+  ok: false,
+  status,
+  headers: new Headers(
+    init.retryAfter ? { 'retry-after': init.retryAfter } : {},
+  ),
+  json: () =>
+    init.body === undefined
+      ? Promise.reject(new Error('no body'))
+      : Promise.resolve(init.body),
+});
+
+/**
+ * Runs a mint whose retries sleep, without waiting out the backoff. Returns the
+ * rejection rather than throwing it, so a caller asserts on it directly.
+ */
+const withoutBackoff = async (
+  start: () => Promise<unknown>,
+): Promise<unknown> => {
+  vi.useFakeTimers();
+  try {
+    const settled = start().catch((err: unknown) => err);
+    await vi.runAllTimersAsync();
+    return await settled;
+  } finally {
+    vi.useRealTimers();
+  }
+};
+
 describe('gatewayAuth', () => {
   const fetchMock = vi.fn();
 
@@ -410,17 +443,98 @@ describe('gatewayAuth', () => {
     },
   );
 
-  it.each([500, 502, 503])(
-    'fails the run when the mint errors (HTTP %i)',
+  it.each([500, 502, 503, 408])(
+    'fails the run when the mint stays unavailable (HTTP %i)',
     async (status) => {
-      fetchMock.mockResolvedValue({ ok: false, status });
+      fetchMock.mockResolvedValue(unavailable(status));
       // Downgrading here would spend the whole run uncapped and unattributed to
       // hide an outage.
-      await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
-      ).rejects.toBeInstanceOf(GatewayMintFailed);
+      expect(
+        await withoutBackoff(() =>
+          gatewayAuth(host, 'pha_oauth', 'integration'),
+        ),
+      ).toBeInstanceOf(GatewayMintFailed);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     },
   );
+
+  it('re-mints through a transient 503 instead of ending the run', async () => {
+    // A gateway pod draining during a normal deploy answers a 503, and the run
+    // has done no work yet, so re-asking costs the user nothing.
+    fetchMock.mockResolvedValueOnce(unavailable()).mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_after_draining',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+    expect(
+      await withoutBackoff(() => gatewayAuth(host, 'pha_oauth', 'integration')),
+    ).toMatchObject({ token: 'phe_after_draining' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint retried',
+      { status: 503, outcome: undefined, attempt: 1, program: 'integration' },
+    );
+  });
+
+  it('does not re-mint a refusal', async () => {
+    // A refusal is a decision about this run, so re-asking only spends the
+    // daily mint the 429 was counting.
+    fetchMock.mockResolvedValue(unavailable(429));
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toBeInstanceOf(GatewayMintRefused);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits the Retry-After the mint sends rather than its own backoff', async () => {
+    fetchMock.mockResolvedValue(unavailable(503, { retryAfter: '2' }));
+    await withoutBackoff(() => gatewayAuth(host, 'pha_oauth', 'integration'));
+    expect(loggedLines()).toContainEqual(
+      expect.stringContaining('re-minting in 2000ms'),
+    );
+  });
+
+  it('reads the Retry-After in its HTTP-date form too', async () => {
+    fetchMock.mockResolvedValue(
+      unavailable(503, {
+        retryAfter: new Date(Date.now() + 5_000).toUTCString(),
+      }),
+    );
+    await withoutBackoff(() => gatewayAuth(host, 'pha_oauth', 'integration'));
+    // The header carries whole seconds, so the wait lands just under the 5s.
+    expect(loggedLines()).toContainEqual(
+      expect.stringMatching(/re-minting in [45]\d{3}ms/),
+    );
+  });
+
+  it('stops re-minting once the budget cannot hold another attempt', async () => {
+    // The mint budget caps the wait, so an absurd Retry-After is not a 20s hang
+    // ending in the same failure.
+    fetchMock.mockResolvedValue(unavailable(503, { retryAfter: '999999' }));
+    expect(
+      await withoutBackoff(() => gatewayAuth(host, 'pha_oauth', 'integration')),
+    ).toBeInstanceOf(GatewayMintFailed);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the gateway reason in the failure message', async () => {
+    // The status alone cannot tell a draining pod from a real outage.
+    fetchMock.mockResolvedValue(
+      unavailable(503, {
+        body: { code: 'draining', detail: 'server is draining' },
+      }),
+    );
+    const failed = await withoutBackoff(() =>
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    );
+    expect((failed as Error).message).toBe(
+      'the PostHog gateway could not issue a token (HTTP 503: draining: server is draining, after 3 attempts)',
+    );
+  });
 
   it('reads the outcome from the DRF body code and shows its detail', async () => {
     // The exact shape the backend's exception handler writes for a refusal.
@@ -527,11 +641,14 @@ describe('gatewayAuth', () => {
 
   it('does not capture a mint failure as a refusal', async () => {
     // A 5xx is the mint being unavailable, not a decision about this run.
-    fetchMock.mockResolvedValue({ ok: false, status: 503 });
-    await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ).rejects.toBeInstanceOf(GatewayMintFailed);
-    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+    fetchMock.mockResolvedValue(unavailable());
+    expect(
+      await withoutBackoff(() => gatewayAuth(host, 'pha_oauth', 'integration')),
+    ).toBeInstanceOf(GatewayMintFailed);
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'gateway mint refused',
+      expect.anything(),
+    );
   });
 
   it('throws coded WizardErrors so the runners can name the failure', async () => {
@@ -553,12 +670,10 @@ describe('gatewayAuth', () => {
       outcome: 'blocked',
     });
 
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
-    const failed: unknown = await gatewayAuth(
-      host,
-      'pha_oauth',
-      'integration',
-    ).catch((e: unknown) => e);
+    fetchMock.mockResolvedValue(unavailable());
+    const failed = await withoutBackoff(() =>
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    );
     expect(failed).toBeInstanceOf(WizardError);
     expect((failed as WizardError).code).toBe(ErrorCodes.GatewayMintFailed);
   });
@@ -721,10 +836,13 @@ describe('gatewayAuth', () => {
     // A rejected resolve must leave neither a cached posture nor a claimed
     // in-flight slot behind, or one transient 503 wedges the run for the
     // process lifetime.
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
-    await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ).rejects.toBeInstanceOf(GatewayMintFailed);
+    fetchMock
+      .mockResolvedValueOnce(unavailable())
+      .mockResolvedValueOnce(unavailable())
+      .mockResolvedValueOnce(unavailable());
+    expect(
+      await withoutBackoff(() => gatewayAuth(host, 'pha_oauth', 'integration')),
+    ).toBeInstanceOf(GatewayMintFailed);
 
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -740,16 +858,19 @@ describe('gatewayAuth', () => {
   });
 
   it('rejects every concurrent joiner when the shared mint fails', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    fetchMock.mockResolvedValue(unavailable());
     // All three join one in-flight promise; a joiner that resolved instead would
     // be running on a posture nobody validated.
-    const results = await Promise.allSettled([
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ]);
+    const results = (await withoutBackoff(() =>
+      Promise.allSettled([
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ]),
+    )) as PromiseSettledResult<unknown>[];
     expect(results.every((r) => r.status === 'rejected')).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The shared mint spends one retry budget for every joiner, not one each.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it.each([
