@@ -1,0 +1,107 @@
+{
+  "recordedFrom": "scripts/tui-host.no-jest.ts MODE=serve via scripts/wizard-ci-mcp.no-jest.ts, wizard 2.76.0",
+  "app": "wizard-workbench/apps/basic-integration/javascript-node/express-todo (throwaway copy, detection only, no key)",
+  "projectId": "228144",
+  "steps": [
+    {
+      "call": "open_app",
+      "state": {
+        "currentScreen": "intro",
+        "hasOverlay": false,
+        "runPhase": "idle",
+        "session": {
+          "installDir": "<APP_DIR>",
+          "integration": "javascript_node",
+          "detectedFrameworkLabel": "Node.js",
+          "detectionComplete": true,
+          "setupConfirmed": false,
+          "integrate": null,
+          "hasCredentials": false,
+          "projectId": null,
+          "mcpComplete": false,
+          "slackStepDismissed": false,
+          "skillsComplete": false,
+          "outroDismissed": false,
+          "llmOptIn": false,
+          "discoveredFeatures": []
+        },
+        "tasks": [],
+        "statusMessages": [],
+        "eventPlan": [],
+        "pendingQuestion": null,
+        "taskNotice": null,
+        "setupQuestions": [],
+        "actions": [
+          { "id": "confirm_setup", "description": "Confirm the intro and continue (sets setupConfirmed)." }
+        ],
+        "integration": "idle",
+        "integrationError": null
+      }
+    },
+    {
+      "call": "perform_action",
+      "action": "confirm_setup",
+      "state": {
+        "currentScreen": "auth",
+        "hasOverlay": false,
+        "runPhase": "idle",
+        "session": {
+          "installDir": "<APP_DIR>",
+          "integration": "javascript_node",
+          "detectedFrameworkLabel": "Node.js",
+          "detectionComplete": true,
+          "setupConfirmed": true,
+          "integrate": null,
+          "hasCredentials": false,
+          "projectId": null,
+          "mcpComplete": false,
+          "slackStepDismissed": false,
+          "skillsComplete": false,
+          "outroDismissed": false,
+          "llmOptIn": false,
+          "discoveredFeatures": []
+        },
+        "tasks": [],
+        "statusMessages": [],
+        "eventPlan": [],
+        "pendingQuestion": null,
+        "taskNotice": null,
+        "setupQuestions": [],
+        "actions": []
+      }
+    },
+    {
+      "call": "read_state",
+      "state": {
+        "currentScreen": "auth",
+        "hasOverlay": false,
+        "runPhase": "idle",
+        "session": {
+          "installDir": "<APP_DIR>",
+          "integration": "javascript_node",
+          "detectedFrameworkLabel": "Node.js",
+          "detectionComplete": true,
+          "setupConfirmed": true,
+          "integrate": null,
+          "hasCredentials": false,
+          "projectId": null,
+          "mcpComplete": false,
+          "slackStepDismissed": false,
+          "skillsComplete": false,
+          "outroDismissed": false,
+          "llmOptIn": false,
+          "discoveredFeatures": []
+        },
+        "tasks": [],
+        "statusMessages": [],
+        "eventPlan": [],
+        "pendingQuestion": null,
+        "taskNotice": null,
+        "setupQuestions": [],
+        "actions": [],
+        "integration": "idle",
+        "integrationError": null
+      }
+    }
+  ]
+}

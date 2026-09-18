@@ -1,0 +1,11 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ ◆ Paste authorization code
+
+ After authorizing, paste the callback URL it lands on — or just the code from it — here:
+
+ http://localhost:8239/callback?code=… or the code
+
+ ENTER submit · ESC cancel

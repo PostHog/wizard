@@ -1,0 +1,18 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ ✘ Authentication error
+
+ The Wizard couldn't connect to the PostHog LLM Gateway. Claude Code settings on this machine override the Wizard's
+ credentials.
+
+   • /app/.claude/settings.json sets ANTHROPIC_BASE_URL
+
+ Remove those keys from the file(s) above, or log out of Claude Code, then re-run the Wizard:
+
+   claude auth logout
+
+ Verbose log: /tmp/posthog-wizard.log
+
+ Press any key to exit
