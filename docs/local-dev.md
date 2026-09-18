@@ -76,9 +76,18 @@ These flags are available in dev/test builds. Published builds reject them.
 | `--local-context-mill` | `POSTHOG_WIZARD_LOCAL_CONTEXT_MILL` | skills → `:8765` |
 | `--local-mcp` | `POSTHOG_WIZARD_LOCAL_MCP` | MCP → `:8787` |
 | `--local-posthog` | `POSTHOG_WIZARD_LOCAL_POSTHOG` | PostHog origins → `:8010` |
+| `--task-stream-log[=path]` | `POSTHOG_WIZARD_TASK_STREAM_LOG` | dump every attempted task-stream sync as JSONL (default `/tmp/posthog-wizard-task-stream.jsonl`) |
 
 `--local-posthog` is sugar over `--base-url`. It pins the API host, app host,
 OAuth server, and the LLM gateway derived from them.
+
+`--task-stream-log` records what the run published, one JSON line per push,
+truncated per run. It rides beside the PostHog destination rather than
+replacing it, so a logged run is the same run the backend sees. A line means
+the payload was attempted, not accepted — `[task-stream] wizard/sessions push
+ok: 201` in the debug log is the delivery signal. `--ci` dumps to the default
+path on every run and never pushes, since a synthetic run would otherwise
+create a session row in a real project.
 
 ### Precedence
 
