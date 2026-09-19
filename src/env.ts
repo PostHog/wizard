@@ -15,7 +15,8 @@
  * this module instead.
  */
 
-import { HEADLESS_FLAG } from '@lib/headless-mode';
+/** The hidden non-interactive flag. Declared here so env reads nothing from a surface. */
+export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
 
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.

@@ -8,6 +8,10 @@ module.exports = {
   plugins: ['@typescript-eslint'],
   parserOptions: {
     tsconfigRootDir: __dirname,
+    // The whole-tree config, not the composite surface projects: those resolve
+    // cross-surface imports through built declarations, so lint would see
+    // `any` until `tsc -b` has run. Boundaries are enforced by tsc -b and the
+    // architecture suite, not by lint's type information.
     project: ['./tsconfig.json'],
   },
   ignorePatterns: [
@@ -19,6 +23,7 @@ module.exports = {
     'assets/**',
     'scripts/**',
     'coverage/**',
+    '**/coverage/**',
     // Standalone jest-based package, linted/typechecked in its own context and
     // outside the root tsconfig the parser uses (parserOptions.project).
     'e2e-tests/**',
@@ -30,6 +35,112 @@ module.exports = {
     'prettier',
   ],
   overrides: [
+    // Surface boundaries. The matrix and public entries live in
+    // src/__tests__/architecture/import-boundaries.test.ts; these mirror it
+    // for editor feedback. Tests may reach into internals.
+    {
+      files: ['src/store/**/*.ts', 'src/store/**/*.tsx'],
+      excludedFiles: ['**/__tests__/**'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: ['ink', 'react', '@inkjs/ui', 'ink-testing-library'],
+            patterns: [
+              '@agent',
+              '@agent/*',
+              '@tui',
+              '@tui/*',
+              '@cli/*',
+              'react/*',
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ['src/agent/**/*.ts', 'src/agent/**/*.tsx'],
+      excludedFiles: ['**/__tests__/**'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: ['ink', 'react', '@inkjs/ui', 'ink-testing-library'],
+            patterns: [
+              '@tui',
+              '@tui/*',
+              '@cli/*',
+              'react/*',
+              '@store/*',
+              '!@store/types',
+              '!@store/programs',
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ['src/tui/**/*.ts', 'src/tui/**/*.tsx'],
+      excludedFiles: ['**/__tests__/**'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              '@agent',
+              '@agent/*',
+              '@cli/*',
+              '@store/*',
+              '!@store/types',
+              '!@store/programs',
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ['src/tui/console/**/*.ts'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: ['ink', 'react', '@inkjs/ui', 'ink-testing-library'],
+            patterns: [
+              '@agent',
+              '@agent/*',
+              '@cli/*',
+              'react/*',
+              '@store/*',
+              '!@store/types',
+              '!@store/programs',
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ['bin.ts', 'src/cli/**/*.ts', 'src/cli/**/*.tsx'],
+      excludedFiles: ['**/__tests__/**'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: ['ink', 'react', '@inkjs/ui', 'ink-testing-library'],
+            patterns: [
+              'react/*',
+              '@store/*',
+              '!@store/types',
+              '!@store/programs',
+              '@agent/*',
+              '!@agent/types',
+              '@tui/*',
+              '!@tui/types',
+              '!@tui/console',
+            ],
+          },
+        ],
+      },
+    },
     {
       files: [
         '*.test.js',

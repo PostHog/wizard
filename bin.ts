@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 import { Agent, setGlobalDispatcher } from 'undici';
-import { ErrorCodes } from './src/lib/errors/codes.js';
-import { emitWizardError } from './src/lib/errors/emit.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -23,8 +21,6 @@ const NODE_VERSION_RANGE = '>=22.22.0';
  */
 setGlobalDispatcher(new Agent({ allowH2: false }));
 
-// Have to run this above the other imports because they are importing clack that
-// has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   // eslint-disable-next-line no-console
   console.log(
@@ -42,10 +38,13 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
       `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
     ].join('\n'),
   );
-  emitWizardError({
-    code: ErrorCodes.CliNodeVersion,
-    message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
-  });
+  // Same line emitWizardError prints; inlined so no surface loads before this check.
+  process.stderr.write(
+    `phw-error: ${JSON.stringify({
+      code: 'PHW_CLI_NODE_VERSION',
+      message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
+    })}\n`,
+  );
   process.exit(1);
 }
 
@@ -65,61 +64,5 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-import { Wizard } from './src/wizard';
-import { basicIntegrationCommand } from './src/commands/basic-integration';
-import { mcpCommand } from './src/commands/mcp';
-import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
-import { replayVisionCommand } from './src/commands/replay-vision';
-import { aiObservabilityCommand } from './src/commands/ai-observability';
-import { metricsCommand } from './src/commands/metrics';
-import { auditCommand } from './src/commands/audit';
-import { doctorCommand } from './src/commands/doctor';
-import { migrateCommand } from './src/commands/migrate';
-import { revenueCommand } from './src/commands/revenue';
-import { warehouseCommand } from './src/commands/warehouse';
-import { selfDrivingCommand } from './src/commands/self-driving';
-import { slackCommand } from './src/commands/slack';
-import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
-import { errorTrackingCommand } from './src/commands/error-tracking';
-import { skillCommand } from './src/commands/skill';
-import { cliCommand } from './src/commands/cli';
-import { recoverOrphanedSettingsBackups } from './src/lib/claude-settings';
-import { setUI } from './src/ui';
-import { LoggingUI } from './src/ui/tui/console/logging-ui';
-
-// The entry point owns the default renderer; @ui ships with none.
-setUI(new LoggingUI());
-
-// Heal any .claude/settings backup a previous interrupted run left orphaned,
-// before anything else reads Claude settings — conflict detection, OAuth, and
-// the agent all need to see the user's real settings file. The install dir is
-// read directly from argv/env because yargs hasn't parsed yet.
-recoverOrphanedSettingsBackups(resolveInstallDir());
-
-function resolveInstallDir(): string {
-  const args = process.argv.slice(2);
-  const flagIndex = args.indexOf('--install-dir');
-  if (flagIndex !== -1 && args[flagIndex + 1]) return args[flagIndex + 1];
-  const inline = args.find((a) => a.startsWith('--install-dir='));
-  if (inline) return inline.slice('--install-dir='.length);
-  return process.env.POSTHOG_WIZARD_INSTALL_DIR ?? process.cwd();
-}
-
-Wizard.use(basicIntegrationCommand)
-  .use(mcpCommand)
-  .use(mcpAnalyticsCommand)
-  .use(replayVisionCommand)
-  .use(aiObservabilityCommand)
-  .use(metricsCommand)
-  .use(cliCommand)
-  .use(auditCommand)
-  .use(doctorCommand)
-  .use(migrateCommand)
-  .use(revenueCommand)
-  .use(warehouseCommand)
-  .use(selfDrivingCommand)
-  .use(slackCommand)
-  .use(uploadSourcemapsCommand)
-  .use(errorTrackingCommand)
-  .use(skillCommand)
-  .init();
+// Surfaces load only after the preflight passed.
+await import('./src/cli/main.js');

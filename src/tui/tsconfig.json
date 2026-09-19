@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.tsbuild/tui"
+  },
+  "include": ["**/*", "../../types/**/*.d.ts"],
+  "references": [
+    {
+      "path": "../../tsconfig.env.json"
+    },
+    {
+      "path": "../store"
+    }
+  ],
+  "exclude": ["vitest.config.ts"]
+}

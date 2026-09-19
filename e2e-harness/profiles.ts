@@ -11,23 +11,23 @@
  * so `decideE2eAction` stays a pure function of (state, profile).
  */
 
-import { Program, type ProgramId } from '@lib/programs/program-registry';
+import { Program, type ProgramId } from '@store/programs/program-registry';
 import {
   DEFAULT_E2E_PROFILE,
   DEFAULT_E2E_VARIATION,
   type AskAnswerRule,
   type WizardE2eProfile,
   type WizardE2eVariation,
-} from './e2e-profile.js';
-import posthogIntegrationE2e from '@lib/programs/posthog-integration/test/e2e.json';
-import aiObservabilityE2e from '@lib/programs/ai-observability/test/e2e.json';
-import metricsE2e from '@lib/programs/metrics/test/e2e.json';
-import replayVisionE2e from '@lib/programs/replay-vision/test/e2e.json';
-import selfDrivingE2e from '@lib/programs/self-driving/test/e2e.json';
-import sourceMapsE2e from '@lib/programs/error-tracking-upload-source-maps/test/e2e.json';
-import errorTrackingE2e from '@lib/programs/error-tracking/test/e2e.json';
-import warehouseSourceE2e from '@lib/programs/warehouse-source/test/e2e.json';
-import auditE2e from '@lib/programs/audit/test/e2e.json';
+} from '@e2e-harness/e2e-profile';
+import posthogIntegrationE2e from '@store/programs/posthog-integration/test/e2e.json';
+import aiObservabilityE2e from '@store/programs/ai-observability/test/e2e.json';
+import metricsE2e from '@store/programs/metrics/test/e2e.json';
+import replayVisionE2e from '@store/programs/replay-vision/test/e2e.json';
+import selfDrivingE2e from '@store/programs/self-driving/test/e2e.json';
+import sourceMapsE2e from '@store/programs/error-tracking-upload-source-maps/test/e2e.json';
+import errorTrackingE2e from '@store/programs/error-tracking/test/e2e.json';
+import warehouseSourceE2e from '@store/programs/warehouse-source/test/e2e.json';
+import auditE2e from '@store/programs/audit/test/e2e.json';
 
 const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
   [Program.PostHogIntegration]:

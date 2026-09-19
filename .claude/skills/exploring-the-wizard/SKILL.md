@@ -114,7 +114,7 @@ MCP snapshots are plain `.txt`; the CI snapshot route writes colored `.ans`
 frames. Keep the screen path and failure evidence with the snapshots. Do not
 stop a progressing run at an invented turn count: the MCP exposes no turn limit;
 Pi's continuation and tool-call guards are described in its
-[harness README](../../../src/lib/agent/runner/harness/pi/README.md).
+[harness README](../../../src/agent/runner/harness/pi/README.md).
 
 ## Sweep the workbench
 
@@ -129,5 +129,5 @@ The shared log is `/tmp/posthog-wizard.log`. Record its byte count before a run
 and read from that count plus one afterward. Run sweeps serially so their logs
 remain attributable. `read_state` omits `frameworkContext`; an empty
 `setupQuestions` list alone does not prove a router mode. When necessary,
-inspect the detector under [`src/frameworks/`](../../../src/frameworks/) against
+inspect the detector under [`src/store/frameworks/`](../../../src/store/frameworks/) against
 the same fixture.

@@ -7,9 +7,9 @@
  * make. Add a program's profile to {@link ./profiles} to make it e2e-drivable.
  */
 
-import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
-import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
-import type { CiState } from './wizard-ci-driver.js';
+import { ScreenId, Overlay, type ScreenName } from '@tui/router';
+import type { AskAnswers, AskQuestion } from '@store/session/wizard-session';
+import type { CiState } from '@e2e-harness/wizard-ci-driver';
 
 /** Which option to pick for a setup disambiguation question. */
 export type SetupChoice = 'first' | 'last';

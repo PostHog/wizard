@@ -19,7 +19,7 @@ configuration surfaces.
 
 Each domain has a dedicated boundary:
 
-- **Frameworks** → `FrameworkConfig` in `src/frameworks/<name>/`
+- **Frameworks** → `FrameworkConfig` in `src/store/frameworks/<name>/`
 - **Integration knowledge** → markdown skills in the
   [context-mill](https://github.com/PostHog/context-mill) repo
 - **Security policy** → YARA-X rules in the
@@ -30,8 +30,15 @@ Each domain has a dedicated boundary:
   [ai-gateway](https://github.com/PostHog/ai-gateway). To disable scanning in
   the field without a release, see the kill-switch runbook:
   `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
-- **Programs** → step arrays in `src/lib/programs/`
-- **TUI** → screen components and primitives in `src/ui/tui/`
+- **Programs** → step arrays in `src/store/programs/`
+- **TUI** → screen components and primitives in `src/tui/`
+
+The tree is three surfaces plus a composition root: `src/store` (state and
+contracts), `src/agent` (one agent run), `src/tui` (rendering), `src/cli`
+(argv and wiring). Surfaces import each other only through `@store`,
+`@store/types`, `@store/programs`, `@agent`, `@agent/types`, `@tui`,
+`@tui/types`, and `@tui/console`; `src/__tests__/architecture` enforces it.
+Each surface's `README.md` lists what it owns and may import.
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -110,7 +117,7 @@ aliases.
 A skill and a command are the **same machinery** — a context-mill skill becomes
 a command when its `cli:` block sets `role: command`. So `wizard audit events`
 _is_ the `audit-events` skill, just promoted. `wizard skill <skill-name>`
-([`skill.ts`](src/commands/skill.ts)) runs a skill that **wasn't** promoted.
+([`skill.ts`](src/cli/commands/skill.ts)) runs a skill that **wasn't** promoted.
 
 Two surfaces, one mechanism. So `wizard audit <subcommand>` is choosing an audit
 area — it is **not** asking for a skill name, despite `wizard audit --help`
@@ -119,15 +126,17 @@ confuse it with the top-level `wizard skill` command.
 
 ### Where the surface is defined (source of truth)
 
-- **Registration:** [`bin.ts`](bin.ts) — the `.use()` chain wires each command.
-- **Command shape:** [`src/commands/command.ts`](src/commands/command.ts) — the
+- **Registration:** [`src/cli/main.ts`](src/cli/main.ts) — the `.use()` chain
+  wires each command. [`bin.ts`](bin.ts) runs the Node preflight, then imports
+  it.
+- **Command shape:** [`src/cli/commands/command.ts`](src/cli/commands/command.ts) — the
   `Command` interface every command implements.
 - **Flat native commands** (e.g. `revenue-analytics`, `upload-source-maps`) are
   built with `nativeCommandFactory`
-  ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
+  ([`src/cli/commands/factories/native-command-factory.ts`](src/cli/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/lib/programs/dispatch-family.ts`](src/lib/programs/dispatch-family.ts).
+  [`src/cli/dispatch-family.ts`](src/cli/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 
@@ -145,7 +154,7 @@ confuse it with the top-level `wizard skill` command.
 
 Give the `Command.name` an array of `[newName, ...legacyNames]`. yargs treats
 the extra entries as aliases. See
-[`src/commands/upload-sourcemaps.ts`](src/commands/upload-sourcemaps.ts).
+[`src/cli/commands/upload-sourcemaps.ts`](src/cli/commands/upload-sourcemaps.ts).
 Reserve aliases for names that external callers (users' scripts) may still use —
 when the only caller is one we control, update the caller instead.
 
@@ -156,6 +165,9 @@ pnpm install                       # Install dependencies
 pnpm try --install-dir=<path>      # Run the wizard locally against a test project
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
+pnpm test:<surface>                # One Vitest project: store, agent, tui, cli, harness, arch
+pnpm typecheck                     # tsc -b over the surface projects (tsconfig.solution.json)
+pnpm typecheck:<surface>           # One surface project
 pnpm test:watch                    # Unit tests in watch mode
 pnpm test:e2e                      # End-to-end tests
 pnpm lint                          # Prettier + ESLint checks

@@ -18,10 +18,13 @@
  * the driver issues the final commit directly instead.
  */
 
-import type { WizardStore } from '@ui/tui/store';
-import type { ScreenName } from '@ui/tui/router';
-import type { PendingQuestion, RunPhase } from '@lib/wizard-session';
-import { actionsForScreen, MissingParamError } from './action-registry.js';
+import type { WizardStore } from '@store/state/store';
+import type { ScreenName } from '@tui/router';
+import type { PendingQuestion, RunPhase } from '@store/session/wizard-session';
+import {
+  actionsForScreen,
+  MissingParamError,
+} from '@e2e-harness/action-registry';
 
 /** A setup question projected for the harness (no `detect` fn, no closures). */
 export interface SetupQuestionView {

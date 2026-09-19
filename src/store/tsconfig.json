@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.tsbuild/store"
+  },
+  "include": ["**/*", "**/*.json", "../../types/**/*.d.ts"],
+  "references": [
+    {
+      "path": "../../tsconfig.env.json"
+    }
+  ],
+  "exclude": ["vitest.config.ts"]
+}

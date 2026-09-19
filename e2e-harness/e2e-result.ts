@@ -21,10 +21,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import type { DetectedSource } from '@lib/warehouse-sources/types';
-import type { E2eDecisionReport } from './e2e-profile.js';
+import { OutroKind, type WizardSession } from '@store/session/wizard-session';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@store/programs/warehouse-source/detect';
+import type { DetectedSource } from '@store/services/warehouse-sources/types';
+import type { E2eDecisionReport } from '@e2e-harness/e2e-profile';
 
 /** One `wizard_ask` batch the run was shown. */
 export interface E2eAskRecord {

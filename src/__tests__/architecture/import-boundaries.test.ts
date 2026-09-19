@@ -7,37 +7,27 @@ export type Surface = 'env' | 'store' | 'agent' | 'tui' | 'cli' | 'harness';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
 
+/** Build and test configuration at the repo root; not surface code. */
+const TOOLING_FILES = new Set([
+  'vitest.config.ts',
+  'vitest.shared.ts',
+  'tsdown.config.ts',
+]);
+
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
     ['env', (p) => p === 'src/env.ts'],
-    [
-      'agent',
-      (p) =>
-        p.startsWith('src/lib/agent/') ||
-        p.startsWith('src/lib/middleware/') ||
-        p === 'src/lib/gateway-session.ts' ||
-        p === 'src/lib/yara-hooks.ts' ||
-        p === 'src/lib/yara-policy.ts' ||
-        p === 'src/lib/wizard-tools/mcp.ts',
-    ],
-    [
-      'tui',
-      (p) =>
-        p.startsWith('src/ui/tui/') ||
-        p === 'src/commands/factories/family-picker.tsx',
-    ],
-    [
-      'cli',
-      (p) =>
-        p === 'bin.ts' ||
-        p === 'src/wizard.ts' ||
-        p === 'src/telemetry.ts' ||
-        p.startsWith('src/commands/') ||
-        p.startsWith('src/lib/runners/'),
-    ],
+    ['agent', (p) => p.startsWith('src/agent/')],
+    ['tui', (p) => p.startsWith('src/tui/')],
+    ['cli', (p) => p === 'bin.ts' || p.startsWith('src/cli/')],
     [
       'harness',
-      (p) => p.startsWith('e2e-harness/') || p.startsWith('scripts/'),
+      (p) =>
+        p.startsWith('e2e-harness/') ||
+        p.startsWith('e2e-tests/') ||
+        p.startsWith('scripts/') ||
+        TOOLING_FILES.has(p) ||
+        p.endsWith('/vitest.config.ts'),
     ],
   ];
 
@@ -61,6 +51,27 @@ export const ALLOWED_IMPORTS: Record<
 };
 
 const TUI_ONLY_PACKAGES = ['ink', 'react', '@inkjs/ui', 'ink-testing-library'];
+
+/** The only files another surface may import. Everything else is internal. */
+export const PUBLIC_ENTRIES: Record<
+  'store' | 'agent' | 'tui',
+  readonly string[]
+> = {
+  store: [
+    'src/store/index.ts',
+    'src/store/types.ts',
+    'src/store/programs/index.ts',
+    'src/store/control/index.ts',
+  ],
+  agent: ['src/agent/index.ts', 'src/agent/types.ts'],
+  tui: ['src/tui/index.ts', 'src/tui/types.ts', 'src/tui/console/index.ts'],
+};
+
+/** The msw hook behind `NODE_ENV === 'test'`; tsdown inlines it away in published builds. */
+const TEST_ONLY_EDGES = new Set(['bin.ts -> e2e-tests/mocks/server.ts']);
+
+/** Console renderers ship in headless builds and must stay Ink free. */
+const INK_FREE_PREFIX = 'src/tui/console/';
 
 const SKIP_DIRS = new Set([
   '__tests__',
@@ -195,6 +206,7 @@ function collectFiles(absDir: string, into: string[]): void {
     if (!/\.tsx?$/.test(entry.name)) continue;
     if (/\.d\.ts$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name))
       continue;
+    if (entry.name === 'vitest.config.ts') continue;
     into.push(toRepoRelative(abs));
   }
 }
@@ -289,7 +301,7 @@ function analyze(): Analysis {
       if (base === null) {
         const tuiOnly =
           TUI_ONLY_PACKAGES.includes(spec) || spec.startsWith('react/');
-        if (tuiOnly && from !== 'tui') {
+        if (tuiOnly && (from !== 'tui' || file.startsWith(INK_FREE_PREFIX))) {
           violations.set(`${file} -> pkg:${spec}`, 'ink-outside-tui');
         }
         continue;
@@ -306,9 +318,18 @@ function analyze(): Analysis {
       edges.add(key);
 
       const to = classifySurface(target);
-      if (to === 'harness') violations.set(key, 'harness');
-      else if (!allowed.includes(to))
+      if (to === 'harness') {
+        if (!TEST_ONLY_EDGES.has(key)) violations.set(key, 'harness');
+      } else if (!allowed.includes(to))
         violations.set(key, `matrix:${from}->${to}`);
+      else if (
+        to !== from &&
+        (to === 'store' || to === 'agent' || to === 'tui') &&
+        !PUBLIC_ENTRIES[to].includes(target)
+      )
+        violations.set(key, `deep:${from}->${to}`);
+      else if (/\/testing\//.test(target) && !/\/testing\//.test(file))
+        violations.set(key, 'testing-in-shipped-code');
     }
   }
 
@@ -323,12 +344,6 @@ function analyze(): Analysis {
 }
 
 const analysis = analyze();
-
-const known = (
-  JSON.parse(
-    fs.readFileSync(path.join(HERE, 'known-violations.json'), 'utf8'),
-  ) as { violations: string[] }
-).violations;
 
 if (process.env.PRINT_VIOLATIONS) {
   const byRule = new Map<string, number>();
@@ -354,13 +369,6 @@ if (process.env.PRINT_VIOLATIONS) {
       .map(([file, count]) => `  ${file}: ${count}`),
   ];
   process.stderr.write(`${lines.join('\n')}\n`);
-  process.stderr.write(
-    `${JSON.stringify(
-      { violations: analysis.violations.map((v) => v.key) },
-      null,
-      2,
-    )}\n`,
-  );
 }
 
 describe('import boundaries', () => {
@@ -368,20 +376,9 @@ describe('import boundaries', () => {
     expect(analysis.unresolved).toEqual([]);
   });
 
-  it('introduces no violation outside known-violations.json', () => {
-    const knownSet = new Set(known);
-    const added = analysis.violations
-      .filter(({ key }) => !knownSet.has(key))
-      .map(({ key, rule }) => `${key}  [${rule}]`);
-    expect(added).toEqual([]);
-  });
-
-  it('keeps known-violations.json free of stale entries', () => {
-    const current = new Set(analysis.violations.map((v) => v.key));
-    const stale = known.filter((key) => !current.has(key));
+  it('crosses surfaces only through public entries, in the allowed direction', () => {
     expect(
-      stale,
-      'stale entries, delete them from known-violations.json',
+      analysis.violations.map(({ key, rule }) => `${key}  [${rule}]`),
     ).toEqual([]);
   });
 });
@@ -389,23 +386,19 @@ describe('import boundaries', () => {
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');
-    expect(classifySurface('src/utils/analytics.ts')).toBe('store');
-    expect(classifySurface('src/lib/agent/agent-runner.ts')).toBe('agent');
-    expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
+    expect(classifySurface('src/store/shared/analytics.ts')).toBe('store');
+    expect(classifySurface('src/agent/agent-runner.ts')).toBe('agent');
+    expect(classifySurface('src/tui/App.tsx')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('e2e-harness/e2e-profile.ts')).toBe('harness');
-    expect(classifySurface('src/lib/wizard-tools/mcp.ts')).toBe('agent');
-    expect(classifySurface('src/lib/wizard-tools/tools.ts')).toBe('store');
-    expect(classifySurface('src/commands/factories/family-picker.tsx')).toBe(
-      'tui',
-    );
+    expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
+    expect(classifySurface('src/store/tools/tools.ts')).toBe('store');
+    expect(classifySurface('src/tui/family-picker.tsx')).toBe('tui');
     expect(
-      classifySurface(
-        'src/ui/tui/programs/posthog-integration/content/index.tsx',
-      ),
+      classifySurface('src/tui/programs/posthog-integration/content/index.tsx'),
     ).toBe('tui');
     expect(
-      classifySurface('src/lib/programs/posthog-integration/index.ts'),
+      classifySurface('src/store/programs/posthog-integration/index.ts'),
     ).toBe('store');
   });
 });

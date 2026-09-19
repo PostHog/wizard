@@ -1,0 +1,26 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.env.json"
+    },
+    {
+      "path": "./src/store"
+    },
+    {
+      "path": "./src/agent"
+    },
+    {
+      "path": "./src/tui"
+    },
+    {
+      "path": "./src/cli"
+    },
+    {
+      "path": "./src/__tests__/architecture"
+    },
+    {
+      "path": "./e2e-harness"
+    }
+  ]
+}

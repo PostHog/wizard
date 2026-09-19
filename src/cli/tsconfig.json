@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.tsbuild/cli"
+  },
+  "include": [
+    "**/*",
+    "../../bin.ts",
+    "../../e2e-tests/mocks/**/*",
+    "../../types/**/*.d.ts"
+  ],
+  "references": [
+    {
+      "path": "../../tsconfig.env.json"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../agent"
+    },
+    {
+      "path": "../tui"
+    }
+  ],
+  "exclude": ["vitest.config.ts"]
+}

@@ -9,27 +9,37 @@
  * through the driver.
  */
 
-import { WizardStore } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
-import { setUI } from '@ui/index';
-import { buildSession, RunPhase, McpOutcome } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
-import { Integration } from '@lib/constants';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { WizardReadiness } from '@lib/health-checks/readiness';
-import { ScreenId, Overlay } from '@ui/tui/router';
-import { Program } from '@lib/programs/program-registry';
-import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
-import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
-import { OutroKind } from '@lib/wizard-session';
-import { flowFor } from '@lib/programs/flow-for';
+import { WizardStore } from '@store/state/store';
+import { StoreUI } from '@store/ui/store-ui';
+import { setUI } from '@store/ui';
+import {
+  buildSession,
+  RunPhase,
+  McpOutcome,
+} from '@store/session/wizard-session';
+import { HostResolution } from '@store/host-resolution';
+import { Integration } from '@store/shared/constants';
+import { FRAMEWORK_REGISTRY } from '@store/registry';
+import { WizardReadiness } from '@store/health-checks/readiness';
+import { ScreenId, Overlay } from '@tui/router';
+import { Program } from '@store/programs/program-registry';
+import {
+  WizardCiDriver,
+  UnknownActionError,
+} from '@e2e-harness/wizard-ci-driver';
+import {
+  ACTION_REGISTRY,
+  NO_ACTION_SCREENS,
+} from '@e2e-harness/action-registry';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@store/programs/error-tracking-upload-source-maps';
+import { OutroKind } from '@store/session/wizard-session';
+import { flowFor } from '@store/programs/flow-for';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
-  // Headless: a real store + InkUI (which only forwards to the store), no Ink
+  // Headless: a real store + StoreUI (which only forwards to the store), no Ink
   // render. setUI so any getUI() path the store touches resolves.
-  setUI(new InkUI(store));
+  setUI(new StoreUI(store));
   const session = buildSession({
     installDir: '/tmp/ci-driver-test',
     ci: true, // OAuth-bypass + ai-opt-in auto-consent semantics
@@ -49,7 +59,7 @@ const cleanReadiness = {
 describe('WizardCiDriver — full integration flow', () => {
   it('lets a failed run exit or continue to MCP', () => {
     const store = freshStore();
-    const ui = new InkUI(store);
+    const ui = new StoreUI(store);
     const driver = new WizardCiDriver(store);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
@@ -201,7 +211,7 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
 describe('WizardCiDriver — self-driving integration check', () => {
   function selfDrivingStore(): WizardStore {
     const store = new WizardStore(flowFor(Program.SelfDriving).flow);
-    setUI(new InkUI(store));
+    setUI(new StoreUI(store));
     store.session = buildSession({ installDir: '/tmp/ci-driver-sd', ci: true });
     return store;
   }
@@ -243,7 +253,7 @@ describe('WizardCiDriver — source-maps project pick', () => {
     const store = new WizardStore(
       flowFor(Program.ErrorTrackingUploadSourceMaps).flow,
     );
-    setUI(new InkUI(store));
+    setUI(new StoreUI(store));
     store.session = buildSession({ installDir: '/tmp/ci-driver-sm', ci: true });
     return store;
   }

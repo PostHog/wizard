@@ -13,25 +13,28 @@
  * Update goldens with `jest -u` after an intentional flow change.
  */
 
-import { WizardStore } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
-import { setUI } from '@ui/index';
-import { buildSession, RunPhase } from '@lib/wizard-session';
-import { Integration } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { WizardStore } from '@store/state/store';
+import { StoreUI } from '@store/ui/store-ui';
+import { setUI } from '@store/ui';
+import { buildSession, RunPhase } from '@store/session/wizard-session';
+import { Integration } from '@store/shared/constants';
+import { HostResolution } from '@store/host-resolution';
+import { FRAMEWORK_REGISTRY } from '@store/registry';
+import { WizardReadiness } from '@store/health-checks/readiness';
 import {
   Program,
   getProgramConfig,
   type ProgramId,
-} from '@lib/programs/program-registry';
-import { ScreenId } from '@ui/tui/router';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
-import { WizardCiDriver } from '../wizard-ci-driver';
-import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';
-import { profileFor } from '../profiles';
-import { flowFor } from '@lib/programs/flow-for';
+} from '@store/programs/program-registry';
+import { ScreenId } from '@tui/router';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@store/programs/self-driving/detect';
+import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
+import {
+  decideE2eAction,
+  type WizardE2eProfile,
+} from '@e2e-harness/e2e-profile';
+import { profileFor } from '@e2e-harness/profiles';
+import { flowFor } from '@store/programs/flow-for';
 
 /**
  * Walk a program flow offline using an e2e profile, injecting the external
@@ -49,7 +52,7 @@ function traceFlow(
   params?: Record<string, unknown>;
 }> {
   const store = new WizardStore(flowFor(program).flow);
-  setUI(new InkUI(store));
+  setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/tmp/e2e-snap', ci: true });
   if (integration) {
     session.integration = integration;

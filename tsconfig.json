@@ -1,35 +1,21 @@
 {
   "extends": "./tsconfig.build.json",
-
   "compilerOptions": {
+    "noEmit": true,
     "types": ["node"],
     "typeRoots": ["./node_modules/@types", "./types"],
-    "declaration": true,
-    "resolveJsonModule": true,
-    "outDir": "dist"
+    "resolveJsonModule": true
   },
   "include": [
-    "__tests__",
-    "__mocks__/**/*",
-    "index.ts",
     "bin.ts",
     "tsdown.config.ts",
     "vitest.config.ts",
-    "src/lib/**/*",
-    "spec/**/*",
     "src/**/*",
-    "test/**/*",
     "e2e-harness/**/*",
-    "types/**/*"
+    "scripts/**/*",
+    "__mocks__/**/*",
+    "types/**/*",
+    "e2e-tests/mocks/**/*"
   ],
-  "exclude": [
-    // e2e-tests is a standalone package (own package.json, own jest + ts-jest,
-    // excluded from the pnpm workspace) and typechecks itself in its own
-    // context. The root unit-test typecheck no longer carries jest types, so it
-    // must not pull e2e's jest-based config/specs into scope.
-    "e2e-tests/**/*"
-  ],
-  "ts-node": {
-    "files": true
-  }
+  "exclude": ["node_modules", "dist", ".tsbuild"]
 }

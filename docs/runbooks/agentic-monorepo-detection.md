@@ -35,10 +35,10 @@ it.
 
 - Only non-interactive basic-integration runs — headless and `--ci`. Interactive
   runs have their own detect step and never enter it.
-- Phase: `scopeInstallDirToProject` in `src/lib/detection/project-scope.ts`,
+- Phase: `scopeInstallDirToProject` in `src/store/detection/project-scope.ts`,
   called from the top of `ciPreRun` in
-  `src/lib/programs/posthog-integration/index.ts`.
-- Detector: `detectProjectsWithAgent` in `src/lib/detection/agentic.ts`;
+  `src/store/programs/posthog-integration/index.ts`.
+- Detector: `detectProjectsWithAgent` in `src/store/detection/agentic.ts`;
   self-driving uses the same detector with its own chooser.
 - Each run fires one `wizard: agentic detection` event tagged with the outcome
   (`flag-off | error | timeout | no-project | recommended | first-instrumentable`).

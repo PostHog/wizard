@@ -170,7 +170,7 @@ skills url, MCP url, and PostHog host together.
 
 ## Implementation
 
-`src/lib/local-dev.ts` defines the endpoints and precedence. Downstream code
+`src/store/local-dev.ts` defines the endpoints and precedence. Downstream code
 reads the resolved targets.
 
 The three service flags have no yargs default. An absent flag is `undefined`
