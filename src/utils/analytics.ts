@@ -16,6 +16,7 @@ import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
 import { VERSION } from '@lib/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
+import { stabilizeOwnFrames } from './exception-frames';
 
 /**
  * The invocation, reduced to flag-safe strings: the command word (first
@@ -132,6 +133,7 @@ export class Analytics {
             event.properties ?? {};
           void $process_person_profile;
           event.properties = { ...this.tags, ...properties };
+          stabilizeOwnFrames(event.properties.$exception_list);
         }
         // The SDK captures this one itself, bypassing capture(), so tags merge here.
         if (event.event === '$feature_flag_called') {
