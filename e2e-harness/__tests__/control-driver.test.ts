@@ -28,8 +28,6 @@ import { SOURCE_MAPS_CONTEXT_KEYS } from '@store/programs/error-tracking-upload-
 import { OutroKind } from '@store/session/wizard-session';
 import { flowFor } from '@store/programs/flow-for';
 
-const IDLE = () => ({ status: 'idle' as const, error: null });
-
 function freshStore(): WizardStore {
   const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
   // Headless: a real store + StoreUI (which only forwards to the store), no Ink
@@ -55,7 +53,7 @@ describe('ControlDriver — full integration flow', () => {
   it('lets a failed run exit or continue to MCP', () => {
     const store = freshStore();
     const ui = new StoreUI(store);
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
@@ -76,11 +74,13 @@ describe('ControlDriver — full integration flow', () => {
 
   it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     // 1. Intro
     expect(driver.readState().currentScreen).toBe(ScreenId.Intro);
-    expect(driver.listActions().map((a) => a.id)).toContain('confirm_setup');
+    expect(driver.readState().actions.map((a) => a.id)).toContain(
+      'confirm_setup',
+    );
     driver.performAction('confirm_setup');
 
     // 2. Health check — blocks until a readiness result lands (mirrors onInit
@@ -139,7 +139,7 @@ describe('ControlDriver — full integration flow', () => {
 
   it('read_state is a truthful projection and never leaks the access token', () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
@@ -157,7 +157,7 @@ describe('ControlDriver — full integration flow', () => {
 
   it('rejects actions that are not legal on the current screen', () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     expect(driver.readState().currentScreen).toBe(ScreenId.Intro);
     expect(() => driver.performAction('keep_skills')).toThrow(
       UnknownActionError,
@@ -168,7 +168,7 @@ describe('ControlDriver — full integration flow', () => {
 describe('ControlDriver — wizard_ask overlay', () => {
   it('answers a pending question through the driver, resolving the agent promise', async () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     // The agent (via the ask bridge) opens a question and awaits the answers.
     const answersPromise = store.requestQuestion({
@@ -189,9 +189,10 @@ describe('ControlDriver — wizard_ask overlay', () => {
 
     const state = driver.readState();
     expect(state.currentScreen).toBe(Overlay.WizardAsk);
-    expect(state.hasOverlay).toBe(true);
-    expect(state.pendingQuestion?.questions[0].id).toBe('router');
-    expect(driver.listActions().map((a) => a.id)).toContain('answer_question');
+    expect(state.session.pendingQuestion?.questions[0].id).toBe('router');
+    expect(driver.readState().actions.map((a) => a.id)).toContain(
+      'answer_question',
+    );
 
     // The driver commits the complete answer map directly — skipping the
     // per-question keystroke walk that lives in React-local state.
@@ -213,7 +214,7 @@ describe('ControlDriver — self-driving integration check', () => {
 
   it('exposes the integration check and commits set_integrate', () => {
     const store = selfDrivingStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     // Intro → integration-check.
     store.completeSetup();
@@ -234,7 +235,7 @@ describe('ControlDriver — self-driving integration check', () => {
       installDir: '/tmp/ci-driver-sd',
       integrate: true,
     });
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     store.completeSetup();
     expect(driver.readState().currentScreen).not.toBe(
@@ -266,7 +267,7 @@ describe('ControlDriver — source-maps project pick', () => {
 
   it('commits the pick the way the detect screen would and advances', () => {
     const store = sourceMapsStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     toDetectScreen(store);
     const state = driver.readState();
@@ -288,7 +289,7 @@ describe('ControlDriver — source-maps project pick', () => {
 
   it('requires the variant and path params', () => {
     const store = sourceMapsStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     toDetectScreen(store);
     expect(() =>
@@ -309,29 +310,27 @@ describe('ControlDriver — task-notice overlay', () => {
 
   it('projects the notice into read_state and keeps the step', async () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
 
     const kept = store.showTaskNotice(notice);
 
     const state = driver.readState();
     expect(state.currentScreen).toBe(Overlay.TaskNotice);
-    expect(state.taskNotice).toEqual({
-      title: 'Connect your data sources',
-      items: ['Postgres', 'Stripe'],
-      prompt: 'Connect these during setup?',
-    });
-    expect(driver.listActions().map((a) => a.id)).toContain('resolve_notice');
+    expect(state.session.taskNotice).toEqual(notice);
+    expect(driver.readState().actions.map((a) => a.id)).toContain(
+      'resolve_notice',
+    );
 
     driver.performAction('resolve_notice', { keep: true });
 
     await expect(kept).resolves.toBe(true);
-    expect(driver.readState().taskNotice).toBeNull();
+    expect(driver.readState().session.taskNotice).toBeNull();
     expect(driver.readState().currentScreen).not.toBe(Overlay.TaskNotice);
   });
 
   it('skips the step when keep is false', async () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     const kept = store.showTaskNotice(notice);
     driver.performAction('resolve_notice', { keep: false });
     await expect(kept).resolves.toBe(false);
@@ -339,16 +338,19 @@ describe('ControlDriver — task-notice overlay', () => {
 
   it('defaults to keeping the step when keep is omitted', async () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     const kept = store.showTaskNotice(notice);
     driver.performAction('resolve_notice');
     await expect(kept).resolves.toBe(true);
   });
 
-  it('projects an empty items list when the notice has none', () => {
+  it('projects the notice as the store holds it, items included', () => {
     const store = freshStore();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     void store.showTaskNotice({ ...notice, items: undefined });
-    expect(driver.readState().taskNotice?.items).toEqual([]);
+    expect(driver.readState().session.taskNotice).toEqual(
+      store.session.taskNotice,
+    );
+    expect(driver.readState().session.taskNotice?.items).toBeUndefined();
   });
 });

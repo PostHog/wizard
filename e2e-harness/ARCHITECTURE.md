@@ -74,20 +74,24 @@ program), 404 (unknown route), 409 (a run is in flight), 413 (body over 64 KB),
 | `GET /state?wait=<ms>&since=<version>`                                      | Long poll: resolves on the first commit with `version > since`, or after `wait` ms          |
 | `POST /actions/<id>` body `{ params }`                                      | Applies one action legal on the current screen through its store setter, returns the state  |
 | `POST /credentials`                                                         | Resolves the API key into project credentials and commits them, advancing `auth`            |
-| `POST /run`                                                                 | TUI surface: releases the runner's agent start. Idempotent                                  |
+| `POST /run`                                                                 | TUI surface: `requestRun` on the store, releasing the runner's agent start. Idempotent      |
 | `POST /detect` body `{ programId?, installDir? }`                           | Headless surface: runs detection through the store's setters                                |
 | `POST /runs` body `{ programId, installDir?, frameworkContext?, skillId? }` | Headless surface: one independent agent run; 409 while one runs                             |
 | `GET /runs`                                                                 | The run ledger: `runId`, `programId`, `installDir`, `status`, `error`, timestamps, `result` |
 | `POST /shutdown`                                                            | Flushes and exits. Idempotent                                                               |
 
-`state` carries `version`, `currentScreen`, `hasOverlay`, `runPhase`,
-`run: { status, error }`, a session whitelist (credentials reduce to
-`hasCredentials` and `projectId`), `tasks`, `statusMessages`, `eventPlan`,
-`pendingQuestion`, `taskNotice`, `setupQuestions`, `actions`, `dashboardUrl`,
-`notebookUrl`, `handoffText`, a reduced `outroData`, and `frameworkContext` as
-`{ keys, digest, values }` after redaction: `secret:<id>` refs become
-`[secret-ref]` and secret-looking keys become `[redacted]`. No access token, API
-key, user record, or answer value is ever projected.
+`state` mirrors the store: `version`, `currentScreen`, `session`, `tasks`,
+`statusMessages`, `eventPlan`, `handoffText`, the unanswered `setupQuestions`,
+and the `actions` legal on the current screen. `session` holds the fields in
+`CONTROL_SESSION_KEYS` (`src/store/control/state.ts`): detection, setup, and
+follow-up flags, `runRequested`, `runPhase`, `pendingQuestion`, `taskNotice`,
+`outroData`, `dashboardUrl`, `notebookUrl`, and `frameworkContext` after
+redaction (`secret:<id>` refs become `[secret-ref]`, secret-looking keys become
+`[redacted]`); credentials reduce to `hasCredentials` and `projectId`.
+`session.runPhase` is the run status and `session.outroData` carries a failed
+run's reason. No access token, API key, user record, or answer value is ever
+projected. A ledger record's `result` is this state as it read when the run
+ended.
 
 The socket is created mode 0600 in a directory the caller owns. A stale socket
 file is replaced; a live one is refused. The wizard unlinks it on exit.
@@ -171,15 +175,16 @@ overrides. Omitted values use normal flag and binding resolution. These are
 launcher environment inputs, not `open_app` arguments.
 
 `read_state` adds `integration` (`idle`, `running`, `done`, `failed`) and
-`integrationError`, copied from `state.run`. Framework identity is the separate
-`session.integration`. `perform_action` returns the state without those two
-fields, so read again to refresh the run status. Legal actions come from
-`state.actions`; there is no `list_actions` tool.
+`integrationError`, derived from `session.runPhase`, `session.runRequested`, and
+`session.outroData`. Framework identity is the separate `session.integration`.
+`perform_action` returns the state without those two fields, so read again to
+refresh the run status. Legal actions come from `state.actions`; there is no
+`list_actions` tool.
 
-Keep handling overlays while the agent runs. `runPhase=completed` ends the main
-work; `session.skillsComplete` ends the integration flow's follow-up screens.
-Recording MCP or keep-skills outcomes only commits store state; it does not
-install or delete anything. For failures, capture the error outro before
+Keep handling overlays while the agent runs. `session.runPhase=completed` ends
+the main work; `session.skillsComplete` ends the integration flow's follow-up
+screens. Recording MCP or keep-skills outcomes only commits store state; it does
+not install or delete anything. For failures, capture the error outro before
 dismissing it.
 
 ## Picker screens

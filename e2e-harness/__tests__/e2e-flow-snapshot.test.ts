@@ -60,10 +60,7 @@ function traceFlow(
   }
   store.session = session;
 
-  const driver = new ControlDriver(store, () => ({
-    status: 'idle',
-    error: null,
-  }));
+  const driver = new ControlDriver(store);
 
   const trace: Array<{
     screen: string;

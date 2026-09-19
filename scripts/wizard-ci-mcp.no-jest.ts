@@ -14,6 +14,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { RunPhase } from '@store';
 import { ControlClient } from '@store/control';
 import { Program } from '@store/programs';
 import type { ControlState, ProgramId } from '@store/types';
@@ -47,12 +48,22 @@ function active(): ControlClient {
   return client;
 }
 
+const RUN_STATUS: Record<RunPhase, string> = {
+  [RunPhase.Idle]: 'idle',
+  [RunPhase.Running]: 'running',
+  [RunPhase.Completed]: 'done',
+  [RunPhase.Error]: 'failed',
+};
+
 /** read_state adds the background run status under its historical names. */
 function withRunStatus(state: ControlState): Record<string, unknown> {
+  const { runPhase, runRequested, outroData } = state.session;
+  const armed = runPhase === RunPhase.Idle && runRequested;
   return {
     ...state,
-    integration: state.run.status,
-    integrationError: state.run.error,
+    integration: armed ? 'running' : RUN_STATUS[runPhase],
+    integrationError:
+      runPhase === RunPhase.Error ? outroData?.message ?? null : null,
   };
 }
 
@@ -176,12 +187,12 @@ async function main() {
     {},
     async () => {
       try {
-        const run = await active().armRun();
+        const state = await active().armRun();
         return text({
           status:
             'integration started in the background; poll read_state (integration: running -> done; screen advances to outro)',
           ok: true,
-          runStatus: run.status,
+          runRequested: state.session.runRequested,
         });
       } catch (e) {
         return errorOut(e);

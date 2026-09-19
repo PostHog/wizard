@@ -49,14 +49,21 @@ function profile(over: Partial<WizardE2eProfile> = {}): WizardE2eProfile {
   return { ...DEFAULT_E2E_PROFILE, ...over };
 }
 
+type StateOverrides = Partial<Omit<ControlState, 'session'>> & {
+  pendingQuestion?: ControlState['session']['pendingQuestion'];
+  taskNotice?: Partial<
+    NonNullable<ControlState['session']['taskNotice']>
+  > | null;
+};
+
 /** A ControlState carrying just the fields the two overlay cases read. */
-function state(over: Partial<ControlState>): ControlState {
+function state(over: StateOverrides): ControlState {
+  const { pendingQuestion = null, taskNotice = null, ...rest } = over;
   return {
     currentScreen: ScreenId.Run,
-    pendingQuestion: null,
-    taskNotice: null,
     setupQuestions: [],
-    ...over,
+    session: { pendingQuestion, taskNotice },
+    ...rest,
   } as ControlState;
 }
 
@@ -490,7 +497,7 @@ describe('E2E_DRIVABLE_SCREENS', () => {
   it('has a decideE2eAction case for every screen it lists', () => {
     // A listed screen with no case would return `{ wait: true }` forever,
     // stalling the run instead of failing it.
-    const overlayState: Partial<Record<string, Partial<ControlState>>> = {
+    const overlayState: Partial<Record<string, StateOverrides>> = {
       [Overlay.WizardAsk]: {
         pendingQuestion: {
           id: 'a',

@@ -55,7 +55,7 @@ export interface E2eNoticeRecord {
   at: string;
 }
 
-/** The session fields the recorder watches. */
+/** The session fields the recorder watches; `state.session` satisfies it. */
 type ObservedSession = {
   pendingQuestion: PendingQuestion | null;
   taskNotice: { title: string; items?: string[] } | null;

@@ -512,9 +512,8 @@ describe('security rail — no answer value reaches the payload', () => {
     const decision = decideE2eAction(
       {
         currentScreen: Overlay.WizardAsk,
-        pendingQuestion: pending,
-        taskNotice: null,
         setupQuestions: [],
+        session: { pendingQuestion: pending, taskNotice: null },
       } as unknown as ControlState,
       {
         ...DEFAULT_E2E_PROFILE,

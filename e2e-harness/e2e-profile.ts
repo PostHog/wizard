@@ -14,8 +14,10 @@ import type { ControlState } from '@store/types';
 /** The slice of the control state a decision reads. */
 export type E2eObservedState = Pick<
   ControlState,
-  'currentScreen' | 'setupQuestions' | 'pendingQuestion' | 'taskNotice'
->;
+  'currentScreen' | 'setupQuestions'
+> & {
+  session: Pick<ControlState['session'], 'pendingQuestion' | 'taskNotice'>;
+};
 
 /** Which option to pick for a setup disambiguation question. */
 export type SetupChoice = 'first' | 'last';
@@ -357,7 +359,7 @@ export function decideE2eAction(
       };
 
     case Overlay.WizardAsk: {
-      const pending = state.pendingQuestion;
+      const pending = state.session.pendingQuestion;
       if (!pending || pending.questions.length === 0) return { wait: true };
       // Answer the whole batch. The bridge resolves on one answers map, so a
       // partial map would leave the unanswered fields empty for the agent.
@@ -378,7 +380,7 @@ export function decideE2eAction(
     }
 
     case Overlay.TaskNotice: {
-      const notice = state.taskNotice;
+      const notice = state.session.taskNotice;
       if (!notice) return { wait: true };
       const keep = profile.notice !== 'decline';
       return {

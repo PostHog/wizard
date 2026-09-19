@@ -62,11 +62,16 @@ It exposes exactly these tools:
 | `run_agent`      | None                                                                         | Starts the real program in the background and returns immediately |
 
 Use `read_state.actions` for action ids and parameters; there is no
-`list_actions` MCP tool. Framework identity is `session.integration`, with
+`list_actions` MCP tool. The state mirrors the wizard's store: `session` holds
+the detection, setup, run, and follow-up fields (`session.runPhase`,
+`session.pendingQuestion`, `session.taskNotice`, `session.outroData`, a redacted
+`session.frameworkContext`), beside `tasks`, `setupQuestions`, and `actions`.
+Framework identity is `session.integration`, with
 `session.detectedFrameworkLabel` and `session.detectionComplete`. The separate
 top-level `integration` field is the background status: `idle`, `running`,
-`done`, or `failed`; `integrationError` holds a caught failure. Those two fields
-are added by `read_state` and are absent from `perform_action` replies.
+`done`, or `failed`, derived from `session.runPhase`; `integrationError` holds a
+caught failure. Those two fields are added by `read_state` and are absent from
+`perform_action` replies.
 
 ## Drive and record
 
@@ -84,10 +89,11 @@ own decisions through the same state and action contract.
 4. For a full run, confirm setup and call `run_agent` at `auth`. Continue
    reading state and handling overlays while it runs; polling alone cannot
    answer them.
-5. Check `runPhase` (`idle`, `running`, `completed`, `error`), background
-   status, and the rendered outro. On error, capture the frame and reason before
-   dismissing it. An error outro can wait for dismissal while `integration`
-   still says `running`; a wizard exit can instead surface as a socket error.
+5. Check `session.runPhase` (`idle`, `running`, `completed`, `error`),
+   background status, and the rendered outro. On error, capture the frame and
+   reason before dismissing it. An error outro can wait for dismissal while
+   `integration` still says `running`; a wizard exit can instead surface as a
+   socket error.
 6. After successful agent completion, finish the offered outro and follow-up
    actions. For the integration flow, `session.skillsComplete` marks the tail's
    completion. Other programs can have a terminal outro or exit screen.
@@ -127,8 +133,8 @@ copies after recording their results.
 
 The shared log is `/tmp/posthog-wizard.log`. Record its byte count before a run
 and read from that count plus one afterward. Run sweeps serially so their logs
-remain attributable. `read_state` omits `frameworkContext`; an empty
-`setupQuestions` list alone does not prove a router mode. When necessary,
-inspect the detector under
+remain attributable. `read_state` shows `session.frameworkContext` after
+redaction; an empty `setupQuestions` list alone does not prove a router mode.
+When necessary, inspect the detector under
 [`src/store/frameworks/`](../../../src/store/frameworks/) against the same
 fixture.

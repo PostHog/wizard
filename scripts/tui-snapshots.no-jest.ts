@@ -195,10 +195,9 @@ async function main(): Promise<void> {
   const snap = async (state: ControlState): Promise<void> => {
     const sig = JSON.stringify({
       screen: state.currentScreen,
-      overlay: state.hasOverlay,
       tasks: state.tasks.map((t) => [t.label, t.status]),
-      phase: state.runPhase,
-      ctx: state.frameworkContext.digest,
+      phase: state.session.runPhase,
+      ctx: state.session.frameworkContext,
     });
     if (sig === lastSig) return;
     lastSig = sig;
@@ -225,7 +224,7 @@ async function main(): Promise<void> {
       JSON.stringify(
         buildE2eResult({
           base: {
-            runPhase: state.runPhase,
+            runPhase: state.session.runPhase,
             hasPosthogDep: deps.length > 0,
             newDeps: deps,
             envFile: envFileWithPosthog(APP_DIR),
@@ -233,10 +232,7 @@ async function main(): Promise<void> {
             skillsComplete: state.session.skillsComplete,
           },
           recorder,
-          session: {
-            frameworkContext: state.frameworkContext.values,
-            outroData: state.outroData,
-          },
+          session: state.session,
           tasks: state.tasks,
           reportFile: readReportFile(APP_DIR, programConfig.reportFile),
         }),
@@ -261,7 +257,7 @@ async function main(): Promise<void> {
     }
     lastState = state;
     await snap(state);
-    recorder.observe(state);
+    recorder.observe(state.session);
     if (state.currentScreen === 'outro') {
       writeResult(state);
       resultWritten = false; // the tail (keep-skills) rewrites it at the end
@@ -284,7 +280,7 @@ async function main(): Promise<void> {
     }
     if (
       before === 'source-maps-detect' &&
-      !state.frameworkContext.keys.includes('selectedVariant')
+      !('selectedVariant' in state.session.frameworkContext)
     ) {
       const picked = pickSourceMapsVariant(APP_DIR);
       if ('error' in picked) {
@@ -306,7 +302,7 @@ async function main(): Promise<void> {
 
     // Program-specific ask answers take precedence over the profile strategy.
     if (before === 'wizard-ask') {
-      const q = state.pendingQuestion?.questions[0];
+      const q = state.session.pendingQuestion?.questions[0];
       const override = q ? askOverrides[programId]?.[q.id] : undefined;
       if (q && override !== undefined) {
         await client.performAction('answer_question', {

@@ -7,9 +7,8 @@ describe('a failed run', () => {
   it('exits from the handoff screen and ends the walk', () => {
     const state = {
       currentScreen: ScreenId.MintFailure,
-      pendingQuestion: null,
-      taskNotice: null,
       setupQuestions: [],
+      session: { pendingQuestion: null, taskNotice: null },
     } as unknown as ControlState;
     expect(decideE2eAction(state, DEFAULT_E2E_PROFILE)).toEqual({
       action: { id: 'dismiss_outro' },

@@ -62,7 +62,7 @@ describe('controlled headless surface', () => {
     });
     const state = await client.state();
     expect(state.currentScreen).toBe('intro');
-    expect(state.run).toEqual({ status: 'idle', error: null });
+    expect(state.session.runPhase).toBe('idle');
     expect(JSON.stringify(state)).not.toContain('phx_test_only');
     await expect(client.startRun({ programId: 'nope' })).rejects.toMatchObject({
       status: 400,
