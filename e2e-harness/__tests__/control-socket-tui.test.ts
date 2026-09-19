@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ControlClient } from '@store/control';
+import { ControlClient, ControlClientError } from '@store/control';
 import { Program } from '@store/programs';
 import { buildLaunch, waitForSocket } from '@e2e-harness/launch';
 import { captureTui, type TuiCapture } from '@e2e-harness/tui-capture';
@@ -51,14 +51,19 @@ describe.skipIf(process.env.WIZARD_PTY_TESTS === '0')(
       expect(intro.actions.map((a) => a.id)).toEqual(['confirm_setup']);
 
       let state = await client.performAction('confirm_setup');
-      // The readiness probe decides the health-check screen: wait for its verdict,
-      // then dismiss an outage the way a person would.
+      // The readiness probe decides the health-check screen. Dismiss an outage
+      // the way a person would; a 400 means the probe moved the screen first.
       const deadline = Date.now() + 30_000;
       while (state.currentScreen === 'health-check' && Date.now() < deadline) {
-        state = await client.waitForChange(state.version, 5_000);
+        try {
+          state = await client.performAction('dismiss_outage');
+        } catch (err) {
+          if (!(err instanceof ControlClientError && err.status === 400))
+            throw err;
+          state = await client.state();
+        }
         if (state.currentScreen === 'health-check') {
-          const next = await client.performAction('dismiss_outage');
-          if (next.currentScreen !== 'health-check') state = next;
+          state = await client.waitForChange(state.version, 5_000);
         }
       }
       expect(state.currentScreen).toBe('auth');
