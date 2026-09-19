@@ -391,6 +391,10 @@ export function decideE2eAction(
       };
     }
 
+    // A failed run parks on the handoff screen until someone chooses; a
+    // headless run exits from it and reports the abort through outroData.
+    case ScreenId.MintFailure:
+      return { action: { id: 'dismiss_outro' }, done: true };
     // auth (runner), run (agent), ai-opt-in (ci), exit, terminal overlays.
     default:
       return { wait: true };
@@ -409,6 +413,7 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.McpSuggestedPrompts,
   ScreenId.SlackConnect,
   ScreenId.KeepSkills,
+  ScreenId.MintFailure,
   Overlay.WizardAsk,
   Overlay.TaskNotice,
 ];

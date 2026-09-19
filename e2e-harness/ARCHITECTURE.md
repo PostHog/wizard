@@ -123,6 +123,10 @@ bearer. CI uses it directly and never mints or refreshes it.
   `run_agent` to the API; `render_screen` returns the captured frame as plain
   text. The agent decides each screen itself.
 
+A run that fails parks the TUI on the handoff screen (flow key `mint-failure`,
+any failed run, not only a gateway mint). The snapshot route exits from it and
+the result payload carries the abort reason from the outro.
+
 Both routes use a 180x50 PTY by default; `PTY_COLS` and `PTY_ROWS` override it.
 
 ## Run selection and state
