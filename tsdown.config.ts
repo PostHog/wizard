@@ -23,6 +23,13 @@ export default defineConfig({
   // Keep npm dependencies external — they're installed at runtime.
   skipNodeModulesBundle: true,
 
+  // Pin the automatic JSX runtime. Nothing under src/ imports React, so a
+  // classic-runtime transform would emit unbound `React.*` references.
+  // The object form is required — the `'react-jsx'` string form is ignored.
+  inputOptions: {
+    transform: { jsx: { runtime: 'automatic', importSource: 'react' } },
+  },
+
   sourcemap: true,
   clean: true,
 
