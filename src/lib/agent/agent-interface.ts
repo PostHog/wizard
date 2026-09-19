@@ -938,6 +938,7 @@ export async function runAgent(
           permissionMode: 'acceptEdits',
           betas: ['context-1m-2025-08-07'],
           mcpServers: agentConfig.mcpServers,
+          strictMcpConfig: true,
           agents: {
             'general-purpose': {
               description:
