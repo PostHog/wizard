@@ -403,14 +403,27 @@ export function decideE2eAction(
   }
 }
 
-/** Screens this profile knows how to act on — for completeness checks/tests. */
+/** Every screen `decideE2eAction` commits on; a test derives the same set from the function. */
 export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.Intro,
+  ScreenId.RevenueIntro,
+  ScreenId.MigrationIntro,
+  ScreenId.AgentSkillIntro,
+  ScreenId.AiObservabilityIntro,
+  ScreenId.MetricsIntro,
+  ScreenId.ErrorTrackingIntro,
+  ScreenId.AuditIntro,
+  ScreenId.SourceMapsIntro,
+  ScreenId.DoctorIntro,
+  ScreenId.WarehouseIntro,
+  ScreenId.SelfDrivingIntro,
   ScreenId.HealthCheck,
   ScreenId.Setup,
   ScreenId.SelfDrivingIntegrationCheck,
+  ScreenId.SelfDrivingHandoff,
   ScreenId.Outro,
   ScreenId.SourceMapsOutro,
+  ScreenId.AuditOutro,
   ScreenId.Mcp,
   ScreenId.McpSuggestedPrompts,
   ScreenId.SlackConnect,

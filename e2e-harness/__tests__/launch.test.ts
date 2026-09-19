@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { Program } from '@store/programs';
+import { HEADLESS_FLAG } from '@env';
+import { getProgramConfig, Program, PROGRAM_REGISTRY } from '@store/programs';
 import type { ProgramId } from '@store/types';
-import { buildLaunch, PROGRAM_COMMANDS } from '@e2e-harness/launch';
+import { buildLaunch, launchWords } from '@e2e-harness/launch';
 import { hasProfile } from '@e2e-harness/profiles';
 
 const base = {
@@ -10,18 +10,28 @@ const base = {
   projectId: '228144',
 };
 
-describe('buildLaunch', () => {
-  it('launches every profiled program through its command words', () => {
-    for (const id of Object.keys(PROGRAM_COMMANDS)) {
-      expect(hasProfile(id), id).toBe(true);
-      const { args } = buildLaunch({ ...base, programId: id }, '/repo');
-      expect(args.slice(0, 1 + PROGRAM_COMMANDS[id]!.length)).toEqual([
-        'bin.ts',
-        ...PROGRAM_COMMANDS[id]!,
-      ]);
+describe('launchWords', () => {
+  it('launches every profiled program through the command its config declares', () => {
+    const profiled = PROGRAM_REGISTRY.map((c) => c.id).filter((id) =>
+      hasProfile(id),
+    );
+    expect(profiled.length).toBeGreaterThanOrEqual(9);
+    for (const id of profiled) {
+      const words = launchWords(id);
+      if (id === Program.PostHogIntegration) expect(words).toEqual([]);
+      else if (id === Program.Audit) expect(words).toEqual(['audit', 'all']);
+      else expect(words, id).toEqual([getProgramConfig(id).command]);
     }
   });
 
+  it('refuses a program with no command', () => {
+    expect(() => launchWords('mcp-add' as ProgramId)).toThrow(
+      /no launch command/,
+    );
+  });
+});
+
+describe('buildLaunch', () => {
   it('maps the run inputs to flags and keeps the key in the environment', () => {
     const { cmd, args, env } = buildLaunch(
       {
@@ -78,6 +88,29 @@ describe('buildLaunch', () => {
     });
   });
 
+  it('launches the headless surface under its flag, without the ask flag', () => {
+    const { cmd, args } = buildLaunch(
+      {
+        ...base,
+        programId: Program.PostHogIntegration,
+        surface: 'headless',
+        e2eAsk: true,
+        bin: 'dist/bin.js',
+        env: {},
+      },
+      '/repo',
+    );
+    expect(cmd).toBe('node');
+    expect(args.slice(0, 4)).toEqual([
+      'dist/bin.js',
+      `--${HEADLESS_FLAG}`,
+      '--control-socket',
+      '/tmp/w/w.sock',
+    ]);
+    expect(args).not.toContain('--ci');
+    expect(args).not.toContain('--e2e-ask');
+  });
+
   it('drops an inherited key when the run has none', () => {
     const { env, args } = buildLaunch(
       {
@@ -89,11 +122,5 @@ describe('buildLaunch', () => {
     );
     expect(env.POSTHOG_WIZARD_API_KEY).toBeUndefined();
     expect(args[1]).toBe('--ci');
-  });
-
-  it('refuses a program with no launch command', () => {
-    expect(() =>
-      buildLaunch({ ...base, programId: 'mcp-add' as ProgramId }, '/repo'),
-    ).toThrow(/no launch command/);
   });
 });

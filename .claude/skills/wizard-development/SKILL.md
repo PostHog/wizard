@@ -19,7 +19,7 @@ infrastructure should consume those boundaries.
 
 | Concern                                               | Owner                                                                                                                                                                              |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Framework detection, context, env conventions         | [FrameworkConfig](../../../src/store/framework-config.ts) and [framework configs](../../../src/frameworks/)                                                                        |
+| Framework detection, context, env conventions         | [FrameworkConfig](../../../src/store/framework-config.ts) and [framework configs](../../../src/store/frameworks/)                                                                  |
 | Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                            |
 | Programs, steps, prerequisites and outcomes           | [programs](../../../src/store/programs/)                                                                                                                                           |
 | Sequence, harness, model and effort selection         | [switchboard](../../../src/agent/runner/switchboard/)                                                                                                                              |

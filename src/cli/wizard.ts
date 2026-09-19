@@ -104,7 +104,7 @@ export class Wizard {
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
     // flag, declared per-command on basic integration + audit via
-    // `headlessOption` (see @lib/headless-mode), so no other command accepts
+    // `headlessOption` (see src/store/shared/headless-mode.ts), so no other command accepts
     // it. CI needs `region` globally because the workbench passes it to every
     // command. --ci and headless stay separate so their behavior can diverge.
     if (!IS_PRODUCTION_BUILD) {

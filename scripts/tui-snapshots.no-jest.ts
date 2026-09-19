@@ -18,7 +18,7 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { logToFile } from '@store';
 import { getProgramConfig, Program } from '@store/programs';
-import { ControlClient } from '@store/control';
+import { ControlClient, ControlClientError } from '@store/control';
 import type { ControlState, ProgramId } from '@store/types';
 import { captureTui } from '@e2e-harness/tui-capture';
 import { buildLaunch, readApiKey, waitForSocket } from '@e2e-harness/launch';
@@ -252,7 +252,8 @@ async function main(): Promise<void> {
     let state: ControlState;
     try {
       state = await client.state();
-    } catch {
+    } catch (e) {
+      if (e instanceof ControlClientError) throw e; // a server fault, not an exit
       break; // the wizard exited between polls
     }
     lastState = state;
@@ -342,7 +343,8 @@ async function main(): Promise<void> {
     try {
       if (acted && (await client.state()).currentScreen !== before) continue;
       state = await client.waitForChange(state.version, 600_000);
-    } catch {
+    } catch (e) {
+      if (e instanceof ControlClientError) throw e;
       break;
     }
   }

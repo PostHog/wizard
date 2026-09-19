@@ -494,6 +494,29 @@ describe('E2E_DRIVABLE_SCREENS', () => {
     expect(E2E_DRIVABLE_SCREENS).toContain(Overlay.TaskNotice);
   });
 
+  it('is exactly the set of screens decideE2eAction commits on', () => {
+    // A rich state lets every conditional case act; screens that still wait
+    // are not drivable and must not be listed.
+    const rich: StateOverrides = {
+      setupQuestions: [
+        {
+          key: 'router',
+          message: 'router?',
+          options: [{ label: 'a', value: 'a' }],
+        },
+      ],
+      pendingQuestion: { id: 'a', source: 's', questions: [text('q')] },
+      taskNotice: { title: 't', items: [], prompt: 'p' },
+    };
+    const every = [...Object.values(ScreenId), ...Object.values(Overlay)];
+    const acting = every.filter(
+      (screen) =>
+        decideE2eAction(state({ currentScreen: screen, ...rich }), profile())
+          .action !== undefined,
+    );
+    expect([...acting].sort()).toEqual([...E2E_DRIVABLE_SCREENS].sort());
+  });
+
   it('has a decideE2eAction case for every screen it lists', () => {
     // A listed screen with no case would return `{ wait: true }` forever,
     // stalling the run instead of failing it.

@@ -1,6 +1,6 @@
 /**
  * Replay captured real-TUI snapshots in the terminal — step through or auto-play
- * the `NN-<screen>.txt` frames a snapshot run dropped in SNAP_OUT.
+ * the `NN-<screen>.ans` frames a snapshot run dropped in SNAP_OUT.
  *
  *   npx tsx scripts/tui-replay.no-jest.ts <snap-dir> [--step | --delay <ms>]
  *   pnpm wizard-ci-replay /tmp/snaps                 # Enter ▸ advance (default)
@@ -35,10 +35,10 @@ async function main() {
   }
   const frames = fs
     .readdirSync(dir)
-    .filter((f) => f.endsWith('.txt') && f !== 'latest.txt')
+    .filter((f) => f.endsWith('.ans'))
     .sort();
   if (frames.length === 0) {
-    console.error(`✖ no NN-<screen>.txt snapshots in ${dir}`);
+    console.error(`✖ no NN-<screen>.ans snapshots in ${dir}`);
     process.exit(1);
   }
   // Step (Enter to advance) is the default; fall back to a timed play when not a

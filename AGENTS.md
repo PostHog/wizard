@@ -37,9 +37,10 @@ The tree is three surfaces plus a composition root: `src/store` (state and
 contracts), `src/agent` (one agent run), `src/tui` (rendering), `src/cli` (argv
 and wiring). Surfaces import each other only through `@store`, `@store/types`,
 `@store/programs`, `@agent`, `@agent/types`, `@tui`, `@tui/types`, and
-`@tui/console`; `src/__tests__/architecture` enforces it. Each surface's
-`README.md` lists what it owns and may import. To drive a run without a keyboard
-(snapshots, an agent, CI), use the control socket described in
+`@tui/console`, plus `@store/control` loaded lazily by the two cli runners;
+`src/__tests__/architecture` enforces it. Each surface's `README.md` lists what
+it owns and may import. To drive a run without a keyboard (snapshots, an agent,
+CI), use the control socket described in
 [`e2e-harness/ARCHITECTURE.md`](e2e-harness/ARCHITECTURE.md).
 
 Adding a new concern means finding the narrowest existing surface, not adding

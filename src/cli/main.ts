@@ -29,7 +29,7 @@ import { skillCommand } from './commands/skill.js';
 import { cliCommand } from './commands/cli/index.js';
 import { LoggingUI } from '@tui/console';
 
-// The entry point owns the default renderer; @ui ships with none.
+// The entry point owns the default renderer; the store ships with none.
 setUI(new LoggingUI());
 // The store and the TUI never import the agent; the entry point installs it,
 // lazily, so `--version` and `--help` never load the SDK or Ink.

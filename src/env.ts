@@ -49,7 +49,7 @@ export const RUN_SURFACE: 'cloud' | 'local' = process.argv.some(
  * Add new keys here when a new runtime dependency is needed.
  */
 type RuntimeEnvKey =
-  // CI-build-only flag overrides (see utils/ci-flag-overrides.ts).
+  // CI-build-only flag overrides (see src/store/shared/ci-flag-overrides.ts).
   // Deliberately NOT POSTHOG_WIZARD_-prefixed: yargs .env('POSTHOG_WIZARD')
   // would claim it as an unknown CLI option and strict-reject the run.
   | 'WIZARD_CI_FLAG_OVERRIDES'

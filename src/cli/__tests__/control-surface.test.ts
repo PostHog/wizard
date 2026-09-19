@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Arguments } from 'yargs';
 
 const runners = vi.hoisted(() => ({
@@ -11,9 +10,11 @@ vi.mock('../runners/index.js', () => runners);
 import { HEADLESS_FLAG } from '@env';
 import {
   errorTrackingUploadSourceMapsConfig,
+  posthogDoctorConfig,
   posthogIntegrationConfig,
   selfDrivingConfig,
 } from '@store/programs';
+import { doctorCommand } from '../commands/doctor.js';
 import { selfDrivingCommand } from '../commands/self-driving.js';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps.js';
 import { dispatchProgram } from '../commands/factories/shared.js';
@@ -99,4 +100,12 @@ describe('commands with their own handlers follow the same dispatch', () => {
       expect(runners.runWizardCI).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('doctor drives the real TUI when a parent holds the socket', () => {
+    doctorCommand.handler?.(argv({ ci: true, controlSocket: '/tmp/c.sock' }));
+    expect(runners.runWizard).toHaveBeenCalledWith(
+      posthogDoctorConfig,
+      expect.objectContaining({ ci: true, controlSocket: '/tmp/c.sock' }),
+    );
+  });
 });

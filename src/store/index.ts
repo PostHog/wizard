@@ -196,6 +196,7 @@ export {
   logToFile,
 } from './shared/debug.js';
 export { readApiKeyFromEnv } from './shared/env-api-key.js';
+export { detectFramework } from './detection/index.js';
 export { isTemplateEnvFileName } from './shared/env-scan.js';
 export {
   isNonInteractiveEnvironment,

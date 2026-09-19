@@ -13,7 +13,9 @@ Runs exactly one independent agent run per `runAgent` call.
 
 ## Never contains
 
-Ink, screens, program definitions, or session mutation outside `WizardUI`.
+Ink, screens, program definitions, or session mutation outside `WizardUI`. One
+exception: `runner/shared/bootstrap.ts` stamps `skillId` on the run's own
+session copy before the run starts.
 
 ## May import
 

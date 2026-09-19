@@ -11,6 +11,8 @@
 #      non-interactive published-build path) — it must not be rejected as an
 #      unknown argument. It is intentionally undocumented; this check only keeps
 #      the published binary from silently dropping the flag the cloud runs need.
+#   5. The control server ships in its own chunk that the TUI path never imports,
+#      and --control-socket is refused without the headless flag.
 #
 # Runs from the wizard repo root via `pnpm test:smoke` (postbuild hook).
 set -e
@@ -24,7 +26,7 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
 }
 
 # ── 2. CI flag overrides physically absent from production builds ───────────
-# The override path (src/utils/ci-flag-overrides.ts) is dead code in published
+# The override path (src/store/shared/ci-flag-overrides.ts) is dead code in published
 # builds and tsdown strips it; its env var name appearing in dist/*.js means
 # dead-code elimination regressed and a prod surface leaked. Sourcemaps keep
 # the original source, so only .js output counts.
@@ -86,7 +88,7 @@ fi
 # not reject the flag, and it must not fall through to the --ci rejection. With
 # no api-key the run exits fast on "Headless mode requires --api-key" — all this
 # asserts is that the flag is recognized and live in the published binary. The
-# flag name is intentionally undocumented; keep it in sync with @lib/headless-mode.
+# flag name is intentionally undocumented; keep it in sync with src/store/shared/headless-mode.ts.
 HEADLESS_FLAG='--headless-DONOTUSE-EXPERIMENTAL'
 hl_output=$(node "$DIST_BIN" "$HEADLESS_FLAG" --install-dir /tmp/wizard-smoke-probe 2>&1) || true
 if echo "$hl_output" | grep -qiE 'unknown argument|not currently supported'; then
@@ -106,6 +108,7 @@ fi
 # The control API ships for headless runs only. Exactly one chunk carries the
 # server; the TUI entry chunk and bin.js never import it; the published binary
 # refuses --control-socket without the headless flag and accepts it with it.
+# Defined in src/store/control/marker.ts and src/tui/start-tui.ts.
 CONTROL_MARKER='wizard-control-server'
 TUI_MARKER='wizard-tui-entry'
 control_chunks=$(grep -l "$CONTROL_MARKER" ./dist/*.js || true)

@@ -100,7 +100,7 @@ function wizard(...args: string[]): Run {
 
 /**
  * The non-interactive install. Reuses the run pipeline's headless flag, so the
- * name is imported rather than spelled out — see @lib/headless-mode.
+ * name is imported rather than spelled out — see src/store/shared/headless-mode.ts.
  */
 function mcpAdd(...extra: string[]): Run {
   return wizard('mcp', 'add', `--${HEADLESS_FLAG}`, ...extra);

@@ -7,10 +7,10 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
 import { ControlClient } from '@store/control';
 import { HEADLESS_FLAG } from '@env';
 import { waitForSocket } from '@e2e-harness/launch';
+import { expectNoSecrets } from '@store/testing';
 
 const REPO = path.resolve(__dirname, '../..');
 let child: ChildProcess | null = null;
@@ -63,7 +63,7 @@ describe('controlled headless surface', () => {
     const state = await client.state();
     expect(state.currentScreen).toBe('intro');
     expect(state.session.runPhase).toBe('idle');
-    expect(JSON.stringify(state)).not.toContain('phx_test_only');
+    expectNoSecrets(JSON.stringify(state));
     await expect(client.startRun({ programId: 'nope' })).rejects.toMatchObject({
       status: 400,
     });

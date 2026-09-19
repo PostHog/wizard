@@ -1,2 +1,2 @@
-/** Entry of the cli composition root. Populated by the surface split (P3). */
+/** The cli composition root has no public runtime API; `bin.ts` imports `main.ts`. */
 export {};

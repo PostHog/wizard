@@ -23,10 +23,21 @@ surfaces' public entries. Holds no domain logic.
   `scripts/controlled-headless-smoke.no-jest.ts` drives the surface end to end
   and prints every request and response.
 
+## Never contains
+
+Domain logic, Ink, or an agent run of its own: every function parses input,
+picks a surface, or forwards to a surface's public entry.
+
 ## May import
 
 Every surface, but only through `@store`, `@store/types`, `@store/programs`,
-`@agent`, `@agent/types`, `@tui`, `@tui/types`, and `@tui/console`.
+`@agent`, `@agent/types`, `@tui`, `@tui/types`, and `@tui/console`; the two
+runners import `@store/control` dynamically.
+
+## Public entries
+
+None for other surfaces: `bin.ts` imports `main.ts`, and nothing else imports
+`@cli/*`.
 
 ## Tests
 

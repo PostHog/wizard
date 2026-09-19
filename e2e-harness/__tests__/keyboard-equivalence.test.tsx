@@ -3,7 +3,7 @@
  * keyboard on one store and apply the control action on another, then golden
  * both session diffs. Pairs whose diffs differ today are recorded, not hidden.
  */
-import { vi, describe, it, expect, afterEach, beforeAll } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import {
   WizardStore,
@@ -436,6 +436,18 @@ function applyAction(pair: Pair): Record<string, unknown> {
   return diff(before, snap(store));
 }
 
+/**
+ * Keys the rendered walk commits from the *next* screen's mount effect (keep-skills
+ * completes with no skills dir; slack-connect records "not connected"), which no
+ * control action produces. Everything else must match exactly.
+ */
+const MOUNT_EFFECTS: Record<string, readonly string[]> = {
+  'mcp: decline install vs set_mcp_outcome skipped': ['slackConnected'],
+  'slack-connect: skip vs dismiss_slack': ['skillsComplete'],
+  'audit-outro: any key vs dismiss_outro': ['skillsComplete'],
+  'source-maps-outro: any key vs dismiss_outro': ['skillsComplete'],
+};
+
 describe('keyboard commit vs control action commit', () => {
   beforeAll(() => {
     vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
@@ -446,11 +458,19 @@ describe('keyboard commit vs control action commit', () => {
     it(pair.name, async () => {
       const keyboard = await driveKeyboard(pair);
       const action = applyAction(pair);
-      expect({
-        keyboard,
-        action,
-        equal: JSON.stringify(keyboard) === JSON.stringify(action),
-      }).toMatchSnapshot();
+      const mountOnly = MOUNT_EFFECTS[pair.name] ?? [];
+      const keyboardOwn = Object.fromEntries(
+        Object.entries(keyboard).filter(([k]) => !mountOnly.includes(k)),
+      );
+      if (pair.keys.length === 0) {
+        // A bare mount commits nothing in this harness; the action still must.
+        expect(keyboard).toEqual({});
+        expect(Object.keys(action).length).toBeGreaterThan(0);
+      } else {
+        expect(action).toEqual(keyboardOwn);
+        for (const key of mountOnly) expect(keyboard).toHaveProperty(key);
+      }
+      expect({ keyboard, action }).toMatchSnapshot();
     });
   }
 });

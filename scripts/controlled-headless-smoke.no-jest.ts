@@ -3,86 +3,59 @@
  * one independent run per program named on the command line, then shutdown.
  * Prints every request and a redacted view of every response.
  *
- *   POSTHOG_WIZARD_API_KEY=… npx tsx scripts/controlled-headless-smoke.no-jest.ts \
- *     --app /tmp/app --project-id 228144 [--region us] [--bin dist/bin.js] posthog-integration [metrics …]
+ *   APP_DIR=/tmp/app PROJECT_ID=228144 POSTHOG_REGION=us POSTHOG_KEY_FILE=… \
+ *   WIZARD_CI_GATEWAY_TOKEN_FILE=… npx tsx scripts/controlled-headless-smoke.no-jest.ts \
+ *     posthog-integration [metrics …]
+ *
+ * WIZARD_BIN=dist/bin.js runs a built binary instead of the source tree.
  */
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { HEADLESS_FLAG } from '@env';
+import { spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { RunPhase } from '@store';
 import { ControlClient } from '@store/control';
-import type { ControlState } from '@store/types';
+import type { ControlState, ProgramId } from '@store/types';
+import { buildLaunch, readApiKey, waitForSocket } from '@e2e-harness/launch';
 
-async function waitForSocket(p: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (fs.existsSync(p)) return;
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  throw new Error(`the wizard did not open ${p} within ${timeoutMs}ms`);
-}
-
-const args = process.argv.slice(2);
-const opt = (name: string, fallback?: string): string | undefined => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 ? args[i + 1] : fallback;
-};
-const programs = args.filter(
-  (a, i) => !a.startsWith('--') && (i === 0 || !args[i - 1].startsWith('--')),
-);
-const app = opt('app');
-const projectId = opt('project-id');
-const region = opt('region', 'us')!;
-const bin = opt('bin', 'bin.ts')!;
-if (!app || !projectId || programs.length === 0) {
+const programs = process.argv.slice(2) as ProgramId[];
+const appDir = process.env.APP_DIR;
+const projectId = process.env.PROJECT_ID;
+const apiKey = readApiKey();
+if (!appDir || !projectId || programs.length === 0 || !apiKey) {
   process.stderr.write(
-    'usage: --app <dir> --project-id <id> [--region us|eu] [--bin dist/bin.js] <program> [program…]\n',
-  );
-  process.exit(2);
-}
-if (!process.env.POSTHOG_WIZARD_API_KEY) {
-  process.stderr.write(
-    'POSTHOG_WIZARD_API_KEY must be set in the environment\n',
+    'usage: APP_DIR=<dir> PROJECT_ID=<id> [POSTHOG_REGION=us|eu] POSTHOG_KEY_FILE=<file> ' +
+      'npx tsx scripts/controlled-headless-smoke.no-jest.ts <program> [program…]\n',
   );
   process.exit(2);
 }
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ctl-'));
 const socketPath = path.join(dir, 'w.sock');
-const cmd = bin.endsWith('.ts')
-  ? path.join(process.cwd(), 'node_modules/.bin/tsx')
-  : 'node';
-const argv = [
-  bin,
-  `--${HEADLESS_FLAG}`,
-  '--control-socket',
+const launch = buildLaunch({
+  programId: programs[0],
+  appDir,
   socketPath,
-  '--project-id',
   projectId,
-  '--region',
-  region,
-  '--install-dir',
-  app,
-];
+  region: process.env.POSTHOG_REGION === 'eu' ? 'eu' : 'us',
+  apiKey,
+  surface: 'headless',
+  bin: process.env.WIZARD_BIN,
+});
 const log = (line: string) => process.stdout.write(`${line}\n`);
 log(
-  `$ ${cmd === 'node' ? 'node' : 'npx tsx'} ${argv.join(
+  `$ ${launch.cmd.endsWith('tsx') ? 'npx tsx' : launch.cmd} ${launch.args.join(
     ' ',
   )}   # POSTHOG_WIZARD_API_KEY in env`,
 );
-const env = { ...process.env };
-for (const k of Object.keys(env))
-  if (/^(CLAUDE|ANTHROPIC|AI_AGENT)/.test(k)) delete env[k];
-const child = spawn(cmd, argv, {
+const child = spawn(launch.cmd, launch.args, {
   cwd: process.cwd(),
-  env,
+  env: launch.env,
   stdio: ['ignore', 'pipe', 'pipe'],
 });
-const wizardOut: string[] = [];
-child.stdout.on('data', (d: Buffer) => wizardOut.push(d.toString()));
-child.stderr.on('data', (d: Buffer) => wizardOut.push(d.toString()));
+const childOutput: string[] = [];
+child.stdout.on('data', (d: Buffer) => childOutput.push(d.toString()));
+child.stderr.on('data', (d: Buffer) => childOutput.push(d.toString()));
 const exit = new Promise<number | null>((resolve) =>
   child.once('exit', (code) => resolve(code)),
 );
@@ -136,11 +109,11 @@ async function main(): Promise<void> {
   const code = await exit;
   log(`wizard exit code: ${code}`);
   log(`socket removed: ${!fs.existsSync(socketPath)}`);
-  const console = wizardOut
+  const output = childOutput
     .join('')
     .replace(/phx_[A-Za-z0-9_]+/g, 'phx_<redacted>')
     .trim();
-  if (console) log(`wizard console:\n${console}`);
+  if (output) log(`wizard console:\n${output}`);
   process.exit(code === 0 ? 0 : 1);
 }
 

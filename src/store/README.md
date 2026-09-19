@@ -25,7 +25,9 @@ Render-agnostic state and the contract between the agent and whatever renders.
 
 ## Never contains
 
-Ink, console output, or any import of `@agent`, `@tui`, or `@cli`.
+Ink, rendering, or any import of `@agent`, `@tui`, or `@cli`. Two shared helpers
+write to stderr on purpose: the terminal bell and the machine-readable error
+line.
 
 ## May import
 

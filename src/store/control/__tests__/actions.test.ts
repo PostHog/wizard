@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '../../programs/error-tracking/detect-agentic.js';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '../../programs/error-tracking-upload-source-maps/detect.js';
 import { flowFor } from '../../programs/flow-for.js';

@@ -4,10 +4,9 @@
  * Computed here, on the parent's side of the socket, and committed through the
  * program's control actions.
  */
-import * as fs from 'node:fs';
-import { join } from 'node:path';
-import { FRAMEWORK_REGISTRY, buildSession } from '@store';
-import { detectFramework } from '@store/detection';
+import fs from 'fs';
+import { join } from 'path';
+import { FRAMEWORK_REGISTRY, buildSession, detectFramework } from '@store';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,

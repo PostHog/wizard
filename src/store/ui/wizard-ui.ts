@@ -36,7 +36,7 @@ export function isTaskStatus(value: string): value is TaskStatus {
  * the main session, and some programs override to Haiku, so pricing must key
  * off the per-turn model rather than a single run-wide assumption. Omit only
  * when the caller genuinely has no model context (falls back to Sonnet
- * pricing — see `pricePerMtokForModel` in `@lib/agent/token-pricing`).
+ * pricing — see `pricePerMtokForModel` in `store/agent-protocol/token-pricing.ts`).
  */
 export interface TokenUsageDelta {
   inputTokens: number;

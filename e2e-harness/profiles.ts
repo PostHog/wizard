@@ -3,7 +3,7 @@
  * program's flow.
  *
  * Each program declares its test path as JSON next to it
- * (`src/lib/programs/<program>/test/e2e.json`): a `profile` (the options the run
+ * (`src/store/programs/<program>/test/e2e.json`): a `profile` (the options the run
  * auto-takes) plus a documented `path`. {@link profileFor} loads the `profile`
  * and maps it by program id.
  *

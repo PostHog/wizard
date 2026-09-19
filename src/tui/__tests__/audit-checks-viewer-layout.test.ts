@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { AUDIT_SEED_CHECKS } from '@store/programs/audit/seed';
 import { COL_AREA_WIDTH } from '../screens/audit/AuditChecksViewer/layout.js';
 

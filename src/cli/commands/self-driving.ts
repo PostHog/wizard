@@ -1,3 +1,4 @@
+import { isControlledTui } from '@store';
 import { dispatchProgram } from './factories/shared.js';
 import { selfDrivingConfig } from '@store/programs';
 import { skillProgramOptions } from './skill-program-options.js';
@@ -29,9 +30,8 @@ export const selfDrivingCommand: Command = {
           '(no flag needed).',
       );
     }
-    // A controlling parent on the socket answers those steps, so `--ci` is
-    // fine when a control socket is attached.
-    if (argv.ci && !argv.controlSocket) {
+    // A controlling parent on the socket answers those steps.
+    if (argv.ci && !isControlledTui(argv)) {
       throw new Error(
         '`self-driving` cannot run in CI mode — it requires interactive steps ' +
           '(GitHub connect, issue-tracker selection, custom-scout approval).',

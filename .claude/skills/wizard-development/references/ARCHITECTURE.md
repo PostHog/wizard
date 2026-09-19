@@ -19,9 +19,7 @@ lifecycle in
 
 [runner/index.ts](../../../../src/agent/runner/index.ts) resolves a program's
 `run` definition, calls shared bootstrap, selects a binding, dispatches the
-sequence, and flushes the scanner report on cleanup. The old
-[agent-runner.ts](../../../../src/agent/runner/index.ts) is a compatibility
-export.
+sequence, and flushes the scanner report on cleanup.
 
 | Layer           | Source and responsibility                                                                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -57,7 +55,8 @@ Do not migrate a linear program merely by changing its binding if it depends on
 these hooks. Inspect the orchestrator's flow and completion path instead.
 [Metrics](../../../../src/store/programs/metrics/) is a current Pi/orchestrator
 example. Native command modules still need registration in
-[bin.ts](../../../../bin.ts); screen sequences derive from the program registry.
+[src/cli/main.ts](../../../../src/cli/main.ts); flows derive from the program
+registry.
 
 ## Switchboard contract
 
@@ -138,7 +137,7 @@ durable credentials.
 ## UI state and agent output
 
 Business logic uses [WizardUI](../../../../src/store/ui/wizard-ui.ts) through
-`getUI()`. [InkUI](../../../../src/store/ui/store-ui.ts) updates the TUI store;
+`getUI()`. [StoreUI](../../../../src/store/ui/store-ui.ts) updates the store;
 [LoggingUI](../../../../src/tui/console/logging-ui.ts) is available for
 noninteractive callers that select it. A missing TTY does not automatically mean
 an arbitrary caller uses LoggingUI; snapshot CI drives Ink in a PTY.
@@ -152,11 +151,11 @@ session event handlers. Orchestrated tasks also have queue and handoff state. Do
 not assume all harness output passes through `handleSDKMessage`.
 
 Session changes go through explicit store setters. They emit updates,
-re-evaluate gates, detect transitions, and refresh rendering. The
-[router](../../../../src/tui/router.ts) resolves overlays first, then the first
-visible incomplete screen from
-[screen-sequences.ts](../../../../src/tui/screen-sequences.ts). Those sequences
-are projected from registered program steps. Change the state/predicate that
+re-evaluate gates, detect transitions, and refresh rendering. The store's
+[flow resolution](../../../../src/store/state/flow-resolution.ts) resolves
+interrupts first, then the first visible incomplete step of the program's flow
+([flowFor](../../../../src/store/programs/flow-for.ts)). Those flows are
+projected from registered program steps. Change the state/predicate that
 represents progress rather than adding imperative navigation.
 
 ## MCP and instrumentation
@@ -167,9 +166,8 @@ them differently; inspect the selected harness rather than assuming identical
 tool names or discovery. Context-mill supplies skills and flow/task prompts.
 
 [Middleware](../../../../src/agent/middleware/) provides opt-in message/phase
-instrumentation. The linear sequence creates the benchmark pipeline; there is no
-pipeline construction in the compatibility `agent-runner.ts`. Inspect the actual
-consumer before extending instrumentation to another sequence or harness.
+instrumentation. The linear sequence creates the benchmark pipeline. Inspect the
+actual consumer before extending instrumentation to another sequence or harness.
 
 ## Surfaces and the control API
 
@@ -184,9 +182,10 @@ lists what it owns and may import:
 | `src/cli`   | argv, command tree, runners that sequence runs and pass context, `ControlHooks` | every surface, through its public entries only      |
 
 Cross-surface imports go through `@store`, `@store/types`, `@store/programs`,
-`@agent`, `@agent/types`, `@tui`, `@tui/types`, and `@tui/console`.
-`src/__tests__/architecture` enforces the matrix and the public-entry rule;
-`tsc -b tsconfig.solution.json` mirrors it with project references.
+`@agent`, `@agent/types`, `@tui`, `@tui/types`, and `@tui/console`; the two cli
+runners load `@store/control` lazily. `src/__tests__/architecture` enforces the
+matrix and the public-entry rule; `tsc -b tsconfig.solution.json` mirrors it
+with project references.
 
 `--control-socket <path>` serves an HTTP/1.1 API over a unix socket from
 `src/store/control`: state with long polling, actions that call one store setter
@@ -203,13 +202,14 @@ Run it:
 
 ```bash
 # headless, every build; the key travels in the environment
+mkdir -p /tmp/w
 POSTHOG_WIZARD_API_KEY=phx_... WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token \
   npx tsx bin.ts --headless-DONOTUSE-EXPERIMENTAL --control-socket /tmp/w/w.sock \
   --project-id <id> --region us --install-dir /tmp/app
 curl -s --unix-socket /tmp/w/w.sock -X POST -H 'content-type: application/json' -d '{}' http://localhost/detect
 curl -s --unix-socket /tmp/w/w.sock -X POST -H 'content-type: application/json' \
   -d '{"programId":"posthog-integration"}' http://localhost/runs
-curl -s --unix-socket /tmp/w/w.sock 'http://localhost/state?wait=60000&since=0' | jq '.state.run, .state.tasks'
+curl -s --unix-socket /tmp/w/w.sock 'http://localhost/state?wait=60000&since=0' | jq '.state.session.runPhase, .state.tasks'
 curl -s --unix-socket /tmp/w/w.sock http://localhost/runs
 curl -s --unix-socket /tmp/w/w.sock -X POST http://localhost/shutdown
 

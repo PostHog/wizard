@@ -1,4 +1,3 @@
-import { describe, expect, test } from 'vitest';
 import { Integration } from '@store';
 import { ERROR_TRACKING_TIPS } from '../programs/error-tracking/content/tips.js';
 

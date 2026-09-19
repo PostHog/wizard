@@ -14,12 +14,12 @@ import { z } from 'zod';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { RunPhase } from '@store';
 import { ControlClient } from '@store/control';
 import { Program } from '@store/programs';
-import type { ControlState, ProgramId } from '@store/types';
+import type { ProgramId } from '@store/types';
 import { captureTui, type TuiCapture } from '@e2e-harness/tui-capture';
 import { buildLaunch, waitForSocket } from '@e2e-harness/launch';
+import { withRunStatus } from '@e2e-harness/run-status';
 
 const text = (data: unknown) => ({
   content: [
@@ -46,25 +46,6 @@ let client: ControlClient | null = null;
 function active(): ControlClient {
   if (!client) throw new Error('No app open. Call open_app first.');
   return client;
-}
-
-const RUN_STATUS: Record<RunPhase, string> = {
-  [RunPhase.Idle]: 'idle',
-  [RunPhase.Running]: 'running',
-  [RunPhase.Completed]: 'done',
-  [RunPhase.Error]: 'failed',
-};
-
-/** read_state adds the background run status under its historical names. */
-function withRunStatus(state: ControlState): Record<string, unknown> {
-  const { runPhase, runRequested, outroData } = state.session;
-  const armed = runPhase === RunPhase.Idle && runRequested;
-  return {
-    ...state,
-    integration: armed ? 'running' : RUN_STATUS[runPhase],
-    integrationError:
-      runPhase === RunPhase.Error ? outroData?.message ?? null : null,
-  };
 }
 
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {

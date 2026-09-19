@@ -24,8 +24,12 @@ src/store/control/
   state.ts              the secret-free projection GET /state returns
   driver.ts             ControlDriver: read and act on one store in process
   runs.ts               the run ledger behind POST /runs and GET /runs
+  params.ts             body and param validation; every bad input is a 400
+  marker.ts             the string the bundle audit looks for
+  index.ts              the barrel the cli runners import dynamically
 e2e-harness/
-  launch.ts             buildLaunch: the argv and env that start a controlled wizard
+  launch.ts             launchWords, buildLaunch, waitForSocket: how a controlled wizard starts
+  run-status.ts         the MCP route's integration status, read off the run phase
   picks.ts              the detection picks a headless run supplies to picker screens
   e2e-profile.ts        WizardE2eProfile and decideE2eAction: the scripted walk policy
   profiles.ts           per-program profiles, profileFor(programId), resolveE2eProfile(env)
@@ -34,6 +38,8 @@ e2e-harness/
 scripts/
   tui-snapshots.no-jest.ts   CI route: the wizard in a PTY, driven over the socket, per-screen snapshots
   wizard-ci-mcp.no-jest.ts   agent route: an MCP server that proxies the same API
+  controlled-headless-smoke.no-jest.ts   headless surface: detect, runs, ledger, shutdown
+  wizard-ci-explore.no-jest.ts           open an app, confirm setup, print one frame
 ```
 
 The server reads and mutates the **real** `WizardStore` the TUI renders from.
@@ -48,7 +54,8 @@ the TUI's input.
 its own command word (`self-driving`, `audit all`, `upload-source-maps`); the
 default flow has none. The flags are `--ci` (API-key auth, no browser),
 `--control-socket <path>`, `--install-dir`, `--project-id`, `--region`, and
-`--e2e-ask` when the parent answers the agent's questions. Switchboard overrides
+`--e2e-ask` when the parent answers the agent's questions, `--integrate` for
+self-driving, and `--task-stream-log` to dump the stream. Switchboard overrides
 map to `--harness`, `--sequence`, and `--model`.
 
 The personal API key travels as `POSTHOG_WIZARD_API_KEY` in the child's
@@ -67,18 +74,18 @@ JSON in and out. Success is `{ ok: true, ... }`; failure is
 program), 404 (unknown route), 409 (a run is in flight), 413 (body over 64 KB),
 415 (not JSON), 500 (a hook failed), or 501 (the other surface's route).
 
-| Route                                                                       | Behavior                                                                                    |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `GET /health`                                                               | `{ ok, version, surface, pid, program }`                                                    |
-| `GET /state`                                                                | `{ ok, state }`, the projection below                                                       |
-| `GET /state?wait=<ms>&since=<version>`                                      | Long poll: resolves on the first commit with `version > since`, or after `wait` ms          |
-| `POST /actions/<id>` body `{ params }`                                      | Applies one action legal on the current screen through its store setter, returns the state  |
-| `POST /credentials`                                                         | Resolves the API key into project credentials and commits them, advancing `auth`            |
-| `POST /run`                                                                 | TUI surface: `requestRun` on the store, releasing the runner's agent start. Idempotent      |
-| `POST /detect` body `{ programId?, installDir? }`                           | Headless surface: runs detection through the store's setters                                |
-| `POST /runs` body `{ programId, installDir?, frameworkContext?, skillId? }` | Headless surface: one independent agent run; 409 while one runs                             |
-| `GET /runs`                                                                 | The run ledger: `runId`, `programId`, `installDir`, `status`, `error`, timestamps, `result` |
-| `POST /shutdown`                                                            | Flushes and exits. Idempotent                                                               |
+| Route                                                                       | Behavior                                                                                             |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET /health`                                                               | `{ ok, version, surface, pid, program }`                                                             |
+| `GET /state`                                                                | `{ ok, state }`, the projection below                                                                |
+| `GET /state?wait=<ms>&since=<version>`                                      | Long poll: resolves on the first commit with `version > since`, or after `wait` ms, capped at 10 min |
+| `POST /actions/<id>` body `{ params }`                                      | Applies one action legal on the current screen through its store setter, returns the state           |
+| `POST /credentials`                                                         | Resolves the API key into project credentials and commits them, advancing `auth`                     |
+| `POST /run`                                                                 | TUI surface: `requestRun` on the store, releasing the runner's agent start. Idempotent               |
+| `POST /detect` body `{ programId?, installDir? }`                           | Headless surface: runs detection through the store's setters                                         |
+| `POST /runs` body `{ programId, installDir?, frameworkContext?, skillId? }` | Headless surface: one independent agent run; 409 while one runs                                      |
+| `GET /runs`                                                                 | The run ledger: `runId`, `programId`, `installDir`, `status`, `error`, timestamps, `result`          |
+| `POST /shutdown`                                                            | Flushes and exits. Idempotent                                                                        |
 
 `state` mirrors the store: `version`, `currentScreen`, `session`, `tasks`,
 `statusMessages`, `eventPlan`, `handoffText`, the unanswered `setupQuestions`,
@@ -137,8 +144,9 @@ APP_DIR=/tmp/app PROJECT_ID=<id> POSTHOG_KEY_FILE=/path/to/phx-key.txt \
 npx tsx scripts/wizard-ci-explore.no-jest.ts
 
 # Controlled headless: detect, independent runs, the ledger, shutdown
-POSTHOG_WIZARD_API_KEY=phx_... WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token.txt \
-npx tsx scripts/controlled-headless-smoke.no-jest.ts --app /tmp/app --project-id <id> posthog-integration metrics
+APP_DIR=/tmp/app PROJECT_ID=<id> POSTHOG_KEY_FILE=/path/to/phx-key.txt \
+WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token.txt \
+npx tsx scripts/controlled-headless-smoke.no-jest.ts posthog-integration metrics
 
 # Process specs: the real binary on both surfaces, no credentials, no agent run
 pnpm test:harness                       # WIZARD_PTY_TESTS=0 skips the PTY spec

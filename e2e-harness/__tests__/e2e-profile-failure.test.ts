@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { ScreenId } from '@tui/router';
 import type { ControlState } from '@store/types';
 import { DEFAULT_E2E_PROFILE, decideE2eAction } from '@e2e-harness/e2e-profile';
