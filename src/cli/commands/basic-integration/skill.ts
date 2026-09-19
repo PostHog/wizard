@@ -1,6 +1,6 @@
 import type { Arguments } from 'yargs';
 import { POSTHOG_DOCS_URL } from '@store';
-import { runWizard, runWizardCI } from '../../runners/index.js';
+import { dispatchProgram } from '../factories/shared.js';
 import { createSkillProgram } from '@store/programs';
 
 /** Run an arbitrary context-mill skill by id (`wizard skill <id>`, headless with `--ci`). */
@@ -18,10 +18,5 @@ export function runSkillMode(argv: Arguments): void {
     spinnerMessage: `Running ${skillId}...`,
     estimatedDurationMinutes: 5,
   });
-  const options = { ...argv, skillId };
-  if (argv.ci) {
-    runWizardCI(config, options);
-  } else {
-    runWizard(config, options);
-  }
+  dispatchProgram(config, { ...argv, skillId });
 }
