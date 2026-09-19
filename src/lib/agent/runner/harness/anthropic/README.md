@@ -1,57 +1,27 @@
-# anthropic harness
+# Anthropic Agent SDK harness
 
-Wraps Anthropic's official [Claude Agent SDK][sdk]
-(`@anthropic-ai/claude-agent-sdk`) and drives Claude models through the PostHog
-LLM gateway.
+A **supported legacy fallback**, deprecated as the default. Retained for major
+Pi vulnerabilities or missing support for new Anthropic models. New work should
+use Pi and prefer orchestration; see
+[runner policy](../../README.md#execution-policy). Existing bindings may still
+choose this harness.
 
-[sdk]: https://github.com/anthropics/claude-agent-sdk-typescript
+[index.ts](index.ts) wraps the Claude Agent SDK through
+[agent-interface.ts](../../../agent-interface.ts). Both entry points are
+supported: `run()` for linear conversations and `runTask()` for orchestrator
+seed/task calls. Pi also implements both entry points.
 
-## What it is
+The SDK subprocess uses the scoped token minted by
+[gateway-session.ts](../../../../gateway-session.ts). Wizard explicitly sets the
+gateway URL and authentication environment and isolates stored Claude logins.
+Model selection must satisfy local routing, the SDK's supported transport, mint
+model/effort allowlists, and the gateway's required prompt policy. The SDK is
+not an arbitrary-provider transport just because model IDs are strings.
 
-A thin adapter over the Claude Agent SDK, which itself wraps a bundled Claude
-Code CLI subprocess. When the wizard picks this harness, `initializeAgent` +
-`runAgent` in `@lib/agent/agent-interface` build the SDK's `AgentRunConfig`
-(system prompt, tools, MCP servers, hooks, model) and drive one query/run.
-
-Both entry points are implemented:
-
-- **`run()`** — linear mode, one agent per program (integration, audit, etc.)
-- **`runTask()`** — orchestrator mode, one agent per seed plan + per drained task
-
-## Core characteristics
-
-- **Model transport:** requests go to the PostHog LLM gateway, authed with the
-  user's OAuth token (`CLAUDE_CODE_OAUTH_TOKEN` + `ANTHROPIC_BASE_URL`).
-  Bedrock fallback via `x-posthog-use-bedrock-fallback: true`.
-- **Context window:** 1M-context beta (`context-1m-2025-08-07`) so large
-  projects don't overflow during compaction.
-- **Custom headers:** wizard flags (`X-POSTHOG-FLAG-*`) and metadata
-  (`X-POSTHOG-PROPERTY-*`) piggyback on every gateway request for tracing.
-- **Model routing:** `AgentConfig.modelOverride` accepts any gateway model id
-  (`DEFAULT_AGENT_MODEL`, `HAIKU_MODEL`, `GPT5_6_TERRA_MODEL`), so
-  mechanical work (repo classification, source-map detection) can route to
-  `HAIKU_MODEL` while integration work stays on Sonnet.
-
-## Security fence
-
-- **`canUseTool` (L1):** program-scoped allow/deny lists layered on
-  `BASE_ALLOWED_TOOLS`. Bash commands allowlisted to install / build /
-  typecheck / lint / format only.
-- **YARA hooks (L2):** `PreToolUse` scans Bash commands + `PostToolUse` scans
-  Read/Write/Edit content for PII, hardcoded keys, prompt injection,
-  destructive ops, and PostHog-config violations.
-- **wizard_ask overlay guard:** `Write`/`Edit` blocked while an interactive
-  question overlay is open (defense in depth against parallel edits).
-
-## Tool surface
-
-| Category | Tools |
-|---|---|
-| Built-in file ops | `Read`, `Write`, `Edit`, `Grep`, `Glob` |
-| Shell | `Bash` (allowlisted install/build/lint commands only) |
-| Web | `WebFetch`, `WebSearch` |
-| Subagents | `Task` (dispatch nested subagent — same fence inherited) |
-| Todo tracking | `TodoWrite` (renders in the TUI todo panel) |
-| MCP: PostHog | `dashboard-create`, `insight-create`, `notebooks-create`, HogQL execution, and the rest of the `posthog-wizard` MCP surface |
-| MCP: wizard-tools | `wizard_ask`, `load_skill_menu`, `install_skill`, `check_env_keys`, `set_env_values`, plus the orchestrator queue tools (`enqueue_task`, `complete_task`, `read_handoffs`) |
-| Additional | Extra program-specific MCP servers passed via `additionalMcpServers` (e.g. Svelte MCP) |
+Security is enforced through `wizardCanUseTool`, SDK sandbox configuration, and
+warlock pre/post tool hooks. Sensitive question answers use vault references;
+write operations are also guarded while a question overlay is open. Read
+[agent-interface.ts](../../../agent-interface.ts),
+[yara-hooks.ts](../../../../yara-hooks.ts), and
+[wizard-tools](../../../../wizard-tools/) for current tool registration and
+permission behavior rather than maintaining a second tool inventory here.

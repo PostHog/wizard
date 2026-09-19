@@ -30,6 +30,7 @@ import {
 } from '@lib/agent/runner/switchboard';
 import {
   modelCapabilities,
+  MINT_ALLOWED_EFFORTS,
   isValidModel,
   requireKnownModel,
   TRIAGE_MODELS,
@@ -40,9 +41,9 @@ import { runBindingCases } from '@lib/agent/runner/switchboard/flags/__tests__/b
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const DEFAULT_RESOLVED = {
   sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: DEFAULT_AGENT_MODEL,
-  thinkingLevel: undefined,
+  harness: Harness.pi,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
 } as const;
 
 describe('switchboard PROGRAM_BINDINGS', () => {
@@ -67,19 +68,20 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       if (program === 'error-tracking-upload-source-maps') continue; // pinned below
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
+      if (program === 'error-tracking') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
 
   runBindingCases([
     {
-      name: 'binds ai-observability to anthropic + sonnet 5',
+      name: 'binds ai-observability to pi + terra high',
       ctx: { program: 'ai-observability', flags: {} },
       binding: {
         sequence: Sequence.linear,
-        harness: Harness.anthropic,
-        model: SONNET_5_MODEL,
-        thinkingLevel: undefined,
+        harness: Harness.pi,
+        model: GPT5_6_TERRA_MODEL,
+        thinkingLevel: 'high',
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -117,13 +119,24 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
+      name: 'binds error-tracking to the orchestrator on pi; stage models come from the flow frontmatter',
+      ctx: { program: 'error-tracking', flags: {} },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
       name: 'falls back to DEFAULT_BINDING for an unmapped program',
       ctx: { program: 'not-a-program', flags: {} },
       binding: {
         sequence: DEFAULT_BINDING.sequence,
         harness: DEFAULT_BINDING.harness,
         model: DEFAULT_BINDING.model,
-        thinkingLevel: undefined,
+        thinkingLevel: DEFAULT_BINDING.thinkingLevel,
       },
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
@@ -153,7 +166,7 @@ describe('switchboard CLI precedence (dev builds)', () => {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
         model: 'openai/o4-mini',
-        thinkingLevel: undefined,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'flag', model: 'cli', sequence: 'flag' },
     },
@@ -169,7 +182,7 @@ describe('switchboard CLI precedence (dev builds)', () => {
         sequence: Sequence.linear,
         harness: Harness.pi,
         model: 'openai/gpt-5',
-        thinkingLevel: undefined,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'cli', model: 'cli', sequence: 'binding' },
     },
@@ -203,8 +216,8 @@ describe('switchboard decision trace', () => {
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        model: DEFAULT_AGENT_MODEL,
-        thinkingLevel: undefined,
+        model: GPT5_6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
     },
@@ -222,21 +235,27 @@ describe('switchboard composed clamp', () => {
       };
       // The flag routes posthog-integration's harness to pi; the composed
       // clamp holds every sequence at linear — the orchestrator bindings
-      // (metrics, replay-vision) included; other axes keep their bindings.
+      // (metrics, replay-vision, error-tracking) included; other axes keep their bindings.
       expect(resolveBinding(ctx)).toEqual(
-        program === 'posthog-integration'
-          ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
-          : program === 'ai-observability'
-          ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
-          : program === 'error-tracking-upload-source-maps'
+        program === 'ai-observability'
           ? {
               ...DEFAULT_RESOLVED,
-              harness: Harness.pi,
-              model: GPT5_6_SOL_MODEL,
-              thinkingLevel: 'medium',
+              model: GPT5_6_TERRA_MODEL,
+              thinkingLevel: 'high',
             }
-          : program === 'metrics'
-          ? { ...DEFAULT_RESOLVED, harness: Harness.pi }
+          : program === 'metrics' || program === 'error-tracking'
+          ? {
+              ...DEFAULT_RESOLVED,
+              model: DEFAULT_AGENT_MODEL,
+              thinkingLevel: undefined,
+            }
+          : program === 'replay-vision'
+          ? {
+              ...DEFAULT_RESOLVED,
+              harness: Harness.anthropic,
+              model: DEFAULT_AGENT_MODEL,
+              thinkingLevel: undefined,
+            }
           : DEFAULT_RESOLVED,
       );
       expect(ctx.trace?.sequence).toBe('composed');
@@ -286,14 +305,29 @@ describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
     for (const m of [GPT5_6_LUNA_MODEL, GPT5_6_TERRA_MODEL, GPT5_6_SOL_MODEL]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
     }
-    // luna/sol stay low (fast); terra runs medium as the sonnet-tier parallel.
+    // luna stays low (fast); terra and sol run medium, the level the mint pins.
     expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
-    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
-    // Anthropic default carries no explicit effort — the harness default stands.
-    expect(
-      modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
-    ).toBeUndefined();
+    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('medium');
+    // The anthropic default carries an explicit effort: an unpinned reasoning
+    // model leaves the level to the harness, which the mint then refuses.
+    expect(modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel).toBe('high');
+  });
+
+  // The mint pins effort per model, so a reasoning model resolving to a level
+  // outside its pin is refused mid-run with no tool calls.
+  it('resolves every model to an effort the mint allows', () => {
+    for (const model of VALID_MODELS) {
+      const { reasoning, thinkingLevel } = modelCapabilities(model);
+      const allowed = MINT_ALLOWED_EFFORTS[model] ?? [];
+      // A reasoning model with no pinned level sends the harness default, which
+      // is never one of the mint's levels; no reasoning at all is its "none".
+      const declared = reasoning ? thinkingLevel ?? 'harness-default' : 'off';
+      expect([model, allowed.includes(declared as never)]).toEqual([
+        model,
+        true,
+      ]);
+    }
   });
 
   it('defaults unknown models by transport: anthropic on, openai off', () => {

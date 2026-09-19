@@ -34,6 +34,7 @@ import {
   StreamEvent,
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
+import { rollUpAuditAreas } from './audit-areas';
 import { logToFile } from '@utils/debug';
 import { sanitizeErrorDetail } from '@lib/errors';
 
@@ -115,6 +116,8 @@ export interface TaskStreamPushOptions {
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
   eventPlanPath?: string;
+  /** The run's audit ledger, when it has one. The runner owns the watcher. */
+  auditChecks?: () => unknown;
   /** When false, destination subscription/delivery remains disabled. */
   enabled?: boolean;
 }
@@ -126,6 +129,7 @@ export class TaskStreamPush {
   private readonly programId: string;
   private readonly sessionId: string;
   private readonly eventPlanWatcher: EventPlanWatcher | null;
+  private readonly auditChecks: (() => unknown) | null;
 
   private enabled: boolean;
   private created = false;
@@ -147,6 +151,7 @@ export class TaskStreamPush {
     this.eventPlanWatcher = opts.eventPlanPath
       ? new EventPlanWatcher(this.store, opts.eventPlanPath)
       : null;
+    this.auditChecks = opts.auditChecks ?? null;
     this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
@@ -297,13 +302,19 @@ export class TaskStreamPush {
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
 
+    // Program rows carry the phase; the area rows carry the audit's progress.
+    const programTasks = buildTasks(tasks);
+    const auditAreas = this.auditChecks
+      ? rollUpAuditAreas(this.auditChecks(), programTasks.length)
+      : [];
+
     const payload: TaskStreamUpdate = {
       session_id: this.sessionId,
       workflow_id: this.programId,
       skill_id: skillId,
       started_at: this.startedAt,
       run_phase: phase,
-      tasks: buildTasks(tasks),
+      tasks: [...programTasks, ...auditAreas],
       event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
       error: buildError(phase, session.outroData),
       pending_input: buildPendingInput(session.pendingQuestion),

@@ -25,7 +25,11 @@ import {
 } from '@lib/programs/program-registry';
 import type { Harness, Sequence } from '@lib/constants';
 import { buildSession } from '@lib/wizard-session';
+import { initLocalDev } from '@lib/local-dev';
+import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
 import { runAgent } from '@lib/agent/agent-runner';
+import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
+import { getAuditChecks } from '@lib/programs/audit/types';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
@@ -34,6 +38,7 @@ import { detectFramework } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { Integration } from '@lib/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@lib/programs/error-tracking/detect-agentic';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
@@ -51,6 +56,16 @@ import {
   buildE2eResult,
   readReportFile,
 } from '@e2e-harness/e2e-result';
+
+/** Cheap 32-bit FNV-1a, to fold framework-context values into a signature. */
+function digest(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -195,6 +210,17 @@ async function main() {
   // requires-interactive-mode the moment they need to ask a question.
   process.env.WIZARD_ASK_AUTODRIVE = '1';
 
+  // The bin initializes the local-dev singleton from its yargs middleware;
+  // this host bypasses yargs, so `getSkillsBaseUrl()` would silently resolve
+  // to production even when the session carries the local flags. Initialize it
+  // here from the same env-backed spellings, before anything reads it.
+  initLocalDev({
+    localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
+    localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
+    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
+    localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
+  });
+
   const { store } = startTUI(VERSION, programId);
   store.session = buildSession({
     installDir: process.env.APP_DIR!,
@@ -219,6 +245,25 @@ async function main() {
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
   });
+  // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
+  const streamLog = createFileDestination(process.env.TASK_STREAM_LOG ?? '');
+  if (streamLog) {
+    const stream = new TaskStreamPush({
+      store,
+      programId,
+      destinations: [streamLog],
+      eventPlanPath: programConfig.eventPlanFile
+        ? join(store.session.installDir, programConfig.eventPlanFile)
+        : undefined,
+      auditChecks: programConfig.auditLedgerFile
+        ? () => getAuditChecks(store.session)
+        : undefined,
+    });
+    stream.attach();
+    process.on('exit', () => void stream.shutdown(0));
+    mark(`task stream dump → ${streamLog.path}`);
+  }
+
   // Optional skip-ahead: pre-resolve the self-driving integration check so its
   // screen never shows (INTEGRATE=true integrates first; false = already set up).
   if (process.env.INTEGRATE === 'true' || process.env.INTEGRATE === 'false') {
@@ -247,35 +292,49 @@ async function main() {
   // Pass the pre-run gates and run the program's real agent. The auth and run
   // screens never advance on their own; this is what moves them. Mirrors
   // run-wizard's flow, including in-program run phases.
+  let gatewayConfigured = false;
   const runProgram = async () => {
+    if (!gatewayConfigured) {
+      configureGatewayFromCIEnvironment(
+        Number(projectId),
+        store.session.region ?? 'us',
+      );
+      gatewayConfigured = true;
+    }
     await store.getGate('intro');
     await store.getGate('integration-check');
     await store.getGate('health-check');
 
     // Mirror run-wizard's composed walk for programs whose steps splice in
-    // their own run steps (self-driving: detect → integrate → handoff → run).
+    // their own run steps (self-driving: detect → integrate → handoff → run),
+    // or scope their own run to a picked project (error-tracking).
     // `authenticate` here resolves the phx key, not OAuth, since the session is
     // built with ci + apiKey.
-    if (programConfig.steps.some((s) => s.run)) {
+    if (programConfig.steps.some((s) => s.run || s.targetDir)) {
+      const runSessionFor = async (
+        step: (typeof programConfig.steps)[number],
+      ) => {
+        const live = store.session;
+        const runSession = step.targetDir
+          ? {
+              ...live,
+              installDir: step.targetDir(live),
+              frameworkContext: { ...live.frameworkContext },
+            }
+          : live;
+        if (step.onRunPrep) await step.onRunPrep(runSession);
+        return runSession;
+      };
       for (const step of programConfig.steps) {
         if (step.screenId === 'outro') break;
         if (step.show && !step.show(store.session)) continue;
         if (step.screenId === 'auth') {
           await authenticate(store.session, programConfig.id);
         } else if (step.run) {
-          const live = store.session;
-          const runSession = step.targetDir
-            ? {
-                ...live,
-                installDir: step.targetDir(live),
-                frameworkContext: { ...live.frameworkContext },
-              }
-            : live;
-          if (step.onRunPrep) await step.onRunPrep(runSession);
-          await step.run(runSession);
+          await step.run(await runSessionFor(step));
           store.completeRunStep(step.id);
         } else if (step.screenId === 'run') {
-          await runAgent(programConfig, store.session);
+          await runAgent(programConfig, await runSessionFor(step));
         } else if (step.isComplete) {
           await store.waitUntil(step.isComplete);
         }
@@ -401,10 +460,9 @@ async function main() {
         overlay: store.router.hasOverlay,
         tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
         phase: store.session.runPhase,
-        // Snap on within-screen state too: when a screen publishes new
-        // framework-context (e.g. the detector's projects), so the picker frame
-        // is captured, not just the loading state. Generic — keys, not values.
-        ctx: Object.keys(store.session.frameworkContext).sort().join(','),
+        // Values, not just keys: a screen rerendering from an artifact updated
+        // in place (the audit ledger) keeps its key and would snap once, empty.
+        ctx: digest(JSON.stringify(store.session.frameworkContext)),
       });
     const snap = (): Promise<void> => {
       const sig = signature();
@@ -454,6 +512,25 @@ async function main() {
               FRAMEWORK_REGISTRY[pick.integration],
             );
           }
+          continue;
+        }
+
+        // Headless error-tracking detect: the same pick injection as above, into
+        // the error-tracking path key, so the run is scoped to the picked app.
+        if (
+          state.currentScreen === ScreenId.ErrorTrackingDetect &&
+          state.session.integration == null
+        ) {
+          const pick = await pickIntegrationTarget(store.session.installDir);
+          if (!pick) {
+            mark('error-tracking detect found no framework to set up');
+            process.exit(1);
+          }
+          store.setFrameworkContext(ERROR_TRACKING_PROJECT_PATH_KEY, pick.path);
+          store.setFrameworkConfig(
+            pick.integration,
+            FRAMEWORK_REGISTRY[pick.integration],
+          );
           continue;
         }
 

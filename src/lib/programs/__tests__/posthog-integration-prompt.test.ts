@@ -7,7 +7,7 @@
  * to the skill's workflow, and the hard guard against every other category.
  */
 
-import { promptFor } from './helpers/integration-prompt';
+import { promptFor } from './helpers/integration-prompt.no-jest';
 
 describe('default integration skill workflow', () => {
   it('loads the framework category first and delegates observability to its workflow', async () => {

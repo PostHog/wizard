@@ -1,0 +1,44 @@
+{
+  "program": "audit",
+  "summary": "Happy path for `wizard audit all`: confirm the intro, let the agent run the read-only audit, dismiss the outro that carries the report, dashboard, and notebook links. The run seeds the audit ledger before the agent starts; the agent resolves each check, and the task stream carries one row per area. The audit asks nothing of its own \u2014 wizard_ask is disallowed for this program.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first"
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "the program's resolved binding, with no switchboard override"
+    }
+  ],
+  "path": [
+    {
+      "screen": "audit-intro",
+      "auto": "confirm & continue"
+    },
+    {
+      "screen": "health-check",
+      "auto": "dismiss a flagged outage"
+    },
+    {
+      "screen": "auth",
+      "auto": "(external) \u2014 the runner resolves credentials from the phx key"
+    },
+    {
+      "screen": "audit-run",
+      "auto": "(external) \u2014 the agent runs the audit skill against the ledger"
+    },
+    {
+      "screen": "audit-outro",
+      "auto": "dismiss"
+    },
+    {
+      "screen": "keep-skills",
+      "auto": "delete the installed skills"
+    }
+  ]
+}

@@ -41,7 +41,6 @@ import {
   getBlockingServiceKeys,
   type WizardReadinessResult,
 } from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
 import {
   WizardRouter,
   type ScreenName,
@@ -128,49 +127,17 @@ interface GateEntry {
  */
 const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
-/**
- * Fired once per blocked readiness result, so we can quantify how often
- * the wizard refuses to start and — crucially — split that between
- * confirmed PostHog outages and probe-level reachability failures that
- * are most likely the user's network. Helps us decide whether the
- * health-check UX is over-firing.
- */
+// Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
   try {
     const health = result.health;
     const blockingKeys = getBlockingServiceKeys(health);
-    const blockingStatuses = blockingKeys.map((k) => health[k]?.status);
-
-    const allNoConnection =
-      blockingStatuses.length > 0 &&
-      blockingStatuses.every((s) => s === ServiceHealthStatus.NoConnection);
-    const onlySkillsOrigin =
-      blockingKeys.length === 1 && blockingKeys[0] === 'skillsOrigin';
-
-    const decision = onlySkillsOrigin
-      ? 'skills-origin-down'
-      : allNoConnection
-      ? 'no-connection'
-      : 'confirmed-outage';
-
-    const posthogStatus = health.posthogOverall?.status;
-    const retriesUsed = Math.max(
-      0,
-      ...(['mcp', 'skillsOrigin'] as const).map((k) => {
-        const ind = health[k]?.rawIndicator ?? '';
-        const m = ind.match(/attempts=(\d+)/);
-        return m ? Number(m[1]) - 1 : 0;
-      }),
-    );
+    const attempts = health.skillsOrigin.rawIndicator?.match(/attempts=(\d+)/);
+    const retriesUsed = Math.max(0, attempts ? Number(attempts[1]) - 1 : 0);
 
     analytics.wizardCapture('health check blocked', {
-      decision,
+      decision: 'skills-origin-down',
       blocking_keys: blockingKeys,
-      posthog_status_reachable:
-        posthogStatus !== ServiceHealthStatus.NoConnection,
-      posthog_status_reports_incident:
-        posthogStatus === ServiceHealthStatus.Down ||
-        posthogStatus === ServiceHealthStatus.Degraded,
       retries_used: retriesUsed,
     });
   } catch (err) {
@@ -303,6 +270,7 @@ export class WizardStore {
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
@@ -530,6 +498,24 @@ export class WizardStore {
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
     analytics.setTag('detected_framework', label);
+    this.emitChange();
+  }
+
+  setPosthogSdkDetected(detected: boolean): void {
+    this.$session.setKey('posthogSdkDetected', detected);
+    this.emitChange();
+  }
+
+  setSpellbook(spellbook: NonNullable<WizardSession['spellbook']>): void {
+    this.$session.setKey('spellbook', spellbook);
+    this.emitChange();
+  }
+
+  setMintHandoff(action: NonNullable<WizardSession['mintHandoff']>): void {
+    // The parked agent may still hold a question or notice open.
+    this.cancelPendingQuestion();
+    if (this.session.taskNotice) this.resolveTaskNotice(false);
+    this.$session.setKey('mintHandoff', action);
     this.emitChange();
   }
 
@@ -908,8 +894,8 @@ export class WizardStore {
     this.setRunPhase(RunPhase.Idle);
   }
 
-  setOutroDismissed(): void {
-    this.$session.setKey('outroDismissed', true);
+  setOutroDismissed(dismissed = true): void {
+    this.$session.setKey('outroDismissed', dismissed);
     this.emitChange();
   }
 
@@ -933,6 +919,26 @@ export class WizardStore {
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);
+    this.emitChange();
+  }
+
+  switchProgram(program: ProgramId): void {
+    if (program === this.router.activeProgram) return;
+
+    // Flush unresolved promises so the wizard can advance
+    for (const gate of this._gates.values()) gate.resolve();
+    this._gates.clear();
+
+    this.router.setProgram(program);
+    this._initFromProgram(program);
+    // start-tui stamps this once at launch; without it here every event
+    // after the switch still reports under the program the run started as.
+    analytics.setTag('program_id', program);
+
+    const config = getProgramConfig(program);
+    this.$session.setKey('setupConfirmed', false);
+    this.$session.setKey('programLabel', config.id);
+    this.$session.setKey('skillId', config.skillId ?? null);
     this.emitChange();
   }
 

@@ -5,9 +5,7 @@
 import { VERSION } from './version';
 
 // ── Models ──────────────────────────────────────────────────────────
-// Every id below must be on the gateway's mint allowlist (posthog
-// `WIZARD_MODEL_ALLOWLIST`), which refuses anything else. Role constants alias
-// the generation they point at, so a repoint lands in one place.
+// Coordinate IDs/efforts with the mint allowlists and gateway transport/required prompt policy; see agent/runner/README.md.
 
 /** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
 export const SONNET_5_MODEL = 'claude-sonnet-5';
@@ -27,7 +25,7 @@ export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
  */
 export const HAIKU_MODEL = HAIKU_TRIAGE_MODEL;
 
-// The only openai models the wizard runs.
+// Locally supported OpenAI models; constants alone do not authorize gateway use.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
 export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
 export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';

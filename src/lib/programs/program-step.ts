@@ -59,6 +59,7 @@ export interface ProgramReadyContext {
   }) => void;
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
+  readonly setPosthogSdkDetected: (detected: boolean) => void;
 }
 
 export interface ProgramStep {
@@ -282,6 +283,14 @@ export interface ProgramConfig {
    * stale or unrelated `.posthog-events.json` file.
    */
   eventPlanFile?: string;
+  /** Audit ledger to mirror into the session, relative to `installDir`. */
+  auditLedgerFile?: string;
+  /**
+   * Channel the task stream publishes this run under, when it differs from the
+   * program id. A family leaf runs on the generic skill program, so without
+   * this every `wizard audit <leaf>` would report as `agent-skill`.
+   */
+  streamWorkflowId?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.

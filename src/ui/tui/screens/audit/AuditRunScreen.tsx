@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from 'react';
-import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -9,19 +8,12 @@ import {
   HNViewer,
 } from '@ui/tui/primitives/index';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
-import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
-import {
-  AUDIT_CHECKS_FILE,
-  AUDIT_CHECKS_KEY,
-  AUDIT_REPORT_FILE,
-  coerceAuditChecks,
-  getAuditChecks,
-} from '@lib/programs/audit/types';
+import { AUDIT_REPORT_FILE, getAuditChecks } from '@lib/programs/audit/types';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { WIZARD_LOG_FILE } from '@utils/paths';
 
@@ -35,11 +27,8 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  // Mirror the agent's audit ledger into the store.
-  useFileWatcher(join(store.session.installDir, AUDIT_CHECKS_FILE), (parsed) =>
-    store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
-  );
-
+  // The ledger reaches the store through `AuditLedgerWatcher`, which runs for
+  // headless runs too. This screen only renders what the store holds.
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 

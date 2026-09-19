@@ -67,22 +67,23 @@ function requireString(
  *   - the runner or agent advances them: auth (runner sets credentials), run
  *     (agent sets runPhase), ai-opt-in (org approval / ci auto-consent), exit,
  *     and the no-dismiss terminal overlays.
- *   - screens of programs the integration e2e profile never enters (audit,
- *     doctor).
+ *   - screens of programs the integration e2e profile never enters (doctor).
  */
 export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Auth,
   ScreenId.Run,
   ScreenId.AiOptIn,
   ScreenId.Exit,
+  // The agent advances the audit run, the same way it advances `run`.
   ScreenId.AuditRun,
   ScreenId.DoctorReport,
   // The detector + picker are interactive; no headless e2e drives this screen.
   ScreenId.SelfDrivingIntegrationDetect,
-  ScreenId.AuditOutro,
   ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.SelfDrivingIntegrationDetect,
   ScreenId.SelfDrivingHandoff,
+  // The e2e host injects the pick, as it does for self-driving's detect screen.
+  ScreenId.ErrorTrackingDetect,
   Overlay.ManagedSettings,
   Overlay.AuthError,
   Overlay.SessionTimeout,
@@ -108,6 +109,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.AgentSkillIntro]: [confirmSetupAction],
   [ScreenId.AiObservabilityIntro]: [confirmSetupAction],
   [ScreenId.MetricsIntro]: [confirmSetupAction],
+  [ScreenId.ErrorTrackingIntro]: [confirmSetupAction],
   [ScreenId.AuditIntro]: [confirmSetupAction],
   [ScreenId.DoctorIntro]: [confirmSetupAction],
   [ScreenId.WarehouseIntro]: [confirmSetupAction],
@@ -205,6 +207,26 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       id: 'dismiss_outro',
       description: 'Dismiss the outro and advance to the MCP step.',
       apply: (store) => store.setOutroDismissed(),
+    },
+  ],
+  [ScreenId.AuditOutro]: [
+    {
+      id: 'dismiss_outro',
+      description:
+        'Dismiss the audit outro, which carries the report, dashboard, and notebook links.',
+      apply: (store) => store.setOutroDismissed(),
+    },
+  ],
+  [ScreenId.MintFailure]: [
+    {
+      id: 'continue_setup',
+      description: 'Continue to MCP and Slack after the skill is saved.',
+      apply: (store) => store.setMintHandoff('continue'),
+    },
+    {
+      id: 'dismiss_outro',
+      description: 'Exit the wizard from the mint failure screen.',
+      apply: (store) => store.setMintHandoff('exit'),
     },
   ],
 

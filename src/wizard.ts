@@ -133,6 +133,13 @@ export class Wizard {
           type: 'boolean',
           hidden: true,
         })
+        // Rides beside the PostHog destination rather than replacing it, so a
+        // logged run is the same run the backend sees.
+        .option('task-stream-log', {
+          describe:
+            'Append every task-stream payload to a local JSONL file. Pass a path, or pass the flag alone for /tmp/posthog-wizard-task-stream.jsonl\nenv: POSTHOG_WIZARD_TASK_STREAM_LOG',
+          type: 'string',
+        })
         // ── Local dev targets (see docs/local-dev.md) ──────────────────
         // Not `hidden`: the build gate already keeps them from users, so
         // hiding them would only cost the dev-build help row. Deliberately not

@@ -35,6 +35,7 @@ import {
   type SwitchboardCtx,
 } from './switchboard';
 import { flushScanReport } from '../../yara-hooks';
+import { startAuditLedgerWatcher } from '../../programs/audit/ledger-watcher';
 import { registerCleanup } from '../../../utils/wizard-abort';
 
 export type {
@@ -59,12 +60,23 @@ export async function runAgent(
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
 
-  const runDef =
-    typeof programConfig.run === 'function'
-      ? await programConfig.run(session)
-      : programConfig.run;
+  // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
+  // and a watcher started later would ignore that write as pre-existing.
+  const ledger = programConfig.auditLedgerFile
+    ? startAuditLedgerWatcher(session.installDir, programConfig.auditLedgerFile)
+    : null;
+  if (ledger) registerCleanup(() => ledger.stop());
 
-  await runProgram(session, runDef, programConfig, options);
+  try {
+    const runDef =
+      typeof programConfig.run === 'function'
+        ? await programConfig.run(session)
+        : programConfig.run;
+
+    await runProgram(session, runDef, programConfig, options);
+  } finally {
+    ledger?.stop();
+  }
 }
 
 /**

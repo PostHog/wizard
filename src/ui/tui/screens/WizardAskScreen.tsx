@@ -7,7 +7,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -35,6 +35,46 @@ export function handleAskKey(
   store: Pick<WizardStore, 'cancelPendingQuestion'>,
 ): void {
   if (key.escape) store.cancelPendingQuestion();
+}
+
+/**
+ * What pressing Esc actually does, phrased for the footer hint.
+ *
+ * Esc declines the *whole* request — {@link WizardStore.cancelPendingQuestion}
+ * builds a cancelled answer for every question, so the ones already typed are
+ * discarded too. The footer used to label that "skip", which on a multi-question
+ * request reads as "skip this field": the warehouse task walks a source's
+ * credentials one field at a time, several of them optional, and a user who
+ * pressed Esc to pass on an optional field instead threw away the whole source
+ * and dropped the agent onto its browser-handoff fallback. Naming the scope
+ * costs a few characters and makes the destructive key read as destructive.
+ */
+export function askEscapeHint(total: number, answered: number): string {
+  if (total <= 1) return 'skip';
+  if (answered <= 0) return `skip all ${total} questions`;
+  return `skip all ${total} questions, discarding the ${answered} you answered`;
+}
+
+/**
+ * Whether the overlay must mask what the user types for this question.
+ *
+ * A `sensitive` answer is one the wizard has already promised to treat as a
+ * secret: `wizard_ask` vaults it and hands the agent an opaque `secretRef`, so
+ * the raw string never enters the model's conversation. Every other boundary
+ * guards it the same way — the skip events carry no free text, handoff prose is
+ * kept out of telemetry — but the overlay that collects it echoed it back in
+ * plain text as it was typed, which is the one place a database password or an
+ * API key is read by a person other than its owner: a shared screen, a pairing
+ * session, a recorded terminal.
+ *
+ * `kind` is checked as well as the flag. The tool already rejects `sensitive`
+ * on a picker, and a picker has nothing to mask, so this keeps the predicate
+ * total over a question rather than relying on that rejection.
+ */
+export function shouldMaskAnswer(
+  question: Pick<AskQuestion, 'kind' | 'sensitive'>,
+): boolean {
+  return question.kind === 'text' && question.sensitive === true;
 }
 
 /**
@@ -170,6 +210,11 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
 
   const total = pending.questions.length;
   const progress = total > 1 ? `Question ${index + 1} of ${total}` : null;
+  const escapeHint = askEscapeHint(total, index);
+  // An optional text field already accepts an empty Enter (see
+  // `isRequiredButEmpty`) — it just never said so, leaving Esc as the only
+  // visible exit from a question the user did not want to answer.
+  const canSkipOne = question.kind === 'text' && question.required === false;
 
   const submit = (value: string | string[]) => {
     // Don't let a required field go through empty — it would reach the agent as
@@ -246,13 +291,21 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
         <Box marginTop={1}>
           <Text color={Colors.accent}>
             {Icons.warning} This field is required — type an answer, or press
-            ESC to skip.
+            ESC to {escapeHint}.
+          </Text>
+        </Box>
+      )}
+      {canSkipOne && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            Optional — press <Text color={Colors.accent}>ENTER</Text> on an
+            empty answer to skip just this one.
           </Text>
         </Box>
       )}
       <Box marginTop={1}>
         <Text dimColor>
-          <Text color={Colors.accent}>ESC</Text> skip
+          <Text color={Colors.accent}>ESC</Text> {escapeHint}
         </Text>
       </Box>
     </ModalOverlay>
@@ -303,14 +356,15 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
       );
     }
 
-    case 'text':
+    case 'text': {
+      const Input = shouldMaskAnswer(question) ? PasswordInput : TextInput;
       return (
         // `width="100%"` on both the column and the hint row anchors them to
         // the modal's content width — without it, Ink/Yoga shrinks the column
         // to fit its widest child, so the right-aligned hint walks left/right
         // as the typed text changes width.
         <Box flexDirection="column" width="100%">
-          <TextInput
+          <Input
             placeholder="Type your answer"
             onSubmit={(value) => onSubmit(value)}
           />
@@ -322,5 +376,6 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
           </Box>
         </Box>
       );
+    }
   }
 };

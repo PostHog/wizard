@@ -546,7 +546,7 @@ describe('isWarlockDisabled (local env escape hatch)', () => {
 });
 
 describe('buildAuthErrorContext', () => {
-  const GATEWAY = 'https://gateway.us.posthog.com/wizard';
+  const GATEWAY = 'https://ai-gateway.us.posthog.com';
   let home: string;
 
   beforeEach(() => {
@@ -900,7 +900,7 @@ describe('auth error context', () => {
   // concurrent run also writes.
   it.each([
     ['https://ai-gateway.us.posthog.com', 'us'],
-    ['https://gateway.eu.posthog.com/wizard', 'eu'],
+    ['https://ai-gateway.eu.posthog.com', 'eu'],
     ['http://localhost:3308', 'local'],
   ])('derives the region from the url it is given (%s)', (url, region) => {
     const ctx = buildAuthErrorContext('/test/dir', url);

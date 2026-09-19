@@ -7,6 +7,7 @@ import {
 } from '@lib/constants';
 import {
   reportableDiscoveredFeatures,
+  reportablePosthogSdkDetected,
   type WizardSession,
 } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
@@ -46,9 +47,13 @@ export function sessionProperties(
   // might be absent. An absent key is unambiguous, while an empty array
   // would read as "we looked and found nothing" instead of "not reported".
   const discoveredFeatures = reportableDiscoveredFeatures(session);
+  const posthogSdkDetected = reportablePosthogSdkDetected(session);
 
   return {
     integration: session.integration,
+    // Discriminates a family leaf: `command` is the first positional, so every
+    // `wizard audit <leaf>` reports the same `audit`.
+    skill_id: session.skillId,
     detected_framework: session.detectedFrameworkLabel,
     typescript: session.typescript,
     project_id: session.credentials?.projectId,
@@ -58,6 +63,9 @@ export function sessionProperties(
     scan_consent: session.scanConsent,
     additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
+    ...(posthogSdkDetected !== undefined
+      ? { posthog_sdk_detected: posthogSdkDetected }
+      : {}),
   };
 }
 

@@ -162,8 +162,8 @@ export interface AskQuestion {
    * Only meaningful for kind='text'. When true, the wizard-tools `wizard_ask`
    * tool stores the user's answer in the session secret vault and returns
    * `{ secretRef }` to the agent instead of the plain string — so the value
-   * never enters the LLM conversation. The TUI may also mask input
-   * accordingly. See `secret-vault.ts`.
+   * never enters the LLM conversation. The TUI masks the input as it is typed
+   * (see `shouldMaskAnswer`). See `secret-vault.ts`.
    */
   sensitive?: boolean;
 }
@@ -299,6 +299,9 @@ export interface WizardSession {
 
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
+
+  /** PostHog found in the project's dependencies. A signal, not a verified install. */
+  posthogSdkDetected: boolean;
 
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
@@ -439,6 +442,13 @@ export interface WizardSession {
   /** Copy for the task-notice modal, set while it is open. */
   taskNotice: TaskNotice | null;
   outroData: OutroData | null;
+  /** Skill saved for the user's own agent during the handoff. */
+  spellbook: { path: string; skillsIncluded: boolean } | null;
+  /**
+   * How the user left the mint-failure screen: `continue` walks the
+   * post-run steps (MCP, Slack, keep-skills), `exit` leaves. Null until then.
+   */
+  mintHandoff: 'continue' | 'exit' | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
@@ -522,6 +532,7 @@ export function buildSession(args: {
     frameworkContext: {},
     typescript: false,
     detectedFrameworkLabel: null,
+    posthogSdkDetected: false,
     detectionComplete: false,
     unsupportedVersion: null,
 
@@ -558,6 +569,8 @@ export function buildSession(args: {
     portConflictProcess: null,
     taskNotice: null,
     outroData: null,
+    spellbook: null,
+    mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
     additionalFeatureQueue: [],
@@ -578,4 +591,11 @@ export function reportableDiscoveredFeatures(
   session: WizardSession,
 ): DiscoveredFeature[] | undefined {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+}
+
+/** Also a scan result, so it travels under the same consent as the rest. */
+export function reportablePosthogSdkDetected(
+  session: WizardSession,
+): boolean | undefined {
+  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
 }

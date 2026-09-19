@@ -5,8 +5,7 @@
 #
 # Prerequisites:
 #   - POSTHOG_PERSONAL_API_KEY env var (or in .env): a personal API key (phx_)
-#     or a wizard-app OAuth access token (pha_), which is what the CI bot uses.
-#     The env name stays the same for either so the secret rotates in place.
+#   - WIZARD_CI_GATEWAY_TOKEN_FILE: path to a file holding the AI gateway key
 #   - A wizard-workbench repo checked out (for the test app), pointed to by:
 #       - WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench
 #         or
@@ -16,19 +15,15 @@
 #   ./scripts/smoke-test-ci.sh                          # default: basic-integration/next-js/15-app-router-todo
 #   ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 #
-# Examples:
-#   # With the key inline (a phx_ personal key or a pha_ wizard-app token):
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh
-#   POSTHOG_PERSONAL_API_KEY=pha_wizard_app_token ./scripts/smoke-test-ci.sh
-#
-#   # With project ID override:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here POSTHOG_PROJECT_ID=12345 ./scripts/smoke-test-ci.sh
-#
-#   # Specific app:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
-#
-#   # If ../wizard-workbench/.env has POSTHOG_PERSONAL_API_KEY, just:
+# Examples (personal API key already exported):
+#   export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"
+#   export POSTHOG_WIZARD_PROJECT_ID=12345
+#   export POSTHOG_WIZARD_REGION=us
 #   ./scripts/smoke-test-ci.sh
+#   ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
+#
+# Both secrets and project settings may also be loaded from the workbench .env.
+# See docs/local-dev.md for the separate API key and gateway token setup.
 #
 set -euo pipefail
 

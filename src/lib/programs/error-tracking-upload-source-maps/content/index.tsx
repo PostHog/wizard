@@ -123,7 +123,14 @@ const GROUPING: ContentBlock = {
   ],
 };
 
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
+/** The two lines that say what the run wires. The rest of the deck is shared. */
+export type SourceMapsDeckCopy = { intro: string; wiring: string };
+
+/** The source-maps narrative. The error-tracking program reuses it with its own copy. */
+export const buildSourceMapsDeck = (
+  store: WizardStore | undefined,
+  copy: SourceMapsDeckCopy,
+): ContentBlock[] =>
   pace([
     {
       content: 'Welcome.',
@@ -133,7 +140,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
     },
 
     {
-      content: "I'm wiring PostHog Error Tracking into your build.",
+      content: copy.intro,
       pause: 5000,
     },
 
@@ -165,8 +172,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
       pause: 6000,
     },
     {
-      content:
-        "Right now I'm hooking source-map generation and upload into your build, tied to each release you ship.",
+      content: copy.wiring,
       pause: 6000,
     },
 
@@ -267,3 +273,10 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
       ),
     },
   ]);
+
+export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
+  buildSourceMapsDeck(store, {
+    intro: "I'm wiring PostHog Error Tracking into your build.",
+    wiring:
+      "Right now I'm hooking source-map generation and upload into your build, tied to each release you ship.",
+  });

@@ -22,6 +22,7 @@ import { Program } from '@lib/programs/program-registry';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
+import { OutroKind } from '@lib/wizard-session';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(Program.PostHogIntegration);
@@ -45,6 +46,28 @@ const cleanReadiness = {
 };
 
 describe('WizardCiDriver — full integration flow', () => {
+  it('lets a failed run exit or continue to MCP', () => {
+    const store = freshStore();
+    const ui = new InkUI(store);
+    const driver = new WizardCiDriver(store);
+    store.setCredentials({
+      accessToken: 'phx_secret_should_not_leak',
+      projectApiKey: 'phc_public',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
+      projectId: 42,
+    });
+    store.setOutroDismissed();
+    ui.outroError({ kind: OutroKind.Error, message: 'agent failed' });
+    expect(driver.readState().currentScreen).toBe(ScreenId.MintFailure);
+    driver.performAction('continue_setup');
+    expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
+    driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
+    driver.performAction('dismiss_slack');
+    expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
+    driver.performAction('keep_skills', { kept: true });
+    expect(driver.readState().currentScreen).toBe(ScreenId.Exit);
+  });
+
   it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
     const store = freshStore();
     const driver = new WizardCiDriver(store);

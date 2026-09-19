@@ -26,12 +26,12 @@ Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn mor
 
 ## Privacy & data usage
 
-The wizard uses **Anthropic Claude** (via PostHog's LLM gateway) to read your project's source files and integrate PostHog. A few things worth knowing up front:
+The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's AI gateway, to read your project's source files and integrate PostHog. A few things worth knowing up front:
 
-- **Source files** are sent to Anthropic as part of the agent's context.
+- **Source files** are sent to the selected model provider as part of the agent's context.
 - **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
 - **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
-- **AI opt-in**: the wizard honors your PostHog organization's `is_ai_data_processing_approved` setting (the same toggle that gates Max). If your org has not opted in, the wizard explains how to enable it and exits without sending source to Anthropic.
+- **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI and signup runs bypass this interactive gate.
 - **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
 
 The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
@@ -231,17 +231,18 @@ The following CLI arguments are available:
 
 # CI Mode
 
-> ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM
-> gateway doesn't yet grant the scopes the wizard needs to personal API keys
-> for most users, so non-interactive `--ci` runs fail at the gateway. The flag
-> is disabled in the published package and exits with an error — run the wizard
-> in an interactive terminal instead (`npx @posthog/wizard@latest`). The notes below
-> describe CI mode as it works in development builds.
+**CI mode is available only in development/test builds.** Published builds
+reject `--ci`; use an interactive terminal for `npx @posthog/wizard@latest`.
 
-Run the wizard non-interactive executions with `--ci`:
+Local CI runs require a PostHog personal API key **and a separate gateway
+token file**, plus the target project ID. See
+[local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs)
+for setup and the CI secret names. With both secrets configured:
 
 ```bash
-npx @posthog/wizard@latest --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
+  --project-id 12345 --region us --install-dir /absolute/path/to/test-app
 ```
 
 When running in CI mode (`--ci`):
@@ -510,6 +511,10 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 
 ## Running locally
 
+For `--ci`, smoke tests, and full headless runs, configure both the personal API
+key and gateway token file first: [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+Interactive runs mint their gateway token after authentication.
+
 ### Quick test without linking
 
 ```bash
@@ -533,8 +538,8 @@ wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
 wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
 ```
 
-See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog. Note
-`--local-mcp` selects the MCP server only — it no longer also switches skills.
+See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
+`--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
 
 ### Testing
 
@@ -568,7 +573,9 @@ Example prompt — explore against
 [open-saas](https://github.com/wasp-lang/open-saas):
 
 > Explore the PostHog wizard against open-saas, following the
-> `exploring-the-wizard` skill. Ask me for my phx key file path and project id,
+> `exploring-the-wizard` skill. Reuse my phx key file path, gateway token file path, and project id,
+> asking only for missing inputs. Launch the MCP server with
+> `WIZARD_CI_GATEWAY_TOKEN_FILE` set to the gateway token file path;
 > then clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp`
 > copy. Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding
 > each screen:
@@ -598,23 +605,20 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/lib/health-checks/` checks external status pages and PostHog-owned
-services before the wizard runs to decide whether it can proceed. The entry
-point is `evaluateWizardReadiness()`, which returns one of three values:
+`src/lib/health-checks/` checks skills download origins before the wizard runs.
+The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
 
 | Decision            | Meaning                                                         |
 | ------------------- | --------------------------------------------------------------- |
-| `yes`               | All services healthy — proceed normally.                        |
-| `yes_with_warnings` | Some services degraded but no critical dependency is down.      |
-| `no`                | A critical dependency is down or degraded — do not run.         |
+| `yes`               | Skills are reachable — proceed without outage warnings.         |
+| `no`                | Neither skills origin is reachable — do not run.                |
 
 ### Module layout
 
 | File | Responsibility |
 | --- | --- |
 | `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
-| `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
-| `endpoints.ts` | Direct endpoint checks for MCP (`/`) and the skills origins (`skill-menu.json` on GitHub Releases + the AWS mirror) |
+| `endpoints.ts` | Direct gateway (`/readyz`) and skills origin (`skill-menu.json`) checks |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
 | `index.ts` | Barrel re-export |
 | `testme.md` | Test running instructions and endpoint reference |
@@ -632,9 +636,12 @@ two arrays:
 ### Current defaults
 
 ```ts
-downBlocksRun: ['anthropic', 'npmOverall', 'mcp', 'skillsOrigin'],
-degradedBlocksRun: ['anthropic'],
+downBlocksRun: ['skillsOrigin'],
 ```
+
+The same policy applies during signup. Third-party status pages are not queried.
+After minting a token, `gateway-session.ts` checks `/readyz` on the returned
+gateway URL and reports an unavailable gateway through the existing error path.
 
 `skillsOrigin` is one entry covering two origins: skills are published to
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail
@@ -654,21 +661,28 @@ This repo includes a helper script to run a full end‑to‑end smoke test of th
   - Setting `WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench`, or
   - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
 - Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
-- (Optional) Set `POSTHOG_PROJECT_ID` to target a specific PostHog project.
+- Set `WIZARD_CI_GATEWAY_TOKEN_FILE` to an absolute path containing the separate
+  AI gateway token. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+- Set `POSTHOG_WIZARD_PROJECT_ID` to the intended test project and
+  `POSTHOG_WIZARD_REGION` to `us` or `eu` (CI uses `us`). The helper also accepts
+  `POSTHOG_PROJECT_ID` and `POSTHOG_REGION` as fallback names.
 
 **Usage**
 
 ```bash
-# Default app: next-js/15-app-router-todo
+# With both secrets and the target project configured above:
+# Default app: basic-integration/next-js/15-app-router-todo
 ./scripts/smoke-test-ci.sh
 
 # Specify a different app from wizard-workbench/apps
-./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 
-# With API key (and optional project ID) inline
+# With both secrets and project settings inline
 POSTHOG_PERSONAL_API_KEY=phx_your_key_here \
-POSTHOG_PROJECT_ID=12345 \
-./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+POSTHOG_WIZARD_PROJECT_ID=12345 \
+POSTHOG_WIZARD_REGION=us \
+./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 
 # Pointing at a custom wizard-workbench checkout
 WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench \
@@ -682,3 +696,7 @@ The script will:
 - Install dependencies for the app
 - Install the packed wizard tarball into an isolated temp project
 - Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks
+
+## Contributing
+
+Start with [AGENTS.md](AGENTS.md) for the development skills and execution policy.

@@ -4,9 +4,9 @@
  * Mirrors source-maps: the integration-detect screen runs `detectSelfDriving-
  * IntegrationProjects` (the shared integration scan from
  * @lib/detection/project-scope), shows a project map, and the user picks one.
- * This file maps the result back to `Integration`s and classifies each project
- * as instrumentable (a framework the wizard supports that doesn't already have
- * PostHog). The screen writes the choice to the session; `prepSelfDriving-
+ * `toIntegrationCandidates` matches each project to an `Integration`; this file
+ * classifies it as instrumentable (a framework the wizard supports that doesn't
+ * already have PostHog). The screen writes the choice to the session; `prepSelfDriving-
  * Integration` then gathers the chosen project's framework context before the
  * integration agent runs (the runner scopes the install dir).
  */
@@ -15,14 +15,15 @@ import type {
   AgenticDetectionReport,
   DetectEvent,
 } from '@lib/detection/agentic';
-import { detectIntegrationProjects } from '@lib/detection/project-scope';
+import {
+  detectIntegrationProjects,
+  toIntegrationCandidates,
+} from '@lib/detection/project-scope';
 import { gatherFrameworkContext } from '@lib/detection/index';
-import { Integration } from '@lib/constants';
+import type { Integration } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 
 export type { DetectEvent };
-
-const INTEGRATION_IDS = new Set<string>(Object.values(Integration));
 
 /** One project, classified for a PostHog SDK integration. */
 export type IntegrationProject = {
@@ -69,20 +70,14 @@ export function toIntegrationReport(
 ): IntegrationDetectionReport {
   return {
     repoType: report.repoType,
-    projects: report.projects.map((p) => {
-      const integration =
-        p.targetId && INTEGRATION_IDS.has(p.targetId)
-          ? (p.targetId as Integration)
-          : null;
-      return {
-        path: p.path,
-        framework: p.framework,
-        integration,
-        hasPostHog: p.hasPostHog,
-        continuable: p.hasPostHog,
-        ...classify(integration, p.hasPostHog),
-      };
-    }),
+    projects: toIntegrationCandidates(report).map((p) => ({
+      path: p.path,
+      framework: p.framework,
+      integration: p.integration,
+      hasPostHog: p.hasPostHog,
+      continuable: p.hasPostHog,
+      ...classify(p.integration, p.hasPostHog),
+    })),
   };
 }
 

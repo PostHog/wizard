@@ -25,7 +25,9 @@ import metricsE2e from '@lib/programs/metrics/test/e2e.json';
 import replayVisionE2e from '@lib/programs/replay-vision/test/e2e.json';
 import selfDrivingE2e from '@lib/programs/self-driving/test/e2e.json';
 import sourceMapsE2e from '@lib/programs/error-tracking-upload-source-maps/test/e2e.json';
+import errorTrackingE2e from '@lib/programs/error-tracking/test/e2e.json';
 import warehouseSourceE2e from '@lib/programs/warehouse-source/test/e2e.json';
+import auditE2e from '@lib/programs/audit/test/e2e.json';
 
 const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
   [Program.PostHogIntegration]:
@@ -36,7 +38,9 @@ const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
   [Program.SelfDriving]: selfDrivingE2e.profile as WizardE2eProfile,
   [Program.ErrorTrackingUploadSourceMaps]:
     sourceMapsE2e.profile as WizardE2eProfile,
+  [Program.ErrorTracking]: errorTrackingE2e.profile as WizardE2eProfile,
   [Program.WarehouseSource]: warehouseSourceE2e.profile as WizardE2eProfile,
+  [Program.Audit]: auditE2e.profile as WizardE2eProfile,
 };
 
 const VARIATIONS: Partial<Record<ProgramId, WizardE2eVariation[]>> = {
@@ -46,8 +50,10 @@ const VARIATIONS: Partial<Record<ProgramId, WizardE2eVariation[]>> = {
     aiObservabilityE2e.variations as WizardE2eVariation[],
   [Program.Metrics]: metricsE2e.variations as WizardE2eVariation[],
   [Program.ReplayVision]: replayVisionE2e.variations as WizardE2eVariation[],
+  [Program.ErrorTracking]: errorTrackingE2e.variations as WizardE2eVariation[],
   [Program.WarehouseSource]:
     warehouseSourceE2e.variations as WizardE2eVariation[],
+  [Program.Audit]: auditE2e.variations as WizardE2eVariation[],
 };
 
 /** The e2e profile for a program, or the happy-path default if none is set. */

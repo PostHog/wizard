@@ -6,6 +6,11 @@ const TMP = process.platform === 'win32' ? tmpdir() : '/tmp';
 
 export const WIZARD_LOG_FILE = join(TMP, 'posthog-wizard.log');
 export const WIZARD_BENCHMARK_FILE = join(TMP, 'posthog-wizard-benchmark.json');
+/** Default target of `--task-stream-log`. Dev builds only. */
+export const WIZARD_TASK_STREAM_FILE = join(
+  TMP,
+  'posthog-wizard-task-stream.jsonl',
+);
 export const WIZARD_YARA_REPORT_FILE = join(
   TMP,
   'posthog-wizard-yara-report.json',

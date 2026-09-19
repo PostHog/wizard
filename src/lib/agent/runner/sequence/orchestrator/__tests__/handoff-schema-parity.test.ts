@@ -5,8 +5,16 @@
  * asked for a report section it could not submit.
  */
 import { describe, it, expect } from 'vitest';
-import { HANDOFF_FIELDS, HANDOFF_SHAPE_KEYS } from '../queue-tools';
-import { PI_HANDOFF_PARAM_KEYS } from '../../../harness/pi/orchestrator-tools';
+import {
+  COMPLETE_TASK_DESCRIPTION,
+  HANDOFF_FIELDS,
+  HANDOFF_SHAPE_KEYS,
+  type OrchestratorToolsContext,
+} from '../queue-tools';
+import {
+  createPiOrchestratorTools,
+  PI_HANDOFF_PARAM_KEYS,
+} from '../../../harness/pi/orchestrator-tools';
 
 describe('complete_task handoff schema', () => {
   it('exposes the same fields on both harnesses', () => {
@@ -32,4 +40,30 @@ describe('complete_task handoff schema', () => {
       expect(PI_HANDOFF_PARAM_KEYS).toContain(field);
     },
   );
+});
+
+describe('complete_task description', () => {
+  const piCompleteTask = () => {
+    const ctx = { validTypes: [] } as unknown as OrchestratorToolsContext;
+    const tool = createPiOrchestratorTools(ctx).find(
+      (t) => (t as unknown as { name: string }).name === 'complete_task',
+    );
+    return tool as unknown as { description: string };
+  };
+
+  it('shares one tool description with the MCP server', () => {
+    expect(piCompleteTask().description).toBe(COMPLETE_TASK_DESCRIPTION);
+  });
+
+  // An agent that cannot see the nesting spends a turn on a rejected flat call.
+  it.each(['goals', 'did', 'forNextAgent'])(
+    'names %s as a field that goes inside the nested handoff',
+    (field) => {
+      expect(COMPLETE_TASK_DESCRIPTION).toContain(field);
+    },
+  );
+
+  it('says the handoff is nested', () => {
+    expect(COMPLETE_TASK_DESCRIPTION).toMatch(/nested object/);
+  });
 });

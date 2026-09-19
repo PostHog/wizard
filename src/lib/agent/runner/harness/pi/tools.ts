@@ -19,21 +19,36 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import {
+  AUDIT_ADD_CHECKS_DESCRIPTION,
+  AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_SEED_CHECKS_DESCRIPTION,
+  AUDIT_SEED_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_STATUSES,
   CHECK_ENV_KEYS_DESCRIPTION,
   CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
   DEFAULT_ASK_MAX_QUESTIONS,
   ENV_FILE_PATH_DESCRIPTION,
   WIZARD_TOOL_NAMES,
+  addAuditChecks,
   checkEnvKeys as checkEnvKeysCore,
+  resolveAuditChecks,
+  seedAuditChecks,
   createAskAccounting,
+  describeAskCancellation,
+  ensureGitignoreCoverage,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
   normaliseAskSubject,
+  resolveAskQuestionKinds,
   resolveEnvPath,
   resolveEnvSecretRefs,
   templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
   vaultSensitiveAnswers,
+  WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
@@ -47,6 +62,9 @@ import {
   publishHandoff,
 } from '@lib/wizard-tools/handoff';
 import { createSecretVault } from '@lib/secret-vault';
+import { AUDIT_CHECKS_FILE } from '@lib/programs/audit/types';
+import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
+import { makeMutex } from '@utils/atomic-ledger';
 import { withMode } from './index';
 import {
   detectNodePackageManagers,
@@ -209,14 +227,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       ),
     }),
     async execute(_id, args) {
-      const forbidden = Object.keys(args.values).find(
-        (k) => k.toUpperCase() === 'POSTHOG_KEY',
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
       );
-      if (forbidden) {
-        return text(
-          `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
-        );
-      }
+      if (keyRefusal) return text(keyRefusal);
       // Resolve secret refs host-side; the value never reaches the agent.
       const resolution = resolveEnvSecretRefs(args.values, secretVault);
       if (!resolution.ok) {
@@ -241,6 +256,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(resolved, merged, 'utf8');
+      // Same post-write pass as the MCP facade: a credential file the
+      // project does not ignore yet gets committed by the next `git add`.
+      ensureGitignoreCoverage(workingDirectory, path.basename(resolved));
       logToFile(
         `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(
           ',',
@@ -250,6 +268,109 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         `Wrote ${Object.keys(args.values).length} key(s) to ${args.filePath}.`,
       );
     },
+  });
+
+  // ── Audit ledger ────────────────────────────────────────────────────
+  // Native mirror of the three MCP audit tools; pi mounts no MCP server, so
+  // without these an audit cannot move a check off pending. Descriptions and
+  // write semantics come from the shared helpers, so the facades cannot drift.
+  const auditLedgerPath = path.join(workingDirectory, AUDIT_CHECKS_FILE);
+  const auditMutex = makeMutex();
+  const auditStatus = Type.Union(
+    AUDIT_STATUSES.map((s) => Type.Literal(s)),
+    { description: 'Check outcome' },
+  );
+  const auditCheck = Type.Object({
+    id: Type.String({ description: 'Stable kebab-case check id' }),
+    area: Type.String({ description: 'Short group name, e.g. Installation' }),
+    label: Type.String({ description: 'Short human name for the check' }),
+    status: auditStatus,
+    file: Type.Optional(Type.String({ description: 'Optional path:line' })),
+    details: Type.Optional(
+      Type.String({ description: 'Optional one-line explanation' }),
+    ),
+  });
+
+  const auditSeedChecks = defineTool({
+    name: 'audit_seed_checks',
+    label: 'Seed audit checks',
+    description: AUDIT_SEED_CHECKS_DESCRIPTION,
+    promptSnippet:
+      'audit_seed_checks(checks) — write the full pending checklist to the audit ledger',
+    parameters: Type.Object({
+      checks: Type.Array(auditCheck, {
+        description: AUDIT_SEED_CHECKS_PARAM_DESCRIPTION,
+      }),
+    }),
+    execute: (_id, args) =>
+      auditMutex(() => {
+        const result = seedAuditChecks(
+          auditLedgerPath,
+          args.checks as AuditCheck[],
+        );
+        logToFile(`[pi] audit_seed_checks: ${result.message}`);
+        return text(result.message);
+      }),
+  });
+
+  const auditAddChecks = defineTool({
+    name: 'audit_add_checks',
+    label: 'Add audit checks',
+    description: AUDIT_ADD_CHECKS_DESCRIPTION,
+    promptSnippet:
+      'audit_add_checks(checks) — append runtime-discovered checks to the ledger',
+    parameters: Type.Object({
+      checks: Type.Array(auditCheck, {
+        minItems: 1,
+        description: AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
+      }),
+    }),
+    execute: (_id, args) =>
+      auditMutex(() => {
+        const result = addAuditChecks(
+          auditLedgerPath,
+          args.checks as AuditCheck[],
+        );
+        logToFile(`[pi] audit_add_checks: ${result.message}`);
+        return text(result.message);
+      }),
+  });
+
+  const auditResolveChecks = defineTool({
+    name: 'audit_resolve_checks',
+    label: 'Resolve audit checks',
+    description: AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+    promptSnippet:
+      'audit_resolve_checks(updates) — patch each check by id as you finish it',
+    parameters: Type.Object({
+      updates: Type.Array(
+        Type.Object({
+          id: Type.String({ description: 'Existing check id' }),
+          status: auditStatus,
+          file: Type.Optional(
+            Type.String({ description: 'Optional path:line' }),
+          ),
+          details: Type.Optional(
+            Type.String({ description: 'Optional one-line explanation' }),
+          ),
+        }),
+        { minItems: 1, description: AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION },
+      ),
+    }),
+    execute: (_id, args) =>
+      auditMutex(() => {
+        const result = resolveAuditChecks(
+          auditLedgerPath,
+          args.updates as Array<{
+            id: string;
+            status: AuditStatus;
+            file?: string;
+            details?: string;
+          }>,
+        );
+        logToFile(`[pi] audit_resolve_checks: ${result.message}`);
+        return text(result.message);
+      }),
   });
 
   const detectPm = defineTool({
@@ -286,16 +407,15 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           prompt: Type.String({
             description: 'Question text shown to the user',
           }),
-          kind: Type.Union(
-            [
-              Type.Literal('single'),
-              Type.Literal('multi'),
-              Type.Literal('text'),
-            ],
-            {
-              description:
-                "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
-            },
+          kind: Type.Optional(
+            Type.Union(
+              [
+                Type.Literal('single'),
+                Type.Literal('multi'),
+                Type.Literal('text'),
+              ],
+              { description: WIZARD_ASK_KIND_DESCRIPTION },
+            ),
           ),
           options: Type.Optional(
             Type.Array(
@@ -348,9 +468,13 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         return text(cap.message);
       }
 
+      // A question with no kind takes the one its options imply, so the
+      // overlay always has an input to render. See resolveAskQuestionKinds.
+      const questions = resolveAskQuestionKinds(args.questions);
+
       // The schema can't enforce per-kind requirements or unique ids.
       const ids = new Set<string>();
-      for (const q of args.questions) {
+      for (const q of questions) {
         if ((q.kind === 'single' || q.kind === 'multi') && !q.options?.length) {
           return text(
             `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
@@ -376,24 +500,35 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       // mutate files while it's waiting on the user's answer.
       onAskPendingChange?.(true);
       try {
-        const answers = await askBridge.request({
-          questions: args.questions,
+        const { answers, timedOut } = await askBridge.request({
+          questions,
           subject: normaliseAskSubject(args.subject),
         });
         if (isFullyCancelled(answers)) askAccounting.refund(args.subject);
         // Sensitive answers go to the vault; the agent sees an opaque ref
         // (same contract as the MCP wizard_ask).
         const sanitised = vaultSensitiveAnswers(
-          args.questions,
+          questions,
           answers,
           secretVault,
         );
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the MCP facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
         logToFile(
           `[pi] wizard_ask: resolved ${
             Object.keys(answers).length
-          } answer(s) for ${args.questions.length} question(s)`,
+          } answer(s) for ${args.questions.length} question(s)${
+            cancelled ? `, cancelled: ${cancelled.reason}` : ''
+          }`,
         );
-        return text(JSON.stringify({ answers: sanitised }, null, 2));
+        return text(
+          JSON.stringify(
+            { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+            null,
+            2,
+          ),
+        );
       } catch (err) {
         askAccounting.refund(args.subject);
         const message = err instanceof Error ? err.message : String(err);
@@ -430,6 +565,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     checkEnvKeys,
     setEnvValues,
     detectPm,
+    // Parallel: the mutex serializes the writes, so a subagent fan-out is safe.
+    withMode(auditSeedChecks, 'parallel'),
+    withMode(auditAddChecks, 'parallel'),
+    withMode(auditResolveChecks, 'parallel'),
     // Sequential: it mutates the store's handoff state.
     withMode(publishHandoffTool, 'sequential'),
   ];

@@ -146,7 +146,7 @@ export class WizardCiDriver {
     };
   }
 
-  /** Commit actions legal on the current screen. */
+  /** Exposed through read_state.actions; there is no list_actions MCP tool. */
   listActions(): ActionView[] {
     return actionsForScreen(this.store.currentScreen).map((a) => ({
       id: a.id,

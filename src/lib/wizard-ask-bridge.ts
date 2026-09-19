@@ -34,13 +34,25 @@ export interface WizardAskRequest {
   subject?: string;
 }
 
+/**
+ * One ask's outcome.
+ *
+ * `answers` holds one answer per question id (string for `single`/`text`,
+ * string[] for `multi`); cancelled fields come back as the literal
+ * `"__cancelled__"`. `timedOut` records that the per-question timeout, rather
+ * than the user, ended the request — the one fact only the bridge holds, and
+ * the difference between "the user said no to this" and "nobody is at the
+ * terminal any more". Both arrive as {@link CANCELLED_SENTINEL} answers, so
+ * without it the two are indistinguishable to the tool facades and to the agent.
+ */
+export interface AskResponse {
+  answers: AskAnswers;
+  timedOut: boolean;
+}
+
 export interface WizardAskBridge {
-  /**
-   * Open the WizardAsk overlay and resolve with the user's answers.
-   * One answer per question id (string for `single`/`text`, string[] for
-   * `multi`). Cancelled fields come back as the literal `"__cancelled__"`.
-   */
-  request(req: WizardAskRequest): Promise<AskAnswers>;
+  /** Open the WizardAsk overlay and resolve with the user's answers. */
+  request(req: WizardAskRequest): Promise<AskResponse>;
 }
 
 export interface WizardAskBridgeOptions {
@@ -76,6 +88,14 @@ export const CANCELLED_SENTINEL = '__cancelled__';
 /** Default per-question timeout (5 minutes). */
 export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * The longer per-question timeout, for asks that send the user on an errand —
+ * open a database console, mint a restricted API key. The default above is
+ * sized for a question answerable from memory and expires long before an
+ * errand is done.
+ */
+export const LONGER_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};
   for (const q of questions) {
@@ -107,6 +127,7 @@ export function createWizardAskBridge(
 
       const startedAt = Date.now();
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
 
       // Race the user against the timeout. Whichever fires first wins. On
       // timeout we also cancel the host's overlay: resolving our side alone
@@ -114,6 +135,7 @@ export function createWizardAskBridge(
       // wizard_ask would be rejected as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
+          timedOut = true;
           opts.cancelQuestion?.();
           resolve(buildCancelledAnswers(questions));
         }, timeoutMs);
@@ -132,7 +154,7 @@ export function createWizardAskBridge(
             subject,
             question_count: questions.length,
             duration_ms: durationMs,
-            timed_out: durationMs >= timeoutMs,
+            timed_out: timedOut,
           });
         } else {
           analytics.wizardCapture('wizard_ask answered', {
@@ -143,7 +165,7 @@ export function createWizardAskBridge(
           });
         }
 
-        return answers;
+        return { answers, timedOut };
       } finally {
         if (timer) clearTimeout(timer);
       }

@@ -3,6 +3,8 @@ import {
   GatewayMintFailed,
   GatewayMintRefused,
   buildWizardPropertiesBlob,
+  configureGatewayCredentialsForCI,
+  configureGatewayFromCIEnvironment,
   gatewayAuth,
   isPastRefresh,
   isTrustedGatewayUrl,
@@ -13,6 +15,12 @@ import { ErrorCodes } from '@lib/errors';
 import { WizardError } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+
+vi.mock('@lib/health-checks/endpoints', () => ({
+  checkLlmGatewayHealth: vi.fn(),
+}));
 
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
@@ -45,6 +53,9 @@ describe('gatewayAuth', () => {
   beforeEach(() => {
     resetGatewaySession();
     fetchMock.mockReset();
+    vi.mocked(checkLlmGatewayHealth)
+      .mockReset()
+      .mockResolvedValue({ status: ServiceHealthStatus.Healthy });
     vi.mocked(analytics.wizardCapture).mockClear();
     vi.mocked(logToFile).mockClear();
     vi.stubGlobal('fetch', fetchMock);
@@ -54,6 +65,86 @@ describe('gatewayAuth', () => {
     vi.unstubAllGlobals();
   });
 
+  it('uses the supplied CI bearer across programs and time without minting', async () => {
+    configureGatewayCredentialsForCI(
+      ' opaque-ci-token ',
+      42,
+      'https://ai-gateway.us.posthog.com/',
+    );
+    const auth = {
+      token: 'opaque-ci-token',
+      teamId: 42,
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      refreshAtMs: Infinity,
+    };
+    const results = await Promise.all(
+      ['integration', 'audit', undefined].map((program) =>
+        gatewayAuth(host, 'phx_project', program),
+      ),
+    );
+    expect(results).toEqual([auth, auth, auth]);
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Number.MAX_SAFE_INTEGER);
+    try {
+      expect(await gatewayAuth(host, 'phx_project', 'integration')).toEqual(
+        auth,
+      );
+      expect(isPastRefresh(auth)).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['', 42, 'https://ai-gateway.us.posthog.com'],
+    ['token', 0, 'https://ai-gateway.us.posthog.com'],
+    ['token', 1.5, 'https://ai-gateway.us.posthog.com'],
+    ['token', NaN, 'https://ai-gateway.us.posthog.com'],
+    ['token', 42, 'https://untrusted.example'],
+    ['token', 42, 'https://ai-gateway.us.posthog.com/v1'],
+    ['token', 42, 'https://gateway.us.posthog.com'],
+    ['token', 42, 'https://gateway.eu.posthog.com'],
+    ['token', 42, 'ftp://localhost'],
+  ] as const)(
+    'rejects invalid CI gateway configuration',
+    (token, projectId, url) => {
+      expect(() =>
+        configureGatewayCredentialsForCI(token, projectId, url),
+      ).toThrow();
+    },
+  );
+
+  it('rejects direct CI gateway auth in production builds', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.resetModules();
+    try {
+      const prod = await import('@lib/gateway-session');
+      expect(() =>
+        prod.configureGatewayCredentialsForCI(
+          'token',
+          42,
+          'https://ai-gateway.us.posthog.com',
+        ),
+      ).toThrow('non-production');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
+  it('requires an explicit gateway token file for CI', () => {
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', '');
+    try {
+      expect(() => configureGatewayFromCIEnvironment(42, 'us')).toThrow(
+        'WIZARD_CI_GATEWAY_TOKEN_FILE is required',
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('resolves auth from a mint response and caches it', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
@@ -61,14 +152,14 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
           team_id: 42,
         }),
     });
 
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(auth).toEqual({
-      gatewayUrl: 'https://gateway.us.posthog.com',
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
       token: 'phe_minted',
       teamId: 42,
       refreshAtMs: expect.any(Number),
@@ -86,7 +177,40 @@ describe('gatewayAuth', () => {
     // Second resolve inside the TTL reuses the cache, so no second mint.
     await gatewayAuth(host, 'pha_oauth', 'integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(
+      'https://ai-gateway.us.posthog.com',
+    );
   });
+
+  it.each([ServiceHealthStatus.Down, ServiceHealthStatus.NoConnection])(
+    'reports gateway %s without exposing diagnostics or caching auth',
+    async (status) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'https://ai-gateway.us.posthog.com',
+          }),
+      });
+      vi.mocked(checkLlmGatewayHealth).mockResolvedValueOnce({
+        status,
+        error: 'private dependency details',
+      });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toMatchObject({
+        name: 'WizardError',
+        code: ErrorCodes.EnvServiceOutage,
+        message:
+          'The PostHog AI gateway is unavailable. Please try again later.',
+      });
+      await gatewayAuth(host, 'pha_oauth', 'integration');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(checkLlmGatewayHealth).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('records a successful mint without ever logging the token', async () => {
     fetchMock.mockResolvedValue({
@@ -95,7 +219,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_secret_value',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
           team_id: 42,
         }),
     });
@@ -455,7 +579,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
 
@@ -488,7 +612,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_minted',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
 
@@ -546,7 +670,7 @@ describe('gatewayAuth', () => {
             Promise.resolve({
               token: 'phe_minted',
               expires_at: new Date(Date.now() + ttlMs).toISOString(),
-              gateway_url: 'https://gateway.us.posthog.com',
+              gateway_url: 'https://ai-gateway.us.posthog.com',
             }),
         }),
       );
@@ -578,7 +702,7 @@ describe('gatewayAuth', () => {
           Promise.resolve({
             token: 'phe_minted',
             expires_at: new Date(Date.now() + ttlMs).toISOString(),
-            gateway_url: 'https://gateway.us.posthog.com',
+            gateway_url: 'https://ai-gateway.us.posthog.com',
           }),
       });
       const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
@@ -608,7 +732,7 @@ describe('gatewayAuth', () => {
         Promise.resolve({
           token: 'phe_after_retry',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://gateway.us.posthog.com',
+          gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
     const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
@@ -628,20 +752,27 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses a gateway url outside the trusted origins', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          token: 'phe_x',
-          expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          gateway_url: 'https://evil.example.com',
-        }),
-    });
-    await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-    ).rejects.toBeInstanceOf(GatewayMintFailed);
-  });
+  it.each([
+    'https://evil.example.com',
+    'https://gateway.us.posthog.com',
+    'https://gateway.eu.posthog.com',
+  ])(
+    'refuses an untrusted or retired minted gateway %s',
+    async (gatewayUrl) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_x',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: gatewayUrl,
+          }),
+      });
+      await expect(
+        gatewayAuth(host, 'pha_oauth', 'integration'),
+      ).rejects.toBeInstanceOf(GatewayMintFailed);
+    },
+  );
 
   it('fails the run on a transport failure', async () => {
     fetchMock.mockRejectedValue(new Error('network down'));
@@ -703,6 +834,12 @@ describe('isTrustedGatewayUrl', () => {
   });
 
   it.each([
+    'https://gateway.us.posthog.com',
+    'https://gateway.eu.posthog.com',
+    'https://gateway.us.posthog.com/wizard',
+    'https://gateway.eu.posthog.com/wizard',
+    'https://us.posthog.com',
+    'https://ai-gateway.us.posthog.com:444',
     'https://evil.example.com',
     'http://ai-gateway.us.posthog.com',
     'not-a-url',

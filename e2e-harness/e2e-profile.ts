@@ -283,6 +283,7 @@ export function decideE2eAction(
     case ScreenId.AgentSkillIntro:
     case ScreenId.AiObservabilityIntro:
     case ScreenId.MetricsIntro:
+    case ScreenId.ErrorTrackingIntro:
     case ScreenId.AuditIntro:
     case ScreenId.SourceMapsIntro:
     case ScreenId.DoctorIntro:
@@ -320,6 +321,7 @@ export function decideE2eAction(
 
     case ScreenId.Outro:
     case ScreenId.SourceMapsOutro:
+    case ScreenId.AuditOutro:
       return { action: { id: 'dismiss_outro' } };
 
     case ScreenId.Mcp:
