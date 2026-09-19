@@ -143,15 +143,17 @@ Connect the sources.
 
   it('marks the sink and the runner-seeded task from frontmatter', () => {
     const p = parseAgentPrompt(
-      '---\nsink: true\nrunnerSeeded: true\n---\nx',
+      '---\nsink: true\nrunnerSeeded: true\noptional: true\n---\nx',
       't',
     );
     expect(p.sink).toBe(true);
     expect(p.runnerSeeded).toBe(true);
+    expect(p.optional).toBe(true);
 
     const plain = parseAgentPrompt('---\nmodel: x\n---\nx', 't');
     expect(plain.sink).toBe(false);
     expect(plain.runnerSeeded).toBe(false);
+    expect(plain.optional).toBe(false);
   });
 
   it('defaults missing array fields to empty and models to undefined', () => {
@@ -212,6 +214,7 @@ describe('buildRegistry', () => {
     seed: false,
     sink: false,
     runnerSeeded: false,
+    optional: false,
     skills: [],
     allowedTools: [],
     disallowedTools: [],
@@ -243,15 +246,17 @@ describe('buildRegistry', () => {
         prompt({ type: 'plan', flow: 'f', seed: true }),
         prompt({ type: 'install', flow: 'f' }),
         prompt({ type: 'warehouse', flow: 'f', runnerSeeded: true }),
+        prompt({ type: 'logs', flow: 'f', optional: true }),
         prompt({ type: 'report', flow: 'f', sink: true }),
       ],
       'f',
     );
 
     // The type still runs — it is only the planner that cannot reach it.
-    expect(registry.types).toEqual(['install', 'warehouse', 'report']);
-    expect(registry.enqueueableTypes).toEqual(['install', 'report']);
+    expect(registry.types).toEqual(['install', 'warehouse', 'logs', 'report']);
+    expect(registry.enqueueableTypes).toEqual(['install', 'logs', 'report']);
     expect(registry.runnerSeededTypes).toEqual(['warehouse']);
+    expect(registry.optionalTypes).toEqual(['logs']);
     expect(registry.sinkTypes).toEqual(['report']);
   });
 
@@ -322,6 +327,7 @@ describe('resolveTask', () => {
     seed: false,
     sink: false,
     runnerSeeded: false,
+    optional: false,
     modelPi: 'openai/gpt-5.6-luna',
     effortPi: 'low',
     modelSdk: 'claude-haiku-4-5',

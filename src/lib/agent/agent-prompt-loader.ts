@@ -214,6 +214,8 @@ export interface AgentPrompt {
    * one an agent can reach — it can neither invent the task nor forget it.
    */
   runnerSeeded: boolean;
+  /** Marks a supplementary task: terminal failure unblocks dependents and never fails the run. */
+  optional: boolean;
   /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
    * harness. The mapping is not 1:1 across providers, so each agent names both. */
   modelPi?: string;
@@ -260,6 +262,8 @@ export interface AgentRegistry {
   readonly sinkTypes: string[];
   /** The types only the wizard queues, from what it detected before the run. */
   readonly runnerSeededTypes: string[];
+  /** The types whose terminal failure must not block dependents or fail the run. */
+  readonly optionalTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
   get(type: string): AgentPrompt | undefined;
@@ -300,6 +304,7 @@ export function buildRegistry(
     enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
     sinkTypes: tasks.filter((p) => p.sink).map((p) => p.type),
     runnerSeededTypes: tasks.filter((p) => p.runnerSeeded).map((p) => p.type),
+    optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
     seed: inFlow.find((p) => p.seed),
     get: (type) => byType.get(type),
   };
@@ -393,6 +398,7 @@ export function parseAgentPrompt(
     seed: fields.seed === 'true',
     sink: fields.sink === 'true',
     runnerSeeded: fields.runnerSeeded === 'true',
+    optional: fields.optional === 'true',
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),

@@ -640,6 +640,8 @@ export async function runOrchestrator(
     // — a single planner edge is enough to pull the task back to the front of
     // the drain and put its prompt in front of the code work again.
     runnerSeededTypes: registry.runnerSeededTypes,
+    // Optionality comes from the task's frontmatter, never from the enqueue call.
+    optionalTypes: registry.optionalTypes,
     currentTaskId,
   });
 
