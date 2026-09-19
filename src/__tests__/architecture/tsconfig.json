@@ -4,5 +4,13 @@
     "outDir": "../../../.tsbuild/architecture"
   },
   "include": ["**/*", "../../../types/**/*.d.ts"],
-  "references": []
+  "references": [
+    {
+      "path": "../../../tsconfig.env.json"
+    },
+    {
+      "path": "../../store"
+    }
+  ],
+  "exclude": ["vitest.config.ts"]
 }

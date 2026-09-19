@@ -7,6 +7,13 @@ export type Surface = 'env' | 'store' | 'agent' | 'tui' | 'cli' | 'harness';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
 
+/** Build and test configuration at the repo root; not surface code. */
+const TOOLING_FILES = new Set([
+  'vitest.config.ts',
+  'vitest.shared.ts',
+  'tsdown.config.ts',
+]);
+
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
     ['env', (p) => p === 'src/env.ts'],
@@ -18,7 +25,9 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
       (p) =>
         p.startsWith('e2e-harness/') ||
         p.startsWith('e2e-tests/') ||
-        p.startsWith('scripts/'),
+        p.startsWith('scripts/') ||
+        TOOLING_FILES.has(p) ||
+        p.endsWith('/vitest.config.ts'),
     ],
   ];
 
@@ -197,6 +206,7 @@ function collectFiles(absDir: string, into: string[]): void {
     if (!/\.tsx?$/.test(entry.name)) continue;
     if (/\.d\.ts$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name))
       continue;
+    if (entry.name === 'vitest.config.ts') continue;
     into.push(toRepoRelative(abs));
   }
 }
@@ -318,6 +328,8 @@ function analyze(): Analysis {
         !PUBLIC_ENTRIES[to].includes(target)
       )
         violations.set(key, `deep:${from}->${to}`);
+      else if (/\/testing\//.test(target) && !/\/testing\//.test(file))
+        violations.set(key, 'testing-in-shipped-code');
     }
   }
 

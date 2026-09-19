@@ -234,6 +234,7 @@ export {
 export { isSkillInstallCommand } from './skill-install.js';
 export { Interrupt } from './state/interrupts.js';
 export { isRunFailure } from './state/run-failure.js';
+export { STORE_BOUNDARY_MEMBERS } from './state/store-api.js';
 export {
   MAX_STATUS_MESSAGES,
   WizardStore,

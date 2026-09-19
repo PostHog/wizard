@@ -12,10 +12,35 @@ export function postAuthGateIdsFor(steps: readonly ProgramStep[]): string[] {
     .map((s) => s.id);
 }
 
-/** The run contract the agent receives for a program. */
+/** The run contract the agent receives for a program: nothing beyond it. */
 export function runConfigFor(config: ProgramConfig): ProgramRunConfig {
+  const {
+    id,
+    run,
+    agentFlow,
+    skillId,
+    requiresAi,
+    seedTasks,
+    auditLedgerFile,
+    reportFile,
+    eventPlanFile,
+    streamWorkflowId,
+    allowedTools,
+    disallowedTools,
+  } = config;
   return {
-    ...config,
+    id,
+    run,
+    agentFlow,
+    skillId,
+    requiresAi,
+    seedTasks,
+    auditLedgerFile,
+    reportFile,
+    eventPlanFile,
+    streamWorkflowId,
+    allowedTools,
+    disallowedTools,
     postAuthGateIds: postAuthGateIdsFor(config.steps),
     healthCheckDeclared: config.steps.some(
       (s) => s.screenId === 'health-check',

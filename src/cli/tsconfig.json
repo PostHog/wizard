@@ -22,5 +22,6 @@
     {
       "path": "../tui"
     }
-  ]
+  ],
+  "exclude": ["vitest.config.ts"]
 }

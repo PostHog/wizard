@@ -26,4 +26,8 @@ Ink, screens, program definitions, or session mutation outside `WizardUI`.
 
 ## Tests
 
-`pnpm test:agent` and `pnpm typecheck:agent`.
+`pnpm test:agent` and `pnpm typecheck:agent`. `vitest.config.ts` resolves
+`@env`, `@store`, and `@agent`; `ink` throws. `testing/fake-harness.ts` records
+run and task inputs behind the `AgentHarness` interface.
+`__tests__/contract.test.ts` pins that both harnesses and the fake implement
+`AgentHarness` and that `runAgent` is the `RunAgent` entry the cli calls.

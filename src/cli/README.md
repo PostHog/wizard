@@ -18,7 +18,11 @@ Every surface, but only through `@store`, `@store/types`, `@store/programs`,
 
 ## Tests
 
-`pnpm test:cli` and `pnpm typecheck:cli`.
+`pnpm test:cli` and `pnpm typecheck:cli`. `vitest.config.ts` resolves every
+surface; `ink` throws, so a command that loads the TUI eagerly fails here.
+`testing/fake-surfaces.ts` provides `fakeRunAgent` (typed `RunAgent`) and
+`fakeStartTUI` (a real store behind `StoreUI`). `__tests__/contract.test.ts`
+pins unique command names and aliases and the fakes' types.
 
 ## Typecheck layout
 

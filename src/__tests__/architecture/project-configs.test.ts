@@ -46,6 +46,23 @@ describe('tsconfig project references', () => {
     },
   );
 
+  it.each(['store', 'agent', 'tui', 'cli'] as const)(
+    '%s Vitest project resolves only the surfaces it may import',
+    (surface) => {
+      const text = fs.readFileSync(
+        path.join(REPO_ROOT, `src/${surface}/vitest.config.ts`),
+        'utf8',
+      );
+      const match = /imports:\s*\[([^\]]*)\]/.exec(text);
+      const imports = (match?.[1] ?? '')
+        .split(',')
+        .map((s) => s.trim().replace(/['"]/g, ''))
+        .filter(Boolean)
+        .sort();
+      expect(imports).toEqual([...ALLOWED_IMPORTS[surface]].sort());
+    },
+  );
+
   it('the solution lists every project', () => {
     const refs = referencesOf('tsconfig.solution.json');
     for (const p of Object.values(PROJECTS)) {

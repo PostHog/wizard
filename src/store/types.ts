@@ -93,3 +93,4 @@ export type {
   WizardUI,
 } from './ui/wizard-ui.js';
 export type { WizardSpellbook } from './wizard-spellbook.js';
+export type { StoreBoundaryMember, WizardStoreApi } from './state/store-api.js';

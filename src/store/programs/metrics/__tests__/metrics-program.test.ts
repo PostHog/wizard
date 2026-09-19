@@ -1,9 +1,7 @@
-import { AGENT_SKILL_STEPS } from '@store/programs/agent-skill';
-import { getProgramConfig, Program } from '@store/programs/program-registry';
-import { metricsConfig } from '@store/programs/metrics';
-import type { ProgramRun } from '@store/types';
-
-import { metricsCommand } from '../commands/metrics.js';
+import { AGENT_SKILL_STEPS } from '../../agent-skill/index.js';
+import { getProgramConfig, Program } from '../../program-registry.js';
+import { metricsConfig } from '../index.js';
+import type { ProgramRun } from '../../../types.js';
 
 function staticRun(config: typeof metricsConfig): ProgramRun {
   if (typeof config.run === 'function') {
@@ -57,11 +55,5 @@ describe('metrics program', () => {
     expect(run.docsUrl).toBe('https://posthog.com/docs/metrics');
     expect(run.reportFile).toBe('posthog-metrics-report.md');
     expect(metricsConfig.reportFile).toBe(run.reportFile);
-  });
-
-  it('is exposed as a yargs command via nativeCommandFactory', () => {
-    expect(metricsCommand.name).toBe('metrics');
-    expect(metricsCommand.description).toBe(metricsConfig.description);
-    expect(typeof metricsCommand.handler).toBe('function');
   });
 });

@@ -25,5 +25,9 @@ the cli imports it lazily.
 
 ## Tests
 
-`pnpm test:tui` and `pnpm typecheck:tui`. Frame goldens render every screen
-through `ink-testing-library`.
+`pnpm test:tui` and `pnpm typecheck:tui`. `vitest.config.ts` resolves `@env`,
+`@store`, and `@tui`, with the no-op `ink` mock that frame tests swap for the
+real package. `__tests__/contract.test.ts` pins that `LoggingUI` and
+`HeadlessUI` implement `WizardUI` with `interactive: false`, that `UiStore`
+satisfies `UiStoreApi`, and that every flow key a program declares is a
+`ScreenId`. Frame goldens render every screen through `ink-testing-library`.

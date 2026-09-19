@@ -1,5 +1,5 @@
-import { shouldDisableAsk } from '@store';
-import { buildSession } from '@store/session/wizard-session';
+import { shouldDisableAsk } from '../ask-policy.js';
+import { buildSession } from '../wizard-session.js';
 
 describe('shouldDisableAsk', () => {
   it('enables wizard_ask in interactive runs by default', () => {

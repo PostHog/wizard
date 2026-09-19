@@ -11,5 +11,6 @@
     {
       "path": "../store"
     }
-  ]
+  ],
+  "exclude": ["vitest.config.ts"]
 }

@@ -30,5 +30,12 @@ Ink, console output, or any import of `@agent`, `@tui`, or `@cli`.
 
 ## Tests
 
-`pnpm test:store` and `pnpm typecheck:store`. Goldens live under
+`pnpm test:store` and `pnpm typecheck:store`. `vitest.config.ts` resolves only
+`@env` and `@store`; an import of any other surface fails at load and `ink`
+throws. `testing/` holds `createTestStore`; shipped code never imports it.
+`__tests__/contract.test.ts` pins the boundary: `StoreUI` and `NullUI` implement
+`WizardUI`, `ProgramConfig` extends `ProgramRunConfig`, `runConfigFor` emits
+nothing beyond the run contract, and `WizardStore` satisfies `WizardStoreApi`
+(`state/store-api.ts`, whose member list the architecture suite derives from
+real tui, cli, and harness usage). Goldens live under
 `**/__tests__/__snapshots__` and must stay byte identical across refactors.

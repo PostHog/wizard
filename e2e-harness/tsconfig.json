@@ -9,7 +9,13 @@
     "../__mocks__/**/*",
     "../vitest.config.ts",
     "../tsdown.config.ts",
-    "../types/**/*.d.ts"
+    "../types/**/*.d.ts",
+    "../vitest.shared.ts",
+    "../src/store/vitest.config.ts",
+    "../src/agent/vitest.config.ts",
+    "../src/tui/vitest.config.ts",
+    "../src/cli/vitest.config.ts",
+    "../src/__tests__/architecture/vitest.config.ts"
   ],
   "references": [
     {

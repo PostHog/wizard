@@ -11,7 +11,7 @@ import {
   RunPhase,
   McpOutcome,
 } from '@store/state/store';
-import { ScreenId, Overlay, type ScreenName } from '../router.js';
+import { Interrupt } from '../interrupts.js';
 import {
   buildSession,
   AdditionalFeature,
@@ -22,7 +22,7 @@ import {
   type TaskNotice,
   type WizardSession,
 } from '@store/session/wizard-session';
-import { EXPANDED_COUNT } from '../constants.js';
+import { MAX_STATUS_MESSAGES } from '../store.js';
 import { WizardReadiness } from '@store/health-checks/readiness';
 import { HostResolution } from '@store/host-resolution';
 import { Integration } from '@store/shared/constants';
@@ -30,7 +30,11 @@ import { FRAMEWORK_REGISTRY } from '@store/registry';
 import { analytics } from '@store/shared/analytics';
 import { PROGRAM_REGISTRY } from '@store/programs/program-registry';
 import type { SettingsConflict } from '@store/services/claude-settings';
-import { flowEntries, resolveActiveScreen } from '@store/state/flow-resolution';
+import {
+  FLOW_KEY,
+  flowEntries,
+  resolveActiveScreen,
+} from '@store/state/flow-resolution';
 import { flowFor } from '@store/programs/flow-for';
 
 vi.mock('@store/shared/analytics', () => ({
@@ -420,12 +424,12 @@ const MUTATIONS: MutationCase[] = [
   },
   {
     name: 'pushInterrupt',
-    invoke: (s) => s.pushInterrupt(Overlay.WizardAsk),
+    invoke: (s) => s.pushInterrupt(Interrupt.WizardAsk),
     emits: 1,
   },
   {
     name: 'popInterrupt',
-    prepare: (s) => s.pushInterrupt(Overlay.WizardAsk),
+    prepare: (s) => s.pushInterrupt(Interrupt.WizardAsk),
     invoke: (s) => s.popInterrupt(),
     emits: 1,
   },
@@ -633,18 +637,18 @@ describe('store invariants', () => {
       const store = createStore();
       expect(store.hasInterrupt).toBe(false);
 
-      store.pushInterrupt(Overlay.AuthError);
-      store.pushInterrupt(Overlay.SessionTimeout);
-      expect(store.currentScreen).toBe(Overlay.SessionTimeout);
+      store.pushInterrupt(Interrupt.AuthError);
+      store.pushInterrupt(Interrupt.SessionTimeout);
+      expect(store.currentScreen).toBe(Interrupt.SessionTimeout);
       expect(store.hasInterrupt).toBe(true);
 
       store.popInterrupt();
-      expect(store.currentScreen).toBe(Overlay.AuthError);
+      expect(store.currentScreen).toBe(Interrupt.AuthError);
       expect(store.hasInterrupt).toBe(true);
 
       store.popInterrupt();
       expect(store.hasInterrupt).toBe(false);
-      expect(store.currentScreen).toBe(ScreenId.Intro);
+      expect(store.currentScreen).toBe('intro');
     });
   });
 
@@ -660,20 +664,27 @@ describe('store invariants', () => {
 
     it('caps at the expanded window, dropping the oldest', () => {
       const store = createStore();
-      const total = EXPANDED_COUNT + 3;
+      const total = MAX_STATUS_MESSAGES + 3;
       for (let i = 0; i < total; i++) store.pushStatus(`m${i}`);
 
-      expect(store.statusMessages).toHaveLength(EXPANDED_COUNT);
-      expect(store.statusMessages[0]).toBe(`m${total - EXPANDED_COUNT}`);
-      expect(store.statusMessages[EXPANDED_COUNT - 1]).toBe(`m${total - 1}`);
+      expect(store.statusMessages).toHaveLength(MAX_STATUS_MESSAGES);
+      expect(store.statusMessages[0]).toBe(`m${total - MAX_STATUS_MESSAGES}`);
+      expect(store.statusMessages[MAX_STATUS_MESSAGES - 1]).toBe(
+        `m${total - 1}`,
+      );
     });
   });
 
   describe('screen resolution is total', () => {
     const PROGRAM_IDS = PROGRAM_REGISTRY.map((config) => config.id);
     const SCREEN_NAMES = new Set<string>([
-      ...Object.values(ScreenId),
-      ...Object.values(Overlay),
+      ...PROGRAM_IDS.flatMap((id) =>
+        flowFor(id).flow.steps.flatMap((step) =>
+          step.screenId ? [step.screenId] : [],
+        ),
+      ),
+      ...Object.values(FLOW_KEY),
+      ...Object.values(Interrupt),
     ]);
     const SEED = 0x5eed;
     const SESSION_COUNT = 200;
@@ -725,18 +736,12 @@ describe('store invariants', () => {
       return session;
     }
 
-    function resolveAll(program: ProgramId): ScreenName[] {
+    function resolveAll(program: ProgramId): string[] {
       const store = createStore(program);
       const rand = mulberry32(SEED);
-      const screens: ScreenName[] = [];
+      const screens: string[] = [];
       for (let i = 0; i < SESSION_COUNT; i++) {
-        screens.push(
-          resolveActiveScreen(
-            store.flow,
-            randomSession(rand),
-            [],
-          ) as ScreenName,
-        );
+        screens.push(resolveActiveScreen(store.flow, randomSession(rand), []));
       }
       return screens;
     }
@@ -754,7 +759,7 @@ describe('store invariants', () => {
 
     it.each(PROGRAM_IDS)('%s sequence ends on the exit screen', (program) => {
       const sequence = flowEntries(flowFor(program).flow);
-      expect(sequence[sequence.length - 1].id).toBe(ScreenId.Exit);
+      expect(sequence[sequence.length - 1].id).toBe('exit');
     });
 
     it('generates the same sessions from the same seed', () => {
