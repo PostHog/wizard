@@ -240,6 +240,10 @@ export interface WizardSession {
    * see `NEVER_FROM_ENV`, and keep that list in step with this comment.
    */
   e2eAsk: boolean;
+  /** `--control-socket`: the unix socket path a parent drives this run over, else null. */
+  controlSocket: string | null;
+  /** A controlled run starts its agent only after the parent posts `/run`. */
+  runRequested: boolean;
   /**
    * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
    * from `getLocalDev()` — neither belongs here. This one stays because
@@ -475,8 +479,9 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
-  /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
+  /** Keep the `wizard_ask` bridge wired in a `ci` session; `--e2e-ask` or the e2e host. */
   e2eAsk?: boolean;
+  controlSocket?: string;
   localDev?: boolean;
   localMcp?: boolean;
   localContextMill?: boolean;
@@ -504,6 +509,8 @@ export function buildSession(args: {
     ci: args.ci ?? false,
     signup: args.signup ?? false,
     e2eAsk: args.e2eAsk ?? false,
+    controlSocket: args.controlSocket ?? null,
+    runRequested: false,
     localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,

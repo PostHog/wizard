@@ -1,4 +1,5 @@
 import { Integration } from '../../shared/constants.js';
+import { pickIntegrationTargetAction } from '../shared/control-actions.js';
 import { detectFramework } from '../../detection/index.js';
 import { scopeInstallDirToProject } from '../../detection/project-scope.js';
 import { FRAMEWORK_REGISTRY } from '../../registry.js';
@@ -8,6 +9,7 @@ import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
+  ERROR_TRACKING_PROJECT_PATH_KEY,
 } from './detect-agentic.js';
 import type { ProgramConfig, ProgramStep } from '../program-step.js';
 import type { WizardSession } from '../../session/wizard-session.js';
@@ -74,6 +76,9 @@ const PICK_PROJECT_STEP: ProgramStep = {
   label: 'Detecting projects',
   screenId: 'error-tracking-detect',
   isComplete: (session) => session.integration != null,
+  controlActions: [
+    pickIntegrationTargetAction(ERROR_TRACKING_PROJECT_PATH_KEY),
+  ],
 };
 
 const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(

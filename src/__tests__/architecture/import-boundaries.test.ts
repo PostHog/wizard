@@ -70,6 +70,15 @@ export const PUBLIC_ENTRIES: Record<
 /** The msw hook behind `NODE_ENV === 'test'`; tsdown inlines it away in published builds. */
 const TEST_ONLY_EDGES = new Set(['bin.ts -> e2e-tests/mocks/server.ts']);
 
+/** The only files that may load the control server, and only lazily. */
+const CONTROL_IMPORTERS = new Set([
+  'src/cli/runners/run-wizard.ts',
+  'src/cli/runners/run-non-interactive.ts',
+]);
+const CONTROL_ENTRY = 'src/store/control/index.ts';
+const STATIC_CONTROL_IMPORT =
+  /(?:import|export)\s+(?:type\s+)?[^'"]*?from\s*['"]@store\/control['"]/;
+
 /** Console renderers ship in headless builds and must stay Ink free. */
 const INK_FREE_PREFIX = 'src/tui/console/';
 
@@ -318,6 +327,13 @@ function analyze(): Analysis {
       edges.add(key);
 
       const to = classifySurface(target);
+      if (target === CONTROL_ENTRY && from !== 'store') {
+        if (STATIC_CONTROL_IMPORT.test(text))
+          violations.set(key, 'control-static-import');
+        else if (!CONTROL_IMPORTERS.has(file))
+          violations.set(key, 'control-importer');
+        continue;
+      }
       if (to === 'harness') {
         if (!TEST_ONLY_EDGES.has(key)) violations.set(key, 'harness');
       } else if (!allowed.includes(to))

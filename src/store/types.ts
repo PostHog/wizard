@@ -94,3 +94,22 @@ export type {
 } from './ui/wizard-ui.js';
 export type { WizardSpellbook } from './wizard-spellbook.js';
 export type { StoreBoundaryMember, WizardStoreApi } from './state/store-api.js';
+export type {
+  ActionView,
+  ControlHooks,
+  ControlState,
+  ControlSurface,
+  DetectRequest,
+  DriverAction,
+  OutroView,
+  RunRecord,
+  RunRequest,
+  RunResult,
+  RunStatus,
+  SetupQuestionView,
+  TaskNoticeView,
+} from './control/types.js';
+export type {
+  ControlServerHandle,
+  ControlServerOptions,
+} from './control/server.js';

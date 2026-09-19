@@ -12,6 +12,7 @@ import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type { Integration } from '../shared/constants.js';
 import type { FrameworkConfig } from '../framework-config.js';
 import type { ProgramId } from '../programs/program-registry.js';
+import type { DriverAction } from '../control/types.js';
 
 /** Context passed to onInit callbacks, before the real session is assigned. */
 export interface StoreInitContext {
@@ -73,6 +74,11 @@ export interface FlowStep {
    * steps shared across programs. Attribution only. Matched by `screenId`.
    */
   reportsAsProgramId?: ProgramId;
+  /**
+   * Commits a controlling parent may make on this step's screen, beyond the
+   * generic ones every flow shares. Each calls one store setter.
+   */
+  controlActions?: readonly DriverAction[];
 }
 
 export interface Flow {

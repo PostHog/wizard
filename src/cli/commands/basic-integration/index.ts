@@ -64,6 +64,10 @@ export const basicIntegrationCommand: Command = {
         const { runHeadlessInstall } = await import('./ci-install.js');
         return runHeadlessInstall(argv);
       }
+      if (argv.ci && argv.controlSocket) {
+        const { runInteractive } = await import('./interactive.js');
+        return runInteractive(argv);
+      }
       if (argv.ci) {
         const { runCIInstall } = await import('./ci-install.js');
         return runCIInstall(argv);

@@ -10,6 +10,12 @@ surfaces' public entries. Holds no domain logic.
   preflight.
 - `wizard.ts`, `commands/`: yargs surface. `runners/`: TUI and headless runners
   that sequence independent agent runs and pass context between them.
+- `control-hooks.ts`: what the store's control server asks the composition root
+  to do: resolve credentials, release the run, detect, start one independent run
+  with explicit context, shut down. `--control-socket` attaches the server in
+  `run-non-interactive.ts` (headless, every build) and in `run-wizard.ts` (TUI,
+  dev builds only). Published TUI runs refuse the flag unless the headless flag
+  is present.
 
 ## May import
 
