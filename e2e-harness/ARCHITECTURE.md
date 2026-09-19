@@ -111,6 +111,40 @@ bearer. CI uses it directly and never mints or refreshes it.
 `WIZARD_CI_GATEWAY_URL` optionally overrides
 `https://ai-gateway.<region>.posthog.com`.
 
+## Run it
+
+Every route needs a throwaway copy of an app, the PostHog project id, and for a
+full run the personal API key plus the issued gateway bearer in
+`WIZARD_CI_GATEWAY_TOKEN_FILE` (no run ever mints). Detection-only walks need
+neither secret.
+
+```bash
+# Snapshot route: the fixed profile, frames, and the result payload
+PROGRAM=posthog-integration E2E_ASK=true \
+POSTHOG_KEY_FILE=/path/to/phx-key.txt WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token.txt \
+PROJECT_ID=<id> POSTHOG_REGION=us APP_DIR=/tmp/app \
+SNAP_OUT=/tmp/snaps E2E_RESULT_JSON=/tmp/snaps/result.json \
+npx tsx scripts/tui-snapshots.no-jest.ts
+ls /tmp/snaps            # 01-intro.ans … NN-keep-skills.ans
+jq .screenPath /tmp/snaps/result.json
+
+# MCP route: open an app, confirm setup, read state, print one frame
+APP_DIR=/tmp/app PROJECT_ID=<id> POSTHOG_KEY_FILE=/path/to/phx-key.txt \
+npx tsx scripts/wizard-ci-explore.no-jest.ts
+
+# Controlled headless: detect, independent runs, the ledger, shutdown
+POSTHOG_WIZARD_API_KEY=phx_... WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token.txt \
+npx tsx scripts/controlled-headless-smoke.no-jest.ts --app /tmp/app --project-id <id> posthog-integration metrics
+
+# Process specs: the real binary on both surfaces, no credentials, no agent run
+pnpm test:harness                       # WIZARD_PTY_TESTS=0 skips the PTY spec
+```
+
+`SNAP_HARNESS`, `SNAP_SEQUENCE`, `SNAP_MODEL` override the switchboard;
+`E2E_NOTICE`, `E2E_ANSWERS_FILE`, `INTEGRATE`, `TASK_STREAM_LOG`,
+`SOURCE_MAPS_RUN_BUILD`, and `SOURCE_MAPS_CLI_KEY` keep their meanings from the
+workbench contract. `PTY_COLS` and `PTY_ROWS` size the terminal.
+
 ## The two routes
 
 - **CI snapshots.** `tui-snapshots.no-jest.ts` spawns the wizard in a PTY,

@@ -34,11 +34,13 @@ Each domain has a dedicated boundary:
 - **TUI** → screen components and primitives in `src/tui/`
 
 The tree is three surfaces plus a composition root: `src/store` (state and
-contracts), `src/agent` (one agent run), `src/tui` (rendering), `src/cli`
-(argv and wiring). Surfaces import each other only through `@store`,
-`@store/types`, `@store/programs`, `@agent`, `@agent/types`, `@tui`,
-`@tui/types`, and `@tui/console`; `src/__tests__/architecture` enforces it.
-Each surface's `README.md` lists what it owns and may import.
+contracts), `src/agent` (one agent run), `src/tui` (rendering), `src/cli` (argv
+and wiring). Surfaces import each other only through `@store`, `@store/types`,
+`@store/programs`, `@agent`, `@agent/types`, `@tui`, `@tui/types`, and
+`@tui/console`; `src/__tests__/architecture` enforces it. Each surface's
+`README.md` lists what it owns and may import. To drive a run without a keyboard
+(snapshots, an agent, CI), use the control socket described in
+[`e2e-harness/ARCHITECTURE.md`](e2e-harness/ARCHITECTURE.md).
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -104,8 +106,8 @@ aliases.
 
 | Subcommand                    | What it audits                                       |
 | ----------------------------- | ---------------------------------------------------- |
-| `wizard audit events`         | event capture quality + cost                        |
-| `wizard audit all`            | comprehensive audit across every area (**default**) |
+| `wizard audit events`         | event capture quality + cost                         |
+| `wizard audit all`            | comprehensive audit across every area (**default**)  |
 | `wizard audit autocapture`    | autocapture setup + cost                             |
 | `wizard audit feature-flags`  | feature flag usage + cost                            |
 | `wizard audit identify`       | `$identify` implementation                           |
@@ -129,16 +131,16 @@ confuse it with the top-level `wizard skill` command.
 - **Registration:** [`src/cli/main.ts`](src/cli/main.ts) — the `.use()` chain
   wires each command. [`bin.ts`](bin.ts) runs the Node preflight, then imports
   it.
-- **Command shape:** [`src/cli/commands/command.ts`](src/cli/commands/command.ts) — the
-  `Command` interface every command implements.
+- **Command shape:**
+  [`src/cli/commands/command.ts`](src/cli/commands/command.ts) — the `Command`
+  interface every command implements.
 - **Flat native commands** (e.g. `revenue-analytics`, `upload-source-maps`) are
   built with `nativeCommandFactory`
   ([`src/cli/commands/factories/native-command-factory.ts`](src/cli/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/cli/dispatch-family.ts`](src/cli/dispatch-family.ts).
-  Adding a skill-backed subcommand is a **context-mill** release, not a wizard
-  change.
+  [`src/cli/dispatch-family.ts`](src/cli/dispatch-family.ts). Adding a
+  skill-backed subcommand is a **context-mill** release, not a wizard change.
 
 ### Commands vs. programs (don't confuse these)
 
@@ -166,6 +168,7 @@ pnpm try --install-dir=<path>      # Run the wizard locally against a test proje
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:<surface>                # One Vitest project: store, agent, tui, cli, harness, arch
+                                   # harness spawns the real binary over its control socket; WIZARD_PTY_TESTS=0 skips the PTY spec
 pnpm typecheck                     # tsc -b over the surface projects (tsconfig.solution.json)
 pnpm typecheck:<surface>           # One surface project
 pnpm test:watch                    # Unit tests in watch mode
@@ -182,8 +185,8 @@ nonmutating lint checks, and scope formatting fixes to edited files. Do not add
 tests for prose, compiler-enforced shapes, or duplicated implementation. Keep
 new code comments to one line; put longer explanations in linked docs.
 
-Local `--ci`, smoke-test, and full headless runs require two separate secrets:
-a PostHog personal API key and an already-issued gateway token supplied through
+Local `--ci`, smoke-test, and full headless runs require two separate secrets: a
+PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
