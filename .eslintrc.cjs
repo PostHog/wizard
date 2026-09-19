@@ -8,15 +8,11 @@ module.exports = {
   plugins: ['@typescript-eslint'],
   parserOptions: {
     tsconfigRootDir: __dirname,
-    project: [
-      './tsconfig.env.json',
-      './src/store/tsconfig.json',
-      './src/agent/tsconfig.json',
-      './src/tui/tsconfig.json',
-      './src/cli/tsconfig.json',
-      './src/__tests__/architecture/tsconfig.json',
-      './e2e-harness/tsconfig.json',
-    ],
+    // The whole-tree config, not the composite surface projects: those resolve
+    // cross-surface imports through built declarations, so lint would see
+    // `any` until `tsc -b` has run. Boundaries are enforced by tsc -b and the
+    // architecture suite, not by lint's type information.
+    project: ['./tsconfig.json'],
   },
   ignorePatterns: [
     '.eslintrc.js',
