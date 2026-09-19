@@ -1,7 +1,8 @@
+import type { OutroData, PendingQuestion } from '@store/session/wizard-session';
 /**
  * The structured record an e2e run writes to `E2E_RESULT_JSON`.
  *
- * Split out of `scripts/tui-host.no-jest.ts` so the shape, and the security
+ * Kept apart from `scripts/tui-snapshots.no-jest.ts` so the shape, and the security
  * rail that guards it, can be unit-tested without booting a TUI.
  *
  * Two halves:
@@ -21,7 +22,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { OutroKind, type WizardSession } from '@store/session/wizard-session';
+import { OutroKind } from '@store/session/wizard-session';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@store/programs/warehouse-source/detect';
 import type { DetectedSource } from '@store/services/warehouse-sources/types';
 import type { E2eDecisionReport } from '@e2e-harness/e2e-profile';
@@ -55,7 +56,16 @@ export interface E2eNoticeRecord {
 }
 
 /** The session fields the recorder watches. */
-type ObservedSession = Pick<WizardSession, 'pendingQuestion' | 'taskNotice'>;
+type ObservedSession = {
+  pendingQuestion: PendingQuestion | null;
+  taskNotice: { title: string; items?: string[] } | null;
+};
+
+/** The outro fields the payload reads; the control state carries exactly these. */
+export type E2eOutro = Pick<
+  OutroData,
+  'kind' | 'errorCode' | 'message' | 'body'
+>;
 
 /**
  * Log every ask batch and task notice a run passes through.
@@ -203,18 +213,18 @@ function isInside(root: string, child: string): boolean {
  * `wizardAbort` renders an error outro and then exits, so `outroData` is the
  * only durable trace of *why* by the time the host writes its result.
  */
-export function abortReasonFrom(
-  session: Pick<WizardSession, 'outroData'>,
-): string | null {
+export function abortReasonFrom(session: {
+  outroData: E2eOutro | null;
+}): string | null {
   const outro = session.outroData;
   if (!outro || outro.kind !== OutroKind.Error) return null;
   return outro.message ?? outro.body ?? 'aborted';
 }
 
 /** The warehouse sources detection wrote into frameworkContext. */
-export function detectedSourcesFrom(
-  session: Pick<WizardSession, 'frameworkContext'>,
-): DetectedSource[] {
+export function detectedSourcesFrom(session: {
+  frameworkContext: Record<string, unknown>;
+}): DetectedSource[] {
   const raw = session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY];
   return Array.isArray(raw) ? (raw as DetectedSource[]) : [];
 }
@@ -236,7 +246,10 @@ export interface E2eResultBase {
 export function buildE2eResult(args: {
   base: E2eResultBase;
   recorder: E2eRunRecorder;
-  session: Pick<WizardSession, 'frameworkContext' | 'outroData'>;
+  session: {
+    frameworkContext: Record<string, unknown>;
+    outroData: E2eOutro | null;
+  };
   tasks: Array<{ label: string; status: string }>;
   reportFile: E2eReportFile | null;
 }): Record<string, unknown> {

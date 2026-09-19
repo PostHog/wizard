@@ -28,7 +28,7 @@ import {
 } from '@store/programs/program-registry';
 import { ScreenId } from '@tui/router';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@store/programs/self-driving/detect';
-import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
+import { ControlDriver } from '@store/control';
 import {
   decideE2eAction,
   type WizardE2eProfile,
@@ -60,7 +60,10 @@ function traceFlow(
   }
   store.session = session;
 
-  const driver = new WizardCiDriver(store);
+  const driver = new ControlDriver(store, () => ({
+    status: 'idle',
+    error: null,
+  }));
 
   const trace: Array<{
     screen: string;

@@ -23,7 +23,7 @@ import {
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { DEFAULT_E2E_PROFILE, decideE2eAction } from '@e2e-harness/e2e-profile';
-import type { CiState } from '@e2e-harness/wizard-ci-driver';
+import type { ControlState } from '@store/types';
 
 const SECRET = 'sk_live_do_not_leak_9f2b';
 
@@ -515,7 +515,7 @@ describe('security rail — no answer value reaches the payload', () => {
         pendingQuestion: pending,
         taskNotice: null,
         setupQuestions: [],
-      } as unknown as CiState,
+      } as unknown as ControlState,
       {
         ...DEFAULT_E2E_PROFILE,
         askAnswers: [{ match: 'stripe', value: SECRET }],

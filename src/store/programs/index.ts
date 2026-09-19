@@ -16,6 +16,7 @@ export {
 } from './error-tracking-upload-source-maps/detect.js';
 export {
   VARIANT_DISPLAY_NAME,
+  detectSourceMapsPrerequisites,
   errorTrackingUploadSourceMapsConfig,
 } from './error-tracking-upload-source-maps/index.js';
 export {

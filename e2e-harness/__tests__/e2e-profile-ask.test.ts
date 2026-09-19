@@ -19,7 +19,7 @@ import {
 } from '@e2e-harness/e2e-profile';
 import { profileFor, resolveE2eProfile } from '@e2e-harness/profiles';
 import { Program } from '@store/programs/program-registry';
-import type { CiState } from '@e2e-harness/wizard-ci-driver';
+import type { ControlState } from '@store/types';
 
 const text = (id: string, prompt = id): AskQuestion => ({
   id,
@@ -49,15 +49,15 @@ function profile(over: Partial<WizardE2eProfile> = {}): WizardE2eProfile {
   return { ...DEFAULT_E2E_PROFILE, ...over };
 }
 
-/** A CiState carrying just the fields the two overlay cases read. */
-function state(over: Partial<CiState>): CiState {
+/** A ControlState carrying just the fields the two overlay cases read. */
+function state(over: Partial<ControlState>): ControlState {
   return {
     currentScreen: ScreenId.Run,
     pendingQuestion: null,
     taskNotice: null,
     setupQuestions: [],
     ...over,
-  } as CiState;
+  } as ControlState;
 }
 
 describe('answerQuestions — the whole batch', () => {
@@ -490,7 +490,7 @@ describe('E2E_DRIVABLE_SCREENS', () => {
   it('has a decideE2eAction case for every screen it lists', () => {
     // A listed screen with no case would return `{ wait: true }` forever,
     // stalling the run instead of failing it.
-    const overlayState: Partial<Record<string, Partial<CiState>>> = {
+    const overlayState: Partial<Record<string, Partial<ControlState>>> = {
       [Overlay.WizardAsk]: {
         pendingQuestion: {
           id: 'a',

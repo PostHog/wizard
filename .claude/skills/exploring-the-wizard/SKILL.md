@@ -9,7 +9,7 @@ compatibility:
   wizard-ci MCP server.
 metadata:
   author: posthog
-  version: '5.0'
+  version: '6.0'
 ---
 
 # Exploring the wizard as an agent
@@ -23,8 +23,8 @@ sequence, and gateway policy. For new exploration, launch the server with
 `SNAP_HARNESS=pi`; prefer `SNAP_SEQUENCE=orchestrator` for the integration flow.
 These are server environment variables, not MCP arguments. Restart an existing
 server to change its environment. See the
-[host architecture](../../../e2e-harness/ARCHITECTURE.md) for other programs,
-overrides, and current limitations.
+[harness architecture](../../../e2e-harness/ARCHITECTURE.md) for the control
+API, other programs, and overrides.
 
 ## Prepare the run
 
@@ -35,16 +35,14 @@ wizard, so finish recording one app before opening another.
 - **Detection only:** pass `appDir` and `projectId` (both required strings),
   with no key. Stop at `auth` without calling `run_agent`.
 - **Full integration:** reuse the authorized phx key file path, separate gateway
-  token file path, and project id;
-  ask only for missing inputs. Prefer `keyFile` so the key stays out of tool
-  arguments. Set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the MCP server environment
-  before launch (restart an existing server); it is not an `open_app` argument.
-  The file must contain an already-issued gateway bearer, not the phx key.
-  CI does not mint or refresh it. Never print or commit either secret. See
-  [local credential setup](../../../docs/local-dev.md#credentials-for-local-ci-and-headless-runs). Read the
-  [credential and region limitations](../../../e2e-harness/ARCHITECTURE.md#current-host-limitations)
-  before starting: an inherited key can shadow `keyFile`, and the host currently
-  hardcodes the US region.
+  token file path, and project id; ask only for missing inputs. Prefer `keyFile`
+  so the key stays out of tool arguments. Set `WIZARD_CI_GATEWAY_TOKEN_FILE` in
+  the MCP server environment before launch (restart an existing server); it is
+  not an `open_app` argument. The file must contain an already-issued gateway
+  bearer, not the phx key. CI does not mint or refresh it. Never print or commit
+  either secret. See
+  [local credential setup](../../../docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+  `region` selects the PostHog region for auth and the gateway.
 - **Questions during the run:** launch the server with `E2E_ASK=true` to keep
   `wizard_ask` available in this CI session. Handle questions yourself through
   the actions below; fixed-route answer profiles do not drive the MCP route.
@@ -79,31 +77,33 @@ own decisions through the same state and action contract.
    judging detection. Inspect `session.integration` and `setupQuestions`.
 2. Capture `render_screen` before each decision and during task or phase
    changes. Save numbered frames such as `/tmp/wz-explore-snaps/01-intro.txt`.
-3. Commit only actions currently offered. Common choices are below; the
-   [action registry](../../../e2e-harness/action-registry.ts) defines the full
-   set.
+3. Commit only actions currently offered. Common choices are below; the generic
+   set lives in
+   [`src/store/control/actions.ts`](../../../src/store/control/actions.ts) and a
+   program adds its own through `controlActions` on its steps.
 4. For a full run, confirm setup and call `run_agent` at `auth`. Continue
    reading state and handling overlays while it runs; polling alone cannot
    answer them.
 5. Check `runPhase` (`idle`, `running`, `completed`, `error`), background
    status, and the rendered outro. On error, capture the frame and reason before
    dismissing it. An error outro can wait for dismissal while `integration`
-   still says `running`; a host exit can instead surface as a socket error.
+   still says `running`; a wizard exit can instead surface as a socket error.
 6. After successful agent completion, finish the offered outro and follow-up
    actions. For the integration flow, `session.skillsComplete` marks the tail's
    completion. Other programs can have a terminal outro or exit screen.
 
-| Decision                                 | Action and `params`                                                                          |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Confirm intro / dismiss blocking outage  | `confirm_setup` / `dismiss_outage`                                                           |
-| Answer setup question                    | `choose`, `{ key, value }` from `setupQuestions`                                             |
-| Answer every question in a pending batch | `answer_question`, `{ answers: { questionId: value } }`; values are strings or string arrays |
-| Cancel a question batch                  | `cancel_question`                                                                            |
-| Accept or decline an optional task       | `resolve_notice`, `{ keep: true }` or `{ keep: false }`                                      |
-| Finish outro                             | `dismiss_outro`                                                                              |
-| Record MCP outcome                       | `set_mcp_outcome`, `{ outcome: "skipped" }` or `{ outcome: "installed", clients: [...] }`    |
-| Dismiss suggested prompts / Slack step   | `dismiss` / `dismiss_slack`                                                                  |
-| Record keep-skills choice                | `keep_skills`, `{ kept: true }` or `{ kept: false }`                                         |
+| Decision                                 | Action and `params`                                                                                              |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Confirm intro / dismiss blocking outage  | `confirm_setup` / `dismiss_outage`                                                                               |
+| Answer setup question                    | `choose`, `{ key, value }` from `setupQuestions`                                                                 |
+| Answer every question in a pending batch | `answer_question`, `{ answers: { questionId: value } }`; values are strings or string arrays                     |
+| Cancel a question batch                  | `cancel_question`                                                                                                |
+| Accept or decline an optional task       | `resolve_notice`, `{ keep: true }` or `{ keep: false }`                                                          |
+| Finish outro                             | `dismiss_outro`                                                                                                  |
+| Record MCP outcome                       | `set_mcp_outcome`, `{ outcome: "skipped" }` or `{ outcome: "installed", clients: [...] }`                        |
+| Dismiss suggested prompts / Slack step   | `dismiss` / `dismiss_slack`                                                                                      |
+| Record keep-skills choice                | `keep_skills`, `{ kept: true }` or `{ kept: false }`                                                             |
+| Pick the project on a detect screen      | `pick_integration_target`, `{ path, integration }`; source maps: `pick_source_maps_project`, `{ variant, path }` |
 
 MCP and keep-skills actions commit store state; recording an outcome does not
 perform the corresponding installation or cleanup. Report which outcomes were
@@ -129,5 +129,6 @@ The shared log is `/tmp/posthog-wizard.log`. Record its byte count before a run
 and read from that count plus one afterward. Run sweeps serially so their logs
 remain attributable. `read_state` omits `frameworkContext`; an empty
 `setupQuestions` list alone does not prove a router mode. When necessary,
-inspect the detector under [`src/store/frameworks/`](../../../src/store/frameworks/) against
-the same fixture.
+inspect the detector under
+[`src/store/frameworks/`](../../../src/store/frameworks/) against the same
+fixture.

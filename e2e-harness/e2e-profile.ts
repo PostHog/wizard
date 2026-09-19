@@ -9,7 +9,13 @@
 
 import { ScreenId, Overlay, type ScreenName } from '@tui/router';
 import type { AskAnswers, AskQuestion } from '@store/session/wizard-session';
-import type { CiState } from '@e2e-harness/wizard-ci-driver';
+import type { ControlState } from '@store/types';
+
+/** The slice of the control state a decision reads. */
+export type E2eObservedState = Pick<
+  ControlState,
+  'currentScreen' | 'setupQuestions' | 'pendingQuestion' | 'taskNotice'
+>;
 
 /** Which option to pick for a setup disambiguation question. */
 export type SetupChoice = 'first' | 'last';
@@ -273,7 +279,7 @@ function acceptsSecret(question: AskQuestion): boolean {
  * not doing that.
  */
 export function decideE2eAction(
-  state: CiState,
+  state: E2eObservedState,
   profile: WizardE2eProfile,
 ): E2eDecision {
   switch (state.currentScreen) {

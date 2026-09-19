@@ -43,6 +43,7 @@ export function outroView(store: WizardStore): OutroView | null {
     kind: data.kind,
     ...(data.errorCode ? { errorCode: data.errorCode } : {}),
     ...(data.message ? { message: data.message } : {}),
+    ...(data.body ? { body: data.body } : {}),
     ...(data.docsUrl ? { docsUrl: data.docsUrl } : {}),
   };
 }
