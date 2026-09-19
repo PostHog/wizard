@@ -1,6 +1,6 @@
 import { http, HttpResponse, passthrough } from 'msw';
-import { getCloudUrl } from '../../src/utils/urls';
-import { DEFAULT_HOST_URL } from '../../src/lib/constants';
+import { getCloudUrl } from '../../src/store/shared/urls';
+import { DEFAULT_HOST_URL } from '../../src/store/shared/constants';
 import { fixtureTracker } from './fixture-tracker';
 
 export const shouldRecord = process.env.RECORD_FIXTURES === 'true';

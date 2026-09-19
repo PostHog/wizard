@@ -11,19 +11,19 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
-import type { AskQuestion, WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import { Overlay } from '@ui/tui/router';
+import { OutroKind, RunPhase } from '@store/session/wizard-session';
+import type { AskQuestion, WizardSession } from '@store/session/wizard-session';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@store/programs/warehouse-source/detect';
+import { Overlay } from '@tui/router';
 import {
   E2eRunRecorder,
   abortReasonFrom,
   buildE2eResult,
   detectedSourcesFrom,
   readReportFile,
-} from '../e2e-result';
-import { DEFAULT_E2E_PROFILE, decideE2eAction } from '../e2e-profile';
-import type { CiState } from '../wizard-ci-driver';
+} from '@e2e-harness/e2e-result';
+import { DEFAULT_E2E_PROFILE, decideE2eAction } from '@e2e-harness/e2e-profile';
+import type { CiState } from '@e2e-harness/wizard-ci-driver';
 
 const SECRET = 'sk_live_do_not_leak_9f2b';
 

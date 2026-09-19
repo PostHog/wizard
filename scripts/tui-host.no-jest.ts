@@ -16,35 +16,35 @@
 import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
-import { startTUI } from '@ui/tui/start-tui';
-import { VERSION } from '@lib/version';
+import { startTUI } from '@tui/start-tui';
+import { VERSION } from '@store/shared/version';
 import {
   Program,
   getProgramConfig,
   type ProgramId,
-} from '@lib/programs/program-registry';
-import type { Harness, Sequence } from '@lib/constants';
-import { buildSession } from '@lib/wizard-session';
-import { initLocalDev } from '@lib/local-dev';
-import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
-import { runAgent } from '@lib/agent/agent-runner';
-import { runConfigFor } from '@lib/programs/run-config';
-import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
-import { getAuditChecks } from '@lib/programs/audit/types';
-import { authenticate } from '@lib/agent/runner/shared/authenticate';
-import { getOrAskForProjectData } from '@utils/setup-utils';
-import { logToFile } from '@utils/debug';
+} from '@store/programs/program-registry';
+import type { Harness, Sequence } from '@store/shared/constants';
+import { buildSession } from '@store/session/wizard-session';
+import { initLocalDev } from '@store/local-dev';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway/gateway-session';
+import { runAgent } from '@agent/agent-runner';
+import { runConfigFor } from '@store/programs/run-config';
+import { TaskStreamPush, createFileDestination } from '@store/task-stream';
+import { getAuditChecks } from '@store/programs/audit/types';
+import { authenticate } from '@agent/runner/shared/authenticate';
+import { getOrAskForProjectData } from '@store/shared/setup-utils';
+import { logToFile } from '@store/shared/debug';
 import { join } from 'path';
-import { detectFramework } from '@lib/detection/index';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import type { Integration } from '@lib/constants';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
-import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@lib/programs/error-tracking/detect-agentic';
+import { detectFramework } from '@store/detection';
+import { FRAMEWORK_REGISTRY } from '@store/registry';
+import type { Integration } from '@store/shared/constants';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@store/programs/self-driving/detect';
+import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@store/programs/error-tracking/detect-agentic';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
-} from '@lib/programs/error-tracking-upload-source-maps/index';
-import { ScreenId, Overlay } from '@ui/tui/router';
+} from '@store/programs/error-tracking-upload-source-maps';
+import { ScreenId, Overlay } from '@tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,

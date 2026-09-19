@@ -1,0 +1,77 @@
+import type { Integration } from '../../shared/constants.js';
+import { withProgress } from '@cli/telemetry';
+import { analytics } from '../../shared/analytics.js';
+import { getUI } from '../../ui/index.js';
+import {
+  tryGetPackageJson,
+  getUncommittedOrUntrackedFiles,
+  isInGitRepo,
+} from '../../shared/setup-utils.js';
+import { hasDeclaredDependency } from '../../shared/package-json.js';
+import type { WizardRunOptions } from '../../shared/types.js';
+import * as childProcess from 'node:child_process';
+
+export async function runPrettierStep({
+  installDir,
+  integration,
+}: Pick<WizardRunOptions, 'installDir'> & {
+  integration: Integration;
+}): Promise<void> {
+  return withProgress('run-prettier', async () => {
+    if (!isInGitRepo()) {
+      // We only run formatting on changed files. If we're not in a git repo, we can't find
+      // changed files. So let's early-return without showing any formatting-related messages.
+      return;
+    }
+
+    const changedOrUntrackedFiles = getUncommittedOrUntrackedFiles()
+      .map((filename) => {
+        return filename.startsWith('- ') ? filename.slice(2) : filename;
+      })
+      .join(' ');
+
+    if (!changedOrUntrackedFiles.length) {
+      // Likewise, if we can't find changed or untracked files, there's no point in running Prettier.
+      return;
+    }
+
+    const packageJson = await tryGetPackageJson({ installDir });
+    if (!packageJson) return;
+    const prettierInstalled = hasDeclaredDependency('prettier', packageJson);
+
+    analytics.setTag('prettier-installed', prettierInstalled);
+
+    if (!prettierInstalled) {
+      return;
+    }
+
+    const prettierSpinner = getUI().spinner();
+    prettierSpinner.start('Running Prettier on your files.');
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        childProcess.exec(
+          `npx prettier --ignore-unknown --write ${changedOrUntrackedFiles}`,
+          (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          },
+        );
+      });
+    } catch (e) {
+      prettierSpinner.stop(
+        'Prettier failed to run. You may want to format the changes manually.',
+      );
+      return;
+    }
+
+    prettierSpinner.stop('Prettier has formatted your files.');
+
+    analytics.wizardCapture('ran prettier', {
+      integration,
+    });
+  });
+}

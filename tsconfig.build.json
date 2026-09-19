@@ -23,29 +23,8 @@
       "@env": [
         "./src/env.ts"
       ],
-      "@lib/*": [
-        "./src/lib/*"
-      ],
       "@e2e-harness/*": [
         "./e2e-harness/*"
-      ],
-      "@utils/*": [
-        "./src/utils/*"
-      ],
-      "@ui": [
-        "./src/ui/index.ts"
-      ],
-      "@ui/*": [
-        "./src/ui/*"
-      ],
-      "@steps": [
-        "./src/steps/index.ts"
-      ],
-      "@steps/*": [
-        "./src/steps/*"
-      ],
-      "@frameworks/*": [
-        "./src/frameworks/*"
       ],
       "@store": [
         "./src/store/index.ts"
@@ -67,6 +46,15 @@
       ],
       "@cli/*": [
         "./src/cli/*"
+      ],
+      "@store/*": [
+        "./src/store/*"
+      ],
+      "@agent/*": [
+        "./src/agent/*"
+      ],
+      "@tui/*": [
+        "./src/tui/*"
       ]
     }
   }

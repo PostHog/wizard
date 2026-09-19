@@ -12,18 +12,18 @@
  * actions speak only in store setters and generic params.
  */
 
-import type { WizardStore } from '@ui/tui/store';
-import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
-import { McpOutcome, OutroKind } from '@lib/wizard-session';
-import type { AskAnswers } from '@lib/wizard-session';
+import type { WizardStore } from '@store/state/store';
+import { ScreenId, Overlay, type ScreenName } from '@tui/router';
+import { McpOutcome, OutroKind } from '@store/session/wizard-session';
+import type { AskAnswers } from '@store/session/wizard-session';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
-} from '@lib/programs/error-tracking-upload-source-maps/index';
+} from '@store/programs/error-tracking-upload-source-maps';
 import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
-} from '@lib/programs/self-driving/detect';
+} from '@store/programs/self-driving/detect';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {

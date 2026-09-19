@@ -1,0 +1,377 @@
+import {
+  buildSession,
+  McpOutcome,
+  OutroKind,
+  RunPhase,
+} from '../session/wizard-session.js';
+import { HostResolution } from '../host-resolution.js';
+import { WizardReadiness } from '../health-checks/readiness.js';
+import { ScreenId, Overlay, Program, type ProgramId } from '@tui/router';
+import { flowEntries, resolveActiveScreen } from '../state/flow-resolution.js';
+import { flowFor } from '../programs/flow-for.js';
+import type { WizardSession } from '../session/wizard-session.js';
+import type { Interrupt } from '../state/interrupts.js';
+
+/** The old router surface over the pure resolver, so the cases port as-is. */
+function routerFor(program: ProgramId) {
+  const flow = flowFor(program).flow;
+  const interrupts: Interrupt[] = [];
+  return {
+    pushOverlay: (interrupt: Interrupt) => void interrupts.push(interrupt),
+    popOverlay: () => void interrupts.pop(),
+    resolve: (session: WizardSession) =>
+      resolveActiveScreen(flow, session, interrupts),
+    get activeScreen() {
+      return interrupts.length > 0
+        ? interrupts[interrupts.length - 1]
+        : flowEntries(flow)[0].id;
+    },
+  };
+}
+import { Integration } from '../shared/constants.js';
+import { FRAMEWORK_REGISTRY } from '../registry.js';
+import { PROGRAM_REGISTRY } from '../programs/program-registry.js';
+
+function baseWizardSession() {
+  return buildSession({});
+}
+
+/** An agent run that ended in an error: credentials set, error outro shown. */
+function failedRunSession() {
+  const session = baseWizardSession();
+  session.credentials = {
+    accessToken: 'tok',
+    projectApiKey: 'pk',
+    host: HostResolution.fromApiHost('https://app.posthog.com'),
+    projectId: 1,
+  };
+  session.outroData = { kind: OutroKind.Error, message: 'agent failed' };
+  return session;
+}
+
+describe('flow resolution', () => {
+  it.each(PROGRAM_REGISTRY.map((program) => program.id))(
+    'shows a failed run over every step and overlay in %s',
+    (program) => {
+      const router = routerFor(program);
+      router.pushOverlay(Overlay.WizardAsk);
+      const session = failedRunSession();
+      session.outroDismissed = true;
+      expect(router.resolve(session)).toBe(ScreenId.MintFailure);
+    },
+  );
+
+  it('continues a failed run through the post-run steps, then exits', () => {
+    const router = routerFor(Program.SelfDriving);
+    const session = failedRunSession();
+    session.mintHandoff = 'continue';
+    expect(router.resolve(session)).toBe(ScreenId.Mcp);
+    session.mcpComplete = true;
+    expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+    session.slackStepDismissed = true;
+    expect(router.resolve(session)).toBe(ScreenId.KeepSkills);
+    session.skillsComplete = true;
+    expect(router.resolve(session)).toBe(ScreenId.Exit);
+    session.mintHandoff = 'exit';
+    expect(router.resolve(session)).toBe(ScreenId.Exit);
+  });
+
+  describe('resolve', () => {
+    it('returns the first incomplete visible screen for the wizard flow', () => {
+      const router = routerFor(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      expect(router.resolve(session)).toBe(ScreenId.Intro);
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+
+      expect(router.resolve(session)).toBe(ScreenId.Run);
+    });
+
+    it('skips the setup screen when there are no unanswered framework questions', () => {
+      const router = routerFor(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.frameworkConfig = {
+        metadata: {
+          setup: {
+            questions: [{ key: 'packageManager' }],
+          },
+        },
+      } as never;
+      session.frameworkContext = { packageManager: 'pnpm' };
+
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+    });
+
+    // Every login failure path (OAuth denied, missing completion scope, no
+    // project access) calls wizardAbort, which renders the error outro and
+    // then waits for its dismissal. Credentials never arrive, so the auth
+    // step never completes — without the reroute the auth spinner stays up
+    // and that wait deadlocks.
+    it('routes a failed login to the error outro instead of parking on auth', () => {
+      const router = routerFor(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      // An error phase alone (no outro yet) stays on auth.
+      session.runPhase = RunPhase.Error;
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      session.outroData = { kind: OutroKind.Error, message: 'login failed' };
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+    });
+
+    it('returns the last flow screen when every entry is complete', () => {
+      const router = routerFor(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      session.runPhase = RunPhase.Completed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+    });
+
+    it('gives the topmost overlay precedence over the flow screen', () => {
+      const router = routerFor(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      router.pushOverlay(Overlay.SettingsOverride);
+      router.pushOverlay(Overlay.AuthError);
+
+      expect(router.resolve(session)).toBe(Overlay.AuthError);
+
+      router.popOverlay();
+      expect(router.resolve(session)).toBe(Overlay.SettingsOverride);
+    });
+
+    it('shows the session-timeout overlay over the auth screen that never completes', () => {
+      // On OAuth timeout the user has no credentials, so the auth step's
+      // isComplete gate never passes and resolve() is pinned on Auth. The
+      // overlay must take precedence, otherwise the spinner shows forever.
+      const router = routerFor(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      router.pushOverlay(Overlay.SessionTimeout);
+      expect(router.resolve(session)).toBe(Overlay.SessionTimeout);
+    });
+  });
+
+  describe('activeScreen', () => {
+    it('defaults to the first screen in the active flow', () => {
+      const router = routerFor(Program.McpRemove);
+
+      expect(router.activeScreen).toBe(ScreenId.McpRemove);
+    });
+
+    it('returns the top overlay when overlays are active', () => {
+      const router = routerFor(Program.PostHogIntegration);
+
+      router.pushOverlay(Overlay.ManagedSettings);
+
+      expect(router.activeScreen).toBe(Overlay.ManagedSettings);
+    });
+  });
+
+  describe('McpAdd flow', () => {
+    it('starts at McpAdd', () => {
+      const router = routerFor(Program.McpAdd);
+      expect(router.activeScreen).toBe(ScreenId.McpAdd);
+    });
+
+    it('exits after install when MCP install was skipped', () => {
+      const router = routerFor(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Skipped;
+
+      // Skipped → tutorial step is hidden, so the only visible
+      // step (mcp-add) is complete and the program resolves to Exit.
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    });
+
+    it('advances to SlackConnect after a successful install', () => {
+      const router = routerFor(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+
+      // Slack is the first post-install step (loginless render); the
+      // tutorial follows it.
+      expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+    });
+
+    it('advances to McpSuggestedPrompts once the Slack step is dismissed', () => {
+      const router = routerFor(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.slackStepDismissed = true;
+
+      expect(router.resolve(session)).toBe(ScreenId.McpSuggestedPrompts);
+    });
+
+    it('exits once the tutorial step is dismissed', () => {
+      const router = routerFor(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.slackStepDismissed = true;
+      session.mcpSuggestedPromptsDismissed = true;
+
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    });
+
+    it('skips the Slack step when MCP install was skipped', () => {
+      const router = routerFor(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Skipped;
+
+      // Both the tutorial and slack-connect steps are gated on a
+      // successful install, so a skipped install resolves straight to Exit.
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    });
+  });
+
+  describe('self-driving integration-check', () => {
+    function confirmed() {
+      const session = baseWizardSession();
+      session.setupConfirmed = true; // self-driving intro confirmed
+      return session;
+    }
+
+    it('asks "set up PostHog?" when none detected and undecided', () => {
+      const router = routerFor(Program.SelfDriving);
+      const session = confirmed(); // integrate null, postHogPresent unset
+      expect(router.resolve(session)).toBe(
+        ScreenId.SelfDrivingIntegrationCheck,
+      );
+    });
+
+    it('skips the question when PostHog is already detected', () => {
+      const router = routerFor(Program.SelfDriving);
+      const session = confirmed();
+      session.frameworkContext.postHogPresent = true;
+      expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
+    });
+
+    it('skips the question when --integrate pre-decided it', () => {
+      const router = routerFor(Program.SelfDriving);
+      const session = confirmed();
+      session.integrate = true;
+      expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
+    });
+
+    function readyToIntegrate() {
+      const session = confirmed();
+      session.integrate = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      return session;
+    }
+
+    it('shows the detect+pick screen after auth, before a project is picked', () => {
+      const router = routerFor(Program.SelfDriving);
+      const session = readyToIntegrate(); // integration still null
+      expect(router.resolve(session)).toBe(
+        ScreenId.SelfDrivingIntegrationDetect,
+      );
+    });
+
+    it('advances to the integration run once a project is picked', () => {
+      const router = routerFor(Program.SelfDriving);
+      const session = readyToIntegrate();
+      session.integration = Integration.javascriptNode; // picked
+      session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.javascriptNode];
+      // integrate-run shares the 'run' screen; the phase hasn't completed yet.
+      expect(router.resolve(session)).toBe(ScreenId.Run);
+    });
+  });
+
+  describe('error-tracking project picker', () => {
+    function loggedIn() {
+      const session = baseWizardSession();
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      return session;
+    }
+
+    it('shows the project picker after login, before a project is picked', () => {
+      const router = routerFor(Program.ErrorTracking);
+      expect(router.resolve(loggedIn())).toBe(ScreenId.ErrorTrackingDetect);
+    });
+
+    it('advances to the run once a project is picked', () => {
+      const router = routerFor(Program.ErrorTracking);
+      const session = loggedIn();
+      session.integration = Integration.nextjs;
+      session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.nextjs];
+      expect(router.resolve(session)).toBe(ScreenId.Run);
+    });
+  });
+});

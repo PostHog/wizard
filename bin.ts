@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 import { Agent, setGlobalDispatcher } from 'undici';
-import { ErrorCodes } from './src/lib/errors/codes.js';
-import { emitWizardError } from './src/lib/errors/emit.js';
+import { ErrorCodes } from '@store/shared/errors/codes';
+import { emitWizardError } from '@store/shared/errors/emit';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -65,27 +65,27 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-import { Wizard } from './src/wizard';
-import { basicIntegrationCommand } from './src/commands/basic-integration';
-import { mcpCommand } from './src/commands/mcp';
-import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
-import { replayVisionCommand } from './src/commands/replay-vision';
-import { aiObservabilityCommand } from './src/commands/ai-observability';
-import { metricsCommand } from './src/commands/metrics';
-import { auditCommand } from './src/commands/audit';
-import { doctorCommand } from './src/commands/doctor';
-import { migrateCommand } from './src/commands/migrate';
-import { revenueCommand } from './src/commands/revenue';
-import { warehouseCommand } from './src/commands/warehouse';
-import { selfDrivingCommand } from './src/commands/self-driving';
-import { slackCommand } from './src/commands/slack';
-import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
-import { errorTrackingCommand } from './src/commands/error-tracking';
-import { skillCommand } from './src/commands/skill';
-import { cliCommand } from './src/commands/cli';
-import { recoverOrphanedSettingsBackups } from './src/lib/claude-settings';
-import { setUI } from './src/ui';
-import { LoggingUI } from './src/ui/tui/console/logging-ui';
+import { Wizard } from './src/cli/wizard.js';
+import { basicIntegrationCommand } from './src/cli/commands/basic-integration/index.js';
+import { mcpCommand } from './src/cli/commands/mcp/index.js';
+import { mcpAnalyticsCommand } from './src/cli/commands/mcp-analytics.js';
+import { replayVisionCommand } from './src/cli/commands/replay-vision.js';
+import { aiObservabilityCommand } from './src/cli/commands/ai-observability.js';
+import { metricsCommand } from './src/cli/commands/metrics.js';
+import { auditCommand } from './src/cli/commands/audit.js';
+import { doctorCommand } from './src/cli/commands/doctor.js';
+import { migrateCommand } from './src/cli/commands/migrate.js';
+import { revenueCommand } from './src/cli/commands/revenue.js';
+import { warehouseCommand } from './src/cli/commands/warehouse.js';
+import { selfDrivingCommand } from './src/cli/commands/self-driving.js';
+import { slackCommand } from './src/cli/commands/slack.js';
+import { uploadSourcemapsCommand } from './src/cli/commands/upload-sourcemaps.js';
+import { errorTrackingCommand } from './src/cli/commands/error-tracking.js';
+import { skillCommand } from './src/cli/commands/skill.js';
+import { cliCommand } from './src/cli/commands/cli/index.js';
+import { recoverOrphanedSettingsBackups } from '@store/services/claude-settings';
+import { setUI } from '@store/ui';
+import { LoggingUI } from '@tui/console/logging-ui';
 
 // The entry point owns the default renderer; @ui ships with none.
 setUI(new LoggingUI());

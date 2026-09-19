@@ -15,7 +15,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { HEADLESS_FLAG } from '../src/lib/headless-mode';
+import { HEADLESS_FLAG } from '@cli/headless-mode';
 
 const PROVIDERS = ['claude-code', 'codex'] as const;
 type Provider = (typeof PROVIDERS)[number];

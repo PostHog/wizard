@@ -10,31 +10,9 @@ const REPO_ROOT = path.resolve(HERE, '../../..');
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
     ['env', (p) => p === 'src/env.ts'],
-    [
-      'agent',
-      (p) =>
-        p.startsWith('src/lib/agent/') ||
-        p.startsWith('src/lib/middleware/') ||
-        p === 'src/lib/gateway-session.ts' ||
-        p === 'src/lib/yara-hooks.ts' ||
-        p === 'src/lib/yara-policy.ts' ||
-        p === 'src/lib/wizard-tools/mcp.ts',
-    ],
-    [
-      'tui',
-      (p) =>
-        p.startsWith('src/ui/tui/') ||
-        p === 'src/commands/factories/family-picker.tsx',
-    ],
-    [
-      'cli',
-      (p) =>
-        p === 'bin.ts' ||
-        p === 'src/wizard.ts' ||
-        p === 'src/telemetry.ts' ||
-        p.startsWith('src/commands/') ||
-        p.startsWith('src/lib/runners/'),
-    ],
+    ['agent', (p) => p.startsWith('src/agent/')],
+    ['tui', (p) => p.startsWith('src/tui/')],
+    ['cli', (p) => p === 'bin.ts' || p.startsWith('src/cli/')],
     [
       'harness',
       (p) => p.startsWith('e2e-harness/') || p.startsWith('scripts/'),
@@ -389,23 +367,19 @@ describe('import boundaries', () => {
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');
-    expect(classifySurface('src/utils/analytics.ts')).toBe('store');
-    expect(classifySurface('src/lib/agent/agent-runner.ts')).toBe('agent');
-    expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
+    expect(classifySurface('src/store/shared/analytics.ts')).toBe('store');
+    expect(classifySurface('src/agent/agent-runner.ts')).toBe('agent');
+    expect(classifySurface('src/tui/App.tsx')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('e2e-harness/e2e-profile.ts')).toBe('harness');
-    expect(classifySurface('src/lib/wizard-tools/mcp.ts')).toBe('agent');
-    expect(classifySurface('src/lib/wizard-tools/tools.ts')).toBe('store');
-    expect(classifySurface('src/commands/factories/family-picker.tsx')).toBe(
-      'tui',
-    );
+    expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
+    expect(classifySurface('src/store/tools/tools.ts')).toBe('store');
+    expect(classifySurface('src/tui/family-picker.tsx')).toBe('tui');
     expect(
-      classifySurface(
-        'src/ui/tui/programs/posthog-integration/content/index.tsx',
-      ),
+      classifySurface('src/tui/programs/posthog-integration/content/index.tsx'),
     ).toBe('tui');
     expect(
-      classifySurface('src/lib/programs/posthog-integration/index.ts'),
+      classifySurface('src/store/programs/posthog-integration/index.ts'),
     ).toBe('store');
   });
 });

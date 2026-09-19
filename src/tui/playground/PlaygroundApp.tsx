@@ -1,0 +1,124 @@
+/**
+ * PlaygroundApp — Root component for the primitives playground.
+ *
+ * Two screens mirroring the real wizard flow:
+ *   intro → (press enter) → run (tabbed demo view)
+ */
+
+import { ScreenContainer, TabContainer } from '../primitives/index.js';
+import type { WizardStore } from '@store/state/store';
+import type { UiStore } from '../ui-store.js';
+import { WelcomeDemo } from './demos/WelcomeDemo.js';
+import { LayoutDemo } from './demos/LayoutDemo.js';
+import { InputDemo } from './demos/InputDemo.js';
+import { ProgressDemo } from './demos/ProgressDemo.js';
+import { LogDemo } from './demos/LogDemo.js';
+import { RunScreenDemo } from './demos/RunScreenDemo.js';
+import { HealthCheckDemo } from './demos/HealthCheckDemo.js';
+import { DoctorReportDemo } from './demos/DoctorReportDemo.js';
+import { ModalDemo } from './demos/ModalDemo.js';
+import { McpDemo } from './demos/McpDemo.js';
+import { McpSuggestedPromptsDemo } from './demos/McpSuggestedPromptsDemo.js';
+import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
+import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
+import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
+import { EndScreensDemo } from './demos/EndScreensDemo.js';
+import { AiOptInDemo } from './demos/AiOptInDemo.js';
+import { AskModalDemo } from './demos/AskModalDemo.js';
+import { ViewportGuardDemo } from './demos/ViewportGuardDemo.js';
+
+interface PlaygroundAppProps {
+  store: WizardStore;
+  ui: UiStore;
+}
+
+export const PlaygroundApp = ({ store, ui }: PlaygroundAppProps) => {
+  const tabs = [
+    { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
+    { id: 'input', label: 'Input', component: <InputDemo /> },
+    { id: 'ask-modal', label: 'Ask modal', component: <AskModalDemo /> },
+    { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
+    { id: 'logs', label: 'Logs', component: <LogDemo /> },
+    {
+      id: 'run',
+      label: 'RunScreen',
+      component: <RunScreenDemo store={store} />,
+    },
+    {
+      id: 'health',
+      label: 'HealthCheck',
+      component: <HealthCheckDemo />,
+    },
+    {
+      id: 'doctor',
+      label: 'Doctor',
+      component: <DoctorReportDemo />,
+    },
+    {
+      id: 'modal',
+      label: 'Modal',
+      component: <ModalDemo />,
+    },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      component: <McpDemo store={store} />,
+    },
+    {
+      id: 'mcp-tutorial',
+      label: 'MCP tutorial',
+      component: <McpSuggestedPromptsDemo store={store} />,
+    },
+    {
+      id: 'hints',
+      label: 'KeyHints',
+      component: <KeyboardHintsDemo />,
+    },
+    {
+      id: 'audit-checks',
+      label: 'Audit checks',
+      component: <AuditChecksDemo />,
+    },
+    {
+      id: 'learn-deck',
+      label: 'Learn deck',
+      component: <LearnDeckDemo store={store} />,
+    },
+    {
+      id: 'end-screens',
+      label: 'End screens',
+      component: <EndScreensDemo store={store} />,
+    },
+    {
+      id: 'ai-opt-in-admin',
+      label: 'AI opt-in (admin)',
+      component: <AiOptInDemo variant="admin" />,
+    },
+    {
+      id: 'ai-opt-in-nonadmin',
+      label: 'AI opt-in (non-admin)',
+      component: <AiOptInDemo variant="non-admin" />,
+    },
+    {
+      id: 'viewport-guard',
+      label: 'Viewport guard',
+      component: <ViewportGuardDemo />,
+    },
+  ];
+
+  return (
+    <ScreenContainer
+      store={store}
+      ui={ui}
+      screens={{
+        intro: <WelcomeDemo store={store} />,
+        run: (
+          <TabContainer
+            tabs={tabs}
+            statusMessage="Primitives Playground — use arrow keys to switch tabs"
+          />
+        ),
+      }}
+    />
+  );
+};

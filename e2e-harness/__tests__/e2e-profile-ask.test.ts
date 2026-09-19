@@ -7,8 +7,8 @@
  * froze, so a workbench run can rely on it.
  */
 
-import { Overlay, ScreenId } from '@ui/tui/router';
-import type { AskQuestion } from '@lib/wizard-session';
+import { Overlay, ScreenId } from '@tui/router';
+import type { AskQuestion } from '@store/session/wizard-session';
 import {
   DEFAULT_E2E_PROFILE,
   E2E_ANSWER_SENTINEL,
@@ -16,10 +16,10 @@ import {
   answerQuestions,
   decideE2eAction,
   type WizardE2eProfile,
-} from '../e2e-profile';
-import { profileFor, resolveE2eProfile } from '../profiles';
-import { Program } from '@lib/programs/program-registry';
-import type { CiState } from '../wizard-ci-driver';
+} from '@e2e-harness/e2e-profile';
+import { profileFor, resolveE2eProfile } from '@e2e-harness/profiles';
+import { Program } from '@store/programs/program-registry';
+import type { CiState } from '@e2e-harness/wizard-ci-driver';
 
 const text = (id: string, prompt = id): AskQuestion => ({
   id,
