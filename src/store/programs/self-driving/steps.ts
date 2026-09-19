@@ -23,7 +23,11 @@ import {
   detectSelfDrivingPrerequisites,
   POSTHOG_PRESENT_KEY,
   SELF_DRIVING_INTEGRATE_PATH_KEY,
+  GITHUB_REQUIRED_MESSAGE,
+  GITHUB_REQUIRED_BODY,
 } from './detect.js';
+import { pickIntegrationTargetAction } from '../shared/control-actions.js';
+import { OutroKind } from '../../session/wizard-session.js';
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
 
 /** True once detection found PostHog already present in the project. */
@@ -65,6 +69,16 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     isComplete: (session) =>
       postHogPresent(session) || session.integrate !== null,
     gate: (session) => postHogPresent(session) || session.integrate !== null,
+    controlActions: [
+      {
+        id: 'set_integrate',
+        description:
+          'Answer the self-driving integration check. integrate=true sets up ' +
+          'the PostHog SDK first; false goes straight to Self-driving.',
+        params: { integrate: 'boolean (default false)' },
+        apply: (store, params) => store.setIntegrate(params.integrate === true),
+      },
+    ],
   },
   HEALTH_CHECK_STEP,
   {
@@ -88,6 +102,9 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     // (integrate=false); without the latter the orchestrator's waitUntil hangs.
     isComplete: (session) =>
       session.integration != null || session.integrate === false,
+    controlActions: [
+      pickIntegrationTargetAction(SELF_DRIVING_INTEGRATE_PATH_KEY),
+    ],
   },
   {
     // The integration's own run step, imported and composed here: it runs the
@@ -111,6 +128,14 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     screenId: 'self-driving-handoff',
     show: (session) => session.integrate === true,
     isComplete: (session) => session.selfDrivingHandoffConfirmed,
+    controlActions: [
+      {
+        id: 'confirm_self_driving_handoff',
+        description:
+          'Acknowledge the post-integration handoff and start the Self-driving run.',
+        apply: (store) => store.confirmSelfDrivingHandoff(),
+      },
+    ],
   },
   {
     // Hard gate before the agent starts: Self-driving cannot research findings
@@ -125,6 +150,25 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
       session.githubConnected === true || session.githubDeclined,
     gate: (session) =>
       session.githubConnected === true || session.githubDeclined,
+    controlActions: [
+      {
+        id: 'set_github_connected',
+        description: 'Resolve the GitHub App connection check',
+        params: { connected: 'boolean' },
+        apply: (store, params) =>
+          store.setGithubConnected(params.connected !== false),
+      },
+      {
+        id: 'decline_github',
+        description: 'Answer "I can\'t connect right now" and end the run',
+        apply: (store) =>
+          store.declineGithub({
+            kind: OutroKind.Cancel,
+            message: GITHUB_REQUIRED_MESSAGE,
+            body: GITHUB_REQUIRED_BODY,
+          }),
+      },
+    ],
   },
   {
     id: 'run',

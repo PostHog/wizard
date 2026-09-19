@@ -24,6 +24,7 @@ import type {
 import { LoggingUI } from '@tui/console';
 import { runConfigFor, getAuditChecks, flowFor } from '@store/programs';
 import { resolveNoTelemetry } from './resolve-no-telemetry.js';
+import { createControlHooks } from '../control-hooks.js';
 import { join } from 'node:path';
 
 /**
@@ -205,8 +206,16 @@ export function runNonInteractive(
 
       const headlessStore = new WizardStore(flowFor(config.id).flow);
       store = headlessStore;
+      // A controlled run answers the agent's questions over the socket, so the
+      // ask bridge stays wired despite `ci`.
+      if (options.controlSocket) session.e2eAsk = true;
       headlessStore.session = session;
-      setUI(new HeadlessUI(headlessStore));
+      if (options.controlSocket) {
+        const { StoreUI } = await import('@store');
+        setUI(new StoreUI(headlessStore));
+      } else {
+        setUI(new HeadlessUI(headlessStore));
+      }
       taskStream = new TaskStreamPush({
         store: headlessStore,
         programId: config.streamWorkflowId ?? config.id,
@@ -220,7 +229,7 @@ export function runNonInteractive(
         enabled: destinations.length > 0,
       });
       taskStream.attach();
-      headlessStore.setRunPhase(RunPhase.Running);
+      if (!options.controlSocket) headlessStore.setRunPhase(RunPhase.Running);
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
       }
@@ -246,6 +255,46 @@ export function runNonInteractive(
           session.region ?? 'us',
         );
       }
+
+      // Controlled headless: nothing runs until the parent asks. Detection,
+      // independent runs, and the exit all arrive over the socket.
+      if (options.controlSocket && store) {
+        const controlledStore = store;
+        const { attachControlServer } = await import('@store/control');
+        const { runAgent } = await import('@agent');
+        const { VERSION } = await import('@store');
+        let release: (() => void) | null = null;
+        const served = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const handle = await attachControlServer(controlledStore, {
+          socketPath: options.controlSocket as string,
+          surface: 'headless',
+          version: VERSION,
+          program: config.id,
+          hooks: createControlHooks({
+            store: controlledStore,
+            programId: config.id,
+            runAgent,
+            shutdown: () => {
+              release?.();
+              return Promise.resolve();
+            },
+          }),
+        });
+        const onSignal = (): void => release?.();
+        process.once('SIGINT', onSignal);
+        process.once('SIGTERM', onSignal);
+        logToFile(`[control] serving ${config.id} on ${handle.socketPath}`);
+        await served;
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+        await handle.close();
+        if (taskStream) await taskStream.shutdown(2000);
+        // Nothing else holds the loop: the process ends here with status 0.
+        return;
+      }
+
       if (config.ciPreRun) {
         await config.ciPreRun(session);
       } else {

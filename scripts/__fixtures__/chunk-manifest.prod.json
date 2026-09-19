@@ -1,10 +1,6 @@
 {
   "add-mcp-server-to-clients.js": {
     "sources": [
-      "src/store/agent-protocol/agent-signals.ts",
-      "src/store/api.ts",
-      "src/store/host-resolution.ts",
-      "src/store/services/oauth/program-scopes.ts",
       "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts",
       "src/store/services/steps/add-mcp-server-to-clients/clients/claude-code.ts",
       "src/store/services/steps/add-mcp-server-to-clients/clients/claude-web.ts",
@@ -16,31 +12,11 @@
       "src/store/services/steps/add-mcp-server-to-clients/defaults.ts",
       "src/store/services/steps/add-mcp-server-to-clients/index.ts",
       "src/store/services/steps/add-mcp-server-to-clients/plugin-client.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/results.ts",
-      "src/store/shared/bounded-fs.ts",
-      "src/store/shared/errors/agent-map.ts",
-      "src/store/shared/errors/auth.ts",
-      "src/store/shared/errors/catalog.ts",
-      "src/store/shared/errors/codes.ts",
-      "src/store/shared/errors/detect-map.ts",
-      "src/store/shared/errors/emit.ts",
-      "src/store/shared/errors/run-failure.ts",
-      "src/store/shared/errors/sanitize.ts",
-      "src/store/shared/errors/skill-map.ts",
-      "src/store/shared/links.ts",
-      "src/store/shared/oauth-errors.ts",
-      "src/store/shared/oauth.ts",
-      "src/store/shared/package-manager.ts",
-      "src/store/shared/project-resolution.ts",
-      "src/store/shared/provisioning.ts",
-      "src/store/shared/semver.ts",
-      "src/store/shared/setup-utils.ts",
-      "src/store/shared/telemetry.ts",
-      "src/store/shared/urls.ts",
-      "src/store/shared/wizard-abort.ts"
+      "src/store/services/steps/add-mcp-server-to-clients/results.ts"
     ],
     "imports": [
-      "analytics.js"
+      "analytics.js",
+      "package-manager.js"
     ]
   },
   "agent.js": {
@@ -80,11 +56,12 @@
       "src/agent/runner/switchboard/sequence.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "agent-interface.js",
       "agent-prompt-loader.js",
       "analytics.js",
+      "package-manager.js",
       "pi.js",
+      "program-registry.js",
       "programs.js",
       "queue-tools.js",
       "store.js"
@@ -105,8 +82,9 @@
       "src/agent/triage-provider.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "analytics.js",
+      "package-manager.js",
+      "program-registry.js",
       "queue-tools.js",
       "store.js"
     ]
@@ -117,24 +95,12 @@
     ],
     "imports": [
       "analytics.js",
-      "queue-tools.js",
-      "store.js"
+      "program-registry.js",
+      "queue-tools.js"
     ]
   },
   "analytics.js": {
-    "sources": [
-      "src/env.ts",
-      "src/store/local-dev.ts",
-      "src/store/session/wizard-session.ts",
-      "src/store/shared/analytics.ts",
-      "src/store/shared/ci-flag-overrides.ts",
-      "src/store/shared/constants.ts",
-      "src/store/shared/debug.ts",
-      "src/store/shared/paths.ts",
-      "src/store/shared/version.ts",
-      "src/store/ui/index.ts",
-      "src/store/ui/null-ui.ts"
-    ],
+    "sources": [],
     "imports": [
       "analytics.js"
     ]
@@ -152,11 +118,11 @@
       "src/cli/commands/basic-integration/ci-install.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "analytics.js",
       "console.js",
-      "runners.js",
-      "store.js"
+      "package-manager.js",
+      "program-registry.js",
+      "runners.js"
     ]
   },
   "console.js": {
@@ -166,7 +132,21 @@
     ],
     "imports": [
       "analytics.js",
-      "store.js"
+      "program-registry.js"
+    ]
+  },
+  "control.js": {
+    "sources": [
+      "src/store/control/actions.ts",
+      "src/store/control/driver.ts",
+      "src/store/control/marker.ts",
+      "src/store/control/runs.ts",
+      "src/store/control/server.ts",
+      "src/store/control/state.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "program-registry.js"
     ]
   },
   "interactive.js": {
@@ -174,8 +154,8 @@
       "src/cli/commands/basic-integration/interactive.ts"
     ],
     "imports": [
-      "runners.js",
-      "store.js"
+      "program-registry.js",
+      "runners.js"
     ]
   },
   "main.js": {
@@ -214,14 +194,15 @@
       "src/cli/wizard.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "agent.js",
       "analytics.js",
       "ci-install.js",
       "console.js",
       "interactive.js",
       "non-interactive.js",
+      "package-manager.js",
       "playground.js",
+      "program-registry.js",
       "runners.js",
       "store.js",
       "tui.js"
@@ -240,8 +221,8 @@
       "src/cli/commands/basic-integration/non-interactive.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
-      "analytics.js"
+      "analytics.js",
+      "package-manager.js"
     ]
   },
   "orchestrator-tools.js": {
@@ -259,6 +240,38 @@
       "package-json.js"
     ]
   },
+  "package-manager.js": {
+    "sources": [
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/api.ts",
+      "src/store/host-resolution.ts",
+      "src/store/services/oauth/program-scopes.ts",
+      "src/store/shared/bounded-fs.ts",
+      "src/store/shared/errors/agent-map.ts",
+      "src/store/shared/errors/auth.ts",
+      "src/store/shared/errors/catalog.ts",
+      "src/store/shared/errors/codes.ts",
+      "src/store/shared/errors/detect-map.ts",
+      "src/store/shared/errors/emit.ts",
+      "src/store/shared/errors/run-failure.ts",
+      "src/store/shared/errors/sanitize.ts",
+      "src/store/shared/errors/skill-map.ts",
+      "src/store/shared/links.ts",
+      "src/store/shared/oauth-errors.ts",
+      "src/store/shared/oauth.ts",
+      "src/store/shared/package-manager.ts",
+      "src/store/shared/project-resolution.ts",
+      "src/store/shared/provisioning.ts",
+      "src/store/shared/semver.ts",
+      "src/store/shared/setup-utils.ts",
+      "src/store/shared/telemetry.ts",
+      "src/store/shared/urls.ts",
+      "src/store/shared/wizard-abort.ts"
+    ],
+    "imports": [
+      "analytics.js"
+    ]
+  },
   "pi.js": {
     "sources": [
       "src/agent/aio-capture.ts",
@@ -266,10 +279,10 @@
       "src/agent/runner/harness/pi/index.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "agent-interface.js",
       "analytics.js",
       "mcp.js",
+      "package-manager.js",
       "security.js",
       "store.js",
       "subagent.js",
@@ -287,6 +300,141 @@
       "tui.js"
     ]
   },
+  "program-registry.js": {
+    "sources": [
+      "src/store/auth-session-state.ts",
+      "src/store/control/params.ts",
+      "src/store/detection/agentic.ts",
+      "src/store/detection/context.ts",
+      "src/store/detection/features.ts",
+      "src/store/detection/framework.ts",
+      "src/store/detection/package-manager.ts",
+      "src/store/detection/project-scope.ts",
+      "src/store/fetch-retry.ts",
+      "src/store/framework-config.ts",
+      "src/store/frameworks/android/android-wizard-agent.ts",
+      "src/store/frameworks/android/utils.ts",
+      "src/store/frameworks/angular/angular-wizard-agent.ts",
+      "src/store/frameworks/angular/utils.ts",
+      "src/store/frameworks/astro/astro-wizard-agent.ts",
+      "src/store/frameworks/astro/utils.ts",
+      "src/store/frameworks/django/django-wizard-agent.ts",
+      "src/store/frameworks/django/utils.ts",
+      "src/store/frameworks/elixir/elixir-wizard-agent.ts",
+      "src/store/frameworks/fastapi/fastapi-wizard-agent.ts",
+      "src/store/frameworks/fastapi/utils.ts",
+      "src/store/frameworks/flask/flask-wizard-agent.ts",
+      "src/store/frameworks/flask/utils.ts",
+      "src/store/frameworks/flutter/flutter-wizard-agent.ts",
+      "src/store/frameworks/go/go-wizard-agent.ts",
+      "src/store/frameworks/java/java-wizard-agent.ts",
+      "src/store/frameworks/javascript-node/javascript-node-wizard-agent.ts",
+      "src/store/frameworks/javascript-web/javascript-web-wizard-agent.ts",
+      "src/store/frameworks/javascript-web/utils.ts",
+      "src/store/frameworks/kmp/kmp-wizard-agent.ts",
+      "src/store/frameworks/laravel/laravel-wizard-agent.ts",
+      "src/store/frameworks/laravel/utils.ts",
+      "src/store/frameworks/nextjs/nextjs-wizard-agent.ts",
+      "src/store/frameworks/nextjs/utils.ts",
+      "src/store/frameworks/nuxt/nuxt-wizard-agent.ts",
+      "src/store/frameworks/python/python-wizard-agent.ts",
+      "src/store/frameworks/python/utils.ts",
+      "src/store/frameworks/rails/rails-wizard-agent.ts",
+      "src/store/frameworks/rails/utils.ts",
+      "src/store/frameworks/react-native/react-native-wizard-agent.ts",
+      "src/store/frameworks/react-native/utils.ts",
+      "src/store/frameworks/react-router/react-router-wizard-agent.ts",
+      "src/store/frameworks/react-router/utils.ts",
+      "src/store/frameworks/ruby/ruby-wizard-agent.ts",
+      "src/store/frameworks/ruby/utils.ts",
+      "src/store/frameworks/rust/rust-wizard-agent.ts",
+      "src/store/frameworks/svelte/svelte-wizard-agent.ts",
+      "src/store/frameworks/swift/swift-wizard-agent.ts",
+      "src/store/frameworks/swift/utils.ts",
+      "src/store/frameworks/tanstack-router/tanstack-router-wizard-agent.ts",
+      "src/store/frameworks/tanstack-router/utils.ts",
+      "src/store/frameworks/tanstack-start/tanstack-start-wizard-agent.ts",
+      "src/store/frameworks/tanstack-start/utils.ts",
+      "src/store/frameworks/vue/vue-wizard-agent.ts",
+      "src/store/health-checks/endpoints.ts",
+      "src/store/health-checks/readiness.ts",
+      "src/store/programs/agent-skill/index.ts",
+      "src/store/programs/agent-skill/steps.ts",
+      "src/store/programs/ai-observability/index.ts",
+      "src/store/programs/audit/detect.ts",
+      "src/store/programs/audit/index.ts",
+      "src/store/programs/audit/seed.ts",
+      "src/store/programs/audit/types.ts",
+      "src/store/programs/error-tracking-upload-source-maps/detect.ts",
+      "src/store/programs/error-tracking-upload-source-maps/index.ts",
+      "src/store/programs/error-tracking-upload-source-maps/prompt.ts",
+      "src/store/programs/error-tracking-upload-source-maps/steps.ts",
+      "src/store/programs/error-tracking/detect-agentic.ts",
+      "src/store/programs/error-tracking/index.ts",
+      "src/store/programs/events-audit/constants.ts",
+      "src/store/programs/events-audit/index.ts",
+      "src/store/programs/events-audit/seed.ts",
+      "src/store/programs/events-audit/steps.ts",
+      "src/store/programs/mcp-analytics/index.ts",
+      "src/store/programs/mcp/index.ts",
+      "src/store/programs/metrics/index.ts",
+      "src/store/programs/migration/index.ts",
+      "src/store/programs/migration/steps.ts",
+      "src/store/programs/posthog-doctor/fetch.ts",
+      "src/store/programs/posthog-doctor/index.ts",
+      "src/store/programs/posthog-doctor/kind-metadata.ts",
+      "src/store/programs/posthog-doctor/steps.ts",
+      "src/store/programs/posthog-doctor/types.ts",
+      "src/store/programs/posthog-integration/constants.ts",
+      "src/store/programs/posthog-integration/detect.ts",
+      "src/store/programs/posthog-integration/handoff.ts",
+      "src/store/programs/posthog-integration/index.ts",
+      "src/store/programs/posthog-integration/steps.ts",
+      "src/store/programs/program-registry.ts",
+      "src/store/programs/replay-vision/index.ts",
+      "src/store/programs/revenue-analytics/detect.ts",
+      "src/store/programs/revenue-analytics/index.ts",
+      "src/store/programs/revenue-analytics/steps.ts",
+      "src/store/programs/self-driving/detect-agentic.ts",
+      "src/store/programs/self-driving/detect.ts",
+      "src/store/programs/self-driving/index.ts",
+      "src/store/programs/self-driving/pricing.ts",
+      "src/store/programs/self-driving/prompt.ts",
+      "src/store/programs/self-driving/step-keys.ts",
+      "src/store/programs/self-driving/steps.ts",
+      "src/store/programs/shared/control-actions.ts",
+      "src/store/programs/shared/health-check-step.ts",
+      "src/store/programs/shared/package-scanning.ts",
+      "src/store/programs/shared/posthog-cli-preinstall.ts",
+      "src/store/programs/slack/index.ts",
+      "src/store/programs/warehouse-source/detect.ts",
+      "src/store/programs/warehouse-source/index.ts",
+      "src/store/programs/warehouse-source/steps.ts",
+      "src/store/programs/web-analytics-doctor/detect.ts",
+      "src/store/programs/web-analytics-doctor/index.ts",
+      "src/store/programs/web-analytics-doctor/steps.ts",
+      "src/store/registry.ts",
+      "src/store/security/yara-hooks.ts",
+      "src/store/security/yara-policy.ts",
+      "src/store/services/authenticate.ts",
+      "src/store/services/steps/install-cli-steering/index.ts",
+      "src/store/services/warehouse-sources/detect.ts",
+      "src/store/services/warehouse-sources/registry.ts",
+      "src/store/session/ask-policy.ts",
+      "src/store/session/wizard-ask-bridge.ts",
+      "src/store/shared/atomic-ledger.ts",
+      "src/store/shared/env-scan.ts",
+      "src/store/shared/headless-mode.ts",
+      "src/store/skill-install.ts",
+      "src/store/tools/tools.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "package-json.js",
+      "package-manager.js",
+      "steps.js"
+    ]
+  },
   "programs.js": {
     "sources": [
       "src/store/programs/ai-opt-in-gate.ts",
@@ -296,8 +444,9 @@
       "src/store/programs/run-config.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "analytics.js",
+      "package-manager.js",
+      "program-registry.js",
       "store.js"
     ]
   },
@@ -309,11 +458,12 @@
     ],
     "imports": [
       "analytics.js",
-      "store.js"
+      "program-registry.js"
     ]
   },
   "runners.js": {
     "sources": [
+      "src/cli/control-hooks.ts",
       "src/cli/runners/resolve-no-telemetry.ts",
       "src/cli/runners/run-non-interactive.ts",
       "src/cli/runners/run-wizard-ci.ts",
@@ -321,10 +471,12 @@
       "src/cli/runners/run-wizard.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "agent.js",
       "analytics.js",
       "console.js",
+      "control.js",
+      "package-manager.js",
+      "program-registry.js",
       "programs.js",
       "store.js",
       "tui.js"
@@ -337,7 +489,7 @@
     "imports": [
       "agent-interface.js",
       "analytics.js",
-      "store.js"
+      "program-registry.js"
     ]
   },
   "steps.js": {
@@ -347,16 +499,48 @@
       "src/store/services/steps/upload-environment-variables/providers/vercel.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
-      "analytics.js"
+      "analytics.js",
+      "package-manager.js"
     ]
   },
   "store.js": {
-    "sources": [],
+    "sources": [
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-phase.ts",
+      "src/store/agent-protocol/mcp-prompt.ts",
+      "src/store/agent-protocol/token-pricing.ts",
+      "src/store/file-watcher.ts",
+      "src/store/mcp-project-profile.ts",
+      "src/store/mcp-role-prompts.copy.json",
+      "src/store/mcp-role-prompts.ts",
+      "src/store/mcp-seed-events.ts",
+      "src/store/safe-tools.ts",
+      "src/store/services/claude-settings.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/browser-client.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/login-client.ts",
+      "src/store/session/secret-vault.ts",
+      "src/store/shared/clipboard.ts",
+      "src/store/shared/custom-headers.ts",
+      "src/store/shared/env-api-key.ts",
+      "src/store/shared/environment.ts",
+      "src/store/shared/terminal-bell.ts",
+      "src/store/state/flow-resolution.ts",
+      "src/store/state/run-failure.ts",
+      "src/store/state/store.ts",
+      "src/store/task-stream/audit-areas.ts",
+      "src/store/task-stream/destinations/file.ts",
+      "src/store/task-stream/destinations/posthog.ts",
+      "src/store/task-stream/event-plan-watcher.ts",
+      "src/store/task-stream/task-stream-push.ts",
+      "src/store/tools/handoff.ts",
+      "src/store/ui/store-ui.ts",
+      "src/store/ui/wizard-ui.ts",
+      "src/store/wizard-spellbook.ts"
+    ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "analytics.js",
-      "store.js"
+      "package-manager.js",
+      "program-registry.js"
     ]
   },
   "subagent.js": {
@@ -372,12 +556,12 @@
       "src/agent/runner/harness/pi/task.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
       "agent-interface.js",
       "agent-prompt-loader.js",
       "analytics.js",
       "mcp.js",
       "orchestrator-tools.js",
+      "package-manager.js",
       "pi.js",
       "queue-tools.js",
       "security.js",
@@ -400,6 +584,7 @@
     "imports": [
       "analytics.js",
       "pi.js",
+      "program-registry.js",
       "store.js"
     ]
   },
@@ -588,6 +773,8 @@
     "imports": [
       "add-mcp-server-to-clients.js",
       "analytics.js",
+      "package-manager.js",
+      "program-registry.js",
       "programs.js",
       "store.js"
     ]

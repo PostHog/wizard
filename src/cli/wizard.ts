@@ -1,7 +1,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { HEADLESS_FLAG, IS_PRODUCTION_BUILD } from '@env';
 import {
   Harness,
   Sequence,
@@ -80,6 +80,14 @@ export const GLOBAL_OPTIONS = {
     type: 'boolean' as const,
     hidden: true,
   },
+  // Always declared so the published headless path accepts it; published TUI
+  // runs refuse it in init(). HTTP/1.1 over the unix socket at this path.
+  'control-socket': {
+    describe:
+      'Serve the control API over this unix socket path\nenv: POSTHOG_WIZARD_CONTROL_SOCKET',
+    type: 'string' as const,
+    hidden: true,
+  },
 };
 
 export class Wizard {
@@ -106,6 +114,15 @@ export class Wizard {
           default: false,
           describe:
             'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+          type: 'boolean',
+          hidden: true,
+        })
+        // Keeps wizard_ask wired in a --ci session so a controlling parent
+        // answers the agent's questions; see shouldDisableAsk.
+        .option('e2e-ask', {
+          default: false,
+          describe:
+            'Answer wizard_ask over the control socket in a --ci run\nenv: POSTHOG_WIZARD_E2E_ASK',
           type: 'boolean',
           hidden: true,
         })
@@ -288,6 +305,16 @@ export class Wizard {
         process.exit(1);
       }
 
+      const controlRefusal = controlFlagRefusal(args, process.env);
+      if (controlRefusal) {
+        process.stderr.write(`\n\x1b[1;91m✖ ${controlRefusal}\x1b[0m\n\n`);
+        emitWizardError({
+          code: ErrorCodes.CliFlagUnavailable,
+          message: controlRefusal,
+        });
+        process.exit(1);
+      }
+
       // `--local-mcp` used to be declared unconditionally, so published builds
       // accepted it and quietly aimed the run at localhost. Reject explicitly.
       const argvHasLocalTarget = args.some((a) =>
@@ -314,6 +341,37 @@ export class Wizard {
     void this.cli.wrap(process.stdout.isTTY ? this.cli.terminalWidth() : 80)
       .argv;
   }
+}
+
+export const CONTROL_SOCKET_UNAVAILABLE =
+  '--control-socket is only available with the experimental headless flag in published builds.';
+export const E2E_ASK_UNAVAILABLE =
+  '--e2e-ask is not available in published builds.';
+
+const hasFlag = (args: readonly string[], flag: string): boolean =>
+  args.some(
+    (a) =>
+      a === `--${flag}` || a === `--no-${flag}` || a.startsWith(`--${flag}=`),
+  );
+const hasEnv = (env: NodeJS.ProcessEnv, key: string): boolean =>
+  env[key] != null && env[key] !== '';
+
+/**
+ * Published builds: the control socket ships for headless runs only, and
+ * `--e2e-ask` never ships. Returns the refusal to print, or null to proceed.
+ */
+export function controlFlagRefusal(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+): string | null {
+  const wantsControl =
+    hasFlag(args, 'control-socket') ||
+    hasEnv(env, 'POSTHOG_WIZARD_CONTROL_SOCKET');
+  if (wantsControl && !hasFlag(args, HEADLESS_FLAG))
+    return CONTROL_SOCKET_UNAVAILABLE;
+  if (hasFlag(args, 'e2e-ask') || hasEnv(env, 'POSTHOG_WIZARD_E2E_ASK'))
+    return E2E_ASK_UNAVAILABLE;
+  return null;
 }
 
 /** Excludes bare `local`: `wizard mcp add --local` stays available in prod. */

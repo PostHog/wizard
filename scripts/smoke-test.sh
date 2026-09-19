@@ -101,3 +101,43 @@ if ! echo "$hl_output" | grep -qi 'Headless mode requires --api-key'; then
   echo "$hl_output" | head -5 >&2
   exit 1
 fi
+
+# ── 5. Control server pruned from the TUI path ───────────────────────────────
+# The control API ships for headless runs only. Exactly one chunk carries the
+# server; the TUI entry chunk and bin.js never import it; the published binary
+# refuses --control-socket without the headless flag and accepts it with it.
+CONTROL_MARKER='wizard-control-server'
+TUI_MARKER='wizard-tui-entry'
+control_chunks=$(grep -l "$CONTROL_MARKER" ./dist/*.js || true)
+control_count=$(printf '%s\n' "$control_chunks" | grep -c . || true)
+if [ "$control_count" -ne 1 ]; then
+  echo "Smoke test failed: expected exactly one chunk with $CONTROL_MARKER, found $control_count" >&2
+  exit 1
+fi
+control_file=$(basename "$control_chunks")
+for tui_chunk in $(grep -l "$TUI_MARKER" ./dist/*.js || true); do
+  if grep -q "$control_file" "$tui_chunk"; then
+    echo "Smoke test failed: TUI chunk $tui_chunk imports the control server chunk" >&2
+    exit 1
+  fi
+done
+if grep -q "$control_file" "$DIST_BIN"; then
+  echo 'Smoke test failed: bin.js imports the control server chunk' >&2
+  exit 1
+fi
+if ! grep -l "$control_file" ./dist/*.js | grep -qv "$control_chunks"; then
+  echo 'Smoke test failed: nothing imports the control server chunk (headless path dead)' >&2
+  exit 1
+fi
+cs_output=$(node "$DIST_BIN" --control-socket /tmp/wizard-smoke-probe.sock --install-dir /tmp/wizard-smoke-probe 2>&1) && cs_exit=0 || cs_exit=$?
+if [ "$cs_exit" -eq 0 ] || ! echo "$cs_output" | grep -q 'only available with the experimental headless flag'; then
+  echo 'Smoke test failed: --control-socket without the headless flag must be refused' >&2
+  echo "$cs_output" | head -5 >&2
+  exit 1
+fi
+cs_hl=$(node "$DIST_BIN" "$HEADLESS_FLAG" --control-socket /tmp/wizard-smoke-probe.sock --install-dir /tmp/wizard-smoke-probe 2>&1) || true
+if ! echo "$cs_hl" | grep -qi 'Headless mode requires --api-key'; then
+  echo 'Smoke test failed: headless --control-socket did not reach the headless path' >&2
+  echo "$cs_hl" | head -5 >&2
+  exit 1
+fi

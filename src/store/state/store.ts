@@ -846,6 +846,12 @@ export class WizardStore {
     this.setRunPhase(RunPhase.Idle);
   }
 
+  /** A controlled run's parent released the agent; the runner waits on this. */
+  requestRun(): void {
+    this.$session.setKey('runRequested', true);
+    this.emitChange();
+  }
+
   setOutroDismissed(dismissed = true): void {
     this.$session.setKey('outroDismissed', dismissed);
     this.emitChange();

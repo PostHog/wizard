@@ -45,6 +45,9 @@ export function dispatchProgram(config: ProgramConfig, argv: Arguments): void {
     // Same non-interactive pipeline `--ci` uses; validation (api-key,
     // install-dir, region) is owned by runNonInteractive.
     runWizardHeadless(config, options);
+  } else if (options.ci && options.controlSocket) {
+    // A controlled TUI: the real screens, API-key auth, a parent on the socket.
+    runWizard(config, options);
   } else if (options.ci) {
     runWizardCI(config, options);
   } else {

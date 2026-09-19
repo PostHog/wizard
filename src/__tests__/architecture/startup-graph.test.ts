@@ -97,6 +97,13 @@ describe('cli startup graph', () => {
     expect(ui).toEqual([]);
   });
 
+  it('never loads the control server statically', () => {
+    const control = [...closure.files]
+      .map(rel)
+      .filter((f) => f === 'src/store/control/server.ts');
+    expect(control).toEqual([]);
+  });
+
   it('does not load the agent runner before a command runs', () => {
     const agent = [...closure.files]
       .map(rel)

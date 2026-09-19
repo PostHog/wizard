@@ -12,6 +12,14 @@ Render-agnostic state and the contract between the agent and whatever renders.
 - `tools/`: wizard tool behavior shared by every harness facade.
 - `detection/`, `frameworks`, `services/`, `security/`, `task-stream/`,
   `shared/`.
+- `control/`: the control API. An HTTP/1.1 server over a unix socket that reads
+  one store and commits through its setters: `GET /health`, `GET /state` (long
+  poll with `?wait=&since=`), `GET /runs`, `POST /actions/<id>`,
+  `POST /credentials`, `POST /run` (TUI surface), `POST /detect` and
+  `POST /runs` (headless surface), `POST /shutdown`. The store never runs
+  agents; `ControlHooks` from the cli do. Generic actions live in
+  `control/actions.ts`; a program adds its own through
+  `FlowStep.controlActions`.
 
 ## Never contains
 
@@ -25,6 +33,9 @@ Ink, console output, or any import of `@agent`, `@tui`, or `@cli`.
 
 - `index.ts`: runtime API. `types.ts`: every type another surface consumes.
 - `programs/index.ts`: program registry and definitions.
+- `control/index.ts`: the control server and client. Loaded only through a
+  dynamic import from the two cli runners, so a published TUI never carries it;
+  `scripts/smoke-test.sh` audits the built chunks.
 - Agent implementations arrive by injection: `setUI`, `setDetectionAgent`,
   `setMcpPromptRunner`.
 

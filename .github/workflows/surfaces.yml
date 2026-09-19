@@ -81,6 +81,10 @@ jobs:
         run:
           npx tsx scripts/chunk-manifest.no-jest.ts dist >
           chunk-manifest.ci.json
+      - name: Chunk layout matches the committed fixtures
+        run: |
+          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-manifest.prod.json
+          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-manifest.ci.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: chunk-manifests-${{ github.sha }}

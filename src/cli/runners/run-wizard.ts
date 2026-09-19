@@ -28,6 +28,9 @@ import type {
   TaskStreamPush as TaskStreamPushClass,
 } from '@store/types';
 import type { TuiHandle } from '@tui/types';
+import type { ControlServerHandle, CloudRegion } from '@store/types';
+import { IS_PRODUCTION_BUILD } from '@env';
+import { createControlHooks } from '../control-hooks.js';
 import { resolveNoTelemetry } from './resolve-no-telemetry.js';
 import { join } from 'node:path';
 
@@ -96,6 +99,7 @@ export function runWizard(
   options: Record<string, unknown>,
 ): void {
   let tui: TuiHandle | null = null;
+  let control: ControlServerHandle | null = null;
   let taskStream: TaskStreamPushClass | null = null;
   let onSignal: (() => void) | null = null;
   let exitInProgress = false;
@@ -136,7 +140,12 @@ export function runWizard(
         localMcp: options.localMcp as boolean | undefined,
         localPosthog: options.localPosthog as boolean | undefined,
         installDir,
-        ci: false,
+        // A controlled TUI (`--ci --control-socket`) authenticates with the API
+        // key; every other TUI run goes through OAuth.
+        ci: options.ci === true && Boolean(options.controlSocket),
+        e2eAsk: options.e2eAsk === true,
+        controlSocket: options.controlSocket as string | undefined,
+        region: options.region as CloudRegion | undefined,
         signup: options.signup as boolean | undefined,
         apiKey: options.apiKey as string | undefined,
         projectId: options.projectId as string | undefined,
@@ -184,6 +193,7 @@ export function runWizard(
           }
           process.exit(130);
         };
+        void control?.close();
         const stream = taskStream;
         if (!stream) {
           teardown();
@@ -199,8 +209,40 @@ export function runWizard(
       process.on('SIGINT', onSignal);
       process.on('SIGTERM', onSignal);
 
+      // Dev only: the parent reads state, commits actions, and releases the run
+      // over the socket. Rolldown folds this branch out of published builds, so
+      // a shipped TUI never carries the server.
+      if (!IS_PRODUCTION_BUILD && options.controlSocket) {
+        const { attachControlServer } = await import('@store/control');
+        control = await attachControlServer(activeTui.store, {
+          socketPath: options.controlSocket as string,
+          surface: 'tui',
+          version: WIZARD_VERSION,
+          program: config.id,
+          hooks: createControlHooks({
+            store: activeTui.store,
+            programId: config.id,
+            runAgent: async (...args) => {
+              const { runAgent } = await import('@agent');
+              return runAgent(...args);
+            },
+            shutdown: async () => {
+              exitInProgress = true;
+              runCleanups();
+              await taskStream?.shutdown(2000);
+              await control?.close();
+              activeTui.unmount();
+              process.exit(0);
+            },
+          }),
+        });
+      }
+
       for (;;) {
         await activeTui.store.runReadyHooks();
+        // Gates latch, so the parent may confirm setup and release the run in
+        // either order. Without a parent nothing waits here.
+        if (control) await activeTui.store.waitUntil((s) => s.runRequested);
         // Settle the pre-run screens; `integration-check` is a no-op gate here.
         await activeTui.store.getGate('intro');
 
@@ -245,6 +287,16 @@ export function runWizard(
 
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
+
+      if (session.ci) {
+        // API-key sessions carry no OAuth token, so the gateway bearer comes
+        // from the CI environment, as it does for `--ci` and the e2e host.
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
+        configureGatewayFromCIEnvironment(
+          Number(session.projectId),
+          session.region ?? 'us',
+        );
+      }
 
       const skipAgent = config.run == null;
       const shown = (s: ProgramConfig['steps'][number]) =>
@@ -307,6 +359,7 @@ export function runWizard(
 
       exitInProgress = true;
       await activeStream.shutdown(2000);
+      await control?.close();
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
       if (runFailed) await analytics.shutdown('error');
@@ -332,6 +385,7 @@ export function runWizard(
           // ignore
         }
       }
+      await control?.close();
       if (tui) {
         try {
           tui.unmount();

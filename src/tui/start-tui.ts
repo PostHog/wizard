@@ -18,6 +18,9 @@ import { getExitLine } from './exit-line.js';
 
 export { releaseTerminal };
 
+/** Appears in the TUI chunk; the smoke test proves it never imports the control server. */
+export const TUI_ENTRY_MARKER = 'wizard-tui-entry';
+
 export interface TuiHandle {
   unmount: () => void;
   store: WizardStore;
@@ -29,6 +32,7 @@ export function startTUI(
   program: ProgramId = Program.PostHogIntegration,
 ): TuiHandle {
   enterDarkTerminal();
+  logToFile(`[${TUI_ENTRY_MARKER}] ${program}`);
 
   const store = new WizardStore(flowFor(program).flow);
   store.version = version;
