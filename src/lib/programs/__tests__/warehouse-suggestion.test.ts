@@ -145,7 +145,9 @@ describe('default integration skill workflow', () => {
     expect(prompt).toContain('category: "integration"');
     expect(prompt).toContain('AI Observability and Logs skills');
     expect(prompt).toContain('before verification and the setup report');
-    expect(prompt).not.toContain('Do NOT pick skills from other categories');
+    expect(prompt).toContain(
+      'Do NOT load or install skills from any other category',
+    );
   });
 });
 
