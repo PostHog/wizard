@@ -89,7 +89,7 @@ export function renderToolInventory(toolNames: readonly string[]): string {
 
 const TASK_BASICS = `You are one step in a larger PostHog workflow made of several tasks, run as a fresh agent with no memory of the other tasks beyond the context you are given. Other tasks — before and after you — own the rest of the work, so stay strictly on your own task: do not do a neighbouring step's job, redo what an upstream handoff already did, or reach beyond what you were asked. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`not needed\` and say why, rather than marking it done.`;
 
-const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. The last task you queue, the one that reports on the run, must depend on every other task in the queue — directly, or through a task it already depends on. You are not a task yourself: do not call complete_task and do not edit the project.`;
+const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call names the task kind in its \`type\` field (the tool has no \`task\` field) and returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. The last task you queue, the one that reports on the run, must depend on every other task in the queue — directly, or through a task it already depends on. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
 /**
  * Tasks the wizard queued before the planner ran. It has to see them: they are
@@ -214,6 +214,8 @@ export interface AgentPrompt {
    * one an agent can reach — it can neither invent the task nor forget it.
    */
   runnerSeeded: boolean;
+  /** Marks a supplementary task: terminal failure unblocks dependents and never fails the run. */
+  optional: boolean;
   /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
@@ -258,6 +260,8 @@ export interface AgentRegistry {
   readonly sinkTypes: string[];
   /** The types only the wizard queues, from what it detected before the run. */
   readonly runnerSeededTypes: string[];
+  /** The types whose terminal failure must not block dependents or fail the run. */
+  readonly optionalTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
   get(type: string): AgentPrompt | undefined;
@@ -298,6 +302,7 @@ export function buildRegistry(
     enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
     sinkTypes: tasks.filter((p) => p.sink).map((p) => p.type),
     runnerSeededTypes: tasks.filter((p) => p.runnerSeeded).map((p) => p.type),
+    optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
     seed: inFlow.find((p) => p.seed),
     get: (type) => byType.get(type),
   };
@@ -391,6 +396,7 @@ export function parseAgentPrompt(
     seed: fields.seed === 'true',
     sink: fields.sink === 'true',
     runnerSeeded: fields.runnerSeeded === 'true',
+    optional: fields.optional === 'true',
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),

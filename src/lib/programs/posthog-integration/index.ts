@@ -333,12 +333,12 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
+STEP 1: Call load_skill_menu (from the wizard-tools MCP server) with category: "integration" to see available framework skills.
    If the tool fails, emit: ${
      AgentSignals.ERROR_MCP_MISSING
    } Could not load skill menu and halt.
 
-   Choose a skill from the \`integration\` category that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
+   Choose a skill from the \`integration\` category that matches this project's framework. Start with this framework skill; load the AI Observability and Logs skills when its workflow calls for them, before verification and the setup report. Both are included by default where applicable; the skills define applicability and how to report skipped work. These three categories — \`integration\`, \`ai-observability\`, \`logs\` — are the only ones this run uses. Do NOT load or install skills from any other category (llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. In particular, \`ai-observability\` is the category for AI Observability; do not substitute \`llm-analytics\`.
    If no suitable integration skill is found, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.

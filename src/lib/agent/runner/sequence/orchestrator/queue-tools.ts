@@ -87,6 +87,13 @@ export interface OrchestratorToolsContext {
    */
   runnerSeededTypes?: readonly string[];
   /**
+   * Types marked `optional: true` in their frontmatter. Enqueue stamps the flag
+   * from this list — the task's definition decides, never the enqueuing agent —
+   * so terminal failure of such a task unblocks dependents and never fails the
+   * run.
+   */
+  optionalTypes?: readonly string[];
+  /**
    * The id of the task this tool server is bound to. Each task agent gets its
    * own wizard-tools server, so attribution holds when independent tasks run
    * in parallel. Absent for the seed, which is not a task.
@@ -311,6 +318,7 @@ export function applyEnqueue(
     inputs: args.inputs ?? {},
     dependsOn: args.dependsOn ?? [],
     model: args.model,
+    optional: (ctx.optionalTypes ?? []).includes(args.type) || undefined,
     enqueuedBy: ctx.currentTaskId ?? 'orchestrator',
   });
   return { ok: true, task };

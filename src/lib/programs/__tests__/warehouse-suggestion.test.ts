@@ -13,11 +13,15 @@
  * say the run already connected the sources.
  */
 
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { POSTHOG_INTEGRATION_PROGRAM } from '@lib/programs/posthog-integration/steps';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
+import {
+  CREDENTIALS,
+  promptFor,
+  resolveRun,
+  sessionWith,
+} from './helpers/integration-prompt.no-jest';
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',
@@ -32,46 +36,6 @@ const STRIPE: DetectedSource = {
   mode: 'in-cli',
   matchedSignal: 'stripe in package.json',
 };
-
-const CREDENTIALS = {
-  accessToken: 'tok',
-  projectApiKey: 'phc_test',
-  projectId: '1',
-  host: {
-    apiHost: 'https://us.i.posthog.com',
-    appHost: 'https://us.posthog.com',
-  },
-};
-
-const FRAMEWORK_CONFIG = {
-  metadata: { name: 'Next.js', docsUrl: 'https://posthog.com/docs' },
-  environment: { getEnvVars: () => ({ POSTHOG_KEY: 'phc_test' }) },
-  ui: { getOutroChanges: () => ['Added PostHog provider'] },
-  detection: {
-    usesPackageJson: false,
-    getVersion: () => '15.0.0',
-    packageName: 'next',
-    packageDisplayName: 'Next.js',
-  },
-  analytics: { getTags: () => ({}) },
-  prompts: { projectTypeDetection: 'app router' },
-};
-
-function sessionWith(sources: DetectedSource[]): WizardSession {
-  const s = buildSession({ installDir: '/tmp/app' });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  s.frameworkConfig = FRAMEWORK_CONFIG as any;
-  if (sources.length > 0) {
-    s.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = sources;
-  }
-  return s;
-}
-
-async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
-  if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
-}
 
 describe('outro suggestion', () => {
   it('gives every detected source its own pre-filled link', async () => {
@@ -132,17 +96,6 @@ describe('outro suggestion', () => {
     }
   });
 });
-
-const promptFor = async (sources: DetectedSource[]) => {
-  const s = sessionWith(sources);
-  const runDef = await resolveRun(s);
-  return runDef.customPrompt!({
-    projectId: 1,
-    projectApiKey: 'phc_test',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    host: CREDENTIALS.host as any,
-  });
-};
 
 describe('report instruction', () => {
   it('asks the agent to note the sources in the report checklist', async () => {
