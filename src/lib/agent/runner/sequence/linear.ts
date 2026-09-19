@@ -165,6 +165,7 @@ export async function runLinearProgram(
           errorDetail: { reason },
         };
     analytics.wizardCapture('agent aborted', {
+      failure_mode: AgentErrorType.ABORT,
       integration: config.integrationLabel,
       reason,
       matched: matched?.message ?? null,
