@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { IntroScreenLayout } from '../IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
 
 interface AuditIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {

@@ -6,7 +6,7 @@ import type {
   AuthErrorDetail,
   TokenUsageDelta,
 } from './wizard-ui.js';
-import type { WizardStore } from '../state/store.js';
+import type { FlowStore } from '../state/store.js';
 import type { SettingsConflict } from '../services/claude-settings.js';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type { ApiUser } from '../api.js';
@@ -28,7 +28,7 @@ function stripAnsi(s: string): string {
 
 export class StoreUI implements WizardUI {
   readonly interactive = true;
-  constructor(private store: WizardStore) {}
+  constructor(private store: FlowStore) {}
 
   intro(message: string): void {
     this.store.pushStatus(message);

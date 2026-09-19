@@ -7,11 +7,11 @@
 
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { OutroKind, RunPhase, logToFile } from '@store';
 
 interface Props {
-  store: WizardStore;
+  store: FlowStore;
   children: ReactNode;
 }
 

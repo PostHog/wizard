@@ -1,8 +1,8 @@
 import { LoggingUI } from './logging-ui.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 
 /**
- * `LoggingUI` plus it feeds run state into a `WizardStore` so the background
+ * `LoggingUI` plus it feeds run state into a `FlowStore` so the background
  * wizard-session sync (`TaskStreamPush`) can observe a headless run. We extend
  * `LoggingUI` (not `InkUI`) because its blocking/gate methods would wait on a
  * TUI that never renders; the runner drives phase transitions on the store
@@ -10,7 +10,7 @@ import type { WizardStore } from '@store/types';
  * ledger arrives through `setFrameworkContext`, the seam every UI implements.
  */
 export class HeadlessUI extends LoggingUI {
-  constructor(private readonly store: WizardStore) {
+  constructor(private readonly store: FlowStore) {
     super();
   }
 

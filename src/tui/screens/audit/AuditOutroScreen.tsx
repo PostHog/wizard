@@ -8,7 +8,7 @@
 import { join } from 'node:path';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { OutroKind } from '@store';
 import { Colors } from '../../styles.js';
 import { getAuditChecks } from '@store/programs';
@@ -16,7 +16,7 @@ import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 import { useDismissOnAnyKey } from '../../hooks/useDismissOnAnyKey.js';
 
 interface AuditOutroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {

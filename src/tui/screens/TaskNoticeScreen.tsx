@@ -8,12 +8,12 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Colors } from '../styles.js';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 
 interface TaskNoticeScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const TaskNoticeScreen = ({ store }: TaskNoticeScreenProps) => {

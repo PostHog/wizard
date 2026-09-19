@@ -14,23 +14,24 @@ import type {
   ProgramConfig,
   ProgramId,
   RunRequest,
+  RunStore,
   WizardSession,
-  WizardStore,
+  FlowStore,
 } from '@store/types';
 
-/** The task stream one independent run publishes to; a new session per run. */
+/** The task stream one run's store publishes to. */
 export interface RunStream {
   attach(): void;
   shutdown(timeoutMs: number): Promise<void>;
 }
 
 export interface ControlHookDeps {
-  store: WizardStore;
+  store: FlowStore;
   /** The program this process launched with. */
   programId: ProgramId;
   runAgent: RunAgent;
-  /** Builds the stream a run publishes to; absent means the run publishes nothing. */
-  runStream?: (config: ProgramConfig, session: WizardSession) => RunStream;
+  /** Builds the stream over one run's store; absent means the run publishes nothing. */
+  runStream?: (config: ProgramConfig, run: RunStore) => RunStream;
   /** Flush and exit; the runner owns the exact steps. */
   shutdown: () => Promise<void>;
 }
@@ -111,26 +112,27 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         programLabel: config.id,
       };
       logToFile(`[control] run ${config.id} in ${runSession.installDir}`);
-      // One session per run: a clean run state and its own stream; credentials and context persist.
-      store.resetRunState();
-      store.setRunPhase(RunPhase.Running);
-      const stream = deps.runStream?.(config, runSession);
+      // One run, one store: a fresh RunStore on the flow; credentials and context carry over.
+      const run = store.startRun(runSession);
+      // In flight from here on: pollers read the phase, not the ledger.
+      run.setRunPhase(RunPhase.Running);
+      const stream = deps.runStream?.(config, run);
       stream?.attach();
       try {
-        await deps.runAgent(runConfigFor(config), runSession, {
+        await deps.runAgent(runConfigFor(config), run.session, {
           composed: true,
         });
         // Headless renderers never flip the phase; settle it so the ledger records a completed run.
-        if (store.session.runPhase === RunPhase.Running) {
-          store.setRunPhase(RunPhase.Completed);
+        if (run.session.runPhase === RunPhase.Running) {
+          run.setRunPhase(RunPhase.Completed);
         }
       } catch (err) {
-        if (store.session.runPhase !== RunPhase.Error) {
-          store.setOutroData({
+        if (run.session.runPhase !== RunPhase.Error) {
+          run.setOutroData({
             kind: OutroKind.Error,
             message: err instanceof Error ? err.message : String(err),
           });
-          store.setRunPhase(RunPhase.Error);
+          run.setRunPhase(RunPhase.Error);
         }
         throw err;
       } finally {

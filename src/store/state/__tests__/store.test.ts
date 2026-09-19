@@ -1,5 +1,5 @@
 import {
-  WizardStore,
+  FlowStore,
   TaskStatus,
   Program,
   type ProgramId,
@@ -49,8 +49,8 @@ vi.mock('@store/health-checks/readiness', () => ({
   getBlockingServiceKeys: vi.fn(() => []),
 }));
 
-function createStore(program?: ProgramId): WizardStore {
-  return new WizardStore(flowFor(program ?? Program.PostHogIntegration).flow);
+function createStore(program?: ProgramId): FlowStore {
+  return new FlowStore(flowFor(program ?? Program.PostHogIntegration).flow);
 }
 
 const wizardCaptureMock = analytics.wizardCapture as Mock;
@@ -63,7 +63,7 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
-describe('WizardStore', () => {
+describe('FlowStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     evaluateWizardReadinessMock.mockResolvedValue({
@@ -389,7 +389,7 @@ describe('WizardStore', () => {
       const integration = Integration.nextjs;
       const config = {
         metadata: { name: 'Next.js' },
-      } as WizardStore['session']['frameworkConfig'];
+      } as FlowStore['session']['frameworkConfig'];
 
       store.setFrameworkConfig(integration, config);
 

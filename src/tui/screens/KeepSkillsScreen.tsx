@@ -14,13 +14,13 @@ import { readdir, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const WIZARD_MARKER = '.posthog-wizard';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { ConfirmationInput } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import { CONTEXT_MILL_URL } from '@store';
 
 interface KeepSkillsScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 interface SkillEntry {

@@ -8,12 +8,12 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 
 interface AgentSkillIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const AgentSkillIntroScreen = ({

@@ -1,4 +1,5 @@
-import type { PlannedEvent, WizardStore } from '../state/store.js';
+import type { PlannedEvent } from '../state/store.js';
+import type { RunStateSource } from './types.js';
 import {
   startFileWatcher,
   type FileWatcherHandle,
@@ -45,7 +46,7 @@ export class EventPlanWatcher {
   private captured = false;
 
   constructor(
-    private readonly store: WizardStore,
+    private readonly store: RunStateSource,
     private readonly path: string,
     private readonly options: FileWatcherOptions = {},
   ) {}

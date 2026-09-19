@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import {
   TabContainer,
   SplitView,
@@ -21,7 +21,7 @@ import {
 import { WIZARD_LOG_FILE } from '@store';
 
 interface AuditRunScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {

@@ -8,14 +8,14 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { OutroKind, withUtm } from '@store';
 import { Colors } from '../styles.js';
 import { LinkText } from '../primitives/LinkText.js';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey.js';
 
 interface OutroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const OutroScreen = ({ store }: OutroScreenProps) => {

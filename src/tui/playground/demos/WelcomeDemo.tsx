@@ -3,11 +3,11 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Colors, Icons } from '../../styles.js';
 
 interface WelcomeDemoProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const WelcomeDemo = ({ store }: WelcomeDemoProps) => {

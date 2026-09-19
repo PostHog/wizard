@@ -1,12 +1,12 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
 import { analytics } from '@store';
 
 interface SettingsOverrideScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const SettingsOverrideScreen = ({

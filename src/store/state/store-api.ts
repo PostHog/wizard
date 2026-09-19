@@ -1,7 +1,7 @@
-import type { WizardStore } from './store.js';
+import type { FlowStore } from './store.js';
 
 /**
- * Every WizardStore member the tui, the cli, and the e2e harness may touch.
+ * Every FlowStore member the tui, the cli, and the e2e harness may touch.
  * The architecture suite derives the real usage and fails when the two drift,
  * so widening the boundary is an explicit edit here.
  */
@@ -27,7 +27,6 @@ export const STORE_BOUNDARY_MEMBERS = [
   'grantSharing',
   'interruptDepth',
   'pushStatus',
-  'resetRunState',
   'resolvePendingQuestion',
   'resolvePortConflict',
   'resolveTaskNotice',
@@ -59,6 +58,7 @@ export const STORE_BOUNDARY_MEMBERS = [
   'setSlackStepDismissed',
   'setSpellbook',
   'setTasks',
+  'startRun',
   'showManualAuthCode',
   'statusMessages',
   'submitManualAuthCode',
@@ -74,4 +74,4 @@ export const STORE_BOUNDARY_MEMBERS = [
 export type StoreBoundaryMember = (typeof STORE_BOUNDARY_MEMBERS)[number];
 
 /** The store as other surfaces see it. */
-export type WizardStoreApi = Pick<WizardStore, StoreBoundaryMember>;
+export type FlowStoreApi = Pick<FlowStore, StoreBoundaryMember>;

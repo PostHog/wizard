@@ -15,7 +15,7 @@ vi.mock('@store/shared/analytics', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import { Overlay } from '../router.js';
 import { flowFor } from '@store/programs/flow-for';
 import { Program } from '@store/programs/program-registry';
@@ -36,7 +36,7 @@ const NOTICE: TaskNotice = {
 
 describe('task notice', () => {
   it('resolves true when kept and false when skipped, closing the overlay', async () => {
-    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+    const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
 
     const kept = store.showTaskNotice(NOTICE);
     expect(store.currentScreen).toBe(Overlay.TaskNotice);
@@ -51,7 +51,7 @@ describe('task notice', () => {
   });
 
   it('leaves no notice behind for the next step to inherit', () => {
-    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+    const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
     expect(store.session.taskNotice).toBeNull();
   });
 });

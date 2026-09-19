@@ -1,10 +1,10 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 
 interface MigrationIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const MigrationIntroScreen = ({ store }: MigrationIntroScreenProps) => {

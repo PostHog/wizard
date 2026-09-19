@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { PickerMenu } from '../../primitives/index.js';
 import { Colors, Icons } from '../../styles.js';
 
 interface DoctorIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const DoctorIntroScreen = ({ store }: DoctorIntroScreenProps) => {

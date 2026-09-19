@@ -8,7 +8,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, setUI, analytics, logToFile, StoreUI } from '@store';
+import { FlowStore, setUI, analytics, logToFile, StoreUI } from '@store';
 import { Program, flowFor } from '@store/programs';
 import type { ProgramId } from '@store/types';
 import { UiStore } from './ui-store.js';
@@ -23,7 +23,7 @@ export const TUI_ENTRY_MARKER = 'wizard-tui-entry';
 
 export interface TuiHandle {
   unmount: () => void;
-  store: WizardStore;
+  store: FlowStore;
   waitForSetup: () => Promise<void>;
 }
 
@@ -34,7 +34,7 @@ export function startTUI(
   enterDarkTerminal();
   logToFile(`[${TUI_ENTRY_MARKER}] ${program}`);
 
-  const store = new WizardStore(flowFor(program).flow);
+  const store = new FlowStore(flowFor(program).flow);
   store.version = version;
   const ui = new UiStore(store);
 

@@ -22,7 +22,7 @@ import {
 } from 'react';
 import { Box, Text, useInput } from 'ink';
 import {
-  WizardStore,
+  FlowStore,
   TaskStatus,
   DiscoveredFeature,
   AgentPhase,
@@ -145,7 +145,7 @@ const MOCK_EVENTS = [
 ];
 
 interface RunScreenDemoProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {

@@ -18,7 +18,7 @@ import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore, CloudRegion } from '@store/types';
+import type { FlowStore, CloudRegion } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import {
   PrivacyPanel,
@@ -29,7 +29,7 @@ import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@store';
 import { Colors } from '../styles.js';
 
 interface SelfDrivingIntegrationCheckScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 /** Multi-step screen state: pick account status → email → region. */

@@ -14,7 +14,7 @@ import {
   getSelfDrivingDetectedTools,
 } from '../self-driving/detect.js';
 import { getDetectedWarehouseSources } from '../warehouse-source/detect.js';
-import { WizardStore } from '../../state/store.js';
+import { FlowStore } from '../../state/store.js';
 import { SOURCE_DETECTORS } from '../../services/warehouse-sources/registry.js';
 import type { DetectedSource } from '../../services/warehouse-sources/types.js';
 import { toIntegrationReport } from '../self-driving/detect-agentic.js';
@@ -132,7 +132,7 @@ describe('the detect step does not leak into the composed integration run', () =
   afterEach(() => cleanup(tmpDir));
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
-    const store = new WizardStore(flowFor('self-driving').flow);
+    const store = new FlowStore(flowFor('self-driving').flow);
     store.session = buildSession({ installDir: tmpDir });
     await store.runReadyHooks();
 

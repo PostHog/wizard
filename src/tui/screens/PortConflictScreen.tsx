@@ -6,12 +6,12 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { OAUTH_PORTS } from '@store';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 
 interface PortConflictScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {

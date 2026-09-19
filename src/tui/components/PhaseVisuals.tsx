@@ -10,7 +10,7 @@
 
 import { Box, Text, measureElement, type DOMElement } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { useTick } from '../hooks/useTick.js';
 import { AgentPhase } from '@store';
 import { MATRIX_FADE } from './visualizer/panel.js';
@@ -36,7 +36,7 @@ const PHASE_LABELS: Record<AgentPhase, string> = {
 
 /** Reads the active phase from the store. The agent loop pushes it in via
  *  `getUI().setStage(...)` whenever a new tool fires. */
-export function useAgentPhase(store: WizardStore): AgentPhase {
+export function useAgentPhase(store: FlowStore): AgentPhase {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -45,7 +45,7 @@ export function useAgentPhase(store: WizardStore): AgentPhase {
 }
 
 interface PhaseVisualProps {
-  store: WizardStore;
+  store: FlowStore;
   width: number;
   height: number;
 }
@@ -64,7 +64,7 @@ export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
  * short terminals. When height runs out, chrome rows drop in order:
  * transport bar first, then track title, then the NOW PLAYING header.
  */
-export const VisualizerTab = ({ store }: { store: WizardStore }) => {
+export const VisualizerTab = ({ store }: { store: FlowStore }) => {
   const phase = useAgentPhase(store);
   const containerRef = useRef<DOMElement>(null);
   const [size, setSize] = useState<{ width: number; height: number }>({

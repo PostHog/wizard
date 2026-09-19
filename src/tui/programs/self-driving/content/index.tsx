@@ -13,7 +13,7 @@ import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@store/programs';
 
 import { Text } from 'ink';
 import { Colors } from '../../../styles.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import type { ContentBlock } from '../../../primitives/content-types.js';
 import { StatusPeekTrigger } from '../../../components/StatusPeekTrigger.js';
@@ -21,7 +21,7 @@ import { PIPELINE_BLOCK } from './pipeline-diagram.js';
 
 const CLEAR: ContentBlock = { type: 'clear', pause: 2000 };
 
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
+export const getContentBlocks = (store?: FlowStore): ContentBlock[] => {
   return [
     // Scene 1 — orient
     {

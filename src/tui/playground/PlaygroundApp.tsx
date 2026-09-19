@@ -6,7 +6,7 @@
  */
 
 import { ScreenContainer, TabContainer } from '../primitives/index.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import type { UiStore } from '../ui-store.js';
 import { WelcomeDemo } from './demos/WelcomeDemo.js';
 import { LayoutDemo } from './demos/LayoutDemo.js';
@@ -28,7 +28,7 @@ import { AskModalDemo } from './demos/AskModalDemo.js';
 import { ViewportGuardDemo } from './demos/ViewportGuardDemo.js';
 
 interface PlaygroundAppProps {
-  store: WizardStore;
+  store: FlowStore;
   ui: UiStore;
 }
 

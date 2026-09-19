@@ -16,7 +16,7 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Colors } from '../../../styles.js';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import type { ContentBlock } from '../../../primitives/content-types.js';
@@ -28,7 +28,7 @@ import { VENDOR_STACK_BLOCK } from './vendor-stack.js';
 import { FREE_TIER_BLOCK } from './free-tier.js';
 import { PRICING_STRUCTURE_BLOCK } from './pricing-structure.js';
 
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
+export const getContentBlocks = (store?: FlowStore): ContentBlock[] => [
   // ── Welcome ────────────────────────────────────────────────────────────
   {
     content: 'Hello.',

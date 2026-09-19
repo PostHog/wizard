@@ -9,13 +9,13 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Colors } from '../styles.js';
 import { OAUTH_TIMEOUT_MS } from '@store';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey.js';
 
 interface SessionTimeoutScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 const TIMEOUT_MINUTES = Math.round(OAUTH_TIMEOUT_MS / 60_000);

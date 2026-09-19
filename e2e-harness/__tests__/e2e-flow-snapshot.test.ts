@@ -13,7 +13,7 @@
  * Update goldens with `jest -u` after an intentional flow change.
  */
 
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import { buildSession, RunPhase } from '@store/session/wizard-session';
@@ -51,7 +51,7 @@ function traceFlow(
   action: string;
   params?: Record<string, unknown>;
 }> {
-  const store = new WizardStore(flowFor(program).flow);
+  const store = new FlowStore(flowFor(program).flow);
   setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/tmp/e2e-snap', ci: true });
   if (integration) {

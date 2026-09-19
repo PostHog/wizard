@@ -23,7 +23,7 @@ import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import type { UiStore } from '../ui-store.js';
 import { UiStoreContext } from '../hooks/useUiStore.js';
 
@@ -37,7 +37,7 @@ function getContentWidth(terminalColumns: number): number {
 }
 
 interface ScreenContainerProps {
-  store: WizardStore;
+  store: FlowStore;
   ui: UiStore;
   screens: Record<string, ReactNode>;
 }

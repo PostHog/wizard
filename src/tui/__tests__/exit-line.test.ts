@@ -1,5 +1,5 @@
 import { getExitLine } from '../exit-line.js';
-import { WizardStore, Program } from '@store/state/store';
+import { FlowStore, Program } from '@store/state/store';
 import { OutroKind } from '@store/session/wizard-session';
 import { HostResolution } from '@store/host-resolution';
 import { flowFor } from '@store/programs/flow-for';
@@ -20,15 +20,15 @@ vi.mock('@store/shared/analytics', () => ({
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 
 function storeWithOutro(
-  data: Parameters<WizardStore['setOutroData']>[0],
-): WizardStore {
-  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+  data: Parameters<FlowStore['setOutroData']>[0],
+): FlowStore {
+  const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
   store.setOutroData(data);
   return store;
 }
 
-const uiFor = new WeakMap<WizardStore, UiStore>();
-function uiOf(store: WizardStore): UiStore {
+const uiFor = new WeakMap<FlowStore, UiStore>();
+function uiOf(store: FlowStore): UiStore {
   let ui = uiFor.get(store);
   if (!ui) {
     ui = new UiStore(store);
@@ -36,10 +36,10 @@ function uiOf(store: WizardStore): UiStore {
   }
   return ui;
 }
-const exitLine = (store: WizardStore) => getExitLine(store, uiOf(store));
+const exitLine = (store: FlowStore) => getExitLine(store, uiOf(store));
 
 /** Force `tokenHudVisible` to `visible`, regardless of its IS_DEV default. */
-function setHudVisible(store: WizardStore, visible: boolean): void {
+function setHudVisible(store: FlowStore, visible: boolean): void {
   if (uiOf(store).tokenHudVisible !== visible) uiOf(store).toggleTokenHud();
 }
 

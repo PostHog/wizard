@@ -6,7 +6,7 @@
 
 import { Text } from 'ink';
 import { Colors } from '../../../styles.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import type { ContentBlock } from '../../../primitives/content-types.js';
 import { StatusPeekTrigger } from '../../../components/StatusPeekTrigger.js';
@@ -15,7 +15,7 @@ import { PRODUCT_SUITE_BLOCK } from './product-suite.js';
 import { LINE_CHART_BLOCK } from './line-chart.js';
 import { FUNNEL_BLOCK } from './funnel.js';
 
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
+export const getContentBlocks = (store?: FlowStore): ContentBlock[] => [
   {
     // Name comes from the login profile; falls back when absent (CI keys).
     content: store?.session.apiUser?.first_name

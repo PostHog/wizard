@@ -9,7 +9,7 @@
 
 import { useEffect } from 'react';
 
-import type { WizardStore, WizardSession } from '@store/types';
+import type { FlowStore, WizardSession } from '@store/types';
 import { fetchGithubConnected, requestDeepLink, analytics } from '@store';
 
 const POLL_INTERVAL_MS = 3000;
@@ -26,7 +26,7 @@ export async function fetchLoginUrl(
   return deepLink ?? `${session.credentials.host.appHost}/login`;
 }
 
-export function useGithubConnection(store: WizardStore): void {
+export function useGithubConnection(store: FlowStore): void {
   const credentials = store.session.credentials;
   const connected = store.session.githubConnected === true;
 

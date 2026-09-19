@@ -11,7 +11,7 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useSyncExternalStore } from 'react';
-import type { WizardStore, SettingsConflict } from '@store/types';
+import type { FlowStore, SettingsConflict } from '@store/types';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
 import { analytics } from '@store';
@@ -30,7 +30,7 @@ function sourceLabel(source: SettingsConflict['source']): string {
 }
 
 interface ManagedSettingsScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const ManagedSettingsScreen = ({

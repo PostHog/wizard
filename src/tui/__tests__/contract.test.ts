@@ -1,5 +1,5 @@
 import { expectTypeOf } from 'vitest';
-import { WizardStore } from '@store';
+import { FlowStore } from '@store';
 import { flowFor, Program, PROGRAM_REGISTRY } from '@store/programs';
 import type { WizardUI } from '@store/types';
 import { HeadlessUI } from '../console/headless-ui.js';
@@ -13,7 +13,7 @@ describe('tui contract', () => {
     expectTypeOf<LoggingUI>().toMatchTypeOf<WizardUI>();
     expectTypeOf<HeadlessUI>().toMatchTypeOf<WizardUI>();
     expect(new LoggingUI().interactive).toBe(false);
-    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+    const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
     expect(new HeadlessUI(store).interactive).toBe(false);
   });
 

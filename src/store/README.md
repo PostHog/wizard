@@ -4,7 +4,16 @@ Render-agnostic state and the contract between the agent and whatever renders.
 
 ## Owns
 
-- `state/`: `WizardStore`, flows, interrupts, screen resolution, run failure.
+- `state/`: `RunStore`, `FlowStore`, flows, interrupts, screen resolution, run
+  failure. A `RunStore` is the state of one agent run: its copy of the session,
+  tasks, phase, outro, and the questions the agent asks. `FlowStore` owns the
+  flow, gates, interrupts, and the session every run inherits; it chains runs
+  through `startRun(session)`, mirrors the active run in its `session`, and
+  re-emits the run's commits. The agent writes through `StoreUI` to the
+  `FlowStore`, which routes run state to the active `RunStore`; the task stream
+  reads one `RunStore`; screens and the control API read the `FlowStore`. The
+  dashboard and notebook a run creates are session artefacts and stay on the
+  flow, so a later run and the outro still link them.
 - `session/`: `WizardSession`, ask policy, ask bridge, secret vault.
 - `ui/`: the `WizardUI` interface, `getUI`/`setUI`, `StoreUI`, `NullUI`.
 - `agent-protocol/`: run configs, agent signals, token pricing, subprocess env.
@@ -50,7 +59,7 @@ line.
 throws. `testing/` holds `createTestStore`; shipped code never imports it.
 `__tests__/contract.test.ts` pins the boundary: `StoreUI` and `NullUI` implement
 `WizardUI`, `ProgramConfig` extends `ProgramRunConfig`, `runConfigFor` emits
-nothing beyond the run contract, and `WizardStore` satisfies `WizardStoreApi`
+nothing beyond the run contract, and `FlowStore` satisfies `FlowStoreApi`
 (`state/store-api.ts`, whose member list the architecture suite derives from
 real tui, cli, and harness usage). Goldens live under
 `**/__tests__/__snapshots__` and must stay byte identical across refactors.

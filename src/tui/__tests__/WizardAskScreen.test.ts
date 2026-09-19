@@ -19,7 +19,7 @@ vi.mock('@store/shared/analytics', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import {
   askEscapeHint,
   handleAskKey,
@@ -53,7 +53,7 @@ describe('handleAskKey', () => {
   });
 
   it('declines the whole request end-to-end so the task can fall back', async () => {
-    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+    const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
     const answers = store.requestQuestion(pending);
 
     handleAskKey({ escape: true }, store);

@@ -1,6 +1,6 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import {
   MintFailureScreen,
   type MintFailureServices,
@@ -27,7 +27,7 @@ const saved = {
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 function setup() {
-  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+  const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
   store.setCredentials({
     accessToken: 'tok',
     projectApiKey: 'pk',

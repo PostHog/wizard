@@ -9,7 +9,7 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import {
@@ -18,7 +18,7 @@ import {
 } from '@store/programs';
 
 interface SelfDrivingHandoffScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const SelfDrivingHandoffScreen = ({

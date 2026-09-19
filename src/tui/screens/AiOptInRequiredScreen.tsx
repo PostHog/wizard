@@ -16,7 +16,7 @@
 import opn from 'opn';
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { useKeyBindings } from '../hooks/useKeyBindings.js';
 import { Colors } from '../styles.js';
 import { useSkillEntry } from './SkillSourceInfo.js';
@@ -33,7 +33,7 @@ const SETTINGS_PATH = 'settings/organization-details';
 const SETTINGS_ANCHOR = '#organization-ai-consent';
 
 interface AiOptInRequiredScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const AiOptInRequiredScreen = ({

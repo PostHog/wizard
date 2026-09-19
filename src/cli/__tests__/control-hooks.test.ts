@@ -180,7 +180,9 @@ describe('one independent run', () => {
       expect(stream.shutdown).toHaveBeenCalledWith(2000);
     }
     expect(cleanups).toHaveBeenCalledTimes(2);
-    expect(store.session.dashboardUrl).toBeNull();
+    expect(store.session.dashboardUrl).toBe(
+      'https://us.posthog.com/project/1/dashboard/9',
+    );
     expect(store.tasks).toEqual([]);
     expect(store.session.runPhase).toBe(RunPhase.Completed);
   });

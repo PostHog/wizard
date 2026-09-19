@@ -1,7 +1,7 @@
 import { TaskStreamPush } from '../task-stream-push.js';
 import { StreamEvent, StreamTaskStatus } from '../types.js';
 import type { TaskStreamDestination, TaskStreamUpdate } from '../types.js';
-import type { WizardStore, TaskItem } from '../../state/store.js';
+import type { FlowStore, TaskItem } from '../../state/store.js';
 import { TaskStatus } from '../../ui/wizard-ui.js';
 import {
   RunPhase,
@@ -91,7 +91,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     },
   };
 
-  return store as typeof store & WizardStore;
+  return store as typeof store & FlowStore;
 }
 
 function createMockDestination(name = 'test'): TaskStreamDestination & {

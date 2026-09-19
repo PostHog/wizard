@@ -5,7 +5,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Colors, Icons } from '../styles.js';
 import { DiscoveredFeature, AdditionalFeature } from '@store';
 
@@ -20,7 +20,7 @@ export interface Tip {
   /** Optional URL shown after the description */
   url?: string;
   /** When provided, the tip is only shown if this returns true */
-  visible?: (store: WizardStore) => boolean;
+  visible?: (store: FlowStore) => boolean;
   /** Optional key binding that toggles an AdditionalFeature */
   toggle?: {
     /** The key the user presses (lowercase) */
@@ -32,7 +32,7 @@ export interface Tip {
     /** Prompt shown when not yet toggled */
     prompt: string;
     /** Returns true if already toggled */
-    isEnabled: (store: WizardStore) => boolean;
+    isEnabled: (store: FlowStore) => boolean;
   };
 }
 
@@ -93,7 +93,7 @@ export const TipsCard = ({
   store,
   tips = DEFAULT_TIPS,
 }: {
-  store: WizardStore;
+  store: FlowStore;
   tips?: Tip[];
 }) => {
   useInput((input) => {

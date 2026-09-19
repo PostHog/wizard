@@ -11,7 +11,7 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Integration, ScanConsent, analytics } from '@store';
 import {
   getCommandPath,
@@ -85,7 +85,7 @@ const FrameworkPicker = ({
   store,
   onComplete,
 }: {
-  store: WizardStore;
+  store: FlowStore;
   onComplete?: () => void;
 }) => {
   const options = Object.values(Integration).map((value) => ({
@@ -113,7 +113,7 @@ const FrameworkPicker = ({
 };
 
 interface PostHogIntegrationIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const PostHogIntegrationIntroScreen = ({

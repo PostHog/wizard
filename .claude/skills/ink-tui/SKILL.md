@@ -51,7 +51,7 @@ service wiring depends on the screen's needs; `App` remains the shared shell.
 
 Business logic calls [WizardUI](../../../src/store/ui/wizard-ui.ts) through
 [getUI](../../../src/store/ui/index.ts). Screens use
-[WizardStore](../../../src/store/state/store.ts) setters for reactive changes.
+[FlowStore](../../../src/store/state/store.ts) setters for reactive changes.
 The router resolves program screens from session predicates; overlays interrupt
 that resolution. Local state is appropriate for presentation details such as tab
 selection, not wizard progression.

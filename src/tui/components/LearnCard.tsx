@@ -9,7 +9,7 @@
 
 import { Box, Text } from 'ink';
 import { Colors } from '../styles.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { ContentSequencer, TextRevealMode } from '../primitives/index.js';
 import type { ContentBlock } from '../primitives/index.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
@@ -22,7 +22,7 @@ const HEADER_ROWS = 2; // title + spacer
 const MIN_CONTENT_ROWS = 6;
 
 interface LearnCardProps {
-  store?: WizardStore;
+  store?: FlowStore;
   /** The script to play. Program-owned; see programs/<name>/content/. */
   blocks: ContentBlock[];
   onComplete?: () => void;

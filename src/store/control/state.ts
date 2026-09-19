@@ -1,6 +1,6 @@
 import type { WizardSession } from '../session/wizard-session.js';
 import { sanitizeErrorDetail } from '../shared/errors/sanitize.js';
-import type { WizardStore } from '../state/store.js';
+import type { FlowStore } from '../state/store.js';
 import { actionsFor, toActionView } from './actions.js';
 import type { ControlSession, ControlState } from './types.js';
 
@@ -90,7 +90,7 @@ function projectSession(s: WizardSession): ControlSession {
 }
 
 /** Project the committed store for a controlling parent. */
-export function projectState(store: WizardStore): ControlState {
+export function projectState(store: FlowStore): ControlState {
   const s = store.session;
   const screen = store.currentScreen;
   const questions = s.frameworkConfig?.metadata.setup?.questions ?? [];

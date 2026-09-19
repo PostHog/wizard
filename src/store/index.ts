@@ -240,7 +240,8 @@ export { isRunFailure } from './state/run-failure.js';
 export { STORE_BOUNDARY_MEMBERS } from './state/store-api.js';
 export {
   MAX_STATUS_MESSAGES,
-  WizardStore,
+  FlowStore,
+  RunStore,
   totalTokenCount,
 } from './state/store.js';
 export { createFileDestination } from './task-stream/destinations/file.js';

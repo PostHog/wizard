@@ -9,7 +9,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import {
   ConfirmationInput,
   LoadingBox,
@@ -30,7 +30,7 @@ import {
 import { useDismissOnAnyKey } from '../../hooks/useDismissOnAnyKey.js';
 
 interface HealthCheckScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 const EXAMPLE_PROMPT =

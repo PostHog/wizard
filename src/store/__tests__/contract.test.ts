@@ -7,8 +7,8 @@ import {
   PROGRAM_REGISTRY,
 } from '../programs/program-registry.js';
 import { runConfigFor } from '../programs/run-config.js';
-import type { WizardStoreApi } from '../state/store-api.js';
-import type { WizardStore } from '../state/store.js';
+import type { FlowStoreApi } from '../state/store-api.js';
+import type { FlowStore } from '../state/store.js';
 import { createTestStore } from '../testing/index.js';
 import { NullUI } from '../ui/null-ui.js';
 import { StoreUI } from '../ui/store-ui.js';
@@ -41,7 +41,7 @@ describe('store contract', () => {
   });
 
   it('the store satisfies the API other surfaces see', () => {
-    expectTypeOf<WizardStore>().toMatchTypeOf<WizardStoreApi>();
+    expectTypeOf<FlowStore>().toMatchTypeOf<FlowStoreApi>();
   });
 
   it('every ProgramConfig is a ProgramRunConfig', () => {

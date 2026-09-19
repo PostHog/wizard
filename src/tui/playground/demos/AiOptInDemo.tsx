@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { WizardStore, HostResolution } from '@store';
+import { FlowStore, HostResolution } from '@store';
 import { AiOptInRequiredScreen } from '../../screens/AiOptInRequiredScreen.js';
 import { flowFor, Program } from '@store/programs';
 
@@ -26,7 +26,7 @@ interface AiOptInDemoProps {
 
 export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
   const [store] = useState(() => {
-    const s = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+    const s = new FlowStore(flowFor(Program.PostHogIntegration).flow);
     s.setCredentials({
       accessToken: 'demo-fake-token',
       projectApiKey: 'demo-fake-project-key',
@@ -37,7 +37,7 @@ export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
   });
 
   useEffect(() => {
-    store.session.region = 'us';
+    store.session = { ...store.session, region: 'us' };
     store.setApiUser({
       distinct_id: 'demo-distinct-id',
       email: 'sarah@example.com',

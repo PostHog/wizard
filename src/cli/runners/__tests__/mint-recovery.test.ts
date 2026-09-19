@@ -2,7 +2,7 @@ import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard.js';
 import { runAgent } from '@agent';
 import { startTUI } from '@tui';
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import { posthogIntegrationConfig } from '@store/programs/posthog-integration';
@@ -49,7 +49,7 @@ afterEach(() => {
 it.each(['continue', 'exit'] as const)(
   'catches a failed run, shows the handoff screen, and exits 1 after %s',
   async (action) => {
-    const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+    const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
     setUI(new StoreUI(store));
     vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
     vi.spyOn(store, 'getGate').mockResolvedValue(undefined);

@@ -187,7 +187,7 @@ export function maybeStampAiSdkDetected(session: WizardSession): void {
   // (latched only from TUI-only consent screens), this runs from
   // `authenticate()`, which also fires in `--ci` mode, where the session is a
   // plain object with no nanostore — see run-non-interactive.ts. A setter
-  // routed through WizardStore would silently never latch there.
+  // routed through FlowStore would silently never latch there.
   //
   // Depends on consent resolving before auth, same as every program's step
   // list orders 'intro' before 'auth' today; a program that reversed that
@@ -201,7 +201,7 @@ export function maybeStampAiSdkDetected(session: WizardSession): void {
 
 /**
  * The single place scan results become telemetry. Called from
- * `WizardStore.completeSetup()`, the point consent becomes final — the privacy
+ * `FlowStore.completeSetup()`, the point consent becomes final — the privacy
  * panel's choice is reversible until then, so nothing may report earlier.
  * The org stamp is a separate concern: see `maybeStampAiSdkDetected`, which
  * runs post-auth rather than at consent resolution.

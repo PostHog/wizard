@@ -19,7 +19,7 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { Colors, Icons } from '../styles.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings.js';
@@ -36,7 +36,7 @@ import {
 import { GITHUB_REQUIRED_BODY, GITHUB_REQUIRED_MESSAGE } from '@store/programs';
 
 interface SelfDrivingGitHubScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 enum ChoiceValue {

@@ -1,5 +1,5 @@
 import type { RunAgent } from '@agent/types';
-import { StoreUI, WizardStore, setUI } from '@store';
+import { StoreUI, FlowStore, setUI } from '@store';
 import { flowFor } from '@store/programs';
 import type { ProgramId } from '@store/types';
 import type { TuiHandle } from '@tui/types';
@@ -30,7 +30,7 @@ export function fakeRunAgent(): { runAgent: RunAgent; calls: RunAgentCall[] } {
 
 /** A real store behind StoreUI, no Ink: what startTUI hands the runner. */
 export function fakeStartTUI(programId: ProgramId): TuiHandle {
-  const store = new WizardStore(flowFor(programId).flow);
+  const store = new FlowStore(flowFor(programId).flow);
   setUI(new StoreUI(store));
   return {
     store,

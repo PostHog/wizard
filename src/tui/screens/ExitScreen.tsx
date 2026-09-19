@@ -6,9 +6,9 @@
  */
 
 import { useEffect } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 
-export const ExitScreen = ({ store }: { store?: WizardStore }) => {
+export const ExitScreen = ({ store }: { store?: FlowStore }) => {
   useEffect(() => {
     // After a mint failure run-wizard owns the exit (status 1, analytics).
     if (!store?.session.mintHandoff) process.exit(0);

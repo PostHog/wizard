@@ -1,5 +1,5 @@
 /**
- * UiStore — presentation state the TUI keeps beside the WizardStore: status
+ * UiStore — presentation state the TUI keeps beside the FlowStore: status
  * bar expansion, learn card progress, the token HUD toggle, and the direction
  * hint for screen transitions. It watches the store and re-emits every store
  * commit, so React subscribes here once for both.
@@ -7,7 +7,7 @@
 
 import { atom } from 'nanostores';
 import { IS_DEV } from '@env';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 
 export class UiStore {
   private $version = atom(0);
@@ -20,7 +20,7 @@ export class UiStore {
   private _lastDirection: 'push' | 'pop' | null = null;
   private _lastDepth: number;
 
-  constructor(readonly store: WizardStore) {
+  constructor(readonly store: FlowStore) {
     this._lastDepth = store.interruptDepth;
     store.subscribe(() => this._onStoreChange());
   }

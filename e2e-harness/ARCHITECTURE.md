@@ -42,11 +42,11 @@ scripts/
   wizard-ci-explore.no-jest.ts           open an app, confirm setup, print one frame
 ```
 
-The server reads and mutates the **real** `WizardStore` the TUI renders from.
-The router resolves the active screen from session state, every action goes
-through a store setter, and the render is a pure projection of that state. So a
-commit over the socket makes the real TUI react, and the parent never touches
-the TUI's input.
+The server reads and mutates the **real** `FlowStore` the TUI renders from. The
+router resolves the active screen from session state, every action goes through
+a store setter, and the render is a pure projection of that state. So a commit
+over the socket makes the real TUI react, and the parent never touches the TUI's
+input.
 
 ## Launching a controlled wizard
 
@@ -83,7 +83,7 @@ program), 404 (unknown route), 409 (a run is in flight), 413 (body over 64 KB),
 | `POST /credentials`                                                         | Resolves the API key into project credentials and commits them, advancing `auth`                     |
 | `POST /run`                                                                 | TUI surface: `requestRun` on the store, releasing the runner's agent start. Idempotent               |
 | `POST /detect` body `{ programId?, installDir? }`                           | Headless surface: runs detection through the store's setters                                         |
-| `POST /runs` body `{ programId, installDir?, frameworkContext?, skillId? }` | Headless surface: one independent agent run; 409 while one runs                                      |
+| `POST /runs` body `{ programId, installDir?, frameworkContext?, skillId? }` | Headless surface: one independent agent run on a fresh `RunStore`; 409 while one runs                |
 | `GET /runs`                                                                 | The run ledger: `runId`, `programId`, `installDir`, `status`, `error`, timestamps, `result`          |
 | `POST /shutdown`                                                            | Flushes and exits. Idempotent                                                                        |
 
@@ -96,9 +96,10 @@ follow-up flags, `runRequested`, `runPhase`, `pendingQuestion`, `taskNotice`,
 redaction (`secret:<id>` refs become `[secret-ref]`, secret-looking keys become
 `[redacted]`); credentials reduce to `hasCredentials` and `projectId`.
 `session.runPhase` is the run status and `session.outroData` carries a failed
-run's reason. No access token, API key, user record, or answer value is ever
-projected. A ledger record's `result` is this state as it read when the run
-ended.
+run's reason. `dashboardUrl` and `notebookUrl` are artefacts of the session: a
+later run inherits them. No access token, API key, user record, or answer value
+is ever projected. A ledger record's `result` is this state as it read when the
+run ended.
 
 The socket is created mode 0600 in a directory the caller owns. A stale socket
 file is replaced; a live one is refused. The wizard unlinks it on exit.

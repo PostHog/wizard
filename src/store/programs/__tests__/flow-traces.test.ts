@@ -3,7 +3,7 @@
  * by walking each program's steps through the store with a generic advance per
  * screen. Baseline for the surface split: must stay byte identical.
  */
-import { WizardStore, RunPhase, McpOutcome } from '../../state/store.js';
+import { FlowStore, RunPhase, McpOutcome } from '../../state/store.js';
 import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '../../ui/index.js';
 import {
@@ -58,7 +58,7 @@ function screenEvents(): ScreenEvent[] {
 const NODE = FRAMEWORK_REGISTRY[Integration.javascriptNode];
 
 function createStore(program: ProgramId, integration: Integration | null) {
-  const store = new WizardStore(flowFor(program).flow);
+  const store = new FlowStore(flowFor(program).flow);
   setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
   if (integration) {
@@ -75,7 +75,7 @@ const approved = (ok: boolean) =>
   } as unknown as WizardSession['apiUser']);
 
 /** Commit what a user, the runner, or the agent would commit on this screen. */
-function advance(store: WizardStore, screen: string): boolean {
+function advance(store: FlowStore, screen: string): boolean {
   const s = store.session;
   if (screen === 'intro' || screen.endsWith('-intro')) {
     store.completeSetup();
@@ -216,7 +216,7 @@ describe('headless walk analytics', () => {
   for (const program of ['posthog-integration', 'audit'] as ProgramId[]) {
     it(`${program}: run phases without a TUI`, () => {
       wizardCapture.mockClear();
-      const store = new WizardStore(flowFor(program).flow);
+      const store = new FlowStore(flowFor(program).flow);
       setUI(new StoreUI(store));
       store.session = buildSession({ installDir: '/app', ci: true });
       store.setRunPhase(RunPhase.Running);

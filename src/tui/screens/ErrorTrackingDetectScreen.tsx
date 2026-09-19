@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type {
-  WizardStore,
+  FlowStore,
   ErrorTrackingDetectionReport,
   ErrorTrackingProject,
 } from '@store/types';
@@ -20,7 +20,7 @@ import {
 } from '@store/programs';
 
 interface ErrorTrackingDetectScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 type DetectState =

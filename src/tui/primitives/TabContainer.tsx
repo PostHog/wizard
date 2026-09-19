@@ -14,7 +14,7 @@ import {
   KeyMatch,
   type KeyBinding,
 } from '../hooks/useKeyBindings.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../constants.js';
 import { useUiStore } from '../hooks/useUiStore.js';
 
@@ -33,7 +33,7 @@ interface TabContainerProps {
   /** Enable expand/collapse on the status box via 's' key */
   expandableStatus?: boolean;
   /** Store reference — required when expandableStatus is true so status state is shared. */
-  store?: WizardStore;
+  store?: FlowStore;
 }
 
 export const TabContainer = ({

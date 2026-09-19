@@ -7,7 +7,7 @@
  * the generic skill deck and `DEFAULT_TIPS`.
  */
 
-import type { ProgramId, WizardStore } from '@store/types';
+import type { ProgramId, FlowStore } from '@store/types';
 import type { ContentBlock } from '../primitives/index.js';
 import type { Tip } from '../components/TipsCard.js';
 import { getContentBlocks as agentSkillDeck } from './agent-skill/content/index.js';
@@ -22,8 +22,8 @@ import { getTips as selfDrivingTips } from './self-driving/content/tips.js';
 import { getContentBlocks as warehouseSourceDeck } from './warehouse-source/content/index.js';
 
 export interface ProgramPresentation {
-  getContentBlocks?: (store?: WizardStore) => ContentBlock[];
-  getTips?: (store?: WizardStore) => Tip[];
+  getContentBlocks?: (store?: FlowStore) => ContentBlock[];
+  getTips?: (store?: FlowStore) => Tip[];
 }
 
 export const PROGRAM_PRESENTATION: Partial<

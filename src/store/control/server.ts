@@ -8,7 +8,7 @@ import {
 import { RunPhase } from '../session/wizard-session.js';
 import { logToFile } from '../shared/debug.js';
 import { resolveInstallDir } from '../shared/paths.js';
-import type { WizardStore } from '../state/store.js';
+import type { FlowStore } from '../state/store.js';
 import { UnknownActionError } from './actions.js';
 import { ControlDriver } from './driver.js';
 import { CONTROL_SERVER_MARKER } from './marker.js';
@@ -181,7 +181,7 @@ function actionId(pathname: string): string | null {
 
 /** Serve the control API for one store over a unix socket: HTTP/1.1, JSON in and out. */
 export async function attachControlServer(
-  store: WizardStore,
+  store: FlowStore,
   options: ControlServerOptions,
 ): Promise<ControlServerHandle> {
   const { socketPath, surface, hooks } = options;

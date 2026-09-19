@@ -22,7 +22,7 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore, OutroData } from '@store/types';
+import type { FlowStore, OutroData } from '@store/types';
 import { SlackConnectScreen } from '../../screens/SlackConnectScreen.js';
 import { OutroScreen } from '../../screens/OutroScreen.js';
 import { Colors } from '../../styles.js';
@@ -60,7 +60,7 @@ const OUTRO_FIXTURES: Record<OutroKind, OutroData> = {
 };
 
 interface EndScreensDemoProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const EndScreensDemo = ({ store }: EndScreensDemoProps) => {

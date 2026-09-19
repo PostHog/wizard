@@ -27,7 +27,7 @@ import {
 } from '../../primitives/index.js';
 import type { ContentBlock, ProgressItem } from '../../primitives/index.js';
 import { Colors } from '../../styles.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { PROGRAM_REGISTRY } from '@store/programs';
 import { PROGRAM_PRESENTATION } from '../../programs/presentation.js';
 import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index.js';
@@ -83,7 +83,7 @@ const MOCK_TASKS: ProgressItem[] = [
 ];
 
 interface LearnDeckDemoProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
@@ -197,10 +197,10 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
  * crash at render time.
  */
 function withSessionOverride(
-  store: WizardStore,
-  patch: Partial<WizardStore['session']>,
-): WizardStore {
-  const stub = Object.create(Object.getPrototypeOf(store)) as WizardStore;
+  store: FlowStore,
+  patch: Partial<FlowStore['session']>,
+): FlowStore {
+  const stub = Object.create(Object.getPrototypeOf(store)) as FlowStore;
   Object.assign(stub, store);
   Object.defineProperty(stub, 'session', {
     value: { ...store.session, ...patch },

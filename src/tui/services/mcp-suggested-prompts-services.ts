@@ -14,7 +14,7 @@ import type {
   Credentials,
   AgentChunk,
   McpPromptRequest,
-  WizardStore,
+  FlowStore,
   ApiUser,
   ProjectDataProfile,
 } from '@store/types';
@@ -98,7 +98,7 @@ export interface McpSuggestedPromptsServices {
  * actually invoked.
  */
 export function createMcpSuggestedPromptsServices(
-  store: WizardStore,
+  store: FlowStore,
 ): McpSuggestedPromptsServices {
   return {
     performLogin: async () => {

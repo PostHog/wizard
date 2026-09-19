@@ -10,7 +10,7 @@ import {
 } from '../../session/wizard-session.js';
 import type { Flow } from '../../state/flow.js';
 import { Interrupt } from '../../state/interrupts.js';
-import { WizardStore } from '../../state/store.js';
+import { FlowStore } from '../../state/store.js';
 import { createControlledStore, createTestStore } from '../../testing/index.js';
 import { setUI } from '../../ui/index.js';
 import { StoreUI } from '../../ui/store-ui.js';
@@ -23,7 +23,7 @@ import {
 import { BadParamError, MissingParamError } from '../params.js';
 import { ControlDriver } from '../driver.js';
 
-function storeFor(program = Program.PostHogIntegration): WizardStore {
+function storeFor(program = Program.PostHogIntegration): FlowStore {
   const store = createTestStore(program);
   setUI(new StoreUI(store));
   store.session = buildSession({
@@ -33,7 +33,7 @@ function storeFor(program = Program.PostHogIntegration): WizardStore {
   return store;
 }
 
-function apply(store: WizardStore, screen: string, id: string, params = {}) {
+function apply(store: FlowStore, screen: string, id: string, params = {}) {
   const action = actionsFor(store.flow, screen).find((a) => a.id === id);
   if (!action) throw new Error(`no ${id} on ${screen}`);
   action.apply(store, params);
@@ -53,49 +53,44 @@ describe('generic actions', () => {
       'health-check',
       'dismiss_outage',
       {},
-      (s: WizardStore) => s.session.outageDismissed === true,
+      (s: FlowStore) => s.session.outageDismissed === true,
     ],
     [
       'setup',
       'choose',
       { key: 'router', value: 'app' },
-      (s: WizardStore) => s.session.frameworkContext.router === 'app',
+      (s: FlowStore) => s.session.frameworkContext.router === 'app',
     ],
-    [
-      'outro',
-      'dismiss_outro',
-      {},
-      (s: WizardStore) => s.session.outroDismissed,
-    ],
+    ['outro', 'dismiss_outro', {}, (s: FlowStore) => s.session.outroDismissed],
     [
       'audit-outro',
       'dismiss_outro',
       {},
-      (s: WizardStore) => s.session.outroDismissed,
+      (s: FlowStore) => s.session.outroDismissed,
     ],
     [
       'source-maps-outro',
       'dismiss_outro',
       {},
-      (s: WizardStore) => s.session.outroDismissed,
+      (s: FlowStore) => s.session.outroDismissed,
     ],
     [
       'mint-failure',
       'continue_setup',
       {},
-      (s: WizardStore) => s.session.mintHandoff === 'continue',
+      (s: FlowStore) => s.session.mintHandoff === 'continue',
     ],
     [
       'mint-failure',
       'dismiss_outro',
       {},
-      (s: WizardStore) => s.session.mintHandoff === 'exit',
+      (s: FlowStore) => s.session.mintHandoff === 'exit',
     ],
     [
       'mcp',
       'set_mcp_outcome',
       { outcome: 'installed', clients: ['cursor'] },
-      (s: WizardStore) =>
+      (s: FlowStore) =>
         s.session.mcpComplete &&
         s.session.mcpOutcome === McpOutcome.Installed &&
         s.session.mcpInstalledClients[0] === 'cursor',
@@ -104,37 +99,37 @@ describe('generic actions', () => {
       'mcp-add',
       'set_mcp_outcome',
       { outcome: 'skipped' },
-      (s: WizardStore) => s.session.mcpOutcome === McpOutcome.Skipped,
+      (s: FlowStore) => s.session.mcpOutcome === McpOutcome.Skipped,
     ],
     [
       'mcp-remove',
       'set_mcp_outcome',
       {},
-      (s: WizardStore) => s.session.mcpOutcome === McpOutcome.Skipped,
+      (s: FlowStore) => s.session.mcpOutcome === McpOutcome.Skipped,
     ],
     [
       'mcp-suggested-prompts',
       'dismiss',
       {},
-      (s: WizardStore) => s.session.mcpSuggestedPromptsDismissed,
+      (s: FlowStore) => s.session.mcpSuggestedPromptsDismissed,
     ],
     [
       'slack-connect',
       'dismiss_slack',
       {},
-      (s: WizardStore) => s.session.slackStepDismissed,
+      (s: FlowStore) => s.session.slackStepDismissed,
     ],
     [
       'slack-connect',
       'set_slack_connected',
       { connected: true },
-      (s: WizardStore) => s.session.slackConnected === true,
+      (s: FlowStore) => s.session.slackConnected === true,
     ],
     [
       'keep-skills',
       'keep_skills',
       { kept: false },
-      (s: WizardStore) => s.session.skillsComplete,
+      (s: FlowStore) => s.session.skillsComplete,
     ],
   ] as const)(
     '%s / %s commits through its setter',

@@ -6,7 +6,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import {
-  WizardStore,
+  FlowStore,
   Program,
   RunPhase,
   McpOutcome,
@@ -90,11 +90,11 @@ const approved = (ok: boolean) =>
     organization: { is_ai_data_processing_approved: ok },
   } as unknown as WizardSession['apiUser']);
 
-const confirmed = (s: WizardStore) => {
+const confirmed = (s: FlowStore) => {
   s.completeSetup();
   s.setReadinessResult(clean);
 };
-const authed = (s: WizardStore) => {
+const authed = (s: FlowStore) => {
   s.setCredentials({
     accessToken: 'phx_test',
     projectApiKey: 'phc_test',
@@ -103,7 +103,7 @@ const authed = (s: WizardStore) => {
   });
   s.setApiUser(approved(true));
 };
-const ran = (s: WizardStore) => {
+const ran = (s: FlowStore) => {
   s.setRunPhase(RunPhase.Running);
   s.setOutroData({ kind: OutroKind.Success, message: 'done' });
   s.setRunPhase(RunPhase.Completed);
@@ -123,7 +123,7 @@ interface Pair {
   program: ProgramId;
   integration?: Integration;
   screen: string;
-  arrange: (s: WizardStore) => void;
+  arrange: (s: FlowStore) => void;
   keys: string[];
   action: string;
   params?: Record<string, unknown>;
@@ -358,8 +358,8 @@ const PAIRS: Pair[] = [
   },
 ];
 
-function makeStore(pair: Pair): WizardStore {
-  const store = new WizardStore(flowFor(pair.program).flow);
+function makeStore(pair: Pair): FlowStore {
+  const store = new FlowStore(flowFor(pair.program).flow);
   store.version = '0.0.0-test';
   setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
@@ -378,7 +378,7 @@ interface Snap {
   session: Record<string, unknown>;
 }
 
-function snap(store: WizardStore): Snap {
+function snap(store: FlowStore): Snap {
   const session: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(store.session)) {
     session[k] = k === 'frameworkConfig' ? (v ? '[config]' : null) : v;

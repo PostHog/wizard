@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { ScreenContainer } from './primitives/index.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import type { UiStore } from './ui-store.js';
 import { createScreens, createServices } from './screen-registry.js';
 
 interface AppProps {
-  store: WizardStore;
+  store: FlowStore;
   ui: UiStore;
 }
 

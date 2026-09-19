@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { vi } from 'vitest';
 import { ScreenContainer } from '../../primitives/ScreenContainer.js';
 import { createScreens, type ScreenServices } from '../../screen-registry.js';
-import type { WizardStore } from '@store/state/store';
+import type { FlowStore } from '@store/state/store';
 import { UiStore } from '../../ui-store.js';
 
 export interface TerminalSize {
@@ -36,7 +36,7 @@ export async function flushInk(ms = 50): Promise<void> {
 
 /** The shell App.tsx builds: router-resolved screen inside the full chrome. */
 export function screenShell(
-  store: WizardStore,
+  store: FlowStore,
   services: ScreenServices,
 ): ReactNode {
   return (
@@ -49,7 +49,7 @@ export function screenShell(
 }
 
 export async function renderScreen(
-  store: WizardStore,
+  store: FlowStore,
   element: ReactNode,
   { columns, rows }: TerminalSize,
 ): Promise<RenderedScreen> {

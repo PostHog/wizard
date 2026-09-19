@@ -8,7 +8,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import {
   TabContainer,
   SplitView,
@@ -30,7 +30,7 @@ import { getContentBlocks as getSkillContentBlocks } from '../programs/agent-ski
 import { useUiStore } from '../hooks/useUiStore.js';
 
 interface RunScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const RunScreen = ({ store }: RunScreenProps) => {

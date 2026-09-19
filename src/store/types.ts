@@ -78,7 +78,8 @@ export type { CloudRegion, WizardRunOptions } from './shared/types.js';
 export type {
   PlannedEvent,
   TokenUsageSnapshot,
-  WizardStore,
+  FlowStore,
+  RunStore,
 } from './state/store.js';
 export type { TaskStreamPush } from './task-stream/task-stream-push.js';
 export type {
@@ -93,7 +94,7 @@ export type {
   WizardUI,
 } from './ui/wizard-ui.js';
 export type { WizardSpellbook } from './wizard-spellbook.js';
-export type { StoreBoundaryMember, WizardStoreApi } from './state/store-api.js';
+export type { StoreBoundaryMember, FlowStoreApi } from './state/store-api.js';
 export type {
   ActionView,
   ControlHooks,

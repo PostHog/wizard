@@ -1,10 +1,10 @@
 /**
- * Behaviour baseline for WizardStore and flow resolution, taken before a refactor.
+ * Behaviour baseline for FlowStore and flow resolution, taken before a refactor.
  * Every expectation here pins what the code does today, exceptions included.
  */
 
 import {
-  WizardStore,
+  FlowStore,
   TaskStatus,
   Program,
   type ProgramId,
@@ -107,8 +107,8 @@ const ANSWERS: AskAnswers = { a: 'yes' };
 const aiUser = (approved: boolean): WizardSession['apiUser'] =>
   ({ organization: { is_ai_data_processing_approved: approved } } as never);
 
-function createStore(program?: ProgramId): WizardStore {
-  return new WizardStore(flowFor(program ?? Program.PostHogIntegration).flow);
+function createStore(program?: ProgramId): FlowStore {
+  return new FlowStore(flowFor(program ?? Program.PostHogIntegration).flow);
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -124,7 +124,7 @@ function tracked(promise: Promise<unknown>): { resolved: boolean } {
   return state;
 }
 
-function countEmissions(store: WizardStore, act: () => void): number {
+function countEmissions(store: FlowStore, act: () => void): number {
   let count = 0;
   const unsubscribe = store.subscribe(() => {
     count += 1;
@@ -137,8 +137,8 @@ function countEmissions(store: WizardStore, act: () => void): number {
 interface MutationCase {
   name: string;
   /** Untracked setup — emissions it fires are excluded from the count. */
-  prepare?: (store: WizardStore) => void;
-  invoke: (store: WizardStore) => void;
+  prepare?: (store: FlowStore) => void;
+  invoke: (store: FlowStore) => void;
   emits: number;
 }
 
@@ -397,7 +397,7 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   { name: 'requestRun', invoke: (s) => s.requestRun(), emits: 1 },
-  { name: 'resetRunState', invoke: (s) => s.resetRunState(), emits: 1 },
+  { name: 'startRun', invoke: (s) => s.startRun(s.session), emits: 1 },
   { name: 'setOutroDismissed', invoke: (s) => s.setOutroDismissed(), emits: 1 },
   {
     name: 'setOutroData',
@@ -505,10 +505,10 @@ describe('store invariants', () => {
 
   describe('one notification per mutation', () => {
     it('enumerates every public method on the class', () => {
-      const methods = Object.getOwnPropertyNames(WizardStore.prototype).filter(
+      const methods = Object.getOwnPropertyNames(FlowStore.prototype).filter(
         (name) => {
           const descriptor = Object.getOwnPropertyDescriptor(
-            WizardStore.prototype,
+            FlowStore.prototype,
             name,
           );
           return (

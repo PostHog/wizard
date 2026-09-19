@@ -5,7 +5,7 @@
  * a short install delay, and a successful result.
  */
 
-import { WizardStore, McpClientStatus } from '@store';
+import { FlowStore, McpClientStatus } from '@store';
 import { McpScreen } from '../../screens/McpScreen.js';
 import type {
   McpInstaller,
@@ -66,7 +66,7 @@ function createMockInstaller(): McpInstaller {
 }
 
 interface McpDemoProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const McpDemo = ({ store }: McpDemoProps) => {

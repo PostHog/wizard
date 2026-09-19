@@ -1,11 +1,11 @@
 import { HeadlessUI } from '../console/headless-ui.js';
 import { TaskStatus } from '@store/ui/wizard-ui';
-import type { WizardStore } from '@store/state/store';
+import type { FlowStore } from '@store/state/store';
 
 describe('HeadlessUI', () => {
   it('forwards task updates to the store and still logs to the console', () => {
     const syncTodos = vi.fn();
-    const store = { syncTodos } as unknown as WizardStore;
+    const store = { syncTodos } as unknown as FlowStore;
     const ui = new HeadlessUI(store);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 

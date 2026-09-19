@@ -12,13 +12,13 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore, WarehouseDetectError } from '@store/types';
+import type { FlowStore, WarehouseDetectError } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { getDetectedWarehouseSources } from '@store/programs';
 
 interface WarehouseIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {

@@ -97,7 +97,7 @@ vi.mock('@store/programs/posthog-doctor/fetch', () => ({
   ]),
 }));
 
-import { WizardStore, TaskStatus } from '@store/state/store';
+import { FlowStore, TaskStatus } from '@store/state/store';
 import type { ScreenName } from '../router.js';
 import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
@@ -204,15 +204,15 @@ const inertPromptsServices = {
   seedDemoEvents: pending,
 } as unknown as McpSuggestedPromptsServices;
 
-function makeStore(program: ProgramId): WizardStore {
-  const store = new WizardStore(flowFor(program).flow);
+function makeStore(program: ProgramId): FlowStore {
+  const store = new FlowStore(flowFor(program).flow);
   setUI(new StoreUI(store));
   store.version = '0.0.0-test';
   store.session = buildSession({ installDir: '/app' });
   return store;
 }
 
-function makeServices(store: WizardStore): ScreenServices {
+function makeServices(store: FlowStore): ScreenServices {
   return {
     ...createServices(store),
     mcpInstaller: fakeInstaller,
@@ -220,20 +220,20 @@ function makeServices(store: WizardStore): ScreenServices {
   };
 }
 
-function authed(store: WizardStore): void {
+function authed(store: FlowStore): void {
   store.completeSetup();
   store.setReadinessResult(HEALTHY);
   store.setCredentials(CREDENTIALS);
 }
 
-function ranSuccessfully(store: WizardStore): void {
+function ranSuccessfully(store: FlowStore): void {
   store.setRunPhase(RunPhase.Completed);
   store.setOutroData(SUCCESS_OUTRO);
 }
 
 interface Fixture {
   program: ProgramId;
-  arrange?: (store: WizardStore) => void;
+  arrange?: (store: FlowStore) => void;
 }
 
 const FIXTURES: Record<ScreenName, Fixture> = {
@@ -546,7 +546,7 @@ const FIXTURES: Record<ScreenName, Fixture> = {
 };
 
 /** Only the org's AI consent and membership level drive the gate screen. */
-function apiUser(approved: boolean): WizardStore['session']['apiUser'] {
+function apiUser(approved: boolean): FlowStore['session']['apiUser'] {
   return {
     distinct_id: 'user-1',
     team: { id: 42, organization: '00000000-0000-0000-0000-000000000000' },
@@ -556,7 +556,7 @@ function apiUser(approved: boolean): WizardStore['session']['apiUser'] {
       membership_level: 8,
       is_ai_data_processing_approved: approved,
     },
-  } as unknown as WizardStore['session']['apiUser'];
+  } as unknown as FlowStore['session']['apiUser'];
 }
 
 beforeAll(() => {

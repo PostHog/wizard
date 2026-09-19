@@ -5,11 +5,11 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import type { ContentBlock } from '../../../primitives/content-types.js';
 
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
+export const getContentBlocks = (store?: FlowStore): ContentBlock[] => {
   const skillId = store?.session.skillId ?? 'unknown';
   return [
     {

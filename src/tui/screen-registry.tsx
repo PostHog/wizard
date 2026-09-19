@@ -11,7 +11,7 @@
 import type { ReactNode } from 'react';
 import path from 'node:path';
 import { getLogFilePath, writeWizardSpellbook } from '@store';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
@@ -69,7 +69,7 @@ export interface ScreenServices extends MintFailureServices {
   mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
-export function createServices(store: WizardStore): ScreenServices {
+export function createServices(store: FlowStore): ScreenServices {
   return {
     get logPath() {
       return path.resolve(getLogFilePath());
@@ -87,7 +87,7 @@ export function createServices(store: WizardStore): ScreenServices {
 }
 
 export function createScreens(
-  store: WizardStore,
+  store: FlowStore,
   services: ScreenServices,
 ): Record<ScreenName, ReactNode> {
   return {

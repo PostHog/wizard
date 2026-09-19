@@ -5,7 +5,7 @@ All rendering: Ink screens, primitives, presentation state, console renderers.
 ## Owns
 
 - `App.tsx`, `start-tui.ts`, screens, primitives, components, hooks, playground.
-- `ui-store.ts`: presentation state that watches the injected `WizardStore`.
+- `ui-store.ts`: presentation state that watches the injected `FlowStore`.
 - `programs/`: content decks and tips keyed by program id.
 - `console/`: `LoggingUI` and `HeadlessUI`. Ink free; headless builds ship them.
 - Agent work the TUI needs arrives through the store's `getMcpPromptRunner`.

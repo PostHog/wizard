@@ -43,7 +43,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type {
-  WizardStore,
+  FlowStore,
   PromptOption,
   RoleGreeting,
   ProjectDataProfile,
@@ -78,7 +78,7 @@ import type {
 } from '../services/mcp-suggested-prompts-services.js';
 
 interface McpSuggestedPromptsScreenProps {
-  store: WizardStore;
+  store: FlowStore;
   services: McpSuggestedPromptsServices;
 }
 

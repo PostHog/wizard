@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore, WizardSpellbook } from '@store/types';
+import type { FlowStore, WizardSpellbook } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { Colors } from '../styles.js';
@@ -31,7 +31,7 @@ export function MintFailureScreen({
   store,
   services,
 }: {
-  store: WizardStore;
+  store: FlowStore;
   services: MintFailureServices;
 }) {
   const [columns] = useStdoutDimensions();

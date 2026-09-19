@@ -12,7 +12,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { LoadingBox } from '../primitives/index.js';
 import { MAX_WIDTH } from '../primitives/ScreenContainer.js';
 import {
@@ -26,7 +26,7 @@ import { Colors, Icons } from '../styles.js';
 import { copyToClipboard } from '@store';
 
 interface AuthScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const AuthScreen = ({ store }: AuthScreenProps) => {

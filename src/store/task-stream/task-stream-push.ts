@@ -1,5 +1,5 @@
 /**
- * Task-stream push — subscribes to WizardStore, builds payloads,
+ * Task-stream push — subscribes to one RunStore, builds payloads,
  * and fans out async to all registered destinations.
  *
  * Behaviour:
@@ -16,7 +16,7 @@
  * latest state once the current one settles.
  */
 
-import type { WizardStore, TaskItem } from '../state/store.js';
+import type { TaskItem } from '../state/store.js';
 import { TaskStatus } from '../ui/wizard-ui.js';
 import {
   RunPhase,
@@ -30,6 +30,7 @@ import {
   type StreamTask,
   type TaskStreamError,
   type StreamPendingInput,
+  type RunStateSource,
   StreamTaskStatus,
   StreamEvent,
 } from './types.js';
@@ -111,7 +112,7 @@ function buildPendingInput(
 }
 
 export interface TaskStreamPushOptions {
-  store: WizardStore;
+  store: RunStateSource;
   programId: string;
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
@@ -125,7 +126,7 @@ export interface TaskStreamPushOptions {
 }
 
 export class TaskStreamPush {
-  private readonly store: WizardStore;
+  private readonly store: RunStateSource;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
   private readonly programId: string;
@@ -171,7 +172,7 @@ export class TaskStreamPush {
    * remains disabled when `enabled === false`, but the plan still populates the
    * store for local and headless consumers.
    */
-  attach(store?: WizardStore): void {
+  attach(store?: RunStateSource): void {
     this.eventPlanWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;

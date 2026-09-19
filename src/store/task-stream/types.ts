@@ -105,3 +105,16 @@ export interface TaskStreamDestination {
   readonly name: string;
   send(event: StreamEvent, payload: TaskStreamUpdate): Promise<void>;
 }
+
+import type { RunStore } from '../state/run-store.js';
+
+/** What a task stream reads from the run it publishes: a RunStore, or a flow store standing in for one. */
+export type RunStateSource = Pick<
+  RunStore,
+  | 'session'
+  | 'tasks'
+  | 'eventPlan'
+  | 'handoffText'
+  | 'subscribe'
+  | 'setEventPlan'
+>;

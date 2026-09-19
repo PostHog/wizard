@@ -9,12 +9,12 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore, SetupQuestion } from '@store/types';
+import type { FlowStore, SetupQuestion } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 
 interface SetupScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const SetupScreen = ({ store }: SetupScreenProps) => {

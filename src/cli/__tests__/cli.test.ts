@@ -8,7 +8,7 @@ const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
 }));
 
 // Headless-only machinery, stubbed so the headless path doesn't construct a
-// real WizardStore (which would re-call the mocked buildSession) or open a real
+// real FlowStore (which would re-call the mocked buildSession) or open a real
 // network stream. The spies assert the stream is wired in headless and not CI.
 const { mockStreamAttach, mockStreamShutdown, mockStreamDestinations } =
   vi.hoisted(() => ({
@@ -48,11 +48,22 @@ vi.mock('@store/task-stream/destinations/file', () => ({
 }));
 vi.mock('@store/state/store', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@store/state/store')>()),
-  WizardStore: class {
+  FlowStore: class {
     session: unknown;
     setRunPhase = vi.fn();
     setOutroData = vi.fn();
     syncTodos = vi.fn();
+    // The run store shares the flow's spies, so phase assertions read either.
+    startRun = () => ({
+      session: this.session,
+      setRunPhase: this.setRunPhase,
+      setOutroData: this.setOutroData,
+      tasks: [],
+      eventPlan: [],
+      handoffText: null,
+      subscribe: vi.fn(() => () => undefined),
+      setEventPlan: vi.fn(),
+    });
   },
 }));
 

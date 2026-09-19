@@ -8,7 +8,7 @@
 | [ProgramStep](../../../../src/store/programs/program-step.ts)    | Screens, visibility/completion predicates, gates, and initialization hooks    |
 | [screen-sequences.ts](../../../../src/tui/screen-sequences.ts)   | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
 | [WizardRouter](../../../../src/tui/router.ts)                    | Resolution and the `Overlay` stack                                            |
-| [WizardStore](../../../../src/store/state/store.ts)              | Reactive state, gate promises, display observations, and pending interactions |
+| [FlowStore](../../../../src/store/state/store.ts)              | Reactive state, gate promises, display observations, and pending interactions |
 | [WizardUI](../../../../src/store/ui/wizard-ui.ts)                | Typed operations available to business logic                                  |
 
 ## Program screens

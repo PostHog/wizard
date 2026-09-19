@@ -1,23 +1,14 @@
 /**
- * WizardStore — Nanostore-backed reactive store for the TUI.
- * React components subscribe via useSyncExternalStore.
- *
- * The active screen is derived from session state: flow resolution walks
- * the flow and shows the first step whose `isComplete` is still false.
- *
- * Define a step `gate` if your screen needs to await user interactions.
- * bin.ts calls `await store.getGate(stepId)` to pause until the gate
- * predicate becomes true.
- *
- * All session mutations that affect screen resolution go through
- * explicit setters so emitChange() is always called.
+ * FlowStore — the state a program flow spans across agent runs: the flow and
+ * its gates, the interrupts, the session every run inherits, and the active
+ * RunStore. Screens read it; agents write to the run through WizardUI. The
+ * active screen is derived from state; setters always emitChange().
  */
 
 import { atom, map } from 'nanostores';
 import { logToFile } from '../shared/debug.js';
 import {
   TaskStatus,
-  isTaskStatus,
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from '../ui/wizard-ui.js';
@@ -48,59 +39,29 @@ import { Program, type ProgramId } from '../programs/program-registry.js';
 import { analytics, sessionProperties } from '../shared/analytics.js';
 import type { StoreInitContext, ProgramReadyContext } from './flow.js';
 import { reportWarehouseSourcesDetected } from '../programs/posthog-integration/detect.js';
-import { computeTokenCostUsd } from '../agent-protocol/token-pricing.js';
+import {
+  RUN_SESSION_DEFAULTS,
+  RunStore,
+  pickRunSession,
+  type PlannedEvent,
+  type TaskItem,
+  type TokenUsageSnapshot,
+} from './run-store.js';
 
 export { TaskStatus, Program, RunPhase, McpOutcome };
 export type { OutroData, WizardSession, ProgramId };
-
-export interface TaskItem {
-  label: string;
-  activeForm?: string;
-  status: TaskStatus;
-  /** Legacy compat */
-  done: boolean;
-}
-
-export interface PlannedEvent {
-  name: string;
-  description: string;
-}
-
-/**
- * Running token/cost estimate for the hidden Ctrl+T HUD. Accumulated live
- * from each assistant turn's usage (see `agent-interface.ts`), then
- * reconciled to the SDK's authoritative `total_cost_usd` once the run
- * completes — `costIsFinal` flips so the HUD can show the number as exact
- * rather than a running estimate.
- */
-export interface TokenUsageSnapshot {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  costUsd: number;
-  costIsFinal: boolean;
-}
-
-const EMPTY_TOKEN_USAGE: TokenUsageSnapshot = {
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheCreationTokens: 0,
-  costUsd: 0,
-  costIsFinal: false,
-};
-
-/** Total tokens across all counters in a `TokenUsageSnapshot` — used by
- *  both `TokenCostHud` and `exit-line.ts` to detect "no agent turns yet". */
-export function totalTokenCount(usage: TokenUsageSnapshot): number {
-  return (
-    usage.inputTokens +
-    usage.outputTokens +
-    usage.cacheReadTokens +
-    usage.cacheCreationTokens
-  );
-}
+export {
+  EMPTY_TOKEN_USAGE,
+  MAX_STATUS_MESSAGES,
+  RUN_SESSION_KEYS,
+  RunStore,
+  totalTokenCount,
+} from './run-store.js';
+export type {
+  PlannedEvent,
+  TaskItem,
+  TokenUsageSnapshot,
+} from './run-store.js';
 
 interface GateEntry {
   predicate: (session: WizardSession) => boolean;
@@ -108,9 +69,6 @@ interface GateEntry {
   resolve: () => void;
   resolved: boolean;
 }
-
-/** FIFO cap on retained status lines; the status bar's expanded window. */
-export const MAX_STATUS_MESSAGES = 10;
 
 // Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
@@ -134,20 +92,14 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
   }
 }
 
-export class WizardStore {
-  // ── Internal nanostore atoms ─────────────────────────────────────
+export class FlowStore {
+  /** The session every run inherits; run-scoped keys are read from the active run instead. */
   private $session = map<WizardSession>(buildSession({}));
-  private $statusMessages = atom<string[]>([]);
-  private $tasks = atom<TaskItem[]>([]);
-  private $eventPlan = atom<PlannedEvent[]>([]);
-  private $handoffText = atom<string | null>(null);
   private $version = atom(0);
-  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
-    null,
-  );
-  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
 
-  private _onTasksChanged: (() => void) | null = null;
+  private _run: RunStore;
+  private _unsubscribeRun: () => void;
+
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: string | null = null;
 
@@ -164,25 +116,17 @@ export class WizardStore {
   /** Interrupts take over the active screen until dismissed, last on top. */
   private _interrupts: Interrupt[] = [];
 
-  /** Blocks agent execution until the settings-override overlay is dismissed. */
-  private _resolveSettingsOverride: (() => void) | null = null;
-  private _backupAndFixSettings: (() => boolean) | null = null;
-
-  /** Blocks the run until an optional step's notice is answered. */
-  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
   /** Resolves the OAuth flow with a manually-entered authorization code. */
   private _resolveManualAuthCode: ((code: string) => void) | null = null;
 
-  /** Resolves the in-flight wizard_ask request. */
-  private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
-    null;
-
   constructor(flow: Flow) {
     this._flow = flow;
     this._initGates(flow);
+    this._run = new RunStore(this.$session.get());
+    this._unsubscribeRun = this._run.subscribe(() => this.emitChange());
   }
 
   /** Create one gate promise per step that declares a `gate` predicate. */
@@ -203,11 +147,52 @@ export class WizardStore {
     }
   }
 
+  // ── Runs ────────────────────────────────────────────────────────
+
+  /** The store of the active (or last) agent run. */
+  get run(): RunStore {
+    return this._run;
+  }
+
   /**
-   * Run the program steps' onInit callbacks. startTUI calls this once
-   * the screens are actually rendering — constructing a store alone
-   * (tests, playground) must not fire init work like the health-check
-   * pre-flight, whose probes belong only to flows that show its screen.
+   * Begin one independent agent run: a fresh RunStore seeded from `session`
+   * with a clean run state. The previous run's open question or notice is
+   * cancelled; credentials, detection, and setup live here and carry over.
+   */
+  startRun(session: WizardSession): RunStore {
+    this.cancelPendingQuestion();
+    if (this._run.session.taskNotice) this.resolveTaskNotice(false);
+    this._unsubscribeRun();
+    this._run = new RunStore({ ...session, ...RUN_SESSION_DEFAULTS });
+    this._unsubscribeRun = this._run.subscribe(() => this.emitChange());
+    this.emitChange();
+    return this._run;
+  }
+
+  /**
+   * Mark a composed run step complete (e.g. self-driving's `integrate-run`).
+   * Records the step id so its `isComplete` predicate holds, clears the task
+   * list, and resets run phase to Idle so the next run step starts fresh.
+   */
+  completeRunStep(stepId: string): void {
+    const done = this.$session.get().completedRuns;
+    if (!done.includes(stepId)) {
+      this.$session.setKey('completedRuns', [...done, stepId]);
+    }
+    this._run.setTasks([], false);
+    this._run.setRunPhase(RunPhase.Idle);
+  }
+
+  /** A controlled run's parent released the agent; the runner waits on this. */
+  requestRun(): void {
+    this.$session.setKey('runRequested', true);
+    this.emitChange();
+  }
+
+  /**
+   * Run the program steps' onInit callbacks. startTUI calls this once the
+   * screens are actually rendering — constructing a store alone (tests,
+   * playground) must not fire init work like the health-check pre-flight.
    */
   runInitHooks(): void {
     const steps = this._flow.steps;
@@ -226,10 +211,9 @@ export class WizardStore {
   }
 
   /**
-   * Run all `onReady` hooks declared by the current flow's steps, in
-   * order. Must be called after `store.session = session` so hooks see
-   * the real installDir. bin.ts calls this generically — it doesn't
-   * need to know which program has which pre-flow work.
+   * Run all `onReady` hooks declared by the current flow's steps, in order.
+   * Must be called after `store.session = session` so hooks see the real
+   * installDir.
    */
   async runReadyHooks(): Promise<void> {
     const steps = this._flow.steps;
@@ -254,29 +238,14 @@ export class WizardStore {
   // ── Gate API ────────────────────────────────────────────────────
 
   /**
-   * Get a gate promise by step ID — the primary blocking checkpoint API
-   * for bin.ts. `await store.getGate('...')` parks the caller until the
-   * corresponding program step's gate predicate flips to true (if the
-   * predicate stays false, the caller stays parked indefinitely — the
-   * TUI keeps rendering so the user can resolve whatever is blocking).
-   *
-   * If the program doesn't define a step with this ID, or the step
-   * has no `gate` predicate, this returns an already-resolved promise
-   * so bin.ts flows straight through. This lets programs opt in to
-   * gates on a per-step basis without bin.ts needing to know which
-   * gates exist in which flow.
+   * The blocking checkpoint for a runner: parks until the step's gate
+   * predicate flips to true. A step without a gate resolves at once.
    */
   getGate(stepId: string): Promise<void> {
     return this._gates.get(stepId)?.promise ?? Promise.resolve();
   }
 
-  /**
-   * Resolve once `predicate(session)` is true. Unlike a gate, this is created
-   * at the await point and evaluated live against the current session, so it
-   * never latches on a startup value — the orchestrator uses it to wait for a
-   * decision (a project picked, a handoff acknowledged) without the "true while
-   * undecided" trap that latched gate predicates have.
-   */
+  /** Resolve once `predicate(session)` is true, evaluated live; never latches on a startup value. */
   waitUntil(predicate: (session: WizardSession) => boolean): Promise<void> {
     if (predicate(this.session)) return Promise.resolve();
     return new Promise((resolve) => {
@@ -289,14 +258,7 @@ export class WizardStore {
     });
   }
 
-  /**
-   * Re-evaluate every gate predicate against the current session and
-   * resolve any whose predicate now returns true. Called after every
-   * emitChange(), so gates unblock as soon as the session mutation
-   * that satisfies them lands. Gates only resolve once — a predicate
-   * that goes true → false → true will NOT re-block a caller that
-   * already awaited through.
-   */
+  /** Gates resolve once; a predicate that goes true, false, true does not re-block. */
   private _checkGates(): void {
     for (const [, gate] of this._gates) {
       if (!gate.resolved && gate.predicate(this.session)) {
@@ -306,44 +268,45 @@ export class WizardStore {
     }
   }
 
-  // ── State accessors (read from atoms) ────────────────────────────
+  // ── State accessors ─────────────────────────────────────────────
 
+  /** The session as screens read it: the flow's, with the active run's own keys on top. */
   get session(): WizardSession {
-    return this.$session.get();
+    return { ...this.$session.get(), ...pickRunSession(this._run.session) };
   }
 
   set session(value: WizardSession) {
     this.$session.set(value);
+    this._run.patchSession(pickRunSession(value), false);
     this.emitChange();
   }
 
   get statusMessages(): string[] {
-    return this.$statusMessages.get();
+    return this._run.statusMessages;
   }
 
   get tasks(): TaskItem[] {
-    return this.$tasks.get();
+    return this._run.tasks;
   }
 
   get eventPlan(): PlannedEvent[] {
-    return this.$eventPlan.get();
+    return this._run.eventPlan;
   }
 
   get handoffText(): string | null {
-    return this.$handoffText.get();
+    return this._run.handoffText;
   }
 
   get currentStage(): { stage: string; startedAt: number } | null {
-    return this.$currentStage.get();
+    return this._run.currentStage;
   }
 
-  /** No-op when the stage hasn't changed, so `startedAt` survives across
-   *  re-renders and tab switches and measures real stage time. */
+  get tokenUsage(): TokenUsageSnapshot {
+    return this._run.tokenUsage;
+  }
+
   setCurrentStage(stage: string): void {
-    const cur = this.$currentStage.get();
-    if (cur?.stage === stage) return;
-    this.$currentStage.set({ stage, startedAt: Date.now() });
-    this.emitChange();
+    this._run.setCurrentStage(stage);
   }
 
   // ── Session setters ─────────────────────────────────────────────
@@ -354,44 +317,25 @@ export class WizardStore {
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
     // Reports first: analytics merges tags into an event as it is sent, so
-    // `setup confirmed` only carries the warehouse tags if they are already
-    // set. On main they were, because reporting happened back in detect.
+    // `setup confirmed` only carries the warehouse tags if they are already set.
     this._markWarehouseSourcesReportedIfNeeded();
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
   }
 
-  /**
-   * Sharing is on: either the user turned it back on in the panel, or they
-   * pressed Continue without ever touching it. Both are reversible until
-   * completeSetup() resolves the intro gate and reports.
-   */
+  /** Sharing is on; reversible until completeSetup() reports. */
   grantSharing(): void {
     this.$session.setKey('scanConsent', ScanConsent.Granted);
     this.emitChange();
   }
 
-  /**
-   * Sharing is off. Suppresses reporting only — local detection still ran and
-   * the results stay in the session, so the outro suggestion and the warehouse
-   * task are unaffected; see `scanConsent` on `WizardSession`.
-   *
-   * Deliberately does not report. The panel's toggle can come back here, so
-   * marking the run reported would strand a user who turns sharing off and
-   * then on again. completeSetup() owns the single report.
-   */
+  /** Sharing is off: suppresses reporting only; detection results stay. */
   declineSharing(): void {
     this.$session.setKey('scanConsent', ScanConsent.Declined);
     this.emitChange();
   }
 
-  /**
-   * reportWarehouseSourcesDetected() is the single place scan results turn
-   * into telemetry; this just supplies its idempotency flag via the normal
-   * setter path (never mutate session directly). A no-op once
-   * `warehouseSourcesReported` is set, or for any program that never
-   * populated a warehouse-scan result in the first place.
-   */
+  /** completeSetup() owns the single warehouse-sources report; this supplies its idempotency flag. */
   private _markWarehouseSourcesReportedIfNeeded(): void {
     if (reportWarehouseSourcesDetected(this.session)) {
       this.$session.setKey('warehouseSourcesReported', true);
@@ -399,9 +343,7 @@ export class WizardStore {
   }
 
   setRunPhase(phase: RunPhase): void {
-    this.$session.setKey('runPhase', phase);
-    analytics.setTag('run_phase', phase);
-    this.emitChange();
+    this._run.setRunPhase(phase);
   }
 
   setCredentials(credentials: WizardSession['credentials']): void {
@@ -466,13 +408,14 @@ export class WizardStore {
   setMintHandoff(action: NonNullable<WizardSession['mintHandoff']>): void {
     // The parked agent may still hold a question or notice open.
     this.cancelPendingQuestion();
-    if (this.session.taskNotice) this.resolveTaskNotice(false);
-    this.$session.setKey('mintHandoff', action);
-    this.emitChange();
+    if (this._run.session.taskNotice) this.resolveTaskNotice(false);
+    this._run.setMintHandoff(action);
   }
 
+  /** The skill lives with the flow and with the run the agent is in. */
   setSkillId(skillId: string | null): void {
     this.$session.setKey('skillId', skillId);
+    this._run.setSkillId(skillId, false);
     this.emitChange();
   }
 
@@ -510,35 +453,20 @@ export class WizardStore {
     this.emitChange();
   }
 
-  /**
-   * Push the settings-override overlay and return a promise that blocks
-   * until the user dismisses it via backupAndFixSettingsOverride().
-   */
+  /** Push the settings-override overlay; resolves when backupAndFixSettingsOverride() succeeds. */
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void> {
-    const allKeys = conflicts.flatMap((c) => c.keys);
-    this.$session.setKey('settingsOverrideKeys', allKeys);
-    this.$session.setKey('settingsConflicts', conflicts);
-    this._backupAndFixSettings = backupAndFix;
-
+    const pending = this._run.showSettingsOverride(conflicts, backupAndFix);
     const hasReadOnly = conflicts.some((c) => !c.writable);
-    if (hasReadOnly) {
-      this.pushInterrupt(Interrupt.ManagedSettings);
-    } else {
-      this.pushInterrupt(Interrupt.SettingsOverride);
-    }
-
-    return new Promise((resolve) => {
-      this._resolveSettingsOverride = resolve;
-    });
+    this.pushInterrupt(
+      hasReadOnly ? Interrupt.ManagedSettings : Interrupt.SettingsOverride,
+    );
+    return pending;
   }
 
-  /**
-   * Push the port-conflict overlay and return a promise that blocks
-   * until the user frees the ports and retries, or exits.
-   */
+  /** Push the port-conflict overlay; resolves when the user frees the ports and retries. */
   showPortConflict(processInfo: {
     command: string;
     pid: string;
@@ -560,31 +488,20 @@ export class WizardStore {
     this._resolvePortConflict = null;
   }
 
-  /**
-   * Show an optional step's notice and return whether to keep that step.
-   * Asked before the step runs, so nobody is surprised by a prompt mid-run.
-   */
+  /** Show an optional step's notice before it runs; resolves with whether to keep the step. */
   showTaskNotice(notice: TaskNotice): Promise<boolean> {
-    this.$session.setKey('taskNotice', notice);
+    const pending = this._run.showTaskNotice(notice);
     this.pushInterrupt(Interrupt.TaskNotice);
-    return new Promise((resolve) => {
-      this._resolveTaskNotice = resolve;
-    });
+    return pending;
   }
 
   /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
   resolveTaskNotice(keep: boolean): void {
-    this.$session.setKey('taskNotice', null);
+    this._run.resolveTaskNotice(keep);
     this.popInterrupt();
-    this._resolveTaskNotice?.(keep);
-    this._resolveTaskNotice = null;
   }
 
-  /**
-   * Return a promise that resolves when the user submits a manually-entered
-   * OAuth code via the paste modal. The OAuth flow races this against the
-   * local callback server — see `performOAuthFlow`.
-   */
+  /** Resolves when the user submits a manually-entered OAuth code; raced against the callback server. */
   waitForManualAuthCode(): Promise<string> {
     return new Promise<string>((resolve) => {
       this._resolveManualAuthCode = resolve;
@@ -601,59 +518,34 @@ export class WizardStore {
     this.popInterrupt();
   }
 
-  /**
-   * Submit a manually-entered authorization code: dismiss the overlay and
-   * resolve the in-flight OAuth flow so it can exchange the code for a token.
-   */
+  /** Submit a manually-entered authorization code: dismiss the overlay and resolve the OAuth flow. */
   submitManualAuthCode(code: string): void {
     this.popInterrupt();
     this._resolveManualAuthCode?.(code);
     this._resolveManualAuthCode = null;
   }
 
-  /**
-   * Open the WizardAsk overlay with a set of questions and return a promise
-   * that resolves once the user submits answers (or the request is cancelled).
-   *
-   * Only one request is in flight at a time — calling this while a request
-   * is already pending throws.
-   */
+  /** Open the WizardAsk overlay; resolves with the answers, or the cancel sentinels. One request at a time. */
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
-    if (this._resolvePendingQuestion) {
-      throw new Error(
-        'requestQuestion called while another wizard_ask request is pending',
-      );
-    }
-    this.$session.setKey('pendingQuestion', question);
+    const pending = this._run.requestQuestion(question);
     this.pushInterrupt(Interrupt.WizardAsk);
     analytics.wizardCapture('wizard_ask shown', {
       source: question.source,
       question_count: question.questions.length,
       kinds: question.questions.map((q) => q.kind),
     });
-    return new Promise<AskAnswers>((resolve) => {
-      this._resolvePendingQuestion = resolve;
-    });
+    return pending;
   }
 
-  /**
-   * Resolve the in-flight wizard_ask request with the user's answers and
-   * dismiss the overlay. Answers flow back to the agent as the tool result.
-   */
+  /** Resolve the in-flight wizard_ask request and dismiss the overlay. */
   resolvePendingQuestion(answers: AskAnswers): void {
-    const resolve = this._resolvePendingQuestion;
-    this._resolvePendingQuestion = null;
-    this.$session.setKey('pendingQuestion', null);
+    this._run.resolvePendingQuestion(answers);
     this.popInterrupt();
-    resolve?.(answers);
   }
 
-  /**
-   * Cancel the in-flight wizard_ask request — the bridge sends a sentinel
-   * answer ("__cancelled__") so the skill can decide how to handle it.
-   */
+  /** Cancel the in-flight wizard_ask request with the `__cancelled__` sentinel per question. */
   cancelPendingQuestion(): void {
-    const pending = this.session.pendingQuestion;
+    const pending = this._run.session.pendingQuestion;
     if (!pending) return;
     const cancelled: AskAnswers = {};
     for (const q of pending.questions) {
@@ -662,19 +554,10 @@ export class WizardStore {
     this.resolvePendingQuestion(cancelled);
   }
 
-  /**
-   * Back up .claude/settings.json. Dismisses the overlay on success.
-   */
+  /** Back up .claude/settings.json. Dismisses the overlay on success. */
   backupAndFixSettingsOverride(): boolean {
-    const ok = this._backupAndFixSettings?.() ?? false;
-    if (ok) {
-      this.$session.setKey('settingsOverrideKeys', null);
-      this.$session.setKey('settingsConflicts', null);
-      this.popInterrupt();
-      this._resolveSettingsOverride?.();
-      this._resolveSettingsOverride = null;
-      this._backupAndFixSettings = null;
-    }
+    const ok = this._run.backupAndFixSettingsOverride();
+    if (ok) this.popInterrupt();
     return ok;
   }
 
@@ -690,29 +573,24 @@ export class WizardStore {
   }
 
   addDiscoveredFeature(feature: DiscoveredFeature): void {
-    if (!this.session.discoveredFeatures.includes(feature)) {
-      this.session.discoveredFeatures.push(feature);
+    const features = this.$session.get().discoveredFeatures;
+    if (!features.includes(feature)) {
+      this.$session.setKey('discoveredFeatures', [...features, feature]);
       this.emitChange();
     }
   }
 
-  /**
-   * Enable an additional feature: enqueue it for the stop hook
-   * and set any feature-specific session flags.
-   */
+  /** Enable an additional feature: enqueue it for the stop hook and set its session flags. */
   enableFeature(feature: AdditionalFeature): void {
-    if (!this.session.additionalFeatureQueue.includes(feature)) {
-      this.session.additionalFeatureQueue.push(feature);
-      // Distinct key from `sessionProperties()`'s array-valued
-      // `additional_features` — see the note in posthog-integration/detect.ts.
-      analytics.setTag(
-        'additional_feature_kinds',
-        this.session.additionalFeatureQueue.join(','),
-      );
+    const queue = this.$session.get().additionalFeatureQueue;
+    if (!queue.includes(feature)) {
+      const next = [...queue, feature];
+      this.$session.setKey('additionalFeatureQueue', next);
+      // Distinct key from `sessionProperties()`'s array-valued `additional_features`.
+      analytics.setTag('additional_feature_kinds', next.join(','));
     }
-    // Feature-specific flags
     if (feature === AdditionalFeature.LLM) {
-      this.session.llmOptIn = true;
+      this.$session.setKey('llmOptIn', true);
     }
     analytics.wizardCapture('feature enabled', { feature });
     this.emitChange();
@@ -770,22 +648,14 @@ export class WizardStore {
     this.emitChange();
   }
 
-  /**
-   * Self-driving GitHub gate declined. Carries the outro the user lands on,
-   * since declining ends the flow before the agent runs and there is no abort
-   * case to render one.
-   */
+  /** Self-driving GitHub gate declined: carries the outro the user lands on, since no run renders one. */
   declineGithub(outroData: OutroData): void {
     this.$session.setKey('githubDeclined', true);
-    this.$session.setKey('outroData', outroData);
+    this._run.setOutroData(outroData, false);
     this.emitChange();
   }
 
-  /**
-   * Self-driving integration-check answer. `true` → integrate the SDK as part
-   * of this run; `false` → PostHog is already set up, go straight to
-   * Self-driving. Resolves `session.integrate` from null.
-   */
+  /** Self-driving integration-check answer; resolves `session.integrate` from null. */
   setIntegrate(
     integrate: boolean,
     extra?: { via?: string; path?: string },
@@ -800,15 +670,7 @@ export class WizardStore {
     this.emitChange();
   }
 
-  /**
-   * Self-driving "no PostHog account" branch of the integration check. The
-   * project has no SDK, so we always integrate (`integrate = true`); and since
-   * the user has no account, we flip `signup` and record the `email` / `region`
-   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
-   * the provisioning path (create account + email a login link) instead of
-   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
-   * leaves `signup` false so auth runs the normal OAuth login.
-   */
+  /** Self-driving "no PostHog account" branch: integrate, and provision an account at auth. */
   chooseProvisionAccount(email: string, region: CloudRegion): void {
     this.$session.setKey('signup', true);
     this.$session.setKey('email', email);
@@ -823,63 +685,21 @@ export class WizardStore {
     this.emitChange();
   }
 
-  /**
-   * Self-driving handoff confirmed — the user acknowledged the post-integration
-   * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
-   */
+  /** Self-driving handoff confirmed; the Self-driving run can begin. */
   confirmSelfDrivingHandoff(): void {
     this.$session.setKey('selfDrivingHandoffConfirmed', true);
     this.emitChange();
   }
 
-  /**
-   * Mark a composed run step complete (e.g. self-driving's `integrate-run`).
-   * Records the step id so its `isComplete` predicate holds, clears the task
-   * list, and resets run phase to Idle so the next run step starts fresh.
-   */
-  completeRunStep(stepId: string): void {
-    const done = this.session.completedRuns;
-    if (!done.includes(stepId)) {
-      this.$session.setKey('completedRuns', [...done, stepId]);
-    }
-    this.$tasks.set([]);
-    this.setRunPhase(RunPhase.Idle);
-  }
-
-  /** Clear what one agent run leaves behind, so the next independent run starts clean. */
-  resetRunState(): void {
-    this.cancelPendingQuestion();
-    if (this.session.taskNotice) this.resolveTaskNotice(false);
-    this.$tasks.set([]);
-    this.$statusMessages.set([]);
-    this.$eventPlan.set([]);
-    this.$handoffText.set(null);
-    this.$tokenUsage.set(EMPTY_TOKEN_USAGE);
-    this.$currentStage.set(null);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.$session.setKey('outroData', null);
-    this.$session.setKey('outroDismissed', false);
-    this.$session.setKey('dashboardUrl', null);
-    this.$session.setKey('notebookUrl', null);
-    this.emitChange();
-  }
-
-  /** A controlled run's parent released the agent; the runner waits on this. */
-  requestRun(): void {
-    this.$session.setKey('runRequested', true);
-    this.emitChange();
-  }
-
   setOutroDismissed(dismissed = true): void {
-    this.$session.setKey('outroDismissed', dismissed);
-    this.emitChange();
+    this._run.setOutroDismissed(dismissed);
   }
 
   setOutroData(data: OutroData): void {
-    this.$session.setKey('outroData', data);
-    this.emitChange();
+    this._run.setOutroData(data);
   }
 
+  /** Artefacts a run created for the project outlive it: later runs and the outro link them. */
   setDashboardUrl(url: string): void {
     logToFile(`store.setDashboardUrl: ${url}`);
     this.$session.setKey('dashboardUrl', url);
@@ -892,9 +712,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  /** Context lives with the flow and with the run the agent is in. */
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);
+    this._run.setFrameworkContext(key, value, false);
     this.emitChange();
   }
 
@@ -915,6 +737,7 @@ export class WizardStore {
     this.$session.setKey('setupConfirmed', false);
     this.$session.setKey('programLabel', flow.programId);
     this.$session.setKey('skillId', flow.skillId);
+    this._run.setSkillId(flow.skillId, false);
     this.emitChange();
   }
 
@@ -948,11 +771,7 @@ export class WizardStore {
     return this.$version.get();
   }
 
-  /**
-   * Notify React that state has changed.
-   * The active screen re-resolves on next render.
-   * Gate predicates are checked and resolved if ready.
-   */
+  /** Bump the version, resolve gates that came true, and record a screen transition. */
   emitChange(): void {
     this.$version.set(this.$version.get() + 1);
     this._checkGates();
@@ -973,45 +792,32 @@ export class WizardStore {
     this._detectTransition();
   }
 
-  // ── ScreenId transition analytics ─────────────────────────────────
+  // ── Screen transition analytics ───────────────────────────────────
 
-  /**
-   * Register a callback to run when transitioning onto the given screen.
-   * Fires after every transition that lands on this screen.
-   */
+  /** Register a callback to run after every transition that lands on `screen`. */
   onEnterScreen(screen: string, fn: () => void): void {
     const list = this._enterScreenHooks.get(screen) ?? [];
     list.push(fn);
     this._enterScreenHooks.set(screen, list);
   }
 
-  /**
-   * The program `screen` reports under — its step's `reportsAsProgramId` if it
-   * claims one, else the running program (also the fallback for overlays and
-   * screens with no owning step).
-   */
+  /** The program `screen` reports under: its step's `reportsAsProgramId`, else the running program. */
   private _programIdForScreen(screen: string): ProgramId {
     const program = this._flow.programId;
     const step = this._flow.steps.find((s) => s.screenId === screen);
     return step?.reportsAsProgramId ?? program;
   }
 
-  /** The program the visible screen reports under; screens stamp this on their
-   *  own events rather than relying on the run-level `program_id` tag. */
+  /** The program the visible screen reports under. */
   get analyticsProgramId(): ProgramId {
     return this._programIdForScreen(this.currentScreen);
   }
 
-  /**
-   * Detect screen transitions, run enter-screen hooks, and fire analytics.
-   * Called at the end of emitChange/pushInterrupt/popInterrupt.
-   */
   private _detectTransition(): void {
     const next = this.currentScreen;
     const prev = this._lastScreen;
     if (next !== prev) {
-      // Every event carries the active TUI screen, filling the
-      // "URL / Screen" column in PostHog.
+      // Every event carries the active TUI screen, filling the "URL / Screen" column.
       analytics.setTag('$screen_name', next);
     }
     if (prev !== null && next !== prev) {
@@ -1028,117 +834,45 @@ export class WizardStore {
     this._lastScreen = next;
   }
 
-  // ── Agent observation state ─────────────────────────────────────
+  // ── Agent observation state, delegated to the active run ────────
 
   pushStatus(message: string): void {
-    const msgs = this.$statusMessages.get();
-    // Skip consecutive duplicate messages (no allocation on the hot path)
-    if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
-    // Nanostore detects change by reference equality, so a new array is
-    // required. At the cap, allocate exactly once at the final size (dropping
-    // the oldest entry) rather than push-then-truncate.
-    const next =
-      msgs.length >= MAX_STATUS_MESSAGES
-        ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
-        : [...msgs, message];
-    this.$statusMessages.set(next);
-    this.emitChange();
+    this._run.pushStatus(message);
   }
 
-  get tokenUsage(): TokenUsageSnapshot {
-    return this.$tokenUsage.get();
-  }
-
-  /**
-   * Accumulate one assistant turn's token usage into the running estimate.
-   * Approximate by design (no dedup for SDK-retried/replayed turns, unlike
-   * the benchmark middleware's TurnCounterPlugin) — it's a live indicator
-   * for a hidden debug HUD, not a billing record, and `setFinalTokenCostUsd`
-   * corrects the total once the run's authoritative cost is known.
-   */
   addTokenUsage(delta: TokenUsageDelta): void {
-    const cur = this.$tokenUsage.get();
-    if (cur.costIsFinal) return;
-    const deltaCostUsd = computeTokenCostUsd(delta);
-    this.$tokenUsage.set({
-      inputTokens: cur.inputTokens + delta.inputTokens,
-      outputTokens: cur.outputTokens + delta.outputTokens,
-      cacheReadTokens: cur.cacheReadTokens + delta.cacheReadTokens,
-      cacheCreationTokens: cur.cacheCreationTokens + delta.cacheCreationTokens,
-      costUsd: cur.costUsd + deltaCostUsd,
-      costIsFinal: false,
-    });
-    this.emitChange();
+    this._run.addTokenUsage(delta);
   }
 
-  /** Reconcile the running cost estimate to the SDK's authoritative total
-   *  once the agent run completes — same trick the benchmark's
-   *  CostTrackerPlugin.onFinalize uses to correct any per-turn drift. */
   setFinalTokenCostUsd(costUsd: number): void {
-    const cur = this.$tokenUsage.get();
-    this.$tokenUsage.set({ ...cur, costUsd, costIsFinal: true });
-    this.emitChange();
+    this._run.setFinalTokenCostUsd(costUsd);
   }
 
   setTasks(tasks: TaskItem[]): void {
-    this.$tasks.set(tasks);
-    this.emitChange();
+    this._run.setTasks(tasks);
   }
 
   updateTask(index: number, done: boolean): void {
-    const tasks = this.$tasks.get();
-    if (tasks[index]) {
-      const updated = [...tasks];
-      updated[index] = {
-        ...updated[index],
-        done,
-        status: done ? TaskStatus.Completed : TaskStatus.Pending,
-      };
-      this.$tasks.set(updated);
-      this.emitChange();
-    }
+    this._run.updateTask(index, done);
   }
 
   setEventPlan(events: PlannedEvent[]): void {
-    this.$eventPlan.set(events);
-    this.emitChange();
+    this._run.setEventPlan(events);
   }
 
-  /** No-op on identical text: an emit here means a network push downstream. */
   setHandoffText(text: string): void {
-    if (this.$handoffText.get() === text) return;
-    logToFile(`store.setHandoffText: ${text.length} chars`);
-    this.$handoffText.set(text);
-    this.emitChange();
+    this._run.setHandoffText(text);
   }
 
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
-    const incoming = todos.map((t) => {
-      const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
-      return {
-        label: t.content,
-        activeForm: t.activeForm,
-        status,
-        done: status === TaskStatus.Completed,
-      };
-    });
-
-    const incomingLabels = new Set(incoming.map((t) => t.label));
-
-    const retained = this.$tasks
-      .get()
-      .filter((t) => t.done && !incomingLabels.has(t.label));
-
-    this.$tasks.set([...retained, ...incoming]);
-    this.emitChange();
-    this._onTasksChanged?.();
+    this._run.syncTodos(todos);
   }
 
-  /** Register a listener for task state changes (e.g. task stream push). */
+  /** Register a listener for task state changes on the active run. */
   set onTasksChanged(fn: () => void) {
-    this._onTasksChanged = fn;
+    this._run.onTasksChanged = fn;
   }
 
   // ── React integration ───────────────────────────────────────────

@@ -23,12 +23,12 @@ import type {
   ProgramConfig,
   Harness,
   Sequence,
-  WizardStore,
+  FlowStore,
   WizardSession,
   TaskStreamPush as TaskStreamPushClass,
 } from '@store/types';
 import type { TuiHandle } from '@tui/types';
-import type { ControlServerHandle, CloudRegion } from '@store/types';
+import type { ControlServerHandle, CloudRegion, RunStore } from '@store/types';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { createControlHooks } from '../control-hooks.js';
 import { resolveNoTelemetry } from './resolve-no-telemetry.js';
@@ -64,26 +64,26 @@ async function prepareRunSession(
  * the user to satisfy `isComplete`. */
 async function advanceStep(
   step: Step,
-  store: WizardStore,
+  store: FlowStore,
   config: ProgramConfig,
+  beginRun: (runConfig: ProgramConfig, session: WizardSession) => RunStore,
 ): Promise<void> {
   if (step.screenId === 'auth') {
     await authenticate(store.session, config.id);
     maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
     const { runAgent } = await import('@agent');
-    await runAgent(
-      runConfigFor(getProgramConfig(step.run.programId)),
+    const runConfig = getProgramConfig(step.run.programId);
+    const run = beginRun(
+      runConfig,
       await prepareRunSession(step, store.session),
-      { composed: true },
     );
+    await runAgent(runConfigFor(runConfig), run.session, { composed: true });
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
     const { runAgent } = await import('@agent');
-    await runAgent(
-      runConfigFor(config),
-      await prepareRunSession(step, store.session),
-    );
+    const run = beginRun(config, await prepareRunSession(step, store.session));
+    await runAgent(runConfigFor(config), run.session);
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -101,6 +101,8 @@ export function runWizard(
   let tui: TuiHandle | null = null;
   let control: ControlServerHandle | null = null;
   let taskStream: TaskStreamPushClass | null = null;
+  // Assigned inside beginRun, which narrowing does not see.
+  const currentStream = (): TaskStreamPushClass | null => taskStream;
   let onSignal: (() => void) | null = null;
   let exitInProgress = false;
 
@@ -251,11 +253,6 @@ export function runWizard(
         config = getProgramConfig(active);
       }
 
-      // After the switch loop, not before: the stream bakes its program id,
-      // session id, and event-plan path in at construction, so a stream built
-      // for the launch program would report the whole run under a program the
-      // user left on the intro screen. Nothing before this point produces a
-      // task to push.
       // Consent gates the push, not the dump: `--no-telemetry` still logs.
       const fileDestination = createFileDestination(options.taskStreamLog);
       const destinations = [
@@ -269,21 +266,31 @@ export function runWizard(
             ]),
         ...(fileDestination ? [fileDestination] : []),
       ];
-      const taskStreamEnabled = destinations.length > 0;
-      const activeStream = new TaskStreamPush({
-        store: activeTui.store,
-        programId: config.streamWorkflowId ?? config.id,
-        destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
-        auditChecks: config.auditLedgerFile
-          ? () => getAuditChecks(activeTui.store.session)
-          : undefined,
-        enabled: taskStreamEnabled,
-      });
-      taskStream = activeStream;
-      activeStream.attach();
+      // One run, one RunStore, one stream session: the stream bakes the program,
+      // the session id, and the event-plan path in at construction, so it is
+      // built when a run starts, over that run's store.
+      const beginRun = (
+        runConfig: ProgramConfig,
+        runSession: WizardSession,
+      ): RunStore => {
+        const run = activeTui.store.startRun(runSession);
+        const stream = new TaskStreamPush({
+          store: run,
+          programId: runConfig.streamWorkflowId ?? runConfig.id,
+          skillId: run.session.skillId ?? undefined,
+          destinations,
+          eventPlanPath: runConfig.eventPlanFile
+            ? join(run.session.installDir, runConfig.eventPlanFile)
+            : undefined,
+          auditChecks: runConfig.auditLedgerFile
+            ? () => getAuditChecks(activeTui.store.session)
+            : undefined,
+          enabled: destinations.length > 0,
+        });
+        taskStream = stream;
+        stream.attach();
+        return run;
+      };
 
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
@@ -307,7 +314,9 @@ export function runWizard(
         // Walk the list once, advancing each step to completion.
         for (const step of config.steps) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
-          if (shown(step)) await advanceStep(step, activeTui.store, config);
+          if (shown(step)) {
+            await advanceStep(step, activeTui.store, config, beginRun);
+          }
         }
       } else if (skipAgent) {
         const { getOrAskForProjectData } = await import('@store');
@@ -329,7 +338,8 @@ export function runWizard(
       } else {
         try {
           const { runAgent } = await import('@agent');
-          await runAgent(runConfigFor(config), activeTui.store.session);
+          const run = beginRun(config, activeTui.store.session);
+          await runAgent(runConfigFor(config), run.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.
@@ -356,7 +366,7 @@ export function runWizard(
       });
 
       exitInProgress = true;
-      await activeStream.shutdown(2000);
+      await currentStream()?.shutdown(2000);
       await control?.close();
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
@@ -376,9 +386,10 @@ export function runWizard(
         process.off('SIGINT', onSignal);
         process.off('SIGTERM', onSignal);
       }
-      if (taskStream) {
+      const stream = currentStream();
+      if (stream) {
         try {
-          await taskStream.shutdown(2000);
+          await stream.shutdown(2000);
         } catch {
           // ignore
         }

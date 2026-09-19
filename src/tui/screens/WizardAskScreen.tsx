@@ -9,7 +9,7 @@
 import { Box, Text, useInput } from 'ink';
 import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore, AskAnswers, AskQuestion } from '@store/types';
+import type { FlowStore, AskAnswers, AskQuestion } from '@store/types';
 import {
   LinkText,
   ModalOverlay,
@@ -21,7 +21,7 @@ import { copyToClipboard, openInBrowser } from '@store';
 import { useKeyBindings } from '../hooks/useKeyBindings.js';
 
 interface WizardAskScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 /**
@@ -31,7 +31,7 @@ interface WizardAskScreenProps {
  */
 export function handleAskKey(
   key: { escape?: boolean },
-  store: Pick<WizardStore, 'cancelPendingQuestion'>,
+  store: Pick<FlowStore, 'cancelPendingQuestion'>,
 ): void {
   if (key.escape) store.cancelPendingQuestion();
 }
@@ -39,7 +39,7 @@ export function handleAskKey(
 /**
  * What pressing Esc actually does, phrased for the footer hint.
  *
- * Esc declines the *whole* request — {@link WizardStore.cancelPendingQuestion}
+ * Esc declines the *whole* request — {@link FlowStore.cancelPendingQuestion}
  * builds a cancelled answer for every question, so the ones already typed are
  * discarded too. The footer used to label that "skip", which on a multi-question
  * request reads as "skip this field": the warehouse task walks a source's

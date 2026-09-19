@@ -20,7 +20,7 @@ import {
   formatCostUsd,
   getLogFilePath,
 } from '@store';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { isRunFailure } from '@store';
 import { MINT_FAILURE_CONTACT } from './mint-failure.js';
 import type { UiStore } from './ui-store.js';
@@ -40,7 +40,7 @@ const DIM = '\x1b[2m';
  * HUD is hidden, or the run never produced any usage (e.g. non-agent
  * programs).
  */
-function tokenCostLine(store: WizardStore, ui: UiStore): string | null {
+function tokenCostLine(store: FlowStore, ui: UiStore): string | null {
   if (!ui.tokenHudVisible) return null;
   const usage = store.tokenUsage;
   if (totalTokenCount(usage) === 0) return null;
@@ -62,7 +62,7 @@ function tokenCostLine(store: WizardStore, ui: UiStore): string | null {
  * Echoed into scrollback like the handoff prompt — command on its own plain
  * line so a terminal can triple-click-select it.
  */
-function mcpLoginBlock(store: WizardStore): string | null {
+function mcpLoginBlock(store: FlowStore): string | null {
   const commands = store.session.mcpLoginCommands;
   if (!commands || commands.length === 0) return null;
   return (
@@ -71,7 +71,7 @@ function mcpLoginBlock(store: WizardStore): string | null {
   );
 }
 
-export function getExitLine(store: WizardStore, ui: UiStore): string {
+export function getExitLine(store: FlowStore, ui: UiStore): string {
   const outro = store.session.outroData;
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store, ui);

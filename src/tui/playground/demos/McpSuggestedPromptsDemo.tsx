@@ -33,7 +33,7 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { WizardStore, ProjectDataProfile } from '@store/types';
+import type { FlowStore, ProjectDataProfile } from '@store/types';
 import { McpSuggestedPromptsScreen } from '../../screens/McpSuggestedPromptsScreen.js';
 import { Colors } from '../../styles.js';
 import {
@@ -185,7 +185,7 @@ interface MockConfig {
 }
 
 interface McpSuggestedPromptsDemoProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 const delay = (ms: number): Promise<void> =>
@@ -197,7 +197,7 @@ const delay = (ms: number): Promise<void> =>
  * the *next* invocation without remounting the screen.
  */
 function createMockServices(
-  store: WizardStore,
+  store: FlowStore,
   configRef: { current: MockConfig },
 ): McpSuggestedPromptsServices {
   return {

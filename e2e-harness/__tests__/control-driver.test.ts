@@ -1,5 +1,5 @@
 /**
- * Control-plane test: drive a REAL WizardStore through the full integration
+ * Control-plane test: drive a REAL FlowStore through the full integration
  * screen sequence using only the ControlDriver — proving read_state is a
  * truthful projection of router-resolved state and that perform_action commits
  * cause the same transitions the interactive UI would.
@@ -9,7 +9,7 @@
  * through the driver.
  */
 
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import {
@@ -28,8 +28,8 @@ import { SOURCE_MAPS_CONTEXT_KEYS } from '@store/programs/error-tracking-upload-
 import { OutroKind } from '@store/session/wizard-session';
 import { flowFor } from '@store/programs/flow-for';
 
-function freshStore(): WizardStore {
-  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+function freshStore(): FlowStore {
+  const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
   // Headless: a real store + StoreUI (which only forwards to the store), no Ink
   // render. setUI so any getUI() path the store touches resolves.
   setUI(new StoreUI(store));
@@ -205,8 +205,8 @@ describe('ControlDriver — wizard_ask overlay', () => {
 });
 
 describe('ControlDriver — self-driving integration check', () => {
-  function selfDrivingStore(): WizardStore {
-    const store = new WizardStore(flowFor(Program.SelfDriving).flow);
+  function selfDrivingStore(): FlowStore {
+    const store = new FlowStore(flowFor(Program.SelfDriving).flow);
     setUI(new StoreUI(store));
     store.session = buildSession({ installDir: '/tmp/ci-driver-sd', ci: true });
     return store;
@@ -245,8 +245,8 @@ describe('ControlDriver — self-driving integration check', () => {
 });
 
 describe('ControlDriver — source-maps project pick', () => {
-  function sourceMapsStore(): WizardStore {
-    const store = new WizardStore(
+  function sourceMapsStore(): FlowStore {
+    const store = new FlowStore(
       flowFor(Program.ErrorTrackingUploadSourceMaps).flow,
     );
     setUI(new StoreUI(store));
@@ -254,7 +254,7 @@ describe('ControlDriver — source-maps project pick', () => {
     return store;
   }
 
-  function toDetectScreen(store: WizardStore): void {
+  function toDetectScreen(store: FlowStore): void {
     // Intro → auth → detect.
     store.completeSetup();
     store.setCredentials({

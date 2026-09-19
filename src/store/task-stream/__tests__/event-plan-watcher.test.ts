@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventPlanWatcher, normalizeEventPlan } from '../event-plan-watcher.js';
 import { EVENT_PLAN_FILE } from '../../programs/posthog-integration/constants.js';
-import type { PlannedEvent, WizardStore } from '../../state/store.js';
+import type { PlannedEvent, FlowStore } from '../../state/store.js';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -23,7 +23,7 @@ function createStore(installDir: string) {
     setEventPlan(events: PlannedEvent[]) {
       eventPlan = events;
     },
-  } as WizardStore;
+  } as FlowStore;
 }
 
 describe('EventPlanWatcher', () => {

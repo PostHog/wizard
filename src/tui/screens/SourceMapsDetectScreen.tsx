@@ -9,11 +9,7 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type {
-  WizardStore,
-  DetectedProject,
-  DetectionReport,
-} from '@store/types';
+import type { FlowStore, DetectedProject, DetectionReport } from '@store/types';
 import { LoadingBox, PickerMenu } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
 import {
@@ -24,7 +20,7 @@ import {
 } from '@store/programs';
 
 interface SourceMapsDetectScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 type DetectState =

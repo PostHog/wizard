@@ -1,7 +1,7 @@
 import type { SetupQuestion } from '../framework-config.js';
 import type { ProgramId } from '../programs/program-registry.js';
 import type { WizardSession } from '../session/wizard-session.js';
-import type { PlannedEvent, TaskItem, WizardStore } from '../state/store.js';
+import type { PlannedEvent, TaskItem, FlowStore } from '../state/store.js';
 import type { CONTROL_SESSION_KEYS } from './state.js';
 
 /** One commit a controlling parent may make on a screen. */
@@ -12,7 +12,7 @@ export interface DriverAction {
   /** Parameter name to a human/type hint. Absent means no params. */
   params?: Record<string, string>;
   /** Apply the commit through exactly one store setter or resolver. */
-  apply: (store: WizardStore, params: Record<string, unknown>) => void;
+  apply: (store: FlowStore, params: Record<string, unknown>) => void;
 }
 
 /** An action as the wire carries it: no closure. */

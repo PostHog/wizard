@@ -7,7 +7,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
 const CONSUMER = /\/(src\/(tui|cli)|e2e-harness|scripts)\/|\/bin\.ts$/;
 
-/** Every WizardStore member the other surfaces reach, from the type checker. */
+/** Every FlowStore member the other surfaces reach, from the type checker. */
 function usedMembers(): string[] {
   const cfg = ts.getParsedCommandLineOfConfigFile(
     path.join(REPO_ROOT, 'tsconfig.json'),
@@ -31,7 +31,7 @@ function usedMembers(): string[] {
   const isStore = (node: ts.Node): boolean => {
     const type = checker.getTypeAtLocation(node);
     const parts = type.isUnion() ? type.types : [type];
-    return parts.some((t) => t.getSymbol()?.getName() === 'WizardStore');
+    return parts.some((t) => t.getSymbol()?.getName() === 'FlowStore');
   };
   const visit = (node: ts.Node): void => {
     if (ts.isPropertyAccessExpression(node) && isStore(node.expression)) {
@@ -55,7 +55,7 @@ function usedMembers(): string[] {
   return [...used].sort();
 }
 
-describe('WizardStore boundary', () => {
+describe('FlowStore boundary', () => {
   it('STORE_BOUNDARY_MEMBERS is exactly what tui, cli, and the harness use', () => {
     expect(usedMembers()).toEqual([...STORE_BOUNDARY_MEMBERS].sort());
   }, 120_000);

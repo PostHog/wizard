@@ -16,8 +16,8 @@ import type {
   Sequence,
   CloudRegion,
   ProgramConfig,
-  WizardSession,
-  WizardStore,
+  FlowStore,
+  RunStore,
   TaskStreamPush,
   OutroData,
   RunPhase as RunPhaseT,
@@ -177,18 +177,22 @@ export function runNonInteractive(
     }
 
     // Headless streams run state to the PostHog backend so the web app can show
-    // live progress. Reuses the interactive TaskStreamPush + WizardStore (no Ink
+    // live progress. Reuses the interactive TaskStreamPush + FlowStore (no Ink
     // render): HeadlessUI keeps LoggingUI's output and feeds task updates into
     // the store; this runner drives the phase transitions. Headless pushes to
     // PostHog (the web app is that run's only UI); `--ci` is synthetic, so it
     // dumps locally and pushes nothing. Telemetry consent gates the push only.
-    let store: WizardStore | null = null;
+    let store: FlowStore | null = null;
     let taskStream: TaskStreamPush | null = null;
     let runStream:
-      | ((config: ProgramConfig, runSession: WizardSession) => TaskStreamPush)
+      | ((config: ProgramConfig, run: RunStore) => TaskStreamPush)
       | null = null;
+    // Starts this process's one run on the flow and streams it; assigned once the store exists.
+    let beginRun: () => RunStore = () => {
+      throw new Error('the run store is not configured yet');
+    };
     {
-      const { WizardStore } = await import('@store');
+      const { FlowStore } = await import('@store');
       const { HeadlessUI } = await import('@tui/console');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await import('@store');
@@ -211,7 +215,7 @@ export function runNonInteractive(
         ...(fileDestination ? [fileDestination] : []),
       ];
 
-      const headlessStore = new WizardStore(flowFor(config.id).flow);
+      const headlessStore = new FlowStore(flowFor(config.id).flow);
       store = headlessStore;
       // A controlled run answers the agent's questions over the socket, so the
       // ask bridge stays wired despite `ci`.
@@ -225,15 +229,15 @@ export function runNonInteractive(
       }
       const streamFor = (
         runConfig: ProgramConfig,
-        runSession: WizardSession,
+        run: RunStore,
       ): TaskStreamPush =>
         new TaskStreamPush({
-          store: headlessStore,
+          store: run,
           programId: runConfig.streamWorkflowId ?? runConfig.id,
-          skillId: runSession.skillId ?? undefined,
+          skillId: run.session.skillId ?? undefined,
           destinations,
           eventPlanPath: runConfig.eventPlanFile
-            ? join(runSession.installDir, runConfig.eventPlanFile)
+            ? join(run.session.installDir, runConfig.eventPlanFile)
             : undefined,
           auditChecks: runConfig.auditLedgerFile
             ? () => getAuditChecks(headlessStore.session)
@@ -241,12 +245,15 @@ export function runNonInteractive(
           enabled: destinations.length > 0,
         });
       if (options.controlSocket) {
-        // Every POST /runs is one independent run with its own stream session.
+        // Every POST /runs is one independent run with its own store and stream.
         runStream = streamFor;
       } else {
-        taskStream = streamFor(config, session);
-        taskStream.attach();
-        headlessStore.setRunPhase(RunPhase.Running);
+        beginRun = () => {
+          const run = headlessStore.startRun(session);
+          taskStream = streamFor(config, run);
+          taskStream.attach();
+          return run;
+        };
       }
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
@@ -259,7 +266,10 @@ export function runNonInteractive(
       phase: RunPhaseT,
       outroData?: OutroData,
     ): Promise<void> => {
-      if (!store || !taskStream) return;
+      if (!store || options.controlSocket) return;
+      // An abort before the run starts still reports through a run of its own.
+      if (!taskStream) beginRun();
+      if (!taskStream) return;
       if (outroData) store.setOutroData(outroData);
       store.setRunPhase(phase);
       await taskStream.shutdown(2000);
@@ -406,7 +416,9 @@ export function runNonInteractive(
       }
 
       const { runAgent } = await import('@agent');
-      await runAgent(runConfigFor(config), session);
+      const run = beginRun();
+      run.setRunPhase(RunPhase.Running);
+      await runAgent(runConfigFor(config), run.session);
       await settleStream(RunPhase.Completed);
     } catch (error) {
       const errorMessage =

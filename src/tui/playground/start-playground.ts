@@ -4,7 +4,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, HostResolution, WizardReadiness } from '@store';
+import { FlowStore, HostResolution, WizardReadiness } from '@store';
 import { UiStore } from '../ui-store.js';
 import { PlaygroundApp } from './PlaygroundApp.js';
 import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
@@ -13,7 +13,7 @@ import { flowFor, Program } from '@store/programs';
 export function startPlayground(version: string): void {
   enterDarkTerminal();
 
-  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+  const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
   store.version = version;
 
   // Pre-fill session so the router skips health-check, auth, and setup,

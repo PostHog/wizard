@@ -13,7 +13,7 @@
 
 import { Text } from 'ink';
 import { Colors } from '../../../styles.js';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import {
   isClearBlock,
@@ -128,7 +128,7 @@ export type SourceMapsDeckCopy = { intro: string; wiring: string };
 
 /** The source-maps narrative. The error-tracking program reuses it with its own copy. */
 export const buildSourceMapsDeck = (
-  store: WizardStore | undefined,
+  store: FlowStore | undefined,
   copy: SourceMapsDeckCopy,
 ): ContentBlock[] =>
   pace([
@@ -274,7 +274,7 @@ export const buildSourceMapsDeck = (
     },
   ]);
 
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
+export const getContentBlocks = (store?: FlowStore): ContentBlock[] =>
   buildSourceMapsDeck(store, {
     intro: "I'm wiring PostHog Error Tracking into your build.",
     wiring:

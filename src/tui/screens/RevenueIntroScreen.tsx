@@ -11,13 +11,13 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore, RevenueDetectError } from '@store/types';
+import type { FlowStore, RevenueDetectError } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { POSTHOG_SDKS, STRIPE_SDKS } from '@store/programs';
 
 interface RevenueIntroScreenProps {
-  store: WizardStore;
+  store: FlowStore;
 }
 
 export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {

@@ -1,4 +1,4 @@
-import { WizardStore } from '@store/state/store';
+import { FlowStore } from '@store/state/store';
 import { UiStore } from '../ui-store.js';
 import { Overlay } from '../router.js';
 import { flowFor } from '@store/programs/flow-for';
@@ -15,7 +15,7 @@ vi.mock('@store/shared/analytics', () => ({
 }));
 
 function pair() {
-  const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
+  const store = new FlowStore(flowFor(Program.PostHogIntegration).flow);
   return { store, ui: new UiStore(store) };
 }
 

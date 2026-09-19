@@ -143,7 +143,7 @@ export function pricePerMtokForModel(
  * being priced at $0.
  *
  * Takes the same shape as `TokenUsageDelta` (`@ui/wizard-ui`) so a caller
- * that already has one — `WizardStore.addTokenUsage` — can pass it straight
+ * that already has one — `FlowStore.addTokenUsage` — can pass it straight
  * through instead of re-listing its fields in a fixed positional order.
  */
 export function computeTokenCostUsd(usage: {

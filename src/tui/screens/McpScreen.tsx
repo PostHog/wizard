@@ -14,7 +14,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import {
   McpOutcome,
   McpClientStatus,
@@ -40,7 +40,7 @@ import type {
 export type McpMode = 'install' | 'remove';
 
 interface McpScreenProps {
-  store: WizardStore;
+  store: FlowStore;
   installer: McpInstaller;
   mode?: McpMode;
 }
@@ -57,7 +57,7 @@ enum Phase {
 }
 
 const markDone = (
-  store: WizardStore,
+  store: FlowStore,
   outcome: McpOutcome,
   clients: string[] = [],
   featuresSelected?: 'all' | string[],

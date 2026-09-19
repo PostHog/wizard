@@ -1,11 +1,11 @@
-import type { WizardStore } from '../state/store.js';
+import type { FlowStore } from '../state/store.js';
 import { actionsFor, UnknownActionError } from './actions.js';
 import { projectState } from './state.js';
 import type { ControlState } from './types.js';
 
 /** Reads the committed store and acts through the setter the screen's key handler would call. */
 export class ControlDriver {
-  constructor(private readonly store: WizardStore) {}
+  constructor(private readonly store: FlowStore) {}
 
   readState(): ControlState {
     return projectState(this.store);

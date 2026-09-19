@@ -3,7 +3,7 @@
  * token/cost estimate for this wizard run. Toggled from `ScreenContainer`;
  * deliberately not registered via `useKeyBindings`, so the shortcut never
  * shows in the `KeyboardHintsBar` in production. Defaults visible for
- * local/dev/test runs (`WizardStore`'s `$tokenHudVisible` initial value),
+ * local/dev/test runs (`FlowStore`'s `$tokenHudVisible` initial value),
  * so contributors see it without needing to know the shortcut; defaults
  * hidden in the published build. Once shown, the panel itself names the
  * shortcut, so it's self-documenting either way.

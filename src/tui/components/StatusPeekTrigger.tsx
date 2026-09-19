@@ -7,14 +7,14 @@
 
 import { Text } from 'ink';
 import { useEffect } from 'react';
-import type { WizardStore } from '@store/types';
+import type { FlowStore } from '@store/types';
 import { useUiStore } from '../hooks/useUiStore.js';
 
 let peekedOnce = false;
 
 interface StatusPeekTriggerProps {
   /** Accepted for the content decks that pass it; presentation reads the UiStore. */
-  store?: WizardStore;
+  store?: FlowStore;
   /** How long the status bar stays expanded, in ms. */
   duration?: number;
 }
