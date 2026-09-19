@@ -846,6 +846,24 @@ export class WizardStore {
     this.setRunPhase(RunPhase.Idle);
   }
 
+  /** Clear what one agent run leaves behind, so the next independent run starts clean. */
+  resetRunState(): void {
+    this.cancelPendingQuestion();
+    if (this.session.taskNotice) this.resolveTaskNotice(false);
+    this.$tasks.set([]);
+    this.$statusMessages.set([]);
+    this.$eventPlan.set([]);
+    this.$handoffText.set(null);
+    this.$tokenUsage.set(EMPTY_TOKEN_USAGE);
+    this.$currentStage.set(null);
+    this.$session.setKey('runPhase', RunPhase.Idle);
+    this.$session.setKey('outroData', null);
+    this.$session.setKey('outroDismissed', false);
+    this.$session.setKey('dashboardUrl', null);
+    this.$session.setKey('notebookUrl', null);
+    this.emitChange();
+  }
+
   /** A controlled run's parent released the agent; the runner waits on this. */
   requestRun(): void {
     this.$session.setKey('runRequested', true);

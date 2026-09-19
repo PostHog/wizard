@@ -16,6 +16,7 @@ import type {
   Sequence,
   CloudRegion,
   ProgramConfig,
+  WizardSession,
   WizardStore,
   TaskStreamPush,
   OutroData,
@@ -182,6 +183,9 @@ export function runNonInteractive(
     // dumps locally and pushes nothing. Telemetry consent gates the push only.
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
+    let runStream:
+      | ((config: ProgramConfig, runSession: WizardSession) => TaskStreamPush)
+      | null = null;
     {
       const { WizardStore } = await import('@store');
       const { HeadlessUI } = await import('@tui/console');
@@ -216,20 +220,30 @@ export function runNonInteractive(
       } else {
         setUI(new HeadlessUI(headlessStore));
       }
-      taskStream = new TaskStreamPush({
-        store: headlessStore,
-        programId: config.streamWorkflowId ?? config.id,
-        destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
-        auditChecks: config.auditLedgerFile
-          ? () => getAuditChecks(headlessStore.session)
-          : undefined,
-        enabled: destinations.length > 0,
-      });
-      taskStream.attach();
-      if (!options.controlSocket) headlessStore.setRunPhase(RunPhase.Running);
+      const streamFor = (
+        runConfig: ProgramConfig,
+        runSession: WizardSession,
+      ): TaskStreamPush =>
+        new TaskStreamPush({
+          store: headlessStore,
+          programId: runConfig.streamWorkflowId ?? runConfig.id,
+          destinations,
+          eventPlanPath: runConfig.eventPlanFile
+            ? join(runSession.installDir, runConfig.eventPlanFile)
+            : undefined,
+          auditChecks: runConfig.auditLedgerFile
+            ? () => getAuditChecks(headlessStore.session)
+            : undefined,
+          enabled: destinations.length > 0,
+        });
+      if (options.controlSocket) {
+        // Every POST /runs is one independent run with its own stream session.
+        runStream = streamFor;
+      } else {
+        taskStream = streamFor(config, session);
+        taskStream.attach();
+        headlessStore.setRunPhase(RunPhase.Running);
+      }
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
       }
@@ -276,6 +290,7 @@ export function runNonInteractive(
             store: controlledStore,
             programId: config.id,
             runAgent,
+            runStream: runStream ?? undefined,
             shutdown: () => {
               release?.();
               return Promise.resolve();

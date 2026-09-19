@@ -17,7 +17,7 @@ vi.mock('@store/shared/analytics', () => ({
   sessionProperties: () => ({}),
 }));
 
-import { buildSession, StoreUI, setUI } from '@store';
+import { buildSession, OutroKind, RunPhase, StoreUI, setUI } from '@store';
 import { Program } from '@store/programs';
 import { createControlHooks } from '../control-hooks.js';
 import { fakeRunAgent, fakeStartTUI } from '../testing/fake-surfaces.js';
@@ -43,13 +43,28 @@ function setup(program = Program.PostHogIntegration) {
   store.setFrameworkContext('shared', 'live');
   const agent = fakeRunAgent();
   const shutdown = vi.fn(() => Promise.resolve());
+  const streams: Array<{
+    programId: string;
+    attach: ReturnType<typeof vi.fn>;
+    shutdown: ReturnType<typeof vi.fn>;
+  }> = [];
+  const runStream = vi.fn((config: { id: string }) => {
+    const stream = {
+      programId: config.id,
+      attach: vi.fn(),
+      shutdown: vi.fn(() => Promise.resolve()),
+    };
+    streams.push(stream);
+    return stream;
+  });
   const hooks = createControlHooks({
     store,
     programId: program,
     runAgent: agent.runAgent,
+    runStream,
     shutdown,
   });
-  return { store, hooks, agent, shutdown, dir };
+  return { store, hooks, agent, shutdown, streams, dir };
 }
 
 describe('control hooks', () => {
@@ -135,5 +150,55 @@ describe('control hooks', () => {
     const { hooks, shutdown } = setup();
     await hooks.shutdown();
     expect(shutdown).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('independent runs', () => {
+  it('each run gets its own stream and a clean run state', async () => {
+    const { store, hooks, streams } = setup();
+    store.setDashboardUrl('https://us.posthog.com/project/1/dashboard/9');
+    store.setTasks([{ label: 'stale', status: 'completed' } as never]);
+    store.setRunPhase(RunPhase.Completed);
+    await hooks.startRun({ programId: Program.Metrics });
+    await hooks.startRun({ programId: Program.Audit });
+    expect(streams.map((s) => s.programId)).toEqual([
+      Program.Metrics,
+      Program.Audit,
+    ]);
+    for (const stream of streams) {
+      expect(stream.attach).toHaveBeenCalledTimes(1);
+      expect(stream.shutdown).toHaveBeenCalledWith(2000);
+    }
+    expect(store.session.dashboardUrl).toBeNull();
+    expect(store.tasks).toEqual([]);
+    expect(store.session.runPhase).toBe(RunPhase.Idle);
+  });
+
+  it('a run that throws leaves an error outro and still closes its stream', async () => {
+    const { store, streams } = setup();
+    const failing = createControlHooks({
+      store,
+      programId: Program.PostHogIntegration,
+      runAgent: () => Promise.reject(new Error('gateway refused')),
+      runStream: () => {
+        const stream = {
+          programId: 'x',
+          attach: vi.fn(),
+          shutdown: vi.fn(() => Promise.resolve()),
+        };
+        streams.push(stream);
+        return stream;
+      },
+      shutdown: () => Promise.resolve(),
+    });
+    await expect(
+      failing.startRun({ programId: Program.PostHogIntegration }),
+    ).rejects.toThrow('gateway refused');
+    expect(store.session.runPhase).toBe(RunPhase.Error);
+    expect(store.session.outroData).toEqual({
+      kind: OutroKind.Error,
+      message: 'gateway refused',
+    });
+    expect(streams[0].shutdown).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,20 +1,30 @@
 import * as path from 'node:path';
 import type { RunAgent } from '@agent/types';
-import { getOrAskForProjectData, logToFile } from '@store';
+import { getOrAskForProjectData, logToFile, OutroKind, RunPhase } from '@store';
 import { flowFor, getProgramConfig, runConfigFor } from '@store/programs';
 import type {
   ControlHooks,
   DetectRequest,
+  ProgramConfig,
   ProgramId,
   RunRequest,
+  WizardSession,
   WizardStore,
 } from '@store/types';
+
+/** The task stream one independent run publishes to; a new session per run. */
+export interface RunStream {
+  attach(): void;
+  shutdown(timeoutMs: number): Promise<void>;
+}
 
 export interface ControlHookDeps {
   store: WizardStore;
   /** The program this process launched with. */
   programId: ProgramId;
   runAgent: RunAgent;
+  /** Builds the stream a run publishes to. Absent means the run publishes nothing. */
+  runStream?: (config: ProgramConfig, session: WizardSession) => RunStream;
   /** Flush and exit; the runner owns the exact steps. */
   shutdown: () => Promise<void>;
 }
@@ -97,7 +107,27 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         programLabel: config.id,
       };
       logToFile(`[control] run ${config.id} in ${runSession.installDir}`);
-      await deps.runAgent(runConfigFor(config), runSession, { composed: true });
+      // Each run is its own session: a clean run state and its own stream, as
+      // a fresh CLI invocation would have. Credentials and context persist.
+      store.resetRunState();
+      const stream = deps.runStream?.(config, runSession);
+      stream?.attach();
+      try {
+        await deps.runAgent(runConfigFor(config), runSession, {
+          composed: true,
+        });
+      } catch (err) {
+        if (store.session.runPhase !== RunPhase.Error) {
+          store.setOutroData({
+            kind: OutroKind.Error,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          store.setRunPhase(RunPhase.Error);
+        }
+        throw err;
+      } finally {
+        await stream?.shutdown(2000);
+      }
     },
 
     shutdown: deps.shutdown,

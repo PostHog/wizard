@@ -48,6 +48,7 @@ export interface OutroView {
 
 export interface RunResult {
   runPhase: RunPhase;
+  tasks: Array<{ label: string; status: string }>;
   outroData: OutroView | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;

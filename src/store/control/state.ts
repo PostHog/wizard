@@ -52,6 +52,7 @@ export function runResult(store: WizardStore): RunResult {
   const s = store.session;
   return {
     runPhase: s.runPhase,
+    tasks: store.tasks.map((t) => ({ label: t.label, status: t.status })),
     outroData: outroView(store),
     dashboardUrl: s.dashboardUrl,
     notebookUrl: s.notebookUrl,

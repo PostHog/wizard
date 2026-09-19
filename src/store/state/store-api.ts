@@ -31,6 +31,7 @@ export const STORE_BOUNDARY_MEMBERS = [
   'interruptDepth',
   'pushStatus',
   'requestRun',
+  'resetRunState',
   'resolvePendingQuestion',
   'resolvePortConflict',
   'resolveTaskNotice',

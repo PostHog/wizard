@@ -200,20 +200,16 @@ export async function attachControlServer(
       programId,
       req.installDir ?? store.session.installDir,
     );
-    // Record the outcome first, then reset tasks and phase for the next run.
+    // The state keeps this run's outcome until the next run starts; the hook
+    // resets it then, so a poller reading after completion sees the result.
     void hooks.startRun(req).then(
-      () => {
-        ledger.finish(record.runId, runResult(store));
-        store.completeRunStep(record.runId);
-      },
-      (err: unknown) => {
+      () => ledger.finish(record.runId, runResult(store)),
+      (err: unknown) =>
         ledger.fail(
           record.runId,
           err instanceof Error ? err.message : String(err),
           runResult(store),
-        );
-        store.completeRunStep(record.runId);
-      },
+        ),
     );
     return { ...record };
   };

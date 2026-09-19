@@ -107,6 +107,7 @@ describe('projectState', () => {
     const result = runResult(store);
     expect(result).toEqual({
       runPhase: RunPhase.Error,
+      tasks: [],
       outroData: {
         kind: OutroKind.Error,
         errorCode: 'PHW_INTERNAL_UNHANDLED',
