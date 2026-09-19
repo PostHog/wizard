@@ -1,5 +1,7 @@
 import { Analytics, groupsFromUser, sessionProperties } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@lib/constants';
 import { VERSION } from '@lib/version';
@@ -503,6 +505,7 @@ describe('Analytics', () => {
       properties?: Record<string, unknown>;
     };
     type BeforeSendFn = (event: TestEvent | null) => TestEvent | null;
+    type ExceptionList = [{ stacktrace: { frames: unknown[] } }];
 
     const getBeforeSend = (): BeforeSendFn =>
       (MockedPostHog.mock.calls[0][1] as { before_send: BeforeSendFn })
@@ -544,6 +547,29 @@ describe('Analytics', () => {
       });
 
       expect(result?.distinctId).toBe('user-123');
+    });
+
+    it('stabilizes the frames of the wizard’s own code', () => {
+      const beforeSend = getBeforeSend();
+      const own = resolve(
+        fileURLToPath(import.meta.url),
+        '..',
+        '..',
+        '..',
+        'dist/agent-runner-CksP2v2P.js',
+      );
+
+      const result = beforeSend({
+        event: '$exception',
+        properties: {
+          $exception_list: [{ stacktrace: { frames: [{ source: own }] } }],
+        },
+      });
+
+      expect(
+        (result?.properties?.$exception_list as ExceptionList)[0].stacktrace
+          .frames,
+      ).toEqual([{ source: 'dist/agent-runner.js', in_app: true }]);
     });
 
     it('leaves non-exception events untouched', () => {
