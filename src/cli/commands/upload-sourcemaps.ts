@@ -1,4 +1,4 @@
-import { runWizard, runWizardCI } from '../runners/index.js';
+import { dispatchProgram } from './factories/shared.js';
 import { errorTrackingUploadSourceMapsConfig } from '@store/programs';
 import { skillProgramOptions } from './skill-program-options.js';
 import type { Command } from './command.js';
@@ -11,16 +11,5 @@ export const uploadSourcemapsCommand: Command = {
     ...skillProgramOptions,
     ...(errorTrackingUploadSourceMapsConfig.cliOptions ?? {}),
   },
-  handler: (argv) => {
-    const extras =
-      errorTrackingUploadSourceMapsConfig.mapCliOptions?.(
-        argv as Record<string, unknown>,
-      ) ?? {};
-    const options = { ...argv, ...extras };
-    if (options.ci) {
-      runWizardCI(errorTrackingUploadSourceMapsConfig, options);
-    } else {
-      runWizard(errorTrackingUploadSourceMapsConfig, options);
-    }
-  },
+  handler: (argv) => dispatchProgram(errorTrackingUploadSourceMapsConfig, argv),
 };

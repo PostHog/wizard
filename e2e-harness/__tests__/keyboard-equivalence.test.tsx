@@ -32,7 +32,7 @@ import {
   createServices,
   type ScreenServices,
 } from '@tui/screen-registry';
-import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
+import { actionsFor } from '@store/control';
 import { flowFor } from '@store/programs/flow-for';
 import { UiStore } from '@tui/ui-store';
 
@@ -428,7 +428,7 @@ function applyAction(pair: Pair): Record<string, unknown> {
   const store = makeStore(pair);
   expect(store.currentScreen).toBe(pair.screen);
   const before = snap(store);
-  const action = ACTION_REGISTRY[pair.screen as ScreenId]?.find(
+  const action = actionsFor(flowFor(pair.program).flow, pair.screen).find(
     (a) => a.id === pair.action,
   );
   if (!action) throw new Error(`no action ${pair.action} on ${pair.screen}`);

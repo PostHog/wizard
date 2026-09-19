@@ -9,7 +9,13 @@
 
 import { ScreenId, Overlay, type ScreenName } from '@tui/router';
 import type { AskAnswers, AskQuestion } from '@store/session/wizard-session';
-import type { CiState } from '@e2e-harness/wizard-ci-driver';
+import type { ControlState } from '@store/types';
+
+/** The slice of the control state a decision reads. */
+export type E2eObservedState = Pick<
+  ControlState,
+  'currentScreen' | 'setupQuestions' | 'pendingQuestion' | 'taskNotice'
+>;
 
 /** Which option to pick for a setup disambiguation question. */
 export type SetupChoice = 'first' | 'last';
@@ -273,7 +279,7 @@ function acceptsSecret(question: AskQuestion): boolean {
  * not doing that.
  */
 export function decideE2eAction(
-  state: CiState,
+  state: E2eObservedState,
   profile: WizardE2eProfile,
 ): E2eDecision {
   switch (state.currentScreen) {
@@ -385,6 +391,10 @@ export function decideE2eAction(
       };
     }
 
+    // A failed run parks on the handoff screen until someone chooses; a
+    // headless run exits from it and reports the abort through outroData.
+    case ScreenId.MintFailure:
+      return { action: { id: 'dismiss_outro' }, done: true };
     // auth (runner), run (agent), ai-opt-in (ci), exit, terminal overlays.
     default:
       return { wait: true };
@@ -403,6 +413,7 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.McpSuggestedPrompts,
   ScreenId.SlackConnect,
   ScreenId.KeepSkills,
+  ScreenId.MintFailure,
   Overlay.WizardAsk,
   Overlay.TaskNotice,
 ];

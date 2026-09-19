@@ -43,6 +43,7 @@ export interface OutroView {
   kind: OutroKind;
   errorCode?: ErrorCode;
   message?: string;
+  body?: string;
   docsUrl?: string;
 }
 

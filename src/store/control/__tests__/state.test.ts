@@ -111,14 +111,18 @@ describe('projectState', () => {
         kind: OutroKind.Error,
         errorCode: 'PHW_INTERNAL_UNHANDLED',
         message: 'boom',
+        body: 'long body copy',
       },
       dashboardUrl: 'https://us.posthog.com/project/1/dashboard/2',
       notebookUrl: null,
       handoffText: null,
     });
-    expect(JSON.stringify(projectState(store, RUN))).not.toContain(
-      'long body copy',
-    );
+    expect(projectState(store, RUN).outroData).toEqual({
+      kind: OutroKind.Error,
+      errorCode: 'PHW_INTERNAL_UNHANDLED',
+      message: 'boom',
+      body: 'long body copy',
+    });
   });
 
   it('redacts by key and by secret ref only', () => {

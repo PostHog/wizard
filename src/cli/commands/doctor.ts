@@ -28,8 +28,9 @@ export const doctorCommand: Command = {
       {};
     const options = { ...argv, ...extras };
     // doctor is otherwise a TUI-only diagnostic (it has no agent run); in CI we
-    // fetch the project's health issues headlessly and report them instead.
-    if (options.ci) {
+    // fetch the project's health issues headlessly and report them instead. A
+    // control socket means a parent drives the real TUI.
+    if (options.ci && !options.controlSocket) {
       void runDoctorCI(options);
     } else {
       runWizard(posthogDoctorConfig, options);

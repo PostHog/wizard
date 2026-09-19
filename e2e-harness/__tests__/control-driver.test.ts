@@ -1,6 +1,6 @@
 /**
  * Control-plane test: drive a REAL WizardStore through the full integration
- * screen sequence using only the WizardCiDriver — proving read_state is a
+ * screen sequence using only the ControlDriver — proving read_state is a
  * truthful projection of router-resolved state and that perform_action commits
  * cause the same transitions the interactive UI would.
  *
@@ -23,17 +23,12 @@ import { FRAMEWORK_REGISTRY } from '@store/registry';
 import { WizardReadiness } from '@store/health-checks/readiness';
 import { ScreenId, Overlay } from '@tui/router';
 import { Program } from '@store/programs/program-registry';
-import {
-  WizardCiDriver,
-  UnknownActionError,
-} from '@e2e-harness/wizard-ci-driver';
-import {
-  ACTION_REGISTRY,
-  NO_ACTION_SCREENS,
-} from '@e2e-harness/action-registry';
+import { ControlDriver, UnknownActionError } from '@store/control';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@store/programs/error-tracking-upload-source-maps';
 import { OutroKind } from '@store/session/wizard-session';
 import { flowFor } from '@store/programs/flow-for';
+
+const IDLE = () => ({ status: 'idle' as const, error: null });
 
 function freshStore(): WizardStore {
   const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
@@ -56,11 +51,11 @@ const cleanReadiness = {
   reasons: [] as string[],
 };
 
-describe('WizardCiDriver — full integration flow', () => {
+describe('ControlDriver — full integration flow', () => {
   it('lets a failed run exit or continue to MCP', () => {
     const store = freshStore();
     const ui = new StoreUI(store);
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
@@ -81,7 +76,7 @@ describe('WizardCiDriver — full integration flow', () => {
 
   it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     // 1. Intro
     expect(driver.readState().currentScreen).toBe(ScreenId.Intro);
@@ -144,7 +139,7 @@ describe('WizardCiDriver — full integration flow', () => {
 
   it('read_state is a truthful projection and never leaks the access token', () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
@@ -162,7 +157,7 @@ describe('WizardCiDriver — full integration flow', () => {
 
   it('rejects actions that are not legal on the current screen', () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
     expect(driver.readState().currentScreen).toBe(ScreenId.Intro);
     expect(() => driver.performAction('keep_skills')).toThrow(
       UnknownActionError,
@@ -170,10 +165,10 @@ describe('WizardCiDriver — full integration flow', () => {
   });
 });
 
-describe('WizardCiDriver — wizard_ask overlay', () => {
+describe('ControlDriver — wizard_ask overlay', () => {
   it('answers a pending question through the driver, resolving the agent promise', async () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     // The agent (via the ask bridge) opens a question and awaits the answers.
     const answersPromise = store.requestQuestion({
@@ -208,7 +203,7 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
   });
 });
 
-describe('WizardCiDriver — self-driving integration check', () => {
+describe('ControlDriver — self-driving integration check', () => {
   function selfDrivingStore(): WizardStore {
     const store = new WizardStore(flowFor(Program.SelfDriving).flow);
     setUI(new StoreUI(store));
@@ -218,7 +213,7 @@ describe('WizardCiDriver — self-driving integration check', () => {
 
   it('exposes the integration check and commits set_integrate', () => {
     const store = selfDrivingStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     // Intro → integration-check.
     store.completeSetup();
@@ -239,7 +234,7 @@ describe('WizardCiDriver — self-driving integration check', () => {
       installDir: '/tmp/ci-driver-sd',
       integrate: true,
     });
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     store.completeSetup();
     expect(driver.readState().currentScreen).not.toBe(
@@ -248,7 +243,7 @@ describe('WizardCiDriver — self-driving integration check', () => {
   });
 });
 
-describe('WizardCiDriver — source-maps project pick', () => {
+describe('ControlDriver — source-maps project pick', () => {
   function sourceMapsStore(): WizardStore {
     const store = new WizardStore(
       flowFor(Program.ErrorTrackingUploadSourceMaps).flow,
@@ -271,7 +266,7 @@ describe('WizardCiDriver — source-maps project pick', () => {
 
   it('commits the pick the way the detect screen would and advances', () => {
     const store = sourceMapsStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     toDetectScreen(store);
     const state = driver.readState();
@@ -293,7 +288,7 @@ describe('WizardCiDriver — source-maps project pick', () => {
 
   it('requires the variant and path params', () => {
     const store = sourceMapsStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     toDetectScreen(store);
     expect(() =>
@@ -302,7 +297,7 @@ describe('WizardCiDriver — source-maps project pick', () => {
   });
 });
 
-describe('WizardCiDriver — task-notice overlay', () => {
+describe('ControlDriver — task-notice overlay', () => {
   const notice = {
     title: 'Connect your data sources',
     body: ['We detected some warehouse sources.'],
@@ -314,7 +309,7 @@ describe('WizardCiDriver — task-notice overlay', () => {
 
   it('projects the notice into read_state and keeps the step', async () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
 
     const kept = store.showTaskNotice(notice);
 
@@ -336,7 +331,7 @@ describe('WizardCiDriver — task-notice overlay', () => {
 
   it('skips the step when keep is false', async () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
     const kept = store.showTaskNotice(notice);
     driver.performAction('resolve_notice', { keep: false });
     await expect(kept).resolves.toBe(false);
@@ -344,7 +339,7 @@ describe('WizardCiDriver — task-notice overlay', () => {
 
   it('defaults to keeping the step when keep is omitted', async () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
     const kept = store.showTaskNotice(notice);
     driver.performAction('resolve_notice');
     await expect(kept).resolves.toBe(true);
@@ -352,18 +347,8 @@ describe('WizardCiDriver — task-notice overlay', () => {
 
   it('projects an empty items list when the notice has none', () => {
     const store = freshStore();
-    const driver = new WizardCiDriver(store);
+    const driver = new ControlDriver(store, IDLE);
     void store.showTaskNotice({ ...notice, items: undefined });
     expect(driver.readState().taskNotice?.items).toEqual([]);
-  });
-});
-
-describe('action registry exhaustiveness', () => {
-  it('every screen and overlay is either actionable or explicitly no-action', () => {
-    const allScreens = [...Object.values(ScreenId), ...Object.values(Overlay)];
-    const uncovered = allScreens.filter(
-      (s) => !(s in ACTION_REGISTRY) && !NO_ACTION_SCREENS.has(s),
-    );
-    expect(uncovered).toEqual([]);
   });
 });

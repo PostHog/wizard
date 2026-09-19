@@ -1,4 +1,4 @@
-import { runWizard, runWizardCI } from '../runners/index.js';
+import { dispatchProgram } from './factories/shared.js';
 import { selfDrivingConfig } from '@store/programs';
 import { skillProgramOptions } from './skill-program-options.js';
 import type { Command } from './command.js';
@@ -29,7 +29,9 @@ export const selfDrivingCommand: Command = {
           '(no flag needed).',
       );
     }
-    if (argv.ci) {
+    // A controlling parent on the socket answers those steps, so `--ci` is
+    // fine when a control socket is attached.
+    if (argv.ci && !argv.controlSocket) {
       throw new Error(
         '`self-driving` cannot run in CI mode — it requires interactive steps ' +
           '(GitHub connect, issue-tracker selection, custom-scout approval).',
@@ -37,14 +39,5 @@ export const selfDrivingCommand: Command = {
     }
     return true;
   },
-  handler: (argv) => {
-    const extras =
-      selfDrivingConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
-    const options = { ...argv, ...extras };
-    if (options.ci) {
-      runWizardCI(selfDrivingConfig, options);
-    } else {
-      runWizard(selfDrivingConfig, options);
-    }
-  },
+  handler: (argv) => dispatchProgram(selfDrivingConfig, argv),
 };

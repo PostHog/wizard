@@ -9,7 +9,13 @@ const runners = vi.hoisted(() => ({
 vi.mock('../runners/index.js', () => runners);
 
 import { HEADLESS_FLAG } from '@env';
-import { posthogIntegrationConfig } from '@store/programs';
+import {
+  errorTrackingUploadSourceMapsConfig,
+  posthogIntegrationConfig,
+  selfDrivingConfig,
+} from '@store/programs';
+import { selfDrivingCommand } from '../commands/self-driving.js';
+import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps.js';
 import { dispatchProgram } from '../commands/factories/shared.js';
 import { GLOBAL_OPTIONS } from '../wizard.js';
 
@@ -56,4 +62,41 @@ describe('surface dispatch', () => {
       expect.objectContaining(flags),
     );
   });
+});
+
+describe('commands with their own handlers follow the same dispatch', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('self-driving refuses --ci alone and accepts it with a control socket', () => {
+    expect(() => selfDrivingCommand.check?.(argv({ ci: true }))).toThrow(
+      /cannot run in CI mode/,
+    );
+    expect(
+      selfDrivingCommand.check?.(
+        argv({ ci: true, controlSocket: '/tmp/c.sock' }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['self-driving', selfDrivingCommand, selfDrivingConfig],
+    [
+      'upload-source-maps',
+      uploadSourcemapsCommand,
+      errorTrackingUploadSourceMapsConfig,
+    ],
+  ] as const)(
+    '%s routes ci + socket to the controlled TUI',
+    (_name, command, config) => {
+      command.handler?.(argv({ ci: true, controlSocket: '/tmp/c.sock' }));
+      expect(runners.runWizard).toHaveBeenCalledWith(
+        config,
+        expect.objectContaining({ ci: true, controlSocket: '/tmp/c.sock' }),
+      );
+      expect(runners.runWizardCI).not.toHaveBeenCalled();
+      vi.clearAllMocks();
+      command.handler?.(argv({ ci: true }));
+      expect(runners.runWizardCI).toHaveBeenCalledTimes(1);
+    },
+  );
 });
