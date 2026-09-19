@@ -1,8 +1,10 @@
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { PROGRAM_REGISTRY } from '../programs/program-registry.js';
-import { RunPhase } from '../session/wizard-session.js';
+import {
+  PROGRAM_REGISTRY,
+  type ProgramId,
+} from '../programs/program-registry.js';
 import { logToFile } from '../shared/debug.js';
 import type { WizardStore } from '../state/store.js';
 import {
@@ -13,14 +15,12 @@ import {
 import { ControlDriver } from './driver.js';
 import { CONTROL_SERVER_MARKER } from './marker.js';
 import { RunInFlightError, RunLedger } from './runs.js';
-import { runResult } from './state.js';
 import type {
   ControlHooks,
   ControlState,
   ControlSurface,
   DetectRequest,
   RunRequest,
-  RunStatus,
 } from './types.js';
 
 export const MAX_BODY_BYTES = 64 * 1024;
@@ -70,9 +70,12 @@ function statusFor(err: unknown): number {
   return 500;
 }
 
-function requireProgram(programId: string): void {
+function requireProgram(programId: unknown): ProgramId {
+  if (typeof programId !== 'string' || !programId)
+    throw new HttpError(400, 'programId is required');
   if (!PROGRAM_REGISTRY.some((c) => c.id === programId))
     throw new HttpError(400, `unknown program "${programId}"`);
+  return programId;
 }
 
 /** Refuse a live socket; unlink a stale file. */
@@ -149,43 +152,16 @@ export async function attachControlServer(
 ): Promise<ControlServerHandle> {
   const { socketPath, surface, hooks } = options;
   const ledger = new RunLedger();
+  const driver = new ControlDriver(store);
   let shuttingDown = false;
-
-  const runStatus = (): { status: RunStatus; error: string | null } => {
-    const active = ledger.active;
-    if (active) return { status: 'running', error: null };
-    const last = ledger.list().at(-1);
-    if (last) return { status: last.status, error: last.error };
-    switch (store.session.runPhase) {
-      case RunPhase.Running:
-        return { status: 'running', error: null };
-      case RunPhase.Completed:
-        return { status: 'done', error: null };
-      case RunPhase.Error:
-        return {
-          status: 'failed',
-          error: store.session.outroData?.message ?? null,
-        };
-      default:
-        return {
-          status: store.session.runRequested ? 'running' : 'idle',
-          error: null,
-        };
-    }
-  };
-  const driver = new ControlDriver(store, runStatus);
 
   const requireSurface = (route: string, wanted: ControlSurface): void => {
     if (surface !== wanted) throw new SurfaceUnavailableError(route, surface);
   };
 
   const startRun = (body: Record<string, unknown>) => {
-    const programId = body.programId;
-    if (typeof programId !== 'string' || !programId)
-      throw new HttpError(400, 'programId is required');
-    requireProgram(programId);
     const req: RunRequest = {
-      programId,
+      programId: requireProgram(body.programId),
       ...(typeof body.installDir === 'string'
         ? { installDir: body.installDir }
         : {}),
@@ -197,18 +173,18 @@ export async function attachControlServer(
       ...(typeof body.skillId === 'string' ? { skillId: body.skillId } : {}),
     };
     const record = ledger.start(
-      programId,
+      req.programId,
       req.installDir ?? store.session.installDir,
     );
     // The state keeps this run's outcome until the next run starts; the hook
     // resets it then, so a poller reading after completion sees the result.
     void hooks.startRun(req).then(
-      () => ledger.finish(record.runId, runResult(store)),
+      () => ledger.finish(record.runId, driver.readState()),
       (err: unknown) =>
         ledger.fail(
           record.runId,
           err instanceof Error ? err.message : String(err),
-          runResult(store),
+          driver.readState(),
         ),
     );
     return { ...record };
@@ -264,14 +240,13 @@ export async function attachControlServer(
         return send(res, 200, { ok: true, state: driver.readState() });
       case '/run':
         requireSurface('POST /run', 'tui');
-        hooks.armRun();
-        return send(res, 200, { ok: true, run: runStatus() });
+        store.requestRun();
+        return send(res, 200, { ok: true, state: driver.readState() });
       case '/detect': {
         requireSurface('POST /detect', 'headless');
-        if (typeof body.programId === 'string') requireProgram(body.programId);
         const detect: DetectRequest = {
-          ...(typeof body.programId === 'string'
-            ? { programId: body.programId }
+          ...(body.programId !== undefined
+            ? { programId: requireProgram(body.programId) }
             : {}),
           ...(typeof body.installDir === 'string'
             ? { installDir: body.installDir }

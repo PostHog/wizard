@@ -53,7 +53,6 @@ async function serve(
       });
       return Promise.resolve();
     }),
-    armRun: vi.fn(() => store.requestRun()),
     detect: vi.fn(() => {
       store.setDetectionComplete();
       return Promise.resolve();
@@ -239,7 +238,6 @@ describe('control server', () => {
     setUI(new StoreUI(store));
     const hooks = {
       setCredentials: vi.fn(),
-      armRun: vi.fn(),
       detect: vi.fn(),
       startRun: vi.fn(),
       shutdown: vi.fn(),
@@ -290,7 +288,7 @@ describe('control server', () => {
     await expect(
       client.startRun({ programId: Program.PostHogIntegration }),
     ).rejects.toMatchObject({ status: 409 });
-    expect((await client.state()).run.status).toBe('running');
+    expect((await client.state()).session.runPhase).toBe(RunPhase.Running);
 
     await new Promise((r) => setTimeout(r, 80));
     const runs = await client.runs();
@@ -300,12 +298,13 @@ describe('control server', () => {
       status: 'done',
       error: null,
     });
-    expect(runs[0].result).toMatchObject({
+    // The result is the state as it read when the run ended.
+    expect(runs[0].result?.session).toMatchObject({
       runPhase: RunPhase.Completed,
       outroData: { kind: OutroKind.Success, message: 'done' },
     });
     expect(runs[0].finishedAt).not.toBeNull();
-    expect((await client.state()).run.status).toBe('done');
+    expect((await client.state()).session.runPhase).toBe(RunPhase.Completed);
   });
 
   it('records a failed run with its error', async () => {
@@ -320,10 +319,7 @@ describe('control server', () => {
       status: 'failed',
       error: 'gateway refused',
     });
-    expect((await client.state()).run).toEqual({
-      status: 'failed',
-      error: 'gateway refused',
-    });
+    expect(record.result?.currentScreen).toBe('intro');
   });
 
   it('serves each surface its own hooks and answers 501 for the other', async () => {
@@ -344,15 +340,9 @@ describe('control server', () => {
       tui.client.startRun({ programId: Program.Audit }),
     ).rejects.toMatchObject({ status: 501 });
     await expect(tui.client.detect()).rejects.toMatchObject({ status: 501 });
-    expect(await tui.client.armRun()).toEqual({
-      status: 'running',
-      error: null,
-    });
+    expect((await tui.client.armRun()).session.runRequested).toBe(true);
     expect(tui.store.session.runRequested).toBe(true);
-    expect(await tui.client.armRun()).toEqual({
-      status: 'running',
-      error: null,
-    });
+    expect((await tui.client.armRun()).session.runRequested).toBe(true);
   });
 
   it('commits credentials through the hook and shuts down once', async () => {

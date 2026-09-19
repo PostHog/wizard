@@ -64,10 +64,6 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
       });
     },
 
-    armRun() {
-      store.requestRun();
-    },
-
     async detect(req: DetectRequest) {
       const programId = req.programId ?? deps.programId;
       if (programId !== store.activeProgram) {
@@ -110,6 +106,8 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
       // Each run is its own session: a clean run state and its own stream, as
       // a fresh CLI invocation would have. Credentials and context persist.
       store.resetRunState();
+      // In flight from here on: pollers read the phase, not the ledger.
+      store.setRunPhase(RunPhase.Running);
       const stream = deps.runStream?.(config, runSession);
       stream?.attach();
       try {

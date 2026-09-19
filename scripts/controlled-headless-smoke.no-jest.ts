@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { HEADLESS_FLAG } from '@env';
+import { RunPhase } from '@store';
 import { ControlClient } from '@store/control';
 import type { ControlState } from '@store/types';
 
@@ -89,15 +90,14 @@ const exit = new Promise<number | null>((resolve) =>
 const brief = (s: ControlState) => ({
   version: s.version,
   screen: s.currentScreen,
-  runPhase: s.runPhase,
-  run: s.run,
+  runPhase: s.session.runPhase,
   integration: s.session.integration,
   detectionComplete: s.session.detectionComplete,
   hasCredentials: s.session.hasCredentials,
   tasks: s.tasks.map((t) => `${t.status}:${t.label}`),
-  dashboardUrl: s.dashboardUrl,
-  notebookUrl: s.notebookUrl,
-  outro: s.outroData,
+  dashboardUrl: s.session.dashboardUrl,
+  notebookUrl: s.session.notebookUrl,
+  outro: s.session.outroData,
 });
 
 async function main(): Promise<void> {
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
     const record = await client.startRun({ programId });
     log(`POST /runs {"programId":"${programId}"} -> ${JSON.stringify(record)}`);
     let state = await client.state();
-    while (state.run.status === 'running') {
+    while (state.session.runPhase === RunPhase.Running) {
       state = await client.waitForChange(state.version, 60_000);
       const last = state.tasks
         .filter((t) => t.status !== 'pending')
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
       log(
         `  GET /state?wait=60000&since=${state.version} -> screen=${
           state.currentScreen
-        } runPhase=${state.runPhase} run=${state.run.status} tasks=${
+        } runPhase=${state.session.runPhase} tasks=${
           state.tasks.filter((t) => t.status === 'completed').length
         }/${state.tasks.length}${
           last ? ` last=${last.status}:${last.label}` : ''

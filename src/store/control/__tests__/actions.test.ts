@@ -21,8 +21,6 @@ import {
 } from '../actions.js';
 import { ControlDriver } from '../driver.js';
 
-const IDLE = () => ({ status: 'idle' as const, error: null });
-
 function storeFor(program = Program.PostHogIntegration): WizardStore {
   const store = createTestStore(program);
   setUI(new StoreUI(store));
@@ -359,7 +357,7 @@ describe('coverage', () => {
 
   it('the driver rejects an action the current screen does not offer', () => {
     const store = storeFor();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     expect(() => driver.performAction('keep_skills')).toThrow(
       UnknownActionError,
     );

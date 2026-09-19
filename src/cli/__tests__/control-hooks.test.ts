@@ -68,12 +68,6 @@ function setup(program = Program.PostHogIntegration) {
 }
 
 describe('control hooks', () => {
-  it('armRun releases the runner through the store', () => {
-    const { store, hooks } = setup();
-    hooks.armRun();
-    expect(store.session.runRequested).toBe(true);
-  });
-
   it('setCredentials resolves the API key and commits it', async () => {
     const { store, hooks } = setup();
     projectData.mockResolvedValueOnce({
@@ -171,7 +165,7 @@ describe('independent runs', () => {
     }
     expect(store.session.dashboardUrl).toBeNull();
     expect(store.tasks).toEqual([]);
-    expect(store.session.runPhase).toBe(RunPhase.Idle);
+    expect(store.session.runPhase).toBe(RunPhase.Completed);
   });
 
   it('a run that throws leaves an error outro and still closes its stream', async () => {
@@ -204,6 +198,23 @@ describe('independent runs', () => {
 });
 
 describe('run settlement', () => {
+  it('is in flight before the agent starts and completed after it returns', async () => {
+    const { store } = setup();
+    let seen: RunPhase | null = null;
+    const hooks = createControlHooks({
+      store,
+      programId: Program.PostHogIntegration,
+      runAgent: () => {
+        seen = store.session.runPhase;
+        return Promise.resolve();
+      },
+      shutdown: () => Promise.resolve(),
+    });
+    await hooks.startRun({ programId: Program.PostHogIntegration });
+    expect(seen).toBe(RunPhase.Running);
+    expect(store.session.runPhase).toBe(RunPhase.Completed);
+  });
+
   it('marks a run that ended while running as completed', async () => {
     const { store } = setup();
     const hooks = createControlHooks({

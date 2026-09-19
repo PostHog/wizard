@@ -12,12 +12,14 @@ Render-agnostic state and the contract between the agent and whatever renders.
 - `tools/`: wizard tool behavior shared by every harness facade.
 - `detection/`, `frameworks`, `services/`, `security/`, `task-stream/`,
   `shared/`.
-- `control/`: the control API. An HTTP/1.1 server over a unix socket that reads
-  one store and commits through its setters: `GET /health`, `GET /state` (long
-  poll with `?wait=&since=`), `GET /runs`, `POST /actions/<id>`,
-  `POST /credentials`, `POST /run` (TUI surface), `POST /detect` and
-  `POST /runs` (headless surface), `POST /shutdown`. The store never runs
-  agents; `ControlHooks` from the cli do. Generic actions live in
+- `control/`: the control API. An HTTP/1.1 server over a unix socket that
+  mirrors one store. `GET /state` is the committed session whitelist
+  (`CONTROL_SESSION_KEYS`, credentials as a flag), the run atoms, and the
+  actions legal on the current screen; `?wait=&since=` blocks on the store
+  version. `POST /actions/<id>` is one store setter; `POST /run` is
+  `requestRun`. `POST /credentials`, `POST /detect`, `POST /runs` (headless
+  surface), and `POST /shutdown` call `ControlHooks` the cli implements, because
+  the store never authenticates or runs agents. Generic actions live in
   `control/actions.ts`; a program adds its own through
   `FlowStep.controlActions`.
 

@@ -1,7 +1,7 @@
 import type { WizardStore } from '../state/store.js';
-import { actionsFor, toActionView, UnknownActionError } from './actions.js';
+import { actionsFor, UnknownActionError } from './actions.js';
 import { projectState } from './state.js';
-import type { ActionView, ControlState, RunStatus } from './types.js';
+import type { ControlState } from './types.js';
 
 /**
  * Read and act on one store. Reads the committed state; acts through the exact
@@ -9,19 +9,10 @@ import type { ActionView, ControlState, RunStatus } from './types.js';
  * is React-local and invisible here by design.
  */
 export class ControlDriver {
-  constructor(
-    private readonly store: WizardStore,
-    private readonly run: () => { status: RunStatus; error: string | null },
-  ) {}
+  constructor(private readonly store: WizardStore) {}
 
   readState(): ControlState {
-    return projectState(this.store, this.run());
-  }
-
-  listActions(): ActionView[] {
-    return actionsFor(this.store.flow, this.store.currentScreen).map(
-      toActionView,
-    );
+    return projectState(this.store);
   }
 
   /** Apply a named action on the current screen; 400-class errors throw. */

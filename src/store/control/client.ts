@@ -4,7 +4,6 @@ import type {
   DetectRequest,
   RunRecord,
   RunRequest,
-  RunStatus,
 } from './types.js';
 
 export class ControlClientError extends Error {
@@ -66,14 +65,10 @@ export class ControlClient {
     ).state;
   }
 
-  async armRun(): Promise<{ status: RunStatus; error: string | null }> {
-    return (
-      await this.request<{ run: { status: RunStatus; error: string | null } }>(
-        'POST',
-        '/run',
-        {},
-      )
-    ).run;
+  /** TUI surface: release the runner's agent start. Idempotent. */
+  async armRun(): Promise<ControlState> {
+    return (await this.request<{ state: ControlState }>('POST', '/run', {}))
+      .state;
   }
 
   async detect(req: DetectRequest = {}): Promise<ControlState> {

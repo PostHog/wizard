@@ -1,10 +1,8 @@
-import type {
-  OutroKind,
-  PendingQuestion,
-  RunPhase,
-} from '../session/wizard-session.js';
-import type { ErrorCode } from '../shared/errors/codes.js';
-import type { WizardStore } from '../state/store.js';
+import type { SetupQuestion } from '../framework-config.js';
+import type { ProgramId } from '../programs/program-registry.js';
+import type { WizardSession } from '../session/wizard-session.js';
+import type { PlannedEvent, TaskItem, WizardStore } from '../state/store.js';
+import type { CONTROL_SESSION_KEYS } from './state.js';
 
 /** One commit a controlling parent may make on a screen. */
 export interface DriverAction {
@@ -17,112 +15,53 @@ export interface DriverAction {
   apply: (store: WizardStore, params: Record<string, unknown>) => void;
 }
 
-/** An action as a caller sees it: no closure. */
-export interface ActionView {
-  id: string;
-  description: string;
-  params?: Record<string, string>;
-}
-
-export interface SetupQuestionView {
-  key: string;
-  message: string;
-  options: Array<{ label: string; value: string; hint?: string }>;
-}
-
-export interface TaskNoticeView {
-  title: string;
-  items: string[];
-  prompt: string;
-}
-
-export type RunStatus = 'idle' | 'running' | 'done' | 'failed';
-
-/** The outro reduced to what a parent needs; never the rendered body. */
-export interface OutroView {
-  kind: OutroKind;
-  errorCode?: ErrorCode;
-  message?: string;
-  docsUrl?: string;
-}
-
-export interface RunResult {
-  runPhase: RunPhase;
-  tasks: Array<{ label: string; status: string }>;
-  outroData: OutroView | null;
-  dashboardUrl: string | null;
-  notebookUrl: string | null;
-  handoffText: string | null;
-}
-
-export interface RunRecord {
-  runId: string;
-  programId: string;
-  installDir: string;
-  status: Exclude<RunStatus, 'idle'>;
-  error: string | null;
-  startedAt: string;
-  finishedAt: string | null;
-  result: RunResult | null;
-}
+/** The session as a parent reads it: the listed fields, credentials as a flag. */
+export type ControlSession = Pick<
+  WizardSession,
+  (typeof CONTROL_SESSION_KEYS)[number]
+> & {
+  hasCredentials: boolean;
+  projectId: number | null;
+};
 
 /**
- * The observable state. A whitelist of the session: credentials reduce to a
- * boolean and framework context passes a redaction, so no secret reaches a
- * controlling parent.
+ * The store as a parent reads it: the committed session whitelist, the run
+ * atoms, and what the flow derives for the current screen. No access token,
+ * API key, user record, or answer value is ever projected.
  */
 export interface ControlState {
   version: number;
   currentScreen: string;
-  hasOverlay: boolean;
-  runPhase: RunPhase;
-  run: { status: RunStatus; error: string | null };
-  session: {
-    installDir: string;
-    integration: string | null;
-    detectedFrameworkLabel: string | null;
-    detectionComplete: boolean;
-    setupConfirmed: boolean;
-    integrate: boolean | null;
-    hasCredentials: boolean;
-    projectId: number | null;
-    mcpComplete: boolean;
-    slackStepDismissed: boolean;
-    skillsComplete: boolean;
-    outroDismissed: boolean;
-    llmOptIn: boolean;
-    discoveredFeatures: string[];
-    runRequested: boolean;
-    completedRuns: string[];
-  };
-  tasks: Array<{ label: string; status: string; activeForm?: string }>;
+  session: ControlSession;
+  tasks: TaskItem[];
   statusMessages: string[];
-  eventPlan: Array<{ name: string; description: string }>;
-  pendingQuestion: PendingQuestion | null;
-  taskNotice: TaskNoticeView | null;
-  setupQuestions: SetupQuestionView[];
-  actions: ActionView[];
-  dashboardUrl: string | null;
-  notebookUrl: string | null;
+  eventPlan: PlannedEvent[];
   handoffText: string | null;
-  outroData: OutroView | null;
-  frameworkContext: {
-    keys: string[];
-    digest: string;
-    values: Record<string, unknown>;
-  };
+  /** Setup questions the session has not answered yet. */
+  setupQuestions: Array<Omit<SetupQuestion, 'detect'>>;
+  /** The commits legal on `currentScreen`. */
+  actions: Array<Omit<DriverAction, 'apply'>>;
 }
 
-export interface DetectRequest {
-  programId?: string;
-  installDir?: string;
-}
+export type DetectRequest = { programId?: ProgramId } & Partial<
+  Pick<WizardSession, 'installDir'>
+>;
 
-export interface RunRequest {
-  programId: string;
-  installDir?: string;
-  frameworkContext?: Record<string, unknown>;
-  skillId?: string;
+export type RunRequest = { programId: ProgramId } & Partial<
+  Pick<WizardSession, 'installDir' | 'frameworkContext' | 'skillId'>
+>;
+
+/** One independent run the headless surface served. */
+export interface RunRecord {
+  runId: string;
+  programId: ProgramId;
+  installDir: string;
+  status: 'running' | 'done' | 'failed';
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  /** The state as `GET /state` read it when the run ended. */
+  result: ControlState | null;
 }
 
 export type ControlSurface = 'tui' | 'headless';
@@ -131,8 +70,6 @@ export type ControlSurface = 'tui' | 'headless';
 export interface ControlHooks {
   /** Resolve credentials host side and commit them, advancing `auth`. */
   setCredentials(): Promise<void>;
-  /** TUI surface: release the runner's agent start. */
-  armRun(): void;
   /** Headless surface: run detection for a program, writing through setters. */
   detect(req: DetectRequest): Promise<void>;
   /** Headless surface: one independent agent run. Resolves when it ends. */

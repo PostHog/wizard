@@ -7,7 +7,7 @@ import { McpOutcome, type AskAnswers } from '../session/wizard-session.js';
 import type { Flow } from '../state/flow.js';
 import { Interrupt } from '../state/interrupts.js';
 import { requireString } from './params.js';
-import type { ActionView, DriverAction } from './types.js';
+import type { DriverAction } from './types.js';
 
 export { BadParamError, MissingParamError } from './params.js';
 
@@ -149,7 +149,7 @@ export const GENERIC_ACTIONS: Readonly<
       id: 'answer_question',
       description:
         'Resolve the pending wizard_ask request with a complete answers ' +
-        'map: { [questionId]: string | string[] }. See state.pendingQuestion.',
+        'map: { [questionId]: string | string[] }. See state.session.pendingQuestion.',
       params: { answers: 'Record<questionId, string | string[]>' },
       apply: (store, params) =>
         store.resolvePendingQuestion((params.answers ?? {}) as AskAnswers),
@@ -165,7 +165,7 @@ export const GENERIC_ACTIONS: Readonly<
       id: 'resolve_notice',
       description:
         'Resolve the task-notice overlay a program shows before an optional ' +
-        'step. keep=true runs the step, keep=false skips it. See state.taskNotice.',
+        'step. keep=true runs the step, keep=false skips it. See state.session.taskNotice.',
       params: { keep: 'boolean (default true)' },
       apply: (store, params) => store.resolveTaskNotice(params.keep !== false),
     },
@@ -222,7 +222,9 @@ export function actionsFor(flow: Flow, screen: string): DriverAction[] {
   return [...own, ...generic.filter((a) => !seen.has(a.id))];
 }
 
-export function toActionView(action: DriverAction): ActionView {
+export function toActionView(
+  action: DriverAction,
+): Omit<DriverAction, 'apply'> {
   return {
     id: action.id,
     description: action.description,
