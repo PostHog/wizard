@@ -12,7 +12,7 @@
  * an import cycle.
  */
 
-import { Harness, Sequence } from '@store/shared/constants';
+import { Harness, Sequence } from '@store';
 import { WIZARD_COMMANDMENTS } from '../../commandments.js';
 import {
   piRuntimeNotes,

@@ -1,4 +1,4 @@
-import { metricsConfig } from '@store/programs/metrics';
+import { metricsConfig } from '@store/programs';
 
 import type { Command } from './command.js';
 import { nativeCommandFactory } from './factories/native-command-factory.js';

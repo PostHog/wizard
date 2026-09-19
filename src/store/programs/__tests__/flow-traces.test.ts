@@ -4,8 +4,7 @@
  * screen. Baseline for the surface split: must stay byte identical.
  */
 import { WizardStore, RunPhase, McpOutcome } from '../../state/store.js';
-import { ScreenId } from '@tui/router';
-import { InkUI } from '@tui/ink-ui';
+import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '../../ui/index.js';
 import {
   buildSession,
@@ -60,7 +59,7 @@ const NODE = FRAMEWORK_REGISTRY[Integration.javascriptNode];
 
 function createStore(program: ProgramId, integration: Integration | null) {
   const store = new WizardStore(flowFor(program).flow);
-  setUI(new InkUI(store));
+  setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
   if (integration) {
     session.integration = integration;
@@ -78,19 +77,19 @@ const approved = (ok: boolean) =>
 /** Commit what a user, the runner, or the agent would commit on this screen. */
 function advance(store: WizardStore, screen: string): boolean {
   const s = store.session;
-  if (screen === ScreenId.Intro || screen.endsWith('-intro')) {
+  if (screen === 'intro' || screen.endsWith('-intro')) {
     store.completeSetup();
     return true;
   }
   switch (screen) {
-    case ScreenId.HealthCheck:
+    case 'health-check':
       store.setReadinessResult({
         decision: WizardReadiness.Yes,
         health: {} as never,
         reasons: [],
       });
       return true;
-    case ScreenId.Setup: {
+    case 'setup': {
       const questions = s.frameworkConfig?.metadata.setup?.questions ?? [];
       for (const q of questions) {
         if (!(q.key in s.frameworkContext)) {
@@ -99,7 +98,7 @@ function advance(store: WizardStore, screen: string): boolean {
       }
       return true;
     }
-    case ScreenId.Auth:
+    case 'auth':
       store.setCredentials({
         accessToken: 'phx_test',
         projectApiKey: 'phc_test',
@@ -108,11 +107,11 @@ function advance(store: WizardStore, screen: string): boolean {
       });
       store.setApiUser(approved(false));
       return true;
-    case ScreenId.AiOptIn:
+    case 'ai-opt-in':
       store.setApiUser(approved(true));
       return true;
-    case ScreenId.Run:
-    case ScreenId.AuditRun: {
+    case 'run':
+    case 'audit-run': {
       const steps = getProgramConfig(store.activeProgram).steps;
       const runStep = steps.find(
         (st) =>
@@ -128,46 +127,46 @@ function advance(store: WizardStore, screen: string): boolean {
       }
       return true;
     }
-    case ScreenId.Outro:
-    case ScreenId.AuditOutro:
-    case ScreenId.SourceMapsOutro:
+    case 'outro':
+    case 'audit-outro':
+    case 'source-maps-outro':
       store.setOutroDismissed();
       return true;
-    case ScreenId.DoctorReport:
+    case 'doctor-report':
       store.setOutroData({ kind: OutroKind.Success, message: 'done' });
       return true;
-    case ScreenId.Mcp:
-    case ScreenId.McpAdd:
-    case ScreenId.McpRemove:
+    case 'mcp':
+    case 'mcp-add':
+    case 'mcp-remove':
       store.setMcpComplete(McpOutcome.Skipped);
       return true;
-    case ScreenId.McpSuggestedPrompts:
+    case 'mcp-suggested-prompts':
       store.setMcpSuggestedPromptsDismissed();
       return true;
-    case ScreenId.SlackConnect:
+    case 'slack-connect':
       store.setSlackStepDismissed();
       return true;
-    case ScreenId.KeepSkills:
+    case 'keep-skills':
       store.setSkillsComplete(true);
       return true;
-    case ScreenId.SelfDrivingIntegrationCheck:
+    case 'self-driving-integration-check':
       store.setIntegrate(true);
       return true;
-    case ScreenId.SelfDrivingIntegrationDetect:
+    case 'self-driving-integration-detect':
       store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
       store.setFrameworkConfig(Integration.javascriptNode, NODE);
       return true;
-    case ScreenId.SelfDrivingHandoff:
+    case 'self-driving-handoff':
       store.confirmSelfDrivingHandoff();
       return true;
-    case ScreenId.SelfDrivingGithub:
+    case 'self-driving-github':
       store.setGithubConnected(true);
       return true;
-    case ScreenId.ErrorTrackingDetect:
+    case 'error-tracking-detect':
       store.setFrameworkContext(ERROR_TRACKING_PROJECT_PATH_KEY, '.');
       store.setFrameworkConfig(Integration.javascriptNode, NODE);
       return true;
-    case ScreenId.SourceMapsDetect:
+    case 'source-maps-detect':
       store.setFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
         'node',
@@ -187,7 +186,7 @@ function trace(program: ProgramId, integration: Integration | null) {
   for (let guard = 0; guard < 40; guard++) {
     const screen = store.currentScreen;
     screens.push(screen);
-    if (screen === ScreenId.Exit) break;
+    if (screen === 'exit') break;
     if (!advance(store, screen)) {
       stoppedOn = screen;
       break;
@@ -218,7 +217,7 @@ describe('headless walk analytics', () => {
     it(`${program}: run phases without a TUI`, () => {
       wizardCapture.mockClear();
       const store = new WizardStore(flowFor(program).flow);
-      setUI(new InkUI(store));
+      setUI(new StoreUI(store));
       store.session = buildSession({ installDir: '/app', ci: true });
       store.setRunPhase(RunPhase.Running);
       store.setOutroData({ kind: OutroKind.Success, message: 'done' });

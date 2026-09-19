@@ -18,7 +18,7 @@ const { mockStreamAttach, mockStreamShutdown, mockStreamDestinations } =
     // destinations, not about whether a stream exists.
     mockStreamDestinations: vi.fn(),
   }));
-vi.mock('@store/task-stream', () => ({
+vi.mock('@store/task-stream/task-stream-push', () => ({
   // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
   // interactive runWizard's dangling SIGTERM handler — which calls
   // shutdown().catch() and outlives these tests — never hits undefined.catch.
@@ -34,9 +34,13 @@ vi.mock('@store/task-stream', () => ({
       return Promise.resolve();
     }
   },
+}));
+vi.mock('@store/task-stream/destinations/posthog', () => ({
   PostHogDestination: class {
     readonly name = 'posthog';
   },
+}));
+vi.mock('@store/task-stream/destinations/file', () => ({
   createFileDestination: (value: unknown) =>
     value === undefined || value === null || value === false
       ? null
@@ -62,7 +66,8 @@ vi.mock('@store/session/wizard-session', async (importOriginal) => ({
 vi.mock('@store/shared/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
-vi.mock('@tui/start-tui', () => ({
+vi.mock('@tui', () => ({
+  setAgentBridge: vi.fn(),
   startTUI: () => ({
     unmount: vi.fn(),
     store: {
@@ -112,8 +117,9 @@ vi.mock('@store/shared/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@store/shared/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('@agent/agent-runner', () => ({
+vi.mock('@agent', () => ({
   runAgent: vi.fn().mockResolvedValue(undefined),
+  detectProjectsWithAgent: vi.fn(),
 }));
 
 describe('CLI argument parsing', () => {

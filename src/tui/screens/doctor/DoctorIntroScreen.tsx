@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { PickerMenu } from '../../primitives/index.js';
 import { Colors, Icons } from '../../styles.js';
 

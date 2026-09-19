@@ -1,16 +1,14 @@
 import type { Arguments } from 'yargs';
 
-import type { ProgramConfig } from '@store/programs/program-step';
+import type { ProgramConfig } from '@store/types';
 import {
   buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
 } from '../../dispatch-family.js';
-import { getSkillsBaseUrl } from '@store/shared/constants';
-import { fetchSkillMenu } from '@store/tools';
+import { getSkillsBaseUrl, fetchSkillMenu } from '@store';
 
 import type { Command } from '../command.js';
-import { createFamilyPickerDefault } from '@tui/family-picker';
 import { mergeCommandOptions, runCommandHandler } from './shared.js';
 
 export interface FamilyCommandFactoryOpts {
@@ -61,6 +59,7 @@ export function familyCommandFactory({
       await Promise.resolve(toShow[0].handler(argv));
       return;
     }
+    const { createFamilyPickerDefault } = await import('@tui');
     const picker = createFamilyPickerDefault(`wizard ${family}`, toShow);
     await picker(argv);
   };

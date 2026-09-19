@@ -9,11 +9,8 @@
 
 import { useEffect } from 'react';
 
-import type { WizardStore } from '@store/state/store';
-import type { WizardSession } from '@store/session/wizard-session';
-import { fetchGithubConnected } from '@store/api';
-import { requestDeepLink } from '@store/shared/provisioning';
-import { analytics } from '@store/shared/analytics';
+import type { WizardStore, WizardSession } from '@store/types';
+import { fetchGithubConnected, requestDeepLink, analytics } from '@store';
 
 const POLL_INTERVAL_MS = 3000;
 

@@ -22,12 +22,11 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, OutroData } from '@store/types';
 import { SlackConnectScreen } from '../../screens/SlackConnectScreen.js';
 import { OutroScreen } from '../../screens/OutroScreen.js';
 import { Colors } from '../../styles.js';
-import { OutroKind, type OutroData } from '@store/session/wizard-session';
-import { HostResolution } from '@store/host-resolution';
+import { OutroKind, HostResolution } from '@store';
 
 const VIEWS = ['slack-connect', 'outro'] as const;
 type View = (typeof VIEWS)[number];

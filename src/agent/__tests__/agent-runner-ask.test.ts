@@ -1,4 +1,4 @@
-import { shouldDisableAsk } from '../agent-runner.js';
+import { shouldDisableAsk } from '@store';
 import { buildSession } from '@store/session/wizard-session';
 
 describe('shouldDisableAsk', () => {

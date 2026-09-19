@@ -14,7 +14,7 @@
  */
 
 import { WizardStore } from '@store/state/store';
-import { InkUI } from '@tui/ink-ui';
+import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import { buildSession, RunPhase } from '@store/session/wizard-session';
 import { Integration } from '@store/shared/constants';
@@ -52,7 +52,7 @@ function traceFlow(
   params?: Record<string, unknown>;
 }> {
   const store = new WizardStore(flowFor(program).flow);
-  setUI(new InkUI(store));
+  setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/tmp/e2e-snap', ci: true });
   if (integration) {
     session.integration = integration;

@@ -24,8 +24,7 @@
  * the main agent flow. Losing an AIO event must never break a run.
  */
 
-import { logToFile } from '@store/shared/debug';
-import { VERSION } from '@store/shared/version';
+import { logToFile, VERSION } from '@store';
 
 /** Conversation turn shape both harnesses normalize to. Matches Anthropic
  *  message role/content conventions, which is also what AIO's Conversation

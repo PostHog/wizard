@@ -22,8 +22,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
-import { logToFile } from '@store/shared/debug';
-import { analytics } from '@store/shared/analytics';
+import { logToFile, analytics } from '@store';
 
 /** macOS keychain service name Claude Code stores its login under. */
 const KEYCHAIN_SERVICE = 'Claude Code-credentials';

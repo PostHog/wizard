@@ -5,12 +5,9 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors, Icons } from '../styles.js';
-import {
-  DiscoveredFeature,
-  AdditionalFeature,
-} from '@store/session/wizard-session';
+import { DiscoveredFeature, AdditionalFeature } from '@store';
 
 /** A discrete tip shown in the TipsCard during the agent run. */
 export interface Tip {

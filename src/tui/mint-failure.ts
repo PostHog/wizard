@@ -1,5 +1,3 @@
-export { isRunFailure } from '@store/state/run-failure';
-
 export const MINT_FAILURE_MESSAGE = "The Wizard's a little busy";
 
 export const MINT_FAILURE_BODY =

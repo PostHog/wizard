@@ -46,6 +46,7 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: node scripts/generate-version.cjs
+      - run: pnpm typecheck:${{ matrix.project }}
       - run: pnpm test:${{ matrix.project }} --coverage
       - uses: codecov/codecov-action@13ce06bfc6bbe3ecf90edbbf1bc32fe5978ca1d3 # pin@v5.3.1
         with:

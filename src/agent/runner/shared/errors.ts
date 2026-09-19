@@ -2,9 +2,8 @@
  * Shared error helpers for the runner pipeline.
  */
 
-import type { InstallSkillResult } from '@store/tools';
-import { skillErrorCode } from '@store/shared/errors';
-import { wizardAbort, WizardError } from '@store/shared/wizard-abort';
+import type { InstallSkillResult } from '@store/types';
+import { skillErrorCode, wizardAbort, WizardError } from '@store';
 
 export async function abortOnInstallFailure(
   integrationLabel: string,

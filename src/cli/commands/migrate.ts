@@ -1,4 +1,4 @@
-import { migrationConfig } from '@store/programs/migration';
+import { migrationConfig } from '@store/programs';
 
 import type { Command } from './command.js';
 import { nativeCommandFactory } from './factories/native-command-factory.js';

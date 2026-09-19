@@ -2,12 +2,16 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Harness, Sequence } from '@store/shared/constants';
-import { regionOption } from '@store/shared/headless-mode';
-import { initLocalDev, localMcpSkillsNotice } from '@store/local-dev';
+import {
+  Harness,
+  Sequence,
+  regionOption,
+  initLocalDev,
+  localMcpSkillsNotice,
+  ErrorCodes,
+  emitWizardError,
+} from '@store';
 import { toCommandModule, type Command } from './commands/command.js';
-import { ErrorCodes } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
 
 /**
  * Global yargs options applied to every command. These are read from the

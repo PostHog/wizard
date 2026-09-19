@@ -10,7 +10,7 @@ import type {
   MiddlewareContext,
   MiddlewareStore,
 } from '../types.js';
-import { logToFile } from '@store/shared/debug';
+import { logToFile } from '@store';
 import { AgentSignals } from '../../agent-interface.js';
 
 export interface CompactionData {

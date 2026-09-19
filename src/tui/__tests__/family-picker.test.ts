@@ -10,13 +10,12 @@ vi.mock('ink', async (importOriginal) => {
 
 import { render } from 'ink';
 
-import type { Command } from '../../command.js';
-import { auditCommand } from '../../audit.js';
 import {
   chooseFamilyChild,
   createFamilyPickerDefault,
   orderFamilyChildren,
-} from '@tui/family-picker';
+  type FamilyChild,
+} from '../family-picker.js';
 
 function makeArgv(extras: Record<string, unknown> = {}): Arguments {
   return { _: [], $0: 'wizard', ...extras } as Arguments;
@@ -24,27 +23,27 @@ function makeArgv(extras: Record<string, unknown> = {}): Arguments {
 
 describe('orderFamilyChildren', () => {
   it('hoists the default-marked child to the front', () => {
-    const a: Command = { name: 'a', description: 'a', handler: vi.fn() };
-    const b: Command = {
+    const a: FamilyChild = { name: 'a', description: 'a', handler: vi.fn() };
+    const b: FamilyChild = {
       name: 'b',
       description: 'b',
       handler: vi.fn(),
       default: true,
     };
-    const c: Command = { name: 'c', description: 'c', handler: vi.fn() };
+    const c: FamilyChild = { name: 'c', description: 'c', handler: vi.fn() };
     const ordered = orderFamilyChildren([a, b, c]);
     expect(ordered.map((cmd) => cmd.name)).toEqual(['b', 'a', 'c']);
   });
 
   it('preserves order when no child is marked default', () => {
-    const a: Command = { name: 'a', description: 'a', handler: vi.fn() };
-    const b: Command = { name: 'b', description: 'b', handler: vi.fn() };
+    const a: FamilyChild = { name: 'a', description: 'a', handler: vi.fn() };
+    const b: FamilyChild = { name: 'b', description: 'b', handler: vi.fn() };
     expect(orderFamilyChildren([a, b])).toEqual([a, b]);
   });
 
   it('drops children that have neither a handler nor children', () => {
-    const dead: Command = { name: 'dead', description: 'd' };
-    const real: Command = {
+    const dead: FamilyChild = { name: 'dead', description: 'd' };
+    const real: FamilyChild = {
       name: 'real',
       description: 'd',
       handler: vi.fn(),
@@ -56,13 +55,13 @@ describe('orderFamilyChildren', () => {
 describe('chooseFamilyChild', () => {
   it('renders the default leaf first so it is pre-highlighted (Enter runs it)', () => {
     (render as Mock).mockClear();
-    const all: Command = {
+    const all: FamilyChild = {
       name: 'all',
       description: 'comprehensive',
       handler: vi.fn(),
       default: true,
     };
-    const events: Command = {
+    const events: FamilyChild = {
       name: 'events',
       description: 'events',
       handler: vi.fn(),
@@ -75,7 +74,7 @@ describe('chooseFamilyChild', () => {
     const element = (render as Mock).mock.calls[0][0];
     const options = element.props.options as {
       label: string;
-      value: Command;
+      value: FamilyChild;
     }[];
     expect(options.map((o) => o.label)).toEqual(['all', 'events']);
     expect(options[0].value.default).toBe(true);
@@ -85,13 +84,13 @@ describe('chooseFamilyChild', () => {
 describe('createFamilyPickerDefault', () => {
   it('always opens the picker — even when one child is marked default', async () => {
     const childHandler = vi.fn();
-    const child: Command = {
+    const child: FamilyChild = {
       name: 'all',
       description: 'comprehensive',
       handler: childHandler,
       default: true,
     };
-    const sibling: Command = {
+    const sibling: FamilyChild = {
       name: 'events',
       description: 'events',
       handler: vi.fn(),
@@ -113,13 +112,13 @@ describe('createFamilyPickerDefault', () => {
   it('dispatches whichever child the picker resolves', async () => {
     const aHandler = vi.fn();
     const bHandler = vi.fn();
-    const a: Command = {
+    const a: FamilyChild = {
       name: 'a',
       description: 'a',
       handler: aHandler,
       default: true,
     };
-    const b: Command = { name: 'b', description: 'b', handler: bHandler };
+    const b: FamilyChild = { name: 'b', description: 'b', handler: bHandler };
     const chooser = vi.fn().mockResolvedValue(b);
 
     const handler = createFamilyPickerDefault('wizard family', [a, b], chooser);
@@ -145,7 +144,7 @@ describe('createFamilyPickerDefault', () => {
 
   it('awaits async child handlers before resolving', async () => {
     let resolved = false;
-    const child: Command = {
+    const child: FamilyChild = {
       name: 'events',
       description: 'audit events',
       handler: () =>
@@ -165,20 +164,5 @@ describe('createFamilyPickerDefault', () => {
     );
     await handler(makeArgv());
     expect(resolved).toBe(true);
-  });
-});
-
-describe('auditCommand', () => {
-  it('wires interactiveDefault for the bare `wizard audit` invocation', () => {
-    expect(typeof auditCommand.interactiveDefault).toBe('function');
-  });
-
-  it('routes leaves through a runtime handler (no static yargs children)', () => {
-    // Skill-backed audit leaves resolve via `dispatchFamily` at runtime
-    // against `cliEntries` in `skill-menu.json`, not via baked yargs
-    // children. So `auditCommand.children` is intentionally empty; the
-    // `[skill]` positional + handler is the routing surface.
-    expect(auditCommand.children).toBeUndefined();
-    expect(typeof auditCommand.handler).toBe('function');
   });
 });

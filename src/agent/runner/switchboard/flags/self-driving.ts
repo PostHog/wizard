@@ -6,7 +6,7 @@
  * Routes: ONLY `self-driving` — any axis the payload pins. A missing or
  *         invalid payload keeps the non-flagged binding default.
  */
-import { WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY } from '@store/shared/constants';
+import { WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY } from '@store';
 import type { HarnessExperiment } from './schemes.js';
 
 export const SELF_DRIVING_EXPERIMENT: HarnessExperiment = {

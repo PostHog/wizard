@@ -16,16 +16,16 @@
 import opn from 'opn';
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { useKeyBindings } from '../hooks/useKeyBindings.js';
 import { Colors } from '../styles.js';
 import { useSkillEntry } from './SkillSourceInfo.js';
-import { fetchUserData } from '@store/api';
 import {
+  fetchUserData,
   CONTEXT_MILL_RELEASES_URL,
   POSTHOG_APP_URL,
-} from '@store/shared/constants';
-import { analytics } from '@store/shared/analytics';
+  analytics,
+} from '@store';
 import { LoadingBox } from '../primitives/index.js';
 
 const ORG_ADMIN_LEVEL = 8;

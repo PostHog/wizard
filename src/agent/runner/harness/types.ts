@@ -15,12 +15,14 @@
  * rather than silently downgrading.
  */
 
-import type { WizardSession } from '@store/session/wizard-session';
-import type { AdditionalFeature } from '@store/session/wizard-session';
-import type { Harness } from '@store/shared/constants';
-import type { ProgramRunConfig } from '@store/agent-protocol/program-run';
-import type { SpinnerHandle } from '@store/ui';
-import type { WizardAskBridge } from '@store/session/wizard-ask-bridge';
+import type {
+  WizardSession,
+  AdditionalFeature,
+  Harness,
+  ProgramRunConfig,
+  SpinnerHandle,
+  WizardAskBridge,
+} from '@store/types';
 import type { AgentErrorType } from '../../agent-interface.js';
 import type { OrchestratorToolsContext } from '../sequence/orchestrator/queue-tools.js';
 import type { EffortLevel, ThinkingLevel } from '../switchboard/models.js';

@@ -19,7 +19,7 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors, Icons } from '../styles.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings.js';
@@ -27,14 +27,13 @@ import {
   useGithubConnection,
   fetchLoginUrl,
 } from '../hooks/useGithubConnection.js';
-import { OutroKind } from '@store/session/wizard-session';
 import {
-  GITHUB_REQUIRED_BODY,
-  GITHUB_REQUIRED_MESSAGE,
-} from '@store/programs/self-driving/detect';
-import { analytics } from '@store/shared/analytics';
-import { openTrackedLink } from '@store/shared/links';
-import { getIntegrationAuthorizeUrl } from '@store/shared/urls';
+  OutroKind,
+  analytics,
+  openTrackedLink,
+  getIntegrationAuthorizeUrl,
+} from '@store';
+import { GITHUB_REQUIRED_BODY, GITHUB_REQUIRED_MESSAGE } from '@store/programs';
 
 interface SelfDrivingGitHubScreenProps {
   store: WizardStore;

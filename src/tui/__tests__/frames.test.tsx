@@ -50,7 +50,7 @@ vi.mock('@store/api', async (actual) => ({
   fetchSlackConnected: vi.fn(pending),
   fetchGithubConnected: vi.fn(pending),
 }));
-vi.mock('@store/tools', async (actual) => ({
+vi.mock('@store/tools/tools', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   fetchSkillMenu: vi.fn(pending),
   downloadSkill: vi.fn(pending),
@@ -99,7 +99,7 @@ vi.mock('@store/programs/posthog-doctor/fetch', () => ({
 
 import { WizardStore, TaskStatus } from '@store/state/store';
 import type { ScreenName } from '../router.js';
-import { InkUI } from '../ink-ui.js';
+import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import { ScreenId, Overlay } from '../router.js';
 import { createServices, type ScreenServices } from '../screen-registry.js';
@@ -206,7 +206,7 @@ const inertPromptsServices = {
 
 function makeStore(program: ProgramId): WizardStore {
   const store = new WizardStore(flowFor(program).flow);
-  setUI(new InkUI(store));
+  setUI(new StoreUI(store));
   store.version = '0.0.0-test';
   store.session = buildSession({ installDir: '/app' });
   return store;

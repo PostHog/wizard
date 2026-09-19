@@ -8,6 +8,7 @@
 
 import type { ReactNode, ReactElement } from 'react';
 import { getContentBlocks } from '../programs/self-driving/content/index.js';
+import { PROGRAM_PRESENTATION } from '../programs/presentation.js';
 
 /** paneWidth in LearnCard at 80 cols: (min(120, 80) - 2) / 2 - 2 */
 const PANE_WIDTH_80COL = 37;
@@ -51,5 +52,17 @@ describe('self-driving learn deck', () => {
       }
     }
     expect(long).toEqual([]);
+  });
+});
+
+describe('self-driving presentation', () => {
+  it('ships its own Learn deck ending on the self-driving closer', () => {
+    const blocks =
+      PROGRAM_PRESENTATION['self-driving']?.getContentBlocks?.() ?? [];
+    expect(blocks.length).toBeGreaterThan(0);
+    const last = blocks[blocks.length - 1];
+    expect(
+      typeof last === 'object' && 'content' in last ? last.content : '',
+    ).toBe('Your product drives itself.');
   });
 });

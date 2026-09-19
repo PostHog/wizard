@@ -5,9 +5,8 @@
  * shapes and resolution.
  */
 import { RUN_SURFACE } from '@env';
-import { logToFile } from '@store/shared/debug';
-import type { Sequence } from '@store/shared/constants';
-import type { ProgramId } from '@store/programs/program-registry';
+import { logToFile } from '@store';
+import type { Sequence, ProgramId } from '@store/types';
 import {
   ORCHESTRATOR_HARNESS_ROUTE,
   ORCHESTRATOR_SEQUENCE_ROUTE,

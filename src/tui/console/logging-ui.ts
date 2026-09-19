@@ -6,26 +6,24 @@
 
 import {
   TaskStatus,
-  type WizardUI,
-  type SpinnerHandle,
-  type AuthErrorDetail,
-  type TokenUsageDelta,
-} from '@store/ui/wizard-ui';
-import type { SettingsConflict } from '@store/services/claude-settings';
-import type { ApiUser } from '@store/api';
-import { OAUTH_TIMEOUT_MS } from '@store/shared/constants';
-import {
-  type WizardReadinessResult,
+  OAUTH_TIMEOUT_MS,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '@store/health-checks/readiness';
+} from '@store';
 import type {
+  WizardUI,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+  SettingsConflict,
+  ApiUser,
+  WizardReadinessResult,
   AskAnswers,
   Credentials,
   OutroData,
   PendingQuestion,
   TaskNotice,
-} from '@store/session/wizard-session';
+} from '@store/types';
 
 export class LoggingUI implements WizardUI {
   readonly interactive = false;
@@ -295,7 +293,7 @@ export class LoggingUI implements WizardUI {
     // No-op — the hidden Ctrl+T HUD is TUI-only
   }
 
-  setOutroData(_data: import('@store/session/wizard-session').OutroData): void {
+  setOutroData(_data: import('@store/types').OutroData): void {
     // No-op in CI mode
   }
 

@@ -22,11 +22,11 @@ anchors are point-in-time — the symbol names are the durable part.
 
 | Need                                   | Go to                                                      |
 | -------------------------------------- | ---------------------------------------------------------- |
-| The ordered steps                      | `src/lib/programs/self-driving/prompt.ts`                  |
+| The ordered steps                      | `src/store/programs/self-driving/prompt.ts`                  |
 | What each step _does_                  | `context-mill/context/skills/self-driving/references/*.md` |
-| Program registration / lifecycle       | `src/lib/programs/self-driving/index.ts`                   |
-| `wizard_ask` / `.env` tools            | `src/lib/wizard-tools.ts`, `src/lib/wizard-ask-bridge.ts`  |
-| OAuth scopes (+ prod ceiling)          | `src/lib/oauth/program-scopes.ts` (§3, §7)                 |
+| Program registration / lifecycle       | `src/store/programs/self-driving/index.ts`                   |
+| `wizard_ask` / `.env` tools            | `src/store/tools/tools.ts`, `src/store/session/wizard-ask-bridge.ts`  |
+| OAuth scopes (+ prod ceiling)          | `src/store/services/oauth/program-scopes.ts` (§3, §7)                 |
 | Signals models / MCP / sync            | `posthog/products/signals/backend/…` (§5)                  |
 | Why a team gets no findings            | §6                                                         |
 | What to change for prod                | §7                                                         |
@@ -146,7 +146,7 @@ repos.
 
 ## 3. Wizard internals
 
-**Program definition** (`src/lib/programs/self-driving/`, five files):
+**Program definition** (`src/store/programs/self-driving/`, five files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 10 steps + mechanics + project
 URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
 screen sequence `detect → intro → health-check → auth → self-driving-github →
@@ -155,7 +155,7 @@ run → outro`), and
 sources + scouts + scanners in plain language, wired via `getTips`; `RunScreen` falls back
 to `DEFAULT_TIPS` for every other program, so nothing else is affected).
 `selfDrivingConfig` is built from the `createSkillProgram` factory
-(`src/lib/programs/agent-skill/`) with overrides. Notables in `index.ts`:
+(`src/store/programs/agent-skill/`) with overrides. Notables in `index.ts`:
 `SELF_DRIVING_SKILL_ID = 'self-driving-setup'`,
 `REPORT_FILE = 'posthog-self-driving-report.md'`, `maxQuestions: 13` (tracker
 picks + custom-scout proposal), `richLinks: true` (OSC-8 links so long
@@ -163,14 +163,14 @@ OAuth URLs survive wrapping), and `postRun` (just `removeInstalledSkill` — the
 setup skill is transient, marker-guarded by `.posthog-wizard`, so there's no
 keep-skills step). The outro inbox URL is the clean `…/project/:id/inbox` built
 in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
-`src/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
+`src/cli/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
 (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram`
-(`src/lib/agent/agent-runner.ts`) is the fixed pipeline
+(`src/agent/runner/index.ts`) is the fixed pipeline
 `init → health → settings → OAuth → skill install → agent → run → errors → postRun → outro`.
 It installs the skill by ID, resolves the MCP URL, runs the Claude Agent SDK
-`query()` (`src/lib/agent/agent-interface.ts`) in a sandbox with the
+`query()` (`src/agent/agent-interface.ts`) in a sandbox with the
 `posthog-wizard` + `wizard-tools` MCP servers, and parses agent output:
 `[STATUS]` → UI, `[ABORT] <reason>` → terminal `AgentErrorType.ABORT` matched
 against `config.abortCases`. `PromptContext` (project/host + AI-consent
@@ -179,7 +179,7 @@ against `config.abortCases`. `PromptContext` (project/host + AI-consent
   `buildSelfDrivingPrompt`. Anything deeper here is generic machinery — read
   those two files directly.
 
-**`wizard-tools` MCP + `wizard_ask`** (`src/lib/wizard-tools.ts`).
+**`wizard-tools` MCP + `wizard_ask`** (`src/store/tools/tools.ts`).
 `check_env_keys` / `set_env_values` are the only sanctioned `.env` access
 (value-safe, `.gitignore`-guarded, secret-vault aware). `wizard_ask` is the
 **only** way to ask the user anything — 1–8 questions, capped at `maxQuestions`
@@ -196,12 +196,12 @@ A multi-select's default focus is its first enabled option and an empty `enter`
 submits that focused option — which is why a **decline option, when present, is
 placed first** (it becomes the safe default). No bridge (CI/non-interactive) →
 returns an error telling the agent to default or emit
-`[ABORT] requires-interactive-mode`. The bridge (`src/lib/wizard-ask-bridge.ts`)
+`[ABORT] requires-interactive-mode`. The bridge (`src/store/session/wizard-ask-bridge.ts`)
 brokers into the TUI overlay; cancelled/timed-out fields resolve to
 `CANCELLED_SENTINEL = '__cancelled__'`.
 
-**OAuth scopes** (`src/lib/oauth/program-scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
-(`src/lib/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**,
+**OAuth scopes** (`src/store/services/oauth/program-scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
+(`src/store/shared/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**,
 requested via a PKCE auth-code flow:
 
 | Scope                                                          | Why                                                                                                                         |
@@ -226,7 +226,7 @@ requests none. (An *exhaustive* ceiling — no `@default` — is possible and wo
 reject anything unlisted, but the wizard apps aren't configured that way.) See §7
 item 1 and the README's "OAuth app scope ceiling".
 
-**Security & TUI.** YARA hooks (`src/lib/yara-hooks.ts`) scan
+**Security & TUI.** YARA hooks (`src/store/security/yara-hooks.ts`) scan
 Bash/Write/Edit/Read content and installed skills via the `warlock` scanner
 (fail-closed; categories: prompt injection, exfiltration, destructive ops,
 supply-chain, secrets, PII); a critical match aborts the run. New rules go in
@@ -260,7 +260,7 @@ The canonical `signals-scout-*` skills do **not** live here — they're in posth
   hot-rebuilds individual skill zips but **not** the bundle. Release: a PR to
   `main` with the **`mcp-publish`** label builds and force-moves the `latest`
   GitHub release tag. The wizard resolves the skill ID at runtime against
-  `getSkillsBaseUrl(localMcp)` (`src/lib/constants.ts`):
+  `getSkillsBaseUrl(localMcp)` (`src/store/shared/constants.ts`):
   `…/releases/latest/download` (prod) or `localhost:8765` (`--local-mcp`) — so
   skill content is decoupled from the wizard npm release (and a prod wizard is
   broken until the skill is published to `latest`; §7).
@@ -358,7 +358,7 @@ source is enabled.
 > and the `[ABORT] self-driving is not available for this project` path is now
 > only a safety net for a genuine Signals-API outage.
 
-1. **UI flag `product-autonomy`** (`posthog/frontend/src/lib/constants.tsx`,
+1. **UI flag `product-autonomy`** (`posthog/frontend/src/store/shared/constants.ts`,
    `FEATURE_FLAGS.PRODUCT_AUTONOMY`). Frontend-only — gates the Inbox scene, nav
    item, and source-config loading. Off → the user can't _see_ the inbox; the
    pipeline is unaffected.
@@ -374,7 +374,7 @@ source is enabled.
    (`posthog/models/organization.py`, default `True`, nullable; admin toggle at
    `/settings/organization#organization-ai-consent`). Fail-closed; without it
    findings are silently dropped. Enforced for this program by the **base
-   wizard's AI opt-in gate** (`src/lib/programs/ai-opt-in-gate.ts`,
+   wizard's AI opt-in gate** (`src/store/programs/ai-opt-in-gate.ts`,
    `withAiOptInGate`): it injects an `ai-opt-in` step after `auth` for every
    program that doesn't set `requiresAi: false` (self-driving doesn't), and
    `store.getGate('ai-opt-in')` parks the agent until approval lands — so the
@@ -479,7 +479,7 @@ must be running, or no scout ever dispatches.
 >      (`self-driving` — so the `programLabel` shown in the intro/exit reads
 >      `self-driving`), the `program-scopes.ts` map key, the `self-driving/`
 >      dir + `SELF_DRIVING_*` constants + `SelfDriving*` types / components,
->      `src/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
+>      `src/cli/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
 >      `self-driving-intro`, every user-facing string (intro copy,
 >      success/outro/spinner messages, `detect.ts` abort `message`/`body`,
 >      prompt header + task labels), and the report filename

@@ -10,8 +10,8 @@
 
 import type { ReactNode } from 'react';
 import path from 'node:path';
-import { getLogFilePath } from '@store/shared/debug';
-import type { WizardStore } from '@store/state/store';
+import { getLogFilePath, writeWizardSpellbook } from '@store';
+import type { WizardStore } from '@store/types';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
@@ -54,8 +54,7 @@ import { OutroScreen } from './screens/OutroScreen.js';
 import { MintFailureScreen } from './screens/MintFailureScreen.js';
 import type { MintFailureServices } from './screens/MintFailureScreen.js';
 import { openCodingAgent } from './services/coding-agent-launcher.js';
-import { writeWizardSpellbook } from '@store/wizard-spellbook';
-import { getProgramConfig } from '@store/programs/program-registry';
+import { getProgramConfig } from '@store/programs';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { SessionTimeoutScreen } from './screens/SessionTimeoutScreen.js';

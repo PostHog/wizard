@@ -1,10 +1,7 @@
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import { Program } from '@store/programs/program-registry';
-import { VERSION } from '@store/shared/version';
-import { ErrorCodes } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
+import { getUI, setUI, VERSION, ErrorCodes, emitWizardError } from '@store';
+import { LoggingUI } from '@tui/console';
+import { Program } from '@store/programs';
 import type { Command } from '../command.js';
 
 export const mcpTutorialCommand: Command = {
@@ -27,8 +24,8 @@ function runMcpTutorial(argv: Arguments): void {
     const localMcp = argv.local as boolean | undefined;
 
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@store/session/wizard-session');
+      const { startTUI } = await import('@tui');
+      const { buildSession } = await import('@store');
       const tui = startTUI(VERSION, Program.McpTutorial);
       tui.store.session = buildSession({
         debug,

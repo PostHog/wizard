@@ -10,7 +10,7 @@
 
 import { readEnvironment } from '../environment.js';
 import { buildSession } from '../../session/wizard-session.js';
-import { shouldDisableAsk } from '@agent/agent-runner';
+import { shouldDisableAsk } from '../../session/ask-policy.js';
 
 /** Every var this file sets, cleared between cases. */
 const TOUCHED = [

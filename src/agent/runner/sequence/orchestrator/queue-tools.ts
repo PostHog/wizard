@@ -7,7 +7,7 @@
  * `buildOrchestratorTools` wraps them in the SDK `tool()` shape.
  */
 import { z } from 'zod';
-import { analytics } from '@store/shared/analytics';
+import { analytics } from '@store';
 import { isValidModel, VALID_MODELS } from '../../switchboard/models.js';
 import {
   isNotNeededReason,

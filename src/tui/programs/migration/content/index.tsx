@@ -16,7 +16,7 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors } from '../../../styles.js';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import type { ContentBlock } from '../../../primitives/content-types.js';

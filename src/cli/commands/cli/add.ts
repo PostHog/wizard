@@ -1,17 +1,18 @@
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import { analytics } from '@store/shared/analytics';
 import {
+  getUI,
+  setUI,
+  analytics,
   CLI_STEERING_TARGETS,
-  type CliSteeringTarget,
   detectTargets,
   findTarget,
   installOrUpdatePostHogCli,
   installSteeringSnippet,
-} from '@store/services/steps/install-cli-steering';
+} from '@store';
+import { LoggingUI } from '@tui/console';
+import type { CliSteeringTarget } from '@store/types';
 import type { Command } from '../command.js';
 
 export const cliAddCommand: Command = {

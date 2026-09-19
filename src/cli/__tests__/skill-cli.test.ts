@@ -4,13 +4,13 @@ vi.mock('../commands/basic-integration/skill.js', () => ({
   runSkillMode: vi.fn(),
 }));
 
-vi.mock('@store/tools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@store/tools')>();
+vi.mock('@store/tools/tools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@store/tools/tools')>();
   return { ...actual, fetchSkillMenu: vi.fn() };
 });
 
 import { runSkillMode } from '../commands/basic-integration/skill.js';
-import { fetchSkillMenu } from '@store/tools';
+import { fetchSkillMenu } from '@store/tools/tools';
 import { analytics } from '@store/shared/analytics';
 import { skillCommand } from '../commands/skill.js';
 import { parseCommand } from './helpers/parse-command.no-jest.js';

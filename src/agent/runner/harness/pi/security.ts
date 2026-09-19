@@ -27,15 +27,12 @@ import {
   recordExternalScan,
   repeatBlockReason,
   scanAndTriage,
-  type RepeatBlockTracker,
-} from '@store/security/yara-hooks';
-import {
   publishBlockingMatch,
   scanVerdict,
-  type ScanContext,
-} from '@store/security/yara-policy';
-import { logToFile } from '@store/shared/debug';
-import { analytics } from '@store/shared/analytics';
+  logToFile,
+  analytics,
+} from '@store';
+import type { RepeatBlockTracker, ScanContext } from '@store/types';
 
 /** warlock ScanMatch → the report shape `recordExternalScan` expects. */
 function toReportViolation(m: ScanMatch) {

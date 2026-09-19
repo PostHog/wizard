@@ -5,12 +5,10 @@ import {
   runWizardCI,
   runWizardHeadless,
 } from '../../runners/index.js';
-import { isHeadless } from '@store/shared/headless-mode';
-import type { ProgramConfig } from '@store/programs/program-step';
+import { isHeadless, ErrorCodes, emitWizardError } from '@store';
+import type { ProgramConfig } from '@store/types';
 
 import { skillProgramOptions } from '../skill-program-options.js';
-import { ErrorCodes } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
 
 /**
  * Dispatch a parsed yargs invocation to the wizard runner. Applies the

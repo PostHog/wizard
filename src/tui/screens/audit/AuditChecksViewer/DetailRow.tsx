@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import type { AuditCheck } from '@store/programs/audit/types';
+import type { AuditCheck } from '@store/types';
 import type { ViewerLayout } from './layout.js';
 
 interface DetailRowProps {

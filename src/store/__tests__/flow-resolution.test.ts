@@ -6,11 +6,10 @@ import {
 } from '../session/wizard-session.js';
 import { HostResolution } from '../host-resolution.js';
 import { WizardReadiness } from '../health-checks/readiness.js';
-import { ScreenId, Overlay, Program, type ProgramId } from '@tui/router';
 import { flowEntries, resolveActiveScreen } from '../state/flow-resolution.js';
 import { flowFor } from '../programs/flow-for.js';
 import type { WizardSession } from '../session/wizard-session.js';
-import type { Interrupt } from '../state/interrupts.js';
+import { Interrupt } from '../state/interrupts.js';
 
 /** The old router surface over the pure resolver, so the cases port as-is. */
 function routerFor(program: ProgramId) {
@@ -30,7 +29,11 @@ function routerFor(program: ProgramId) {
 }
 import { Integration } from '../shared/constants.js';
 import { FRAMEWORK_REGISTRY } from '../registry.js';
-import { PROGRAM_REGISTRY } from '../programs/program-registry.js';
+import {
+  PROGRAM_REGISTRY,
+  Program,
+  type ProgramId,
+} from '../programs/program-registry.js';
 
 function baseWizardSession() {
   return buildSession({});
@@ -54,10 +57,10 @@ describe('flow resolution', () => {
     'shows a failed run over every step and overlay in %s',
     (program) => {
       const router = routerFor(program);
-      router.pushOverlay(Overlay.WizardAsk);
+      router.pushOverlay(Interrupt.WizardAsk);
       const session = failedRunSession();
       session.outroDismissed = true;
-      expect(router.resolve(session)).toBe(ScreenId.MintFailure);
+      expect(router.resolve(session)).toBe('mint-failure');
     },
   );
 
@@ -65,15 +68,15 @@ describe('flow resolution', () => {
     const router = routerFor(Program.SelfDriving);
     const session = failedRunSession();
     session.mintHandoff = 'continue';
-    expect(router.resolve(session)).toBe(ScreenId.Mcp);
+    expect(router.resolve(session)).toBe('mcp');
     session.mcpComplete = true;
-    expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+    expect(router.resolve(session)).toBe('slack-connect');
     session.slackStepDismissed = true;
-    expect(router.resolve(session)).toBe(ScreenId.KeepSkills);
+    expect(router.resolve(session)).toBe('keep-skills');
     session.skillsComplete = true;
-    expect(router.resolve(session)).toBe(ScreenId.Exit);
+    expect(router.resolve(session)).toBe('exit');
     session.mintHandoff = 'exit';
-    expect(router.resolve(session)).toBe(ScreenId.Exit);
+    expect(router.resolve(session)).toBe('exit');
   });
 
   describe('resolve', () => {
@@ -81,7 +84,7 @@ describe('flow resolution', () => {
       const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
-      expect(router.resolve(session)).toBe(ScreenId.Intro);
+      expect(router.resolve(session)).toBe('intro');
 
       session.setupConfirmed = true;
       session.readinessResult = {
@@ -96,7 +99,7 @@ describe('flow resolution', () => {
         projectId: 1,
       };
 
-      expect(router.resolve(session)).toBe(ScreenId.Run);
+      expect(router.resolve(session)).toBe('run');
     });
 
     it('skips the setup screen when there are no unanswered framework questions', () => {
@@ -118,7 +121,7 @@ describe('flow resolution', () => {
       } as never;
       session.frameworkContext = { packageManager: 'pnpm' };
 
-      expect(router.resolve(session)).toBe(ScreenId.Auth);
+      expect(router.resolve(session)).toBe('auth');
     });
 
     // Every login failure path (OAuth denied, missing completion scope, no
@@ -136,14 +139,14 @@ describe('flow resolution', () => {
         health: {} as never,
         reasons: [],
       };
-      expect(router.resolve(session)).toBe(ScreenId.Auth);
+      expect(router.resolve(session)).toBe('auth');
 
       // An error phase alone (no outro yet) stays on auth.
       session.runPhase = RunPhase.Error;
-      expect(router.resolve(session)).toBe(ScreenId.Auth);
+      expect(router.resolve(session)).toBe('auth');
 
       session.outroData = { kind: OutroKind.Error, message: 'login failed' };
-      expect(router.resolve(session)).toBe(ScreenId.Outro);
+      expect(router.resolve(session)).toBe('outro');
     });
 
     it('returns the last flow screen when every entry is complete', () => {
@@ -166,20 +169,20 @@ describe('flow resolution', () => {
       session.mcpComplete = true;
       session.slackStepDismissed = true;
 
-      expect(router.resolve(session)).toBe(ScreenId.Outro);
+      expect(router.resolve(session)).toBe('outro');
     });
 
     it('gives the topmost overlay precedence over the flow screen', () => {
       const router = routerFor(Program.PostHogIntegration);
       const session = baseWizardSession();
 
-      router.pushOverlay(Overlay.SettingsOverride);
-      router.pushOverlay(Overlay.AuthError);
+      router.pushOverlay(Interrupt.SettingsOverride);
+      router.pushOverlay(Interrupt.AuthError);
 
-      expect(router.resolve(session)).toBe(Overlay.AuthError);
+      expect(router.resolve(session)).toBe(Interrupt.AuthError);
 
       router.popOverlay();
-      expect(router.resolve(session)).toBe(Overlay.SettingsOverride);
+      expect(router.resolve(session)).toBe(Interrupt.SettingsOverride);
     });
 
     it('shows the session-timeout overlay over the auth screen that never completes', () => {
@@ -195,10 +198,10 @@ describe('flow resolution', () => {
         health: {} as never,
         reasons: [],
       };
-      expect(router.resolve(session)).toBe(ScreenId.Auth);
+      expect(router.resolve(session)).toBe('auth');
 
-      router.pushOverlay(Overlay.SessionTimeout);
-      expect(router.resolve(session)).toBe(Overlay.SessionTimeout);
+      router.pushOverlay(Interrupt.SessionTimeout);
+      expect(router.resolve(session)).toBe(Interrupt.SessionTimeout);
     });
   });
 
@@ -206,22 +209,22 @@ describe('flow resolution', () => {
     it('defaults to the first screen in the active flow', () => {
       const router = routerFor(Program.McpRemove);
 
-      expect(router.activeScreen).toBe(ScreenId.McpRemove);
+      expect(router.activeScreen).toBe('mcp-remove');
     });
 
     it('returns the top overlay when overlays are active', () => {
       const router = routerFor(Program.PostHogIntegration);
 
-      router.pushOverlay(Overlay.ManagedSettings);
+      router.pushOverlay(Interrupt.ManagedSettings);
 
-      expect(router.activeScreen).toBe(Overlay.ManagedSettings);
+      expect(router.activeScreen).toBe(Interrupt.ManagedSettings);
     });
   });
 
   describe('McpAdd flow', () => {
     it('starts at McpAdd', () => {
       const router = routerFor(Program.McpAdd);
-      expect(router.activeScreen).toBe(ScreenId.McpAdd);
+      expect(router.activeScreen).toBe('mcp-add');
     });
 
     it('exits after install when MCP install was skipped', () => {
@@ -232,7 +235,7 @@ describe('flow resolution', () => {
 
       // Skipped → tutorial step is hidden, so the only visible
       // step (mcp-add) is complete and the program resolves to Exit.
-      expect(router.resolve(session)).toBe(ScreenId.Exit);
+      expect(router.resolve(session)).toBe('exit');
     });
 
     it('advances to SlackConnect after a successful install', () => {
@@ -243,7 +246,7 @@ describe('flow resolution', () => {
 
       // Slack is the first post-install step (loginless render); the
       // tutorial follows it.
-      expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+      expect(router.resolve(session)).toBe('slack-connect');
     });
 
     it('advances to McpSuggestedPrompts once the Slack step is dismissed', () => {
@@ -253,7 +256,7 @@ describe('flow resolution', () => {
       session.mcpOutcome = McpOutcome.Installed;
       session.slackStepDismissed = true;
 
-      expect(router.resolve(session)).toBe(ScreenId.McpSuggestedPrompts);
+      expect(router.resolve(session)).toBe('mcp-suggested-prompts');
     });
 
     it('exits once the tutorial step is dismissed', () => {
@@ -264,7 +267,7 @@ describe('flow resolution', () => {
       session.slackStepDismissed = true;
       session.mcpSuggestedPromptsDismissed = true;
 
-      expect(router.resolve(session)).toBe(ScreenId.Exit);
+      expect(router.resolve(session)).toBe('exit');
     });
 
     it('skips the Slack step when MCP install was skipped', () => {
@@ -275,7 +278,7 @@ describe('flow resolution', () => {
 
       // Both the tutorial and slack-connect steps are gated on a
       // successful install, so a skipped install resolves straight to Exit.
-      expect(router.resolve(session)).toBe(ScreenId.Exit);
+      expect(router.resolve(session)).toBe('exit');
     });
   });
 
@@ -289,23 +292,21 @@ describe('flow resolution', () => {
     it('asks "set up PostHog?" when none detected and undecided', () => {
       const router = routerFor(Program.SelfDriving);
       const session = confirmed(); // integrate null, postHogPresent unset
-      expect(router.resolve(session)).toBe(
-        ScreenId.SelfDrivingIntegrationCheck,
-      );
+      expect(router.resolve(session)).toBe('self-driving-integration-check');
     });
 
     it('skips the question when PostHog is already detected', () => {
       const router = routerFor(Program.SelfDriving);
       const session = confirmed();
       session.frameworkContext.postHogPresent = true;
-      expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
+      expect(router.resolve(session)).toBe('health-check');
     });
 
     it('skips the question when --integrate pre-decided it', () => {
       const router = routerFor(Program.SelfDriving);
       const session = confirmed();
       session.integrate = true;
-      expect(router.resolve(session)).toBe(ScreenId.HealthCheck);
+      expect(router.resolve(session)).toBe('health-check');
     });
 
     function readyToIntegrate() {
@@ -328,9 +329,7 @@ describe('flow resolution', () => {
     it('shows the detect+pick screen after auth, before a project is picked', () => {
       const router = routerFor(Program.SelfDriving);
       const session = readyToIntegrate(); // integration still null
-      expect(router.resolve(session)).toBe(
-        ScreenId.SelfDrivingIntegrationDetect,
-      );
+      expect(router.resolve(session)).toBe('self-driving-integration-detect');
     });
 
     it('advances to the integration run once a project is picked', () => {
@@ -339,7 +338,7 @@ describe('flow resolution', () => {
       session.integration = Integration.javascriptNode; // picked
       session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.javascriptNode];
       // integrate-run shares the 'run' screen; the phase hasn't completed yet.
-      expect(router.resolve(session)).toBe(ScreenId.Run);
+      expect(router.resolve(session)).toBe('run');
     });
   });
 
@@ -363,7 +362,7 @@ describe('flow resolution', () => {
 
     it('shows the project picker after login, before a project is picked', () => {
       const router = routerFor(Program.ErrorTracking);
-      expect(router.resolve(loggedIn())).toBe(ScreenId.ErrorTrackingDetect);
+      expect(router.resolve(loggedIn())).toBe('error-tracking-detect');
     });
 
     it('advances to the run once a project is picked', () => {
@@ -371,7 +370,7 @@ describe('flow resolution', () => {
       const session = loggedIn();
       session.integration = Integration.nextjs;
       session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.nextjs];
-      expect(router.resolve(session)).toBe(ScreenId.Run);
+      expect(router.resolve(session)).toBe('run');
     });
   });
 });

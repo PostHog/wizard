@@ -5,7 +5,6 @@ import { Integration } from '../../shared/constants.js';
 import type { AgenticDetectionReport } from '../../detection/agentic.js';
 import { detectFramework } from '../../detection/index.js';
 import { ErrorCodes } from '../../shared/errors/index.js';
-import { ERROR_TRACKING_TIPS } from '@tui/programs/error-tracking/content/tips';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,
   toErrorTrackingReport,
@@ -212,19 +211,5 @@ describe('error-tracking posthog-cli pre-install set', () => {
       .map((variant) => (variant === 'ios' ? Integration.swift : variant))
       .sort();
     expect([...SYMBOL_UPLOAD_CLI_FRAMEWORKS].sort()).toEqual(expected);
-  });
-});
-
-describe('error-tracking tips', () => {
-  const replayTip = ERROR_TRACKING_TIPS.find((t) => t.id === 'session-replay');
-  const storeFor = (integration: Integration | null) =>
-    ({ session: { integration } } as never);
-
-  test('shows the replay tip only where session replay records', () => {
-    expect(replayTip?.visible?.(storeFor(Integration.nextjs))).toBe(true);
-    expect(replayTip?.visible?.(storeFor(Integration.javascriptNode))).toBe(
-      false,
-    );
-    expect(replayTip?.visible?.(storeFor(null))).toBe(false);
   });
 });

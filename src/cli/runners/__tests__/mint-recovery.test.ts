@@ -1,9 +1,9 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard.js';
-import { runAgent } from '@agent/agent-runner';
-import { startTUI } from '@tui/start-tui';
+import { runAgent } from '@agent';
+import { startTUI } from '@tui';
 import { WizardStore } from '@store/state/store';
-import { InkUI } from '@tui/ink-ui';
+import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import { posthogIntegrationConfig } from '@store/programs/posthog-integration';
 import { ScreenId } from '@tui/router';
@@ -12,8 +12,8 @@ import { analytics } from '@store/shared/analytics';
 import { flowFor } from '@store/programs/flow-for';
 import { Program } from '@store/programs/program-registry';
 
-vi.mock('@agent/agent-runner', () => ({ runAgent: vi.fn() }));
-vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));
+vi.mock('@agent', () => ({ runAgent: vi.fn() }));
+vi.mock('@tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@store/local-dev', async (original) => ({
   ...(await original<typeof import('@store/local-dev')>()),
   getLocalDev: () => ({}),
@@ -29,7 +29,7 @@ vi.mock('@store/shared/analytics', () => ({
   },
   sessionProperties: () => ({}),
 }));
-vi.mock('@store/task-stream', () => ({
+vi.mock('@store/task-stream/task-stream-push', () => ({
   TaskStreamPush: class {
     attach = vi.fn();
     shutdown() {
@@ -50,7 +50,7 @@ it.each(['continue', 'exit'] as const)(
   'catches a failed run, shows the handoff screen, and exits 1 after %s',
   async (action) => {
     const store = new WizardStore(flowFor(Program.PostHogIntegration).flow);
-    setUI(new InkUI(store));
+    setUI(new StoreUI(store));
     vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
     vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
     const unmount = vi.fn();

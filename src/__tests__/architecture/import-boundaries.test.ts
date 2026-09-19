@@ -15,7 +15,10 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     ['cli', (p) => p === 'bin.ts' || p.startsWith('src/cli/')],
     [
       'harness',
-      (p) => p.startsWith('e2e-harness/') || p.startsWith('scripts/'),
+      (p) =>
+        p.startsWith('e2e-harness/') ||
+        p.startsWith('e2e-tests/') ||
+        p.startsWith('scripts/'),
     ],
   ];
 
@@ -39,6 +42,27 @@ export const ALLOWED_IMPORTS: Record<
 };
 
 const TUI_ONLY_PACKAGES = ['ink', 'react', '@inkjs/ui', 'ink-testing-library'];
+
+/** The only files another surface may import. Everything else is internal. */
+export const PUBLIC_ENTRIES: Record<
+  'store' | 'agent' | 'tui',
+  readonly string[]
+> = {
+  store: [
+    'src/store/index.ts',
+    'src/store/types.ts',
+    'src/store/programs/index.ts',
+    'src/store/control/index.ts',
+  ],
+  agent: ['src/agent/index.ts', 'src/agent/types.ts'],
+  tui: ['src/tui/index.ts', 'src/tui/types.ts', 'src/tui/console/index.ts'],
+};
+
+/** The msw hook behind `NODE_ENV === 'test'`; tsdown inlines it away in published builds. */
+const TEST_ONLY_EDGES = new Set(['bin.ts -> e2e-tests/mocks/server.ts']);
+
+/** Console renderers ship in headless builds and must stay Ink free. */
+const INK_FREE_PREFIX = 'src/tui/console/';
 
 const SKIP_DIRS = new Set([
   '__tests__',
@@ -267,7 +291,7 @@ function analyze(): Analysis {
       if (base === null) {
         const tuiOnly =
           TUI_ONLY_PACKAGES.includes(spec) || spec.startsWith('react/');
-        if (tuiOnly && from !== 'tui') {
+        if (tuiOnly && (from !== 'tui' || file.startsWith(INK_FREE_PREFIX))) {
           violations.set(`${file} -> pkg:${spec}`, 'ink-outside-tui');
         }
         continue;
@@ -284,9 +308,16 @@ function analyze(): Analysis {
       edges.add(key);
 
       const to = classifySurface(target);
-      if (to === 'harness') violations.set(key, 'harness');
-      else if (!allowed.includes(to))
+      if (to === 'harness') {
+        if (!TEST_ONLY_EDGES.has(key)) violations.set(key, 'harness');
+      } else if (!allowed.includes(to))
         violations.set(key, `matrix:${from}->${to}`);
+      else if (
+        to !== from &&
+        (to === 'store' || to === 'agent' || to === 'tui') &&
+        !PUBLIC_ENTRIES[to].includes(target)
+      )
+        violations.set(key, `deep:${from}->${to}`);
     }
   }
 
@@ -301,12 +332,6 @@ function analyze(): Analysis {
 }
 
 const analysis = analyze();
-
-const known = (
-  JSON.parse(
-    fs.readFileSync(path.join(HERE, 'known-violations.json'), 'utf8'),
-  ) as { violations: string[] }
-).violations;
 
 if (process.env.PRINT_VIOLATIONS) {
   const byRule = new Map<string, number>();
@@ -332,13 +357,6 @@ if (process.env.PRINT_VIOLATIONS) {
       .map(([file, count]) => `  ${file}: ${count}`),
   ];
   process.stderr.write(`${lines.join('\n')}\n`);
-  process.stderr.write(
-    `${JSON.stringify(
-      { violations: analysis.violations.map((v) => v.key) },
-      null,
-      2,
-    )}\n`,
-  );
 }
 
 describe('import boundaries', () => {
@@ -346,20 +364,9 @@ describe('import boundaries', () => {
     expect(analysis.unresolved).toEqual([]);
   });
 
-  it('introduces no violation outside known-violations.json', () => {
-    const knownSet = new Set(known);
-    const added = analysis.violations
-      .filter(({ key }) => !knownSet.has(key))
-      .map(({ key, rule }) => `${key}  [${rule}]`);
-    expect(added).toEqual([]);
-  });
-
-  it('keeps known-violations.json free of stale entries', () => {
-    const current = new Set(analysis.violations.map((v) => v.key));
-    const stale = known.filter((key) => !current.has(key));
+  it('crosses surfaces only through public entries, in the allowed direction', () => {
     expect(
-      stale,
-      'stale entries, delete them from known-violations.json',
+      analysis.violations.map(({ key, rule }) => `${key}  [${rule}]`),
     ).toEqual([]);
   });
 });

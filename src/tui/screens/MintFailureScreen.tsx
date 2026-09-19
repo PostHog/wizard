@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, WizardSpellbook } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { Colors } from '../styles.js';
@@ -9,7 +9,6 @@ import {
   MINT_FAILURE_BODY,
   MINT_FAILURE_CONTACT,
 } from '../mint-failure.js';
-import type { WizardSpellbook } from '@store/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher.js';
 
 export type MintFailureServices = {

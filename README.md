@@ -155,14 +155,14 @@ route review to their owning team instead.
 | Path | Owning team |
 |---|---|
 | `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
-| `src/lib/agent/` | `@PostHog/team-wizard-docs` |
-| `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
-| `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
-| `src/lib/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/lib/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/lib/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-| `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+| `src/agent/` | `@PostHog/team-wizard-docs` |
+| `src/store/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/store/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/store/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/store/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/store/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/store/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
+| `src/store/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
@@ -270,10 +270,10 @@ dashboard:write insight:write notebook:write event_definition:write
 health_issue:read wizard_session:read wizard_session:write
 ```
 
-The source of truth is `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts`, which
+The source of truth is `WIZARD_OAUTH_SCOPES` in `src/store/shared/constants.ts`, which
 documents why each scope is needed — if this block drifts, trust the code.
 Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
-`src/lib/oauth/program-scopes.ts`); the default integration flow adds
+`src/store/services/oauth/program-scopes.ts`); the default integration flow adds
 `integration:read` and `external_data_source:read` /
 `external_data_source:write`.
 
@@ -281,7 +281,7 @@ Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
-`src/lib/oauth/program-scopes.ts`) must be grantable under that ceiling, or
+`src/store/services/oauth/program-scopes.ts`) must be grantable under that ceiling, or
 `/authorize` drops it and the call that needs it 403s.
 
 **A granted token can be narrower than the request even with a correct
@@ -291,7 +291,7 @@ are clamped silently (`clamp_scopes_to_ceiling`) — neither path errors;
 `/oauth/token` just returns a smaller `scope`. So never assume the token
 carries what was requested: the token response's `scope` field is the truth.
 The wizard diffs granted vs requested at login (`missingOAuthScopes` in
-`src/utils/oauth.ts`), warns the user which permissions are missing, and emits
+`src/store/shared/oauth.ts`), warns the user which permissions are missing, and emits
 `wizard: oauth grant narrowed` so narrowed runs are countable in analytics.
 The diff also rides on the session (`credentials.missingScopes`), so when a
 run does fail on a scope-gated step, the error names the missing permission
@@ -396,7 +396,7 @@ and set up the general flow of the application.
 ## Analytics
 
 Did you know you can capture PostHog events even for smaller, supporting
-products like a command line tool? `src/utils/analytics.ts` is a great example
+products like a command line tool? `src/store/shared/analytics.ts` is a great example
 of how to do it.
 
 This file wraps `posthog-node` with some convenience functions to set up an
@@ -450,14 +450,14 @@ orchestrates that journey, but the raw value should _never_ enter the LLM
 conversation, where it would be sent to the model provider, written to
 transcripts, and captured in logs.
 
-`src/lib/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
+`src/store/session/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
 session-scoped, in-memory vault: a tool that handles a secret calls `put()` to
 store the raw value and hands the agent an opaque `secret:<uuid>` reference
 instead. The agent passes that ref between tools as if it were the value; the
 host resolves it back to the real secret only at the last moment, inside the
 process, when it writes the file.
 
-Two tools in `src/lib/wizard-tools.ts` form the ends of that pipe:
+Two tools in `src/store/tools/tools.ts` form the ends of that pipe:
 
 - `wizard_ask` with `sensitive: true` vaults the user's typed answer and returns
   `{ secretRef: "secret:..." }` to the agent rather than the string.
@@ -503,11 +503,11 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 | Alias | Maps to |
 |---|---|
 | `@env` | `src/env.ts` |
-| `@lib/*` | `src/lib/*` |
-| `@utils/*` | `src/utils/*` |
-| `@ui/*` | `src/ui/*` |
-| `@steps/*` | `src/steps/*` |
-| `@frameworks/*` | `src/frameworks/*` |
+| `@store`, `@store/types`, `@store/programs` | `src/store/{index,types,programs/index}.ts` |
+| `@agent`, `@agent/types` | `src/agent/{index,types}.ts` |
+| `@tui`, `@tui/types`, `@tui/console` | `src/tui/{index,types,console/index}.ts` |
+| `@cli/*` | `src/cli/*` (composition root, internal) |
+| `@store/*`, `@agent/*`, `@tui/*` | surface internals; tests only, never across surfaces |
 
 ## Running locally
 
@@ -605,7 +605,7 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/lib/health-checks/` checks skills download origins before the wizard runs.
+`src/store/health-checks/` checks skills download origins before the wizard runs.
 The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
 
 | Decision            | Meaning                                                         |
@@ -645,7 +645,7 @@ gateway URL and reports an unavailable gateway through the existing error path.
 
 `skillsOrigin` is one entry covering two origins: skills are published to
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail
-over between them (`src/lib/fetch-retry.ts`). Both are probed in parallel, so
+over between them (`src/store/fetch-retry.ts`). Both are probed in parallel, so
 the key only reports **Down** when neither origin answers — a GitHub Releases
 outage on its own doesn't block a run, including a 403 or 404, which is as
 often about the origin (expired asset redirect, blocked region, a publish that

@@ -10,21 +10,21 @@
  * tree.
  */
 
-import type { Credentials } from '@store/session/wizard-session';
 import type {
+  Credentials,
   AgentChunk,
   McpPromptRequest,
-} from '@store/agent-protocol/mcp-prompt';
-import { getAgentBridge } from '../agent-bridge.js';
-import { getOrAskForProjectData } from '@store/shared/setup-utils';
-import { Program } from '@store/programs/program-registry';
-import type { WizardStore } from '@store/state/store';
-import type { ApiUser } from '@store/api';
+  WizardStore,
+  ApiUser,
+  ProjectDataProfile,
+} from '@store/types';
 import {
+  getOrAskForProjectData,
   probeProjectData as runProbe,
-  type ProjectDataProfile,
-} from '@store/mcp-project-profile';
-import { seedDemoEvents as runSeed } from '@store/mcp-seed-events';
+  seedDemoEvents as runSeed,
+  getMcpPromptRunner,
+} from '@store';
+import { Program } from '@store/programs';
 
 /**
  * Discriminated union covering every kind of streamed event the screen
@@ -160,5 +160,5 @@ export function createMcpSuggestedPromptsServices(
 async function* runProductionPromptStreaming(
   args: McpPromptRequest,
 ): AsyncIterable<AgentChunk> {
-  yield* getAgentBridge().runMcpPrompt(args);
+  yield* getMcpPromptRunner().runMcpPrompt(args);
 }

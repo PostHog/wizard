@@ -6,8 +6,8 @@
  */
 
 import { atom } from 'nanostores';
-import { IS_DEV } from '@store/shared/constants';
-import type { WizardStore } from '@store/state/store';
+import { IS_DEV } from '@env';
+import type { WizardStore } from '@store/types';
 
 export class UiStore {
   private $version = atom(0);

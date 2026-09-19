@@ -6,7 +6,7 @@
 
 import { Text } from 'ink';
 import { Colors } from '../../../styles.js';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { TextRevealMode } from '../../../primitives/TextBlock.js';
 import type { ContentBlock } from '../../../primitives/content-types.js';
 import { StatusPeekTrigger } from '../../../components/StatusPeekTrigger.js';

@@ -5,7 +5,7 @@
  * and can publish data to a shared store for downstream middleware to read.
  */
 
-import type { SpinnerHandle } from '@store/ui';
+import type { SpinnerHandle } from '@store/types';
 
 export type SDKMessage = any;
 

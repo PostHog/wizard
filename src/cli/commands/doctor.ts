@@ -1,14 +1,17 @@
-import { getUI, setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import { readApiKeyFromEnv } from '@store/shared/env-api-key';
-import { ErrorCodes } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
+import {
+  getUI,
+  setUI,
+  readApiKeyFromEnv,
+  ErrorCodes,
+  emitWizardError,
+} from '@store';
+import { LoggingUI } from '@tui/console';
 import { runWizard } from '../runners/index.js';
 import {
   posthogDoctorConfig,
   fetchHealthIssues,
   getKindMeta,
-} from '@store/programs/posthog-doctor';
+} from '@store/programs';
 import { skillProgramOptions } from './skill-program-options.js';
 import type { Command } from './command.js';
 
@@ -53,9 +56,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
   getUI().log.info('Running posthog-doctor in CI mode');
 
   try {
-    const { getOrAskForProjectData } = await import(
-      '@store/shared/setup-utils'
-    );
+    const { getOrAskForProjectData } = await import('@store');
     const { host, accessToken, projectId } = await getOrAskForProjectData({
       signup: false,
       ci: true,
@@ -89,7 +90,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
     }
     process.exit(1);
   } catch (error) {
-    const { ApiError } = await import('@store/api');
+    const { ApiError } = await import('@store');
     const message =
       error instanceof ApiError && error.statusCode === 401
         ? 'Your PostHog API key is invalid or expired.'

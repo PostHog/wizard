@@ -1,8 +1,6 @@
 import { Box, Text } from 'ink';
-import {
-  AUDIT_SEVERITY_STYLE,
-  type AuditCheck,
-} from '@store/programs/audit/types';
+import { AUDIT_SEVERITY_STYLE } from '@store/programs';
+import type { AuditCheck } from '@store/types';
 import { truncate, type ViewerLayout } from './layout.js';
 
 interface CheckRowProps {

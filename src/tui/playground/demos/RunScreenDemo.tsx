@@ -21,9 +21,13 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { WizardStore, TaskStatus } from '@store/state/store';
-import { DiscoveredFeature } from '@store/session/wizard-session';
-import { AgentPhase } from '@store/agent-protocol/agent-phase';
+import {
+  WizardStore,
+  TaskStatus,
+  DiscoveredFeature,
+  AgentPhase,
+  WIZARD_LOG_FILE,
+} from '@store';
 import {
   SplitView,
   ProgressList,
@@ -38,7 +42,6 @@ import { VisualizerTab } from '../../components/PhaseVisuals.js';
 import { PROGRAM_PRESENTATION } from '../../programs/presentation.js';
 import { getContentBlocks as getSkillContentBlocks } from '../../programs/agent-skill/content/index.js';
 import { Colors } from '../../styles.js';
-import { WIZARD_LOG_FILE } from '@store/shared/paths';
 import { useUiStore } from '../../hooks/useUiStore.js';
 
 const STAGE_CYCLE: AgentPhase[] = [

@@ -12,8 +12,8 @@ import {
   McpOutcome,
   type ProgramId,
 } from '@store/state/store';
-import { ScreenId, Overlay } from '../router.js';
-import { InkUI } from '../ink-ui.js';
+import { ScreenId, Overlay } from '@tui/router';
+import { StoreUI } from '@store/ui/store-ui';
 import { setUI } from '@store/ui';
 import {
   buildSession,
@@ -26,19 +26,17 @@ import { HostResolution } from '@store/host-resolution';
 import { WizardReadiness } from '@store/health-checks/readiness';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@store/programs/error-tracking-upload-source-maps/detect';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@store/programs/self-driving/detect';
-import { ScreenContainer } from '../primitives/ScreenContainer.js';
+import { ScreenContainer } from '@tui/primitives/ScreenContainer';
 import {
   createScreens,
   createServices,
   type ScreenServices,
-} from '../screen-registry.js';
+} from '@tui/screen-registry';
 import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
 import { flowFor } from '@store/programs/flow-for';
-import { UiStore } from '../ui-store.js';
+import { UiStore } from '@tui/ui-store';
 
-vi.mock('ink', () =>
-  vi.importActual('../../../node_modules/ink/build/index.js'),
-);
+vi.mock('ink', () => vi.importActual('../../node_modules/ink/build/index.js'));
 vi.mock('@store/shared/analytics', () => ({
   analytics: {
     capture: vi.fn(),
@@ -64,8 +62,8 @@ vi.mock('@store/api', async (importOriginal) => ({
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@store/tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@store/tools')>()),
+vi.mock('@store/tools/tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@store/tools/tools')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@store/shared/setup-utils', async (importOriginal) => ({
@@ -363,7 +361,7 @@ const PAIRS: Pair[] = [
 function makeStore(pair: Pair): WizardStore {
   const store = new WizardStore(flowFor(pair.program).flow);
   store.version = '0.0.0-test';
-  setUI(new InkUI(store));
+  setUI(new StoreUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
   const integration = pair.integration ?? Integration.javascriptNode;
   session.integration = integration;

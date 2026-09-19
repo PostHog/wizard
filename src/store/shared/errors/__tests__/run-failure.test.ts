@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { classifyRunFailure } from '../run-failure.js';
 import { ErrorCodes } from '../codes.js';
 import { WizardError } from '../../wizard-abort.js';
-import { GatewayMintRefused } from '@agent/gateway/gateway-session';
 
 vi.mock('../../analytics.js', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
@@ -12,7 +11,9 @@ describe('classifyRunFailure', () => {
   it('keeps a mint refusal as its own code and message', () => {
     // The runners print this message alone, without the unhandled framing.
     const failure = classifyRunFailure(
-      new GatewayMintRefused(403, 'This account is blocked.', 'blocked'),
+      Object.assign(new Error('This account is blocked.'), {
+        code: ErrorCodes.GatewayMintRefused,
+      }),
     );
     expect(failure).toEqual({
       code: ErrorCodes.GatewayMintRefused,

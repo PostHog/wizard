@@ -12,6 +12,7 @@ import {
 } from '../gateway/gateway-session.js';
 import type { HostResolution } from '@store/host-resolution';
 import { ErrorCodes } from '@store/shared/errors';
+import { classifyRunFailure } from '@store/shared/errors/run-failure';
 import { WizardError } from '@store/shared/wizard-abort';
 import { analytics } from '@store/shared/analytics';
 import { logToFile } from '@store/shared/debug';
@@ -867,5 +868,19 @@ describe('isTrustedGatewayUrl', () => {
         'https://ph.internal.example',
       ),
     ).toBe(true);
+  });
+});
+
+describe('GatewayMintRefused', () => {
+  it('classifies as its own coded run failure', () => {
+    expect(
+      classifyRunFailure(
+        new GatewayMintRefused(403, 'This account is blocked.', 'blocked'),
+      ),
+    ).toEqual({
+      code: ErrorCodes.GatewayMintRefused,
+      message: 'This account is blocked.',
+      coded: true,
+    });
   });
 });

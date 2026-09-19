@@ -3,8 +3,7 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Harness } from '@store/shared/constants';
-import { logToFile } from '@store/shared/debug';
+import { Harness, logToFile } from '@store';
 import { anthropicBackend } from '../harness/anthropic/index.js';
 import { piBackend } from '../harness/pi/index.js';
 import type { AgentHarness } from '../harness/types.js';

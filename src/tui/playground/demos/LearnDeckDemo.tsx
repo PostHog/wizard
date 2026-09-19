@@ -27,8 +27,8 @@ import {
 } from '../../primitives/index.js';
 import type { ContentBlock, ProgressItem } from '../../primitives/index.js';
 import { Colors } from '../../styles.js';
-import type { WizardStore } from '@store/state/store';
-import { PROGRAM_REGISTRY } from '@store/programs/program-registry';
+import type { WizardStore } from '@store/types';
+import { PROGRAM_REGISTRY } from '@store/programs';
 import { PROGRAM_PRESENTATION } from '../../programs/presentation.js';
 import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index.js';
 import type { AreaSlide } from '../../screens/audit/slides/shared.js';

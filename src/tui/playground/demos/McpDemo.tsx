@@ -5,13 +5,12 @@
  * a short install delay, and a successful result.
  */
 
-import { WizardStore } from '@store/state/store';
+import { WizardStore, McpClientStatus } from '@store';
 import { McpScreen } from '../../screens/McpScreen.js';
 import type {
   McpInstaller,
   McpClientInfo,
 } from '../../services/mcp-installer.js';
-import { McpClientStatus } from '@store/services/steps/add-mcp-server-to-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [
   { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },

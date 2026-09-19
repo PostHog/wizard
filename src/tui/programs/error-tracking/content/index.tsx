@@ -1,6 +1,6 @@
 /** Error-tracking learn-deck: the source-maps narrative, worded to also fit platforms that upload nothing. */
 
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import type { ContentBlock } from '../../../primitives/content-types.js';
 import { buildSourceMapsDeck } from '../../error-tracking-upload-source-maps/content/index.js';
 

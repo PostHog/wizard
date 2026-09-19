@@ -3,7 +3,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors, Icons } from '../../styles.js';
 
 interface WelcomeDemoProps {

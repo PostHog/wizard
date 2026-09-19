@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import {
   TabContainer,
   SplitView,
@@ -13,9 +13,12 @@ import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
-import { AUDIT_REPORT_FILE, getAuditChecks } from '@store/programs/audit/types';
-import { getProgramConfig } from '@store/programs/program-registry';
-import { WIZARD_LOG_FILE } from '@store/shared/paths';
+import {
+  AUDIT_REPORT_FILE,
+  getAuditChecks,
+  getProgramConfig,
+} from '@store/programs';
+import { WIZARD_LOG_FILE } from '@store';
 
 interface AuditRunScreenProps {
   store: WizardStore;

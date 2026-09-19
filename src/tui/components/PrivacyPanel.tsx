@@ -22,8 +22,8 @@ import {
   POSTHOG_ORG_AI_SETTINGS_URL,
   POSTHOG_PRIVACY_URL,
   POSTHOG_TERMS_URL,
-} from '@store/shared/constants';
-import { analytics } from '@store/shared/analytics';
+  analytics,
+} from '@store';
 
 /**
  * The panel's name everywhere it is referenced: intro menu, screen titles, and

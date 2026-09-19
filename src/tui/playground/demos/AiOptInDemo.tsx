@@ -14,11 +14,9 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { WizardStore } from '@store/state/store';
+import { WizardStore, HostResolution } from '@store';
 import { AiOptInRequiredScreen } from '../../screens/AiOptInRequiredScreen.js';
-import { HostResolution } from '@store/host-resolution';
-import { flowFor } from '@store/programs/flow-for';
-import { Program } from '@store/programs/program-registry';
+import { flowFor, Program } from '@store/programs';
 
 type Variant = 'admin' | 'non-admin';
 

@@ -1,4 +1,4 @@
-import { errorTrackingConfig } from '@store/programs/error-tracking';
+import { errorTrackingConfig } from '@store/programs';
 
 import type { Command } from './command.js';
 import { nativeCommandFactory } from './factories/native-command-factory.js';

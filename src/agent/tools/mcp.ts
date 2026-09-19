@@ -11,35 +11,16 @@
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
-import { logToFile } from '@store/shared/debug';
-import { analytics } from '@store/shared/analytics';
-import { makeMutex } from '@store/shared/atomic-ledger';
-import type { PackageManagerDetector } from '@store/detection/package-manager';
 import {
-  AUDIT_CHECKS_FILE,
-  type AuditCheck,
-  type AuditStatus,
-} from '@store/programs/audit/types';
-import {
-  type WizardAskBridge,
+  logToFile,
+  analytics,
+  makeMutex,
   isFullyCancelled,
-} from '@store/session/wizard-ask-bridge';
-import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
-} from '@store/tools/handoff';
-import {
   createSecretVault,
-  type SecretVault,
-} from '@store/session/secret-vault';
-import {
-  buildOrchestratorTools,
-  type OrchestratorToolsContext,
-} from '../runner/sequence/orchestrator/queue-tools.js';
-import type { LLMProvider } from '@posthog/warlock';
-import {
   DEFAULT_ASK_MAX_QUESTIONS,
   CHECK_ENV_KEYS_DESCRIPTION,
   CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
@@ -62,7 +43,6 @@ import {
   templateEnvWriteRefusal,
   legacyKeyNameRefusal,
   vaultSensitiveAnswers,
-  type SkillEntry,
   AUDIT_ADD_CHECKS_DESCRIPTION,
   AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
   AUDIT_RESOLVE_CHECKS_DESCRIPTION,
@@ -74,7 +54,21 @@ import {
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
-} from '@store/tools/tools';
+} from '@store';
+import type {
+  PackageManagerDetector,
+  AuditCheck,
+  AuditStatus,
+  WizardAskBridge,
+  SecretVault,
+  SkillEntry,
+} from '@store/types';
+import { AUDIT_CHECKS_FILE } from '@store/programs';
+import {
+  buildOrchestratorTools,
+  type OrchestratorToolsContext,
+} from '../runner/sequence/orchestrator/queue-tools.js';
+import type { LLMProvider } from '@posthog/warlock';
 
 const auditCheckSchema = z.object({
   id: z.string().min(1),

@@ -63,7 +63,7 @@ Narrower is better — keep the security net on for users who aren't affected.
 ## Timing & reach
 
 - The flag is read **once at run start**
-  ([`agent-runner.ts`](../../src/lib/agent/agent-runner.ts),
+  ([`agent-runner.ts`](../../src/agent/runner/index.ts),
   `getAllFlagsForWizard()`), so a change takes effect on the **next** run — not
   on runs already in flight. Wizard runs are short-lived, so "next run" is
   effectively seconds to minutes.
@@ -90,11 +90,11 @@ is a **local tool only** — it is per-machine and is **not** the incident lever
 One feature flag, read at run start, gates the two hooks Warlock registers.
 
 - **Flag key:** `wizard-warlock-disabled` —
-  [`src/lib/constants.ts`](../../src/lib/constants.ts)
+  [`src/store/shared/constants.ts`](../../src/store/shared/constants.ts)
   (`WIZARD_WARLOCK_DISABLED_FLAG_KEY`).
 - **Decision helper:** `isWarlockDisabled(flags)` in
-  [`src/lib/agent/agent-interface.ts`](../../src/lib/agent/agent-interface.ts) —
-  pure, unit-tested.
+  [`src/agent/agent-interface.ts`](../../src/agent/agent-interface.ts) — pure,
+  unit-tested.
 - **The gate:** at hook registration in the same file, when disabled the
   Pre/PostToolUse YARA hooks are registered as empty arrays (`[]`) instead of
   `createPreToolUseYaraHooks()` / `createPostToolUseYaraHooks()`. The SDK then
@@ -114,7 +114,7 @@ exact string `'true'`. Everything else leaves Warlock **ON**:
 
 A network blip must never silently disable a security control. This is pinned by
 unit tests in
-[`src/lib/__tests__/agent-interface.test.ts`](../../src/lib/__tests__/agent-interface.test.ts)
+[`src/agent/__tests__/agent-interface.test.ts`](../../src/agent/__tests__/agent-interface.test.ts)
 (`describe('isWarlockDisabled (kill switch)')`).
 
 ---
@@ -146,5 +146,6 @@ unit tests in
 
 - Scanner engine & rules: the [warlock](https://github.com/PostHog/warlock)
   sibling repo.
-- Hook wiring: [`src/lib/yara-hooks.ts`](../../src/lib/yara-hooks.ts).
+- Hook wiring:
+  [`src/store/security/yara-hooks.ts`](../../src/store/security/yara-hooks.ts).
 - Feedback / questions: wizard@posthog.com.

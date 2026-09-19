@@ -16,7 +16,7 @@
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { logToFile } from '@store/shared/debug';
+import { logToFile } from '@store';
 
 /**
  * Read-only built-ins a subagent may use. bash is supplied separately as the

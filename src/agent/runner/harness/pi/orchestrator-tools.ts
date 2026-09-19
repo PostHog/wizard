@@ -13,7 +13,7 @@
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { analytics } from '@store/shared/analytics';
+import { analytics } from '@store';
 import {
   applyComplete,
   applyEnqueue,

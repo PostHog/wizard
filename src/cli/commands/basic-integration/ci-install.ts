@@ -1,16 +1,20 @@
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
+import {
+  getUI,
+  setUI,
+  provisionNewAccount,
+  ErrorCodes,
+  emitWizardError,
+} from '@store';
+import { LoggingUI } from '@tui/console';
 import {
   API_KEY_HINT,
   runWizardCI,
   runWizardHeadless,
 } from '../../runners/index.js';
 import type { NonInteractiveMode } from '../../runners/index.js';
-import { provisionNewAccount } from '@store/shared/provisioning';
-import { posthogIntegrationConfig } from '@store/programs/posthog-integration';
-import { ErrorCodes, type ErrorCode } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
+import { posthogIntegrationConfig } from '@store/programs';
+import type { ErrorCode } from '@store/types';
 
 type Options = Arguments & {
   region?: string;

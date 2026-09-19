@@ -1,19 +1,23 @@
 import type { Arguments } from 'yargs';
 
-import { auditConfig } from '@store/programs/audit';
-import { AUDIT_CHECKS_FILE } from '@store/programs/audit/types';
-import { WIZARD_TOOL_NAMES } from '@store/tools';
-import { agentSkillConfig } from '@store/programs/program-registry';
-import { webAnalyticsDoctorConfig } from '@store/programs/web-analytics-doctor';
-import type { ProgramConfig } from '@store/programs/program-step';
-import { getSkillsBaseUrl } from '@store/shared/constants';
-import { fetchSkillMenu, type CliEntry } from '@store/tools';
-import { analytics } from '@store/shared/analytics';
+import {
+  auditConfig,
+  AUDIT_CHECKS_FILE,
+  agentSkillConfig,
+  webAnalyticsDoctorConfig,
+} from '@store/programs';
+import {
+  WIZARD_TOOL_NAMES,
+  getSkillsBaseUrl,
+  fetchSkillMenu,
+  analytics,
+  ErrorCodes,
+  emitWizardError,
+} from '@store';
+import type { ProgramConfig, CliEntry } from '@store/types';
 
 import { dispatchProgram } from './commands/factories/shared.js';
 import type { Command } from './commands/command.js';
-import { ErrorCodes } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
 
 /**
  * Capture a CLI dispatch error, flush analytics, and exit. The wizard never

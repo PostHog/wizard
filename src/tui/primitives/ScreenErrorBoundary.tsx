@@ -7,9 +7,8 @@
 
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
-import type { WizardStore } from '@store/state/store';
-import { OutroKind, RunPhase } from '@store/session/wizard-session';
-import { logToFile } from '@store/shared/debug';
+import type { WizardStore } from '@store/types';
+import { OutroKind, RunPhase, logToFile } from '@store';
 
 interface Props {
   store: WizardStore;

@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
-import { analytics } from '@store/shared/analytics';
+import { analytics } from '@store';
 
 interface SettingsOverrideScreenProps {
   store: WizardStore;

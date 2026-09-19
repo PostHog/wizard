@@ -12,7 +12,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { LoadingBox } from '../primitives/index.js';
 import { MAX_WIDTH } from '../primitives/ScreenContainer.js';
 import {
@@ -23,7 +23,7 @@ import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { useKeyBindings, type KeyBinding } from '../hooks/useKeyBindings.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { Colors, Icons } from '../styles.js';
-import { copyToClipboard } from '@store/shared/clipboard';
+import { copyToClipboard } from '@store';
 
 interface AuthScreenProps {
   store: WizardStore;

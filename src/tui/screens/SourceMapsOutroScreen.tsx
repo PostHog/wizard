@@ -13,8 +13,8 @@ import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
-import { OutroKind } from '@store/session/wizard-session';
+import type { WizardStore } from '@store/types';
+import { OutroKind } from '@store';
 import { Colors } from '../styles.js';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey.js';
 

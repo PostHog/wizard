@@ -6,12 +6,12 @@ machine-readable code so the backend, the web UI, and sandbox supervisors can
 classify failures without parsing human-readable messages.
 
 - **Source of truth for codes:**
-  [`src/lib/errors/codes.ts`](../src/lib/errors/codes.ts)
+  [`src/store/shared/errors/codes.ts`](../src/store/shared/errors/codes.ts)
 - **Source of truth for metadata (group, retry advice, description):**
-  [`src/lib/errors/catalog.ts`](../src/lib/errors/catalog.ts)
+  [`src/store/shared/errors/catalog.ts`](../src/store/shared/errors/catalog.ts)
 - **Consumers:** `wizardAbort()`
-  ([`src/utils/wizard-abort.ts`](../src/utils/wizard-abort.ts)), the task stream
-  ([`src/lib/task-stream/`](../src/lib/task-stream/)), and non-interactive hosts
+  ([`src/store/shared/wizard-abort.ts`](../src/store/shared/wizard-abort.ts)), the task stream
+  ([`src/store/task-stream/`](../src/store/task-stream/)), and non-interactive hosts
   reading stderr.
 
 ## Stability contract
@@ -117,7 +117,7 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/lib/errors/detect-map.ts`](../src/lib/errors/detect-map.ts)) maps `kind`
+([`src/store/shared/errors/detect-map.ts`](../src/store/shared/errors/detect-map.ts)) maps `kind`
 → code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 
@@ -140,7 +140,7 @@ Two rules make the detect group safe for automated retry policy:
 ## Auth classification
 
 Gateway 401s are classified at the abort site by `classifyAuthFailure()`
-([`src/lib/errors/auth.ts`](../src/lib/errors/auth.ts)) with priority:
+([`src/store/shared/errors/auth.ts`](../src/store/shared/errors/auth.ts)) with priority:
 stored-login conflict → settings conflict → key-type → missing scope → region
 mismatch → invalid/expired. Inputs are best-effort from the run context; the
 classifier degrades to `PHW_AUTH_INVALID_OR_EXPIRED` when no distinguishing

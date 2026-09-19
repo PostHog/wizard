@@ -6,8 +6,7 @@
  */
 
 import fs from 'fs';
-import { getUI } from '@store/ui';
-import { logToFile } from '@store/shared/debug';
+import { getUI, logToFile } from '@store';
 import { AgentSignals } from '../../agent-interface.js';
 import type {
   Middleware,

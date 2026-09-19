@@ -1,4 +1,5 @@
-import { getUI, type SpinnerHandle } from '@store/ui';
+import { getUI } from '@store';
+import type { SpinnerHandle } from '@store/types';
 import { AgentSignals } from '../../agent-interface.js';
 import type {
   Middleware,

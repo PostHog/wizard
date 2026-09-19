@@ -1,0 +1,31 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../.tsbuild/harness"
+  },
+  "include": [
+    "**/*",
+    "../scripts/**/*",
+    "../__mocks__/**/*",
+    "../vitest.config.ts",
+    "../tsdown.config.ts",
+    "../types/**/*.d.ts"
+  ],
+  "references": [
+    {
+      "path": "../tsconfig.env.json"
+    },
+    {
+      "path": "../src/store"
+    },
+    {
+      "path": "../src/agent"
+    },
+    {
+      "path": "../src/tui"
+    },
+    {
+      "path": "../src/cli"
+    }
+  ]
+}

@@ -9,19 +9,19 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type {
+  WizardStore,
+  DetectedProject,
+  DetectionReport,
+} from '@store/types';
 import { LoadingBox, PickerMenu } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
   MANUAL_SDK_VARIANTS,
-} from '@store/programs/error-tracking-upload-source-maps';
-import {
   detectSourceMapsProjects,
-  type DetectedProject,
-  type DetectionReport,
-} from '@store/programs/error-tracking-upload-source-maps/detect-agentic';
+} from '@store/programs';
 
 interface SourceMapsDetectScreenProps {
   store: WizardStore;

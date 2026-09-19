@@ -1,4 +1,4 @@
-import { AgentErrorType } from '@store/agent-protocol/agent-signals';
+import { AgentErrorType } from '@store';
 
 /** Which completion guard should fail a pi run, or undefined for a clean finish. */
 export function completionFailure(args: {

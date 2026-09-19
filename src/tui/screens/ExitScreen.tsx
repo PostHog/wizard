@@ -6,7 +6,7 @@
  */
 
 import { useEffect } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 
 export const ExitScreen = ({ store }: { store?: WizardStore }) => {
   useEffect(() => {

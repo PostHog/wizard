@@ -11,20 +11,18 @@ import {
   getInstalledClients,
   getSupportedPluginClients,
   installPlugins as runPluginInstall,
-} from '@store/services/steps/add-mcp-server-to-clients';
-import { ALL_FEATURE_VALUES } from '@store/services/steps/add-mcp-server-to-clients/defaults';
-import {
+  ALL_FEATURE_VALUES,
   McpClientStatus,
   namesWithStatus,
   redactSecrets,
   toClientResult,
-  type McpClientResult,
-} from '@store/services/steps/add-mcp-server-to-clients/results';
-import { isPluginCapable } from '@store/services/steps/add-mcp-server-to-clients/plugin-client';
-import { isLoginCapable } from '@store/services/steps/add-mcp-server-to-clients/login-client';
-import { isBrowserFinishable } from '@store/services/steps/add-mcp-server-to-clients/browser-client';
-import { logToFile } from '@store/shared/debug';
-import { analytics } from '@store/shared/analytics';
+  isPluginCapable,
+  isLoginCapable,
+  isBrowserFinishable,
+  logToFile,
+  analytics,
+} from '@store';
+import type { McpClientResult } from '@store/types';
 
 export interface McpClientInfo {
   name: string;

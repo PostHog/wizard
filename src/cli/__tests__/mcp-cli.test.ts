@@ -11,29 +11,22 @@ const { mockBuildSessionMcp, mockStartTUIMcp, mockReadApiKeyFromEnvMcp } =
     mockReadApiKeyFromEnvMcp: vi.fn(() => undefined as string | undefined),
   }));
 
-vi.mock('@store/session/wizard-session', () => ({
+vi.mock('@store/session/wizard-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@store/session/wizard-session')>()),
   buildSession: mockBuildSessionMcp,
-  // analytics.ts imports this for sessionProperties(); unused by this
-  // suite's assertions, stubbed only so the mocked module still satisfies
-  // the real module's exports.
-  reportableDiscoveredFeatures: () => undefined,
-  reportablePosthogSdkDetected: () => undefined,
 }));
-vi.mock('@tui/start-tui', () => ({
+vi.mock('@tui', () => ({
   startTUI: mockStartTUIMcp,
 }));
 vi.mock('@store/shared/env-api-key', () => ({
   readApiKeyFromEnv: mockReadApiKeyFromEnvMcp,
 }));
-vi.mock('@store/programs/program-registry', () => ({
+vi.mock('@store/programs', () => ({
   Program: {
     McpAdd: 'mcp-add',
     McpRemove: 'mcp-remove',
     McpTutorial: 'mcp-tutorial',
   },
-  PROGRAM_REGISTRY: [],
-  getSubcommandPrograms: () => [],
-  getProgramConfig: () => ({}),
 }));
 
 import type { Arguments } from 'yargs';

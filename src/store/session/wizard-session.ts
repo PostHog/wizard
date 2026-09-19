@@ -12,6 +12,7 @@
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '../local-dev.js';
 import type { Harness, Integration, Sequence } from '../shared/constants.js';
+import type { CloudRegion } from '../shared/types.js';
 import type { FrameworkConfig } from '../framework-config.js';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type { SettingsConflict } from '../services/claude-settings.js';
@@ -47,7 +48,7 @@ function parseProjectIdArg(value: string | undefined): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-export type CloudRegion = 'us' | 'eu';
+export type { CloudRegion };
 
 /** Lifecycle phase of the main work (agent run, MCP install, etc.) */
 export enum RunPhase {
@@ -478,6 +479,7 @@ export function buildSession(args: {
   e2eAsk?: boolean;
   localDev?: boolean;
   localMcp?: boolean;
+  localContextMill?: boolean;
   localPosthog?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;

@@ -1,9 +1,7 @@
 import type { Arguments } from 'yargs';
-import { setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import { headlessOption, isHeadless } from '@store/shared/headless-mode';
-import { Program } from '@store/programs/program-registry';
-import { VERSION } from '@store/shared/version';
+import { setUI, headlessOption, isHeadless, VERSION } from '@store';
+import { LoggingUI } from '@tui/console';
+import { Program } from '@store/programs';
 import type { Command } from '../command.js';
 import { isTUIUnavailable } from './tui-availability.js';
 
@@ -35,8 +33,8 @@ function runMcpRemove(argv: Arguments): void {
     }
 
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@store/session/wizard-session');
+      const { startTUI } = await import('@tui');
+      const { buildSession } = await import('@store');
       const tui = startTUI(VERSION, Program.McpRemove);
       tui.store.session = buildSession({
         debug,
@@ -55,8 +53,6 @@ function runMcpRemove(argv: Arguments): void {
 /** No exit code on an empty result: nothing to remove is the requested end state. */
 async function runHeadlessRemove(local?: boolean): Promise<void> {
   setUI(new LoggingUI());
-  const { removeMCPServerFromClientsStep } = await import(
-    '@store/services/steps/add-mcp-server-to-clients'
-  );
+  const { removeMCPServerFromClientsStep } = await import('@store');
   await removeMCPServerFromClientsStep({ local });
 }

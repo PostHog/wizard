@@ -1,4 +1,4 @@
-import { mcpAnalyticsConfig } from '@store/programs/mcp-analytics';
+import { mcpAnalyticsConfig } from '@store/programs';
 
 import type { Command } from './command.js';
 import { nativeCommandFactory } from './factories/native-command-factory.js';

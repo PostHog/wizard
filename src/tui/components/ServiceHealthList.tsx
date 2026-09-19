@@ -1,12 +1,8 @@
 // Display the dependencies reported by the health check.
 
 import { Box, Text } from 'ink';
-import {
-  ServiceHealthStatus,
-  type AllServicesHealth,
-  type HealthCheckKey,
-} from '@store/health-checks/types';
-import { SERVICE_LABELS } from '@store/health-checks/readiness';
+import { ServiceHealthStatus, SERVICE_LABELS } from '@store';
+import type { AllServicesHealth, HealthCheckKey } from '@store/types';
 import { Icons } from '../styles.js';
 
 function statusIcon(status: ServiceHealthStatus): {

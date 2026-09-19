@@ -1,24 +1,34 @@
-import { VERSION } from '@store/shared/version';
-import { logToFile, getLogFilePath } from '@store/shared/debug';
-import { runAgent } from '@agent/agent-runner';
-import { authenticate } from '@store/services/authenticate';
-import { getProgramConfig } from '@store/programs/program-registry';
-import { runConfigFor } from '@store/programs/run-config';
-import { getAuditChecks } from '@store/programs/audit/types';
-import { maybeStampAiSdkDetected } from '@store/programs/posthog-integration/detect';
-import type { ProgramConfig } from '@store/programs/program-step';
-import type { Harness, Sequence } from '@store/shared/constants';
-import type { startTUI as StartTUIFn } from '@tui/start-tui';
-import type { WizardStore } from '@store/state/store';
-import { OutroKind, type WizardSession } from '@store/session/wizard-session';
-import type { TaskStreamPush as TaskStreamPushClass } from '@store/task-stream/task-stream-push';
+import {
+  VERSION,
+  logToFile,
+  getLogFilePath,
+  authenticate,
+  OutroKind,
+  checkLocalServices,
+  getLocalDev,
+  runCleanups,
+  classifyRunFailure,
+  emitWizardError,
+  isRunFailure,
+  getUI,
+  analytics,
+} from '@store';
+import {
+  getProgramConfig,
+  runConfigFor,
+  getAuditChecks,
+  maybeStampAiSdkDetected,
+} from '@store/programs';
+import type {
+  ProgramConfig,
+  Harness,
+  Sequence,
+  WizardStore,
+  WizardSession,
+  TaskStreamPush as TaskStreamPushClass,
+} from '@store/types';
+import type { TuiHandle } from '@tui/types';
 import { resolveNoTelemetry } from './resolve-no-telemetry.js';
-import { checkLocalServices, getLocalDev } from '@store/local-dev';
-import { runCleanups } from '@store/shared/wizard-abort';
-import { classifyRunFailure, emitWizardError } from '@store/shared/errors';
-import { isRunFailure } from '@tui/mint-failure';
-import { getUI } from '@store/ui';
-import { analytics } from '@store/shared/analytics';
 import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
@@ -58,6 +68,7 @@ async function advanceStep(
     await authenticate(store.session, config.id);
     maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
+    const { runAgent } = await import('@agent');
     await runAgent(
       runConfigFor(getProgramConfig(step.run.programId)),
       await prepareRunSession(step, store.session),
@@ -65,6 +76,7 @@ async function advanceStep(
     );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
+    const { runAgent } = await import('@agent');
     await runAgent(
       runConfigFor(config),
       await prepareRunSession(step, store.session),
@@ -83,7 +95,7 @@ export function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
-  let tui: ReturnType<typeof StartTUIFn> | null = null;
+  let tui: TuiHandle | null = null;
   let taskStream: TaskStreamPushClass | null = null;
   let onSignal: (() => void) | null = null;
   let exitInProgress = false;
@@ -92,17 +104,11 @@ export function runWizard(
     try {
       const installDir = (options.installDir as string) || process.cwd();
 
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession, RunPhase } = await import(
-        '@store/session/wizard-session'
-      );
-      const { TaskStreamPush } = await import('@store/task-stream');
-      const { PostHogDestination } = await import(
-        '@store/task-stream/destinations/posthog'
-      );
-      const { createFileDestination } = await import(
-        '@store/task-stream/destinations/file'
-      );
+      const { startTUI } = await import('@tui');
+      const { buildSession, RunPhase } = await import('@store');
+      const { TaskStreamPush } = await import('@store');
+      const { PostHogDestination } = await import('@store');
+      const { createFileDestination } = await import('@store');
 
       // Before the TUI mounts: once Ink owns the alt screen, anything written
       // to it is wiped on unmount (see the catch block below), so an abort here
@@ -115,7 +121,7 @@ export function runWizard(
         localPosthog: local.localPosthog && !options.baseUrl,
       });
       if (localServicesError) {
-        const { wizardAbort } = await import('@store/shared/wizard-abort');
+        const { wizardAbort } = await import('@store');
         await wizardAbort({ message: localServicesError });
         return;
       }
@@ -254,9 +260,7 @@ export function runWizard(
           if (shown(step)) await advanceStep(step, activeTui.store, config);
         }
       } else if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          '@store/shared/setup-utils'
-        );
+        const { getOrAskForProjectData } = await import('@store');
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
             signup: session.signup,
@@ -274,6 +278,7 @@ export function runWizard(
         });
       } else {
         try {
+          const { runAgent } = await import('@agent');
           await runAgent(runConfigFor(config), activeTui.store.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.

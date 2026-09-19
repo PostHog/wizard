@@ -5,7 +5,7 @@ import type {
   Options,
   PositionalOptions,
 } from 'yargs';
-import { setEntryCommand } from '@store/shared/links';
+import { setEntryCommand } from '@store';
 
 export interface Command {
   /** Yargs command name. Use `['$0']` for the default command. */

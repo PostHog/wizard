@@ -9,7 +9,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import {
   ConfirmationInput,
   LoadingBox,
@@ -20,12 +20,13 @@ import { ServiceHealthList } from '../../components/ServiceHealthList.js';
 import {
   getBlockingServiceKeys,
   SIGNUP_WIZARD_READINESS_CONFIG,
-} from '@store/health-checks/readiness';
-import { ServiceHealthStatus } from '@store/health-checks/types';
-import { wizardAbort } from '@store/shared/wizard-abort';
-import { ErrorCodes } from '@store/shared/errors';
-import { fetchSkillMenu, downloadSkill } from '@store/tools';
-import { GITHUB_SKILLS_BASE_URL } from '@store/shared/constants';
+  ServiceHealthStatus,
+  wizardAbort,
+  ErrorCodes,
+  fetchSkillMenu,
+  downloadSkill,
+  GITHUB_SKILLS_BASE_URL,
+} from '@store';
 import { useDismissOnAnyKey } from '../../hooks/useDismissOnAnyKey.js';
 
 interface HealthCheckScreenProps {

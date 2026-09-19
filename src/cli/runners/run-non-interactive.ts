@@ -1,35 +1,30 @@
 import {
   POSTHOG_DOCS_URL,
-  type Harness,
-  type Sequence,
-} from '@store/shared/constants';
-import {
   checkLocalServices,
   getLocalDev,
   POSTHOG_LOCAL_URL,
-} from '@store/local-dev';
-import type { CloudRegion } from '@store/shared/types';
-import { getUI, setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import type { ProgramConfig } from '@store/programs/program-step';
-import { runConfigFor } from '@store/programs/run-config';
-import { getAuditChecks } from '@store/programs/audit/types';
-import { analytics } from '@store/shared/analytics';
-import { resolveNoTelemetry } from './resolve-no-telemetry.js';
-import type { WizardStore } from '@store/state/store';
-import type { TaskStreamPush } from '@store/task-stream/task-stream-push';
-import { join } from 'node:path';
-import {
+  getUI,
+  setUI,
+  analytics,
   ErrorCodes,
   classifyRunFailure,
   detectErrorCode,
   emitWizardError,
-} from '@store/shared/errors';
+} from '@store';
 import type {
+  Harness,
+  Sequence,
+  CloudRegion,
+  ProgramConfig,
+  WizardStore,
+  TaskStreamPush,
   OutroData,
   RunPhase as RunPhaseT,
-} from '@store/session/wizard-session';
-import { flowFor } from '@store/programs/flow-for';
+} from '@store/types';
+import { LoggingUI } from '@tui/console';
+import { runConfigFor, getAuditChecks, flowFor } from '@store/programs';
+import { resolveNoTelemetry } from './resolve-no-telemetry.js';
+import { join } from 'node:path';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -112,17 +107,13 @@ export function runNonInteractive(
 
   void (async () => {
     const path = await import('path');
-    const { buildSession, RunPhase, OutroKind } = await import(
-      '@store/session/wizard-session'
-    );
-    const { readEnvironment } = await import('@store/shared/environment');
-    const { readApiKeyFromEnv } = await import('@store/shared/env-api-key');
+    const { buildSession, RunPhase, OutroKind } = await import('@store');
+    const { readEnvironment } = await import('@store');
+    const { readApiKeyFromEnv } = await import('@store');
     const { configureLogFileFromEnvironment, logToFile } = await import(
-      '@store/shared/debug'
+      '@store'
     );
-    const { wizardAbort, WizardError } = await import(
-      '@store/shared/wizard-abort'
-    );
+    const { wizardAbort, WizardError } = await import('@store');
 
     configureLogFileFromEnvironment();
 
@@ -191,10 +182,10 @@ export function runNonInteractive(
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
     {
-      const { WizardStore } = await import('@store/state/store');
-      const { HeadlessUI } = await import('@tui/console/headless-ui');
+      const { WizardStore } = await import('@store');
+      const { HeadlessUI } = await import('@tui/console');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
-        await import('@store/task-stream');
+        await import('@store');
 
       // `''` resolves to the default path, so `--ci` always dumps.
       const logTarget =
@@ -249,9 +240,7 @@ export function runNonInteractive(
 
     try {
       if (mode === 'ci') {
-        const { configureGatewayFromCIEnvironment } = await import(
-          '@agent/gateway/gateway-session'
-        );
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',
@@ -346,7 +335,7 @@ export function runNonInteractive(
         }
       }
 
-      const { runAgent } = await import('@agent/agent-runner');
+      const { runAgent } = await import('@agent');
       await runAgent(runConfigFor(config), session);
       await settleStream(RunPhase.Completed);
     } catch (error) {

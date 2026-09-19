@@ -42,8 +42,14 @@ import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/state/store';
-import { Program } from '@store/programs/program-registry';
+import type {
+  WizardStore,
+  PromptOption,
+  RoleGreeting,
+  ProjectDataProfile,
+  Integration,
+} from '@store/types';
+import { Program } from '@store/programs';
 import { Colors, Icons } from '../styles.js';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings.js';
 import {
@@ -61,17 +67,11 @@ import {
   getGeneratedQuests,
   getSeedOfferGreeting,
   FOLLOW_UP_EXIT_SENTINEL,
-  type PromptOption,
-  type RoleGreeting,
-} from '@store/mcp-role-prompts';
-import {
   degradedProfile,
   isKnownCloudHost,
-  type ProjectDataProfile,
-} from '@store/mcp-project-profile';
-import type { Integration } from '@store/shared/constants';
-import { analytics } from '@store/shared/analytics';
-import { logToFile } from '@store/shared/debug';
+  analytics,
+  logToFile,
+} from '@store';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,

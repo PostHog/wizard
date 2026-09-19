@@ -12,18 +12,17 @@
  * `for await (...)` and render as they arrive.
  */
 
-import type { AgentChunk } from '@store/agent-protocol/mcp-prompt';
-import type { Credentials } from '@store/session/wizard-session';
+import type { AgentChunk, Credentials } from '@store/types';
 import {
   DEFAULT_AGENT_MODEL,
   WIZARD_USER_AGENT,
-} from '@store/shared/constants';
-import { logToFile } from '@store/shared/debug';
+  logToFile,
+  sanitizeAgentSubprocessEnv,
+  analytics,
+} from '@store';
 import { gatewayAuth } from './gateway/gateway-session.js';
 import { buildAgentEnv, buildRunTags } from './agent-interface.js';
-import { sanitizeAgentSubprocessEnv } from '@store/agent-protocol/agent-env-isolation';
 import { createIsolatedAgentConfigDir } from './stored-login.js';
-import { analytics } from '@store/shared/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.

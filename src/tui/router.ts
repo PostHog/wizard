@@ -4,8 +4,9 @@
  */
 
 import { ScreenId } from './screen-sequences.js';
-import { Interrupt } from '@store/state/interrupts';
-import { Program, type ProgramId } from '@store/programs/program-registry';
+import { Interrupt } from '@store';
+import { Program } from '@store/programs';
+import type { ProgramId } from '@store/types';
 
 export { ScreenId, Program };
 export type { ProgramId };

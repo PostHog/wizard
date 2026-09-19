@@ -23,7 +23,7 @@ import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import type { UiStore } from '../ui-store.js';
 import { UiStoreContext } from '../hooks/useUiStore.js';
 

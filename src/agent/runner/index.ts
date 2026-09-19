@@ -16,16 +16,17 @@
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  */
 
-import type { WizardSession } from '@store/session/wizard-session';
-import { analytics } from '@store/shared/analytics';
+import type { WizardSession, ProgramRunConfig } from '@store/types';
 import {
+  analytics,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-} from '@store/shared/constants';
-import { logToFile } from '@store/shared/debug';
-import { getUI } from '@store/ui';
-import type { ProgramRunConfig } from '@store/agent-protocol/program-run';
+  logToFile,
+  getUI,
+  flushScanReport,
+  registerCleanup,
+} from '@store';
 import type { ProgramRun, BootstrapResult } from './shared/types.js';
 import { bootstrapProgram } from './shared/bootstrap.js';
 import {
@@ -34,9 +35,7 @@ import {
   type ProgramBinding,
   type SwitchboardCtx,
 } from './switchboard/index.js';
-import { flushScanReport } from '@store/security/yara-hooks';
-import { startAuditLedgerWatcher } from '@store/programs/audit/ledger-watcher';
-import { registerCleanup } from '@store/shared/wizard-abort';
+import { startAuditLedgerWatcher } from '@store/programs';
 
 export type {
   ProgramRun,

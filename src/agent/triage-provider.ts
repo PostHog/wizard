@@ -5,8 +5,7 @@
  * transport, reasoning effort and trace headers come from one place.
  */
 
-import { Harness } from '@store/shared/constants';
-import { logToFile } from '@store/shared/debug';
+import { Harness, logToFile } from '@store';
 import {
   buildGatewayModel,
   gatewayApiFor,

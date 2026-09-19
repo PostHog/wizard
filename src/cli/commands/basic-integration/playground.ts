@@ -1,7 +1,7 @@
-import { VERSION } from '@store/shared/version';
-import { startPlayground } from '@tui/playground/start-playground';
+import { VERSION } from '@store';
 
 /** Launch the TUI primitives playground. */
-export function runPlayground(): void {
+export async function runPlayground(): Promise<void> {
+  const { startPlayground } = await import('@tui');
   startPlayground(VERSION);
 }

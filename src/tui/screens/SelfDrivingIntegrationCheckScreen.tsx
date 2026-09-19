@@ -18,18 +18,14 @@ import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/state/store';
-import type { CloudRegion } from '@store/session/wizard-session';
+import type { WizardStore, CloudRegion } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import {
   PrivacyPanel,
   PRIVACY_PANEL_LABEL,
 } from '../components/PrivacyPanel.js';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
-import {
-  POSTHOG_PRIVACY_URL,
-  POSTHOG_TERMS_URL,
-} from '@store/shared/constants';
+import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@store';
 import { Colors } from '../styles.js';
 
 interface SelfDrivingIntegrationCheckScreenProps {

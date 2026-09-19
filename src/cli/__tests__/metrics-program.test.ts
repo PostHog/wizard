@@ -1,9 +1,9 @@
-import { AGENT_SKILL_STEPS } from '../agent-skill/index.js';
-import { getProgramConfig, Program } from '../program-registry.js';
-import { metricsConfig } from '../metrics/index.js';
-import type { ProgramRun } from '../../agent-protocol/program-run.js';
+import { AGENT_SKILL_STEPS } from '@store/programs/agent-skill';
+import { getProgramConfig, Program } from '@store/programs/program-registry';
+import { metricsConfig } from '@store/programs/metrics';
+import type { ProgramRun } from '@store/types';
 
-import { metricsCommand } from '@cli/commands/metrics';
+import { metricsCommand } from '../commands/metrics.js';
 
 function staticRun(config: typeof metricsConfig): ProgramRun {
   if (typeof config.run === 'function') {

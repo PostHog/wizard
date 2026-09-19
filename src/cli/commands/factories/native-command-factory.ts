@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@store/programs/program-step';
+import type { ProgramConfig } from '@store/types';
 
 import type { Command } from '../command.js';
 

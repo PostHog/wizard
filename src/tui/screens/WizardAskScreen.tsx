@@ -9,7 +9,7 @@
 import { Box, Text, useInput } from 'ink';
 import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, AskAnswers, AskQuestion } from '@store/types';
 import {
   LinkText,
   ModalOverlay,
@@ -17,9 +17,8 @@ import {
   extractUrls,
 } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
-import { copyToClipboard, openInBrowser } from '@store/shared/clipboard';
+import { copyToClipboard, openInBrowser } from '@store';
 import { useKeyBindings } from '../hooks/useKeyBindings.js';
-import type { AskAnswers, AskQuestion } from '@store/session/wizard-session';
 
 interface WizardAskScreenProps {
   store: WizardStore;

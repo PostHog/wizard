@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import type { ProvisioningResult } from '@store/shared/provisioning';
+import { getUI, setUI } from '@store';
+import { LoggingUI } from '@tui/console';
+import type { ProvisioningResult } from '@store/types';
 import type { Command } from './command.js';
 
 export const provisionCommand: Command = {
@@ -66,7 +66,7 @@ async function provision({
   jsonMode,
 }: ProvisionArgs): Promise<void> {
   try {
-    const { provisionNewAccount } = await import('@store/shared/provisioning');
+    const { provisionNewAccount } = await import('@store');
     if (!jsonMode) {
       getUI().log.info(`Provisioning account for ${email} in ${region}...`);
     }

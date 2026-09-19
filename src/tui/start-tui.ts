@@ -8,34 +8,33 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, Program, type ProgramId } from '@store/state/store';
-import { InkUI } from './ink-ui.js';
+import { WizardStore, setUI, analytics, logToFile, StoreUI } from '@store';
+import { Program, flowFor } from '@store/programs';
+import type { ProgramId } from '@store/types';
 import { UiStore } from './ui-store.js';
-import { setUI } from '@store/ui';
 import { App } from './App.js';
 import { enterDarkTerminal, releaseTerminal } from './terminal.js';
-import { analytics } from '@store/shared/analytics';
-import { logToFile } from '@store/shared/debug';
 import { getExitLine } from './exit-line.js';
-import { flowFor } from '@store/programs/flow-for';
 
 export { releaseTerminal };
+
+export interface TuiHandle {
+  unmount: () => void;
+  store: WizardStore;
+  waitForSetup: () => Promise<void>;
+}
 
 export function startTUI(
   version: string,
   program: ProgramId = Program.PostHogIntegration,
-): {
-  unmount: () => void;
-  store: WizardStore;
-  waitForSetup: () => Promise<void>;
-} {
+): TuiHandle {
   enterDarkTerminal();
 
   const store = new WizardStore(flowFor(program).flow);
   store.version = version;
   const ui = new UiStore(store);
 
-  const inkUI = new InkUI(store);
+  const inkUI = new StoreUI(store);
   setUI(inkUI);
 
   const { unmount: inkUnmount, waitUntilExit } = render(

@@ -9,11 +9,13 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
-import { SETUP_REPORT_FILE } from '@store/programs/posthog-integration';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@store/programs/self-driving/detect';
+import {
+  SETUP_REPORT_FILE,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
+} from '@store/programs';
 
 interface SelfDrivingHandoffScreenProps {
   store: WizardStore;

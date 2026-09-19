@@ -16,9 +16,9 @@ import path from 'path';
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { analytics } from '@store/shared/analytics';
-import { logToFile } from '@store/shared/debug';
 import {
+  analytics,
+  logToFile,
   AUDIT_ADD_CHECKS_DESCRIPTION,
   AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
   AUDIT_RESOLVE_CHECKS_DESCRIPTION,
@@ -52,27 +52,24 @@ import {
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
-} from '@store/tools/tools';
-import type { LLMProvider } from '@posthog/warlock';
-import {
   isFullyCancelled,
-  type WizardAskBridge,
-} from '@store/session/wizard-ask-bridge';
-import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
-} from '@store/tools/handoff';
-import { createSecretVault } from '@store/session/secret-vault';
-import { AUDIT_CHECKS_FILE } from '@store/programs/audit/types';
-import type { AuditCheck, AuditStatus } from '@store/programs/audit/types';
-import { makeMutex } from '@store/shared/atomic-ledger';
-import { withMode } from './index.js';
-import {
+  createSecretVault,
+  makeMutex,
   detectNodePackageManagers,
-  type PackageManagerDetector,
-} from '@store/detection/package-manager';
+} from '@store';
+import type { LLMProvider } from '@posthog/warlock';
+import type {
+  WizardAskBridge,
+  AuditCheck,
+  AuditStatus,
+  PackageManagerDetector,
+} from '@store/types';
+import { AUDIT_CHECKS_FILE } from '@store/programs';
+import { withMode } from './index.js';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];

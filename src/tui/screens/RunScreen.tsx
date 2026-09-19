@@ -8,7 +8,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import {
   TabContainer,
   SplitView,
@@ -18,7 +18,7 @@ import {
   HNViewer,
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
-import { ADDITIONAL_FEATURE_LABELS } from '@store/session/wizard-session';
+import { ADDITIONAL_FEATURE_LABELS, WIZARD_LOG_FILE } from '@store';
 import { LearnCard } from '../components/LearnCard.js';
 import { VisualizerTab } from '../components/PhaseVisuals.js';
 import { TipsCard } from '../components/TipsCard.js';
@@ -27,7 +27,6 @@ import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { PROGRAM_PRESENTATION } from '../programs/presentation.js';
 import { getContentBlocks as getSkillContentBlocks } from '../programs/agent-skill/content/index.js';
 
-import { WIZARD_LOG_FILE } from '@store/shared/paths';
 import { useUiStore } from '../hooks/useUiStore.js';
 
 interface RunScreenProps {

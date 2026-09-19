@@ -14,7 +14,7 @@ import {
   KeyMatch,
   type KeyBinding,
 } from '../hooks/useKeyBindings.js';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../constants.js';
 import { useUiStore } from '../hooks/useUiStore.js';
 

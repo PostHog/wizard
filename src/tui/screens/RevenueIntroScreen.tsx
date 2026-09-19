@@ -11,14 +11,10 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, RevenueDetectError } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
-import {
-  POSTHOG_SDKS,
-  STRIPE_SDKS,
-  type RevenueDetectError,
-} from '@store/programs/revenue-analytics';
+import { POSTHOG_SDKS, STRIPE_SDKS } from '@store/programs';
 
 interface RevenueIntroScreenProps {
   store: WizardStore;

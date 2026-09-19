@@ -1,6 +1,10 @@
 {
   "add-mcp-server-to-clients.js": {
     "sources": [
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/api.ts",
+      "src/store/host-resolution.ts",
+      "src/store/services/oauth/program-scopes.ts",
       "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts",
       "src/store/services/steps/add-mcp-server-to-clients/clients/claude-code.ts",
       "src/store/services/steps/add-mcp-server-to-clients/clients/claude-web.ts",
@@ -9,73 +13,41 @@
       "src/store/services/steps/add-mcp-server-to-clients/clients/opencode.ts",
       "src/store/services/steps/add-mcp-server-to-clients/clients/visual-studio-code.ts",
       "src/store/services/steps/add-mcp-server-to-clients/clients/zed.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/defaults.ts",
       "src/store/services/steps/add-mcp-server-to-clients/index.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/plugin-client.ts"
+      "src/store/services/steps/add-mcp-server-to-clients/plugin-client.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/results.ts",
+      "src/store/shared/bounded-fs.ts",
+      "src/store/shared/errors/agent-map.ts",
+      "src/store/shared/errors/auth.ts",
+      "src/store/shared/errors/catalog.ts",
+      "src/store/shared/errors/codes.ts",
+      "src/store/shared/errors/detect-map.ts",
+      "src/store/shared/errors/emit.ts",
+      "src/store/shared/errors/run-failure.ts",
+      "src/store/shared/errors/sanitize.ts",
+      "src/store/shared/errors/skill-map.ts",
+      "src/store/shared/links.ts",
+      "src/store/shared/oauth-errors.ts",
+      "src/store/shared/oauth.ts",
+      "src/store/shared/package-manager.ts",
+      "src/store/shared/project-resolution.ts",
+      "src/store/shared/provisioning.ts",
+      "src/store/shared/semver.ts",
+      "src/store/shared/setup-utils.ts",
+      "src/store/shared/telemetry.ts",
+      "src/store/shared/urls.ts",
+      "src/store/shared/wizard-abort.ts"
     ],
     "imports": [
-      "analytics.js",
-      "debug.js",
-      "defaults.js",
-      "rolldown-runtime.js",
-      "telemetry.js",
-      "ui.js"
+      "analytics.js"
     ]
   },
-  "agent-interface.js": {
-    "sources": [
-      "src/agent/agent-interface.ts",
-      "src/agent/agent-phase.ts",
-      "src/agent/bash-fence.ts",
-      "src/agent/commandments.ts",
-      "src/agent/output-signals.ts",
-      "src/agent/runner/harness/pi/gateway.ts",
-      "src/agent/runner/harness/pi/runtime-notes.ts",
-      "src/agent/runner/switchboard/commandments.ts",
-      "src/agent/stored-login.ts",
-      "src/agent/tools/mcp.ts",
-      "src/agent/triage-provider.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
-      "src/store/auth-session-state.ts",
-      "src/store/fetch-retry.ts",
-      "src/store/safe-tools.ts",
-      "src/store/services/claude-settings.ts",
-      "src/store/session/secret-vault.ts",
-      "src/store/session/wizard-ask-bridge.ts",
-      "src/store/shared/custom-headers.ts",
-      "src/store/shared/env-scan.ts",
-      "src/store/tools/handoff.ts",
-      "src/store/tools/tools.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "bounded-fs.js",
-      "constants.js",
-      "debug.js",
-      "errors.js",
-      "gateway-session.js",
-      "queue-tools.js",
-      "rolldown-runtime.js",
-      "ui.js",
-      "wizard-abort.js",
-      "wizard-session.js",
-      "yara-hooks.js"
-    ]
-  },
-  "agent-prompt-loader.js": {
-    "sources": [
-      "src/agent/agent-prompt-loader.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "debug.js",
-      "queue-tools.js"
-    ]
-  },
-  "agent-runner.js": {
+  "agent.js": {
     "sources": [
       "src/agent/agent-prompt.ts",
-      "src/agent/agent-runner.ts",
+      "src/agent/detection/agentic.ts",
+      "src/agent/mcp-prompt-streaming.ts",
       "src/agent/middleware/benchmark.ts",
       "src/agent/middleware/benchmarks/cache-tracker.ts",
       "src/agent/middleware/benchmarks/compaction-tracker.ts",
@@ -105,59 +77,109 @@
       "src/agent/runner/switchboard/flags/self-driving.ts",
       "src/agent/runner/switchboard/harness.ts",
       "src/agent/runner/switchboard/index.ts",
-      "src/agent/runner/switchboard/sequence.ts",
-      "src/store/programs/audit/ledger-watcher.ts",
-      "src/store/shared/terminal-bell.ts"
+      "src/agent/runner/switchboard/sequence.ts"
     ],
     "imports": [
+      "add-mcp-server-to-clients.js",
       "agent-interface.js",
       "agent-prompt-loader.js",
       "analytics.js",
-      "constants.js",
-      "debug.js",
-      "environment.js",
-      "errors.js",
-      "file-watcher.js",
-      "gateway-session.js",
-      "package-manager.js",
       "pi.js",
+      "programs.js",
       "queue-tools.js",
-      "readiness.js",
-      "registry.js",
-      "rolldown-runtime.js",
-      "setup-utils.js",
-      "token-pricing.js",
-      "ui.js",
-      "version.js",
-      "wizard-abort.js",
-      "yara-hooks.js"
+      "store.js"
+    ]
+  },
+  "agent-interface.js": {
+    "sources": [
+      "src/agent/agent-interface.ts",
+      "src/agent/bash-fence.ts",
+      "src/agent/commandments.ts",
+      "src/agent/gateway/gateway-session.ts",
+      "src/agent/output-signals.ts",
+      "src/agent/runner/harness/pi/gateway.ts",
+      "src/agent/runner/harness/pi/runtime-notes.ts",
+      "src/agent/runner/switchboard/commandments.ts",
+      "src/agent/stored-login.ts",
+      "src/agent/tools/mcp.ts",
+      "src/agent/triage-provider.ts"
+    ],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "analytics.js",
+      "queue-tools.js",
+      "store.js"
+    ]
+  },
+  "agent-prompt-loader.js": {
+    "sources": [
+      "src/agent/agent-prompt-loader.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "queue-tools.js",
+      "store.js"
     ]
   },
   "analytics.js": {
     "sources": [
+      "src/env.ts",
+      "src/store/local-dev.ts",
+      "src/store/session/wizard-session.ts",
       "src/store/shared/analytics.ts",
-      "src/store/shared/ci-flag-overrides.ts"
+      "src/store/shared/ci-flag-overrides.ts",
+      "src/store/shared/constants.ts",
+      "src/store/shared/debug.ts",
+      "src/store/shared/paths.ts",
+      "src/store/shared/version.ts",
+      "src/store/ui/index.ts",
+      "src/store/ui/null-ui.ts"
     ],
     "imports": [
-      "constants.js",
-      "debug.js",
-      "version.js",
-      "wizard-session.js"
-    ]
-  },
-  "api.js": {
-    "sources": [
-      "src/store/api.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "constants.js",
-      "rolldown-runtime.js"
+      "analytics.js"
     ]
   },
   "bin.js": {
     "sources": [
-      "bin.ts",
+      "bin.ts"
+    ],
+    "imports": [
+      "main.js"
+    ]
+  },
+  "ci-install.js": {
+    "sources": [
+      "src/cli/commands/basic-integration/ci-install.ts"
+    ],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "analytics.js",
+      "console.js",
+      "runners.js",
+      "store.js"
+    ]
+  },
+  "console.js": {
+    "sources": [
+      "src/tui/console/headless-ui.ts",
+      "src/tui/console/logging-ui.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "store.js"
+    ]
+  },
+  "interactive.js": {
+    "sources": [
+      "src/cli/commands/basic-integration/interactive.ts"
+    ],
+    "imports": [
+      "runners.js",
+      "store.js"
+    ]
+  },
+  "main.js": {
+    "sources": [
       "src/cli/commands/ai-observability.ts",
       "src/cli/commands/audit.ts",
       "src/cli/commands/basic-integration/index.ts",
@@ -187,203 +209,22 @@
       "src/cli/commands/slack.ts",
       "src/cli/commands/upload-sourcemaps.ts",
       "src/cli/commands/warehouse.ts",
-      "src/cli/runners/resolve-no-telemetry.ts",
-      "src/cli/runners/run-non-interactive.ts",
-      "src/cli/runners/run-wizard-ci.ts",
-      "src/cli/runners/run-wizard-headless.ts",
-      "src/cli/runners/run-wizard.ts",
-      "src/cli/wizard.ts",
-      "src/store/programs/ai-opt-in-gate.ts",
-      "src/store/programs/dispatch-family.ts",
-      "src/store/programs/flow-for.ts",
-      "src/store/programs/run-config.ts",
-      "src/tui/family-picker.tsx",
-      "src/tui/hooks/keyboard-hints-utils.ts",
-      "src/tui/hooks/useKeyBindings.ts",
-      "src/tui/hooks/useKeyboardHints.tsx",
-      "src/tui/hooks/useStdoutDimensions.ts",
-      "src/tui/mint-failure.ts",
-      "src/tui/primitives/ConfirmButton.tsx",
-      "src/tui/primitives/PickerMenu.tsx",
-      "src/tui/primitives/PromptLabel.tsx",
-      "src/tui/primitives/content-types.ts",
-      "src/tui/primitives/layout-helpers.ts",
-      "src/tui/primitives/picker-filter.ts",
-      "src/tui/styles.ts"
+      "src/cli/dispatch-family.ts",
+      "src/cli/main.ts",
+      "src/cli/wizard.ts"
     ],
     "imports": [
       "add-mcp-server-to-clients.js",
-      "agent-interface.js",
-      "agent-runner.js",
+      "agent.js",
       "analytics.js",
-      "api.js",
       "ci-install.js",
-      "constants.js",
-      "debug.js",
-      "env-api-key.js",
-      "environment.js",
-      "errors.js",
-      "file.js",
-      "gateway-session.js",
-      "headless-ui.js",
+      "console.js",
       "interactive.js",
-      "local-dev.js",
-      "logging-ui.js",
       "non-interactive.js",
       "playground.js",
-      "posthog.js",
-      "provisioning.js",
-      "run-failure.js",
-      "setup-utils.js",
-      "start-tui.js",
+      "runners.js",
       "store.js",
-      "task-stream.js",
-      "telemetry.js",
-      "token-pricing.js",
-      "ui.js",
-      "version.js",
-      "wizard-abort.js",
-      "wizard-session.js",
-      "yara-hooks.js"
-    ]
-  },
-  "bounded-fs.js": {
-    "sources": [
-      "src/store/shared/bounded-fs.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "debug.js"
-    ]
-  },
-  "ci-install.js": {
-    "sources": [
-      "src/cli/commands/basic-integration/ci-install.ts"
-    ],
-    "imports": [
-      "bin.js",
-      "errors.js",
-      "logging-ui.js",
-      "provisioning.js",
-      "run-failure.js",
-      "ui.js"
-    ]
-  },
-  "constants.js": {
-    "sources": [
-      "src/store/shared/constants.ts"
-    ],
-    "imports": [
-      "local-dev.js",
-      "version.js"
-    ]
-  },
-  "debug.js": {
-    "sources": [],
-    "imports": [
-      "debug.js"
-    ]
-  },
-  "defaults.js": {
-    "sources": [
-      "src/store/services/steps/add-mcp-server-to-clients/defaults.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/results.ts"
-    ],
-    "imports": []
-  },
-  "endpoints.js": {
-    "sources": [
-      "src/store/health-checks/endpoints.ts"
-    ],
-    "imports": [
-      "constants.js",
-      "debug.js"
-    ]
-  },
-  "env-api-key.js": {
-    "sources": [
-      "src/store/shared/env-api-key.ts"
-    ],
-    "imports": [
-      "bounded-fs.js",
-      "rolldown-runtime.js"
-    ]
-  },
-  "environment.js": {
-    "sources": [
-      "src/store/shared/environment.ts"
-    ],
-    "imports": [
-      "rolldown-runtime.js"
-    ]
-  },
-  "errors.js": {
-    "sources": [
-      "src/store/agent-protocol/agent-signals.ts",
-      "src/store/shared/errors/agent-map.ts",
-      "src/store/shared/errors/auth.ts",
-      "src/store/shared/errors/catalog.ts",
-      "src/store/shared/errors/codes.ts",
-      "src/store/shared/errors/detect-map.ts",
-      "src/store/shared/errors/emit.ts",
-      "src/store/shared/errors/run-failure.ts",
-      "src/store/shared/errors/sanitize.ts",
-      "src/store/shared/errors/skill-map.ts"
-    ],
-    "imports": []
-  },
-  "file.js": {
-    "sources": [
-      "src/store/task-stream/destinations/file.ts"
-    ],
-    "imports": [
-      "debug.js"
-    ]
-  },
-  "file-watcher.js": {
-    "sources": [
-      "src/store/file-watcher.ts"
-    ],
-    "imports": [
-      "debug.js"
-    ]
-  },
-  "gateway-session.js": {
-    "sources": [],
-    "imports": [
-      "gateway-session.js"
-    ]
-  },
-  "headless-ui.js": {
-    "sources": [
-      "src/tui/console/headless-ui.ts"
-    ],
-    "imports": [
-      "logging-ui.js"
-    ]
-  },
-  "interactive.js": {
-    "sources": [
-      "src/cli/commands/basic-integration/interactive.ts"
-    ],
-    "imports": [
-      "bin.js",
-      "run-failure.js"
-    ]
-  },
-  "local-dev.js": {
-    "sources": [
-      "src/store/local-dev.ts"
-    ],
-    "imports": []
-  },
-  "logging-ui.js": {
-    "sources": [
-      "src/tui/console/logging-ui.ts"
-    ],
-    "imports": [
-      "constants.js",
-      "readiness.js"
+      "tui.js"
     ]
   },
   "mcp.js": {
@@ -391,20 +232,7 @@
       "src/agent/runner/harness/pi/mcp.ts"
     ],
     "imports": [
-      "debug.js",
-      "version.js"
-    ]
-  },
-  "mcp-prompt-streaming.js": {
-    "sources": [
-      "src/agent/mcp-prompt-streaming.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "constants.js",
-      "debug.js",
-      "gateway-session.js"
+      "analytics.js"
     ]
   },
   "non-interactive.js": {
@@ -412,8 +240,8 @@
       "src/cli/commands/basic-integration/non-interactive.ts"
     ],
     "imports": [
-      "errors.js",
-      "ui.js"
+      "add-mcp-server-to-clients.js",
+      "analytics.js"
     ]
   },
   "orchestrator-tools.js": {
@@ -426,20 +254,9 @@
     ]
   },
   "package-json.js": {
-    "sources": [
-      "src/store/shared/package-json.ts"
-    ],
+    "sources": [],
     "imports": [
-      "rolldown-runtime.js"
-    ]
-  },
-  "package-manager.js": {
-    "sources": [
-      "src/store/detection/package-manager.ts",
-      "src/store/frameworks/python/utils.ts"
-    ],
-    "imports": [
-      "setup-utils.js"
+      "package-json.js"
     ]
   },
   "pi.js": {
@@ -449,26 +266,175 @@
       "src/agent/runner/harness/pi/index.ts"
     ],
     "imports": [
+      "add-mcp-server-to-clients.js",
       "agent-interface.js",
       "analytics.js",
-      "constants.js",
-      "debug.js",
-      "errors.js",
-      "gateway-session.js",
       "mcp.js",
       "security.js",
+      "store.js",
       "subagent.js",
       "task.js",
       "tasks.js",
-      "tools.js",
-      "ui.js",
-      "version.js",
-      "yara-hooks.js"
+      "tools.js"
     ]
   },
   "playground.js": {
     "sources": [
-      "src/cli/commands/basic-integration/playground.ts",
+      "src/cli/commands/basic-integration/playground.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "tui.js"
+    ]
+  },
+  "programs.js": {
+    "sources": [
+      "src/store/programs/ai-opt-in-gate.ts",
+      "src/store/programs/audit/ledger-watcher.ts",
+      "src/store/programs/error-tracking-upload-source-maps/detect-agentic.ts",
+      "src/store/programs/flow-for.ts",
+      "src/store/programs/run-config.ts"
+    ],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "analytics.js",
+      "store.js"
+    ]
+  },
+  "queue-tools.js": {
+    "sources": [
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
+      "src/agent/runner/sequence/orchestrator/queue.ts",
+      "src/agent/runner/switchboard/models.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "store.js"
+    ]
+  },
+  "runners.js": {
+    "sources": [
+      "src/cli/runners/resolve-no-telemetry.ts",
+      "src/cli/runners/run-non-interactive.ts",
+      "src/cli/runners/run-wizard-ci.ts",
+      "src/cli/runners/run-wizard-headless.ts",
+      "src/cli/runners/run-wizard.ts"
+    ],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "agent.js",
+      "analytics.js",
+      "console.js",
+      "programs.js",
+      "store.js",
+      "tui.js"
+    ]
+  },
+  "security.js": {
+    "sources": [
+      "src/agent/runner/harness/pi/security.ts"
+    ],
+    "imports": [
+      "agent-interface.js",
+      "analytics.js",
+      "store.js"
+    ]
+  },
+  "steps.js": {
+    "sources": [
+      "src/store/services/steps/upload-environment-variables/EnvironmentProvider.ts",
+      "src/store/services/steps/upload-environment-variables/index.ts",
+      "src/store/services/steps/upload-environment-variables/providers/vercel.ts"
+    ],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "analytics.js"
+    ]
+  },
+  "store.js": {
+    "sources": [],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "analytics.js",
+      "store.js"
+    ]
+  },
+  "subagent.js": {
+    "sources": [
+      "src/agent/runner/harness/pi/subagent.ts"
+    ],
+    "imports": [
+      "analytics.js"
+    ]
+  },
+  "task.js": {
+    "sources": [
+      "src/agent/runner/harness/pi/task.ts"
+    ],
+    "imports": [
+      "add-mcp-server-to-clients.js",
+      "agent-interface.js",
+      "agent-prompt-loader.js",
+      "analytics.js",
+      "mcp.js",
+      "orchestrator-tools.js",
+      "pi.js",
+      "queue-tools.js",
+      "security.js",
+      "store.js",
+      "tools.js"
+    ]
+  },
+  "tasks.js": {
+    "sources": [
+      "src/agent/runner/harness/pi/tasks.ts"
+    ],
+    "imports": [
+      "analytics.js"
+    ]
+  },
+  "tools.js": {
+    "sources": [
+      "src/agent/runner/harness/pi/tools.ts"
+    ],
+    "imports": [
+      "analytics.js",
+      "pi.js",
+      "store.js"
+    ]
+  },
+  "tui.js": {
+    "sources": [
+      "src/tui/App.tsx",
+      "src/tui/components/LearnCard.tsx",
+      "src/tui/components/PhaseVisuals.tsx",
+      "src/tui/components/PrivacyPanel.tsx",
+      "src/tui/components/ServiceHealthList.tsx",
+      "src/tui/components/StatusPeekTrigger.tsx",
+      "src/tui/components/TipsCard.tsx",
+      "src/tui/components/TitleBar.tsx",
+      "src/tui/components/TokenCostHud.tsx",
+      "src/tui/components/visualizer/CrateStack.tsx",
+      "src/tui/components/visualizer/DashboardGrid.tsx",
+      "src/tui/components/visualizer/DiffCascade.tsx",
+      "src/tui/components/visualizer/LibraryShelf.tsx",
+      "src/tui/components/visualizer/MatrixRain.tsx",
+      "src/tui/components/visualizer/Tumblers.tsx",
+      "src/tui/components/visualizer/grid.ts",
+      "src/tui/components/visualizer/palette.ts",
+      "src/tui/components/visualizer/panel.tsx",
+      "src/tui/constants.ts",
+      "src/tui/exit-line.ts",
+      "src/tui/family-picker.tsx",
+      "src/tui/hooks/keyboard-hints-utils.ts",
+      "src/tui/hooks/useDismissOnAnyKey.ts",
+      "src/tui/hooks/useGithubConnection.ts",
+      "src/tui/hooks/useKeyBindings.ts",
+      "src/tui/hooks/useKeyboardHints.tsx",
+      "src/tui/hooks/useStdoutDimensions.ts",
+      "src/tui/hooks/useTick.ts",
+      "src/tui/hooks/useUiStore.ts",
+      "src/tui/mint-failure.ts",
       "src/tui/playground/PlaygroundApp.tsx",
       "src/tui/playground/demos/AiOptInDemo.tsx",
       "src/tui/playground/demos/AskModalDemo.tsx",
@@ -488,445 +454,10 @@
       "src/tui/playground/demos/RunScreenDemo.tsx",
       "src/tui/playground/demos/ViewportGuardDemo.tsx",
       "src/tui/playground/demos/WelcomeDemo.tsx",
-      "src/tui/playground/start-playground.ts"
-    ],
-    "imports": [
-      "bin.js",
-      "debug.js",
-      "readiness.js",
-      "run-failure.js",
-      "setup-utils.js",
-      "store.js",
-      "terminal.js",
-      "version.js"
-    ]
-  },
-  "posthog.js": {
-    "sources": [
-      "src/store/task-stream/destinations/posthog.ts"
-    ],
-    "imports": [
-      "debug.js"
-    ]
-  },
-  "provisioning.js": {
-    "sources": [
-      "src/store/shared/provisioning.ts",
-      "src/store/shared/urls.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "constants.js",
-      "debug.js",
-      "rolldown-runtime.js"
-    ]
-  },
-  "queue-tools.js": {
-    "sources": [
-      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
-      "src/agent/runner/sequence/orchestrator/queue.ts",
-      "src/agent/runner/switchboard/models.ts",
-      "src/store/shared/atomic-ledger.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "constants.js"
-    ]
-  },
-  "readiness.js": {
-    "sources": [
-      "src/store/health-checks/readiness.ts"
-    ],
-    "imports": [
-      "debug.js",
-      "endpoints.js"
-    ]
-  },
-  "registry.js": {
-    "sources": [
-      "src/store/framework-config.ts",
-      "src/store/frameworks/android/android-wizard-agent.ts",
-      "src/store/frameworks/android/utils.ts",
-      "src/store/frameworks/angular/angular-wizard-agent.ts",
-      "src/store/frameworks/angular/utils.ts",
-      "src/store/frameworks/astro/astro-wizard-agent.ts",
-      "src/store/frameworks/astro/utils.ts",
-      "src/store/frameworks/django/django-wizard-agent.ts",
-      "src/store/frameworks/django/utils.ts",
-      "src/store/frameworks/elixir/elixir-wizard-agent.ts",
-      "src/store/frameworks/fastapi/fastapi-wizard-agent.ts",
-      "src/store/frameworks/fastapi/utils.ts",
-      "src/store/frameworks/flask/flask-wizard-agent.ts",
-      "src/store/frameworks/flask/utils.ts",
-      "src/store/frameworks/flutter/flutter-wizard-agent.ts",
-      "src/store/frameworks/go/go-wizard-agent.ts",
-      "src/store/frameworks/java/java-wizard-agent.ts",
-      "src/store/frameworks/javascript-node/javascript-node-wizard-agent.ts",
-      "src/store/frameworks/javascript-web/javascript-web-wizard-agent.ts",
-      "src/store/frameworks/javascript-web/utils.ts",
-      "src/store/frameworks/kmp/kmp-wizard-agent.ts",
-      "src/store/frameworks/laravel/laravel-wizard-agent.ts",
-      "src/store/frameworks/laravel/utils.ts",
-      "src/store/frameworks/nextjs/nextjs-wizard-agent.ts",
-      "src/store/frameworks/nextjs/utils.ts",
-      "src/store/frameworks/nuxt/nuxt-wizard-agent.ts",
-      "src/store/frameworks/python/python-wizard-agent.ts",
-      "src/store/frameworks/rails/rails-wizard-agent.ts",
-      "src/store/frameworks/rails/utils.ts",
-      "src/store/frameworks/react-native/react-native-wizard-agent.ts",
-      "src/store/frameworks/react-native/utils.ts",
-      "src/store/frameworks/react-router/react-router-wizard-agent.ts",
-      "src/store/frameworks/react-router/utils.ts",
-      "src/store/frameworks/ruby/ruby-wizard-agent.ts",
-      "src/store/frameworks/ruby/utils.ts",
-      "src/store/frameworks/rust/rust-wizard-agent.ts",
-      "src/store/frameworks/svelte/svelte-wizard-agent.ts",
-      "src/store/frameworks/swift/swift-wizard-agent.ts",
-      "src/store/frameworks/swift/utils.ts",
-      "src/store/frameworks/tanstack-router/tanstack-router-wizard-agent.ts",
-      "src/store/frameworks/tanstack-router/utils.ts",
-      "src/store/frameworks/tanstack-start/tanstack-start-wizard-agent.ts",
-      "src/store/frameworks/tanstack-start/utils.ts",
-      "src/store/frameworks/vue/vue-wizard-agent.ts",
-      "src/store/registry.ts"
-    ],
-    "imports": [
-      "bounded-fs.js",
-      "package-json.js",
-      "package-manager.js",
-      "rolldown-runtime.js",
-      "setup-utils.js",
-      "ui.js"
-    ]
-  },
-  "rolldown-runtime.js": {
-    "sources": [],
-    "imports": []
-  },
-  "run-failure.js": {
-    "sources": [
-      "src/cli/headless-mode.ts",
-      "src/store/detection/project-scope.ts",
-      "src/store/programs/agent-skill/index.ts",
-      "src/store/programs/agent-skill/steps.ts",
-      "src/store/programs/ai-observability/index.ts",
-      "src/store/programs/audit/detect.ts",
-      "src/store/programs/audit/index.ts",
-      "src/store/programs/audit/seed.ts",
-      "src/store/programs/error-tracking-upload-source-maps/detect.ts",
-      "src/store/programs/error-tracking-upload-source-maps/index.ts",
-      "src/store/programs/error-tracking-upload-source-maps/prompt.ts",
-      "src/store/programs/error-tracking-upload-source-maps/steps.ts",
-      "src/store/programs/error-tracking/detect-agentic.ts",
-      "src/store/programs/error-tracking/index.ts",
-      "src/store/programs/events-audit/index.ts",
-      "src/store/programs/events-audit/seed.ts",
-      "src/store/programs/events-audit/steps.ts",
-      "src/store/programs/mcp-analytics/index.ts",
-      "src/store/programs/mcp/index.ts",
-      "src/store/programs/metrics/index.ts",
-      "src/store/programs/migration/index.ts",
-      "src/store/programs/migration/steps.ts",
-      "src/store/programs/posthog-doctor/fetch.ts",
-      "src/store/programs/posthog-doctor/index.ts",
-      "src/store/programs/posthog-doctor/kind-metadata.ts",
-      "src/store/programs/posthog-doctor/steps.ts",
-      "src/store/programs/posthog-doctor/types.ts",
-      "src/store/programs/posthog-integration/handoff.ts",
-      "src/store/programs/posthog-integration/index.ts",
-      "src/store/programs/posthog-integration/steps.ts",
-      "src/store/programs/program-registry.ts",
-      "src/store/programs/replay-vision/index.ts",
-      "src/store/programs/revenue-analytics/detect.ts",
-      "src/store/programs/revenue-analytics/index.ts",
-      "src/store/programs/revenue-analytics/steps.ts",
-      "src/store/programs/self-driving/detect-agentic.ts",
-      "src/store/programs/self-driving/detect.ts",
-      "src/store/programs/self-driving/index.ts",
-      "src/store/programs/self-driving/prompt.ts",
-      "src/store/programs/self-driving/step-keys.ts",
-      "src/store/programs/self-driving/steps.ts",
-      "src/store/programs/shared/health-check-step.ts",
-      "src/store/programs/shared/posthog-cli-preinstall.ts",
-      "src/store/programs/slack/index.ts",
-      "src/store/programs/warehouse-source/index.ts",
-      "src/store/programs/warehouse-source/steps.ts",
-      "src/store/programs/web-analytics-doctor/detect.ts",
-      "src/store/programs/web-analytics-doctor/index.ts",
-      "src/store/programs/web-analytics-doctor/steps.ts",
-      "src/store/services/steps/install-cli-steering/index.ts",
-      "src/store/state/run-failure.ts",
-      "src/tui/programs/self-driving/content/pricing.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "api.js",
-      "constants.js",
-      "debug.js",
-      "errors.js",
-      "package-json.js",
-      "provisioning.js",
-      "queue-tools.js",
-      "readiness.js",
-      "registry.js",
-      "setup-utils.js",
-      "steps.js",
-      "telemetry.js",
-      "token-pricing.js",
-      "ui.js",
-      "wizard-abort.js",
-      "wizard-session.js",
-      "yara-hooks.js"
-    ]
-  },
-  "security.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/security.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "debug.js",
-      "yara-hooks.js"
-    ]
-  },
-  "setup-utils.js": {
-    "sources": [
-      "src/store/host-resolution.ts",
-      "src/store/services/oauth/program-scopes.ts",
-      "src/store/shared/oauth-errors.ts",
-      "src/store/shared/oauth.ts",
-      "src/store/shared/package-manager.ts",
-      "src/store/shared/project-resolution.ts",
-      "src/store/shared/semver.ts",
-      "src/store/shared/setup-utils.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "api.js",
-      "bounded-fs.js",
-      "constants.js",
-      "debug.js",
-      "local-dev.js",
-      "provisioning.js",
-      "rolldown-runtime.js",
-      "telemetry.js",
-      "ui.js",
-      "wizard-abort.js"
-    ]
-  },
-  "start-tui.js": {
-    "sources": [
-      "src/store/programs/error-tracking-upload-source-maps/detect-agentic.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/browser-client.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/login-client.ts",
-      "src/store/shared/clipboard.ts",
-      "src/store/ui/store-ui.ts",
-      "src/store/wizard-spellbook.ts",
-      "src/tui/App.tsx",
-      "src/tui/components/PrivacyPanel.tsx",
-      "src/tui/exit-line.ts",
-      "src/tui/hooks/useGithubConnection.ts",
+      "src/tui/playground/start-playground.ts",
       "src/tui/posthog-integration-intro.ts",
-      "src/tui/screen-registry.tsx",
-      "src/tui/screens/AgentSkillIntroScreen.tsx",
-      "src/tui/screens/AiObservabilityIntroScreen.tsx",
-      "src/tui/screens/AuthErrorScreen.tsx",
-      "src/tui/screens/AuthScreen.tsx",
-      "src/tui/screens/ErrorTrackingDetectScreen.tsx",
-      "src/tui/screens/ErrorTrackingIntroScreen.tsx",
-      "src/tui/screens/ExitScreen.tsx",
-      "src/tui/screens/IntroScreenLayout.tsx",
-      "src/tui/screens/KeepSkillsScreen.tsx",
-      "src/tui/screens/ManagedSettingsScreen.tsx",
-      "src/tui/screens/ManualAuthCodeScreen.tsx",
-      "src/tui/screens/MetricsIntroScreen.tsx",
-      "src/tui/screens/MigrationIntroScreen.tsx",
-      "src/tui/screens/MintFailureScreen.tsx",
-      "src/tui/screens/PortConflictScreen.tsx",
-      "src/tui/screens/PostHogIntegrationIntroScreen.tsx",
-      "src/tui/screens/RevenueIntroScreen.tsx",
-      "src/tui/screens/RunScreen.tsx",
-      "src/tui/screens/SelfDrivingGitHubScreen.tsx",
-      "src/tui/screens/SelfDrivingHandoffScreen.tsx",
-      "src/tui/screens/SelfDrivingIntegrationCheckScreen.tsx",
-      "src/tui/screens/SelfDrivingIntegrationDetectScreen.tsx",
-      "src/tui/screens/SelfDrivingIntroScreen.tsx",
-      "src/tui/screens/SessionTimeoutScreen.tsx",
-      "src/tui/screens/SettingsOverrideScreen.tsx",
-      "src/tui/screens/SetupScreen.tsx",
-      "src/tui/screens/SourceMapsDetectScreen.tsx",
-      "src/tui/screens/SourceMapsIntroScreen.tsx",
-      "src/tui/screens/SourceMapsOutroScreen.tsx",
-      "src/tui/screens/TaskNoticeScreen.tsx",
-      "src/tui/screens/WarehouseIntroScreen.tsx",
-      "src/tui/screens/WizardAskScreen.tsx",
-      "src/tui/screens/audit/AuditAreaPane.tsx",
-      "src/tui/screens/audit/AuditChecksOutroSection.tsx",
-      "src/tui/screens/audit/AuditIntroScreen.tsx",
-      "src/tui/screens/audit/AuditOutroScreen.tsx",
-      "src/tui/screens/audit/AuditRunScreen.tsx",
-      "src/tui/screens/audit/PendingChecksList.tsx",
-      "src/tui/screens/audit/slides/events-audit/createDashboard.tsx",
-      "src/tui/screens/audit/slides/events-audit/detectSdk.tsx",
-      "src/tui/screens/audit/slides/events-audit/enrichSites.tsx",
-      "src/tui/screens/audit/slides/events-audit/index.ts",
-      "src/tui/screens/audit/slides/events-audit/queryVolume.tsx",
-      "src/tui/screens/audit/slides/events-audit/scanSites.tsx",
-      "src/tui/screens/audit/slides/events-audit/uploadNotebook.tsx",
-      "src/tui/screens/audit/slides/events-audit/writeReport.tsx",
-      "src/tui/screens/doctor/DoctorIntroScreen.tsx",
-      "src/tui/screens/doctor/DoctorReportScreen.tsx",
-      "src/tui/screens/health/HealthCheckScreen.tsx",
-      "src/tui/services/coding-agent-launcher.ts",
-      "src/tui/services/mcp-installer.ts",
-      "src/tui/services/mcp-suggested-prompts-services.ts",
-      "src/tui/start-tui.ts"
-    ],
-    "imports": [
-      "add-mcp-server-to-clients.js",
-      "agent-interface.js",
-      "analytics.js",
-      "api.js",
-      "bin.js",
-      "bounded-fs.js",
-      "constants.js",
-      "debug.js",
-      "defaults.js",
-      "errors.js",
-      "mcp-prompt-streaming.js",
-      "provisioning.js",
-      "readiness.js",
-      "registry.js",
-      "run-failure.js",
-      "setup-utils.js",
-      "store.js",
-      "telemetry.js",
-      "terminal.js",
-      "token-pricing.js",
-      "ui.js",
-      "wizard-abort.js",
-      "wizard-session.js",
-      "yara-hooks.js"
-    ]
-  },
-  "steps.js": {
-    "sources": [
-      "src/store/services/steps/upload-environment-variables/EnvironmentProvider.ts",
-      "src/store/services/steps/upload-environment-variables/index.ts",
-      "src/store/services/steps/upload-environment-variables/providers/vercel.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "telemetry.js",
-      "ui.js"
-    ]
-  },
-  "store.js": {
-    "sources": [
-      "src/store/state/flow-resolution.ts",
-      "src/store/state/store.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "debug.js",
-      "readiness.js",
-      "rolldown-runtime.js",
-      "run-failure.js",
-      "token-pricing.js",
-      "wizard-session.js",
-      "wizard-ui.js"
-    ]
-  },
-  "subagent.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/subagent.ts"
-    ],
-    "imports": [
-      "debug.js"
-    ]
-  },
-  "task.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/task.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "agent-prompt-loader.js",
-      "analytics.js",
-      "constants.js",
-      "debug.js",
-      "errors.js",
-      "gateway-session.js",
-      "mcp.js",
-      "orchestrator-tools.js",
-      "pi.js",
-      "queue-tools.js",
-      "security.js",
-      "tools.js",
-      "ui.js",
-      "yara-hooks.js"
-    ]
-  },
-  "task-stream.js": {
-    "sources": [
-      "src/store/task-stream/audit-areas.ts",
-      "src/store/task-stream/event-plan-watcher.ts",
-      "src/store/task-stream/task-stream-push.ts"
-    ],
-    "imports": [
-      "debug.js",
-      "errors.js",
-      "file-watcher.js",
-      "file.js",
-      "posthog.js"
-    ]
-  },
-  "tasks.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/tasks.ts"
-    ],
-    "imports": [
-      "ui.js"
-    ]
-  },
-  "telemetry.js": {
-    "sources": [
-      "src/cli/telemetry.ts",
-      "src/store/shared/links.ts"
-    ],
-    "imports": [
-      "analytics.js"
-    ]
-  },
-  "terminal.js": {
-    "sources": [
-      "src/store/mcp-project-profile.ts",
-      "src/store/mcp-role-prompts.copy.json",
-      "src/store/mcp-role-prompts.ts",
-      "src/store/mcp-seed-events.ts",
-      "src/tui/components/LearnCard.tsx",
-      "src/tui/components/PhaseVisuals.tsx",
-      "src/tui/components/ServiceHealthList.tsx",
-      "src/tui/components/StatusPeekTrigger.tsx",
-      "src/tui/components/TipsCard.tsx",
-      "src/tui/components/TitleBar.tsx",
-      "src/tui/components/TokenCostHud.tsx",
-      "src/tui/components/visualizer/CrateStack.tsx",
-      "src/tui/components/visualizer/DashboardGrid.tsx",
-      "src/tui/components/visualizer/DiffCascade.tsx",
-      "src/tui/components/visualizer/LibraryShelf.tsx",
-      "src/tui/components/visualizer/MatrixRain.tsx",
-      "src/tui/components/visualizer/Tumblers.tsx",
-      "src/tui/components/visualizer/grid.ts",
-      "src/tui/components/visualizer/palette.ts",
-      "src/tui/components/visualizer/panel.tsx",
-      "src/tui/constants.ts",
-      "src/tui/hooks/useDismissOnAnyKey.ts",
-      "src/tui/hooks/useTick.ts",
-      "src/tui/hooks/useUiStore.ts",
       "src/tui/primitives/CardLayout.tsx",
+      "src/tui/primitives/ConfirmButton.tsx",
       "src/tui/primitives/ConfirmationInput.tsx",
       "src/tui/primitives/ContentSequencer.tsx",
       "src/tui/primitives/DissolveTransition.tsx",
@@ -941,14 +472,19 @@
       "src/tui/primitives/LogViewer.tsx",
       "src/tui/primitives/ModalOverlay.tsx",
       "src/tui/primitives/NodeBlock.tsx",
+      "src/tui/primitives/PickerMenu.tsx",
       "src/tui/primitives/ProgressList.tsx",
+      "src/tui/primitives/PromptLabel.tsx",
       "src/tui/primitives/ScreenContainer.tsx",
       "src/tui/primitives/ScreenErrorBoundary.tsx",
       "src/tui/primitives/SplitView.tsx",
       "src/tui/primitives/TabContainer.tsx",
       "src/tui/primitives/TextBlock.tsx",
       "src/tui/primitives/ViewportTooSmall.tsx",
+      "src/tui/primitives/content-types.ts",
+      "src/tui/primitives/layout-helpers.ts",
       "src/tui/primitives/link-helpers.ts",
+      "src/tui/primitives/picker-filter.ts",
       "src/tui/primitives/text-helpers.ts",
       "src/tui/programs/agent-skill/content/index.tsx",
       "src/tui/programs/error-tracking-upload-source-maps/content/index.tsx",
@@ -967,12 +503,47 @@
       "src/tui/programs/self-driving/content/index.tsx",
       "src/tui/programs/self-driving/content/pipeline-diagram.tsx",
       "src/tui/programs/self-driving/content/tips.ts",
+      "src/tui/screen-registry.tsx",
+      "src/tui/screens/AgentSkillIntroScreen.tsx",
+      "src/tui/screens/AiObservabilityIntroScreen.tsx",
       "src/tui/screens/AiOptInRequiredScreen.tsx",
+      "src/tui/screens/AuthErrorScreen.tsx",
+      "src/tui/screens/AuthScreen.tsx",
+      "src/tui/screens/ErrorTrackingDetectScreen.tsx",
+      "src/tui/screens/ErrorTrackingIntroScreen.tsx",
+      "src/tui/screens/ExitScreen.tsx",
+      "src/tui/screens/IntroScreenLayout.tsx",
+      "src/tui/screens/KeepSkillsScreen.tsx",
+      "src/tui/screens/ManagedSettingsScreen.tsx",
+      "src/tui/screens/ManualAuthCodeScreen.tsx",
       "src/tui/screens/McpScreen.tsx",
       "src/tui/screens/McpSuggestedPromptsScreen.tsx",
+      "src/tui/screens/MetricsIntroScreen.tsx",
+      "src/tui/screens/MigrationIntroScreen.tsx",
+      "src/tui/screens/MintFailureScreen.tsx",
       "src/tui/screens/OutroScreen.tsx",
+      "src/tui/screens/PortConflictScreen.tsx",
+      "src/tui/screens/PostHogIntegrationIntroScreen.tsx",
+      "src/tui/screens/RevenueIntroScreen.tsx",
+      "src/tui/screens/RunScreen.tsx",
+      "src/tui/screens/SelfDrivingGitHubScreen.tsx",
+      "src/tui/screens/SelfDrivingHandoffScreen.tsx",
+      "src/tui/screens/SelfDrivingIntegrationCheckScreen.tsx",
+      "src/tui/screens/SelfDrivingIntegrationDetectScreen.tsx",
+      "src/tui/screens/SelfDrivingIntroScreen.tsx",
+      "src/tui/screens/SessionTimeoutScreen.tsx",
+      "src/tui/screens/SettingsOverrideScreen.tsx",
+      "src/tui/screens/SetupScreen.tsx",
       "src/tui/screens/SkillSourceInfo.tsx",
       "src/tui/screens/SlackConnectScreen.tsx",
+      "src/tui/screens/SourceMapsDetectScreen.tsx",
+      "src/tui/screens/SourceMapsIntroScreen.tsx",
+      "src/tui/screens/SourceMapsOutroScreen.tsx",
+      "src/tui/screens/TaskNoticeScreen.tsx",
+      "src/tui/screens/WarehouseIntroScreen.tsx",
+      "src/tui/screens/WizardAskScreen.tsx",
+      "src/tui/screens/audit/AuditAreaPane.tsx",
+      "src/tui/screens/audit/AuditChecksOutroSection.tsx",
       "src/tui/screens/audit/AuditChecksViewer/AreaHeaderRow.tsx",
       "src/tui/screens/audit/AuditChecksViewer/AuditChecksViewer.tsx",
       "src/tui/screens/audit/AuditChecksViewer/CheckRow.tsx",
@@ -982,7 +553,19 @@
       "src/tui/screens/audit/AuditChecksViewer/Legend.tsx",
       "src/tui/screens/audit/AuditChecksViewer/layout.ts",
       "src/tui/screens/audit/AuditChecksViewer/sort.ts",
+      "src/tui/screens/audit/AuditIntroScreen.tsx",
+      "src/tui/screens/audit/AuditOutroScreen.tsx",
+      "src/tui/screens/audit/AuditRunScreen.tsx",
+      "src/tui/screens/audit/PendingChecksList.tsx",
       "src/tui/screens/audit/slides/eventCapture.tsx",
+      "src/tui/screens/audit/slides/events-audit/createDashboard.tsx",
+      "src/tui/screens/audit/slides/events-audit/detectSdk.tsx",
+      "src/tui/screens/audit/slides/events-audit/enrichSites.tsx",
+      "src/tui/screens/audit/slides/events-audit/index.ts",
+      "src/tui/screens/audit/slides/events-audit/queryVolume.tsx",
+      "src/tui/screens/audit/slides/events-audit/scanSites.tsx",
+      "src/tui/screens/audit/slides/events-audit/uploadNotebook.tsx",
+      "src/tui/screens/audit/slides/events-audit/writeReport.tsx",
       "src/tui/screens/audit/slides/identification.tsx",
       "src/tui/screens/audit/slides/index.ts",
       "src/tui/screens/audit/slides/installation.tsx",
@@ -990,107 +573,23 @@
       "src/tui/screens/audit/slides/shared.tsx",
       "src/tui/screens/audit/slides/uploadNotebook.tsx",
       "src/tui/screens/audit/slides/writeReport.tsx",
+      "src/tui/screens/doctor/DoctorIntroScreen.tsx",
+      "src/tui/screens/doctor/DoctorReportScreen.tsx",
       "src/tui/screens/doctor/IssueTable.tsx",
+      "src/tui/screens/health/HealthCheckScreen.tsx",
+      "src/tui/services/coding-agent-launcher.ts",
+      "src/tui/services/mcp-installer.ts",
+      "src/tui/services/mcp-suggested-prompts-services.ts",
+      "src/tui/start-tui.ts",
+      "src/tui/styles.ts",
       "src/tui/terminal.ts",
       "src/tui/ui-store.ts"
     ],
     "imports": [
-      "agent-interface.js",
+      "add-mcp-server-to-clients.js",
       "analytics.js",
-      "api.js",
-      "bin.js",
-      "constants.js",
-      "debug.js",
-      "defaults.js",
-      "readiness.js",
-      "run-failure.js",
-      "setup-utils.js",
-      "store.js",
-      "telemetry.js",
-      "token-pricing.js",
-      "yara-hooks.js"
-    ]
-  },
-  "token-pricing.js": {
-    "sources": [
-      "src/agent/runner/shared/authenticate.ts",
-      "src/store/agent-protocol/token-pricing.ts",
-      "src/store/detection/agentic.ts",
-      "src/store/detection/context.ts",
-      "src/store/detection/features.ts",
-      "src/store/detection/framework.ts",
-      "src/store/programs/posthog-integration/detect.ts",
-      "src/store/programs/shared/package-scanning.ts",
-      "src/store/programs/warehouse-source/detect.ts",
-      "src/store/services/warehouse-sources/detect.ts",
-      "src/store/services/warehouse-sources/registry.ts",
-      "src/store/session/ask-policy.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "bounded-fs.js",
-      "constants.js",
-      "debug.js",
-      "errors.js",
-      "package-manager.js",
-      "registry.js",
-      "setup-utils.js",
-      "ui.js",
-      "wizard-session.js"
-    ]
-  },
-  "tools.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/tools.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "debug.js",
-      "package-manager.js",
-      "pi.js",
-      "queue-tools.js",
-      "yara-hooks.js"
-    ]
-  },
-  "ui.js": {
-    "sources": [
-      "src/store/ui/index.ts",
-      "src/store/ui/null-ui.ts"
-    ],
-    "imports": []
-  },
-  "version.js": {
-    "sources": [
-      "src/store/shared/version.ts"
-    ],
-    "imports": []
-  },
-  "wizard-abort.js": {
-    "sources": [],
-    "imports": [
-      "wizard-abort.js"
-    ]
-  },
-  "wizard-session.js": {
-    "sources": [
-      "src/store/session/wizard-session.ts"
-    ],
-    "imports": [
-      "local-dev.js"
-    ]
-  },
-  "wizard-ui.js": {
-    "sources": [
-      "src/store/ui/wizard-ui.ts"
-    ],
-    "imports": []
-  },
-  "yara-hooks.js": {
-    "sources": [],
-    "imports": [
-      "yara-hooks.js"
+      "programs.js",
+      "store.js"
     ]
   }
 }

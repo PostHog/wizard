@@ -7,10 +7,7 @@
  *   3. Skill prompt — "follow SKILL.md" instructions (if a skill was installed)
  */
 
-import type {
-  ProgramRun,
-  PromptContext,
-} from '@store/agent-protocol/program-run';
+import type { ProgramRun, PromptContext } from '@store/types';
 
 export type { PromptContext };
 

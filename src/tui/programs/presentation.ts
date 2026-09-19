@@ -7,9 +7,8 @@
  * the generic skill deck and `DEFAULT_TIPS`.
  */
 
-import type { ProgramId } from '@store/programs/program-registry';
+import type { ProgramId, WizardStore } from '@store/types';
 import type { ContentBlock } from '../primitives/index.js';
-import type { WizardStore } from '@store/state/store';
 import type { Tip } from '../components/TipsCard.js';
 import { getContentBlocks as agentSkillDeck } from './agent-skill/content/index.js';
 import { getContentBlocks as errorTrackingDeck } from './error-tracking/content/index.js';

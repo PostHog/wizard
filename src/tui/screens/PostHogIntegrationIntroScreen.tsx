@@ -11,12 +11,13 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
-import { Integration } from '@store/shared/constants';
+import type { WizardStore } from '@store/types';
+import { Integration, ScanConsent, analytics } from '@store';
 import {
   getCommandPath,
   getLaunchablePrograms,
-} from '@store/programs/program-registry';
+  flowFor,
+} from '@store/programs';
 import {
   PickerMenu,
   LoadingBox,
@@ -24,17 +25,14 @@ import {
 } from '../primitives/index.js';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { ScanConsent } from '@store/session/wizard-session';
 import { KeyMatch, useKeyBindings } from '../hooks/useKeyBindings.js';
 import { Icons } from '../styles.js';
-import { analytics } from '@store/shared/analytics';
 import { PRIVACY_PANEL_LABEL } from '../components/PrivacyPanel.js';
 import type { IntroMenuView } from '../posthog-integration-intro.js';
 import {
   introHeadline,
   introMenuOptions,
 } from '../posthog-integration-intro.js';
-import { flowFor } from '@store/programs/flow-for';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
@@ -103,7 +101,7 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@store/registry').then(({ FRAMEWORK_REGISTRY }) => {
+        void import('@store').then(({ FRAMEWORK_REGISTRY }) => {
           const config = FRAMEWORK_REGISTRY[integration];
           store.setFrameworkConfig(integration, config);
           store.setDetectedFramework(config.metadata.name);

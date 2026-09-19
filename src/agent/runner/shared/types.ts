@@ -3,8 +3,7 @@
  * `@lib/program-run`; the agent re-exports it for its own modules.
  */
 
-import type { Credentials } from '@store/session/wizard-session';
-import type { ApiProject } from '@store/api';
+import type { Credentials, ApiProject } from '@store/types';
 import type { LLMProvider } from '@posthog/warlock';
 
 export type {
@@ -13,7 +12,7 @@ export type {
   AbortCase,
   ProgramRun,
   ProgramRunConfig,
-} from '@store/agent-protocol/program-run';
+} from '@store/types';
 
 /**
  * Result of the shared bootstrap, consumed by both the linear and the

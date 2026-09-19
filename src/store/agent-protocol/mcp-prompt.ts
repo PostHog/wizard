@@ -24,3 +24,19 @@ export interface McpPromptRequest {
   programId?: string;
   integration?: string;
 }
+
+/** Runs one suggested prompt. The agent surface provides it; the entry point installs it. */
+export interface McpPromptRunner {
+  runMcpPrompt(args: McpPromptRequest): AsyncIterable<AgentChunk>;
+}
+
+let runner: McpPromptRunner | null = null;
+
+export function setMcpPromptRunner(next: McpPromptRunner): void {
+  runner = next;
+}
+
+export function getMcpPromptRunner(): McpPromptRunner {
+  if (!runner) throw new Error('MCP prompt runner not installed');
+  return runner;
+}

@@ -5,28 +5,26 @@
  * program-level static metadata (tool allow/disallow lists, etc.).
  */
 
-import type { WizardSession } from '@store/session/wizard-session';
-import { OutroKind } from '@store/session/wizard-session';
-import { getUI } from '@store/ui';
-import { AgentErrorType, AgentSignals } from '../../agent-interface.js';
-import { restoreClaudeSettings } from '@store/services/claude-settings';
-import { logToFile } from '@store/shared/debug';
-import { createBenchmarkPipeline } from '../../middleware/benchmark.js';
+import type { WizardSession, ProgramRunConfig } from '@store/types';
 import {
+  OutroKind,
+  getUI,
+  restoreClaudeSettings,
+  logToFile,
   wizardAbort,
   WizardError,
   registerCleanup,
-} from '@store/shared/wizard-abort';
-import { ErrorCodes, AGENT_ERROR_CODE } from '@store/shared/errors';
-import { analytics } from '@store/shared/analytics';
-import {
+  ErrorCodes,
+  AGENT_ERROR_CODE,
+  analytics,
   formatScanReport,
   formatYaraAbortMessage,
   writeScanReport,
-} from '@store/security/yara-hooks';
-import { installSkillById } from '@store/tools';
-import { createWizardAskBridge } from '@store/session/wizard-ask-bridge';
-import type { ProgramRunConfig } from '@store/agent-protocol/program-run';
+  installSkillById,
+  createWizardAskBridge,
+} from '@store';
+import { AgentErrorType, AgentSignals } from '../../agent-interface.js';
+import { createBenchmarkPipeline } from '../../middleware/benchmark.js';
 import { assemblePrompt } from '../../agent-prompt.js';
 import type { ProgramRun, BootstrapResult } from '../shared/types.js';
 import { abortOnInstallFailure } from '../shared/errors.js';

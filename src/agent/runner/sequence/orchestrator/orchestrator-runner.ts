@@ -22,28 +22,29 @@ import {
 import * as path from 'path';
 import {
   OutroKind,
-  type TaskNotice,
-  type WizardSession,
-} from '@store/session/wizard-session';
-import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
-  type Integration,
-} from '@store/shared/constants';
-import { FRAMEWORK_REGISTRY } from '@store/registry';
-import {
+  FRAMEWORK_REGISTRY,
   installSkillById,
   fetchSkillMenu,
-  type SkillEntry,
-} from '@store/tools';
-import { getUI } from '@store/ui';
-import { analytics } from '@store/shared/analytics';
-import { ciExcludedTaskTypes } from '@store/shared/ci-flag-overrides';
-import { logToFile } from '@store/shared/debug';
-import { ringTerminalBell } from '@store/shared/terminal-bell';
-import { wizardAbort, WizardError } from '@store/shared/wizard-abort';
-import { ErrorCodes } from '@store/shared/errors';
-import type { ProgramRunConfig } from '@store/agent-protocol/program-run';
+  getUI,
+  analytics,
+  ciExcludedTaskTypes,
+  logToFile,
+  ringTerminalBell,
+  wizardAbort,
+  WizardError,
+  ErrorCodes,
+  createWizardAskBridge,
+  LONGER_ASK_TIMEOUT_MS,
+} from '@store';
+import type {
+  TaskNotice,
+  WizardSession,
+  Integration,
+  SkillEntry,
+  ProgramRunConfig,
+} from '@store/types';
 import type { BootstrapResult, ProgramRun } from '../../shared/types.js';
 import {
   areSeededTasksEnabled,
@@ -65,10 +66,6 @@ import { drainQueue, type RunTask } from './executor.js';
 import { RunMetrics } from './run-metrics.js';
 import { dependencyClosure, uncoveredBySink } from './queue-tools.js';
 import { deferSeededTasks } from './seeded-deps.js';
-import {
-  createWizardAskBridge,
-  LONGER_ASK_TIMEOUT_MS,
-} from '@store/session/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap.js';
 import {
   agentRunTools,

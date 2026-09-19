@@ -1,11 +1,8 @@
 import { Box, Text } from 'ink';
 import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
 import { Colors, Icons } from '../../styles.js';
-import {
-  getKindMeta,
-  type HealthIssue,
-  type HealthIssueSeverity,
-} from '@store/programs/posthog-doctor';
+import { getKindMeta } from '@store/programs';
+import type { HealthIssue, HealthIssueSeverity } from '@store/types';
 
 export const SEVERITY_ORDER: HealthIssueSeverity[] = [
   'critical',

@@ -14,7 +14,17 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
-import { type WizardStore, McpOutcome } from '@store/state/store';
+import type { WizardStore } from '@store/types';
+import {
+  McpOutcome,
+  McpClientStatus,
+  namesWithStatus,
+  isOk,
+  summarizeFailure,
+  AVAILABLE_FEATURES,
+  ALL_FEATURE_VALUES,
+  isAllFeaturesSelected,
+} from '@store';
 import {
   ConfirmationInput,
   GroupedPickerMenu,
@@ -26,17 +36,6 @@ import type {
   McpClientInfo,
   McpClientResult,
 } from '../services/mcp-installer.js';
-import {
-  McpClientStatus,
-  namesWithStatus,
-  isOk,
-  summarizeFailure,
-} from '@store/services/steps/add-mcp-server-to-clients/results';
-import {
-  AVAILABLE_FEATURES,
-  ALL_FEATURE_VALUES,
-  isAllFeaturesSelected,
-} from '@store/services/steps/add-mcp-server-to-clients/defaults';
 
 export type McpMode = 'install' | 'remove';
 

@@ -1,4 +1,4 @@
-import { auditConfig } from '@store/programs/audit';
+import { auditConfig } from '@store/programs';
 
 import type { Command } from './command.js';
 import { familyCommandFactory } from './factories/family-command-factory.js';

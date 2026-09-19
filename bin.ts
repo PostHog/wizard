@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 import { Agent, setGlobalDispatcher } from 'undici';
-import { ErrorCodes } from '@store/shared/errors/codes';
-import { emitWizardError } from '@store/shared/errors/emit';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -23,8 +21,6 @@ const NODE_VERSION_RANGE = '>=22.22.0';
  */
 setGlobalDispatcher(new Agent({ allowH2: false }));
 
-// Have to run this above the other imports because they are importing clack that
-// has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   // eslint-disable-next-line no-console
   console.log(
@@ -42,10 +38,13 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
       `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
     ].join('\n'),
   );
-  emitWizardError({
-    code: ErrorCodes.CliNodeVersion,
-    message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
-  });
+  // Same line emitWizardError prints; inlined so no surface loads before this check.
+  process.stderr.write(
+    `phw-error: ${JSON.stringify({
+      code: 'PHW_CLI_NODE_VERSION',
+      message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
+    })}\n`,
+  );
   process.exit(1);
 }
 
@@ -65,74 +64,5 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-import { Wizard } from './src/cli/wizard.js';
-import { basicIntegrationCommand } from './src/cli/commands/basic-integration/index.js';
-import { mcpCommand } from './src/cli/commands/mcp/index.js';
-import { mcpAnalyticsCommand } from './src/cli/commands/mcp-analytics.js';
-import { replayVisionCommand } from './src/cli/commands/replay-vision.js';
-import { aiObservabilityCommand } from './src/cli/commands/ai-observability.js';
-import { metricsCommand } from './src/cli/commands/metrics.js';
-import { auditCommand } from './src/cli/commands/audit.js';
-import { doctorCommand } from './src/cli/commands/doctor.js';
-import { migrateCommand } from './src/cli/commands/migrate.js';
-import { revenueCommand } from './src/cli/commands/revenue.js';
-import { warehouseCommand } from './src/cli/commands/warehouse.js';
-import { selfDrivingCommand } from './src/cli/commands/self-driving.js';
-import { slackCommand } from './src/cli/commands/slack.js';
-import { uploadSourcemapsCommand } from './src/cli/commands/upload-sourcemaps.js';
-import { errorTrackingCommand } from './src/cli/commands/error-tracking.js';
-import { skillCommand } from './src/cli/commands/skill.js';
-import { cliCommand } from './src/cli/commands/cli/index.js';
-import { recoverOrphanedSettingsBackups } from '@store/services/claude-settings';
-import { setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import { setDetectionAgent } from './src/store/detection/agentic';
-import { detectProjectsWithAgent } from './src/agent/detection/agentic';
-import { setAgentBridge } from './src/tui/agent-bridge';
-
-// The entry point owns the default renderer; @ui ships with none.
-setUI(new LoggingUI());
-// The store and the TUI never import the agent; the entry point installs it.
-setDetectionAgent(detectProjectsWithAgent);
-setAgentBridge({
-  runMcpPrompt: async function* (args) {
-    const { runMcpPromptViaSdk } = await import(
-      './src/agent/mcp-prompt-streaming'
-    );
-    yield* runMcpPromptViaSdk(args);
-  },
-});
-
-// Heal any .claude/settings backup a previous interrupted run left orphaned,
-// before anything else reads Claude settings — conflict detection, OAuth, and
-// the agent all need to see the user's real settings file. The install dir is
-// read directly from argv/env because yargs hasn't parsed yet.
-recoverOrphanedSettingsBackups(resolveInstallDir());
-
-function resolveInstallDir(): string {
-  const args = process.argv.slice(2);
-  const flagIndex = args.indexOf('--install-dir');
-  if (flagIndex !== -1 && args[flagIndex + 1]) return args[flagIndex + 1];
-  const inline = args.find((a) => a.startsWith('--install-dir='));
-  if (inline) return inline.slice('--install-dir='.length);
-  return process.env.POSTHOG_WIZARD_INSTALL_DIR ?? process.cwd();
-}
-
-Wizard.use(basicIntegrationCommand)
-  .use(mcpCommand)
-  .use(mcpAnalyticsCommand)
-  .use(replayVisionCommand)
-  .use(aiObservabilityCommand)
-  .use(metricsCommand)
-  .use(cliCommand)
-  .use(auditCommand)
-  .use(doctorCommand)
-  .use(migrateCommand)
-  .use(revenueCommand)
-  .use(warehouseCommand)
-  .use(selfDrivingCommand)
-  .use(slackCommand)
-  .use(uploadSourcemapsCommand)
-  .use(errorTrackingCommand)
-  .use(skillCommand)
-  .init();
+// Surfaces load only after the preflight passed.
+await import('./src/cli/main.js');

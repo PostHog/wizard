@@ -12,9 +12,9 @@ import {
   Harness,
   Sequence,
   SONNET_5_MODEL,
-} from '@store/shared/constants';
-import type { ProgramId } from '@store/programs/program-registry';
-import { logToFile } from '@store/shared/debug';
+  logToFile,
+} from '@store';
+import type { ProgramId } from '@store/types';
 import type { EffortLevel } from '../models.js';
 
 // ── Shared vocabulary ─────────────────────────────────────────────────────

@@ -14,20 +14,19 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getUI } from '@store/ui';
-import { getLogFilePath, logToFile } from '@store/shared/debug';
 import {
+  getUI,
+  getLogFilePath,
+  logToFile,
   Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-} from '@store/shared/constants';
-import { analytics } from '@store/shared/analytics';
-import { AgentErrorType } from '../../../agent-interface.js';
-import {
+  analytics,
   AgentSignals,
   REMARK_INSTRUCTION,
-} from '@store/agent-protocol/agent-signals';
+} from '@store';
+import { AgentErrorType } from '../../../agent-interface.js';
 import { AgentOutputSignals } from '../../../output-signals.js';
 import { assembleCommandments } from '../../switchboard/commandments.js';
 import {
@@ -321,7 +320,7 @@ export const piBackend: AgentHarness = {
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
       // path, so the first scanned call doesn't eat cold-start latency.
-      const { prewarmYaraScanner } = await import('@store/security/yara-hooks');
+      const { prewarmYaraScanner } = await import('@store');
       void prewarmYaraScanner();
 
       // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point

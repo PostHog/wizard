@@ -13,7 +13,7 @@
  * (`npx <anything>` downloads and runs it), and shell injection. Matching is
  * token-exact per manager — keyword prefixes admitted `npm publish` via `pub`.
  */
-import { LINTING_TOOLS } from '@store/safe-tools';
+import { LINTING_TOOLS } from '@store';
 
 export type BashFenceDecision =
   | { allowed: true }

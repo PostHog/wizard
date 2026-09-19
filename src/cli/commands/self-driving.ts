@@ -1,5 +1,5 @@
 import { runWizard, runWizardCI } from '../runners/index.js';
-import { selfDrivingConfig } from '@store/programs/self-driving';
+import { selfDrivingConfig } from '@store/programs';
 import { skillProgramOptions } from './skill-program-options.js';
 import type { Command } from './command.js';
 

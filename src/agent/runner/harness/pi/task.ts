@@ -16,22 +16,22 @@
  * Loaded lazily from `index.ts` (typebox/ESM constraint, same as tools.ts).
  */
 
-import { getUI } from '@store/ui';
-import { logToFile } from '@store/shared/debug';
-import { analytics } from '@store/shared/analytics';
 import {
+  getUI,
+  logToFile,
+  analytics,
   Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-} from '@store/shared/constants';
+  REMARK_INSTRUCTION,
+} from '@store';
 import {
   allowsPostHogMcp,
   queueTools,
   renderToolInventory,
 } from '../../../agent-prompt-loader.js';
 import { AgentErrorType } from '../../../agent-interface.js';
-import { REMARK_INSTRUCTION } from '@store/agent-protocol/agent-signals';
 import { AgentOutputSignals } from '../../../output-signals.js';
 import { TaskStatus } from '../../sequence/orchestrator/queue.js';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools.js';
@@ -285,7 +285,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
     });
-    const { prewarmYaraScanner } = await import('@store/security/yara-hooks');
+    const { prewarmYaraScanner } = await import('@store');
     void prewarmYaraScanner();
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never

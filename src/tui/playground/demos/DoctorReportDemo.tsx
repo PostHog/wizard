@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import { Colors, Icons } from '../../styles.js';
 import { IssueTable } from '../../screens/doctor/IssueTable.js';
-import type { HealthIssue } from '@store/programs/posthog-doctor';
+import type { HealthIssue } from '@store/types';
 
 const NOW = '2026-04-27T15:00:00Z';
 

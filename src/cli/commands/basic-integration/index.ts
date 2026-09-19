@@ -1,10 +1,10 @@
-import { isNonInteractiveEnvironment } from '@store/shared/environment';
-import { setEntryCommand } from '@store/shared/links';
 import {
+  isNonInteractiveEnvironment,
+  setEntryCommand,
   headlessOption,
   isHeadless,
   regionOption,
-} from '@store/shared/headless-mode';
+} from '@store';
 import { provisionCommand } from '../provision.js';
 import type { Command } from '../command.js';
 

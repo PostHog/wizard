@@ -9,10 +9,9 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, SetupQuestion } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
-import type { SetupQuestion } from '@store/framework-config';
 
 interface SetupScreenProps {
   store: WizardStore;

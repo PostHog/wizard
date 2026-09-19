@@ -9,8 +9,7 @@
  * The drain loop is independent of how a task actually runs. `runTask` is
  * injected: the real one spins up a fresh agent, the tests use a fake.
  */
-import { analytics } from '@store/shared/analytics';
-import { logToFile } from '@store/shared/debug';
+import { analytics, logToFile } from '@store';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue.js';
 
 /** Per-task agent configuration the resolver produces from a task's type.

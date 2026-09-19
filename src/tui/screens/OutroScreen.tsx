@@ -8,10 +8,9 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
-import { OutroKind } from '@store/session/wizard-session';
+import type { WizardStore } from '@store/types';
+import { OutroKind, withUtm } from '@store';
 import { Colors } from '../styles.js';
-import { withUtm } from '@store/shared/links';
 import { LinkText } from '../primitives/LinkText.js';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey.js';
 

@@ -14,7 +14,7 @@ vi.mock('@store/session/wizard-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@store/session/wizard-session')>()),
   buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
-vi.mock('@tui/start-tui', () => ({
+vi.mock('@tui', () => ({
   startTUI: () => ({
     unmount: vi.fn(),
     store: {
@@ -63,8 +63,9 @@ vi.mock('@store/shared/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@store/shared/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('@agent/agent-runner', () => ({
+vi.mock('@agent', () => ({
   runAgent: vi.fn().mockResolvedValue(undefined),
+  detectProjectsWithAgent: vi.fn(),
 }));
 
 import { provisionCommand } from '../commands/provision.js';

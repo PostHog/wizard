@@ -15,9 +15,9 @@
 import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors, Icons } from '../styles.js';
-import { extractOAuthCode } from '@store/shared/oauth';
+import { extractOAuthCode } from '@store';
 
 interface ManualAuthCodeScreenProps {
   store: WizardStore;

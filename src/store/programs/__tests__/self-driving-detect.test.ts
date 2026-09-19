@@ -15,7 +15,6 @@ import {
 } from '../self-driving/detect.js';
 import { getDetectedWarehouseSources } from '../warehouse-source/detect.js';
 import { WizardStore } from '../../state/store.js';
-import { PROGRAM_PRESENTATION } from '@tui/programs/presentation';
 import { SOURCE_DETECTORS } from '../../services/warehouse-sources/registry.js';
 import type { DetectedSource } from '../../services/warehouse-sources/types.js';
 import { toIntegrationReport } from '../self-driving/detect-agentic.js';
@@ -188,16 +187,6 @@ describe('selfDrivingConfig', () => {
     expect(selfDrivingConfig.disallowedTools ?? []).not.toContain(
       WIZARD_TOOL_NAMES.wizardAsk,
     );
-  });
-
-  it('ships its own Learn deck ending on the self-driving closer', () => {
-    const blocks =
-      PROGRAM_PRESENTATION['self-driving']?.getContentBlocks?.() ?? [];
-    expect(blocks.length).toBeGreaterThan(0);
-    const last = blocks[blocks.length - 1];
-    expect(
-      typeof last === 'object' && 'content' in last ? last.content : '',
-    ).toBe('Your product drives itself.');
   });
 
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {

@@ -33,18 +33,17 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, ProjectDataProfile } from '@store/types';
 import { McpSuggestedPromptsScreen } from '../../screens/McpSuggestedPromptsScreen.js';
 import { Colors } from '../../styles.js';
-import { Integration } from '@store/shared/constants';
-import { McpOutcome } from '@store/session/wizard-session';
-import { HostResolution } from '@store/host-resolution';
-import { TAILORED_ROLES } from '@store/mcp-role-prompts';
 import {
+  Integration,
+  McpOutcome,
+  HostResolution,
+  TAILORED_ROLES,
   assembleProfile,
-  type ProjectDataProfile,
-} from '@store/mcp-project-profile';
-import { seededProfile } from '@store/mcp-seed-events';
+  seededProfile,
+} from '@store';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,

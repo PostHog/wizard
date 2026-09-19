@@ -4,16 +4,14 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence } from '@store/shared/constants';
-import { logToFile } from '@store/shared/debug';
+import { Sequence, logToFile } from '@store';
 import {
   isOrchestratorEnabled,
   resolveFlagRoute,
   resolveFlagSequence,
 } from './flags/index.js';
 import { getHarness, resolveHarness } from './harness.js';
-import type { WizardSession } from '@store/session/wizard-session';
-import type { ProgramRunConfig } from '@store/agent-protocol/program-run';
+import type { WizardSession, ProgramRunConfig } from '@store/types';
 import type { ProgramRun, BootstrapResult } from '../shared/types.js';
 import { runLinearProgram } from '../sequence/linear.js';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner.js';

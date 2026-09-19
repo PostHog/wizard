@@ -1,9 +1,7 @@
 import type { Arguments } from 'yargs';
-import { setUI } from '@store/ui';
-import { LoggingUI } from '@tui/console/logging-ui';
-import { headlessOption, isHeadless } from '@store/shared/headless-mode';
-import { Program } from '@store/programs/program-registry';
-import { VERSION } from '@store/shared/version';
+import { setUI, headlessOption, isHeadless, VERSION } from '@store';
+import { LoggingUI } from '@tui/console';
+import { Program } from '@store/programs';
 import type { Command } from '../command.js';
 import { isTUIUnavailable } from './tui-availability.js';
 
@@ -34,7 +32,7 @@ export const mcpAddCommand: Command = {
 function runMcpAdd(argv: Arguments): void {
   const features = parseFeatures(argv.features);
   void (async () => {
-    const { readApiKeyFromEnv } = await import('@store/shared/env-api-key');
+    const { readApiKeyFromEnv } = await import('@store');
     const apiKey = (argv.apiKey as string | undefined) || readApiKeyFromEnv();
     const debug = argv.debug as boolean | undefined;
     const localMcp = argv.local as boolean | undefined;
@@ -50,8 +48,8 @@ function runMcpAdd(argv: Arguments): void {
     }
 
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@store/session/wizard-session');
+      const { startTUI } = await import('@tui');
+      const { buildSession } = await import('@store');
       const tui = startTUI(VERSION, Program.McpAdd);
       tui.store.session = buildSession({
         debug,
@@ -73,9 +71,7 @@ async function runHeadlessAdd(args: {
   apiKey?: string;
 }): Promise<void> {
   setUI(new LoggingUI());
-  const { addMCPServerToClientsStep } = await import(
-    '@store/services/steps/add-mcp-server-to-clients'
-  );
+  const { addMCPServerToClientsStep } = await import('@store');
   // Never forwards `ci`: headless implies session.ci elsewhere, and the step
   // reads that as "skip MCP entirely" — the opposite of what we're here to do.
   const { installed, failed } = await addMCPServerToClientsStep(args);

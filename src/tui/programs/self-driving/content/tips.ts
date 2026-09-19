@@ -1,7 +1,4 @@
-import {
-  NO_DEFAULT_LIMIT,
-  PRICING_LONG,
-} from '@store/programs/self-driving/pricing';
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@store/programs';
 
 /**
  * Sidebar tips for the self-driving run — short footnotes on the

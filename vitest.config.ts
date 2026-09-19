@@ -46,8 +46,19 @@ const EXCLUDE = [
   '**/*.d.ts',
 ];
 
+/** Only the tui renders; everywhere else an Ink import is a boundary breach. */
+const INK_MOCK = { tui: 'ink.ts', harness: 'ink.ts' } as Record<string, string>;
+
 const project = (name: string, include: string[], exclude: string[] = []) => ({
   extends: true as const,
+  resolve: {
+    alias: [
+      {
+        find: /^ink$/,
+        replacement: r(`__mocks__/${INK_MOCK[name] ?? 'forbidden-ink.ts'}`),
+      },
+    ],
+  },
   test: { name, include, exclude: [...EXCLUDE, ...exclude] },
 });
 
@@ -69,15 +80,19 @@ export default defineConfig({
         find: /^@posthog\/warlock$/,
         replacement: r('__mocks__/@posthog/warlock.ts'),
       },
-      { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@store$/, replacement: r('src/store/index.ts') },
+      {
+        find: /^@store\/programs$/,
+        replacement: r('src/store/programs/index.ts'),
+      },
       { find: /^@store\/(.*)$/, replacement: `${r('src/store')}/$1` },
       { find: /^@agent$/, replacement: r('src/agent/index.ts') },
       { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
       { find: /^@tui$/, replacement: r('src/tui/index.ts') },
+      { find: /^@tui\/console$/, replacement: r('src/tui/console/index.ts') },
       { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
       { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
     ],

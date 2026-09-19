@@ -11,17 +11,18 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type {
+  WizardStore,
+  IntegrationProject,
+  IntegrationDetectionReport,
+} from '@store/types';
 import { LoadingBox, PickerMenu } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
-import { Integration } from '@store/shared/constants';
-import { FRAMEWORK_REGISTRY } from '@store/registry';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@store/programs/self-driving/detect';
+import { Integration, FRAMEWORK_REGISTRY } from '@store';
 import {
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
   detectSelfDrivingIntegrationProjects,
-  type IntegrationProject,
-  type IntegrationDetectionReport,
-} from '@store/programs/self-driving/detect-agentic';
+} from '@store/programs';
 
 interface SelfDrivingIntegrationDetectScreenProps {
   store: WizardStore;

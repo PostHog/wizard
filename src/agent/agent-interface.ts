@@ -6,20 +6,14 @@
 import path from 'path';
 import * as os from 'os';
 import { createRequire } from 'node:module';
-import { getUI, type SpinnerHandle } from '@store/ui';
-import type { TokenUsageDelta } from '@store/ui/wizard-ui';
 import {
+  getUI,
   debug,
   logToFile,
   initLogFile,
   getLogFilePath,
-} from '@store/shared/debug';
-import type { WizardRunOptions } from '@store/shared/types';
-import { analytics } from '@store/shared/analytics';
-import { isTemplateEnvFileName } from '@store/shared/env-scan';
-import { runtimeEnv } from '@env';
-import type { AioCapture } from './aio-capture.js';
-import {
+  analytics,
+  isTemplateEnvFileName,
   Harness,
   CallType,
   Sequence,
@@ -27,14 +21,36 @@ import {
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
   AWS_SKILLS_BASE_URL,
-} from '@store/shared/constants';
-import {
-  type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '@store/session/wizard-session';
-import { wizardAbort, WizardError } from '@store/shared/wizard-abort';
-import { createCustomHeaders } from '@store/shared/custom-headers';
-import type { HostResolution } from '@store/host-resolution';
+  wizardAbort,
+  WizardError,
+  createCustomHeaders,
+  WIZARD_TOOL_NAMES,
+  createPreToolUseYaraHooks,
+  createPostToolUseYaraHooks,
+  prewarmYaraScanner,
+  classifyToolToStage,
+  AgentSignals,
+  AgentErrorType,
+  REMARK_INSTRUCTION,
+  RESUME_INSTRUCTION,
+  classifyAuthFailure,
+  isGrantRevoked,
+  checkAllSettingsConflicts,
+  sanitizeAgentSubprocessEnv,
+} from '@store';
+import type {
+  SpinnerHandle,
+  TokenUsageDelta,
+  WizardRunOptions,
+  AdditionalFeature,
+  HostResolution,
+  PackageManagerDetector,
+  SettingsConflict,
+  SettingsConflictSource,
+} from '@store/types';
+import { runtimeEnv } from '@env';
+import type { AioCapture } from './aio-capture.js';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -42,48 +58,23 @@ import {
   type GatewayAuth,
 } from './gateway/gateway-session.js';
 import { evaluateBashCommand } from './bash-fence.js';
-import { WIZARD_TOOL_NAMES } from '@store/tools';
 import { createWizardToolsServer } from './tools/mcp.js';
-import {
-  createPreToolUseYaraHooks,
-  createPostToolUseYaraHooks,
-  prewarmYaraScanner,
-} from '@store/security/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider.js';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments.js';
-import { classifyToolToStage } from '@store/agent-protocol/agent-phase';
-import type { PackageManagerDetector } from '@store/detection/package-manager';
-import {
-  AgentSignals,
-  AgentErrorType,
-  REMARK_INSTRUCTION,
-  RESUME_INSTRUCTION,
-} from '@store/agent-protocol/agent-signals';
-import { classifyAuthFailure } from '@store/shared/errors';
-import { isGrantRevoked } from '@store/auth-session-state';
 import { AgentOutputSignals } from './output-signals.js';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
-export {
-  AgentSignals,
-  AgentErrorType,
-} from '@store/agent-protocol/agent-signals';
-export type { AgentSignal } from '@store/agent-protocol/agent-signals';
+export { AgentSignals, AgentErrorType } from '@store';
+export type { AgentSignal } from '@store/types';
 export { AgentOutputSignals } from './output-signals.js';
-import {
-  checkAllSettingsConflicts,
-  type SettingsConflict,
-  type SettingsConflictSource,
-} from '@store/services/claude-settings';
 import {
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,
   claudeConfigDir,
   createIsolatedAgentConfigDir,
 } from './stored-login.js';
-import { sanitizeAgentSubprocessEnv } from '@store/agent-protocol/agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -226,7 +217,7 @@ export type AgentConfig = {
    */
   modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
-  askBridge?: import('@store/session/wizard-ask-bridge').WizardAskBridge;
+  askBridge?: import('@store/types').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -237,9 +228,7 @@ export type AgentConfig = {
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
    */
-  getPendingQuestion?: () =>
-    | import('@store/session/wizard-session').PendingQuestion
-    | null;
+  getPendingQuestion?: () => import('@store/types').PendingQuestion | null;
   /**
    * Orchestrator queue context. Present only when the `wizard-orchestrator`
    * flag routes the run here; threaded into wizard-tools so the orchestrator
@@ -337,9 +326,7 @@ type AgentRunConfig = {
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
    */
-  getPendingQuestion?: () =>
-    | import('@store/session/wizard-session').PendingQuestion
-    | null;
+  getPendingQuestion?: () => import('@store/types').PendingQuestion | null;
   /**
    * The orchestrator owns the TUI task panel (it renders its queue), so its
    * runs suppress the agent's own TaskCreate/TaskUpdate rendering. Set from
@@ -423,7 +410,7 @@ export function buildAgentEnv(
 }
 
 // Re-export for backwards compatibility — canonical source is skill-install.ts
-export { isSkillInstallCommand } from '@store/skill-install';
+export { isSkillInstallCommand } from '@store';
 
 /**
  * Permission hook that allows only safe commands. Bash commands are gated by

@@ -1,4 +1,4 @@
-import { aiObservabilityConfig } from '@store/programs/ai-observability';
+import { aiObservabilityConfig } from '@store/programs';
 
 import type { Command } from './command.js';
 import { nativeCommandFactory } from './factories/native-command-factory.js';

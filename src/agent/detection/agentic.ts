@@ -10,24 +10,24 @@ import {
   buildRunTags,
   AgentSignals,
 } from '../agent-interface.js';
-import { detectNodePackageManagers } from '@store/detection/package-manager';
 import {
+  detectNodePackageManagers,
   CallType,
   getSkillsBaseUrl,
   HAIKU_MODEL,
-} from '@store/shared/constants';
-import { analytics } from '@store/shared/analytics';
-import type { WizardSession } from '@store/session/wizard-session';
-import type { WizardRunOptions } from '@store/shared/types';
-import type { SpinnerHandle } from '@store/ui';
-import {
+  analytics,
   coerceAgenticReport,
   deriveReportJson,
   manifestGlob,
-  type AgenticDetectOptions,
-  type AgenticDetectionReport,
-  type DetectTarget,
-} from '@store/detection/agentic';
+} from '@store';
+import type {
+  WizardSession,
+  WizardRunOptions,
+  SpinnerHandle,
+  AgenticDetectOptions,
+  AgenticDetectionReport,
+  DetectTarget,
+} from '@store/types';
 
 function buildPrompt(
   cwd: string,

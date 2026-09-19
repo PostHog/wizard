@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
-import { POSTHOG_DOCS_URL } from '@store/shared/constants';
+import { POSTHOG_DOCS_URL } from '@store';
 import { runWizard, runWizardCI } from '../../runners/index.js';
-import { createSkillProgram } from '@store/programs/agent-skill';
+import { createSkillProgram } from '@store/programs';
 
 /** Run an arbitrary context-mill skill by id (`wizard skill <id>`, headless with `--ci`). */
 export function runSkillMode(argv: Arguments): void {

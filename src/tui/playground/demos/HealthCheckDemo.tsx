@@ -5,9 +5,8 @@ import { Box, Text } from 'ink';
 import { LoadingBox, ModalOverlay } from '../../primitives/index.js';
 import { Icons } from '../../styles.js';
 import { ServiceHealthList } from '../../components/ServiceHealthList.js';
-import { getBlockingServiceKeys } from '@store/health-checks/readiness';
-import { ServiceHealthStatus } from '@store/health-checks/types';
-import type { AllServicesHealth } from '@store/health-checks/types';
+import { getBlockingServiceKeys, ServiceHealthStatus } from '@store';
+import type { AllServicesHealth } from '@store/types';
 
 const MOCK_CONFIRMED_OUTAGE: AllServicesHealth = {
   skillsOrigin: { status: ServiceHealthStatus.Down },

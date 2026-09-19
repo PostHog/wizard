@@ -7,40 +7,42 @@
  * effects. Returns the values the arms still need.
  */
 
-import type { WizardSession } from '@store/session/wizard-session';
-import { analytics } from '@store/shared/analytics';
-import { getUI } from '@store/ui';
+import type {
+  WizardSession,
+  WizardRunOptions,
+  ProgramRunConfig,
+} from '@store/types';
 import {
+  analytics,
+  getUI,
   authenticate,
   refreshAccessTokenIfNeeded,
-} from '@store/services/authenticate';
-import { maybeStampAiSdkDetected } from '@store/programs/posthog-integration/detect';
-import { createTriageLLMProvider } from '../../triage-provider.js';
-import { gatewayAuth } from '../../gateway/gateway-session.js';
-import { resolveHarness } from '../switchboard/index.js';
-import { buildRunTags } from '../../agent-interface.js';
-import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   classifySettingsConflicts,
-} from '@store/services/claude-settings';
-import {
   evaluateWizardReadiness,
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '@store/health-checks/readiness';
-import { enableDebugLogs, logToFile, initLogFile } from '@store/shared/debug';
-import { wizardAbort } from '@store/shared/wizard-abort';
-import { ErrorCodes } from '@store/shared/errors';
-import { isNonInteractiveEnvironment } from '@store/shared/environment';
-import { CallType, getSkillsBaseUrl, IS_DEV } from '@store/shared/constants';
-import { VERSION } from '@store/shared/version';
-import { mcpUrlFor } from '@store/host-resolution';
-import type { WizardRunOptions } from '@store/shared/types';
-import type { ProgramRunConfig } from '@store/agent-protocol/program-run';
-import { shouldDisableAsk } from '@store/session/ask-policy';
+  enableDebugLogs,
+  logToFile,
+  initLogFile,
+  wizardAbort,
+  ErrorCodes,
+  isNonInteractiveEnvironment,
+  CallType,
+  getSkillsBaseUrl,
+  VERSION,
+  mcpUrlFor,
+  shouldDisableAsk,
+} from '@store';
+import { maybeStampAiSdkDetected } from '@store/programs';
+import { createTriageLLMProvider } from '../../triage-provider.js';
+import { gatewayAuth } from '../../gateway/gateway-session.js';
+import { resolveHarness } from '../switchboard/index.js';
+import { buildRunTags } from '../../agent-interface.js';
+import { IS_DEV } from '@env';
 
 export { shouldDisableAsk };
 import type { ProgramRun, BootstrapResult } from './types.js';

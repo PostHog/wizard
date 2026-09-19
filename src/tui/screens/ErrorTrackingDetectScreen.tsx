@@ -6,16 +6,18 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type {
+  WizardStore,
+  ErrorTrackingDetectionReport,
+  ErrorTrackingProject,
+} from '@store/types';
 import { LoadingBox, PickerMenu } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
-import { FRAMEWORK_REGISTRY } from '@store/registry';
+import { FRAMEWORK_REGISTRY } from '@store';
 import {
   detectErrorTrackingProjects,
   ERROR_TRACKING_PROJECT_PATH_KEY,
-  type ErrorTrackingDetectionReport,
-  type ErrorTrackingProject,
-} from '@store/programs/error-tracking/detect-agentic';
+} from '@store/programs';
 
 interface ErrorTrackingDetectScreenProps {
   store: WizardStore;

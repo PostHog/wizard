@@ -7,10 +7,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { logToFile } from '@store/shared/debug';
+import { logToFile, WIZARD_BENCHMARK_FILE, WIZARD_LOG_FILE } from '@store';
 import { AgentSignals } from '../agent-interface.js';
 import { runtimeEnv } from '@env';
-import { WIZARD_BENCHMARK_FILE, WIZARD_LOG_FILE } from '@store/shared/paths';
 
 export interface BenchmarkConfig {
   /** Enable/disable individual metric plugins */

@@ -16,11 +16,8 @@
  */
 import { Box, Text } from 'ink';
 import { Colors } from '../styles.js';
-import { totalTokenCount, type TokenUsageSnapshot } from '@store/state/store';
-import {
-  formatTokenCount,
-  formatCostUsd,
-} from '@store/agent-protocol/token-pricing';
+import { totalTokenCount, formatTokenCount, formatCostUsd } from '@store';
+import type { TokenUsageSnapshot } from '@store/types';
 
 /** Self-documents the hidden shortcut once the panel is showing. */
 const HINT_TEXT = 'Ctrl+T to hide';

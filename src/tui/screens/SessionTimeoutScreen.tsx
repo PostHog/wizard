@@ -9,9 +9,9 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors } from '../styles.js';
-import { OAUTH_TIMEOUT_MS } from '@store/shared/constants';
+import { OAUTH_TIMEOUT_MS } from '@store';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey.js';
 
 interface SessionTimeoutScreenProps {

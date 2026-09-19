@@ -8,7 +8,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 
 type View = 'default' | 'more-info';

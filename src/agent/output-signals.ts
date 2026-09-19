@@ -12,10 +12,7 @@
  * hooks' onTerminate callback (`yaraViolationReason` in runAgent) instead.
  */
 
-import {
-  AgentSignals,
-  REMARK_INSTRUCTION,
-} from '@store/agent-protocol/agent-signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@store';
 
 /**
  * Single source of truth for the substrings runAgent scans agent output for.

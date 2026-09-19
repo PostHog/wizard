@@ -4,14 +4,11 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore } from '@store/state/store';
+import { WizardStore, HostResolution, WizardReadiness } from '@store';
 import { UiStore } from '../ui-store.js';
 import { PlaygroundApp } from './PlaygroundApp.js';
-import { HostResolution } from '@store/host-resolution';
-import { WizardReadiness } from '@store/health-checks/readiness';
 import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
-import { flowFor } from '@store/programs/flow-for';
-import { Program } from '@store/programs/program-registry';
+import { flowFor, Program } from '@store/programs';
 
 export function startPlayground(version: string): void {
   enterDarkTerminal();

@@ -11,15 +11,10 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore, SelfDrivingDetectError } from '@store/types';
 import { PickerMenu } from '../primitives/index.js';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
-import {
-  NO_DEFAULT_LIMIT,
-  PRICING_LONG,
-  PRICING_SHORT,
-} from '@store/programs/self-driving/pricing';
-import type { SelfDrivingDetectError } from '@store/programs/self-driving';
+import { NO_DEFAULT_LIMIT, PRICING_LONG, PRICING_SHORT } from '@store/programs';
 
 interface SelfDrivingIntroScreenProps {
   store: WizardStore;

@@ -26,17 +26,20 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@store/state/store';
+import type { WizardStore } from '@store/types';
 import { Colors, Icons } from '../styles.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings.js';
-import { getSlackAppCard } from '@store/mcp-role-prompts';
-import { fetchSlackConnected } from '@store/api';
-import { Program } from '@store/programs/program-registry';
-import { getOrAskForProjectData } from '@store/shared/setup-utils';
-import { analytics } from '@store/shared/analytics';
-import { logToFile } from '@store/shared/debug';
-import { openTrackedLink, withUtm } from '@store/shared/links';
+import {
+  getSlackAppCard,
+  fetchSlackConnected,
+  getOrAskForProjectData,
+  analytics,
+  logToFile,
+  openTrackedLink,
+  withUtm,
+} from '@store';
+import { Program } from '@store/programs';
 
 interface SlackConnectScreenProps {
   store: WizardStore;

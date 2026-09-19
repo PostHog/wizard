@@ -1,6 +1,4 @@
-import { getUI } from '@store/ui';
-import { ErrorCodes } from '@store/shared/errors';
-import { emitWizardError } from '@store/shared/errors';
+import { getUI, ErrorCodes, emitWizardError } from '@store';
 
 /** Print the "needs a TTY" error and exit. Used when no `--ci` flag and no TTY. */
 export function failNonInteractive(): void {

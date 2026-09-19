@@ -7,8 +7,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createJiti } from 'jiti';
-import { VERSION } from '@store/shared/version';
-import { logToFile } from '@store/shared/debug';
+import { VERSION, logToFile } from '@store';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
 
