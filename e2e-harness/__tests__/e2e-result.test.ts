@@ -15,12 +15,14 @@ import { OutroKind, RunPhase } from '@lib/wizard-session';
 import type { AskQuestion, WizardSession } from '@lib/wizard-session';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 import { Overlay } from '@ui/tui/router';
+import { TASK_OUTCOMES_KEY } from '@lib/agent/runner/sequence/orchestrator/queue';
 import {
   E2eRunRecorder,
   abortReasonFrom,
   buildE2eResult,
   detectedSourcesFrom,
   readReportFile,
+  taskOutcomesFrom,
 } from '../e2e-result';
 import { DEFAULT_E2E_PROFILE, decideE2eAction } from '../e2e-profile';
 import type { CiState } from '../wizard-ci-driver';
@@ -422,6 +424,9 @@ describe('buildE2eResult', () => {
               matchedSignal: 'found DATABASE_URL',
             },
           ],
+          [TASK_OUTCOMES_KEY]: [
+            { type: 'ai-observability', status: 'not needed', optional: true },
+          ],
         },
         outroData: null,
       },
@@ -447,6 +452,7 @@ describe('buildE2eResult', () => {
         'runPhase',
         'screenPath',
         'skillsComplete',
+        'taskOutcomes',
         'tasks',
         'unansweredAsks',
       ].sort(),
@@ -461,6 +467,16 @@ describe('buildE2eResult', () => {
     expect(build().tasks).toEqual([
       { label: 'Connect your data sources', status: 'completed' },
     ]);
+  });
+
+  it("reports the queue's terminal outcomes by type", () => {
+    expect(build().taskOutcomes).toEqual([
+      { type: 'ai-observability', status: 'not needed', optional: true },
+    ]);
+  });
+
+  it('has no outcomes for a linear run, which drains no queue', () => {
+    expect(taskOutcomesFrom({ frameworkContext: {} })).toEqual([]);
   });
 
   it('reports the sources detection found', () => {

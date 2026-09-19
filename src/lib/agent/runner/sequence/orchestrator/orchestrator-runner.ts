@@ -58,8 +58,10 @@ import {
   QueueStore,
   QUEUE_DIR_NAME,
   SkipReason,
+  TASK_OUTCOMES_KEY,
   TaskStatus,
   type QueuedTask,
+  type TaskOutcome,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
@@ -1041,6 +1043,12 @@ export async function runOrchestrator(
   try {
     await drainQueue(store, runTask);
   } finally {
+    // The queue file is wiped below; the e2e harness reads outcomes from here.
+    session.frameworkContext[TASK_OUTCOMES_KEY] = store.list().map((t) => ({
+      type: t.type,
+      status: t.status,
+      optional: t.optional === true,
+    })) satisfies TaskOutcome[];
     try {
       if (referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(

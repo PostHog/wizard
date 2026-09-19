@@ -8,11 +8,14 @@
  * into an inline run.
  */
 
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { POSTHOG_INTEGRATION_PROGRAM } from '@lib/programs/posthog-integration/steps';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
+import {
+  CREDENTIALS,
+  promptFor,
+  resolveRun,
+  sessionWith,
+} from './helpers/integration-prompt';
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',
@@ -27,46 +30,6 @@ const STRIPE: DetectedSource = {
   mode: 'in-cli',
   matchedSignal: 'stripe in package.json',
 };
-
-const CREDENTIALS = {
-  accessToken: 'tok',
-  projectApiKey: 'phc_test',
-  projectId: '1',
-  host: {
-    apiHost: 'https://us.i.posthog.com',
-    appHost: 'https://us.posthog.com',
-  },
-};
-
-const FRAMEWORK_CONFIG = {
-  metadata: { name: 'Next.js', docsUrl: 'https://posthog.com/docs' },
-  environment: { getEnvVars: () => ({ POSTHOG_KEY: 'phc_test' }) },
-  ui: { getOutroChanges: () => ['Added PostHog provider'] },
-  detection: {
-    usesPackageJson: false,
-    getVersion: () => '15.0.0',
-    packageName: 'next',
-    packageDisplayName: 'Next.js',
-  },
-  analytics: { getTags: () => ({}) },
-  prompts: { projectTypeDetection: 'app router' },
-};
-
-function sessionWith(sources: DetectedSource[]): WizardSession {
-  const s = buildSession({ installDir: '/tmp/app' });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  s.frameworkConfig = FRAMEWORK_CONFIG as any;
-  if (sources.length > 0) {
-    s.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = sources;
-  }
-  return s;
-}
-
-async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
-  if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
-}
 
 describe('outro suggestion', () => {
   it('gives every detected source its own pre-filled link', async () => {
@@ -125,29 +88,6 @@ describe('outro suggestion', () => {
       // No report file — the report goes out via publish_handoff + notebook.
       expect(outro.reportFile).toBeUndefined();
     }
-  });
-});
-
-const promptFor = async (sources: DetectedSource[]) => {
-  const s = sessionWith(sources);
-  const runDef = await resolveRun(s);
-  return runDef.customPrompt!({
-    projectId: 1,
-    projectApiKey: 'phc_test',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    host: CREDENTIALS.host as any,
-  });
-};
-
-describe('default integration skill workflow', () => {
-  it('loads the framework category first and delegates observability to its workflow', async () => {
-    const prompt = await promptFor([]);
-    expect(prompt).toContain('category: "integration"');
-    expect(prompt).toContain('AI Observability and Logs skills');
-    expect(prompt).toContain('before verification and the setup report');
-    expect(prompt).toContain(
-      'Do NOT load or install skills from any other category',
-    );
   });
 });
 

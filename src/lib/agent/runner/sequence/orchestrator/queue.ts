@@ -132,6 +132,16 @@ export interface QueueFile {
   tasks: QueuedTask[];
 }
 
+/** Session frameworkContext key holding the drained queue's final outcomes —
+ *  written by the runner before the cache wipe, read by the e2e harness. */
+export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
+
+export interface TaskOutcome {
+  type: string;
+  status: TaskStatus;
+  optional: boolean;
+}
+
 /** The structured handoff a task leaves for the next agent. */
 export interface TaskHandoff {
   goals: string;
