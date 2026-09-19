@@ -24,6 +24,7 @@ import type {
 } from '@store/types';
 import { LoggingUI } from '@tui/console';
 import { runConfigFor, getAuditChecks, flowFor } from '@store/programs';
+import { runtimeEnv } from '@env';
 import { resolveNoTelemetry } from './resolve-no-telemetry.js';
 import { createControlHooks } from '../control-hooks.js';
 import { join } from 'node:path';
@@ -262,7 +263,9 @@ export function runNonInteractive(
     };
 
     try {
-      if (mode === 'ci') {
+      // An issued gateway bearer in the environment replaces the mint, for
+      // `--ci` and for a headless run driven by a test harness alike.
+      if (mode === 'ci' || runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE')) {
         const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),

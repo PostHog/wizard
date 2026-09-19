@@ -16,6 +16,12 @@ surfaces' public entries. Holds no domain logic.
   `run-non-interactive.ts` (headless, every build) and in `run-wizard.ts` (TUI,
   dev builds only). Published TUI runs refuse the flag unless the headless flag
   is present.
+- Every `POST /runs` is one independent run: the hook clears the previous run's
+  state and gives the run its own task stream session; credentials and framework
+  context persist. A headless run with `WIZARD_CI_GATEWAY_TOKEN_FILE` in its
+  environment uses that bearer and never mints.
+  `scripts/controlled-headless-smoke.no-jest.ts` drives the surface end to end
+  and prints every request and response.
 
 ## May import
 
