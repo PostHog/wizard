@@ -24,7 +24,11 @@ import {
 } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
-import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+import {
+  AgentSignals,
+  REMARK_INSTRUCTION,
+  runErrorType,
+} from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '@lib/gateway-session';
@@ -42,7 +46,11 @@ import type {
 } from '../types';
 import type { BootstrapResult } from '@lib/agent/runner/shared/types';
 import type { TaskStore } from './tasks';
-import { completionFailure, runErrorType } from './completion';
+import {
+  completionFailure,
+  nudgeWhileUnfinished,
+  type NudgeRun,
+} from './completion';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
 function piMcpContext(
@@ -219,6 +227,9 @@ export const piBackend: AgentHarness = {
     // Tool calls across the whole run. Zero means the agent only ever produced
     // text and never acted — a no-op that leaves the project untouched.
     let toolCalls = 0;
+    // Assistant turns that carried text. A turn with neither text nor a tool
+    // call did nothing, and the completion guard reads that as a dead nudge.
+    let assistantOutputs = 0;
     const runDurations = () => {
       const durationMs = Date.now() - startTime;
       return {
@@ -236,6 +247,8 @@ export const piBackend: AgentHarness = {
     // Not `reason`: the linear sequence emits this same event with a `reason`
     // holding the agent's free-text [ABORT] string, and one property cannot be
     // both a closed enum and unbounded prose without making either unreadable.
+    // What the completion guard did, read by the abort event below.
+    let nudgeRun: NudgeRun = { nudges: 0, dead: false };
     const captureAborted = (failureMode: AgentErrorType) =>
       analytics.wizardCapture('agent aborted', {
         failure_mode: failureMode,
@@ -507,6 +520,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const assistant = extractText(event.message).trim();
             if (assistant) {
+              assistantOutputs += 1;
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
               applyOutroMarkers(assistant);
               // Surface [STATUS] lines into the live spinner + status history,
@@ -566,17 +580,23 @@ export const piBackend: AgentHarness = {
         // Completion guard: pi's prompt() resolves the moment the model returns
         // a turn with no tool call (e.g. a lone [STATUS] line), even mid-plan.
         // While tasks remain open and we're under the cap, nudge it to continue.
-        let continueNudges = 0;
-        while (
-          continueNudges < MAX_CONTINUE_NUDGES &&
-          !security.state.criticalViolation &&
-          hasOpenTasks(wizardTaskTools.store)
-        ) {
-          continueNudges += 1;
+        nudgeRun = await nudgeWhileUnfinished({
+          max: MAX_CONTINUE_NUDGES,
+          unfinished: () =>
+            !security.state.criticalViolation &&
+            hasOpenTasks(wizardTaskTools.store),
+          progress: () => toolCalls + assistantOutputs,
+          send: (nudge) => {
+            logToFile(
+              `[pi] completion guard: tasks still open, nudge ${nudge}/${MAX_CONTINUE_NUDGES}`,
+            );
+            return turns.prompt(CONTINUE_INSTRUCTION);
+          },
+        });
+        if (nudgeRun.dead) {
           logToFile(
-            `[pi] completion guard: tasks still open, nudge ${continueNudges}/${MAX_CONTINUE_NUDGES}`,
+            `[pi] completion guard: nudge ${nudgeRun.nudges} produced nothing; stopping`,
           );
-          await turns.prompt(CONTINUE_INSTRUCTION);
         }
 
         // Best-effort remark ask — a failed turn never fails a successful run.
@@ -621,7 +641,11 @@ export const piBackend: AgentHarness = {
       if (failure === AgentErrorType.INCOMPLETE_TASKS) {
         spinner.stop('Agent stopped before finishing');
         logToFile('[pi] incomplete: tasks left open');
-        analytics.wizardCapture('agent incomplete tasks', { open_tasks: true });
+        analytics.wizardCapture('agent incomplete tasks', {
+          open_tasks: true,
+          nudges: nudgeRun.nudges,
+          dead_nudge: nudgeRun.dead,
+        });
         captureAborted(failure);
         return { error: failure };
       }
