@@ -28,12 +28,12 @@ import {
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-} from '../../../security/yara-hooks.js';
+} from '@store/security/yara-hooks';
 import {
   publishBlockingMatch,
   scanVerdict,
   type ScanContext,
-} from '../../../security/yara-policy.js';
+} from '@store/security/yara-policy';
 import { logToFile } from '@store/shared/debug';
 import { analytics } from '@store/shared/analytics';
 

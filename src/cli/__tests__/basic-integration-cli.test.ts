@@ -1,5 +1,5 @@
 import { basicIntegrationCommand } from '../commands/basic-integration/index.js';
-import { HEADLESS_FLAG } from '../headless-mode.js';
+import { HEADLESS_FLAG } from '@store/shared/headless-mode';
 import { parseCommand } from './helpers/parse-command.no-jest.js';
 
 describe('basic-integration parsing (end-to-end yargs)', () => {

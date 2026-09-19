@@ -1,7 +1,7 @@
 import { VERSION } from '@store/shared/version';
 import { logToFile, getLogFilePath } from '@store/shared/debug';
 import { runAgent } from '@agent/agent-runner';
-import { authenticate } from '@agent/runner/shared/authenticate';
+import { authenticate } from '@store/services/authenticate';
 import { getProgramConfig } from '@store/programs/program-registry';
 import { runConfigFor } from '@store/programs/run-config';
 import { getAuditChecks } from '@store/programs/audit/types';

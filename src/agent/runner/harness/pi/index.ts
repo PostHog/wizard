@@ -321,9 +321,7 @@ export const piBackend: AgentHarness = {
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
       // path, so the first scanned call doesn't eat cold-start latency.
-      const { prewarmYaraScanner } = await import(
-        '../../../security/yara-hooks.js'
-      );
+      const { prewarmYaraScanner } = await import('@store/security/yara-hooks');
       void prewarmYaraScanner();
 
       // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point

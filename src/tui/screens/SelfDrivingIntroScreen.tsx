@@ -18,7 +18,7 @@ import {
   NO_DEFAULT_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
-} from '../programs/self-driving/content/pricing.js';
+} from '@store/programs/self-driving/pricing';
 import type { SelfDrivingDetectError } from '@store/programs/self-driving';
 
 interface SelfDrivingIntroScreenProps {

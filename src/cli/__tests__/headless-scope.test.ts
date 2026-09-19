@@ -1,7 +1,7 @@
 import { auditCommand } from '../commands/audit.js';
 import { basicIntegrationCommand } from '../commands/basic-integration/index.js';
 import { revenueCommand } from '../commands/revenue.js';
-import { HEADLESS_FLAG } from '../headless-mode.js';
+import { HEADLESS_FLAG } from '@store/shared/headless-mode';
 import { GLOBAL_OPTIONS } from '../wizard.js';
 import { parseCommand } from './helpers/parse-command.no-jest.js';
 

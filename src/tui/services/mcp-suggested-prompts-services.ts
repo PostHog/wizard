@@ -11,6 +11,11 @@
  */
 
 import type { Credentials } from '@store/session/wizard-session';
+import type {
+  AgentChunk,
+  McpPromptRequest,
+} from '@store/agent-protocol/mcp-prompt';
+import { getAgentBridge } from '../agent-bridge.js';
 import { getOrAskForProjectData } from '@store/shared/setup-utils';
 import { Program } from '@store/programs/program-registry';
 import type { WizardStore } from '@store/state/store';
@@ -26,17 +31,7 @@ import { seedDemoEvents as runSeed } from '@store/mcp-seed-events';
  * needs to render. Production yields these from Claude SDK messages;
  * the playground yields them from canned scripts.
  */
-export type AgentChunk =
-  | { kind: 'text'; text: string }
-  /** `command` carries CLI mode's exec command string (`call <tool> …`) so the
-   *  screen can recover the inner tool for context-aware follow-ups. */
-  | { kind: 'tool-call'; toolName: string; detail: string; command?: string }
-  | { kind: 'tool-result'; toolName: string; detail: string }
-  | { kind: 'error'; text: string }
-  /** Stream completed. `sessionId` is the SDK session ID of the just-
-   *  completed turn; pass it back as `resumeSessionId` on a follow-up
-   *  call to continue the conversation with full history. */
-  | { kind: 'done'; sessionId?: string };
+export type { AgentChunk };
 
 export interface McpSuggestedPromptsServices {
   /**
@@ -162,17 +157,8 @@ export function createMcpSuggestedPromptsServices(
   };
 }
 
-async function* runProductionPromptStreaming(args: {
-  prompt: string;
-  credentials: Credentials;
-  signal: AbortSignal;
-  resumeSessionId?: string;
-  programId?: string;
-  integration?: string;
-}): AsyncIterable<AgentChunk> {
-  // Defer the SDK import to call time — the playground never hits
-  // this path (it overrides the whole service object), so demo
-  // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import('@agent/mcp-prompt-streaming');
-  yield* runMcpPromptViaSdk(args);
+async function* runProductionPromptStreaming(
+  args: McpPromptRequest,
+): AsyncIterable<AgentChunk> {
+  yield* getAgentBridge().runMcpPrompt(args);
 }

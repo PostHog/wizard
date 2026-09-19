@@ -42,16 +42,17 @@ import {
   type GatewayAuth,
 } from './gateway/gateway-session.js';
 import { evaluateBashCommand } from './bash-fence.js';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@store/tools';
+import { WIZARD_TOOL_NAMES } from '@store/tools';
+import { createWizardToolsServer } from './tools/mcp.js';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
-} from './security/yara-hooks.js';
+} from '@store/security/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider.js';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments.js';
-import { classifyToolToStage } from './agent-phase.js';
+import { classifyToolToStage } from '@store/agent-protocol/agent-phase';
 import type { PackageManagerDetector } from '@store/detection/package-manager';
 import {
   AgentSignals,

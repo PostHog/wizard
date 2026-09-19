@@ -4,7 +4,7 @@ import type { ProgramRun } from '../../agent-protocol/program-run.js';
 import type { WizardSession } from '../../session/wizard-session.js';
 import { OutroKind } from '../../session/wizard-session.js';
 import { WIZARD_TOOL_NAMES } from '../../tools/index.js';
-import { headlessOption, regionOption } from '@cli/headless-mode';
+import { headlessOption, regionOption } from '../../shared/headless-mode.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import {
   AUDIT_CHECKS_FILE,

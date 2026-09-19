@@ -12,7 +12,7 @@
  * `for await (...)` and render as they arrive.
  */
 
-import type { AgentChunk } from '@tui/services/mcp-suggested-prompts-services';
+import type { AgentChunk } from '@store/agent-protocol/mcp-prompt';
 import type { Credentials } from '@store/session/wizard-session';
 import {
   DEFAULT_AGENT_MODEL,

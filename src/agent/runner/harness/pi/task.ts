@@ -285,9 +285,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
     });
-    const { prewarmYaraScanner } = await import(
-      '../../../security/yara-hooks.js'
-    );
+    const { prewarmYaraScanner } = await import('@store/security/yara-hooks');
     void prewarmYaraScanner();
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never

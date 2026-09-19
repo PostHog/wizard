@@ -5,7 +5,7 @@ import {
   runWizardCI,
   runWizardHeadless,
 } from '../../runners/index.js';
-import { isHeadless } from '../../headless-mode.js';
+import { isHeadless } from '@store/shared/headless-mode';
 import type { ProgramConfig } from '@store/programs/program-step';
 
 import { skillProgramOptions } from '../skill-program-options.js';

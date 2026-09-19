@@ -11,11 +11,7 @@ import {
 } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';
-import {
-  NO_DEFAULT_LIMIT,
-  PRICE_PER_PR_USD,
-  PRICING_LONG,
-} from '@tui/programs/self-driving/content/pricing';
+import { NO_DEFAULT_LIMIT, PRICE_PER_PR_USD, PRICING_LONG } from './pricing.js';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';

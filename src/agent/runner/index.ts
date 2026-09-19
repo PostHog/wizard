@@ -34,7 +34,7 @@ import {
   type ProgramBinding,
   type SwitchboardCtx,
 } from './switchboard/index.js';
-import { flushScanReport } from '../security/yara-hooks.js';
+import { flushScanReport } from '@store/security/yara-hooks';
 import { startAuditLedgerWatcher } from '@store/programs/audit/ledger-watcher';
 import { registerCleanup } from '@store/shared/wizard-abort';
 

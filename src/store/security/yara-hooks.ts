@@ -32,19 +32,19 @@ import type {
   LLMProvider,
   Category,
 } from '@posthog/warlock';
-import { logToFile } from '@store/shared/debug';
-import { readFileHead } from '@store/shared/bounded-fs';
-import { analytics } from '@store/shared/analytics';
-import { getUI } from '@store/ui';
-import type { WizardSession } from '@store/session/wizard-session';
-import { isSkillInstallCommand } from '@store/skill-install';
+import { logToFile } from '../shared/debug.js';
+import { readFileHead } from '../shared/bounded-fs.js';
+import { analytics } from '../shared/analytics.js';
+import { getUI } from '../ui/index.js';
+import type { WizardSession } from '../session/wizard-session.js';
+import { isSkillInstallCommand } from '../skill-install.js';
 import {
   highestSeverityMatch,
   publishBlockingMatch,
   scanVerdict,
 } from './yara-policy.js';
 import type { ScanAction, ScanContext } from './yara-policy.js';
-import { WIZARD_YARA_REPORT_FILE } from '@store/shared/paths';
+import { WIZARD_YARA_REPORT_FILE } from '../shared/paths.js';
 // TODO(wizard#594): invert this dependency.
 // L2 infra (yara-hooks) imports product-specific filename constants from
 // individual programs. The leaf `constants.ts` modules break the *import*
@@ -58,9 +58,9 @@ import {
   SETUP_REPORT_FILE as EVENTS_AUDIT_REPORT_FILE,
   EVENT_INVENTORY_FILE,
   EVENT_INVENTORY_PART_PATTERN,
-} from '@store/programs/events-audit/constants';
-import { AUDIT_REPORT_FILE } from '@store/programs/audit/types';
-import { EVENT_PLAN_FILE } from '@store/programs/posthog-integration/constants';
+} from '../programs/events-audit/constants.js';
+import { AUDIT_REPORT_FILE } from '../programs/audit/types.js';
+import { EVENT_PLAN_FILE } from '../programs/posthog-integration/constants.js';
 
 // ─── Warlock module accessor ─────────────────────────────────────
 // Warlock is ESM-only and lazily inits its WASM engine + compiles rules on the

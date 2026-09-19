@@ -4,7 +4,7 @@ import {
   headlessOption,
   isHeadless,
   regionOption,
-} from '../../headless-mode.js';
+} from '@store/shared/headless-mode';
 import { provisionCommand } from '../provision.js';
 import type { Command } from '../command.js';
 

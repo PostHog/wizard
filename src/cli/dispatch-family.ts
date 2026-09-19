@@ -1,19 +1,19 @@
 import type { Arguments } from 'yargs';
 
-import { auditConfig } from './audit/index.js';
-import { AUDIT_CHECKS_FILE } from './audit/types.js';
-import { WIZARD_TOOL_NAMES } from '../tools/index.js';
-import { agentSkillConfig } from './program-registry.js';
-import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
-import type { ProgramConfig } from './program-step.js';
-import { getSkillsBaseUrl } from '../shared/constants.js';
-import { fetchSkillMenu, type CliEntry } from '../tools/index.js';
-import { analytics } from '../shared/analytics.js';
+import { auditConfig } from '@store/programs/audit';
+import { AUDIT_CHECKS_FILE } from '@store/programs/audit/types';
+import { WIZARD_TOOL_NAMES } from '@store/tools';
+import { agentSkillConfig } from '@store/programs/program-registry';
+import { webAnalyticsDoctorConfig } from '@store/programs/web-analytics-doctor';
+import type { ProgramConfig } from '@store/programs/program-step';
+import { getSkillsBaseUrl } from '@store/shared/constants';
+import { fetchSkillMenu, type CliEntry } from '@store/tools';
+import { analytics } from '@store/shared/analytics';
 
-import { dispatchProgram } from '@cli/commands/factories/shared';
-import type { Command } from '@cli/commands/command';
-import { ErrorCodes } from '../shared/errors/index.js';
-import { emitWizardError } from '../shared/errors/index.js';
+import { dispatchProgram } from './commands/factories/shared.js';
+import type { Command } from './commands/command.js';
+import { ErrorCodes } from '@store/shared/errors';
+import { emitWizardError } from '@store/shared/errors';
 
 /**
  * Capture a CLI dispatch error, flush analytics, and exit. The wizard never

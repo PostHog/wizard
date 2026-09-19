@@ -8,20 +8,20 @@ import {
   captureScanReport,
   recordExternalScan,
   resetScanReport,
-} from '../security/yara-hooks.js';
+} from '../yara-hooks.js';
 import { scan, triageMatches } from '@posthog/warlock';
 import fs from 'fs';
 import fg from 'fast-glob';
-import * as analyticsModule from '@store/shared/analytics';
+import * as analyticsModule from '../../shared/analytics.js';
 
 // Mock dependencies
-vi.mock('@store/shared/debug');
-vi.mock('@store/shared/analytics');
+vi.mock('../../shared/debug.js');
+vi.mock('../../shared/analytics.js');
 vi.mock('fs');
 vi.mock('fast-glob');
 
 // Mock isSkillInstallCommand from skill-install (extracted to break circular dep)
-vi.mock('@store/skill-install', () => ({
+vi.mock('../../skill-install.js', () => ({
   isSkillInstallCommand: (command: string) =>
     command.startsWith('mkdir -p .claude/skills/') &&
     command.includes('curl -sL') &&

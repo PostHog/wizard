@@ -5,7 +5,7 @@ import {
   buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
-} from '@store/programs/dispatch-family';
+} from '../../dispatch-family.js';
 import { getSkillsBaseUrl } from '@store/shared/constants';
 import { fetchSkillMenu } from '@store/tools';
 

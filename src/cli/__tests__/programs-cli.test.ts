@@ -26,10 +26,7 @@ import { revenueCommand } from '../commands/revenue.js';
 import { warehouseCommand } from '../commands/warehouse.js';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps.js';
 import { selfDrivingCommand } from '../commands/self-driving.js';
-import {
-  dispatchFamily,
-  pickerChildrenToShow,
-} from '@store/programs/dispatch-family';
+import { dispatchFamily, pickerChildrenToShow } from '../dispatch-family.js';
 import type { Command } from '../commands/command.js';
 import { fetchSkillMenu, type CliEntry } from '@store/tools';
 import { auditConfig } from '@store/programs/audit';

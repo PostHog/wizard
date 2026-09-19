@@ -1,21 +1,24 @@
 import { refreshAccessTokenIfNeeded } from '../authenticate.js';
-import { refreshAccessToken } from '@store/shared/oauth';
-import { OAuthError } from '@store/shared/oauth-errors';
+import { refreshAccessToken } from '../../shared/oauth.js';
+import { OAuthError } from '../../shared/oauth-errors.js';
 import {
   isGrantRevoked,
   resetAuthSessionState,
-} from '@store/auth-session-state';
-import type { WizardSession, Credentials } from '@store/session/wizard-session';
+} from '../../auth-session-state.js';
+import type {
+  WizardSession,
+  Credentials,
+} from '../../session/wizard-session.js';
 
-vi.mock('@store/shared/oauth', () => ({ refreshAccessToken: vi.fn() }));
-vi.mock('@store/shared/debug', () => ({ logToFile: vi.fn() }));
-vi.mock('@store/shared/analytics', () => ({
+vi.mock('../../shared/oauth.js', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('../../shared/debug.js', () => ({ logToFile: vi.fn() }));
+vi.mock('../../shared/analytics.js', () => ({
   analytics: { wizardCapture: vi.fn() },
   groupsFromUser: vi.fn(),
 }));
 
 const setAccessToken = vi.fn();
-vi.mock('@store/ui', () => ({
+vi.mock('../../ui/index.js', () => ({
   getUI: () => ({ setAccessToken }),
 }));
 

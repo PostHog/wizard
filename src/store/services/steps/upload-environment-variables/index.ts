@@ -1,5 +1,5 @@
 import type { Integration } from '../../../shared/constants.js';
-import { withProgress } from '@cli/telemetry';
+import { withProgress } from '../../../shared/telemetry.js';
 import { analytics } from '../../../shared/analytics.js';
 import { getUI } from '../../../ui/index.js';
 import type { WizardSession } from '../../../session/wizard-session.js';

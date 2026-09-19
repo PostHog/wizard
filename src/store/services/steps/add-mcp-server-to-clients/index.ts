@@ -1,6 +1,6 @@
 import type { Integration } from '../../../shared/constants.js';
 import type { CloudRegion } from '../../../shared/types.js';
-import { withProgress } from '@cli/telemetry';
+import { withProgress } from '../../../shared/telemetry.js';
 import { analytics } from '../../../shared/analytics.js';
 import { getUI } from '../../../ui/index.js';
 import { MCPClient } from './MCPClient.js';

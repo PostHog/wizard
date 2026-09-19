@@ -86,9 +86,22 @@ import { cliCommand } from './src/cli/commands/cli/index.js';
 import { recoverOrphanedSettingsBackups } from '@store/services/claude-settings';
 import { setUI } from '@store/ui';
 import { LoggingUI } from '@tui/console/logging-ui';
+import { setDetectionAgent } from './src/store/detection/agentic';
+import { detectProjectsWithAgent } from './src/agent/detection/agentic';
+import { setAgentBridge } from './src/tui/agent-bridge';
 
 // The entry point owns the default renderer; @ui ships with none.
 setUI(new LoggingUI());
+// The store and the TUI never import the agent; the entry point installs it.
+setDetectionAgent(detectProjectsWithAgent);
+setAgentBridge({
+  runMcpPrompt: async function* (args) {
+    const { runMcpPromptViaSdk } = await import(
+      './src/agent/mcp-prompt-streaming'
+    );
+    yield* runMcpPromptViaSdk(args);
+  },
+});
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and

@@ -10,15 +10,15 @@
  * back rather than fetching again.
  */
 
-import type { Credentials, WizardSession } from '@store/session/wizard-session';
-import type { ProgramId } from '@store/programs/program-registry';
-import { getOrAskForProjectData } from '@store/shared/setup-utils';
-import { refreshAccessToken } from '@store/shared/oauth';
-import { OAuthError } from '@store/shared/oauth-errors';
-import { markGrantRevoked } from '@store/auth-session-state';
-import { analytics, groupsFromUser } from '@store/shared/analytics';
-import { getUI } from '@store/ui';
-import { logToFile } from '@store/shared/debug';
+import type { Credentials, WizardSession } from '../session/wizard-session.js';
+import type { ProgramId } from '../programs/program-registry.js';
+import { getOrAskForProjectData } from '../shared/setup-utils.js';
+import { refreshAccessToken } from '../shared/oauth.js';
+import { OAuthError } from '../shared/oauth-errors.js';
+import { markGrantRevoked } from '../auth-session-state.js';
+import { analytics, groupsFromUser } from '../shared/analytics.js';
+import { getUI } from '../ui/index.js';
+import { logToFile } from '../shared/debug.js';
 
 export async function authenticate(
   session: WizardSession,

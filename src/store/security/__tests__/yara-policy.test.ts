@@ -4,7 +4,7 @@ import {
   isTerminalMatch,
   publishBlockingMatch,
   scanVerdict,
-} from '../security/yara-policy.js';
+} from '../yara-policy.js';
 
 function match(
   severity: string,

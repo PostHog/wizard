@@ -7,12 +7,12 @@ import {
   AGENTIC_DETECTION_TIMEOUT_MS,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '../../shared/constants.js';
-import { authenticate } from '@agent/runner/shared/authenticate';
+import { authenticate } from '../../services/authenticate.js';
 import { buildSession } from '../../session/wizard-session.js';
 import { analytics } from '../../shared/analytics.js';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
-vi.mock('@agent/runner/shared/authenticate', () => ({
+vi.mock('../../services/authenticate.js', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../agentic.js', async (importOriginal) => ({

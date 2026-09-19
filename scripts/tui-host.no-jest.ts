@@ -17,6 +17,10 @@ import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@tui/start-tui';
+import { setDetectionAgent } from '@store/detection/agentic';
+import { detectProjectsWithAgent } from '@agent/detection/agentic';
+import { setAgentBridge } from '@tui/agent-bridge';
+import { runMcpPromptViaSdk } from '@agent/mcp-prompt-streaming';
 import { VERSION } from '@store/shared/version';
 import {
   Program,
@@ -31,7 +35,7 @@ import { runAgent } from '@agent/agent-runner';
 import { runConfigFor } from '@store/programs/run-config';
 import { TaskStreamPush, createFileDestination } from '@store/task-stream';
 import { getAuditChecks } from '@store/programs/audit/types';
-import { authenticate } from '@agent/runner/shared/authenticate';
+import { authenticate } from '@store/services/authenticate';
 import { getOrAskForProjectData } from '@store/shared/setup-utils';
 import { logToFile } from '@store/shared/debug';
 import { join } from 'path';
@@ -222,6 +226,8 @@ async function main() {
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
   });
 
+  setDetectionAgent(detectProjectsWithAgent);
+  setAgentBridge({ runMcpPrompt: runMcpPromptViaSdk });
   const { store } = startTUI(VERSION, programId);
   store.session = buildSession({
     installDir: process.env.APP_DIR!,

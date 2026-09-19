@@ -23,7 +23,7 @@ import {
   formatScanReport,
   formatYaraAbortMessage,
   writeScanReport,
-} from '../../security/yara-hooks.js';
+} from '@store/security/yara-hooks';
 import { installSkillById } from '@store/tools';
 import { createWizardAskBridge } from '@store/session/wizard-ask-bridge';
 import type { ProgramRunConfig } from '@store/agent-protocol/program-run';

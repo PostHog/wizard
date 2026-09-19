@@ -23,7 +23,7 @@ import {
 import { Box, Text, useInput } from 'ink';
 import { WizardStore, TaskStatus } from '@store/state/store';
 import { DiscoveredFeature } from '@store/session/wizard-session';
-import { AgentPhase } from '@agent/agent-phase';
+import { AgentPhase } from '@store/agent-protocol/agent-phase';
 import {
   SplitView,
   ProgressList,

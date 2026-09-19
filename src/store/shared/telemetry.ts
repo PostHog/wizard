@@ -1,4 +1,4 @@
-import { analytics } from '@store/shared/analytics';
+import { analytics } from './analytics.js';
 
 export function withProgress<T>(step: string, callback: () => T): T {
   updateProgress(step);

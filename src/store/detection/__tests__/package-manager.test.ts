@@ -15,7 +15,7 @@ import {
 } from '../package-manager.js';
 
 vi.mock('../../shared/debug.js');
-vi.mock('@cli/telemetry', () => ({
+vi.mock('../../shared/telemetry.js', () => ({
   withProgress: (_name: string, fn: () => unknown) => fn(),
 }));
 vi.mock('../../shared/analytics.js', () => ({

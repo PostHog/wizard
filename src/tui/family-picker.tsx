@@ -23,15 +23,29 @@ import { createElement } from 'react';
 import { Colors } from './styles.js';
 import { PickerMenu } from './primitives/PickerMenu.js';
 
-import { commandKeys, type Command } from '@cli/commands/command';
-
-interface FamilyPickerAppProps {
-  parentLabel: string;
-  options: { label: string; value: Command; hint?: string }[];
-  onSelect: (cmd: Command) => void;
+/** The slice of a CLI command the picker reads; the cli passes its own objects. */
+export interface FamilyChild {
+  name: string | readonly string[];
+  description: string;
+  default?: boolean;
+  handler?: (argv: Arguments) => unknown;
+  children?: readonly unknown[];
 }
 
-function FamilyPickerApp(props: FamilyPickerAppProps) {
+const firstKey = (name: string | readonly string[]): string => {
+  const list = typeof name === 'string' ? [name] : name;
+  return (list[0] ?? '').trim().split(/\s+/)[0] ?? '';
+};
+
+interface FamilyPickerAppProps<T extends FamilyChild> {
+  parentLabel: string;
+  options: { label: string; value: T; hint?: string }[];
+  onSelect: (cmd: T) => void;
+}
+
+function FamilyPickerApp<T extends FamilyChild>(
+  props: FamilyPickerAppProps<T>,
+) {
   return createElement(
     Box,
     { flexDirection: 'column', paddingX: 1, paddingY: 1 },
@@ -41,7 +55,7 @@ function FamilyPickerApp(props: FamilyPickerAppProps) {
       props.parentLabel,
     ),
     createElement(Box, { height: 1 }),
-    createElement(PickerMenu<Command>, {
+    createElement(PickerMenu<T>, {
       message: 'Pick a subcommand',
       options: props.options,
       optionMarginBottom: 1,
@@ -55,9 +69,9 @@ function FamilyPickerApp(props: FamilyPickerAppProps) {
   );
 }
 
-function describe(child: Command): string {
+function describe(child: FamilyChild): string {
   // Strip positional syntax (`search <query>` → `search`) for the picker label.
-  return commandKeys(child.name)[0] ?? '';
+  return firstKey(child.name);
 }
 
 /**
@@ -69,7 +83,9 @@ function describe(child: Command): string {
  * Exported for testability — the ordering logic stays pure and
  * inspectable without mounting Ink.
  */
-export function orderFamilyChildren(children: readonly Command[]): Command[] {
+export function orderFamilyChildren<T extends FamilyChild>(
+  children: readonly T[],
+): T[] {
   const selectable = children.filter((c) => c.handler || c.children?.length);
   const defaults = selectable.filter((c) => c.default);
   const rest = selectable.filter((c) => !c.default);
@@ -81,10 +97,10 @@ export function orderFamilyChildren(children: readonly Command[]): Command[] {
  * dispatching the child's handler is the caller's responsibility (so this
  * function stays pure-UI and easy to test by stubbing `render`).
  */
-export function chooseFamilyChild(
+export function chooseFamilyChild<T extends FamilyChild>(
   parentLabel: string,
-  children: readonly Command[],
-): Promise<Command | null> {
+  children: readonly T[],
+): Promise<T | null> {
   const ordered = orderFamilyChildren(children);
   if (ordered.length === 0) return Promise.resolve(null);
 
@@ -96,7 +112,7 @@ export function chooseFamilyChild(
 
   return new Promise((resolve) => {
     let app: ReturnType<typeof render> | null = null;
-    const handleSelect = (cmd: Command): void => {
+    const handleSelect = (cmd: T): void => {
       app?.unmount();
       resolve(cmd);
     };
@@ -125,13 +141,13 @@ export function chooseFamilyChild(
  *     interactiveDefault: createFamilyPickerDefault('audit', auditChildren),
  *   };
  */
-export function createFamilyPickerDefault(
+export function createFamilyPickerDefault<T extends FamilyChild>(
   parentLabel: string,
-  children: readonly Command[],
+  children: readonly T[],
   chooser: (
     label: string,
-    children: readonly Command[],
-  ) => Promise<Command | null> = chooseFamilyChild,
+    children: readonly T[],
+  ) => Promise<T | null> = chooseFamilyChild,
 ): (argv: Arguments) => Promise<void> {
   return async (argv) => {
     const chosen = await chooser(parentLabel, children);
