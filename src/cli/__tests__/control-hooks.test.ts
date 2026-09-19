@@ -202,3 +202,20 @@ describe('independent runs', () => {
     expect(streams[0].shutdown).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('run settlement', () => {
+  it('marks a run that ended while running as completed', async () => {
+    const { store } = setup();
+    const hooks = createControlHooks({
+      store,
+      programId: Program.PostHogIntegration,
+      runAgent: () => {
+        store.setRunPhase(RunPhase.Running);
+        return Promise.resolve();
+      },
+      shutdown: () => Promise.resolve(),
+    });
+    await hooks.startRun({ programId: Program.PostHogIntegration });
+    expect(store.session.runPhase).toBe(RunPhase.Completed);
+  });
+});

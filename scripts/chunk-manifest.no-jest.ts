@@ -1,7 +1,9 @@
 /**
- * Structural manifest of the built bundle: for every chunk in dist/, the
- * source files it contains (from its sourcemap) and the chunks it imports.
- * Hash suffixes are stripped so the output is stable across builds.
+ * Structural manifest of the built bundle, keyed by content rather than by
+ * chunk file name: every chunk that carries source files becomes a group named
+ * after its first source; imports point at the groups they reach, with empty
+ * facade chunks resolved through. Chunk names and hashes vary by platform;
+ * which modules share a chunk and who imports whom does not.
  *
  *   tsx scripts/chunk-manifest.no-jest.ts [distDir] > manifest.json
  */
@@ -16,8 +18,12 @@ const stripHash = (file: string): string =>
 
 const importRe = /(?:from\s*|import\s*\(\s*)["']\.\/([^"']+\.js)["']/g;
 
-const manifest: Record<string, { sources: string[]; imports: string[] }> = {};
+interface Chunk {
+  sources: string[];
+  imports: string[];
+}
 
+const chunks: Record<string, Chunk> = {};
 for (const file of fs
   .readdirSync(dist)
   .filter((f) => f.endsWith('.js'))
@@ -34,7 +40,32 @@ for (const file of fs
     : [];
   const imports = new Set<string>();
   for (const m of code.matchAll(importRe)) imports.add(stripHash(m[1]));
-  manifest[stripHash(file)] = { sources, imports: [...imports].sort() };
+  chunks[stripHash(file)] = { sources, imports: [...imports].sort() };
 }
 
-process.stdout.write(JSON.stringify(manifest, null, 2) + '\n');
+/** The groups a chunk reaches: itself when it carries sources, else what it re-exports. */
+function groupsOf(name: string, seen = new Set<string>()): string[] {
+  const chunk = chunks[name];
+  if (!chunk || seen.has(name)) return [];
+  seen.add(name);
+  if (chunk.sources.length) return [chunk.sources[0]];
+  return chunk.imports.flatMap((i) => groupsOf(i, seen));
+}
+
+const manifest: Record<string, Chunk> = {};
+for (const [name, chunk] of Object.entries(chunks)) {
+  if (!chunk.sources.length) continue;
+  const imports = new Set<string>();
+  for (const i of chunk.imports) for (const g of groupsOf(i)) imports.add(g);
+  imports.delete(chunk.sources[0]);
+  manifest[chunk.sources[0]] = {
+    sources: chunk.sources,
+    imports: [...imports].sort(),
+  };
+  void name;
+}
+
+const sorted = Object.fromEntries(
+  Object.entries(manifest).sort(([a], [b]) => a.localeCompare(b)),
+);
+process.stdout.write(JSON.stringify(sorted, null, 2) + '\n');

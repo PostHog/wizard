@@ -87,7 +87,7 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         // ciPreRun writes to the session object directly, as the headless runner
         // lets it; publish the result so pollers and gates see it.
         await config.ciPreRun(store.session);
-        store.emitChange();
+        store.setDetectionComplete();
       } else {
         await store.runReadyHooks();
       }
@@ -116,6 +116,11 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         await deps.runAgent(runConfigFor(config), runSession, {
           composed: true,
         });
+        // Headless renderers never flip the phase; settle it as the headless
+        // runner does, so the ledger and the stream record a completed run.
+        if (store.session.runPhase === RunPhase.Running) {
+          store.setRunPhase(RunPhase.Completed);
+        }
       } catch (err) {
         if (store.session.runPhase !== RunPhase.Error) {
           store.setOutroData({
