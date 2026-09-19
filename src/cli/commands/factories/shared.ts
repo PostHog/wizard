@@ -5,7 +5,12 @@ import {
   runWizardCI,
   runWizardHeadless,
 } from '../../runners/index.js';
-import { isHeadless, ErrorCodes, emitWizardError } from '@store';
+import {
+  isControlledTui,
+  isHeadless,
+  ErrorCodes,
+  emitWizardError,
+} from '@store';
 import type { ProgramConfig } from '@store/types';
 
 import { skillProgramOptions } from '../skill-program-options.js';
@@ -45,8 +50,7 @@ export function dispatchProgram(config: ProgramConfig, argv: Arguments): void {
     // Same non-interactive pipeline `--ci` uses; validation (api-key,
     // install-dir, region) is owned by runNonInteractive.
     runWizardHeadless(config, options);
-  } else if (options.ci && options.controlSocket) {
-    // A controlled TUI: the real screens, API-key auth, a parent on the socket.
+  } else if (isControlledTui(options)) {
     runWizard(config, options);
   } else if (options.ci) {
     runWizardCI(config, options);

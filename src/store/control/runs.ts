@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { ProgramId } from '../programs/program-registry.js';
 import type { ControlState, RunRecord } from './types.js';
 
-/** Thrown when a run is requested while one is in flight. Maps to 409. */
+/** Thrown when a route needs an idle store while a run is in flight. Maps to 409. */
 export class RunInFlightError extends Error {
-  constructor(runId: string) {
-    super(`A run is already in flight: ${runId}`);
+  constructor(runId?: string) {
+    super(
+      runId ? `A run is already in flight: ${runId}` : 'A run is in flight',
+    );
     this.name = 'RunInFlightError';
   }
 }

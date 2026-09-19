@@ -2,6 +2,7 @@ import {
   isNonInteractiveEnvironment,
   setEntryCommand,
   headlessOption,
+  isControlledTui,
   isHeadless,
   regionOption,
 } from '@store';
@@ -64,7 +65,7 @@ export const basicIntegrationCommand: Command = {
         const { runHeadlessInstall } = await import('./ci-install.js');
         return runHeadlessInstall(argv);
       }
-      if (argv.ci && argv.controlSocket) {
+      if (isControlledTui(argv)) {
         const { runInteractive } = await import('./interactive.js');
         return runInteractive(argv);
       }

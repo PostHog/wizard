@@ -1,4 +1,5 @@
 import type { WizardSession } from '../session/wizard-session.js';
+import { sanitizeErrorDetail } from '../shared/errors/sanitize.js';
 import type { WizardStore } from '../state/store.js';
 import { actionsFor, toActionView } from './actions.js';
 import type { ControlSession, ControlState } from './types.js';
@@ -28,19 +29,42 @@ export const CONTROL_SESSION_KEYS = [
   'skillsComplete',
 ] as const satisfies readonly (keyof WizardSession)[];
 
+const SECRET_WORDS = new Set([
+  'key',
+  'keys',
+  'token',
+  'tokens',
+  'secret',
+  'secrets',
+  'password',
+  'passwords',
+  'credential',
+  'credentials',
+]);
 const SECRET_REF = /^secret:[0-9a-f-]{16,}$/i;
-const SECRET_KEY = /(key|token|secret|password|credential)/i;
 
-/** Values a driver may read; secret refs and secret-looking keys never leave. */
+/** `upload-api-key`, `accessToken`, and `ACCESS_TOKEN` name a secret; `monkey` does not. */
+export function isSecretKey(name: string): boolean {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .some((word) => SECRET_WORDS.has(word));
+}
+
+/** Values a driver may read; secret refs and secret-named keys never leave. */
 export function redactContext(
   ctx: Record<string, unknown>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(ctx)) {
-    if (SECRET_KEY.test(key)) out[key] = '[redacted]';
-    else if (typeof value === 'string' && SECRET_REF.test(value))
+    if (isSecretKey(key)) {
+      out[key] = '[redacted]';
+    } else if (typeof value === 'string' && SECRET_REF.test(value)) {
       out[key] = '[secret-ref]';
-    else out[key] = value;
+    } else {
+      out[key] = value;
+    }
   }
   return out;
 }
@@ -52,6 +76,14 @@ function projectSession(s: WizardSession): ControlSession {
   return {
     ...picked,
     frameworkContext: redactContext(s.frameworkContext),
+    outroData: s.outroData
+      ? {
+          ...s.outroData,
+          ...(s.outroData.errorDetail
+            ? { errorDetail: sanitizeErrorDetail(s.outroData.errorDetail) }
+            : {}),
+        }
+      : null,
     hasCredentials: s.credentials !== null,
     projectId: s.credentials?.projectId ?? null,
   };

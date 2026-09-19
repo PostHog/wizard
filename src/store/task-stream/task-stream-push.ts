@@ -120,6 +120,8 @@ export interface TaskStreamPushOptions {
   auditChecks?: () => unknown;
   /** When false, destination subscription/delivery remains disabled. */
   enabled?: boolean;
+  /** Keys the stream by this skill instead of the store's; set for an independent run. */
+  skillId?: string;
 }
 
 export class TaskStreamPush {
@@ -127,6 +129,7 @@ export class TaskStreamPush {
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
   private readonly programId: string;
+  private readonly skillId: string | null;
   private readonly sessionId: string;
   private readonly eventPlanWatcher: EventPlanWatcher | null;
   private readonly auditChecks: (() => unknown) | null;
@@ -156,8 +159,9 @@ export class TaskStreamPush {
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
     // program metadata is populated.
+    this.skillId = opts.skillId ?? null;
     const skillId = sanitizeChannelId(
-      this.store.session.skillId ?? this.programId,
+      this.skillId ?? this.store.session.skillId ?? this.programId,
     );
     this.sessionId = `${this.programId}-${skillId}-${this.startedAt}`;
   }
@@ -299,7 +303,9 @@ export class TaskStreamPush {
 
   private async sendOnce(): Promise<void> {
     const { session, tasks, eventPlan, handoffText } = this.store;
-    const skillId = sanitizeChannelId(session.skillId ?? this.programId);
+    const skillId = sanitizeChannelId(
+      this.skillId ?? session.skillId ?? this.programId,
+    );
     const phase = session.runPhase;
 
     // Program rows carry the phase; the area rows carry the audit's progress.

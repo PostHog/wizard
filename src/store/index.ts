@@ -210,6 +210,7 @@ export { classifyRunFailure } from './shared/errors/run-failure.js';
 export { skillErrorCode } from './shared/errors/skill-map.js';
 export {
   headlessOption,
+  isControlledTui,
   isHeadless,
   regionOption,
 } from './shared/headless-mode.js';
@@ -219,6 +220,7 @@ export {
   WIZARD_BENCHMARK_FILE,
   WIZARD_LOG_FILE,
   relativeToInstallDir,
+  resolveInstallDir,
 } from './shared/paths.js';
 export { provisionNewAccount, requestDeepLink } from './shared/provisioning.js';
 export { getOrAskForProjectData } from './shared/setup-utils.js';

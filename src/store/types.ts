@@ -95,12 +95,14 @@ export type {
 export type { WizardSpellbook } from './wizard-spellbook.js';
 export type { StoreBoundaryMember, WizardStoreApi } from './state/store-api.js';
 export type {
+  ActionView,
   ControlHooks,
   ControlSession,
   ControlState,
   ControlSurface,
   DetectRequest,
   DriverAction,
+  HealthResponse,
   RunRecord,
   RunRequest,
 } from './control/types.js';

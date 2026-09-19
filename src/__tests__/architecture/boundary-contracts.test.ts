@@ -67,4 +67,16 @@ describe('boundary contracts', () => {
       expect(consumed(roots)).toMatchSnapshot();
     },
   );
+
+  it.each(CONSUMERS.filter(([name]) => name !== 'cli'))(
+    '%s never names the control API',
+    (_name, roots) => {
+      const list: string[] = [];
+      for (const r of roots) files(r, list);
+      const offenders = list.filter((f) =>
+        fs.readFileSync(f, 'utf8').includes('@store/control'),
+      );
+      expect(offenders).toEqual([]);
+    },
+  );
 });

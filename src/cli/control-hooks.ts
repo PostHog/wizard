@@ -1,6 +1,12 @@
-import * as path from 'node:path';
 import type { RunAgent } from '@agent/types';
-import { getOrAskForProjectData, logToFile, OutroKind, RunPhase } from '@store';
+import {
+  getOrAskForProjectData,
+  logToFile,
+  OutroKind,
+  resolveInstallDir,
+  runCleanups,
+  RunPhase,
+} from '@store';
 import { flowFor, getProgramConfig, runConfigFor } from '@store/programs';
 import type {
   ControlHooks,
@@ -23,26 +29,26 @@ export interface ControlHookDeps {
   /** The program this process launched with. */
   programId: ProgramId;
   runAgent: RunAgent;
-  /** Builds the stream a run publishes to. Absent means the run publishes nothing. */
+  /** Builds the stream a run publishes to; absent means the run publishes nothing. */
   runStream?: (config: ProgramConfig, session: WizardSession) => RunStream;
   /** Flush and exit; the runner owns the exact steps. */
   shutdown: () => Promise<void>;
 }
 
-/** A sub-app path stays relative to the live install dir; absolute wins. */
-function resolveInstallDir(
-  live: string,
-  requested: string | undefined,
-): string {
-  if (!requested) return live;
-  return path.isAbsolute(requested) ? requested : path.join(live, requested);
+/** The keys `draft` changed against `before`. */
+function changedKeys(
+  before: WizardSession,
+  draft: WizardSession,
+): Partial<WizardSession> {
+  const was = before as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(draft)) {
+    if (value !== was[key]) out[key] = value;
+  }
+  return out as Partial<WizardSession>;
 }
 
-/**
- * What the composition root does when a parent drives the run. Every agent run
- * is independent: the context a run receives is exactly what the request and
- * the live session hold, merged here and nowhere else.
- */
+/** The composition root's side of the control API: every run independent, context merged here only. */
 export function createControlHooks(deps: ControlHookDeps): ControlHooks {
   const { store } = deps;
   return {
@@ -80,9 +86,11 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
       }
       const config = getProgramConfig(programId);
       if (config.ciPreRun) {
-        // ciPreRun writes to the session object directly, as the headless runner
-        // lets it; publish the result so pollers and gates see it.
-        await config.ciPreRun(store.session);
+        // ciPreRun writes to the object it is handed while its setters commit to the store.
+        const before = store.session;
+        const draft: WizardSession = { ...before };
+        await config.ciPreRun(draft);
+        store.session = { ...store.session, ...changedKeys(before, draft) };
         store.setDetectionComplete();
       } else {
         await store.runReadyHooks();
@@ -92,7 +100,7 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
     async startRun(req: RunRequest) {
       const config = getProgramConfig(req.programId);
       const live = store.session;
-      const runSession = {
+      const runSession: WizardSession = {
         ...live,
         installDir: resolveInstallDir(live.installDir, req.installDir),
         frameworkContext: {
@@ -103,10 +111,8 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         programLabel: config.id,
       };
       logToFile(`[control] run ${config.id} in ${runSession.installDir}`);
-      // Each run is its own session: a clean run state and its own stream, as
-      // a fresh CLI invocation would have. Credentials and context persist.
+      // One session per run: a clean run state and its own stream; credentials and context persist.
       store.resetRunState();
-      // In flight from here on: pollers read the phase, not the ledger.
       store.setRunPhase(RunPhase.Running);
       const stream = deps.runStream?.(config, runSession);
       stream?.attach();
@@ -114,8 +120,7 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         await deps.runAgent(runConfigFor(config), runSession, {
           composed: true,
         });
-        // Headless renderers never flip the phase; settle it as the headless
-        // runner does, so the ledger and the stream record a completed run.
+        // Headless renderers never flip the phase; settle it so the ledger records a completed run.
         if (store.session.runPhase === RunPhase.Running) {
           store.setRunPhase(RunPhase.Completed);
         }
@@ -129,6 +134,7 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
         }
         throw err;
       } finally {
+        runCleanups();
         await stream?.shutdown(2000);
       }
     },

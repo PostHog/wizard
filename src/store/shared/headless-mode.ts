@@ -52,6 +52,11 @@ export function isHeadless(options: Record<string, unknown>): boolean {
   return options[HEADLESS_FLAG] === true;
 }
 
+/** `--ci` with a control socket: the real TUI, API-key auth, a parent driving it. */
+export function isControlledTui(options: Record<string, unknown>): boolean {
+  return options.ci === true && Boolean(options.controlSocket);
+}
+
 // `--region` only means something non-interactively (API-key auth has no OAuth
 // token response to read `posthog_region` from), so only headless-capable
 // commands declare it.

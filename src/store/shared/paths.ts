@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { isAbsolute, join, sep } from 'node:path';
 
 // /tmp is stable and discoverable on macOS/Linux; Windows needs os.tmpdir()
 const TMP = process.platform === 'win32' ? tmpdir() : '/tmp';
@@ -24,4 +24,13 @@ export const WIZARD_YARA_REPORT_FILE = join(
 export function relativeToInstallDir(file: string, installDir: string): string {
   const prefix = installDir.endsWith(sep) ? installDir : installDir + sep;
   return file.startsWith(prefix) ? file.slice(prefix.length) : file;
+}
+
+/** A sub-app path stays relative to the live install dir; an absolute path wins. */
+export function resolveInstallDir(
+  live: string,
+  requested: string | undefined,
+): string {
+  if (!requested) return live;
+  return isAbsolute(requested) ? requested : join(live, requested);
 }

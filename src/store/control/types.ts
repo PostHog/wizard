@@ -15,6 +15,9 @@ export interface DriverAction {
   apply: (store: WizardStore, params: Record<string, unknown>) => void;
 }
 
+/** An action as the wire carries it: no closure. */
+export type ActionView = Omit<DriverAction, 'apply'>;
+
 /** The session as a parent reads it: the listed fields, credentials as a flag. */
 export type ControlSession = Pick<
   WizardSession,
@@ -24,11 +27,7 @@ export type ControlSession = Pick<
   projectId: number | null;
 };
 
-/**
- * The store as a parent reads it: the committed session whitelist, the run
- * atoms, and what the flow derives for the current screen. No access token,
- * API key, user record, or answer value is ever projected.
- */
+/** The store as a parent reads it; no token, key, user record, or answer value is ever projected. */
 export interface ControlState {
   version: number;
   currentScreen: string;
@@ -40,7 +39,7 @@ export interface ControlState {
   /** Setup questions the session has not answered yet. */
   setupQuestions: Array<Omit<SetupQuestion, 'detect'>>;
   /** The commits legal on `currentScreen`. */
-  actions: Array<Omit<DriverAction, 'apply'>>;
+  actions: ActionView[];
 }
 
 export type DetectRequest = { programId?: ProgramId } & Partial<
@@ -65,6 +64,14 @@ export interface RunRecord {
 }
 
 export type ControlSurface = 'tui' | 'headless';
+
+export interface HealthResponse {
+  ok: true;
+  version: string;
+  surface: ControlSurface;
+  pid: number;
+  program: string;
+}
 
 /** What the composition root does on the parent's behalf; the store never runs agents. */
 export interface ControlHooks {

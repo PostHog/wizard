@@ -2,6 +2,7 @@ import * as http from 'node:http';
 import type {
   ControlState,
   DetectRequest,
+  HealthResponse,
   RunRecord,
   RunRequest,
 } from './types.js';
@@ -11,14 +12,6 @@ export class ControlClientError extends Error {
     super(message);
     this.name = 'ControlClientError';
   }
-}
-
-interface HealthResponse {
-  ok: true;
-  version: string;
-  surface: string;
-  pid: number;
-  program: string;
 }
 
 /** The parent's side of the control API: one unix socket, JSON in and out. */

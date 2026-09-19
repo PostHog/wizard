@@ -1,33 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import {
-  buildSession,
-  OutroKind,
-  RunPhase,
-} from '../../session/wizard-session.js';
-import { createTestStore } from '../../testing/index.js';
-import { setUI } from '../../ui/index.js';
-import { StoreUI } from '../../ui/store-ui.js';
+import { HostResolution } from '../../host-resolution.js';
+import { OutroKind, RunPhase } from '../../session/wizard-session.js';
+import { createControlledStore, expectNoSecrets } from '../../testing/index.js';
 import { actionsFor, toActionView } from '../actions.js';
-import { CONTROL_SESSION_KEYS, projectState, redactContext } from '../state.js';
+import {
+  CONTROL_SESSION_KEYS,
+  isSecretKey,
+  projectState,
+  redactContext,
+} from '../state.js';
 
-function storeFor(over: { apiKey?: string } = {}) {
-  const store = createTestStore();
-  setUI(new StoreUI(store));
-  store.session = buildSession({
-    installDir: '/tmp/control-state',
-    ci: true,
-    ...over,
-  });
-  return store;
-}
+const US = HostResolution.fromApiHost('https://us.posthog.com');
 
-describe('projectState', () => {
+describe('the control state projection', () => {
   it('never carries a credential, an api key, a user, or a vaulted answer', () => {
-    const store = storeFor({ apiKey: 'phx_PERSONAL_SECRET' });
+    const store = createControlledStore(undefined, {
+      apiKey: 'phx_PERSONAL_SECRET',
+    });
     store.setCredentials({
       accessToken: 'phx_ACCESS_SECRET',
       projectApiKey: 'phc_PROJECT_TOKEN',
-      host: {} as never,
+      host: US,
       projectId: 42,
     });
     store.setApiUser({
@@ -42,17 +34,10 @@ describe('projectState', () => {
     );
 
     const state = projectState(store);
-    const text = JSON.stringify(state);
-    for (const leak of [
-      'phx_',
-      'phc_',
-      'phs_',
-      'secret:0b7c',
+    expectNoSecrets(JSON.stringify(state), [
       'someone@example.com',
       'user-uuid',
-    ]) {
-      expect(text, leak).not.toContain(leak);
-    }
+    ]);
     expect(state.session.hasCredentials).toBe(true);
     expect(state.session.projectId).toBe(42);
     expect(state.session.frameworkContext).toEqual({
@@ -62,12 +47,33 @@ describe('projectState', () => {
     });
   });
 
+  it('projects exactly the listed session keys plus the two credential facts', () => {
+    const state = projectState(createControlledStore());
+    expect(Object.keys(state.session).sort()).toEqual(
+      [...CONTROL_SESSION_KEYS, 'hasCredentials', 'projectId'].sort(),
+    );
+    expect(Object.keys(state).sort()).toEqual(
+      [
+        'actions',
+        'currentScreen',
+        'eventPlan',
+        'handoffText',
+        'session',
+        'setupQuestions',
+        'statusMessages',
+        'tasks',
+        'version',
+      ].sort(),
+    );
+  });
+
   it('mirrors the store: the listed session fields, the run atoms, the screen', () => {
-    const store = storeFor();
+    const store = createControlledStore();
     store.completeSetup();
     store.setTasks([
       { label: 'Install SDK', status: 'in_progress', done: false } as never,
     ]);
+    store.pushStatus('installing the SDK');
     store.setEventPlan([{ name: 'signup', description: 'a user signed up' }]);
     store.setHandoffText('run this prompt');
     store.setDashboardUrl('https://us.posthog.com/project/1/dashboard/2');
@@ -85,9 +91,13 @@ describe('projectState', () => {
     }
     expect(state.currentScreen).toBe(store.currentScreen);
     expect(state.version).toBe(store.getVersion());
-    expect(state.tasks).toEqual(store.tasks);
-    expect(state.statusMessages).toEqual(store.statusMessages);
-    expect(state.eventPlan).toEqual(store.eventPlan);
+    expect(state.tasks).toEqual([
+      { label: 'Install SDK', status: 'in_progress', done: false },
+    ]);
+    expect(state.statusMessages).toEqual(['installing the SDK']);
+    expect(state.eventPlan).toEqual([
+      { name: 'signup', description: 'a user signed up' },
+    ]);
     expect(state.handoffText).toBe('run this prompt');
     expect(state.actions).toEqual(
       actionsFor(store.flow, store.currentScreen).map(toActionView),
@@ -95,30 +105,102 @@ describe('projectState', () => {
     expect(JSON.stringify(state)).not.toContain('"apply"');
   });
 
-  it('bumps the version on a commit and offers the screen actions', () => {
-    const store = storeFor();
-    const before = projectState(store);
-    expect(before.currentScreen).toBe('intro');
-    expect(before.actions.map((a) => a.id)).toEqual(['confirm_setup']);
+  it('offers the screen actions without their closures and with their params', () => {
+    const store = createControlledStore();
+    expect(projectState(store).currentScreen).toBe('intro');
+    expect(projectState(store).actions).toMatchObject([
+      { id: 'confirm_setup', params: { share: 'boolean (optional)' } },
+    ]);
+    expect(projectState(store).actions[0]).not.toHaveProperty('apply');
+    const before = projectState(store).version;
     store.completeSetup();
     const after = projectState(store);
-    expect(after.version).toBeGreaterThan(before.version);
+    expect(after.version).toBeGreaterThan(before);
     expect(after.session.setupConfirmed).toBe(true);
   });
 
-  it('redacts by key and by secret ref only', () => {
+  it('lists only the setup questions the session has not answered', () => {
+    const store = createControlledStore();
+    store.setFrameworkConfig(
+      'nextjs' as never,
+      {
+        metadata: {
+          setup: {
+            questions: [
+              {
+                key: 'router',
+                message: 'Which router?',
+                options: [{ label: 'App', value: 'app' }],
+                detect: () => Promise.resolve(null),
+              },
+              {
+                key: 'styling',
+                message: 'Which styling?',
+                options: [{ label: 'CSS', value: 'css', hint: 'plain' }],
+                detect: () => Promise.resolve(null),
+              },
+            ],
+          },
+        },
+      } as never,
+    );
+    expect(projectState(store).setupQuestions.map((q) => q.key)).toEqual([
+      'router',
+      'styling',
+    ]);
+    store.setFrameworkContext('router', 'app');
+    expect(projectState(store).setupQuestions).toEqual([
+      {
+        key: 'styling',
+        message: 'Which styling?',
+        options: [{ label: 'CSS', value: 'css', hint: 'plain' }],
+      },
+    ]);
+  });
+
+  it('keeps only the allow-listed outro error detail', () => {
+    const store = createControlledStore();
+    store.setOutroData({
+      kind: OutroKind.Error,
+      message: 'boom',
+      errorDetail: {
+        reason: 'no manifest',
+        response: { headers: { authorization: 'Bearer phx_LEAK' } },
+      },
+    });
+    expect(projectState(store).session.outroData).toEqual({
+      kind: OutroKind.Error,
+      message: 'boom',
+      errorDetail: { reason: 'no manifest' },
+    });
+  });
+
+  it('redacts secret-named keys and secret refs, and nothing else', () => {
     expect(
       redactContext({
         a: 1,
         token: 'x',
+        apiKey: 'y',
+        ACCESS_TOKEN: 'z',
         nested: { k: 'v' },
         ref: 'secret:abcdef0123456789',
+        short: 'secret:abc',
+        monkey: 'business',
+        keyboard: 'qwerty',
       }),
     ).toEqual({
       a: 1,
       token: '[redacted]',
+      apiKey: '[redacted]',
+      ACCESS_TOKEN: '[redacted]',
       nested: { k: 'v' },
       ref: '[secret-ref]',
+      short: 'secret:abc',
+      monkey: 'business',
+      keyboard: 'qwerty',
     });
+    expect(isSecretKey('upload-api-key')).toBe(true);
+    expect(isSecretKey('projectApiKey')).toBe(true);
+    expect(isSecretKey('hotkeys')).toBe(false);
   });
 });
