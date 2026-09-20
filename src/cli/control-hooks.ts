@@ -99,7 +99,11 @@ export function createControlHooks(deps: ControlHookDeps): ControlHooks {
     },
 
     async startRun(req: RunRequest) {
-      const config = getProgramConfig(req.programId);
+      // The request's data fields lay over the program's; runConfigFor picks from the result.
+      const config: ProgramConfig = {
+        ...getProgramConfig(req.programId),
+        ...req.config,
+      };
       const live = store.session;
       const runSession: WizardSession = {
         ...live,

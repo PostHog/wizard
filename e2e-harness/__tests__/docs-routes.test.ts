@@ -11,7 +11,7 @@ describe('the documented control API', () => {
     );
     const documented = new Set(
       [...doc.matchAll(/^\| `((?:GET|POST) \/[^`?]*)/gm)].map((m) =>
-        m[1].replace('<id>', ':id').trim(),
+        m[1].replace(/<(\w+)>/g, ':$1').trim(),
       ),
     );
     expect([...documented].sort()).toEqual([...ROUTES].sort());

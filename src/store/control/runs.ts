@@ -20,12 +20,17 @@ export class RunLedger {
     return this.records.find((r) => r.status === 'running') ?? null;
   }
 
-  start(programId: ProgramId, installDir: string): RunRecord {
+  start(
+    programId: ProgramId,
+    installDir: string,
+    skillId: string | null = null,
+  ): RunRecord {
     const running = this.active;
     if (running) throw new RunInFlightError(running.runId);
     const record: RunRecord = {
       runId: randomUUID(),
       programId,
+      skillId,
       installDir,
       status: 'running',
       error: null,

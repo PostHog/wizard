@@ -14,6 +14,7 @@ import {
   MAX_BODY_BYTES,
   type ControlServerHandle,
 } from '../server.js';
+import { CONTROL_SETTERS } from '../setters.js';
 import type { ControlHooks, ControlSurface } from '../types.js';
 
 const handles: ControlServerHandle[] = [];
@@ -531,6 +532,92 @@ describe('control server', () => {
     vi.mocked(hooks.setCredentials).mockRejectedValueOnce(new Error('no key'));
     await expect(client.setCredentials()).rejects.toEqual(
       new ControlClientError(500, 'no key'),
+    );
+  });
+
+  it('lists the store setters and applies one on either surface, whatever the screen', async () => {
+    for (const surface of ['headless', 'tui'] as const) {
+      const { client, store } = await serve(surface);
+      const listed = (await client.setters()).map((s) => s.name);
+      expect(listed).toEqual(CONTROL_SETTERS.map((s) => s.name));
+      expect((await client.state()).actions.map((a) => a.id)).not.toContain(
+        'setFrameworkContext',
+      );
+      const state = await client.applySetter('setFrameworkContext', {
+        key: 'router',
+        value: 'app',
+      });
+      expect(state.session.frameworkContext).toEqual({ router: 'app' });
+      expect(store.session.frameworkContext.router).toBe('app');
+    }
+  });
+
+  it('answers 400 for a setter outside the table or a wrong param, naming the problem', async () => {
+    const { client, store } = await serve('headless');
+    await expect(client.applySetter('setTasks', {})).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('GET /store'),
+    });
+    await expect(
+      client.applySetter('setIntegrate', { integrate: 'yes' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('integrate'),
+    });
+    expect(store.session.integrate).toBeNull();
+  });
+
+  it('starts a run from a skill id alone on the generic skill program', async () => {
+    const { client, hooks, store } = await serve('headless');
+    const run = await client.startRun({ skillId: 'metrics' });
+    expect(run).toMatchObject({
+      programId: 'agent-skill',
+      skillId: 'metrics',
+      installDir: store.session.installDir,
+    });
+    expect(hooks.startRun).toHaveBeenCalledWith({
+      programId: 'agent-skill',
+      installDir: store.session.installDir,
+      skillId: 'metrics',
+    });
+  });
+
+  it('hands a validated config overlay to the hook and refuses unknown or malformed keys', async () => {
+    const { client, hooks, socketPath } = await serve('headless', undefined, {
+      runMs: 1,
+    });
+    for (const config of [
+      { prompt: 'be nice' },
+      { allowedTools: 'Read' },
+      { requiresAi: 'no' },
+    ]) {
+      const r = await raw(
+        socketPath,
+        'POST',
+        '/runs',
+        JSON.stringify({ programId: Program.Audit, config }),
+        JSON_HEADERS,
+      );
+      expect(r.status).toBe(400);
+    }
+    expect(hooks.startRun).not.toHaveBeenCalled();
+    await client.startRun({
+      programId: Program.Audit,
+      config: {
+        allowedTools: ['Read', 'Edit'],
+        requiresAi: false,
+        streamWorkflowId: 'audit-custom',
+      },
+    });
+    expect(hooks.startRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        programId: Program.Audit,
+        config: {
+          allowedTools: ['Read', 'Edit'],
+          requiresAi: false,
+          streamWorkflowId: 'audit-custom',
+        },
+      }),
     );
   });
 });

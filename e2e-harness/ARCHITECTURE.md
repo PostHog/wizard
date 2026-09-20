@@ -70,22 +70,25 @@ server (`scripts/smoke-test.sh` audits both).
 ## The control API
 
 JSON in and out. Success is `{ ok: true, ... }`; failure is
-`{ ok: false, error }` with 400 (bad body, missing param, unknown action or
-program), 404 (unknown route), 409 (a run is in flight), 413 (body over 64 KB),
-415 (not JSON), 500 (a hook failed), or 501 (the other surface's route).
+`{ ok: false, error }` with 400 (bad body, missing param, unknown action,
+setter, or program), 404 (unknown route), 409 (a run is in flight), 413 (body
+over 64 KB), 415 (not JSON), 500 (a hook failed), or 501 (the other surface's
+route).
 
-| Route                                                                       | Behavior                                                                                             |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `GET /health`                                                               | `{ ok, version, surface, pid, program }`                                                             |
-| `GET /state`                                                                | `{ ok, state }`, the projection below                                                                |
-| `GET /state?wait=<ms>&since=<version>`                                      | Long poll: resolves on the first commit with `version > since`, or after `wait` ms, capped at 10 min |
-| `POST /actions/<id>` body `{ params }`                                      | Applies one action legal on the current screen through its store setter, returns the state           |
-| `POST /credentials`                                                         | Resolves the API key into project credentials and commits them, advancing `auth`                     |
-| `POST /run`                                                                 | TUI surface: `requestRun` on the store, releasing the runner's agent start. Idempotent               |
-| `POST /detect` body `{ programId?, installDir? }`                           | Headless surface: runs detection through the store's setters                                         |
-| `POST /runs` body `{ programId, installDir?, frameworkContext?, skillId? }` | Headless surface: one independent agent run on a fresh `RunStore`; 409 while one runs                |
-| `GET /runs`                                                                 | The run ledger: `runId`, `programId`, `installDir`, `status`, `error`, timestamps, `result`          |
-| `POST /shutdown`                                                            | Flushes and exits. Idempotent                                                                        |
+| Route                                                                                 | Behavior                                                                                                                                           |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                                                                         | `{ ok, version, surface, pid, program }`                                                                                                           |
+| `GET /state`                                                                          | `{ ok, state }`, the projection below                                                                                                              |
+| `GET /state?wait=<ms>&since=<version>`                                                | Long poll: resolves on the first commit with `version > since`, or after `wait` ms, capped at 10 min                                               |
+| `POST /actions/<id>` body `{ params }`                                                | Applies one action legal on the current screen through its store setter, returns the state                                                         |
+| `GET /store`                                                                          | The store setters a parent may call by name: `name`, `description`, `params`                                                                       |
+| `POST /store/<setter>` body `{ params }`                                              | Calls one whitelisted `FlowStore` setter with named params, whatever the current screen; returns the state                                         |
+| `POST /credentials`                                                                   | Resolves the API key into project credentials and commits them, advancing `auth`                                                                   |
+| `POST /run`                                                                           | TUI surface: `requestRun` on the store, releasing the runner's agent start. Idempotent                                                             |
+| `POST /detect` body `{ programId?, installDir? }`                                     | Headless surface: runs detection through the store's setters                                                                                       |
+| `POST /runs` body `{ programId?, skillId?, installDir?, frameworkContext?, config? }` | Headless surface: one independent agent run on a fresh `RunStore`; a `skillId` alone runs on the generic `agent-skill` program; 409 while one runs |
+| `GET /runs`                                                                           | The run ledger: `runId`, `programId`, `skillId`, `installDir`, `status`, `error`, timestamps, `result`                                             |
+| `POST /shutdown`                                                                      | Flushes and exits. Idempotent                                                                                                                      |
 
 `state` mirrors the store: `version`, `currentScreen`, `session`, `tasks`,
 `statusMessages`, `eventPlan`, `handoffText`, the unanswered `setupQuestions`,
@@ -100,6 +103,22 @@ run's reason. `dashboardUrl` and `notebookUrl` are artefacts of the session: a
 later run inherits them. No access token, API key, user record, or answer value
 is ever projected. A ledger record's `result` is this state as it read when the
 run ended.
+
+Full store controls: `GET /store` lists the `FlowStore` setters a parent may
+call by name and `POST /store/<setter>` calls one with named params, on either
+surface and whatever the current screen. The table
+(`src/store/control/setters.ts`) covers the session a run inherits (credentials,
+framework, context, features, the registered program) and the decisions a screen
+would take (asks, notices, follow-up steps); every name is a
+`STORE_BOUNDARY_MEMBERS` entry, so the wire can reach exactly what the TUI can.
+Run-level atoms stay the agent's, and setters with effects beyond the store
+(account provisioning, settings backups, the OAuth code flow) stay off the wire.
+`POST /runs` takes a `skillId` alone, which runs on the generic `agent-skill`
+program, and a `config` overlay of the run's data fields: `agentFlow`,
+`allowedTools`, `disallowedTools`, `requiresAi`, `reportFile`, `eventPlanFile`,
+`streamWorkflowId`. Functions in a program's run recipe never cross the wire.
+Together these let a parent configure the store and run any registered program
+or catalog skill without the launched program's flow taking part.
 
 The socket is created mode 0600 in a directory the caller owns. A stale socket
 file is replaced; a live one is refused. The wizard unlinks it on exit.

@@ -187,6 +187,51 @@ describe('one independent run', () => {
     expect(store.session.runPhase).toBe(RunPhase.Completed);
   });
 
+  it('lays the request config over the program before the agent and the stream read it', async () => {
+    const { store, streams } = setup();
+    const seen: Array<Record<string, unknown>> = [];
+    const hooks = createControlHooks({
+      store,
+      programId: Program.PostHogIntegration,
+      runAgent: (config) => {
+        seen.push({
+          id: config.id,
+          allowedTools: config.allowedTools,
+          requiresAi: config.requiresAi,
+          agentFlow: config.agentFlow,
+        });
+        return Promise.resolve();
+      },
+      runStream: (config) => {
+        const stream = {
+          programId: config.streamWorkflowId ?? config.id,
+          attach: vi.fn(),
+          shutdown: vi.fn(() => Promise.resolve()),
+        };
+        streams.push(stream);
+        return stream;
+      },
+      shutdown: () => Promise.resolve(),
+    });
+    await hooks.startRun({
+      programId: Program.Audit,
+      config: {
+        allowedTools: ['Read'],
+        requiresAi: false,
+        streamWorkflowId: 'audit-custom',
+      },
+    });
+    expect(seen).toEqual([
+      {
+        id: Program.Audit,
+        allowedTools: ['Read'],
+        requiresAi: false,
+        agentFlow: undefined,
+      },
+    ]);
+    expect(streams.at(-1)?.programId).toBe('audit-custom');
+  });
+
   it('is in flight before the agent starts and completed after it returns', async () => {
     const { store } = setup();
     let seen: RunPhase | null = null;

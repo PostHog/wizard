@@ -1,7 +1,13 @@
 import type { FlowStore } from '../state/store.js';
 import { actionsFor, UnknownActionError } from './actions.js';
+import {
+  CONTROL_SETTERS,
+  setterNamed,
+  toSetterView,
+  UnknownSetterError,
+} from './setters.js';
 import { projectState } from './state.js';
-import type { ControlState } from './types.js';
+import type { ControlState, SetterView } from './types.js';
 
 /** Reads the committed store and acts through the setter the screen's key handler would call. */
 export class ControlDriver {
@@ -9,6 +15,22 @@ export class ControlDriver {
 
   readState(): ControlState {
     return projectState(this.store);
+  }
+
+  /** The store setters a parent may call whatever the screen. */
+  setters(): SetterView[] {
+    return CONTROL_SETTERS.map(toSetterView);
+  }
+
+  /** Call one whitelisted store setter by name; 400-class errors throw. */
+  applySetter(
+    name: string,
+    params: Record<string, unknown> = {},
+  ): ControlState {
+    const setter = setterNamed(name);
+    if (!setter) throw new UnknownSetterError(name);
+    setter.apply(this.store, params);
+    return this.readState();
   }
 
   /** Apply a named action on the current screen; 400-class errors throw. */

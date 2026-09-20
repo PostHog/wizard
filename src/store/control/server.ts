@@ -15,16 +15,20 @@ import { CONTROL_SERVER_MARKER } from './marker.js';
 import {
   BadParamError,
   MissingParamError,
+  optionalFlag,
   optionalRecord,
   optionalString,
+  optionalStringList,
 } from './params.js';
 import { RunInFlightError, RunLedger } from './runs.js';
+import { UnknownSetterError } from './setters.js';
 import type {
   ControlHooks,
   ControlState,
   ControlSurface,
   DetectRequest,
   HealthResponse,
+  RunConfigOverlay,
   RunRequest,
 } from './types.js';
 
@@ -38,7 +42,9 @@ export const ROUTES = [
   'GET /health',
   'GET /state',
   'GET /runs',
+  'GET /store',
   'POST /actions/:id',
+  'POST /store/:setter',
   'POST /credentials',
   'POST /run',
   'POST /detect',
@@ -79,6 +85,7 @@ function statusFor(err: unknown): number {
   if (err instanceof HttpError) return err.status;
   if (
     err instanceof UnknownActionError ||
+    err instanceof UnknownSetterError ||
     err instanceof MissingParamError ||
     err instanceof BadParamError
   ) {
@@ -179,6 +186,62 @@ function actionId(pathname: string): string | null {
   }
 }
 
+function setterName(pathname: string): string | null {
+  const match = /^\/store\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    throw new HttpError(400, 'setter name is not valid percent-encoding');
+  }
+}
+
+const RUN_CONFIG_KEYS = [
+  'agentFlow',
+  'allowedTools',
+  'disallowedTools',
+  'requiresAi',
+  'reportFile',
+  'eventPlanFile',
+  'streamWorkflowId',
+] as const satisfies readonly (keyof RunConfigOverlay)[];
+
+/** The `config` overlay of a run request: every key known, every value the field's type. */
+function readRunConfig(
+  route: string,
+  body: Record<string, unknown>,
+): RunConfigOverlay | undefined {
+  const raw = optionalRecord(route, body, 'config');
+  if (!raw) return undefined;
+  for (const key of Object.keys(raw)) {
+    if (!(RUN_CONFIG_KEYS as readonly string[]).includes(key)) {
+      throw new BadParamError(
+        route,
+        'config',
+        `unknown key "${key}"; allowed: ${RUN_CONFIG_KEYS.join(', ')}`,
+      );
+    }
+  }
+  const subject = `${route} config`;
+  const config: RunConfigOverlay = {};
+  for (const key of [
+    'agentFlow',
+    'reportFile',
+    'eventPlanFile',
+    'streamWorkflowId',
+  ] as const) {
+    const value = optionalString(subject, raw, key);
+    if (value !== undefined) config[key] = value;
+  }
+  for (const key of ['allowedTools', 'disallowedTools'] as const) {
+    const value = optionalStringList(subject, raw, key);
+    if (value !== undefined) config[key] = value;
+  }
+  const requiresAi = optionalFlag(subject, raw, 'requiresAi');
+  if (requiresAi !== undefined) config.requiresAi = requiresAi;
+  return config;
+}
+
 /** Serve the control API for one store over a unix socket: HTTP/1.1, JSON in and out. */
 export async function attachControlServer(
   store: FlowStore,
@@ -211,13 +274,18 @@ export async function attachControlServer(
       store.session.installDir,
       optionalString(route, body, 'installDir'),
     );
+    const config = readRunConfig(route, body);
     const req: RunRequest = {
-      programId: requireProgram(body.programId),
+      // A skill alone runs on the generic skill program.
+      programId: requireProgram(
+        body.programId ?? (skillId ? 'agent-skill' : undefined),
+      ),
       installDir,
       ...(frameworkContext ? { frameworkContext } : {}),
       ...(skillId ? { skillId } : {}),
+      ...(config ? { config } : {}),
     };
-    const record = ledger.start(req.programId, installDir);
+    const record = ledger.start(req.programId, installDir, skillId ?? null);
     // The state keeps this run's outcome until the next run starts; the hook
     // resets it then, so a poller reading after completion sees the result.
     Promise.resolve()
@@ -274,6 +342,9 @@ export async function attachControlServer(
     if (route === 'GET /runs') {
       return send(res, 200, { ok: true, runs: ledger.list() });
     }
+    if (route === 'GET /store') {
+      return send(res, 200, { ok: true, setters: driver.setters() });
+    }
     if (method !== 'POST') throw new HttpError(404, `no route ${route}`);
 
     const body = await readBody(req);
@@ -283,6 +354,14 @@ export async function attachControlServer(
       return send(res, 200, {
         ok: true,
         state: driver.performAction(action, params),
+      });
+    }
+    const setter = setterName(url.pathname);
+    if (setter !== null) {
+      const params = optionalRecord(route, body, 'params') ?? {};
+      return send(res, 200, {
+        ok: true,
+        state: driver.applySetter(setter, params),
       });
     }
     switch (url.pathname) {

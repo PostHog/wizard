@@ -5,7 +5,10 @@
  *
  *   APP_DIR=/tmp/app PROJECT_ID=228144 POSTHOG_REGION=us POSTHOG_KEY_FILE=… \
  *   WIZARD_CI_GATEWAY_TOKEN_FILE=… npx tsx scripts/controlled-headless-smoke.no-jest.ts \
- *     posthog-integration [metrics …]
+ *     posthog-integration [metrics …] [skill:<catalog skill id> …]
+ *
+ * A `skill:` target starts the run from the skill id alone (the generic
+ * agent-skill program); anything else is a registered program id.
  *
  * WIZARD_BIN=dist/bin.js runs a built binary instead of the source tree.
  */
@@ -18,7 +21,10 @@ import { ControlClient } from '@store/control';
 import type { ControlState, ProgramId } from '@store/types';
 import { buildLaunch, readApiKey, waitForSocket } from '@e2e-harness/launch';
 
-const programs = process.argv.slice(2) as ProgramId[];
+const programs = process.argv.slice(2);
+const SKILL = 'skill:';
+const launchProgram = (programs.find((p) => !p.startsWith(SKILL)) ??
+  'posthog-integration') as ProgramId;
 const appDir = process.env.APP_DIR;
 const projectId = process.env.PROJECT_ID;
 const apiKey = readApiKey();
@@ -33,7 +39,7 @@ if (!appDir || !projectId || programs.length === 0 || !apiKey) {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ctl-'));
 const socketPath = path.join(dir, 'w.sock');
 const launch = buildLaunch({
-  programId: programs[0],
+  programId: launchProgram,
   appDir,
   socketPath,
   projectId,
@@ -79,9 +85,28 @@ async function main(): Promise<void> {
   log(`GET /health -> ${JSON.stringify(await client.health())}`);
   log(`GET /state -> ${JSON.stringify(brief(await client.state()))}`);
   log(`POST /detect {} -> ${JSON.stringify(brief(await client.detect({})))}`);
-  for (const programId of programs) {
-    const record = await client.startRun({ programId });
-    log(`POST /runs {"programId":"${programId}"} -> ${JSON.stringify(record)}`);
+  const setters = await client.setters();
+  log(
+    `GET /store -> ${setters.length} setters (${setters
+      .slice(0, 4)
+      .map((s) => s.name)
+      .join(', ')}, …)`,
+  );
+  const patched = await client.applySetter('setFrameworkContext', {
+    key: 'controlSmoke',
+    value: true,
+  });
+  log(
+    `POST /store/setFrameworkContext {"params":{"key":"controlSmoke","value":true}} -> frameworkContext keys ${JSON.stringify(
+      Object.keys(patched.session.frameworkContext),
+    )}`,
+  );
+  for (const target of programs) {
+    const body = target.startsWith(SKILL)
+      ? { skillId: target.slice(SKILL.length) }
+      : { programId: target as ProgramId };
+    const record = await client.startRun(body);
+    log(`POST /runs ${JSON.stringify(body)} -> ${JSON.stringify(record)}`);
     let state = await client.state();
     while (state.session.runPhase === RunPhase.Running) {
       state = await client.waitForChange(state.version, 60_000);

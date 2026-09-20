@@ -1,6 +1,8 @@
+import type { ProgramRunConfig } from '../agent-protocol/program-run.js';
 import type { SetupQuestion } from '../framework-config.js';
 import type { ProgramId } from '../programs/program-registry.js';
 import type { WizardSession } from '../session/wizard-session.js';
+import type { StoreBoundaryMember } from '../state/store-api.js';
 import type { PlannedEvent, TaskItem, FlowStore } from '../state/store.js';
 import type { CONTROL_SESSION_KEYS } from './state.js';
 
@@ -17,6 +19,20 @@ export interface DriverAction {
 
 /** An action as the wire carries it: no closure. */
 export type ActionView = Omit<DriverAction, 'apply'>;
+
+/** One store setter a parent may call by name, whatever the current screen. */
+export interface StoreSetter {
+  /** The FlowStore member `POST /store/<name>` calls. */
+  name: StoreBoundaryMember;
+  description: string;
+  /** Parameter name to a human/type hint. Absent means no params. */
+  params?: Record<string, string>;
+  /** Validate the params and call exactly that setter. */
+  apply: (store: FlowStore, params: Record<string, unknown>) => void;
+}
+
+/** A setter as the wire carries it: no closure. */
+export type SetterView = Omit<StoreSetter, 'apply'>;
 
 /** The session as a parent reads it: the listed fields, credentials as a flag. */
 export type ControlSession = Pick<
@@ -46,14 +62,35 @@ export type DetectRequest = { programId?: ProgramId } & Partial<
   Pick<WizardSession, 'installDir'>
 >;
 
-export type RunRequest = { programId: ProgramId } & Partial<
-  Pick<WizardSession, 'installDir' | 'frameworkContext' | 'skillId'>
+/** The run-config fields a request may lay over the program's; functions never cross the wire. */
+export type RunConfigOverlay = Partial<
+  Pick<
+    ProgramRunConfig,
+    | 'agentFlow'
+    | 'allowedTools'
+    | 'disallowedTools'
+    | 'requiresAi'
+    | 'reportFile'
+    | 'eventPlanFile'
+    | 'streamWorkflowId'
+  >
 >;
+
+export type RunRequest = {
+  programId: ProgramId;
+  config?: RunConfigOverlay;
+} & Partial<Pick<WizardSession, 'installDir' | 'frameworkContext' | 'skillId'>>;
+
+/** The `POST /runs` body: a skill alone runs on the generic skill program. */
+export type RunStartBody = Omit<RunRequest, 'programId'> & {
+  programId?: ProgramId;
+};
 
 /** One independent run the headless surface served. */
 export interface RunRecord {
   runId: string;
   programId: ProgramId;
+  skillId: string | null;
   installDir: string;
   status: 'running' | 'done' | 'failed';
   error: string | null;

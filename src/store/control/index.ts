@@ -8,6 +8,12 @@ export {
   NO_ACTION_SCREENS,
   UnknownActionError,
 } from './actions.js';
+export {
+  CONTROL_SETTERS,
+  setterNamed,
+  toSetterView,
+  UnknownSetterError,
+} from './setters.js';
 export { BadParamError, MissingParamError } from './params.js';
 export { CONTROL_SESSION_KEYS } from './state.js';
 export { CONTROL_SERVER_MARKER } from './marker.js';

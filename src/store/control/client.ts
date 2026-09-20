@@ -4,7 +4,8 @@ import type {
   DetectRequest,
   HealthResponse,
   RunRecord,
-  RunRequest,
+  RunStartBody,
+  SetterView,
 } from './types.js';
 
 export class ControlClientError extends Error {
@@ -52,6 +53,26 @@ export class ControlClient {
     ).state;
   }
 
+  /** The store setters callable through `POST /store/<name>`. */
+  async setters(): Promise<SetterView[]> {
+    return (await this.request<{ setters: SetterView[] }>('GET', '/store'))
+      .setters;
+  }
+
+  /** Call one store setter by name, whatever the current screen. */
+  async applySetter(
+    name: string,
+    params: Record<string, unknown> = {},
+  ): Promise<ControlState> {
+    return (
+      await this.request<{ state: ControlState }>(
+        'POST',
+        `/store/${encodeURIComponent(name)}`,
+        { params },
+      )
+    ).state;
+  }
+
   async setCredentials(): Promise<ControlState> {
     return (
       await this.request<{ state: ControlState }>('POST', '/credentials', {})
@@ -69,7 +90,7 @@ export class ControlClient {
       .state;
   }
 
-  async startRun(req: RunRequest): Promise<RunRecord> {
+  async startRun(req: RunStartBody): Promise<RunRecord> {
     return (await this.request<{ run: RunRecord }>('POST', '/runs', req)).run;
   }
 
