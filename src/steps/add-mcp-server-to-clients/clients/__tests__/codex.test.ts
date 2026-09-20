@@ -12,6 +12,9 @@ vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   rmSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  renameSync: vi.fn(),
 }));
 
 vi.mock('../../../../utils/analytics', () => ({
@@ -22,6 +25,8 @@ describe('CodexMCPClient', () => {
   const spawnSyncMock = spawnSync as Mock;
   const execSyncMock = execSync as Mock;
   const readFileSyncMock = fs.readFileSync as Mock;
+  const existsSyncMock = fs.existsSync as Mock;
+  const writeFileSyncMock = fs.writeFileSync as Mock;
 
   const CODEX_PATH = '/usr/local/bin/codex';
 
@@ -33,6 +38,8 @@ describe('CodexMCPClient', () => {
     // implementations, so without this a config.toml fixture set by one test
     // leaks into the next one's isPluginInstalled() check.
     readFileSyncMock.mockReturnValue('');
+    existsSyncMock.mockReturnValue(false);
+    writeFileSyncMock.mockReturnValue(undefined);
   });
 
   describe('isClientSupported', () => {
@@ -172,12 +179,68 @@ describe('CodexMCPClient', () => {
       );
     });
 
-    it('returns the failure reason and captures exception on failure', async () => {
+    it('deletes the config.toml section when the codex CLI fails', async () => {
+      spawnSyncMock.mockReturnValue({
+        error: new Error('spawn /opt/codex/vendor/codex ENOENT'),
+      });
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog]\nurl = "https://mcp.posthog.com/mcp"\n\n[mcp_servers.other]\nurl = "https://example.com"\n',
+      );
+      const client = new CodexMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(writeFileSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('.wizard-tmp'),
+        '[mcp_servers.other]\nurl = "https://example.com"\n',
+      );
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('deletes the config.toml section when the codex CLI is gone', async () => {
+      execSyncMock.mockImplementation(() => {
+        throw new Error('not found');
+      });
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.posthog-local]\nurl = "http://localhost:8787/mcp"\n',
+      );
+      const client = new CodexMCPClient();
+      await expect(client.removeServer(true)).resolves.toEqual({
+        success: true,
+      });
+      expect(spawnSyncMock).not.toHaveBeenCalled();
+      expect(writeFileSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('.wizard-tmp'),
+        '',
+      );
+    });
+
+    it('reports an absent server as success without writing', async () => {
+      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'no such server' });
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(
+        '[mcp_servers.other]\nurl = "https://example.com"\n',
+      );
+      const client = new CodexMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(writeFileSyncMock).not.toHaveBeenCalled();
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('returns the failure reason and captures exception when the write fails', async () => {
       spawnSyncMock.mockReturnValue({ status: 1, stderr: 'codex is locked' });
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue('[mcp_servers.posthog]\nurl = "u"\n');
+      writeFileSyncMock.mockImplementation(() => {
+        throw new Error('EACCES: permission denied');
+      });
       const client = new CodexMCPClient();
       await expect(client.removeServer()).resolves.toEqual({
         success: false,
-        reason: 'codex is locked',
+        reason: 'EACCES: permission denied',
       });
       expect(analytics.captureException).toHaveBeenCalled();
     });
