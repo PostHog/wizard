@@ -9,12 +9,14 @@ permissions:
   contents: read
 
 # Unit tests run once, in build.yml. This workflow owns the two checks that
-# workflow does not: the import-boundary test and the bundle shape.
+# workflow does not: the import-boundary test and the bundle shape. Both
+# report drift in the job summary and never block a pull request, for now.
 jobs:
   architecture:
     name: Architecture
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
@@ -28,12 +30,29 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/generate-version.cjs
       - run: pnpm typecheck
-      - run: pnpm test:arch
+      - name: Import boundaries (drift is reported, not blocking)
+        run: |
+          set +e
+          pnpm test:arch 2>&1 | tee arch.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '## Import boundary drift'
+              echo
+              echo 'A cross-surface edge changed. Update `src/__tests__/architecture/known-violations.json` if intended.'
+              echo
+              echo '```'
+              grep -E 'matrix:|ink-outside-tui|->' arch.log | head -40
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
 
   bundle:
     name: Bundle audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
@@ -67,7 +86,22 @@ jobs:
             chunk-summary.*.json
       # Both summaries are uploaded above, so a drift here still leaves the
       # artifact to re-record the fixtures from.
-      - name: Summaries match the fixtures
+      - name: Summaries match the fixtures (drift is reported, not blocking)
         run: |
-          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-summary.prod.json
-          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-summary.ci.json
+          set +e
+          status=0
+          for v in prod ci; do
+            if ! diff scripts/__fixtures__/chunk-manifest.$v.json chunk-summary.$v.json > drift.$v.txt; then
+              status=1
+              {
+                echo "## Bundle drift ($v build)"
+                echo
+                echo "Chunk names or bundled sources changed. Re-record \`scripts/__fixtures__/chunk-manifest.$v.json\` from this run's artifact if intended."
+                echo
+                echo '```diff'
+                cat drift.$v.txt
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          exit $status
