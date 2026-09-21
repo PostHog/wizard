@@ -10,6 +10,7 @@
  * injected: the real one spins up a fresh agent, the tests use a fake.
  */
 import { analytics } from '@utils/analytics';
+import type { AgentFailure } from '../../shared/types';
 import { logToFile } from '@utils/debug';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
@@ -33,6 +34,19 @@ export type TaskResolver = (
  *  (via the task agent calling complete_task). */
 export type RunTask = (task: QueuedTask) => Promise<void>;
 
+/**
+ * Thrown by a `RunTask` when its harness returned a decided failure that ends
+ * the whole run (a 401 the auth screen already reported), not just the task.
+ * `drainQueue` lets it through so the sequence can return the failure where
+ * the harness used to exit the process.
+ */
+export class RunTaskFatal extends Error {
+  constructor(public readonly failure: AgentFailure) {
+    super(failure.message ?? 'agent run failed');
+    this.name = 'RunTaskFatal';
+  }
+}
+
 export interface DrainOptions {
   /** Backstop against a pathological always-one-more-pending loop. */
   maxStarts: number;
@@ -51,6 +65,7 @@ async function runOne(
   try {
     await runTask(task);
   } catch (error) {
+    if (error instanceof RunTaskFatal) throw error;
     // The task threw rather than reporting. The outcome check below handles
     // the queue; the exception itself should never be silent.
     logToFile(`[executor] runTask threw for ${task.type}:`, error);

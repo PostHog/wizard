@@ -23,11 +23,11 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
 } from '@lib/constants';
 import {
-  PROGRAM_BINDINGS,
   DEFAULT_BINDING,
   resolveBinding,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
+import { PROGRAM_BINDINGS, bindingFor } from '@lib/programs/bindings';
 import {
   modelCapabilities,
   MINT_ALLOWED_EFFORTS,
@@ -69,7 +69,9 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       if (program === 'metrics') continue; // pinned below
       if (program === 'replay-vision') continue; // pinned below
       if (program === 'error-tracking') continue; // pinned below
-      expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
+      expect(
+        resolveBinding({ program, flags: {}, binding: bindingFor(program) }),
+      ).toEqual(DEFAULT_RESOLVED);
     }
   });
 
@@ -229,6 +231,7 @@ describe('switchboard composed clamp', () => {
     for (const program of PROGRAM_IDS) {
       const ctx: SwitchboardCtx = {
         program,
+        binding: bindingFor(program),
         composed: true,
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         trace: {},

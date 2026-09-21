@@ -7,7 +7,6 @@
 import { RUN_SURFACE } from '@env';
 import { logToFile } from '@utils/debug';
 import type { Sequence } from '@lib/constants';
-import type { ProgramId } from '@lib/programs/program-registry';
 import {
   ORCHESTRATOR_HARNESS_ROUTE,
   ORCHESTRATOR_SEQUENCE_ROUTE,
@@ -34,7 +33,7 @@ export const SEQUENCE_EXPERIMENTS: readonly SequenceExperiment[] = [
 
 /** The flag-driven route for a program, or undefined when no experiment covers it or its flags don't validly route. */
 export function resolveFlagRoute(
-  program: ProgramId,
+  program: string,
   flags: Record<string, string>,
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
@@ -46,7 +45,7 @@ export function resolveFlagRoute(
 
 /** The flag-driven sequence for a program, or undefined when no sequence experiment covers it with its flag on. Surface/build scoping is the flag's own job (see `flagPersonProperties`). */
 export function resolveFlagSequence(
-  program: ProgramId,
+  program: string,
   flags: Record<string, string>,
 ): Sequence | undefined {
   return SEQUENCE_EXPERIMENTS.find(
@@ -56,7 +55,7 @@ export function resolveFlagSequence(
 
 /** The per-stage overrides for a program's run, or undefined (prompt frontmatter stays). Applied once, where the agent prompts are loaded. */
 export function resolveStageOverrides(
-  program: ProgramId,
+  program: string,
   flags: Record<string, string>,
   flagPayloads?: Record<string, unknown>,
 ): Record<string, StageOverride> | undefined {

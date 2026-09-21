@@ -5,7 +5,7 @@
  * and can publish data to a shared store for downstream middleware to read.
  */
 
-import type { SpinnerHandle } from '@ui';
+import type { SpinnerHandle } from '@lib/agent/progress';
 
 export type SDKMessage = any;
 
@@ -57,4 +57,6 @@ export interface MiddlewareFactoryOptions {
   spinner?: SpinnerHandle;
   outputPath?: string;
   phased?: boolean;
+  /** Where the summary and writer plugins print their lines. */
+  log?: (message: string) => void;
 }

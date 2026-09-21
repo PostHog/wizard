@@ -11,7 +11,7 @@
  */
 
 import type { Credentials, WizardSession } from '@lib/wizard-session';
-import type { ProgramId } from '@lib/programs/program-registry';
+import type { ProgramId } from './program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';

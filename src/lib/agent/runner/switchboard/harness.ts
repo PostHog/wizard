@@ -10,8 +10,7 @@ import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
 import { resolveFlagRoute } from './flags';
 import {
-  DEFAULT_BINDING,
-  PROGRAM_BINDINGS,
+  bindingOf,
   runChain,
   type HarnessPick,
   type Middleware,
@@ -86,7 +85,7 @@ export function resolveHarness(
   const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
     if (ctx.trace)
       Object.assign(ctx.trace, { harness: 'binding', model: 'binding' });
-    const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
+    const binding = bindingOf(ctx);
     return {
       harness: binding.harness,
       model: binding.model,

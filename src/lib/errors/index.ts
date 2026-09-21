@@ -18,3 +18,4 @@ export {
 } from './emit';
 export { sanitizeErrorDetail } from './sanitize';
 export { classifyRunFailure, type RunFailure } from './run-failure';
+export { WizardError } from './wizard-error';

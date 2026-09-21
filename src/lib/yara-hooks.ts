@@ -35,8 +35,6 @@ import type {
 import { logToFile } from '@utils/debug';
 import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
-import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
 import {
   highestSeverityMatch,
@@ -431,13 +429,14 @@ export function captureScanReport(): void {
  * scanCount === 0 and every step no-ops.
  */
 export function flushScanReport(
-  session: Pick<WizardSession, 'yaraReport'>,
+  options: { yaraReport: boolean },
+  log: (message: string) => void,
 ): void {
-  if (session.yaraReport) {
+  if (options.yaraReport) {
     const reportPath = writeScanReport();
     if (reportPath) {
       const summary = formatScanReport();
-      getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+      log(`YARA scan report: ${reportPath}${summary ?? ''}`);
     }
   }
   captureScanReport();

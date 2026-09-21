@@ -30,8 +30,8 @@ const PLUGIN_REGISTRY: Record<string, PluginFactory> = {
   contextSize: () => new ContextSizeTrackerPlugin(),
   cost: () => new CostTrackerPlugin(),
   duration: () => new DurationTrackerPlugin(),
-  summary: (opts) => new SummaryPlugin(opts.spinner!),
-  jsonWriter: (opts) => new JsonWriterPlugin(opts.outputPath!),
+  summary: (opts) => new SummaryPlugin(opts.spinner!, opts.log),
+  jsonWriter: (opts) => new JsonWriterPlugin(opts.outputPath!, opts.log),
 };
 
 /**

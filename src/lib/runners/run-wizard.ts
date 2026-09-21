@@ -1,7 +1,7 @@
 import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
-import { runAgent } from '@lib/agent/agent-runner';
-import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { runAgent } from '@lib/programs/run-agent-legacy';
+import { authenticate } from '@lib/programs/authenticate';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getAuditChecks } from '@lib/programs/audit/types';
 import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';

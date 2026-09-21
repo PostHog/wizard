@@ -6,7 +6,6 @@
  */
 
 import fs from 'fs';
-import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type {
@@ -57,7 +56,13 @@ export class JsonWriterPlugin implements Middleware {
 
   private outputPath: string;
 
-  constructor(outputPath: string) {
+  private readonly log: (message: string) => void;
+
+  constructor(
+    outputPath: string,
+    log: (message: string) => void = () => undefined,
+  ) {
+    this.log = log;
     this.outputPath = outputPath;
   }
 
@@ -170,7 +175,7 @@ export class JsonWriterPlugin implements Middleware {
     try {
       fs.writeFileSync(this.outputPath, JSON.stringify(data, null, 2));
       logToFile(`Benchmark data written to ${this.outputPath}`);
-      getUI().log.info(
+      this.log(
         `● ${AgentSignals.BENCHMARK} Results written to ${this.outputPath}`,
       );
     } catch (error) {

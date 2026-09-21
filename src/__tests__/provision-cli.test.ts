@@ -63,7 +63,7 @@ vi.mock('../utils/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../lib/agent/agent-runner', () => ({
+vi.mock('../lib/programs/run-agent-legacy', () => ({
   runAgent: vi.fn().mockResolvedValue(undefined),
 }));
 

@@ -1,4 +1,4 @@
-import { getUI, type SpinnerHandle } from '@ui';
+import type { SpinnerHandle } from '@lib/agent/progress';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type {
   Middleware,
@@ -97,8 +97,14 @@ export class SummaryPlugin implements Middleware {
 
   private spinner: SpinnerHandle;
 
-  constructor(spinner: SpinnerHandle) {
+  private readonly log: (message: string) => void;
+
+  constructor(
+    spinner: SpinnerHandle,
+    log: (message: string) => void = () => undefined,
+  ) {
     this.spinner = spinner;
+    this.log = log;
   }
 
   onPhaseTransition(
@@ -117,7 +123,7 @@ export class SummaryPlugin implements Middleware {
       this.spinner.stop(`${AgentSignals.BENCHMARK} ${fromPhase}`);
     }
 
-    getUI().log.info(`${AgentSignals.BENCHMARK} Starting phase: ${toPhase}`);
+    this.log(`${AgentSignals.BENCHMARK} Starting phase: ${toPhase}`);
     this.spinner.start(`Integrating PostHog (${toPhase})...`);
   }
 
@@ -135,31 +141,31 @@ export class SummaryPlugin implements Middleware {
     const phaseCount = duration?.phaseSnapshots.length ?? 0;
     const totalCost = cost?.totalCost ?? 0;
 
-    getUI().log.info('');
-    getUI().log.info(
+    this.log('');
+    this.log(
       `◇ ${AgentSignals.BENCHMARK} ${phaseCount} phases in ${fmtDuration(
         totalDurationMs,
       )}, cost: ${fmtCost(totalCost)}`,
     );
-    getUI().log.info(
+    this.log(
       `  total in: ${fmtTok(tokens?.totalInput ?? 0)}, out: ${fmtTok(
         tokens?.totalOutput ?? 0,
       )}, cache_read: ${fmtTok(cache?.totalRead ?? 0)}, cache_5m: ${fmtTok(
         cache?.totalCreation5m ?? 0,
       )}, cache_1h: ${fmtTok(cache?.totalCreation1h ?? 0)}`,
     );
-    getUI().log.info('');
-    getUI().log.info(`● ${AgentSignals.BENCHMARK} Summary by phase:`);
+    this.log('');
+    this.log(`● ${AgentSignals.BENCHMARK} Summary by phase:`);
 
     if (duration?.phaseSnapshots) {
       for (let i = 0; i < duration.phaseSnapshots.length; i++) {
         const stats = getPhaseStats(i, ctx);
         if (stats) {
-          getUI().log.info(printPhase(stats));
+          this.log(printPhase(stats));
         }
       }
     }
 
-    getUI().log.info('');
+    this.log('');
   }
 }

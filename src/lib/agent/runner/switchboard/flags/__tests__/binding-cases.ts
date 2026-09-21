@@ -11,6 +11,7 @@ import {
   type SwitchboardTrace,
 } from '@lib/agent/runner/switchboard';
 import type { EffortLevel } from '@lib/agent/runner/switchboard/models';
+import { bindingFor } from '@lib/programs/bindings';
 
 /** The complete resolved binding — every axis stated, nothing implicit. */
 export interface ExpectedBinding {
@@ -38,7 +39,12 @@ export function runBindingCases(
     it(c.name, () => {
       if (c.surface) setSurface?.(c.surface);
       try {
-        const ctx: SwitchboardCtx = { ...c.ctx };
+        // The program's declared binding rides along, as the legacy adapter
+        // supplies it; a case may pin its own.
+        const ctx: SwitchboardCtx = {
+          binding: bindingFor(c.ctx.program),
+          ...c.ctx,
+        };
         expect(resolveBinding(ctx)).toEqual(c.binding);
         if (c.trace) expect(ctx.trace).toEqual(c.trace);
       } finally {

@@ -1,112 +1,127 @@
 /**
  * The linear pipeline. Single execution path for all non-orchestrator programs,
  * both skill-based (revenue analytics) and framework-based (core integration).
- * The `ProgramRun` controls what varies between them; `programConfig` carries the
- * program-level static metadata (tool allow/disallow lists, etc.).
+ * The `AgentRunDefinition` controls what varies between them; `RunConfig`
+ * carries the program-level static metadata (tool allow/disallow lists, etc.).
+ *
+ * Reports through `emit`, asks through `interaction`, and returns a decided
+ * `RunResult`. Every former `getUI()` call is one progress event in the same
+ * place; every former `wizardAbort` is a returned failure with the same
+ * arguments, so the caller's exit sequence is unchanged.
  */
 
-import type { WizardSession } from '../../../wizard-session';
-import { OutroKind } from '../../../wizard-session';
-import { getUI } from '../../../../ui';
+import { OutroKind, type OutroData } from '@lib/wizard-session';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
-import { restoreClaudeSettings } from '../../claude-settings';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
-import {
-  wizardAbort,
-  WizardError,
-  registerCleanup,
-} from '../../../../utils/wizard-abort';
+import { WizardError } from '@lib/errors/wizard-error';
 import { ErrorCodes, AGENT_ERROR_CODE } from '@lib/errors';
 import { analytics } from '../../../../utils/analytics';
-import {
-  formatScanReport,
-  formatYaraAbortMessage,
-  writeScanReport,
-} from '../../../yara-hooks';
+import { formatYaraAbortMessage } from '../../../yara-hooks';
 import { installSkillById } from '../../../wizard-tools';
-import { createWizardAskBridge } from '../../../wizard-ask-bridge';
-import type { ProgramConfig } from '../../../programs/program-step';
 import { assemblePrompt } from '../../agent-prompt';
-import type { ProgramRun, BootstrapResult } from '../shared/types';
-import { abortOnInstallFailure } from '../shared/errors';
-import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
-import { resolveHarness, getHarness } from '../switchboard';
+import type {
+  AgentFailure,
+  RunResult,
+  RunSnapshot,
+  SequenceContext,
+} from '../shared/types';
+import { installFailure } from '../shared/errors';
+import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
+import { createEmitSpinner } from '../shared/progress-collector';
+import { createAskBridge } from '../shared/ask';
+import { getHarness } from '../switchboard';
 
-export async function runLinearProgram(
-  session: WizardSession,
-  config: ProgramRun,
-  programConfig: ProgramConfig,
-  boot: BootstrapResult,
-  composed = false,
-): Promise<void> {
-  const { skillsBaseUrl, credentials, wizardFlags, project } = boot;
+/** The snapshot the sequence returns; `runAgent` fills it from its collector. */
+const PENDING_SNAPSHOT: RunSnapshot = {
+  tasks: [],
+  statusMessages: [],
+  usage: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+  },
+};
+
+const failed = (failure: AgentFailure): RunResult => ({
+  outcome: 'failed',
+  failure,
+  snapshot: PENDING_SNAPSHOT,
+});
+
+const cancelled = (): RunResult => ({
+  outcome: 'cancelled',
+  failure: { message: 'Wizard setup cancelled.' },
+  snapshot: PENDING_SNAPSHOT,
+});
+
+export async function runLinearProgram({
+  config,
+  input,
+  boot,
+  emit,
+  interaction,
+  signal,
+}: SequenceContext): Promise<RunResult> {
+  const { run, composed } = config;
+  const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
+
+  if (signal.aborted) return cancelled();
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
-  if (config.skillId) {
-    logToFile(`[agent-runner] installing skill ${config.skillId}`);
+  if (run.skillId) {
+    logToFile(`[agent-runner] installing skill ${run.skillId}`);
     const installResult = await installSkillById(
-      config.skillId,
-      session.installDir,
+      run.skillId,
+      input.installDir,
       skillsBaseUrl,
       { triage: boot.triageProvider },
     );
     if (installResult.kind !== 'ok') {
-      await abortOnInstallFailure(config.integrationLabel, installResult);
-      return;
+      return failed(installFailure(run.integrationLabel, installResult));
     }
     skillPath = installResult.path;
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
 
+  if (signal.aborted) return cancelled();
+
   // 6. Initialize agent
-  const spinner = getUI().spinner();
+  const spinner = createEmitSpinner(emit);
 
-  const restoreSettings = () => restoreClaudeSettings(session.installDir);
-  getUI().onEnterScreen('outro', restoreSettings);
-
-  if (session.yaraReport) {
-    registerCleanup(() => {
-      const reportPath = writeScanReport();
-      if (reportPath) {
-        const summary = formatScanReport();
-        getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
-      }
-    });
-  }
-
-  getUI().startRun();
+  emit({ kind: 'lifecycle', phase: 'started' });
 
   // wizard_ask needs an answerer. A human answers at the keyboard; the e2e
   // snapshot/MCP host answers via its driver and sets WIZARD_ASK_AUTODRIVE.
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    shouldDisableAsk(session) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
-  const askBridge = askDisabled
+    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+  const ask = askDisabled
     ? undefined
-    : createWizardAskBridge({
-        getSource: () => session.skillId ?? config.integrationLabel,
-        showQuestion: (q) => getUI().requestQuestion(q),
-        cancelQuestion: () => getUI().cancelPendingQuestion(),
-        richLinks: config.richLinks ?? false,
-        timeoutMs: config.askTimeoutMs,
+    : createAskBridge(interaction, signal, {
+        getSource: () => input.skillId ?? run.integrationLabel,
+        richLinks: run.richLinks ?? false,
+        timeoutMs: run.askTimeoutMs,
       });
 
-  const middleware = session.benchmark
-    ? createBenchmarkPipeline(spinner, sessionToOptions(session))
+  const middleware = input.flags.benchmark
+    ? createBenchmarkPipeline(spinner, runOptions(input), undefined, {
+        log: (message) => emit({ kind: 'log', level: 'info', message }),
+      })
     : undefined;
 
   // 7. Build prompt
-  const prompt = assemblePrompt(config, {
+  const prompt = assemblePrompt(run, {
     projectId,
     projectApiKey,
     host,
     skillPath,
     orgAiDataProcessingApproved:
-      session.apiUser?.organization?.is_ai_data_processing_approved ?? null,
+      input.apiUser?.organization?.is_ai_data_processing_approved ?? null,
     teamProductOptIns: project
       ? {
           sessionReplay: project.session_recording_opt_in ?? null,
@@ -117,37 +132,35 @@ export async function runLinearProgram(
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 
-  // 8. Resolve the (runner, model) pair from the central plan and run the agent
-  // through the selected runner. The runner owns the agent loop + model
-  // transport; everything around it (skill install, prompt, ask bridge, error
-  // routing, outro) stays here so every runner shares it.
-  const pick = resolveHarness({
-    program: programConfig.id,
-    flags: wizardFlags,
-    flagPayloads: boot.wizardFlagPayloads,
-    cliHarness: session.harness,
-    cliModel: session.model,
-  });
-  const agentResult = await getHarness(pick.harness).run({
-    session,
+  // 8. Run the agent through the run-level harness. The harness owns the agent
+  // loop + model transport; everything around it (skill install, prompt, ask
+  // bridge, error routing, outro) stays here so every harness shares it.
+  const { harness, model, thinkingLevel } = config.binding;
+  const agentResult = await getHarness(harness).run({
     config,
-    programConfig,
+    input,
     boot,
+    emit,
     prompt,
     skillPath,
     spinner,
-    askBridge,
+    askBridge: ask?.bridge,
+    getPendingQuestion: ask?.getPendingQuestion,
     middleware,
-    model: pick.model,
-    thinkingLevel: pick.thinkingLevel,
+    model,
+    thinkingLevel,
   });
 
-  // 9. Error handling (full set from both runners)
+  // 9. Error handling (full set from both harnesses)
+  if (agentResult.failure) {
+    return failed(agentResult.failure);
+  }
+
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
-    const matched = config.abortCases?.find((c) => c.match.test(reason));
+    const matched = run.abortCases?.find((c) => c.match.test(reason));
     const abortCode = matched?.errorCode ?? ErrorCodes.AgentAbort;
-    const outroData: WizardSession['outroData'] = matched
+    const outroData: OutroData = matched
       ? {
           kind: OutroKind.Error,
           message: matched.message,
@@ -158,44 +171,48 @@ export async function runLinearProgram(
         }
       : {
           kind: OutroKind.Error,
-          message: `${config.integrationLabel} aborted`,
+          message: `${run.integrationLabel} aborted`,
           body: reason || 'The agent aborted the program.',
-          docsUrl: config.docsUrl,
+          docsUrl: run.docsUrl,
           errorCode: abortCode,
           errorDetail: { reason },
         };
     analytics.wizardCapture('agent aborted', {
-      integration: config.integrationLabel,
+      integration: run.integrationLabel,
       reason,
       matched: matched?.message ?? null,
     });
-    await wizardAbort({
-      outroData,
-      code: abortCode,
-      error: new WizardError(
-        `Agent aborted: ${reason}`,
-        {
-          integration: config.integrationLabel,
-          error_type: AgentErrorType.ABORT,
-          reason,
-        },
-        abortCode,
-      ),
-    });
+    return {
+      outcome: 'aborted',
+      failure: {
+        outroData,
+        code: abortCode,
+        error: new WizardError(
+          `Agent aborted: ${reason}`,
+          {
+            integration: run.integrationLabel,
+            error_type: AgentErrorType.ABORT,
+            reason,
+          },
+          abortCode,
+        ),
+      },
+      snapshot: PENDING_SNAPSHOT,
+    };
   }
 
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
-    await wizardAbort({
+    return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
       message:
         'Could not access the PostHog MCP server\n\n' +
         'The wizard was unable to connect to the PostHog MCP server.\n' +
         'This could be due to a network issue or a configuration problem.\n\n' +
-        `Please try again, or check the documentation:\n${config.docsUrl}`,
+        `Please try again, or check the documentation:\n${run.docsUrl}`,
       error: new WizardError(
         'Agent could not access PostHog MCP server',
         {
-          integration: config.integrationLabel,
+          integration: run.integrationLabel,
           error_type: AgentErrorType.MCP_MISSING,
           signal: AgentSignals.ERROR_MCP_MISSING,
         },
@@ -205,16 +222,16 @@ export async function runLinearProgram(
   }
 
   if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
-    await wizardAbort({
+    return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
       message:
         'Could not access the setup resource\n\n' +
         'This may indicate a version mismatch or a temporary service issue.\n\n' +
-        `Please try again, or check the documentation:\n${config.docsUrl}`,
+        `Please try again, or check the documentation:\n${run.docsUrl}`,
       error: new WizardError(
         'Agent could not access setup resource',
         {
-          integration: config.integrationLabel,
+          integration: run.integrationLabel,
           error_type: AgentErrorType.RESOURCE_MISSING,
           signal: AgentSignals.ERROR_RESOURCE_MISSING,
         },
@@ -224,13 +241,13 @@ export async function runLinearProgram(
   }
 
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
-    await wizardAbort({
+    return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
       message: formatYaraAbortMessage(),
       error: new WizardError(
         'YARA scanner terminated session',
         {
-          integration: config.integrationLabel,
+          integration: run.integrationLabel,
           error_type: AgentErrorType.YARA_VIOLATION,
         },
         AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
@@ -240,10 +257,10 @@ export async function runLinearProgram(
 
   if (agentResult.error === AgentErrorType.NO_PROGRESS) {
     analytics.wizardCapture('agent no progress', {
-      integration: config.integrationLabel,
+      integration: run.integrationLabel,
       error_type: AgentErrorType.NO_PROGRESS,
     });
-    await wizardAbort({
+    return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
       message:
         'The Wizard exited without changing your project. Please contact the ' +
@@ -251,7 +268,7 @@ export async function runLinearProgram(
       error: new WizardError(
         'Agent made no progress',
         {
-          integration: config.integrationLabel,
+          integration: run.integrationLabel,
           error_type: AgentErrorType.NO_PROGRESS,
         },
         AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
@@ -261,10 +278,10 @@ export async function runLinearProgram(
 
   if (agentResult.error === AgentErrorType.INCOMPLETE_TASKS) {
     analytics.wizardCapture('agent incomplete tasks', {
-      integration: config.integrationLabel,
+      integration: run.integrationLabel,
       error_type: AgentErrorType.INCOMPLETE_TASKS,
     });
-    await wizardAbort({
+    return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
       message:
         'The Wizard exited without completing its planned tasks. Please contact ' +
@@ -272,7 +289,7 @@ export async function runLinearProgram(
       error: new WizardError(
         'Agent left planned tasks incomplete',
         {
-          integration: config.integrationLabel,
+          integration: run.integrationLabel,
           error_type: AgentErrorType.INCOMPLETE_TASKS,
         },
         AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
@@ -285,12 +302,12 @@ export async function runLinearProgram(
     agentResult.error === AgentErrorType.API_ERROR
   ) {
     analytics.wizardCapture('agent api error', {
-      integration: config.integrationLabel,
+      integration: run.integrationLabel,
       error_type: agentResult.error,
       error_message: agentResult.message,
     });
 
-    await wizardAbort({
+    return failed({
       code: AGENT_ERROR_CODE[agentResult.error],
       message: `API Error\n\n${
         agentResult.message || 'Unknown error'
@@ -298,7 +315,7 @@ export async function runLinearProgram(
       error: new WizardError(
         `API error: ${agentResult.message}`,
         {
-          integration: config.integrationLabel,
+          integration: run.integrationLabel,
           error_type: agentResult.error,
         },
         AGENT_ERROR_CODE[agentResult.error],
@@ -307,39 +324,36 @@ export async function runLinearProgram(
   }
 
   // 10. Post-run hooks
-  if (config.postRun) {
-    await config.postRun(session, credentials);
+  if (config.hooks?.postRun) {
+    await config.hooks.postRun(credentials);
   }
 
   // A composed sub-run (integration inside self-driving) skips the terminal
   // outro + analytics shutdown so the shared client survives the host's run.
-  if (composed) return;
+  if (composed) {
+    return { outcome: 'success', snapshot: PENDING_SNAPSHOT };
+  }
 
   // 11. Outro
-  // Push outro data through the UI (not via direct `session.outroData = ...`
-  // mutation) so the live store gets the value. agent-runner's `session`
-  // parameter is captured at runAgent() invocation time, and any `setKey`
-  // call between then and here (e.g. setDashboardUrl, setNotebookUrl) forks
-  // the session reference — direct mutation then lands on a stale snapshot
-  // that the screen never reads. UI.setOutroData() goes through the store
-  // and also merges in any post-snapshot URLs from the live session.
-  const outroData = config.buildOutroData
-    ? config.buildOutroData(session, credentials)
+  const outroData: OutroData | undefined = config.hooks?.buildOutroData
+    ? config.hooks.buildOutroData(credentials)
     : {
         kind: OutroKind.Success,
-        message: config.successMessage,
-        reportFile: config.reportFile,
-        docsUrl: config.docsUrl,
-        continueUrl: session.signup
+        message: run.successMessage,
+        reportFile: run.reportFile,
+        docsUrl: run.docsUrl,
+        continueUrl: input.flags.signup
           ? `${host.appHost}/products?source=wizard`
           : undefined,
       };
   if (outroData) {
-    getUI().setOutroData(outroData);
+    emit({ kind: 'completion', outro: outroData });
   }
 
-  getUI().outro(config.successMessage);
+  emit({ kind: 'lifecycle', phase: 'completed', message: run.successMessage });
 
   // 12. Analytics shutdown
   await analytics.shutdown('success');
+
+  return { outcome: 'success', outro: outroData, snapshot: PENDING_SNAPSHOT };
 }

@@ -93,6 +93,8 @@ export interface PiToolsContext {
   disallowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
+  /** Receives the handoff document `publish_handoff` accepted. */
+  onHandoffText?: (text: string) => void;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -553,7 +555,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       }),
     }),
     execute(_id, args) {
-      const result = publishHandoff(args.content);
+      const result = publishHandoff(args.content, ctx.onHandoffText);
       logToFile(`[pi] publish_handoff: ${result.message}`);
       return Promise.resolve(text(result.message));
     },

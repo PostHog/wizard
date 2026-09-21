@@ -3,7 +3,6 @@
  * markdown) in one explicit call, replacing the report file + watcher path.
  */
 
-import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { runtimeEnv } from '@env';
@@ -134,7 +133,10 @@ function writeHandoffFileAtomically(
   }
 }
 
-export function publishHandoff(content: string): PublishHandoffResult {
+export function publishHandoff(
+  content: string,
+  onHandoffText?: (text: string) => void,
+): PublishHandoffResult {
   if (content.trim() === '') {
     analytics.wizardCapture('handoff published', {
       handoff_ok: false,
@@ -148,7 +150,7 @@ export function publishHandoff(content: string): PublishHandoffResult {
   }
   const truncated = content.length > MAX_HANDOFF_TEXT_CHARS;
   const text = truncated ? content.slice(0, MAX_HANDOFF_TEXT_CHARS) : content;
-  getUI().setHandoffText(text);
+  onHandoffText?.(text);
 
   const handoffOutputPath = runtimeEnv('POSTHOG_HANDOFF_OUTPUT_PATH');
   let handoffOutputWritten: boolean | undefined;

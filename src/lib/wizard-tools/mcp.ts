@@ -147,6 +147,9 @@ export interface WizardToolsOptions {
 
   /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
   triageProvider: LLMProvider;
+
+  /** Receives the handoff document `publish_handoff` accepted. */
+  onHandoffText?: (text: string) => void;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -168,6 +171,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     secretVault = createSecretVault(),
     orchestrator,
     triageProvider,
+    onHandoffText,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -755,7 +759,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
     },
     (args: { content: string }) => {
-      const result = publishHandoff(args.content);
+      const result = publishHandoff(args.content, onHandoffText);
       logToFile(`publish_handoff: ${result.message}`);
       return {
         content: [{ type: 'text' as const, text: result.message }],

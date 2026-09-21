@@ -8,7 +8,7 @@ import {
   type DetectEvent,
   type DetectTarget,
 } from './agentic.js';
-import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { authenticate } from '@lib/programs/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,

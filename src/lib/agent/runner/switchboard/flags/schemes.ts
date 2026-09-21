@@ -13,7 +13,6 @@ import {
   Sequence,
   SONNET_5_MODEL,
 } from '@lib/constants';
-import type { ProgramId } from '@lib/programs/program-registry';
 import { logToFile } from '@utils/debug';
 import type { EffortLevel } from '../models';
 
@@ -68,13 +67,13 @@ export type ConfigFlag = HarnessConfigFlag | PayloadConfigFlag;
  * program.
  */
 export interface HarnessExperiment {
-  program: ProgramId;
+  program: string;
   flags: ConfigFlag;
 }
 
 /** A sequence-axis experiment: one boolean flag, inert outside its listed programs. */
 export interface SequenceExperiment {
-  programs: readonly ProgramId[];
+  programs: readonly string[];
   flag: string;
   /** Sequence the flag routes covered programs to. */
   sequence: Sequence;

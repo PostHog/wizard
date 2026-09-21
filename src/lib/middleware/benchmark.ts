@@ -7,7 +7,7 @@
  *   pipeline.finalize(resultMessage, durationMs);
  */
 
-import { getUI, type SpinnerHandle } from '@ui';
+import type { SpinnerHandle } from '@lib/agent/progress';
 import { logToFile, getLogFilePath, configureLogFile } from '@utils/debug';
 import { MiddlewarePipeline } from './pipeline';
 import { PhaseDetector } from './phase-detector';
@@ -68,8 +68,10 @@ export function createBenchmarkPipeline(
   spinner: SpinnerHandle,
   options: WizardRunOptions,
   configOverride?: BenchmarkConfig,
+  reporting: { log?: (message: string) => void } = {},
 ): MiddlewarePipeline {
   const config = configOverride ?? loadBenchmarkConfig(options.installDir);
+  const log = reporting.log ?? (() => undefined);
 
   configureLogFile({
     path: config.output.logPath,
@@ -80,13 +82,12 @@ export function createBenchmarkPipeline(
     spinner,
     phased: false,
     outputPath: config.output.benchmarkPath,
+    log,
   });
 
   if (!config.output.suppressWizardLogs) {
-    getUI().log.info(
-      `${AgentSignals.BENCHMARK} Verbose logs: ${getLogFilePath()}`,
-    );
-    getUI().log.info(
+    log(`${AgentSignals.BENCHMARK} Verbose logs: ${getLogFilePath()}`);
+    log(
       `${AgentSignals.BENCHMARK} Benchmark data will be written to: ${config.output.benchmarkPath}`,
     );
   }

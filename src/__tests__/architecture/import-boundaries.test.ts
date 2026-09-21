@@ -304,6 +304,11 @@ function analyze(): Analysis {
 
       const to = classifySurface(target);
       if (!allowed.includes(to)) violations.set(key, `matrix:${from}->${to}`);
+      // The agent reports through `onProgress` and asks through
+      // `AgentInteraction`; it never reaches for a renderer, not even a type.
+      if (from === 'agent' && target.startsWith('src/ui/')) {
+        violations.set(key, 'agent-imports-ui');
+      }
     }
   }
 

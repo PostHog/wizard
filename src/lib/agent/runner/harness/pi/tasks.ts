@@ -1,15 +1,15 @@
 /**
  * Task/todo parity for pi (#526). The same four Task tools the anthropic path
  * exposes (TaskCreate/Update/Get/List), as pi `defineTool` tools backed by a
- * shared in-memory store. Every mutation pushes the list to the TUI via
- * `getUI().syncTodos`, so the todo panel updates live under pi exactly like the
- * anthropic path — the thing that was missing before.
+ * shared in-memory store. Every mutation reports the list through `onSync`
+ * (a `tasks` progress event), so the todo panel updates live under pi exactly
+ * like the anthropic path — the thing that was missing before.
  */
 
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { getUI } from '@ui';
+import type { TaskSnapshot } from '@lib/agent/progress';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 export interface TaskEntry {
@@ -26,22 +26,23 @@ function text(s: string): {
   return { content: [{ type: 'text', text: s }], details: {} };
 }
 
-function syncToTui(store: TaskStore): void {
-  getUI().syncTodos(
-    Array.from(store.values()).map((t) => ({
-      content: t.content,
-      status: t.status,
-      activeForm: t.activeForm,
-    })),
-  );
+function snapshot(store: TaskStore): TaskSnapshot[] {
+  return Array.from(store.values()).map((t) => ({
+    content: t.content,
+    status: t.status,
+    activeForm: t.activeForm,
+  }));
 }
 
-/** Build the four Task tools over a fresh store. */
-export function createWizardPiTaskTools(): {
+/** Build the four Task tools over a fresh store. `onSync` gets the list after every mutation. */
+export function createWizardPiTaskTools(
+  onSync: (tasks: TaskSnapshot[]) => void = () => undefined,
+): {
   tools: ToolDefinition[];
   store: TaskStore;
 } {
   const store: TaskStore = new Map();
+  const syncToTui = (): void => onSync(snapshot(store));
 
   const taskCreate = defineTool({
     name: 'TaskCreate',
@@ -64,7 +65,7 @@ export function createWizardPiTaskTools(): {
         status: 'pending',
         activeForm: args.activeForm,
       });
-      syncToTui(store);
+      syncToTui();
       return text(`Created ${id}`);
     },
   });
@@ -97,7 +98,7 @@ export function createWizardPiTaskTools(): {
         status: (args.status as TaskStatus) ?? existing.status,
         activeForm: args.activeForm ?? existing.activeForm,
       });
-      syncToTui(store);
+      syncToTui();
       return text(`Updated ${args.taskId}`);
     },
   });

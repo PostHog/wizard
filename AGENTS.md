@@ -97,8 +97,8 @@ aliases.
 
 | Subcommand                    | What it audits                                       |
 | ----------------------------- | ---------------------------------------------------- |
-| `wizard audit events`         | event capture quality + cost                        |
-| `wizard audit all`            | comprehensive audit across every area (**default**) |
+| `wizard audit events`         | event capture quality + cost                         |
+| `wizard audit all`            | comprehensive audit across every area (**default**)  |
 | `wizard audit autocapture`    | autocapture setup + cost                             |
 | `wizard audit feature-flags`  | feature flag usage + cost                            |
 | `wizard audit identify`       | `$identify` implementation                           |
@@ -170,8 +170,8 @@ nonmutating lint checks, and scope formatting fixes to edited files. Do not add
 tests for prose, compiler-enforced shapes, or duplicated implementation. Keep
 new code comments to one line; put longer explanations in linked docs.
 
-Local `--ci`, smoke-test, and full headless runs require two separate secrets:
-a PostHog personal API key and an already-issued gateway token supplied through
+Local `--ci`, smoke-test, and full headless runs require two separate secrets: a
+PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
@@ -196,7 +196,10 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
-  the store directly from business logic.
+  the store directly from business logic. The agent (`src/lib/agent`) is the
+  exception: it reports through `AgentProgress` events and asks through
+  `AgentInteraction`, and never imports `src/ui` (the architecture test enforces
+  this).
 - Session mutations go through explicit store setters that call `emitChange()`.
   Never mutate `session` directly — nanostore holds a shallow copy.
 - The router resolves the active screen from session state. No imperative

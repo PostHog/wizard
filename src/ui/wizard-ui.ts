@@ -9,6 +9,11 @@
  */
 
 import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type {
+  AuthErrorDetail,
+  SpinnerHandle,
+  TokenUsageDelta,
+} from '@lib/agent/progress';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type { Credentials, TaskNotice } from '@lib/wizard-session';
@@ -29,60 +34,11 @@ export function isTaskStatus(value: string): value is TaskStatus {
   return (Object.values(TaskStatus) as string[]).includes(value);
 }
 
-/**
- * One assistant turn's token usage, for the hidden Ctrl+T token/cost HUD.
- * `model` is the model that produced *this* turn (e.g. the SDK's
- * `message.message.model`) — a subagent can run on a different model than
- * the main session, and some programs override to Haiku, so pricing must key
- * off the per-turn model rather than a single run-wide assumption. Omit only
- * when the caller genuinely has no model context (falls back to Sonnet
- * pricing — see `pricePerMtokForModel` in `@lib/agent/token-pricing`).
- */
-export interface TokenUsageDelta {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  cacheCreation5m: number;
-  cacheCreation1h: number;
-  model?: string;
-}
-
-export interface SpinnerHandle {
-  start(message?: string): void;
-  stop(message?: string): void;
-  message(msg?: string): void;
-}
-
-/**
- * Context passed to `showAuthError` so the screen can pick the right copy.
- *
- * `hasSettingsConflict` is true when a Claude Code settings file (project,
- * project-local, the user's global config, or managed) actually overrides the
- * LLM Gateway auth. `conflicts` carries the exact files and keys so the screen
- * can name them. When there is no conflict, the 401 has a different cause (bad
- * PAT prefix, missing scope, expired key, region mismatch) and we should not
- * advise the user to log out of Claude Code.
- */
-export interface AuthErrorDetail {
-  hasSettingsConflict: boolean;
-  conflicts?: SettingsConflict[];
-  /**
-   * True when the agent SDK authenticated from a stored Claude login
-   * (`apiKeySource: "/login managed key"`) instead of the wizard's gateway
-   * token — conflicting Anthropic credentials. Takes priority in the screen.
-   */
-  usingManagedLogin?: boolean;
-  /** Human-readable places a conflicting Anthropic credential may live. */
-  credentialPlaces?: string[];
-  /**
-   * True when a pre-run refresh already failed on a dead grant. The login is
-   * gone and re-running is the only fix, so this outranks every other branch —
-   * none of the usual advice (key type, scopes, region) applies.
-   */
-  sessionExpired?: boolean;
-  logFilePath: string;
-}
+export type {
+  AuthErrorDetail,
+  SpinnerHandle,
+  TokenUsageDelta,
+} from '@lib/agent/progress';
 
 export interface WizardUI {
   // ── Lifecycle messages ────────────────────────────────────────────

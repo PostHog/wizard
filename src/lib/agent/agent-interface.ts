@@ -6,8 +6,11 @@
 import path from 'path';
 import * as os from 'os';
 import { createRequire } from 'node:module';
-import { getUI, type SpinnerHandle } from '@ui';
-import type { TokenUsageDelta } from '@ui/wizard-ui';
+import type {
+  ProgressEmitter,
+  SpinnerHandle,
+  TokenUsageDelta,
+} from './progress';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
@@ -27,7 +30,8 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@lib/wizard-session';
-import { wizardAbort, WizardError } from '@utils/wizard-abort';
+import { WizardError } from '@lib/errors/wizard-error';
+import type { AgentFailure } from './runner/shared/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
 import {
@@ -243,6 +247,12 @@ export type AgentConfig = {
    * `--capture-aio` is off. Constructed once per run by the harness.
    */
   capture?: AioCapture;
+  /**
+   * Where the run reports: log lines, tasks, status, URLs, usage, the handoff
+   * document and the auth-error detail. Absent → the run reports nowhere and
+   * still completes.
+   */
+  emit?: ProgressEmitter;
 };
 
 /**
@@ -354,7 +364,11 @@ type AgentRunConfig = {
   program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
   sequence: Sequence;
+  /** Where the run reports. A no-op when the caller passed none. */
+  emit?: ProgressEmitter;
 };
+
+const NO_PROGRESS: ProgressEmitter = () => undefined;
 
 /**
  * Global identifiers attached to every LLM gateway trace for a run. They ride on
@@ -531,6 +545,7 @@ export async function initializeAgent(
   initLogFile();
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
+  const emit = config.emit ?? NO_PROGRESS;
 
   try {
     // Configure model routing (inherited by the SDK subprocess). All model
@@ -636,6 +651,7 @@ export async function initializeAgent(
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
       triageProvider,
+      onHandoffText: (text) => emit({ kind: 'handoff', text }),
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -661,6 +677,7 @@ export async function initializeAgent(
       program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
+      emit,
     };
 
     logToFile('Agent config:', {
@@ -689,9 +706,11 @@ export async function initializeAgent(
 
     return agentRunConfig;
   } catch (error) {
-    getUI().log.error(
-      `Failed to initialize agent: ${(error as Error).message}`,
-    );
+    emit({
+      kind: 'log',
+      level: 'error',
+      message: `Failed to initialize agent: ${(error as Error).message}`,
+    });
     logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
@@ -740,7 +759,12 @@ export async function runAgent(
     onMessage(message: any): void;
     finalize(resultMessage: any, totalDurationMs: number): any;
   },
-): Promise<{ error?: AgentErrorType; message?: string }> {
+): Promise<{
+  error?: AgentErrorType;
+  message?: string;
+  failure?: AgentFailure;
+}> {
+  const emit = agentConfig.emit ?? NO_PROGRESS;
   const {
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
@@ -854,7 +878,7 @@ export async function runAgent(
     // CostTrackerPlugin.onFinalize uses to correct per-turn drift.
     const totalCostUsd = Number(lastResultMessage?.total_cost_usd ?? 0);
     if (totalCostUsd > 0) {
-      getUI().setFinalTokenCostUsd(totalCostUsd);
+      emit({ kind: 'finalCost', usd: totalCostUsd });
     }
     try {
       middleware?.finalize(lastResultMessage, durationMs);
@@ -879,6 +903,9 @@ export async function runAgent(
   let sessionId: string | undefined;
   let reminted = false;
   let remintRequested = false;
+  // A 401 on a fresh bearer: the auth screen was reported, and this is the
+  // failure the caller ends the run with. The query is aborted to unwind.
+  let authFailure: AgentFailure | undefined;
   const agentConfigDir = createIsolatedAgentConfigDir();
 
   try {
@@ -1162,6 +1189,7 @@ export async function runAgent(
             options,
             spinner,
             signals,
+            emit,
             receivedSuccessResult,
             tasks,
             agentConfig.suppressTaskRender ?? false,
@@ -1240,15 +1268,20 @@ export async function runAgent(
               ...authError,
               sessionExpired,
             });
-            getUI().showAuthError({
-              hasSettingsConflict: authError.hasSettingsConflict,
-              conflicts: authError.conflicts,
-              usingManagedLogin: authError.usingManagedLogin,
-              credentialPlaces: authError.credentialPlaces,
-              sessionExpired,
-              logFilePath: getLogFilePath(),
+            emit({
+              kind: 'authError',
+              detail: {
+                hasSettingsConflict: authError.hasSettingsConflict,
+                conflicts: authError.conflicts,
+                usingManagedLogin: authError.usingManagedLogin,
+                credentialPlaces: authError.credentialPlaces,
+                sessionExpired,
+                logFilePath: getLogFilePath(),
+              },
             });
-            await wizardAbort({
+            // The caller ends the run with this; the query is abandoned here
+            // where the process used to exit.
+            authFailure = {
               code: authCode,
               message: 'Authentication failed (401)',
               error: new WizardError(
@@ -1264,7 +1297,9 @@ export async function runAgent(
                 },
                 authCode,
               ),
-            });
+            };
+            abortController.abort();
+            break;
           }
 
           try {
@@ -1290,6 +1325,7 @@ export async function runAgent(
       } catch (error) {
         // The abort we asked for; anything else belongs to the outer catch.
         if (remintRequested) return 'remint';
+        if (authFailure) return 'done';
         throw error;
       }
       return remintRequested ? 'remint' : 'done';
@@ -1319,6 +1355,12 @@ export async function runAgent(
       });
       spinner.message(spinnerMessage);
       await runQuery(sessionId);
+    }
+
+    // A fresh bearer was rejected. The auth screen is already up; hand the
+    // decided failure to the caller, which owns the exit.
+    if (authFailure) {
+      return { failure: authFailure };
     }
 
     // A YARA hook detected a terminal violation and aborted the run.
@@ -1421,14 +1463,19 @@ export async function runAgent(
 
     // No API error found, re-throw the original exception
     spinner.stop(errorMessage);
-    getUI().log.error(`Error: ${(error as Error).message}`);
+    emit({
+      kind: 'log',
+      level: 'error',
+      message: `Error: ${(error as Error).message}`,
+    });
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
   } finally {
     // Always capture run duration, even on abort/error, so we can alert on
-    // long runs where the user gave up before completion.
-    if (!receivedSuccessResult) {
+    // long runs where the user gave up before completion. A 401 never reached
+    // this block before (the process exited first), so it still does not count.
+    if (!receivedSuccessResult && !authFailure) {
       const durationMs = Date.now() - startTime;
       analytics.wizardCapture('agent aborted', {
         duration_ms: durationMs,
@@ -1737,6 +1784,7 @@ function handleSDKMessage(
   options: WizardRunOptions,
   spinner: SpinnerHandle,
   signals: AgentOutputSignals,
+  emit: ProgressEmitter,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
   // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
@@ -1762,7 +1810,7 @@ function handleSDKMessage(
     const sorted = Array.from(tasks.values()).sort(
       (a, b) => rank(a.status) - rank(b.status),
     );
-    getUI().syncTodos(sorted);
+    emit({ kind: 'tasks', tasks: sorted.map((t) => ({ ...t })) });
   };
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
@@ -1777,7 +1825,7 @@ function handleSDKMessage(
       // dedup for SDK-retried turns — see addTokenUsage's doc comment), so
       // this stays live-updating for every run, not just `--benchmark`.
       const tokenUsageDelta = extractTokenUsageDelta(message);
-      if (tokenUsageDelta) getUI().addTokenUsage(tokenUsageDelta);
+      if (tokenUsageDelta) emit({ kind: 'usage', delta: tokenUsageDelta });
 
       // Extract text content from assistant messages
       const content = message.message?.content;
@@ -1797,7 +1845,7 @@ function handleSDKMessage(
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
               const statusText = statusMatch[1].trim();
-              getUI().pushStatus(statusText);
+              emit({ kind: 'status', message: statusText });
               spinner.message(statusText);
             }
 
@@ -1811,7 +1859,11 @@ function handleSDKMessage(
             );
             const dashboardMatch = block.text.match(dashboardRegex);
             if (dashboardMatch) {
-              getUI().setDashboardUrl(dashboardMatch[1].trim());
+              emit({
+                kind: 'url',
+                which: 'dashboard',
+                url: dashboardMatch[1].trim(),
+              });
             }
 
             // Check for [NOTEBOOK_URL] markers
@@ -1824,7 +1876,11 @@ function handleSDKMessage(
             );
             const notebookMatch = block.text.match(notebookRegex);
             if (notebookMatch) {
-              getUI().setNotebookUrl(notebookMatch[1].trim());
+              emit({
+                kind: 'url',
+                which: 'notebook',
+                url: notebookMatch[1].trim(),
+              });
             }
           }
 
@@ -1847,7 +1903,7 @@ function handleSDKMessage(
           // Mirror the active tool into the Visualizer's "stage" indicator.
           if (block.type === 'tool_use') {
             const stage = classifyToolToStage((block as ToolUseBlock).name);
-            if (stage) getUI().setStage(stage);
+            if (stage) emit({ kind: 'stage', stage });
           }
         }
       }
@@ -1900,7 +1956,7 @@ function handleSDKMessage(
         // mode race conditions). Full message already logged above via JSON dump.
         if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
-            getUI().log.error(`Error: ${err}`);
+            emit({ kind: 'log', level: 'error', message: `Error: ${err}` });
             logToFile('ERROR:', err);
           }
         }
@@ -1915,7 +1971,7 @@ function handleSDKMessage(
         // Full message already logged above via JSON dump.
         if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
-            getUI().log.error(`Error: ${err}`);
+            emit({ kind: 'log', level: 'error', message: `Error: ${err}` });
             logToFile('ERROR:', err);
           }
         }

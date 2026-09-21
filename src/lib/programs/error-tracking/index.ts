@@ -2,7 +2,7 @@ import { Integration } from '@lib/constants';
 import { detectFramework } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import type { ProgramRun } from '@lib/agent/runner/shared/types';
+import type { ProgramRun } from '@lib/programs/program-run';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/steps';
 import { getContentBlocks } from '@lib/programs/error-tracking/content/index';
 import { getTips } from '@lib/programs/error-tracking/content/tips';

@@ -16,19 +16,27 @@ readiness hooks, and traverse steps and gates.
 detection in `onReady`. Noninteractive execution has its own lifecycle in
 [run-non-interactive.ts](../../../../src/lib/runners/run-non-interactive.ts).
 
-[runner/index.ts](../../../../src/lib/agent/runner/index.ts) resolves a
-program's `run` definition, calls shared bootstrap, selects a binding,
-dispatches the sequence, and flushes the scanner report on cleanup. The old
+[runner/index.ts](../../../../src/lib/agent/runner/index.ts) exports
+`runAgent(config, input, options)`: it prepares the run, dispatches the sequence
+the binding names, flushes the scanner report and returns a `RunResult`. It
+reports through `options.onProgress` and asks through `options.interaction`; it
+never calls `getUI()`, reads a session or exits.
+[run-agent-legacy.ts](../../../../src/lib/programs/run-agent-legacy.ts) is the
+caller today's runners use: it runs the gates, authenticates, resolves the
+binding from [bindings.ts](../../../../src/lib/programs/bindings.ts), builds the
+agent's inputs from the session, maps progress back onto `getUI()` and hands a
+decided failure to `wizardAbort`.
 [agent-runner.ts](../../../../src/lib/agent/agent-runner.ts) is a compatibility
-export.
+export of the agent's contracts.
 
-| Layer           | Source and responsibility                                                                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bootstrap       | [shared/bootstrap.ts](../../../../src/lib/agent/runner/shared/bootstrap.ts): shared health/settings/auth/flag and MCP setup                                                    |
-| Switchboard     | [switchboard/index.ts](../../../../src/lib/agent/runner/switchboard/index.ts): resolve sequence, harness, model and effort override                                            |
-| Linear sequence | [sequence/linear.ts](../../../../src/lib/agent/runner/sequence/linear.ts): one conversation, skill/prompt assembly, post-run hooks and outro                                   |
-| Orchestrator    | [orchestrator-runner.ts](../../../../src/lib/agent/runner/sequence/orchestrator/orchestrator-runner.ts): seed plan, task queue, focused conversations, handoffs and completion |
-| Harness         | [harness/types.ts](../../../../src/lib/agent/runner/harness/types.ts): SDK boundary, implemented by Pi and Anthropic                                                           |
+| Layer           | Source and responsibility                                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contracts       | [shared/types.ts](../../../../src/lib/agent/runner/shared/types.ts) and [progress.ts](../../../../src/lib/agent/progress.ts): `RunConfig`, `RunInput`, `RunResult`, `AgentProgress`, `AgentInteraction` |
+| Prepare         | [shared/bootstrap.ts](../../../../src/lib/agent/runner/shared/bootstrap.ts): logging targets, gateway mint, scan triage                                                                                 |
+| Switchboard     | [switchboard/index.ts](../../../../src/lib/agent/runner/switchboard/index.ts): resolve sequence, harness, model and effort override                                                                     |
+| Linear sequence | [sequence/linear.ts](../../../../src/lib/agent/runner/sequence/linear.ts): one conversation, skill/prompt assembly, post-run hooks and outro                                                            |
+| Orchestrator    | [orchestrator-runner.ts](../../../../src/lib/agent/runner/sequence/orchestrator/orchestrator-runner.ts): seed plan, task queue, focused conversations, handoffs and completion                          |
+| Harness         | [harness/types.ts](../../../../src/lib/agent/runner/harness/types.ts): SDK boundary, implemented by Pi and Anthropic                                                                                    |
 
 The contribution policy is
 [Pi by default, orchestration preferred](../SKILL.md#execution-policy-and-model-admission).
@@ -135,16 +143,20 @@ credentials.
 
 ## UI state and agent output
 
-Business logic uses [WizardUI](../../../../src/ui/wizard-ui.ts) through
-`getUI()`. [InkUI](../../../../src/ui/tui/ink-ui.ts) updates the TUI store;
-[LoggingUI](../../../../src/ui/logging-ui.ts) is available for noninteractive
-callers that select it. A missing TTY does not automatically mean an arbitrary
-caller uses LoggingUI; snapshot CI drives Ink in a PTY. `requestQuestion` and
-task notices are supported interactions, not console prompts to invent in
-business logic.
+Business logic outside the agent uses
+[WizardUI](../../../../src/ui/wizard-ui.ts) through `getUI()`. The agent
+(`src/lib/agent`) reports through `AgentProgress` events instead, and the
+reducer in
+[run-agent-legacy.ts](../../../../src/lib/programs/run-agent-legacy.ts) maps
+each event to one `WizardUI` call. [InkUI](../../../../src/ui/tui/ink-ui.ts)
+updates the TUI store; [LoggingUI](../../../../src/ui/logging-ui.ts) is
+available for noninteractive callers that select it. A missing TTY does not
+automatically mean an arbitrary caller uses LoggingUI; snapshot CI drives Ink in
+a PTY. `requestQuestion` and task notices are supported interactions, not
+console prompts to invent in business logic.
 
 Harness adapters translate SDK messages, status markers, task updates and tool
-activity into WizardUI calls. Anthropic message processing lives in
+activity into progress events. Anthropic message processing lives in
 [agent-interface.ts](../../../../src/lib/agent/agent-interface.ts); Pi uses its
 own session event handlers. Orchestrated tasks also have queue and handoff
 state. Do not assume all harness output passes through `handleSDKMessage`.

@@ -13,20 +13,9 @@ import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@lib/errors';
 import { emitWizardError, sanitizeErrorDetail } from '@lib/errors';
+import { WizardError } from '@lib/errors/wizard-error';
 
-export class WizardError extends Error {
-  readonly code?: ErrorCode;
-
-  constructor(
-    message: string,
-    public readonly context?: Record<string, unknown>,
-    code?: ErrorCode,
-  ) {
-    super(message);
-    this.name = 'WizardError';
-    this.code = code;
-  }
-}
+export { WizardError };
 
 interface WizardAbortOptions {
   message?: string;

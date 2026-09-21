@@ -1,5 +1,5 @@
 import { assemblePrompt, type PromptContext } from '@lib/agent/agent-prompt';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 import { HostResolution } from '@lib/host-resolution';
 
 function makeRunDef(overrides: Partial<ProgramRun> = {}): ProgramRun {

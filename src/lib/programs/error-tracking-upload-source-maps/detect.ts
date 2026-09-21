@@ -17,7 +17,7 @@ import {
   safeReadFile,
 } from '@utils/bounded-fs';
 import type { WizardSession } from '@lib/wizard-session';
-import type { AbortCase } from '@lib/agent/agent-runner';
+import type { AbortCase } from '@lib/programs/program-run';
 import { ErrorCodes } from '@lib/errors';
 
 /**

@@ -11,34 +11,31 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getUI, setUI } from '@ui';
-import type { WizardUI } from '@ui/wizard-ui';
-import { MAX_HANDOFF_TEXT_CHARS, publishHandoff } from '../handoff';
+import {
+  MAX_HANDOFF_TEXT_CHARS,
+  publishHandoff as publishHandoffTo,
+} from '../handoff';
 
 describe('publishHandoff', () => {
   const captured: string[] = [];
-  let previousUI: WizardUI;
   let temporaryDirectory: string;
   let ambientOutputPath: string | undefined;
+  // The reporting seam: what the agent's `handoff` progress event carries.
+  const publishHandoff = (content: string) =>
+    publishHandoffTo(content, (text) => {
+      captured.push(text);
+    });
 
   beforeEach(() => {
     captured.length = 0;
-    previousUI = getUI();
     temporaryDirectory = mkdtempSync(join(tmpdir(), 'wizard-handoff-'));
     // Save the ambient value so a developer running these tests with the var
     // exported doesn't have their environment silently clobbered.
     ambientOutputPath = process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
     delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
-    setUI({
-      ...previousUI,
-      setHandoffText: (text: string) => {
-        captured.push(text);
-      },
-    } as WizardUI);
   });
 
   afterEach(() => {
-    setUI(previousUI);
     rmSync(temporaryDirectory, { recursive: true, force: true });
     if (ambientOutputPath === undefined) {
       delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
@@ -47,7 +44,7 @@ describe('publishHandoff', () => {
     }
   });
 
-  it('publishes the content through the UI seam', () => {
+  it('publishes the content through the reporting seam', () => {
     const result = publishHandoff('# Setup report\n\nAll done.');
     expect(result.ok).toBe(true);
     expect(captured).toEqual(['# Setup report\n\nAll done.']);

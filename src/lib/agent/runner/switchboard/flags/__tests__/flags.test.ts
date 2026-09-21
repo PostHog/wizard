@@ -27,6 +27,7 @@ import {
 } from '@lib/agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@lib/agent/runner/switchboard/flags/self-driving';
 import { runBindingCases } from './binding-cases';
+import { bindingFor } from '@lib/programs/bindings';
 
 const envState = vi.hoisted(() => ({
   runSurface: 'local' as 'cloud' | 'local',
@@ -261,7 +262,12 @@ describe('isolation — everything on at once', () => {
 
   it('only the two covered programs move; each lands exactly on its own row', () => {
     for (const program of PROGRAM_IDS) {
-      const ctx: SwitchboardCtx = { program, flags, flagPayloads };
+      const ctx: SwitchboardCtx = {
+        program,
+        flags,
+        flagPayloads,
+        binding: bindingFor(program),
+      };
       const resolved = resolveBinding(ctx);
       if (program === 'posthog-integration') {
         expect(resolved).toEqual(ORCHESTRATOR_PI_DEFAULT);
@@ -325,6 +331,7 @@ describe('isolation — everything on at once', () => {
   it('regression (2026-07-17): self-driving never rides the global orchestrator flag into the orchestrator', () => {
     const binding = resolveBinding({
       program: 'self-driving',
+      binding: bindingFor('self-driving'),
       flags: { [ORCH]: 'true', [SD]: 'true' },
       flagPayloads: { [SD]: { model: 'gpt-5-6-terra' } },
     });

@@ -94,8 +94,11 @@ only when it gives a real owner a smaller, reusable boundary.
 
 ## Lifecycle and security
 
-[runner/index.ts](../../../src/lib/agent/runner/index.ts) bootstraps, resolves a
-binding, and dispatches to a sequence. `agent-runner.ts` is a compatibility
+[runner/index.ts](../../../src/lib/agent/runner/index.ts) exports
+`runAgent(config, input, options)`: it prepares the run and dispatches to the
+sequence the binding names, reporting through `onProgress` and asking through
+`interaction`. Gates, authentication and binding resolution live in
+`src/lib/programs/run-agent-legacy.ts`. `agent-runner.ts` is a compatibility
 re-export, not the implementation. Sequences own their lifecycle; harnesses own
 SDK calls. `ProgramRun.postRun`, `buildOutroData`, `customPrompt`, and
 `abortCases` are consumed by the linear sequence, not by the orchestrator. Put
