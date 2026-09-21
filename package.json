@@ -138,7 +138,7 @@
     "test:cli": "vitest run --project cli",
     "test:harness": "vitest run --project harness",
     "test:arch": "vitest run --project architecture",
-    "test:goldens:update": "vitest run --project tui --project legacy -u",
+    "test:goldens:update": "vitest run -u",
     "test:coverage": "pnpm build && vitest run --coverage",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",

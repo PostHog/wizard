@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+  Verifying installation                  hecks
+  ┌──────────────────────────────────┐   ◌ SDK version up to date
+  │   ▼ posthog.init(...)   once     │   ◌ One initialization per runtime
+  │   ▼ posthog.capture('pageview')  │
+  │     posthog.capture('signup')    │   ◌ Stable distinct_id (not session
+  │     posthog.capture('purchase')  │   ◌ Same distinct_id across client and
+  └──────────────────────────────────┘   ◌ reset() called on logout / account
+                                         switch
+  PostHog releases frequent SDK
+  updates to fix bugs and add new
+  features. We're checking your          ◌ Event names are static and
+  project's SDK version and making       ◌ Key activation events capturedse
+  We're also checking that your SDK is   proxy
+   initialized correctly and in the      ◌ Open findings in PostHog
+  right part of your app's lifecycle.
+  This ensures you won't miss any        ◌ Create posthog-audit-report.md
+  autocaptured events.
+  [O] Learn more                         ◌ Write the report into a PostHog
+                                         notebook
+ ──────────────────────────────────────────────────────────────────────────────
+
+   Status   Audit plan   Tail logs   HN
+  ←→ switch tab  s toggle status

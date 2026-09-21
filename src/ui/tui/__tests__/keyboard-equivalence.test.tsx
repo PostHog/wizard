@@ -5,6 +5,9 @@
  */
 import { vi, describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
+import { mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
   WizardStore,
   Program,
@@ -76,9 +79,17 @@ vi.mock('@utils/wizard-abort', async (importOriginal) => ({
   wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
 
+// A temp dir so KeepSkillsScreen's readdir of `<installDir>/.claude/skills`
+// never sees a host directory.
+const INSTALL_DIR = mkdtempSync(join(tmpdir(), 'wizard-kb-'));
+
 const ENTER = '\r';
 const ESC = '\u001B';
 const DOWN = '\u001B[B';
+// Real timers on purpose: Ink delivers stdin writes through the event loop,
+// and under vi.useFakeTimers the key handlers never run (verified: every
+// keyboard diff came back empty). The frames test can fake time since it
+// never presses a key.
 const tick = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 
 const clean = {
@@ -121,6 +132,12 @@ const fakeInstaller = {
 
 interface Pair {
   name: string;
+  /**
+   * Set when the keyboard path and the control action are known to commit
+   * different state today. The test asserts the divergence so a fix must
+   * clear this field rather than silently re-record.
+   */
+  knownDivergence?: string;
   program: ProgramId;
   integration?: Integration;
   screen: string;
@@ -139,6 +156,8 @@ const nextjsRouterFirst = () => {
 const PAIRS: Pair[] = [
   {
     name: 'intro: enter on Continue vs confirm_setup',
+    knownDivergence:
+      'keyboard grants scan sharing before completeSetup, confirm_setup only completes setup',
     program: Program.PostHogIntegration,
     screen: ScreenId.Intro,
     arrange: () => undefined,
@@ -169,6 +188,8 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'mcp: decline install vs set_mcp_outcome skipped',
+    knownDivergence:
+      'keyboard path records extra MCP state the action does not',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
     arrange: (s) => {
@@ -183,6 +204,8 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'slack-connect: skip vs dismiss_slack',
+    knownDivergence:
+      'keyboard path and dismiss_slack commit different slack step state',
     program: Program.PostHogIntegration,
     screen: ScreenId.SlackConnect,
     arrange: (s) => {
@@ -197,6 +220,8 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'keep-skills: mount with no skills dir vs keep_skills',
+    knownDivergence:
+      'keyboard path runs the skills-dir scan effect, the action only flips the flag',
     program: Program.PostHogIntegration,
     screen: ScreenId.KeepSkills,
     arrange: (s) => {
@@ -213,6 +238,8 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'audit-outro: any key vs dismiss_outro',
+    knownDivergence:
+      'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.Audit,
     screen: ScreenId.AuditOutro,
     arrange: (s) => {
@@ -225,6 +252,8 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'source-maps-outro: any key vs dismiss_outro',
+    knownDivergence:
+      'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.ErrorTrackingUploadSourceMaps,
     screen: ScreenId.SourceMapsOutro,
     arrange: (s) => {
@@ -363,7 +392,7 @@ function makeStore(pair: Pair): WizardStore {
   const store = new WizardStore(pair.program);
   store.version = '0.0.0-test';
   setUI(new InkUI(store));
-  const session = buildSession({ installDir: '/app', ci: false });
+  const session = buildSession({ installDir: INSTALL_DIR, ci: false });
   const integration = pair.integration ?? Integration.javascriptNode;
   session.integration = integration;
   session.frameworkConfig = FRAMEWORK_REGISTRY[integration];
@@ -447,11 +476,12 @@ describe('keyboard commit vs control action commit', () => {
     it(pair.name, async () => {
       const keyboard = await driveKeyboard(pair);
       const action = applyAction(pair);
-      expect({
-        keyboard,
-        action,
-        equal: JSON.stringify(keyboard) === JSON.stringify(action),
-      }).toMatchSnapshot();
+      if (pair.knownDivergence) {
+        expect(keyboard, pair.knownDivergence).not.toEqual(action);
+      } else {
+        expect(keyboard).toEqual(action);
+      }
+      expect({ keyboard, action }).toMatchSnapshot();
     });
   }
 });

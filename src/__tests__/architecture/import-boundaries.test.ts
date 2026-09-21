@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-export type Surface = 'env' | 'legacy' | 'agent' | 'tui' | 'cli' | 'harness';
+export type Surface = 'env' | 'legacy' | 'agent' | 'tui' | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
@@ -39,10 +39,6 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
         p.startsWith('src/commands/') ||
         p.startsWith('src/lib/runners/'),
     ],
-    [
-      'harness',
-      (p) => p.startsWith('e2e-harness/') || p.startsWith('scripts/'),
-    ],
   ];
 
 export function classifySurface(relPath: string): Surface {
@@ -53,10 +49,7 @@ export function classifySurface(relPath: string): Surface {
   return 'legacy';
 }
 
-export const ALLOWED_IMPORTS: Record<
-  Exclude<Surface, 'harness'>,
-  readonly Surface[]
-> = {
+export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   env: [],
   legacy: ['env', 'legacy'],
   agent: ['env', 'legacy', 'agent'],
@@ -283,7 +276,7 @@ function analyze(): Analysis {
       fs.readFileSync(path.join(REPO_ROOT, file), 'utf8'),
     );
     const from = classifySurface(file);
-    const allowed = from === 'harness' ? [] : ALLOWED_IMPORTS[from];
+    const allowed = ALLOWED_IMPORTS[from];
 
     for (const spec of specifiersIn(text)) {
       const base = spec.startsWith('.')
@@ -310,9 +303,7 @@ function analyze(): Analysis {
       edges.add(key);
 
       const to = classifySurface(target);
-      if (to === 'harness') violations.set(key, 'harness');
-      else if (!allowed.includes(to))
-        violations.set(key, `matrix:${from}->${to}`);
+      if (!allowed.includes(to)) violations.set(key, `matrix:${from}->${to}`);
     }
   }
 
@@ -397,7 +388,6 @@ describe('surface classification', () => {
     expect(classifySurface('src/lib/agent/agent-runner.ts')).toBe('agent');
     expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');
-    expect(classifySurface('e2e-harness/e2e-profile.ts')).toBe('harness');
     expect(classifySurface('src/lib/wizard-tools/mcp.ts')).toBe('agent');
     expect(classifySurface('src/lib/wizard-tools/tools.ts')).toBe('legacy');
     expect(classifySurface('src/commands/factories/family-picker.tsx')).toBe(

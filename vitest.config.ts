@@ -48,7 +48,10 @@ const CLI_TESTS = [
   'src/__tests__/wizard.test.ts',
   'src/__tests__/headless-scope.test.ts',
 ];
-const HARNESS_TESTS = [`e2e-harness/${TESTS}`];
+const HARNESS_TESTS = [
+  `e2e-harness/${TESTS}`,
+  'e2e-harness/**/*.{test,spec}.{js,jsx,ts,tsx}',
+];
 const ARCH_TESTS = ['src/__tests__/architecture/**/*.{ts,tsx}'];
 const EXCLUDE = [
   '**/node_modules/**',
@@ -105,7 +108,9 @@ export default defineConfig({
       project('architecture', ARCH_TESTS),
       project(
         'legacy',
-        [`src/**/${TESTS}`],
+        // The second glob keeps the pre-split behavior: a test file outside
+        // a __tests__ directory still runs, here, rather than nowhere.
+        [`src/**/${TESTS}`, 'src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
         [...AGENT_TESTS, ...TUI_TESTS, ...CLI_TESTS, ...ARCH_TESTS],
       ),
     ],

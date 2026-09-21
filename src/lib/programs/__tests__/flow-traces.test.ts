@@ -2,6 +2,13 @@
  * Golden screen sequences and `screen <name>` analytics per program, produced
  * by walking each program's steps through the store with a generic advance per
  * screen. Baseline for the surface split: must stay byte identical.
+ *
+ * Known defect recorded as-is: gated programs show `screen run`,
+ * `screen ai-opt-in`, `screen run`. authenticate.ts sets credentials before
+ * apiUser and the AI opt-in gate hides itself while apiUser is null, so the
+ * router visits `run` twice. Fixing the ordering is a production analytics
+ * change and belongs in its own PR; when it lands, re-record and add an
+ * assertion that no trace visits `run` twice.
  */
 import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';

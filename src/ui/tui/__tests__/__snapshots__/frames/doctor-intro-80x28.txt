@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ PostHog Doctor
+ Scan your project configuration for issues that may need attention.
+
+ The wizard will:
+   • Sign you in to PostHog
+   • Fetch active health issues for your project
+   • Show you what needs to be resolved, with docs links
+
+ ▸ Continue
+   Cancel
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

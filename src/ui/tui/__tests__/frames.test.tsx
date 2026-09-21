@@ -129,10 +129,13 @@ import {
   type TerminalSize,
 } from './helpers/render-screen.no-jest';
 
+// 80x28 is the ScreenContainer minimum. Anything smaller renders the
+// viewport guard instead of the screen, which the last describe pins once.
 const SIZES: TerminalSize[] = [
   { columns: 120, rows: 40 },
-  { columns: 60, rows: 15 },
+  { columns: 80, rows: 28 },
 ];
+const TOO_SMALL: TerminalSize = { columns: 60, rows: 15 };
 
 const CREDENTIALS = {
   accessToken: 'phx_test_token',
@@ -579,6 +582,43 @@ describe.each(Object.entries(FIXTURES))('%s', (name, fixture) => {
       size,
     );
     await expect(frame).toMatchFileSnapshot(snapshotPath(screen, size));
+  });
+});
+
+describe('viewport guard', () => {
+  it('replaces every screen below 80x28 with the too-small message', async () => {
+    const store = makeStore(FIXTURES[ScreenId.Intro].program);
+    FIXTURES[ScreenId.Intro].arrange?.(store);
+    const { frame } = await renderScreen(
+      store,
+      screenShell(store, makeServices(store)),
+      TOO_SMALL,
+    );
+    expect(frame).toContain('needs at least 80×28');
+    await expect(frame).toMatchFileSnapshot(
+      snapshotPath(ScreenId.Intro, TOO_SMALL),
+    );
+  });
+});
+
+describe('revenue-intro with a detect error', () => {
+  // Covers the detect-error branch of RevenueIntroScreen, which spreads the
+  // POSTHOG_SDKS / STRIPE_SDKS sets before calling array methods.
+  it.each(SIZES)(`at $columns x $rows`, async (size) => {
+    const store = makeStore(Program.RevenueAnalyticsSetup);
+    store.setFrameworkContext('detectError', {
+      kind: 'no-sdks',
+      scannedCount: 2,
+    });
+    expect(store.currentScreen).toBe(ScreenId.RevenueIntro);
+    const { frame } = await renderScreen(
+      store,
+      screenShell(store, makeServices(store)),
+      size,
+    );
+    await expect(frame).toMatchFileSnapshot(
+      `__snapshots__/frames/revenue-intro-detect-error-${size.columns}x${size.rows}.txt`,
+    );
   });
 });
 

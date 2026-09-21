@@ -1,0 +1,11 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ Remove the PostHog MCP
+
+ Detected: Claude Code, Cursor
+
+  Remove the PostHog MCP server and plugin?
+
+   ▸ Remove    No thanks

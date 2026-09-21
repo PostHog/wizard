@@ -6,7 +6,6 @@ exports[`keyboard commit vs control action commit > audit-outro: any key vs dism
     "outroDismissed": true,
     "screen": "keep-skills",
   },
-  "equal": false,
   "keyboard": {
     "outroDismissed": true,
     "screen": "keep-skills",
@@ -21,7 +20,6 @@ exports[`keyboard commit vs control action commit > intro: enter on Continue vs 
     "screen": "health-check",
     "setupConfirmed": true,
   },
-  "equal": false,
   "keyboard": {
     "scanConsent": "granted",
     "screen": "health-check",
@@ -36,7 +34,6 @@ exports[`keyboard commit vs control action commit > keep-skills: mount with no s
   "action": {
     "skillsComplete": true,
   },
-  "equal": false,
   "keyboard": {},
 }
 `;
@@ -47,7 +44,6 @@ exports[`keyboard commit vs control action commit > manual-auth-code: escape vs 
     "overlay": false,
     "screen": "auth",
   },
-  "equal": true,
   "keyboard": {
     "overlay": false,
     "screen": "auth",
@@ -61,7 +57,6 @@ exports[`keyboard commit vs control action commit > manual-auth-code: paste code
     "overlay": false,
     "screen": "auth",
   },
-  "equal": true,
   "keyboard": {
     "overlay": false,
     "screen": "auth",
@@ -76,7 +71,6 @@ exports[`keyboard commit vs control action commit > mcp: decline install vs set_
     "mcpOutcome": "skipped",
     "screen": "slack-connect",
   },
-  "equal": false,
   "keyboard": {
     "mcpComplete": true,
     "mcpOutcome": "skipped",
@@ -92,7 +86,6 @@ exports[`keyboard commit vs control action commit > outro: any key vs dismiss_ou
     "outroDismissed": true,
     "screen": "mcp",
   },
-  "equal": true,
   "keyboard": {
     "outroDismissed": true,
     "screen": "mcp",
@@ -107,7 +100,6 @@ exports[`keyboard commit vs control action commit > port-conflict: enter vs reso
     "portConflictProcess": null,
     "screen": "auth",
   },
-  "equal": true,
   "keyboard": {
     "overlay": false,
     "portConflictProcess": null,
@@ -122,7 +114,6 @@ exports[`keyboard commit vs control action commit > self-driving-handoff: enter 
     "screen": "self-driving-github",
     "selfDrivingHandoffConfirmed": true,
   },
-  "equal": true,
   "keyboard": {
     "screen": "self-driving-github",
     "selfDrivingHandoffConfirmed": true,
@@ -136,7 +127,6 @@ exports[`keyboard commit vs control action commit > self-driving-integration-che
     "integrate": true,
     "screen": "health-check",
   },
-  "equal": true,
   "keyboard": {
     "integrate": true,
     "screen": "health-check",
@@ -152,7 +142,6 @@ exports[`keyboard commit vs control action commit > setup: enter on first router
     },
     "screen": "auth",
   },
-  "equal": true,
   "keyboard": {
     "frameworkContext": {
       "router": "app-router",
@@ -168,7 +157,6 @@ exports[`keyboard commit vs control action commit > slack-connect: skip vs dismi
     "screen": "keep-skills",
     "slackStepDismissed": true,
   },
-  "equal": false,
   "keyboard": {
     "screen": "keep-skills",
     "skillsComplete": true,
@@ -183,7 +171,6 @@ exports[`keyboard commit vs control action commit > source-maps-outro: any key v
     "outroDismissed": true,
     "screen": "keep-skills",
   },
-  "equal": false,
   "keyboard": {
     "outroDismissed": true,
     "screen": "keep-skills",
@@ -199,7 +186,6 @@ exports[`keyboard commit vs control action commit > task-notice: enter vs resolv
     "screen": "intro",
     "taskNotice": null,
   },
-  "equal": true,
   "keyboard": {
     "overlay": false,
     "screen": "intro",
@@ -215,7 +201,6 @@ exports[`keyboard commit vs control action commit > task-notice: escape vs resol
     "screen": "intro",
     "taskNotice": null,
   },
-  "equal": true,
   "keyboard": {
     "overlay": false,
     "screen": "intro",
@@ -231,7 +216,6 @@ exports[`keyboard commit vs control action commit > wizard-ask: type answer and 
     "pendingQuestion": null,
     "screen": "intro",
   },
-  "equal": true,
   "keyboard": {
     "overlay": false,
     "pendingQuestion": null,
