@@ -1,32 +1,50 @@
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { PROGRAM_REGISTRY } from '../programs/program-registry.js';
+import {
+  PROGRAM_REGISTRY,
+  type ProgramId,
+} from '../programs/program-registry.js';
 import { RunPhase } from '../session/wizard-session.js';
 import { logToFile } from '../shared/debug.js';
+import { resolveInstallDir } from '../shared/paths.js';
 import type { WizardStore } from '../state/store.js';
+import { UnknownActionError } from './actions.js';
+import { ControlDriver } from './driver.js';
+import { CONTROL_SERVER_MARKER } from './marker.js';
 import {
   BadParamError,
   MissingParamError,
-  UnknownActionError,
-} from './actions.js';
-import { ControlDriver } from './driver.js';
-import { CONTROL_SERVER_MARKER } from './marker.js';
+  optionalRecord,
+  optionalString,
+} from './params.js';
 import { RunInFlightError, RunLedger } from './runs.js';
-import { runResult } from './state.js';
 import type {
   ControlHooks,
   ControlState,
   ControlSurface,
   DetectRequest,
+  HealthResponse,
   RunRequest,
-  RunStatus,
 } from './types.js';
 
 export const MAX_BODY_BYTES = 64 * 1024;
 const PROBE_TIMEOUT_MS = 200;
 /** Long polls cap here so a stuck parent never pins a connection forever. */
-const MAX_WAIT_MS = 10 * 60 * 1000;
+const MAX_WAIT_MS = 600_000;
+
+/** Every route the server answers; the docs table is checked against it. */
+export const ROUTES = [
+  'GET /health',
+  'GET /state',
+  'GET /runs',
+  'POST /actions/:id',
+  'POST /credentials',
+  'POST /run',
+  'POST /detect',
+  'POST /runs',
+  'POST /shutdown',
+] as const;
 
 export interface ControlServerOptions {
   socketPath: string;
@@ -63,21 +81,30 @@ function statusFor(err: unknown): number {
     err instanceof UnknownActionError ||
     err instanceof MissingParamError ||
     err instanceof BadParamError
-  )
+  ) {
     return 400;
+  }
   if (err instanceof RunInFlightError) return 409;
   if (err instanceof SurfaceUnavailableError) return 501;
   return 500;
 }
 
-function requireProgram(programId: string): void {
-  if (!PROGRAM_REGISTRY.some((c) => c.id === programId))
+function requireProgram(programId: unknown): ProgramId {
+  if (typeof programId !== 'string' || !programId) {
+    throw new HttpError(400, 'programId is required');
+  }
+  if (!PROGRAM_REGISTRY.some((c) => c.id === programId)) {
     throw new HttpError(400, `unknown program "${programId}"`);
+  }
+  return programId;
 }
 
-/** Refuse a live socket; unlink a stale file. */
+/** Refuse a live socket or a non-socket path; unlink a stale socket. */
 async function claimSocketPath(socketPath: string): Promise<void> {
   if (!fs.existsSync(socketPath)) return;
+  if (!fs.lstatSync(socketPath).isSocket()) {
+    throw new Error(`control socket path is not a socket: ${socketPath}`);
+  }
   const live = await new Promise<boolean>((resolve) => {
     const probe = net.connect(socketPath);
     const done = (value: boolean): void => {
@@ -105,9 +132,12 @@ function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
+        // Stop reading but keep the connection: the 413 still has to go out.
+        req.pause();
         reject(new HttpError(413, `body over ${MAX_BODY_BYTES} bytes`));
-        req.destroy();
-      } else chunks.push(chunk);
+      } else {
+        chunks.push(chunk);
+      }
     });
     req.on('end', () => {
       const text = Buffer.concat(chunks).toString('utf8').trim();
@@ -118,8 +148,9 @@ function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
           parsed === null ||
           typeof parsed !== 'object' ||
           Array.isArray(parsed)
-        )
+        ) {
           throw new Error('not an object');
+        }
         resolve(parsed as Record<string, unknown>);
       } catch {
         reject(new HttpError(400, 'body is not a JSON object'));
@@ -138,83 +169,71 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
-/**
- * Serve the control API for one store over a unix socket. HTTP/1.1, JSON in
- * and out. The store never learns who is listening; the hooks do the work the
- * composition root owns.
- */
+function actionId(pathname: string): string | null {
+  const match = /^\/actions\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    throw new HttpError(400, 'action id is not valid percent-encoding');
+  }
+}
+
+/** Serve the control API for one store over a unix socket: HTTP/1.1, JSON in and out. */
 export async function attachControlServer(
   store: WizardStore,
   options: ControlServerOptions,
 ): Promise<ControlServerHandle> {
   const { socketPath, surface, hooks } = options;
   const ledger = new RunLedger();
+  const driver = new ControlDriver(store);
+  const polls = new AbortController();
   let shuttingDown = false;
-
-  const runStatus = (): { status: RunStatus; error: string | null } => {
-    const active = ledger.active;
-    if (active) return { status: 'running', error: null };
-    const last = ledger.list().at(-1);
-    if (last) return { status: last.status, error: last.error };
-    switch (store.session.runPhase) {
-      case RunPhase.Running:
-        return { status: 'running', error: null };
-      case RunPhase.Completed:
-        return { status: 'done', error: null };
-      case RunPhase.Error:
-        return {
-          status: 'failed',
-          error: store.session.outroData?.message ?? null,
-        };
-      default:
-        return {
-          status: store.session.runRequested ? 'running' : 'idle',
-          error: null,
-        };
-    }
-  };
-  const driver = new ControlDriver(store, runStatus);
 
   const requireSurface = (route: string, wanted: ControlSurface): void => {
     if (surface !== wanted) throw new SurfaceUnavailableError(route, surface);
   };
 
+  /** Routes that rewrite the session or end the process wait for the run to end. */
+  const requireIdle = (): void => {
+    const active = ledger.active;
+    if (active) throw new RunInFlightError(active.runId);
+    if (store.session.runPhase === RunPhase.Running) {
+      throw new RunInFlightError();
+    }
+  };
+
   const startRun = (body: Record<string, unknown>) => {
-    const programId = body.programId;
-    if (typeof programId !== 'string' || !programId)
-      throw new HttpError(400, 'programId is required');
-    requireProgram(programId);
+    const route = 'POST /runs';
+    const frameworkContext = optionalRecord(route, body, 'frameworkContext');
+    const skillId = optionalString(route, body, 'skillId');
+    const installDir = resolveInstallDir(
+      store.session.installDir,
+      optionalString(route, body, 'installDir'),
+    );
     const req: RunRequest = {
-      programId,
-      ...(typeof body.installDir === 'string'
-        ? { installDir: body.installDir }
-        : {}),
-      ...(body.frameworkContext &&
-      typeof body.frameworkContext === 'object' &&
-      !Array.isArray(body.frameworkContext)
-        ? { frameworkContext: body.frameworkContext as Record<string, unknown> }
-        : {}),
-      ...(typeof body.skillId === 'string' ? { skillId: body.skillId } : {}),
+      programId: requireProgram(body.programId),
+      installDir,
+      ...(frameworkContext ? { frameworkContext } : {}),
+      ...(skillId ? { skillId } : {}),
     };
-    const record = ledger.start(
-      programId,
-      req.installDir ?? store.session.installDir,
-    );
-    // Record the outcome first, then reset tasks and phase for the next run.
-    void hooks.startRun(req).then(
-      () => {
-        ledger.finish(record.runId, runResult(store));
-        store.completeRunStep(record.runId);
-      },
-      (err: unknown) => {
-        ledger.fail(
-          record.runId,
-          err instanceof Error ? err.message : String(err),
-          runResult(store),
-        );
-        store.completeRunStep(record.runId);
-      },
-    );
+    const record = ledger.start(req.programId, installDir);
+    // The state keeps this run's outcome until the next run starts; the hook
+    // resets it then, so a poller reading after completion sees the result.
+    Promise.resolve()
+      .then(() => hooks.startRun(req))
+      .then(
+        () => ledger.finish(record.runId, driver.readState()),
+        (err: unknown) =>
+          ledger.fail(
+            record.runId,
+            err instanceof Error ? err.message : String(err),
+            driver.readState(),
+          ),
+      )
+      .catch((err: unknown) =>
+        logToFile('[control] ledger update failed:', err),
+      );
     return { ...record };
   };
 
@@ -227,13 +246,14 @@ export async function attachControlServer(
     const route = `${method} ${url.pathname}`;
 
     if (route === 'GET /health') {
-      return send(res, 200, {
+      const health: HealthResponse = {
         ok: true,
         version: options.version,
         surface,
         pid: process.pid,
         program: options.program,
-      });
+      };
+      return send(res, 200, health);
     }
     if (route === 'GET /state') {
       const wait = Number(url.searchParams.get('wait') ?? '');
@@ -241,57 +261,77 @@ export async function attachControlServer(
       let state: ControlState;
       if (Number.isFinite(wait) && wait > 0) {
         const from = Number.isFinite(since) ? since : store.getVersion();
-        state = await driver.waitForVersion(from, Math.min(wait, MAX_WAIT_MS));
-      } else state = driver.readState();
+        state = await driver.waitForVersion(
+          from,
+          Math.min(wait, MAX_WAIT_MS),
+          polls.signal,
+        );
+      } else {
+        state = driver.readState();
+      }
       return send(res, 200, { ok: true, state });
     }
-    if (route === 'GET /runs')
+    if (route === 'GET /runs') {
       return send(res, 200, { ok: true, runs: ledger.list() });
+    }
     if (method !== 'POST') throw new HttpError(404, `no route ${route}`);
 
     const body = await readBody(req);
-    const actionMatch = /^\/actions\/([^/]+)$/.exec(url.pathname);
-    if (actionMatch) {
-      const params =
-        body.params && typeof body.params === 'object'
-          ? (body.params as Record<string, unknown>)
-          : {};
-      const state = driver.performAction(
-        decodeURIComponent(actionMatch[1]),
-        params,
-      );
-      return send(res, 200, { ok: true, state });
+    const action = actionId(url.pathname);
+    if (action !== null) {
+      const params = optionalRecord(route, body, 'params') ?? {};
+      return send(res, 200, {
+        ok: true,
+        state: driver.performAction(action, params),
+      });
     }
     switch (url.pathname) {
       case '/credentials':
+        requireIdle();
+        if (!store.session.apiKey) {
+          throw new HttpError(400, 'this session has no API key to resolve');
+        }
         await hooks.setCredentials();
         return send(res, 200, { ok: true, state: driver.readState() });
       case '/run':
-        requireSurface('POST /run', 'tui');
-        hooks.armRun();
-        return send(res, 200, { ok: true, run: runStatus() });
+        requireSurface(route, 'tui');
+        store.requestRun();
+        return send(res, 200, { ok: true, state: driver.readState() });
       case '/detect': {
-        requireSurface('POST /detect', 'headless');
-        if (typeof body.programId === 'string') requireProgram(body.programId);
+        requireSurface(route, 'headless');
+        requireIdle();
+        const installDir = optionalString(route, body, 'installDir');
         const detect: DetectRequest = {
-          ...(typeof body.programId === 'string'
-            ? { programId: body.programId }
+          ...(body.programId !== undefined
+            ? { programId: requireProgram(body.programId) }
             : {}),
-          ...(typeof body.installDir === 'string'
-            ? { installDir: body.installDir }
+          ...(installDir
+            ? {
+                installDir: resolveInstallDir(
+                  store.session.installDir,
+                  installDir,
+                ),
+              }
             : {}),
         };
         await hooks.detect(detect);
         return send(res, 200, { ok: true, state: driver.readState() });
       }
       case '/runs':
-        requireSurface('POST /runs', 'headless');
+        requireSurface(route, 'headless');
         return send(res, 200, { ok: true, run: startRun(body) });
       case '/shutdown':
+        requireIdle();
         send(res, 200, { ok: true });
         if (!shuttingDown) {
           shuttingDown = true;
-          res.once('finish', () => void hooks.shutdown());
+          res.once('finish', () => {
+            hooks
+              .shutdown()
+              .catch((err: unknown) =>
+                logToFile('[control] shutdown hook failed:', err),
+              );
+          });
         }
         return;
       default:
@@ -303,25 +343,40 @@ export async function attachControlServer(
     handle(req, res).catch((err: unknown) => {
       const status = statusFor(err);
       const message = err instanceof Error ? err.message : String(err);
-      if (status === 500)
-        logToFile(`[${CONTROL_SERVER_MARKER}] ${route(req)} failed:`, err);
-      if (!res.headersSent) send(res, status, { ok: false, error: message });
-      else res.end();
+      if (status === 500) {
+        logToFile(`[control] ${describeRequest(req)} failed:`, err);
+      }
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      if (status === 413) {
+        // The unread body would stall this connection; close it after the reply.
+        res.setHeader('connection', 'close');
+        res.once('finish', () => req.destroy());
+      }
+      send(res, status, { ok: false, error: message });
     });
   });
   server.keepAliveTimeout = 1000;
 
   await claimSocketPath(socketPath);
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(socketPath, () => {
-      server.off('error', reject);
-      resolve();
+  // Listen with a tight umask so the socket never exists with wider permissions.
+  const previousUmask = process.umask(0o077);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(socketPath, () => {
+        server.off('error', reject);
+        resolve();
+      });
     });
-  });
+  } finally {
+    process.umask(previousUmask);
+  }
   fs.chmodSync(socketPath, 0o600);
   logToFile(
-    `[${CONTROL_SERVER_MARKER}] listening on ${socketPath} (${surface})`,
+    `[control] listening on ${socketPath} (${surface}) ${CONTROL_SERVER_MARKER}`,
   );
 
   let closed = false;
@@ -340,20 +395,23 @@ export async function attachControlServer(
   return {
     socketPath,
     ledger,
-    close: () =>
-      new Promise<void>((resolve) => {
-        if (closed) return resolve();
-        closed = true;
-        process.off('exit', onExit);
-        server.closeAllConnections();
-        server.close(() => {
-          unlink();
-          resolve();
-        });
-      }),
+    close: async () => {
+      if (closed) return;
+      closed = true;
+      process.off('exit', onExit);
+      unlink();
+      // Aborted long polls answer first; idle keep-alive connections are swept until none remain.
+      polls.abort();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const sweep = setInterval(() => server.closeIdleConnections(), 10);
+      const forced = setTimeout(() => server.closeAllConnections(), 1000);
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      clearInterval(sweep);
+      clearTimeout(forced);
+    },
   };
 }
 
-function route(req: http.IncomingMessage): string {
+function describeRequest(req: http.IncomingMessage): string {
   return `${req.method ?? 'GET'} ${req.url ?? '/'}`;
 }

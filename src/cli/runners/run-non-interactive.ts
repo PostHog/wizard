@@ -16,6 +16,7 @@ import type {
   Sequence,
   CloudRegion,
   ProgramConfig,
+  WizardSession,
   WizardStore,
   TaskStreamPush,
   OutroData,
@@ -23,6 +24,7 @@ import type {
 } from '@store/types';
 import { LoggingUI } from '@tui/console';
 import { runConfigFor, getAuditChecks, flowFor } from '@store/programs';
+import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import { resolveNoTelemetry } from './resolve-no-telemetry.js';
 import { createControlHooks } from '../control-hooks.js';
 import { join } from 'node:path';
@@ -182,6 +184,9 @@ export function runNonInteractive(
     // dumps locally and pushes nothing. Telemetry consent gates the push only.
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
+    let runStream:
+      | ((config: ProgramConfig, runSession: WizardSession) => TaskStreamPush)
+      | null = null;
     {
       const { WizardStore } = await import('@store');
       const { HeadlessUI } = await import('@tui/console');
@@ -195,7 +200,9 @@ export function runNonInteractive(
       const posthogDestination =
         mode === 'headless' && !session.noTelemetry
           ? new PostHogDestination({
-              getCredentials: () => session.credentials,
+              // The store forks the session on its first commit; read the live one.
+              getCredentials: () =>
+                store?.session.credentials ?? session.credentials,
               onError: (e) => logToFile('[headless task-stream]', e.message),
             })
           : null;
@@ -216,20 +223,31 @@ export function runNonInteractive(
       } else {
         setUI(new HeadlessUI(headlessStore));
       }
-      taskStream = new TaskStreamPush({
-        store: headlessStore,
-        programId: config.streamWorkflowId ?? config.id,
-        destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
-        auditChecks: config.auditLedgerFile
-          ? () => getAuditChecks(headlessStore.session)
-          : undefined,
-        enabled: destinations.length > 0,
-      });
-      taskStream.attach();
-      if (!options.controlSocket) headlessStore.setRunPhase(RunPhase.Running);
+      const streamFor = (
+        runConfig: ProgramConfig,
+        runSession: WizardSession,
+      ): TaskStreamPush =>
+        new TaskStreamPush({
+          store: headlessStore,
+          programId: runConfig.streamWorkflowId ?? runConfig.id,
+          skillId: runSession.skillId ?? undefined,
+          destinations,
+          eventPlanPath: runConfig.eventPlanFile
+            ? join(runSession.installDir, runConfig.eventPlanFile)
+            : undefined,
+          auditChecks: runConfig.auditLedgerFile
+            ? () => getAuditChecks(headlessStore.session)
+            : undefined,
+          enabled: destinations.length > 0,
+        });
+      if (options.controlSocket) {
+        // Every POST /runs is one independent run with its own stream session.
+        runStream = streamFor;
+      } else {
+        taskStream = streamFor(config, session);
+        taskStream.attach();
+        headlessStore.setRunPhase(RunPhase.Running);
+      }
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
       }
@@ -248,7 +266,11 @@ export function runNonInteractive(
     };
 
     try {
-      if (mode === 'ci') {
+      // An issued gateway bearer replaces the mint for `--ci` and, in dev builds, for a harness-driven headless run.
+      if (
+        mode === 'ci' ||
+        (!IS_PRODUCTION_BUILD && runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE'))
+      ) {
         const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),
@@ -263,7 +285,7 @@ export function runNonInteractive(
         const { attachControlServer } = await import('@store/control');
         const { runAgent } = await import('@agent');
         const { VERSION } = await import('@store');
-        let release: (() => void) | null = null;
+        let release: () => void = () => undefined;
         const served = new Promise<void>((resolve) => {
           release = resolve;
         });
@@ -276,22 +298,21 @@ export function runNonInteractive(
             store: controlledStore,
             programId: config.id,
             runAgent,
+            runStream: runStream ?? undefined,
             shutdown: () => {
-              release?.();
+              release();
               return Promise.resolve();
             },
           }),
         });
-        const onSignal = (): void => release?.();
-        process.once('SIGINT', onSignal);
-        process.once('SIGTERM', onSignal);
+        process.once('SIGINT', release);
+        process.once('SIGTERM', release);
         logToFile(`[control] serving ${config.id} on ${handle.socketPath}`);
         await served;
-        process.off('SIGINT', onSignal);
-        process.off('SIGTERM', onSignal);
+        process.off('SIGINT', release);
+        process.off('SIGTERM', release);
         await handle.close();
-        if (taskStream) await taskStream.shutdown(2000);
-        // Nothing else holds the loop: the process ends here with status 0.
+        // Each run shut its own stream; nothing else holds the loop, so the process ends with status 0.
         return;
       }
 

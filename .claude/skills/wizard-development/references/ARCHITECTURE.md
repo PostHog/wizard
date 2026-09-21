@@ -170,3 +170,50 @@ tool names or discovery. Context-mill supplies skills and flow/task prompts.
 instrumentation. The linear sequence creates the benchmark pipeline; there is no
 pipeline construction in the compatibility `agent-runner.ts`. Inspect the actual
 consumer before extending instrumentation to another sequence or harness.
+
+## Surfaces and the control API
+
+The tree is three surfaces plus a composition root, each with a `README.md` that
+lists what it owns and may import:
+
+| Surface     | Owns                                                                            | Imports                                             |
+| ----------- | ------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `src/store` | state, session, `WizardUI`, programs as data, tool behavior, the control API    | `@env`                                              |
+| `src/agent` | one independent agent run: switchboard, sequences, harnesses, gateway           | `@env`, `@store`, `@store/types`, `@store/programs` |
+| `src/tui`   | Ink screens, `UiStore`, program presentation, Ink-free console renderers        | `@env`, `@store`, `@store/types`, `@store/programs` |
+| `src/cli`   | argv, command tree, runners that sequence runs and pass context, `ControlHooks` | every surface, through its public entries only      |
+
+Cross-surface imports go through `@store`, `@store/types`, `@store/programs`,
+`@agent`, `@agent/types`, `@tui`, `@tui/types`, and `@tui/console`.
+`src/__tests__/architecture` enforces the matrix and the public-entry rule;
+`tsc -b tsconfig.solution.json` mirrors it with project references.
+
+`--control-socket <path>` serves an HTTP/1.1 API over a unix socket from
+`src/store/control`: state with long polling, actions that call one store setter
+each, credentials, run arming on the TUI surface, detection and independent runs
+on the headless surface, shutdown. The store owns the server;
+`src/cli/control-hooks.ts` does the work that needs the agent. Every
+`POST /runs` is one independent run with a clean run state and its own task
+stream session. Published builds keep the server for headless runs and refuse
+the flag on the TUI, whose bundle never contains it. The full route table and
+the run instructions live in
+[`e2e-harness/ARCHITECTURE.md`](../../../../e2e-harness/ARCHITECTURE.md).
+
+Run it:
+
+```bash
+# headless, every build; the key travels in the environment
+POSTHOG_WIZARD_API_KEY=phx_... WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token \
+  npx tsx bin.ts --headless-DONOTUSE-EXPERIMENTAL --control-socket /tmp/w/w.sock \
+  --project-id <id> --region us --install-dir /tmp/app
+curl -s --unix-socket /tmp/w/w.sock -X POST -H 'content-type: application/json' -d '{}' http://localhost/detect
+curl -s --unix-socket /tmp/w/w.sock -X POST -H 'content-type: application/json' \
+  -d '{"programId":"posthog-integration"}' http://localhost/runs
+curl -s --unix-socket /tmp/w/w.sock 'http://localhost/state?wait=60000&since=0' | jq '.state.run, .state.tasks'
+curl -s --unix-socket /tmp/w/w.sock http://localhost/runs
+curl -s --unix-socket /tmp/w/w.sock -X POST http://localhost/shutdown
+
+# the same sequence, scripted
+POSTHOG_WIZARD_API_KEY=phx_... WIZARD_CI_GATEWAY_TOKEN_FILE=/path/to/token \
+  npx tsx scripts/controlled-headless-smoke.no-jest.ts --app /tmp/app --project-id <id> posthog-integration
+```

@@ -397,6 +397,7 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   { name: 'requestRun', invoke: (s) => s.requestRun(), emits: 1 },
+  { name: 'resetRunState', invoke: (s) => s.resetRunState(), emits: 1 },
   { name: 'setOutroDismissed', invoke: (s) => s.setOutroDismissed(), emits: 1 },
   {
     name: 'setOutroData',

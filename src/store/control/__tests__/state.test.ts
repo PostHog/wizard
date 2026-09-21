@@ -1,34 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { HostResolution } from '../../host-resolution.js';
+import { OutroKind, RunPhase } from '../../session/wizard-session.js';
+import { createControlledStore, expectNoSecrets } from '../../testing/index.js';
+import { actionsFor, toActionView } from '../actions.js';
 import {
-  buildSession,
-  OutroKind,
-  RunPhase,
-} from '../../session/wizard-session.js';
-import { createTestStore } from '../../testing/index.js';
-import { setUI } from '../../ui/index.js';
-import { StoreUI } from '../../ui/store-ui.js';
-import {
-  contextDigest,
+  CONTROL_SESSION_KEYS,
+  isSecretKey,
   projectState,
   redactContext,
-  runResult,
 } from '../state.js';
 
-const RUN = { status: 'idle' as const, error: null };
+const US = HostResolution.fromApiHost('https://us.posthog.com');
 
-describe('projectState', () => {
+describe('the control state projection', () => {
   it('never carries a credential, an api key, a user, or a vaulted answer', () => {
-    const store = createTestStore();
-    setUI(new StoreUI(store));
-    store.session = buildSession({
-      installDir: '/tmp/control-state',
-      ci: true,
+    const store = createControlledStore(undefined, {
       apiKey: 'phx_PERSONAL_SECRET',
     });
     store.setCredentials({
       accessToken: 'phx_ACCESS_SECRET',
       projectApiKey: 'phc_PROJECT_TOKEN',
-      host: {} as never,
+      host: US,
       projectId: 42,
     });
     store.setApiUser({
@@ -42,102 +33,174 @@ describe('projectState', () => {
       'secret:0b7c6d2e-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
     );
 
-    const state = projectState(store, RUN);
-    const text = JSON.stringify(state);
-    for (const leak of [
-      'phx_',
-      'phc_',
-      'phs_',
-      'secret:0b7c',
+    const state = projectState(store);
+    expectNoSecrets(JSON.stringify(state), [
       'someone@example.com',
       'user-uuid',
-    ]) {
-      expect(text, leak).not.toContain(leak);
-    }
+    ]);
     expect(state.session.hasCredentials).toBe(true);
     expect(state.session.projectId).toBe(42);
-    expect(state.frameworkContext.values).toEqual({
+    expect(state.session.frameworkContext).toEqual({
       router: 'app',
       'upload-api-key': '[redacted]',
       answer: '[secret-ref]',
     });
-    expect(state.frameworkContext.keys).toEqual([
-      'answer',
-      'router',
-      'upload-api-key',
-    ]);
-    expect(state.frameworkContext.digest).toBe(
-      contextDigest(store.session.frameworkContext),
+  });
+
+  it('projects exactly the listed session keys plus the two credential facts', () => {
+    const state = projectState(createControlledStore());
+    expect(Object.keys(state.session).sort()).toEqual(
+      [...CONTROL_SESSION_KEYS, 'hasCredentials', 'projectId'].sort(),
+    );
+    expect(Object.keys(state).sort()).toEqual(
+      [
+        'actions',
+        'currentScreen',
+        'eventPlan',
+        'handoffText',
+        'session',
+        'setupQuestions',
+        'statusMessages',
+        'tasks',
+        'version',
+      ].sort(),
     );
   });
 
-  it('projects the screen, its actions, and the version', () => {
-    const store = createTestStore();
-    setUI(new StoreUI(store));
-    store.session = buildSession({
-      installDir: '/tmp/control-state',
-      ci: true,
-    });
-    const before = projectState(store, RUN);
-    expect(before.currentScreen).toBe('intro');
-    expect(before.actions.map((a) => a.id)).toEqual(['confirm_setup']);
-    expect(before.hasOverlay).toBe(false);
+  it('mirrors the store: the listed session fields, the run atoms, the screen', () => {
+    const store = createControlledStore();
     store.completeSetup();
-    const after = projectState(store, { status: 'running', error: null });
-    expect(after.version).toBeGreaterThan(before.version);
-    expect(after.session.setupConfirmed).toBe(true);
-    expect(after.run).toEqual({ status: 'running', error: null });
+    store.setTasks([
+      { label: 'Install SDK', status: 'in_progress', done: false } as never,
+    ]);
+    store.pushStatus('installing the SDK');
+    store.setEventPlan([{ name: 'signup', description: 'a user signed up' }]);
+    store.setHandoffText('run this prompt');
+    store.setDashboardUrl('https://us.posthog.com/project/1/dashboard/2');
+    store.setOutroData({
+      kind: OutroKind.Success,
+      message: 'ok',
+      body: 'long body copy',
+    });
+    store.setRunPhase(RunPhase.Completed);
+
+    const state = projectState(store);
+    for (const key of CONTROL_SESSION_KEYS) {
+      if (key === 'frameworkContext') continue;
+      expect(state.session[key], key).toEqual(store.session[key]);
+    }
+    expect(state.currentScreen).toBe(store.currentScreen);
+    expect(state.version).toBe(store.getVersion());
+    expect(state.tasks).toEqual([
+      { label: 'Install SDK', status: 'in_progress', done: false },
+    ]);
+    expect(state.statusMessages).toEqual(['installing the SDK']);
+    expect(state.eventPlan).toEqual([
+      { name: 'signup', description: 'a user signed up' },
+    ]);
+    expect(state.handoffText).toBe('run this prompt');
+    expect(state.actions).toEqual(
+      actionsFor(store.flow, store.currentScreen).map(toActionView),
+    );
+    expect(JSON.stringify(state)).not.toContain('"apply"');
   });
 
-  it('reduces the outro and reports the run result', () => {
-    const store = createTestStore();
-    setUI(new StoreUI(store));
-    store.session = buildSession({
-      installDir: '/tmp/control-state',
-      ci: true,
-    });
+  it('offers the screen actions without their closures and with their params', () => {
+    const store = createControlledStore();
+    expect(projectState(store).currentScreen).toBe('intro');
+    expect(projectState(store).actions).toMatchObject([
+      { id: 'confirm_setup', params: { share: 'boolean (optional)' } },
+    ]);
+    expect(projectState(store).actions[0]).not.toHaveProperty('apply');
+    const before = projectState(store).version;
+    store.completeSetup();
+    const after = projectState(store);
+    expect(after.version).toBeGreaterThan(before);
+    expect(after.session.setupConfirmed).toBe(true);
+  });
+
+  it('lists only the setup questions the session has not answered', () => {
+    const store = createControlledStore();
+    store.setFrameworkConfig(
+      'nextjs' as never,
+      {
+        metadata: {
+          setup: {
+            questions: [
+              {
+                key: 'router',
+                message: 'Which router?',
+                options: [{ label: 'App', value: 'app' }],
+                detect: () => Promise.resolve(null),
+              },
+              {
+                key: 'styling',
+                message: 'Which styling?',
+                options: [{ label: 'CSS', value: 'css', hint: 'plain' }],
+                detect: () => Promise.resolve(null),
+              },
+            ],
+          },
+        },
+      } as never,
+    );
+    expect(projectState(store).setupQuestions.map((q) => q.key)).toEqual([
+      'router',
+      'styling',
+    ]);
+    store.setFrameworkContext('router', 'app');
+    expect(projectState(store).setupQuestions).toEqual([
+      {
+        key: 'styling',
+        message: 'Which styling?',
+        options: [{ label: 'CSS', value: 'css', hint: 'plain' }],
+      },
+    ]);
+  });
+
+  it('keeps only the allow-listed outro error detail', () => {
+    const store = createControlledStore();
     store.setOutroData({
       kind: OutroKind.Error,
       message: 'boom',
-      body: 'long body copy',
-      errorCode: 'PHW_INTERNAL_UNHANDLED' as never,
-    });
-    store.setDashboardUrl('https://us.posthog.com/project/1/dashboard/2');
-    store.setRunPhase(RunPhase.Error);
-    const result = runResult(store);
-    expect(result).toEqual({
-      runPhase: RunPhase.Error,
-      outroData: {
-        kind: OutroKind.Error,
-        errorCode: 'PHW_INTERNAL_UNHANDLED',
-        message: 'boom',
-        body: 'long body copy',
+      errorDetail: {
+        reason: 'no manifest',
+        response: { headers: { authorization: 'Bearer phx_LEAK' } },
       },
-      dashboardUrl: 'https://us.posthog.com/project/1/dashboard/2',
-      notebookUrl: null,
-      handoffText: null,
     });
-    expect(projectState(store, RUN).outroData).toEqual({
+    expect(projectState(store).session.outroData).toEqual({
       kind: OutroKind.Error,
-      errorCode: 'PHW_INTERNAL_UNHANDLED',
       message: 'boom',
-      body: 'long body copy',
+      errorDetail: { reason: 'no manifest' },
     });
   });
 
-  it('redacts by key and by secret ref only', () => {
+  it('redacts secret-named keys and secret refs, and nothing else', () => {
     expect(
       redactContext({
         a: 1,
         token: 'x',
+        apiKey: 'y',
+        ACCESS_TOKEN: 'z',
         nested: { k: 'v' },
         ref: 'secret:abcdef0123456789',
+        short: 'secret:abc',
+        monkey: 'business',
+        keyboard: 'qwerty',
       }),
     ).toEqual({
       a: 1,
       token: '[redacted]',
+      apiKey: '[redacted]',
+      ACCESS_TOKEN: '[redacted]',
       nested: { k: 'v' },
       ref: '[secret-ref]',
+      short: 'secret:abc',
+      monkey: 'business',
+      keyboard: 'qwerty',
     });
+    expect(isSecretKey('upload-api-key')).toBe(true);
+    expect(isSecretKey('projectApiKey')).toBe(true);
+    expect(isSecretKey('hotkeys')).toBe(false);
   });
 });

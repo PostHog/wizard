@@ -2,9 +2,9 @@ import * as http from 'node:http';
 import type {
   ControlState,
   DetectRequest,
+  HealthResponse,
   RunRecord,
   RunRequest,
-  RunStatus,
 } from './types.js';
 
 export class ControlClientError extends Error {
@@ -12,14 +12,6 @@ export class ControlClientError extends Error {
     super(message);
     this.name = 'ControlClientError';
   }
-}
-
-interface HealthResponse {
-  ok: true;
-  version: string;
-  surface: string;
-  pid: number;
-  program: string;
 }
 
 /** The parent's side of the control API: one unix socket, JSON in and out. */
@@ -66,14 +58,10 @@ export class ControlClient {
     ).state;
   }
 
-  async armRun(): Promise<{ status: RunStatus; error: string | null }> {
-    return (
-      await this.request<{ run: { status: RunStatus; error: string | null } }>(
-        'POST',
-        '/run',
-        {},
-      )
-    ).run;
+  /** TUI surface: release the runner's agent start. Idempotent. */
+  async armRun(): Promise<ControlState> {
+    return (await this.request<{ state: ControlState }>('POST', '/run', {}))
+      .state;
   }
 
   async detect(req: DetectRequest = {}): Promise<ControlState> {

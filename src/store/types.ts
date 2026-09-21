@@ -97,17 +97,14 @@ export type { StoreBoundaryMember, WizardStoreApi } from './state/store-api.js';
 export type {
   ActionView,
   ControlHooks,
+  ControlSession,
   ControlState,
   ControlSurface,
   DetectRequest,
   DriverAction,
-  OutroView,
+  HealthResponse,
   RunRecord,
   RunRequest,
-  RunResult,
-  RunStatus,
-  SetupQuestionView,
-  TaskNoticeView,
 } from './control/types.js';
 export type {
   ControlServerHandle,

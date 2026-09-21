@@ -1,25 +1,43 @@
 {
-  "add-mcp-server-to-clients.js": {
+  "bin.ts": {
     "sources": [
-      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/claude-code.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/claude-web.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/codex.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/cursor.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/opencode.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/visual-studio-code.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/clients/zed.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/defaults.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/index.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/plugin-client.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/results.ts"
+      "bin.ts"
     ],
     "imports": [
-      "analytics.js",
-      "package-manager.js"
+      "src/cli/commands/ai-observability.ts"
     ]
   },
-  "agent.js": {
+  "src/agent/agent-interface.ts": {
+    "sources": [
+      "src/agent/agent-interface.ts",
+      "src/agent/bash-fence.ts",
+      "src/agent/commandments.ts",
+      "src/agent/gateway/gateway-session.ts",
+      "src/agent/output-signals.ts",
+      "src/agent/runner/harness/pi/gateway.ts",
+      "src/agent/runner/harness/pi/runtime-notes.ts",
+      "src/agent/runner/switchboard/commandments.ts",
+      "src/agent/stored-login.ts",
+      "src/agent/tools/mcp.ts",
+      "src/agent/triage-provider.ts"
+    ],
+    "imports": [
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/agent/agent-prompt-loader.ts": {
+    "sources": [
+      "src/agent/agent-prompt-loader.ts"
+    ],
+    "imports": [
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/agent/agent-prompt.ts": {
     "sources": [
       "src/agent/agent-prompt.ts",
       "src/agent/detection/agentic.ts",
@@ -56,105 +74,107 @@
       "src/agent/runner/switchboard/sequence.ts"
     ],
     "imports": [
-      "agent-interface.js",
-      "agent-prompt-loader.js",
-      "analytics.js",
-      "package-manager.js",
-      "pi.js",
-      "program-registry.js",
-      "programs.js",
-      "queue-tools.js",
-      "store.js"
-    ]
-  },
-  "agent-interface.js": {
-    "sources": [
       "src/agent/agent-interface.ts",
-      "src/agent/bash-fence.ts",
-      "src/agent/commandments.ts",
-      "src/agent/gateway/gateway-session.ts",
-      "src/agent/output-signals.ts",
-      "src/agent/runner/harness/pi/gateway.ts",
-      "src/agent/runner/harness/pi/runtime-notes.ts",
-      "src/agent/runner/switchboard/commandments.ts",
-      "src/agent/stored-login.ts",
-      "src/agent/tools/mcp.ts",
-      "src/agent/triage-provider.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "package-manager.js",
-      "program-registry.js",
-      "queue-tools.js",
-      "store.js"
+      "src/agent/agent-prompt-loader.ts",
+      "src/agent/aio-capture.ts",
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/store/programs/ai-opt-in-gate.ts"
     ]
   },
-  "agent-prompt-loader.js": {
+  "src/agent/aio-capture.ts": {
     "sources": [
-      "src/agent/agent-prompt-loader.ts"
+      "src/agent/aio-capture.ts",
+      "src/agent/runner/harness/pi/completion.ts",
+      "src/agent/runner/harness/pi/index.ts"
     ],
     "imports": [
-      "analytics.js",
-      "program-registry.js",
-      "queue-tools.js"
+      "src/agent/agent-interface.ts",
+      "src/agent/runner/harness/pi/mcp.ts",
+      "src/agent/runner/harness/pi/security.ts",
+      "src/agent/runner/harness/pi/subagent.ts",
+      "src/agent/runner/harness/pi/task.ts",
+      "src/agent/runner/harness/pi/tasks.ts",
+      "src/agent/runner/harness/pi/tools.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts"
     ]
   },
-  "analytics.js": {
-    "sources": [],
-    "imports": [
-      "analytics.js"
-    ]
-  },
-  "bin.js": {
+  "src/agent/runner/harness/pi/mcp.ts": {
     "sources": [
-      "bin.ts"
+      "src/agent/runner/harness/pi/mcp.ts"
     ],
-    "imports": [
-      "main.js"
-    ]
+    "imports": []
   },
-  "ci-install.js": {
+  "src/agent/runner/harness/pi/orchestrator-tools.ts": {
     "sources": [
-      "src/cli/commands/basic-integration/ci-install.ts"
+      "src/agent/runner/harness/pi/orchestrator-tools.ts"
     ],
     "imports": [
-      "analytics.js",
-      "console.js",
-      "package-manager.js",
-      "program-registry.js",
-      "runners.js"
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts"
     ]
   },
-  "console.js": {
-    "sources": [],
-    "imports": [
-      "console.js"
-    ]
-  },
-  "control.js": {
+  "src/agent/runner/harness/pi/security.ts": {
     "sources": [
-      "src/store/control/actions.ts",
-      "src/store/control/driver.ts",
-      "src/store/control/marker.ts",
-      "src/store/control/runs.ts",
-      "src/store/control/server.ts",
-      "src/store/control/state.ts"
+      "src/agent/runner/harness/pi/security.ts"
     ],
     "imports": [
-      "analytics.js",
-      "program-registry.js"
+      "src/agent/agent-interface.ts",
+      "src/store/auth-session-state.ts"
     ]
   },
-  "interactive.js": {
+  "src/agent/runner/harness/pi/subagent.ts": {
     "sources": [
-      "src/cli/commands/basic-integration/interactive.ts"
+      "src/agent/runner/harness/pi/subagent.ts"
+    ],
+    "imports": []
+  },
+  "src/agent/runner/harness/pi/task.ts": {
+    "sources": [
+      "src/agent/runner/harness/pi/task.ts"
     ],
     "imports": [
-      "program-registry.js",
-      "runners.js"
+      "src/agent/agent-interface.ts",
+      "src/agent/agent-prompt-loader.ts",
+      "src/agent/aio-capture.ts",
+      "src/agent/runner/harness/pi/mcp.ts",
+      "src/agent/runner/harness/pi/orchestrator-tools.ts",
+      "src/agent/runner/harness/pi/security.ts",
+      "src/agent/runner/harness/pi/tools.ts",
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts"
     ]
   },
-  "main.js": {
+  "src/agent/runner/harness/pi/tasks.ts": {
+    "sources": [
+      "src/agent/runner/harness/pi/tasks.ts"
+    ],
+    "imports": []
+  },
+  "src/agent/runner/harness/pi/tools.ts": {
+    "sources": [
+      "src/agent/runner/harness/pi/tools.ts"
+    ],
+    "imports": [
+      "src/agent/aio-capture.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/agent/runner/sequence/orchestrator/queue-tools.ts": {
+    "sources": [
+      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
+      "src/agent/runner/sequence/orchestrator/queue.ts",
+      "src/agent/runner/switchboard/models.ts"
+    ],
+    "imports": [
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/cli/commands/ai-observability.ts": {
     "sources": [
       "src/cli/commands/ai-observability.ts",
       "src/cli/commands/audit.ts",
@@ -190,53 +210,115 @@
       "src/cli/wizard.ts"
     ],
     "imports": [
-      "agent.js",
-      "analytics.js",
-      "ci-install.js",
-      "console.js",
-      "interactive.js",
-      "non-interactive.js",
-      "package-manager.js",
-      "playground.js",
-      "program-registry.js",
-      "runners.js",
-      "store.js",
-      "tui.js"
+      "src/agent/agent-prompt.ts",
+      "src/cli/commands/basic-integration/ci-install.ts",
+      "src/cli/commands/basic-integration/interactive.ts",
+      "src/cli/commands/basic-integration/non-interactive.ts",
+      "src/cli/commands/basic-integration/playground.ts",
+      "src/cli/control-hooks.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/tui/App.tsx",
+      "src/tui/console/headless-ui.ts"
     ]
   },
-  "mcp.js": {
+  "src/cli/commands/basic-integration/ci-install.ts": {
     "sources": [
-      "src/agent/runner/harness/pi/mcp.ts"
+      "src/cli/commands/basic-integration/ci-install.ts"
     ],
     "imports": [
-      "analytics.js"
+      "src/cli/control-hooks.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/tui/console/headless-ui.ts"
     ]
   },
-  "non-interactive.js": {
+  "src/cli/commands/basic-integration/interactive.ts": {
+    "sources": [
+      "src/cli/commands/basic-integration/interactive.ts"
+    ],
+    "imports": [
+      "src/cli/control-hooks.ts",
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/cli/commands/basic-integration/non-interactive.ts": {
     "sources": [
       "src/cli/commands/basic-integration/non-interactive.ts"
     ],
     "imports": [
-      "analytics.js",
-      "package-manager.js"
+      "src/store/agent-protocol/agent-signals.ts"
     ]
   },
-  "orchestrator-tools.js": {
+  "src/cli/commands/basic-integration/playground.ts": {
     "sources": [
-      "src/agent/runner/harness/pi/orchestrator-tools.ts"
+      "src/cli/commands/basic-integration/playground.ts"
     ],
     "imports": [
-      "analytics.js",
-      "queue-tools.js"
+      "src/tui/App.tsx"
     ]
   },
-  "package-json.js": {
-    "sources": [],
+  "src/cli/control-hooks.ts": {
+    "sources": [
+      "src/cli/control-hooks.ts",
+      "src/cli/runners/resolve-no-telemetry.ts",
+      "src/cli/runners/run-non-interactive.ts",
+      "src/cli/runners/run-wizard-ci.ts",
+      "src/cli/runners/run-wizard-headless.ts",
+      "src/cli/runners/run-wizard.ts"
+    ],
     "imports": [
-      "package-json.js"
+      "src/agent/agent-prompt.ts",
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/store/control/actions.ts",
+      "src/store/programs/ai-opt-in-gate.ts",
+      "src/tui/App.tsx",
+      "src/tui/console/headless-ui.ts"
     ]
   },
-  "package-manager.js": {
+  "src/store/agent-protocol/agent-env-isolation.ts": {
+    "sources": [
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-phase.ts",
+      "src/store/agent-protocol/mcp-prompt.ts",
+      "src/store/agent-protocol/token-pricing.ts",
+      "src/store/file-watcher.ts",
+      "src/store/mcp-project-profile.ts",
+      "src/store/mcp-role-prompts.copy.json",
+      "src/store/mcp-role-prompts.ts",
+      "src/store/mcp-seed-events.ts",
+      "src/store/safe-tools.ts",
+      "src/store/services/claude-settings.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/browser-client.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/login-client.ts",
+      "src/store/session/secret-vault.ts",
+      "src/store/shared/clipboard.ts",
+      "src/store/shared/custom-headers.ts",
+      "src/store/shared/env-api-key.ts",
+      "src/store/shared/environment.ts",
+      "src/store/shared/terminal-bell.ts",
+      "src/store/state/flow-resolution.ts",
+      "src/store/state/run-failure.ts",
+      "src/store/state/store.ts",
+      "src/store/task-stream/audit-areas.ts",
+      "src/store/task-stream/destinations/file.ts",
+      "src/store/task-stream/destinations/posthog.ts",
+      "src/store/task-stream/event-plan-watcher.ts",
+      "src/store/task-stream/task-stream-push.ts",
+      "src/store/tools/handoff.ts",
+      "src/store/ui/store-ui.ts",
+      "src/store/ui/wizard-ui.ts",
+      "src/store/wizard-spellbook.ts"
+    ],
+    "imports": [
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/store/agent-protocol/agent-signals.ts": {
     "sources": [
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/api.ts",
@@ -264,39 +346,9 @@
       "src/store/shared/urls.ts",
       "src/store/shared/wizard-abort.ts"
     ],
-    "imports": [
-      "analytics.js"
-    ]
+    "imports": []
   },
-  "pi.js": {
-    "sources": [
-      "src/agent/aio-capture.ts",
-      "src/agent/runner/harness/pi/completion.ts",
-      "src/agent/runner/harness/pi/index.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "mcp.js",
-      "package-manager.js",
-      "security.js",
-      "store.js",
-      "subagent.js",
-      "task.js",
-      "tasks.js",
-      "tools.js"
-    ]
-  },
-  "playground.js": {
-    "sources": [
-      "src/cli/commands/basic-integration/playground.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "tui.js"
-    ]
-  },
-  "program-registry.js": {
+  "src/store/auth-session-state.ts": {
     "sources": [
       "src/store/auth-session-state.ts",
       "src/store/control/params.ts",
@@ -425,13 +477,24 @@
       "src/store/tools/tools.ts"
     ],
     "imports": [
-      "analytics.js",
-      "package-json.js",
-      "package-manager.js",
-      "steps.js"
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/services/steps/upload-environment-variables/EnvironmentProvider.ts"
     ]
   },
-  "programs.js": {
+  "src/store/control/actions.ts": {
+    "sources": [
+      "src/store/control/actions.ts",
+      "src/store/control/driver.ts",
+      "src/store/control/marker.ts",
+      "src/store/control/runs.ts",
+      "src/store/control/server.ts",
+      "src/store/control/state.ts"
+    ],
+    "imports": [
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/store/programs/ai-opt-in-gate.ts": {
     "sources": [
       "src/store/programs/ai-opt-in-gate.ts",
       "src/store/programs/audit/ledger-watcher.ts",
@@ -440,151 +503,41 @@
       "src/store/programs/run-config.ts"
     ],
     "imports": [
-      "analytics.js",
-      "package-manager.js",
-      "program-registry.js",
-      "store.js"
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts"
     ]
   },
-  "queue-tools.js": {
+  "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts": {
     "sources": [
-      "src/agent/runner/sequence/orchestrator/queue-tools.ts",
-      "src/agent/runner/sequence/orchestrator/queue.ts",
-      "src/agent/runner/switchboard/models.ts"
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/claude-code.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/claude-web.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/codex.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/cursor.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/opencode.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/visual-studio-code.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/clients/zed.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/defaults.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/index.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/plugin-client.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/results.ts"
     ],
     "imports": [
-      "analytics.js",
-      "program-registry.js"
+      "src/store/agent-protocol/agent-signals.ts"
     ]
   },
-  "runners.js": {
-    "sources": [
-      "src/cli/control-hooks.ts",
-      "src/cli/runners/resolve-no-telemetry.ts",
-      "src/cli/runners/run-non-interactive.ts",
-      "src/cli/runners/run-wizard-ci.ts",
-      "src/cli/runners/run-wizard-headless.ts",
-      "src/cli/runners/run-wizard.ts"
-    ],
-    "imports": [
-      "agent.js",
-      "analytics.js",
-      "console.js",
-      "control.js",
-      "package-manager.js",
-      "program-registry.js",
-      "programs.js",
-      "store.js",
-      "tui.js"
-    ]
-  },
-  "security.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/security.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "analytics.js",
-      "program-registry.js"
-    ]
-  },
-  "steps.js": {
+  "src/store/services/steps/upload-environment-variables/EnvironmentProvider.ts": {
     "sources": [
       "src/store/services/steps/upload-environment-variables/EnvironmentProvider.ts",
       "src/store/services/steps/upload-environment-variables/index.ts",
       "src/store/services/steps/upload-environment-variables/providers/vercel.ts"
     ],
     "imports": [
-      "analytics.js",
-      "package-manager.js"
+      "src/store/agent-protocol/agent-signals.ts"
     ]
   },
-  "store.js": {
-    "sources": [
-      "src/store/agent-protocol/agent-env-isolation.ts",
-      "src/store/agent-protocol/agent-phase.ts",
-      "src/store/agent-protocol/mcp-prompt.ts",
-      "src/store/agent-protocol/token-pricing.ts",
-      "src/store/file-watcher.ts",
-      "src/store/mcp-project-profile.ts",
-      "src/store/mcp-role-prompts.copy.json",
-      "src/store/mcp-role-prompts.ts",
-      "src/store/mcp-seed-events.ts",
-      "src/store/safe-tools.ts",
-      "src/store/services/claude-settings.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/browser-client.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/login-client.ts",
-      "src/store/session/secret-vault.ts",
-      "src/store/shared/clipboard.ts",
-      "src/store/shared/custom-headers.ts",
-      "src/store/shared/env-api-key.ts",
-      "src/store/shared/environment.ts",
-      "src/store/shared/terminal-bell.ts",
-      "src/store/state/flow-resolution.ts",
-      "src/store/state/run-failure.ts",
-      "src/store/state/store.ts",
-      "src/store/task-stream/audit-areas.ts",
-      "src/store/task-stream/destinations/file.ts",
-      "src/store/task-stream/destinations/posthog.ts",
-      "src/store/task-stream/event-plan-watcher.ts",
-      "src/store/task-stream/task-stream-push.ts",
-      "src/store/tools/handoff.ts",
-      "src/store/ui/store-ui.ts",
-      "src/store/ui/wizard-ui.ts",
-      "src/store/wizard-spellbook.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "package-manager.js",
-      "program-registry.js"
-    ]
-  },
-  "subagent.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/subagent.ts"
-    ],
-    "imports": [
-      "analytics.js"
-    ]
-  },
-  "task.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/task.ts"
-    ],
-    "imports": [
-      "agent-interface.js",
-      "agent-prompt-loader.js",
-      "analytics.js",
-      "mcp.js",
-      "orchestrator-tools.js",
-      "package-manager.js",
-      "pi.js",
-      "queue-tools.js",
-      "security.js",
-      "store.js",
-      "tools.js"
-    ]
-  },
-  "tasks.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/tasks.ts"
-    ],
-    "imports": [
-      "analytics.js"
-    ]
-  },
-  "tools.js": {
-    "sources": [
-      "src/agent/runner/harness/pi/tools.ts"
-    ],
-    "imports": [
-      "analytics.js",
-      "pi.js",
-      "program-registry.js",
-      "store.js"
-    ]
-  },
-  "tui.js": {
+  "src/tui/App.tsx": {
     "sources": [
       "src/tui/App.tsx",
       "src/tui/components/LearnCard.tsx",
@@ -767,12 +720,20 @@
       "src/tui/ui-store.ts"
     ],
     "imports": [
-      "add-mcp-server-to-clients.js",
-      "analytics.js",
-      "package-manager.js",
-      "program-registry.js",
-      "programs.js",
-      "store.js"
+      "src/store/agent-protocol/agent-env-isolation.ts",
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/store/programs/ai-opt-in-gate.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
+    ]
+  },
+  "src/tui/console/headless-ui.ts": {
+    "sources": [
+      "src/tui/console/headless-ui.ts",
+      "src/tui/console/logging-ui.ts"
+    ],
+    "imports": [
+      "src/store/auth-session-state.ts"
     ]
   }
 }

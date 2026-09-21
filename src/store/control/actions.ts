@@ -1,15 +1,20 @@
-/**
- * The commits a controlling parent may make, keyed by flow key or interrupt.
- * Generic entries call one store setter each and know no program; a program
- * adds its own through `FlowStep.controlActions`, merged per flow here.
- */
-import { McpOutcome, type AskAnswers } from '../session/wizard-session.js';
+/** The commits a parent may make, keyed by flow key or interrupt; a program adds its own through `FlowStep.controlActions`. */
+import {
+  McpOutcome,
+  ScanConsent,
+  type AskAnswers,
+} from '../session/wizard-session.js';
 import type { Flow } from '../state/flow.js';
+import { FLOW_KEY } from '../state/flow-resolution.js';
 import { Interrupt } from '../state/interrupts.js';
-import { requireString } from './params.js';
+import {
+  optionalBoolean,
+  optionalOneOf,
+  optionalStringArray,
+  requireRecord,
+  requireString,
+} from './params.js';
 import type { ActionView, DriverAction } from './types.js';
-
-export { BadParamError, MissingParamError } from './params.js';
 
 /** Thrown when an action is not legal on the current screen. Maps to 400. */
 export class UnknownActionError extends Error {
@@ -22,15 +27,12 @@ export class UnknownActionError extends Error {
   }
 }
 
-/**
- * Screens with no commit: the runner or the agent advances them, or they are
- * terminal. Listed so the exhaustiveness test tells "empty" from "forgotten".
- */
+/** Screens with no commit: the runner or the agent advances them, or they are terminal. */
 export const NO_ACTION_SCREENS: ReadonlySet<string> = new Set<string>([
-  'auth',
-  'run',
+  FLOW_KEY.Auth,
+  FLOW_KEY.Run,
   'ai-opt-in',
-  'exit',
+  FLOW_KEY.Exit,
   'audit-run',
   'doctor-report',
   Interrupt.ManagedSettings,
@@ -44,6 +46,30 @@ const confirmSetup: DriverAction = {
   apply: (store) => store.completeSetup(),
 };
 
+/** The default intro also decides scan sharing; Enter grants when undecided, as its key handler does. */
+const confirmSetupWithSharing: DriverAction = {
+  id: 'confirm_setup',
+  description:
+    'Confirm the intro and continue. share: true grants and false declines ' +
+    'sharing scan results; absent keeps the toggle (granted when undecided).',
+  params: { share: 'boolean (optional)' },
+  apply: (store, params) => {
+    const share =
+      params.share === undefined
+        ? undefined
+        : optionalBoolean('confirm_setup', params, 'share', true);
+    if (share === false) {
+      store.declineSharing();
+    } else if (
+      share === true ||
+      store.session.scanConsent === ScanConsent.Undecided
+    ) {
+      store.grantSharing();
+    }
+    store.completeSetup();
+  },
+};
+
 const dismissOutro: DriverAction = {
   id: 'dismiss_outro',
   description: 'Dismiss the outro (sets outroDismissed).',
@@ -54,17 +80,21 @@ const setMcpOutcome = (description: string): DriverAction => ({
   id: 'set_mcp_outcome',
   description,
   params: {
-    outcome: '"installed" | "skipped"',
+    outcome: '"installed" | "skipped" (default skipped)',
     clients: 'string[] (optional)',
   },
   apply: (store, params) => {
-    const raw = (params.outcome as string) ?? 'skipped';
-    const outcome =
-      raw === 'installed' ? McpOutcome.Installed : McpOutcome.Skipped;
-    const clients = Array.isArray(params.clients)
-      ? (params.clients as string[])
-      : [];
-    store.setMcpComplete(outcome, clients);
+    const outcome = optionalOneOf(
+      'set_mcp_outcome',
+      params,
+      'outcome',
+      ['installed', 'skipped'] as const,
+      'skipped',
+    );
+    store.setMcpComplete(
+      outcome === 'installed' ? McpOutcome.Installed : McpOutcome.Skipped,
+      optionalStringArray('set_mcp_outcome', params, 'clients'),
+    );
   },
 });
 
@@ -92,10 +122,10 @@ export const GENERIC_ACTIONS: Readonly<
       },
     },
   ],
-  outro: [dismissOutro],
+  [FLOW_KEY.Outro]: [dismissOutro],
   'audit-outro': [dismissOutro],
   'source-maps-outro': [dismissOutro],
-  'mint-failure': [
+  [FLOW_KEY.MintFailure]: [
     {
       id: 'continue_setup',
       description: 'Continue to MCP and Slack after the skill is saved.',
@@ -107,7 +137,7 @@ export const GENERIC_ACTIONS: Readonly<
       apply: (store) => store.setMintHandoff('exit'),
     },
   ],
-  mcp: [
+  [FLOW_KEY.Mcp]: [
     setMcpOutcome(
       'Complete the MCP step. outcome is installed or skipped; clients optional.',
     ),
@@ -121,7 +151,7 @@ export const GENERIC_ACTIONS: Readonly<
       apply: (store) => store.setMcpSuggestedPromptsDismissed(),
     },
   ],
-  'slack-connect': [
+  [FLOW_KEY.SlackConnect]: [
     {
       id: 'dismiss_slack',
       description: 'Skip or finish the Connect-Slack step.',
@@ -130,18 +160,23 @@ export const GENERIC_ACTIONS: Readonly<
     {
       id: 'set_slack_connected',
       description: 'Mark Slack as connected (then dismiss to advance).',
-      params: { connected: 'boolean' },
+      params: { connected: 'boolean (default true)' },
       apply: (store, params) =>
-        store.setSlackConnected(params.connected !== false),
+        store.setSlackConnected(
+          optionalBoolean('set_slack_connected', params, 'connected', true),
+        ),
     },
   ],
-  'keep-skills': [
+  [FLOW_KEY.KeepSkills]: [
     {
       id: 'keep_skills',
       description:
         'Decide whether to keep installed skills; completes the run.',
       params: { kept: 'boolean (default true)' },
-      apply: (store, params) => store.setSkillsComplete(params.kept !== false),
+      apply: (store, params) =>
+        store.setSkillsComplete(
+          optionalBoolean('keep_skills', params, 'kept', true),
+        ),
     },
   ],
   [Interrupt.WizardAsk]: [
@@ -149,10 +184,12 @@ export const GENERIC_ACTIONS: Readonly<
       id: 'answer_question',
       description:
         'Resolve the pending wizard_ask request with a complete answers ' +
-        'map: { [questionId]: string | string[] }. See state.pendingQuestion.',
+        'map: { [questionId]: string | string[] }. See state.session.pendingQuestion.',
       params: { answers: 'Record<questionId, string | string[]>' },
       apply: (store, params) =>
-        store.resolvePendingQuestion((params.answers ?? {}) as AskAnswers),
+        store.resolvePendingQuestion(
+          requireRecord('answer_question', params, 'answers') as AskAnswers,
+        ),
     },
     {
       id: 'cancel_question',
@@ -165,9 +202,12 @@ export const GENERIC_ACTIONS: Readonly<
       id: 'resolve_notice',
       description:
         'Resolve the task-notice overlay a program shows before an optional ' +
-        'step. keep=true runs the step, keep=false skips it. See state.taskNotice.',
+        'step. keep=true runs the step, keep=false skips it. See state.session.taskNotice.',
       params: { keep: 'boolean (default true)' },
-      apply: (store, params) => store.resolveTaskNotice(params.keep !== false),
+      apply: (store, params) =>
+        store.resolveTaskNotice(
+          optionalBoolean('resolve_notice', params, 'keep', true),
+        ),
     },
   ],
   [Interrupt.SettingsOverride]: [
@@ -210,16 +250,19 @@ function isIntro(screen: string): boolean {
   return screen === 'intro' || screen.endsWith('-intro');
 }
 
+function genericActionsFor(screen: string): readonly DriverAction[] {
+  if (screen === 'intro') return [confirmSetupWithSharing];
+  if (isIntro(screen)) return [confirmSetup];
+  return GENERIC_ACTIONS[screen] ?? [];
+}
+
 /** Actions legal on `screen` in `flow`: the flow's own first, then generic. */
 export function actionsFor(flow: Flow, screen: string): DriverAction[] {
   const own = flow.steps
     .filter((step) => step.screenId === screen)
     .flatMap((step) => step.controlActions ?? []);
-  const generic = isIntro(screen)
-    ? [confirmSetup]
-    : GENERIC_ACTIONS[screen] ?? [];
   const seen = new Set(own.map((a) => a.id));
-  return [...own, ...generic.filter((a) => !seen.has(a.id))];
+  return [...own, ...genericActionsFor(screen).filter((a) => !seen.has(a.id))];
 }
 
 export function toActionView(action: DriverAction): ActionView {

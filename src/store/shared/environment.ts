@@ -22,13 +22,12 @@ export function isNonInteractiveEnvironment(): boolean {
 }
 
 /**
- * Session fields the environment must never set, matched case-insensitively
- * against the camel-cased key `read-env` produces.
- *
- * `e2eAsk` re-wires the `wizard_ask` bridge in an otherwise non-interactive
- * run. Only the e2e TUI host may set it: a real `--ci` run has nobody to answer,
- * so every question would stall for the bridge timeout instead of failing fast
- * with an actionable error. See `shouldDisableAsk`.
+ * Session fields the raw environment spread must never set, matched
+ * case-insensitively against the camel-cased key `read-env` produces. They
+ * arrive through their flags instead (yargs also reads those from
+ * `POSTHOG_WIZARD_*` in dev builds). `e2eAsk` re-wires the `wizard_ask` bridge
+ * in an otherwise non-interactive run; a real `--ci` run has nobody to answer,
+ * so every question would stall instead of failing fast. See `shouldDisableAsk`.
  */
 const NEVER_FROM_ENV = ['e2eAsk', 'controlSocket', 'runRequested'];
 

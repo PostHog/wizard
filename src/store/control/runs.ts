@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { RunRecord, RunResult } from './types.js';
+import type { ProgramId } from '../programs/program-registry.js';
+import type { ControlState, RunRecord } from './types.js';
 
-/** Thrown when a run is requested while one is in flight. Maps to 409. */
+/** Thrown when a route needs an idle store while a run is in flight. Maps to 409. */
 export class RunInFlightError extends Error {
-  constructor(runId: string) {
-    super(`A run is already in flight: ${runId}`);
+  constructor(runId?: string) {
+    super(
+      runId ? `A run is already in flight: ${runId}` : 'A run is in flight',
+    );
     this.name = 'RunInFlightError';
   }
 }
@@ -17,7 +20,7 @@ export class RunLedger {
     return this.records.find((r) => r.status === 'running') ?? null;
   }
 
-  start(programId: string, installDir: string): RunRecord {
+  start(programId: ProgramId, installDir: string): RunRecord {
     const running = this.active;
     if (running) throw new RunInFlightError(running.runId);
     const record: RunRecord = {
@@ -34,14 +37,14 @@ export class RunLedger {
     return record;
   }
 
-  finish(runId: string, result: RunResult): void {
+  finish(runId: string, result: ControlState): void {
     const record = this.find(runId);
     record.status = 'done';
     record.result = result;
     record.finishedAt = new Date().toISOString();
   }
 
-  fail(runId: string, error: string, result: RunResult | null): void {
+  fail(runId: string, error: string, result: ControlState): void {
     const record = this.find(runId);
     record.status = 'failed';
     record.error = error;

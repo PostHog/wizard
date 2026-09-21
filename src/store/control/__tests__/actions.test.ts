@@ -4,24 +4,25 @@ import { SOURCE_MAPS_CONTEXT_KEYS } from '../../programs/error-tracking-upload-s
 import { flowFor } from '../../programs/flow-for.js';
 import { Program, PROGRAM_REGISTRY } from '../../programs/program-registry.js';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '../../programs/self-driving/detect.js';
-import { buildSession, McpOutcome } from '../../session/wizard-session.js';
+import {
+  buildSession,
+  McpOutcome,
+  ScanConsent,
+} from '../../session/wizard-session.js';
 import type { Flow } from '../../state/flow.js';
 import { Interrupt } from '../../state/interrupts.js';
 import { WizardStore } from '../../state/store.js';
-import { createTestStore } from '../../testing/index.js';
+import { createControlledStore, createTestStore } from '../../testing/index.js';
 import { setUI } from '../../ui/index.js';
 import { StoreUI } from '../../ui/store-ui.js';
 import {
   actionsFor,
-  BadParamError,
   GENERIC_ACTIONS,
-  MissingParamError,
   NO_ACTION_SCREENS,
   UnknownActionError,
 } from '../actions.js';
+import { BadParamError, MissingParamError } from '../params.js';
 import { ControlDriver } from '../driver.js';
-
-const IDLE = () => ({ status: 'idle' as const, error: null });
 
 function storeFor(program = Program.PostHogIntegration): WizardStore {
   const store = createTestStore(program);
@@ -330,6 +331,77 @@ describe('program actions', () => {
   });
 });
 
+describe('param validation', () => {
+  it('confirm_setup on the default intro follows the sharing toggle like Enter does', () => {
+    // An interactive session starts undecided; a ci session is granted up front.
+    const undecided = createControlledStore(undefined, { ci: false });
+    expect(undecided.session.scanConsent).toBe(ScanConsent.Undecided);
+    apply(undecided, 'intro', 'confirm_setup');
+    expect(undecided.session.scanConsent).toBe(ScanConsent.Granted);
+    expect(undecided.session.setupConfirmed).toBe(true);
+
+    const declined = createControlledStore(undefined, { ci: false });
+    declined.declineSharing();
+    apply(declined, 'intro', 'confirm_setup');
+    expect(declined.session.scanConsent).toBe(ScanConsent.Declined);
+
+    const explicit = storeFor();
+    apply(explicit, 'intro', 'confirm_setup', { share: false });
+    expect(explicit.session.scanConsent).toBe(ScanConsent.Declined);
+    expect(() =>
+      apply(storeFor(), 'intro', 'confirm_setup', { share: 'yes' }),
+    ).toThrow(BadParamError);
+
+    const other = createControlledStore(Program.Audit, { ci: false });
+    apply(other, 'audit-intro', 'confirm_setup');
+    expect(other.session.scanConsent).toBe(ScanConsent.Undecided);
+    expect(other.session.setupConfirmed).toBe(true);
+  });
+
+  it('passes booleans through and rejects anything else', () => {
+    const store = storeFor();
+    const skills = vi.spyOn(store, 'setSkillsComplete');
+    apply(store, 'keep-skills', 'keep_skills', { kept: false });
+    expect(skills).toHaveBeenCalledWith(false);
+    apply(store, 'slack-connect', 'set_slack_connected', { connected: false });
+    expect(store.session.slackConnected).toBe(false);
+    expect(() =>
+      apply(store, 'slack-connect', 'set_slack_connected', {
+        connected: 'false',
+      }),
+    ).toThrow(BadParamError);
+    expect(() =>
+      apply(store, 'keep-skills', 'keep_skills', { kept: 1 }),
+    ).toThrow(BadParamError);
+  });
+
+  it('rejects an unknown MCP outcome and a non-string client list', () => {
+    const store = storeFor();
+    expect(() =>
+      apply(store, 'mcp', 'set_mcp_outcome', { outcome: 'maybe' }),
+    ).toThrow(BadParamError);
+    expect(() =>
+      apply(store, 'mcp', 'set_mcp_outcome', { clients: [1] }),
+    ).toThrow(BadParamError);
+    expect(store.session.mcpComplete).toBe(false);
+  });
+
+  it('requires an answers object and a non-empty string value', () => {
+    const store = storeFor();
+    void store.requestQuestion({
+      id: 'q',
+      subject: 'test',
+      questions: [{ id: 'color', question: 'Which?', kind: 'text' }],
+    } as never);
+    expect(() =>
+      apply(store, Interrupt.WizardAsk, 'answer_question', { answers: 'red' }),
+    ).toThrow(MissingParamError);
+    expect(() =>
+      apply(store, 'setup', 'choose', { key: 'router', value: '' }),
+    ).toThrow(MissingParamError);
+  });
+});
+
 describe('coverage', () => {
   it('every flow key and interrupt is actionable or explicitly no-action', () => {
     const missing: string[] = [];
@@ -359,7 +431,7 @@ describe('coverage', () => {
 
   it('the driver rejects an action the current screen does not offer', () => {
     const store = storeFor();
-    const driver = new ControlDriver(store, IDLE);
+    const driver = new ControlDriver(store);
     expect(() => driver.performAction('keep_skills')).toThrow(
       UnknownActionError,
     );

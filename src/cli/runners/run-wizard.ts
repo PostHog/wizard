@@ -288,17 +288,15 @@ export function runWizard(
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
 
-      if (session.ci) {
-        // API-key sessions carry no OAuth token, so the gateway bearer comes
-        // from the CI environment, as it does for `--ci` and the e2e host.
+      const skipAgent = config.run == null;
+      if (session.ci && !skipAgent) {
+        // API-key sessions carry no OAuth token; the gateway bearer comes from the CI environment.
         const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',
         );
       }
-
-      const skipAgent = config.run == null;
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 

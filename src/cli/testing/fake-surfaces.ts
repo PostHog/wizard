@@ -8,6 +8,7 @@ export interface RunAgentCall {
   programId: string;
   installDir: string;
   frameworkContextKeys: string[];
+  skillId: string | null;
   composed: boolean;
 }
 
@@ -19,6 +20,7 @@ export function fakeRunAgent(): { runAgent: RunAgent; calls: RunAgentCall[] } {
       programId: config.id,
       installDir: session.installDir,
       frameworkContextKeys: Object.keys(session.frameworkContext),
+      skillId: session.skillId,
       composed: options.composed ?? false,
     });
     return Promise.resolve();
