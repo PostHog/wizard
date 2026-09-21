@@ -23,9 +23,9 @@
     ],
     "imports": [
       "src/agent/runner/sequence/orchestrator/queue-tools.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
-      "src/store/auth-session-state.ts"
+      "src/store/auth-session-state.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
     ]
   },
   "src/agent/agent-prompt-loader.ts": {
@@ -78,10 +78,10 @@
       "src/agent/agent-prompt-loader.ts",
       "src/agent/aio-capture.ts",
       "src/agent/runner/sequence/orchestrator/queue-tools.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
-      "src/store/programs/ai-opt-in-gate.ts"
+      "src/store/programs/ai-opt-in-gate.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
     ]
   },
   "src/agent/aio-capture.ts": {
@@ -98,8 +98,9 @@
       "src/agent/runner/harness/pi/task.ts",
       "src/agent/runner/harness/pi/tasks.ts",
       "src/agent/runner/harness/pi/tools.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
-      "src/store/agent-protocol/agent-signals.ts"
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
     ]
   },
   "src/agent/runner/harness/pi/mcp.ts": {
@@ -144,8 +145,9 @@
       "src/agent/runner/harness/pi/security.ts",
       "src/agent/runner/harness/pi/tools.ts",
       "src/agent/runner/sequence/orchestrator/queue-tools.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
-      "src/store/agent-protocol/agent-signals.ts"
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
     ]
   },
   "src/agent/runner/harness/pi/tasks.ts": {
@@ -160,8 +162,9 @@
     ],
     "imports": [
       "src/agent/aio-capture.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
-      "src/store/auth-session-state.ts"
+      "src/store/agent-protocol/agent-signals.ts",
+      "src/store/auth-session-state.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
     ]
   },
   "src/agent/runner/sequence/orchestrator/queue-tools.ts": {
@@ -216,9 +219,9 @@
       "src/cli/commands/basic-integration/non-interactive.ts",
       "src/cli/commands/basic-integration/playground.ts",
       "src/cli/control-hooks.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts",
       "src/tui/App.tsx",
       "src/tui/console/headless-ui.ts"
     ]
@@ -270,52 +273,13 @@
     ],
     "imports": [
       "src/agent/agent-prompt.ts",
-      "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
       "src/store/control/actions.ts",
       "src/store/programs/ai-opt-in-gate.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts",
       "src/tui/App.tsx",
       "src/tui/console/headless-ui.ts"
-    ]
-  },
-  "src/store/agent-protocol/agent-env-isolation.ts": {
-    "sources": [
-      "src/store/agent-protocol/agent-env-isolation.ts",
-      "src/store/agent-protocol/agent-phase.ts",
-      "src/store/agent-protocol/mcp-prompt.ts",
-      "src/store/agent-protocol/token-pricing.ts",
-      "src/store/file-watcher.ts",
-      "src/store/mcp-project-profile.ts",
-      "src/store/mcp-role-prompts.copy.json",
-      "src/store/mcp-role-prompts.ts",
-      "src/store/mcp-seed-events.ts",
-      "src/store/safe-tools.ts",
-      "src/store/services/claude-settings.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/browser-client.ts",
-      "src/store/services/steps/add-mcp-server-to-clients/login-client.ts",
-      "src/store/session/secret-vault.ts",
-      "src/store/shared/clipboard.ts",
-      "src/store/shared/custom-headers.ts",
-      "src/store/shared/env-api-key.ts",
-      "src/store/shared/environment.ts",
-      "src/store/shared/terminal-bell.ts",
-      "src/store/state/flow-resolution.ts",
-      "src/store/state/run-failure.ts",
-      "src/store/state/store.ts",
-      "src/store/task-stream/audit-areas.ts",
-      "src/store/task-stream/destinations/file.ts",
-      "src/store/task-stream/destinations/posthog.ts",
-      "src/store/task-stream/event-plan-watcher.ts",
-      "src/store/task-stream/task-stream-push.ts",
-      "src/store/tools/handoff.ts",
-      "src/store/ui/store-ui.ts",
-      "src/store/ui/wizard-ui.ts",
-      "src/store/wizard-spellbook.ts"
-    ],
-    "imports": [
-      "src/store/agent-protocol/agent-signals.ts",
-      "src/store/auth-session-state.ts"
     ]
   },
   "src/store/agent-protocol/agent-signals.ts": {
@@ -474,6 +438,8 @@
       "src/store/shared/env-scan.ts",
       "src/store/shared/headless-mode.ts",
       "src/store/skill-install.ts",
+      "src/store/state/flow-resolution.ts",
+      "src/store/state/run-failure.ts",
       "src/store/tools/tools.ts"
     ],
     "imports": [
@@ -491,6 +457,7 @@
       "src/store/control/state.ts"
     ],
     "imports": [
+      "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts"
     ]
   },
@@ -503,9 +470,9 @@
       "src/store/programs/run-config.ts"
     ],
     "imports": [
-      "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
-      "src/store/auth-session-state.ts"
+      "src/store/auth-session-state.ts",
+      "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
     ]
   },
   "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts": {
@@ -720,7 +687,6 @@
       "src/tui/ui-store.ts"
     ],
     "imports": [
-      "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
       "src/store/programs/ai-opt-in-gate.ts",
