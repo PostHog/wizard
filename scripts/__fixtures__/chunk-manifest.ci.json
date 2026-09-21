@@ -219,8 +219,7 @@
       "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
-      "src/tui/App.tsx",
-      "src/tui/console/headless-ui.ts"
+      "src/tui/App.tsx"
     ]
   },
   "src/cli/commands/basic-integration/ci-install.ts": {
@@ -230,8 +229,7 @@
     "imports": [
       "src/cli/control-hooks.ts",
       "src/store/agent-protocol/agent-signals.ts",
-      "src/store/auth-session-state.ts",
-      "src/tui/console/headless-ui.ts"
+      "src/store/auth-session-state.ts"
     ]
   },
   "src/cli/commands/basic-integration/interactive.ts": {
@@ -275,8 +273,7 @@
       "src/store/auth-session-state.ts",
       "src/store/control/actions.ts",
       "src/store/programs/ai-opt-in-gate.ts",
-      "src/tui/App.tsx",
-      "src/tui/console/headless-ui.ts"
+      "src/tui/App.tsx"
     ]
   },
   "src/store/agent-protocol/agent-env-isolation.ts": {
@@ -300,8 +297,6 @@
       "src/store/shared/env-api-key.ts",
       "src/store/shared/environment.ts",
       "src/store/shared/terminal-bell.ts",
-      "src/store/state/flow-resolution.ts",
-      "src/store/state/run-failure.ts",
       "src/store/state/store.ts",
       "src/store/task-stream/audit-areas.ts",
       "src/store/task-stream/destinations/file.ts",
@@ -474,6 +469,8 @@
       "src/store/shared/env-scan.ts",
       "src/store/shared/headless-mode.ts",
       "src/store/skill-install.ts",
+      "src/store/state/flow-resolution.ts",
+      "src/store/state/run-failure.ts",
       "src/store/tools/tools.ts"
     ],
     "imports": [
@@ -491,6 +488,7 @@
       "src/store/control/state.ts"
     ],
     "imports": [
+      "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts"
     ]
   },
@@ -725,15 +723,6 @@
       "src/store/auth-session-state.ts",
       "src/store/programs/ai-opt-in-gate.ts",
       "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
-    ]
-  },
-  "src/tui/console/headless-ui.ts": {
-    "sources": [
-      "src/tui/console/headless-ui.ts",
-      "src/tui/console/logging-ui.ts"
-    ],
-    "imports": [
-      "src/store/auth-session-state.ts"
     ]
   }
 }

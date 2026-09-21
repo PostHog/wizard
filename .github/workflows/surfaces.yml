@@ -83,9 +83,13 @@ jobs:
           chunk-manifest.ci.json
       - name: Chunk layout matches the committed fixtures
         run: |
-          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-manifest.prod.json
-          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-manifest.ci.json
+          status=0
+          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-manifest.prod.json || status=1
+          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-manifest.ci.json || status=1
+          exit $status
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        # A failed comparison still uploads: the artifact is how the fixtures get refreshed.
+        if: always()
         with:
           name: chunk-manifests-${{ github.sha }}
           path: chunk-manifest.*.json
