@@ -34,13 +34,6 @@ const STALE_MARKETPLACE_CACHE = /already added from a different source/i;
  */
 const STARTUP_TIMEOUT_SEC = 30;
 
-/**
- * Errno codes that mean the temp file is the problem, not the config. macOS
- * denies the sibling file when it guards the directory; EXDEV means the rename
- * crosses a device boundary.
- */
-const TEMP_WRITE_DENIED = new Set(['EPERM', 'EACCES', 'EXDEV']);
-
 /** The section to paste when the wizard cannot write config.toml at all. */
 const manualSection = (serverName: string, url: string): string =>
   `[mcp_servers.${serverName}]\nurl = "${url}"\n` +
@@ -257,12 +250,15 @@ export class CodexMCPClient
       fs.writeFileSync(tmp, contents);
       fs.renameSync(tmp, configPath);
     } catch (error) {
+      // macOS denies the sibling file when it guards the directory, and EXDEV
+      // means the rename crosses a device boundary. Any other errno is about
+      // the config itself, which an in-place write cannot help.
       const code = (error as NodeJS.ErrnoException).code ?? '';
-      if (!TEMP_WRITE_DENIED.has(code)) throw error;
+      if (!['EPERM', 'EACCES', 'EXDEV'].includes(code)) throw error;
       try {
         fs.rmSync(tmp, { force: true });
       } catch {
-        // a temp file we cannot delete must not mask the write below
+        // an undeletable temp file must not cost the user the write below
       }
       fs.writeFileSync(configPath, contents);
     }
