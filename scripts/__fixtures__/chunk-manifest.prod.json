@@ -81,7 +81,7 @@
       "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
-      "src/store/programs/ai-opt-in-gate.ts"
+      "src/store/programs/audit/ledger-watcher.ts"
     ]
   },
   "src/agent/aio-capture.ts": {
@@ -219,8 +219,7 @@
       "src/store/agent-protocol/agent-env-isolation.ts",
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
-      "src/tui/App.tsx",
-      "src/tui/console/headless-ui.ts"
+      "src/tui/App.tsx"
     ]
   },
   "src/cli/commands/basic-integration/ci-install.ts": {
@@ -230,8 +229,7 @@
     "imports": [
       "src/cli/control-hooks.ts",
       "src/store/agent-protocol/agent-signals.ts",
-      "src/store/auth-session-state.ts",
-      "src/tui/console/headless-ui.ts"
+      "src/store/auth-session-state.ts"
     ]
   },
   "src/cli/commands/basic-integration/interactive.ts": {
@@ -275,8 +273,8 @@
       "src/store/auth-session-state.ts",
       "src/store/control/actions.ts",
       "src/store/programs/ai-opt-in-gate.ts",
-      "src/tui/App.tsx",
-      "src/tui/console/headless-ui.ts"
+      "src/store/programs/audit/ledger-watcher.ts",
+      "src/tui/App.tsx"
     ]
   },
   "src/store/agent-protocol/agent-env-isolation.ts": {
@@ -489,19 +487,28 @@
       "src/store/control/marker.ts",
       "src/store/control/runs.ts",
       "src/store/control/server.ts",
+      "src/store/control/setters.ts",
       "src/store/control/state.ts"
     ],
     "imports": [
       "src/store/agent-protocol/agent-signals.ts",
-      "src/store/auth-session-state.ts"
+      "src/store/auth-session-state.ts",
+      "src/store/programs/ai-opt-in-gate.ts"
     ]
   },
   "src/store/programs/ai-opt-in-gate.ts": {
     "sources": [
       "src/store/programs/ai-opt-in-gate.ts",
+      "src/store/programs/flow-for.ts"
+    ],
+    "imports": [
+      "src/store/auth-session-state.ts"
+    ]
+  },
+  "src/store/programs/audit/ledger-watcher.ts": {
+    "sources": [
       "src/store/programs/audit/ledger-watcher.ts",
       "src/store/programs/error-tracking-upload-source-maps/detect-agentic.ts",
-      "src/store/programs/flow-for.ts",
       "src/store/programs/run-config.ts"
     ],
     "imports": [
@@ -726,16 +733,8 @@
       "src/store/agent-protocol/agent-signals.ts",
       "src/store/auth-session-state.ts",
       "src/store/programs/ai-opt-in-gate.ts",
+      "src/store/programs/audit/ledger-watcher.ts",
       "src/store/services/steps/add-mcp-server-to-clients/MCPClient.ts"
-    ]
-  },
-  "src/tui/console/headless-ui.ts": {
-    "sources": [
-      "src/tui/console/headless-ui.ts",
-      "src/tui/console/logging-ui.ts"
-    ],
-    "imports": [
-      "src/store/auth-session-state.ts"
     ]
   }
 }
