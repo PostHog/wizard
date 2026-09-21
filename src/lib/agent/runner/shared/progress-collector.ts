@@ -9,6 +9,7 @@
  */
 
 import { logToFile } from '@utils/debug';
+import { appendStatus } from '@lib/status-history';
 import type {
   AgentProgress,
   ProgressEmitter,
@@ -41,7 +42,10 @@ export function createProgressCollector(
         snapshot.tasks = event.tasks.map((t) => ({ ...t }));
         break;
       case 'status':
-        snapshot.statusMessages.push(event.message);
+        snapshot.statusMessages = appendStatus(
+          snapshot.statusMessages,
+          event.message,
+        );
         break;
       case 'stage':
         snapshot.stage = event.stage;
@@ -68,7 +72,7 @@ export function createProgressCollector(
     apply(event);
     if (!onProgress) return;
     try {
-      onProgress(event);
+      onProgress(structuredClone(event));
     } catch (error) {
       // A broken projection is the host's problem, not the run's. Say so in
       // the log and carry on; the snapshot above is the source of truth.

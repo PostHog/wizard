@@ -9,15 +9,17 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Harness, Sequence } from '@lib/constants';
+import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@lib/constants';
 import { HostResolution } from '@lib/host-resolution';
 import { OutroKind, type PendingQuestion } from '@lib/wizard-session';
 import { AGENT_ERROR_CODE, ErrorCodes } from '@lib/errors';
 import { AgentErrorType } from '@lib/agent/signals';
+import type { AgentFailure } from '@lib/agent/runner/shared/types';
 import type { AgentProgress } from '@lib/agent/progress';
 import type {
   AgentHarness,
   BackendRunInputs,
+  TaskRunInputs,
 } from '@lib/agent/runner/harness/types';
 
 vi.mock('@ui', () => ({
@@ -29,6 +31,10 @@ vi.mock('@ui', () => ({
   },
 }));
 vi.mock('@utils/debug');
+vi.mock('@lib/yara-hooks', async (original) => ({
+  ...(await original<typeof import('@lib/yara-hooks')>()),
+  flushScanReport: vi.fn(),
+}));
 vi.mock('@utils/analytics', () => ({
   analytics: {
     build: 'test',
@@ -56,11 +62,33 @@ const harnessState = vi.hoisted(() => ({
   result: {} as { error?: string; message?: string; failure?: unknown },
   throws: undefined as Error | undefined,
   lastInputs: undefined as unknown,
+  tasks: [] as TaskRunInputs[],
+  selected: [] as Harness[],
+  taskFailure: undefined as AgentFailure | undefined,
+  seedFailure: undefined as AgentFailure | undefined,
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
 }));
 vi.mock('@lib/agent/runner/switchboard/harness', () => {
   const fake: AgentHarness = {
     name: Harness.pi,
+    runTask(inputs: TaskRunInputs) {
+      harnessState.tasks.push(inputs);
+      const { store, currentTaskId } = inputs.orchestrator;
+      if (!currentTaskId) {
+        if (harnessState.seedFailure)
+          return Promise.resolve({ failure: harnessState.seedFailure });
+        store.enqueue({ type: 'install' });
+      } else if (harnessState.taskFailure) {
+        return Promise.resolve({ failure: harnessState.taskFailure });
+      } else {
+        store.complete(currentTaskId, {
+          goals: 'install',
+          did: 'installed',
+          forNextAgent: 'done',
+        });
+      }
+      return Promise.resolve({});
+    },
     async run(inputs: BackendRunInputs) {
       harnessState.lastInputs = inputs;
       const { emit, spinner } = inputs;
@@ -72,6 +100,9 @@ vi.mock('@lib/agent/runner/switchboard/harness', () => {
         tasks: [{ content: 'Install', status: 'completed' }],
       });
       emit({ kind: 'url', which: 'dashboard', url: 'https://d/1' });
+      emit({ kind: 'url', which: 'notebook', url: 'https://n/1' });
+      emit({ kind: 'stage', stage: 'Configure' });
+      emit({ kind: 'finalCost', usd: 0.25 });
       emit({
         kind: 'usage',
         delta: {
@@ -99,14 +130,55 @@ vi.mock('@lib/agent/runner/switchboard/harness', () => {
   };
   return {
     HARNESS_OPTIONS: { [Harness.pi]: fake },
-    getHarness: () => fake,
-    resolveHarness: () => ({ harness: Harness.pi, model: 'm' }),
+    getHarness: (name: Harness) => {
+      harnessState.selected.push(name);
+      return { ...fake, name };
+    },
+    resolveHarness: (ctx: { cliHarness?: Harness }) => ({
+      harness: ctx.cliHarness ?? Harness.pi,
+      model: DEFAULT_AGENT_MODEL,
+    }),
   };
 });
+
+vi.mock('@lib/agent/agent-prompt-loader', async (original) => {
+  const actual = await original<
+    typeof import('@lib/agent/agent-prompt-loader')
+  >();
+  return {
+    ...actual,
+    loadAgentRegistry: vi.fn(() =>
+      Promise.resolve(
+        actual.buildRegistry(
+          [
+            actual.parseAgentPrompt(
+              '---\ntype: seed\nseed: true\n---\nPlan work',
+              'seed',
+              'test-program',
+            ),
+            actual.parseAgentPrompt(
+              '---\ntype: install\n---\nInstall it',
+              'install',
+              'test-program',
+            ),
+          ],
+          'test-program',
+        ),
+      ),
+    ),
+  };
+});
+vi.mock('@lib/wizard-tools', async (original) => ({
+  ...(await original<typeof import('@lib/wizard-tools')>()),
+  fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
+}));
 
 import { runAgent } from '@lib/agent/runner';
 import type { RunConfig, RunInput } from '@lib/agent/runner';
 import { analytics } from '@utils/analytics';
+import { initLogFile } from '@utils/debug';
+import { flushScanReport } from '@lib/yara-hooks';
+import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
 
 let tmp: string;
 
@@ -166,15 +238,152 @@ const input = (over: Partial<RunInput> = {}): RunInput => ({
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'run-agent-standalone-'));
   harnessState.result = {};
+  harnessState.tasks = [];
+  harnessState.selected = [];
+  harnessState.taskFailure = undefined;
+  harnessState.seedFailure = undefined;
   harnessState.throws = undefined;
   harnessState.lastInputs = undefined;
   harnessState.askQuestions = undefined;
   vi.mocked(analytics.shutdown).mockClear();
+  vi.mocked(initLogFile).mockClear();
+  vi.mocked(flushScanReport).mockClear();
 });
 
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 describe('runAgent standalone', () => {
+  it.each([Harness.pi, Harness.anthropic])(
+    'dispatches %s through both sequence arms',
+    async (harness) => {
+      for (const sequence of [Sequence.linear, Sequence.orchestrator]) {
+        const result = await runAgent(
+          config({
+            binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
+            switchboard: {
+              program: 'test-program',
+              flags: {},
+              cliHarness: harness,
+            },
+          }),
+          input(),
+        );
+        expect(result.outcome).toBe('success');
+        expect(harnessState.selected.at(-1)).toBe(harness);
+        if (sequence === Sequence.linear) {
+          expect(harnessState.tasks).toHaveLength(0);
+        } else {
+          expect(harnessState.tasks).toHaveLength(2);
+          expect(
+            harnessState.tasks[1].orchestrator.currentTaskId,
+          ).toBeDefined();
+          expect(result.snapshot.tasks).toEqual([
+            { content: 'install', activeForm: 'install', status: 'completed' },
+          ]);
+        }
+      }
+      expect(analytics.shutdown).toHaveBeenCalledTimes(2);
+      expect(analytics.shutdown).toHaveBeenCalledWith('success');
+    },
+  );
+
+  it('cleans up when the seed fails before the drain starts', async () => {
+    const failure = { message: 'Authentication failed (401)' };
+    harnessState.seedFailure = failure;
+    const result = await runAgent(
+      config({
+        binding: {
+          harness: Harness.anthropic,
+          sequence: Sequence.orchestrator,
+          model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.anthropic,
+        },
+      }),
+      input(),
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.failure).toBe(failure);
+    expect(harnessState.tasks).toHaveLength(1);
+    expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
+  });
+
+  it('returns an anthropic orchestrator task failure and cleans up the queue', async () => {
+    const failure = {
+      code: ErrorCodes.AgentAbort,
+      message: 'Authentication failed (401)',
+    };
+    harnessState.taskFailure = failure;
+    const result = await runAgent(
+      config({
+        binding: {
+          harness: Harness.anthropic,
+          sequence: Sequence.orchestrator,
+          model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.anthropic,
+        },
+      }),
+      input(),
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.failure).toBe(failure);
+    expect(harnessState.tasks).toHaveLength(2);
+    expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
+  });
+
+  it.each([Sequence.linear, Sequence.orchestrator])(
+    'preserves %s completion, shutdown and scan-flush ordering',
+    async (sequence) => {
+      const order: string[] = [];
+      vi.mocked(analytics.shutdown).mockImplementationOnce(() => {
+        order.push('shutdown');
+        return Promise.resolve();
+      });
+      vi.mocked(flushScanReport).mockImplementationOnce(() => {
+        order.push('scan-flush');
+      });
+      const result = await runAgent(
+        config({
+          binding: {
+            harness: Harness.pi,
+            sequence,
+            model: DEFAULT_AGENT_MODEL,
+          },
+        }),
+        input(),
+        {
+          onProgress: (event) => {
+            if (event.kind === 'completion') {
+              order.push(
+                fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))
+                  ? 'queue-present'
+                  : 'queue-clean',
+              );
+              order.push('completion');
+            }
+            if (event.kind === 'lifecycle' && event.phase === 'completed')
+              order.push('outro');
+          },
+        },
+      );
+      expect(result.outcome).toBe('success');
+      expect(order).toEqual([
+        'queue-clean',
+        'completion',
+        'outro',
+        'shutdown',
+        'scan-flush',
+      ]);
+    },
+  );
+
   it('runs to success with an observer and an answerer', async () => {
     const events: AgentProgress[] = [];
     const ask = vi.fn(() => Promise.resolve({ q1: 'yes' }));
@@ -217,6 +426,9 @@ describe('runAgent standalone', () => {
 
     // The agent's own snapshot, independent of the observer.
     expect(result.snapshot.dashboardUrl).toBe('https://d/1');
+    expect(result.snapshot.notebookUrl).toBe('https://n/1');
+    expect(result.snapshot.stage).toBe('Configure');
+    expect(result.snapshot.finalCostUsd).toBe(0.25);
     expect(result.snapshot.tasks).toEqual([
       { content: 'Install', status: 'completed' },
     ]);
@@ -227,7 +439,7 @@ describe('runAgent standalone', () => {
       cacheReadTokens: 0,
       cacheCreationTokens: 0,
     });
-    expect(analytics.shutdown).toHaveBeenCalledWith('success');
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
   });
 
   it('runs to a complete result with no options at all', async () => {
@@ -372,17 +584,5 @@ describe('runAgent standalone', () => {
     expect(result.failure?.code).toBe(ErrorCodes.InternalUnhandled);
     // What was reported before the crash survives in the snapshot.
     expect(result.snapshot.statusMessages).toContain('Installing the SDK');
-  });
-
-  it('is cancelled by a signal that is already aborted', async () => {
-    const controller = new AbortController();
-    controller.abort();
-
-    const result = await runAgent(config(), input(), {
-      signal: controller.signal,
-    });
-
-    expect(result.outcome).toBe('cancelled');
-    expect(harnessState.lastInputs).toBeUndefined();
   });
 });

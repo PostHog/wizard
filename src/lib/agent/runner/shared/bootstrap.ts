@@ -8,10 +8,9 @@
  * arrives already resolved in `RunConfig` and `RunInput`.
  */
 
-import { analytics } from '@utils/analytics';
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { gatewayAuth } from '@lib/gateway-session';
-import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
+import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@lib/constants';
 import { VERSION } from '@lib/version';
 import { mcpUrlFor } from '@lib/host-resolution';
@@ -67,19 +66,6 @@ export async function prepareRun(
   config: RunConfig,
   input: RunInput,
 ): Promise<BootstrapResult> {
-  const { run } = config;
-
-  // 1. Init logging + debug
-  initLogFile();
-  logToFile(
-    `[agent-runner] START ${run.integrationLabel} build=${analytics.build}` +
-      `${input.flags.ci ? ' (non-interactive)' : ''}`,
-  );
-
-  if (input.flags.debug) {
-    enableDebugLogs();
-  }
-
   const { skillsBaseUrl } = config;
 
   // Where this run actually points. The three services switch independently,

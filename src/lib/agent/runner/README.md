@@ -40,11 +40,11 @@ for the coordinated change checklist.
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
 **The entry point** (`index.ts`) is the front door:
-`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
-takes resolved execution data and an invocation snapshot (`shared/types.ts`),
-reports through `onProgress` and asks through `interaction` (`../progress.ts`),
-and returns every ending as a result. It never renders, reads a session or
-exits. The gates, OAuth, flags and binding lookup that used to run here live in
+`runAgent(config, input, {onProgress?, interaction?}) → RunResult`. It takes
+resolved execution data and an invocation snapshot (`shared/types.ts`), reports
+through `onProgress` and asks through `interaction` (`../progress.ts`), and
+returns every ending as a result. It never renders, reads a session or exits.
+The gates, OAuth, flags and binding lookup that used to run here live in
 `src/lib/programs/run-agent-legacy.ts`, which also maps progress back onto
 `getUI()` for today's runners.
 

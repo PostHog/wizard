@@ -64,7 +64,7 @@ vi.mock('../utils/wizard-abort', async (importOriginal) => ({
   wizardAbort: vi.fn(),
 }));
 vi.mock('../lib/programs/run-agent-legacy', () => ({
-  runAgent: vi.fn().mockResolvedValue(undefined),
+  runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { provisionCommand } from '../commands/provision';

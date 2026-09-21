@@ -5,7 +5,7 @@
  * pipeline to a decided result. `config` is resolved execution data (which
  * program, how it is routed, which flags apply); `input` is the invocation
  * snapshot (directory, credentials, project); `options` carries an optional
- * progress observer, an optional answerer and an optional cancel signal.
+ * progress observer, an optional answerer.
  *
  * The pipeline prepares the run (logging targets, gateway mint, scan triage),
  * then forks. The `orchestrator` variant routes to the task-queue runner.
@@ -16,13 +16,15 @@
  * exits the process and never rejects. A decided failure comes back in
  * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
  * agent did not decide (a refused mint, an SDK crash) comes back as
- * `outcome: 'crashed'` with the original error attached, so a caller can keep
+ * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
  * handling it the way it always did. The legacy adapter in
  * `src/lib/programs/run-agent-legacy.ts` rebuilds today's session-driven
  * behavior on top of this call for every existing caller.
  */
 
 import { Sequence } from '@lib/constants';
+import { RunOutcome } from './shared/types';
+export { RunOutcome } from './shared/types';
 import { classifyRunFailure } from '@lib/errors';
 import { logToFile } from '@utils/debug';
 import type {
@@ -49,7 +51,6 @@ export type {
   RunFlags,
   RunHooks,
   RunInput,
-  RunOutcome,
   RunResult,
   RunSnapshot,
   SeedTaskEntry,
@@ -77,7 +78,6 @@ export async function runAgent(
 ): Promise<RunResult> {
   const collector = createProgressCollector(options.onProgress);
   const { emit } = collector;
-  const signal = options.signal ?? new AbortController().signal;
   const log = (message: string) =>
     emit({ kind: 'log', level: 'info', message });
 
@@ -101,7 +101,6 @@ export async function runAgent(
       boot,
       emit,
       interaction: options.interaction,
-      signal,
     });
     return {
       ...result,
@@ -114,7 +113,7 @@ export async function runAgent(
     const failure = classifyRunFailure(error);
     logToFile('[agent-runner] run crashed:', error);
     return {
-      outcome: 'crashed',
+      outcome: RunOutcome.Crashed,
       skillId: input.skillId,
       failure: {
         code: failure.code,

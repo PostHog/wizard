@@ -112,19 +112,25 @@ export async function drainQueue(
 ): Promise<void> {
   const running = new Map<string, Promise<void>>();
   let starts = 0;
+  let failure: { error: unknown } | undefined;
 
-  for (;;) {
-    for (const task of store.nextRunnable()) {
-      if (++starts > opts.maxStarts) break;
-      // runOne marks the task running synchronously, so the next
-      // nextRunnable() call no longer offers it.
-      const p = runOne(store, runTask, task).finally(() =>
-        running.delete(task.id),
-      );
-      running.set(task.id, p);
+  try {
+    for (;;) {
+      if (failure) throw failure.error;
+      for (const task of store.nextRunnable()) {
+        if (++starts > opts.maxStarts) break;
+        const p = runOne(store, runTask, task)
+          .catch((error: unknown) => {
+            failure ??= { error };
+          })
+          .finally(() => running.delete(task.id));
+        running.set(task.id, p);
+      }
+      if (running.size === 0) break;
+      await Promise.race(running.values());
     }
-    if (running.size === 0) break;
-    // Wake on the first finish; it may have unblocked dependents or requeued.
-    await Promise.race(running.values());
+  } finally {
+    // No queue or skill cleanup may run while a sibling still uses them.
+    await Promise.allSettled(running.values());
   }
 }

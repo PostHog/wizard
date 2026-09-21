@@ -79,7 +79,7 @@ export function validateNonInteractiveOptions(
  * (`runWizardHeadless`) runs.
  *
  * Validates flags, builds a `ci:true` session, runs `config.ciPreRun` (or the
- * program's `onReady` hooks by default), executes `runAgent`, and routes any
+ * program's `onReady` hooks by default), executes `runProgramAgent`, and routes any
  * failure through `wizardAbort`. `wizardAbort` owns all exits — never add a
  * raw `process.exit` here.
  *
@@ -335,8 +335,10 @@ export function runNonInteractive(
         }
       }
 
-      const { runAgent } = await import('@lib/programs/run-agent-legacy');
-      await runAgent(config, session);
+      const { runProgramAgent } = await import(
+        '@lib/programs/run-agent-legacy'
+      );
+      await runProgramAgent(config, session);
       await settleStream(RunPhase.Completed);
     } catch (error) {
       const errorMessage =

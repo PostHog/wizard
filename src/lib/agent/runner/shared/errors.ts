@@ -5,7 +5,12 @@
 import type { InstallSkillResult } from '@lib/wizard-tools';
 import { skillErrorCode } from '@lib/errors';
 import { WizardError } from '@utils/wizard-abort';
-import type { AgentFailure } from './types';
+import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
+
+export const failed = (failure: AgentFailure): SequenceResult => ({
+  outcome: RunOutcome.Failed,
+  failure,
+});
 
 /** The failure a skill install error decides. The caller reports and exits. */
 export function installFailure(

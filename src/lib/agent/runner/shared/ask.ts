@@ -17,7 +17,6 @@ import type { AgentInteraction } from '@lib/agent/progress';
 
 export function createAskBridge(
   interaction: AgentInteraction | undefined,
-  signal: AbortSignal,
   options: {
     getSource: () => string;
     richLinks: boolean;
@@ -33,7 +32,7 @@ export function createAskBridge(
     getSource: options.getSource,
     showQuestion: (question) => {
       options.beforeShow?.();
-      return ask(question, { signal });
+      return ask(question);
     },
     cancelQuestion: interaction?.cancelAsk,
     richLinks: options.richLinks,

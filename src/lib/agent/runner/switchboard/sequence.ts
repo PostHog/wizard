@@ -12,7 +12,7 @@ import {
   resolveFlagSequence,
 } from './flags';
 import { getHarness, resolveHarness } from './harness';
-import type { RunResult, SequenceContext } from '../shared/types';
+import type { SequenceResult, SequenceContext } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
 import {
@@ -28,7 +28,7 @@ import {
 export interface SequenceRunner {
   readonly name: Sequence;
   /** Run one program to a decided result. Unexpected errors propagate. */
-  run(ctx: SequenceContext): Promise<RunResult>;
+  run(ctx: SequenceContext): Promise<SequenceResult>;
 }
 
 export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {

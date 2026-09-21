@@ -1,5 +1,5 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
-import { runAgent } from '@lib/programs/run-agent-legacy';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
@@ -479,7 +479,7 @@ export const integrationRunStep: ProgramStep = {
   // composed: runs inside the host program (self-driving), so skip the
   // integration's terminal outro + analytics shutdown of the shared client.
   run: (session) =>
-    runAgent(posthogIntegrationConfig, session, { composed: true }),
+    runProgramAgent(posthogIntegrationConfig, session, { composed: true }),
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

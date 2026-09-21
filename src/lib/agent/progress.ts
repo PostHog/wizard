@@ -81,20 +81,13 @@ export type ProgressEmitter = (event: AgentProgress) => void;
 export interface AgentInteraction {
   /**
    * Open a question and resolve with the answers. The bridge that calls this
-   * owns the timeout, the `__cancelled__` sentinel and the analytics; `signal`
-   * aborts when the run is cancelled so the host can dismiss its overlay.
+   * owns the timeout, the `__cancelled__` sentinel and the analytics.
    */
-  ask?: (
-    question: PendingQuestion,
-    context: { signal: AbortSignal },
-  ) => Promise<AskAnswers>;
+  ask?: (question: PendingQuestion) => Promise<AskAnswers>;
   /** Dismiss the in-flight question as cancelled (timeouts call this). */
   cancelAsk?: () => void;
   /** Offer an optional step and resolve with whether to keep it. */
-  taskNotice?: (
-    notice: TaskNotice,
-    context: { signal: AbortSignal },
-  ) => Promise<boolean>;
+  taskNotice?: (notice: TaskNotice) => Promise<boolean>;
   /** Dismiss an in-flight task notice as declined (timeouts call this). */
   cancelTaskNotice?: () => void;
 }

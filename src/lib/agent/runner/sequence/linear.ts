@@ -20,41 +20,13 @@ import { analytics } from '../../../../utils/analytics';
 import { formatYaraAbortMessage } from '../../../yara-hooks';
 import { installSkillById } from '../../../wizard-tools';
 import { assemblePrompt } from '../../agent-prompt';
-import type {
-  AgentFailure,
-  RunResult,
-  RunSnapshot,
-  SequenceContext,
-} from '../shared/types';
-import { installFailure } from '../shared/errors';
+import type { SequenceResult, SequenceContext } from '../shared/types';
+import { failed, installFailure } from '../shared/errors';
+import { RunOutcome } from '../shared/types';
 import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { getHarness } from '../switchboard';
-
-/** The snapshot the sequence returns; `runAgent` fills it from its collector. */
-const PENDING_SNAPSHOT: RunSnapshot = {
-  tasks: [],
-  statusMessages: [],
-  usage: {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-  },
-};
-
-const failed = (failure: AgentFailure): RunResult => ({
-  outcome: 'failed',
-  failure,
-  snapshot: PENDING_SNAPSHOT,
-});
-
-const cancelled = (): RunResult => ({
-  outcome: 'cancelled',
-  failure: { message: 'Wizard setup cancelled.' },
-  snapshot: PENDING_SNAPSHOT,
-});
 
 export async function runLinearProgram({
   config,
@@ -62,13 +34,10 @@ export async function runLinearProgram({
   boot,
   emit,
   interaction,
-  signal,
-}: SequenceContext): Promise<RunResult> {
+}: SequenceContext): Promise<SequenceResult> {
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
-
-  if (signal.aborted) return cancelled();
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -87,8 +56,6 @@ export async function runLinearProgram({
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
 
-  if (signal.aborted) return cancelled();
-
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
 
@@ -102,7 +69,7 @@ export async function runLinearProgram({
     shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const ask = askDisabled
     ? undefined
-    : createAskBridge(interaction, signal, {
+    : createAskBridge(interaction, {
         getSource: () => input.skillId ?? run.integrationLabel,
         richLinks: run.richLinks ?? false,
         timeoutMs: run.askTimeoutMs,
@@ -180,7 +147,7 @@ export async function runLinearProgram({
       matched: matched?.message ?? null,
     });
     return {
-      outcome: 'aborted',
+      outcome: RunOutcome.Aborted,
       failure: {
         outroData,
         code: abortCode,
@@ -194,7 +161,6 @@ export async function runLinearProgram({
           abortCode,
         ),
       },
-      snapshot: PENDING_SNAPSHOT,
     };
   }
 
@@ -325,10 +291,9 @@ export async function runLinearProgram({
     await config.hooks.postRun(credentials);
   }
 
-  // A composed sub-run (integration inside self-driving) skips the terminal
-  // outro + analytics shutdown so the shared client survives the host's run.
+  // A composed sub-run leaves the terminal outro to its host.
   if (composed) {
-    return { outcome: 'success', snapshot: PENDING_SNAPSHOT };
+    return { outcome: RunOutcome.Success };
   }
 
   // 11. Outro
@@ -349,8 +314,6 @@ export async function runLinearProgram({
 
   emit({ kind: 'lifecycle', phase: 'completed', message: run.successMessage });
 
-  // 12. Analytics shutdown
   await analytics.shutdown('success');
-
-  return { outcome: 'success', outro: outroData, snapshot: PENDING_SNAPSHOT };
+  return { outcome: RunOutcome.Success, outro: outroData };
 }

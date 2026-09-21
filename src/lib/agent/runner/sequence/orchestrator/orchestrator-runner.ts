@@ -10,6 +10,8 @@
  * task resolve to a prompt fetched at startup into the registry. The wizard side
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
+import { failed } from '../../shared/errors';
+import { RunOutcome } from '../../shared/types';
 import { randomUUID } from 'crypto';
 import {
   cpSync,
@@ -36,8 +38,7 @@ import { ErrorCodes } from '@lib/errors';
 import type { AgentInteraction } from '@lib/agent/progress';
 import type {
   AgentFailure,
-  RunResult,
-  RunSnapshot,
+  SequenceResult,
   SequenceContext,
 } from '../../shared/types';
 import { createEmitSpinner } from '../../shared/progress-collector';
@@ -205,6 +206,11 @@ function resolveReferenceSkillId(
  */
 export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
 
+interface SeededTaskOptions {
+  timeoutMs?: number;
+  interaction?: AgentInteraction;
+}
+
 /**
  * Offer an optional step, defaulting to declining it if nobody answers.
  *
@@ -215,9 +221,7 @@ export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export async function offerSeededTask(
   notice: TaskNotice,
-  timeoutMs: number = TASK_NOTICE_TIMEOUT_MS,
-  interaction?: AgentInteraction,
-  signal: AbortSignal = new AbortController().signal,
+  { timeoutMs = TASK_NOTICE_TIMEOUT_MS, interaction }: SeededTaskOptions = {},
 ): Promise<{ keep: boolean; timedOut: boolean }> {
   // No one to show the notice to: a step nobody can answer for must not run.
   // The same answer a non-interactive host gives today.
@@ -236,7 +240,7 @@ export async function offerSeededTask(
     }, timeoutMs);
   });
   try {
-    const keep = await Promise.race([taskNotice(notice, { signal }), timeout]);
+    const keep = await Promise.race([taskNotice(notice), timeout]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
@@ -337,16 +341,9 @@ export function skipDeclinedSeededTasks(
 export async function askSeededConsent(
   type: string,
   notice: TaskNotice,
-  timeoutMs?: number,
-  interaction?: AgentInteraction,
-  signal?: AbortSignal,
+  options: SeededTaskOptions = {},
 ): Promise<SeededConsent> {
-  const consent = await offerSeededTask(
-    notice,
-    timeoutMs,
-    interaction,
-    signal,
-  ).then(
+  const consent = await offerSeededTask(notice, options).then(
     (answer): SeededConsent => ({ ...answer, errored: false }),
     (err: unknown): SeededConsent => {
       logToFile(
@@ -435,43 +432,39 @@ export function displayOrder(
     .map((entry) => entry.task);
 }
 
-/** The snapshot the sequence returns; `runAgent` fills it from its collector. */
-const PENDING_SNAPSHOT: RunSnapshot = {
-  tasks: [],
-  statusMessages: [],
-  usage: {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-  },
-};
+export async function runOrchestrator(
+  context: SequenceContext,
+): Promise<SequenceResult> {
+  let cleaned = false;
+  const cleanupQueue = (): void => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      rmSync(path.join(context.input.installDir, QUEUE_DIR_NAME), {
+        recursive: true,
+        force: true,
+      });
+    } catch (error) {
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'orchestrator_cache_cleanup' },
+      );
+    }
+  };
+  try {
+    return await executeOrchestrator(context, cleanupQueue);
+  } finally {
+    cleanupQueue();
+  }
+}
 
-const failed = (failure: AgentFailure): RunResult => ({
-  outcome: 'failed',
-  failure,
-  snapshot: PENDING_SNAPSHOT,
-});
-
-export async function runOrchestrator({
-  config,
-  input,
-  boot,
-  emit,
-  interaction,
-  signal,
-}: SequenceContext): Promise<RunResult> {
+async function executeOrchestrator(
+  { config, input, boot, emit, interaction }: SequenceContext,
+  cleanupQueue: () => void,
+): Promise<SequenceResult> {
   const runId = randomUUID();
   const { run } = config;
   const programId = config.programId;
-
-  if (signal.aborted) {
-    return {
-      outcome: 'cancelled',
-      failure: { message: 'Wizard setup cancelled.' },
-      snapshot: PENDING_SNAPSHOT,
-    };
-  }
 
   // Switchboard context — reused for every per-role harness resolution below.
   // The caller resolved the run-level binding from it; per-task roles overlay
@@ -790,13 +783,7 @@ export async function runOrchestrator({
       // not, which is why the offer lives here and not there.
       seededConsent.set(
         task.id,
-        await askSeededConsent(
-          seeded.type,
-          seeded.notice,
-          undefined,
-          interaction,
-          signal,
-        ),
+        await askSeededConsent(seeded.type, seeded.notice, { interaction }),
       );
     }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
@@ -830,7 +817,7 @@ export async function runOrchestrator({
   // Absent in CI and signup, where nobody can answer.
   const askBridge = shouldDisableAsk(input.flags)
     ? undefined
-    : createAskBridge(interaction, signal, {
+    : createAskBridge(interaction, {
         getSource: () => input.skillId ?? programId,
         beforeShow: () => {
           // How late the first ask lands is the measure of this run shape: it
@@ -878,8 +865,7 @@ export async function runOrchestrator({
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
-  // A decided failure (a 401 the harness already reported) ends the run here,
-  // before anything is queued, exactly where the harness used to exit.
+  // A decided seed failure ends the run and releases its queue artifacts.
   if (seedResult.failure) return failed(seedResult.failure);
   if (seedResult.error) {
     logToFile(
@@ -1140,20 +1126,7 @@ export async function runOrchestrator({
         { step: 'orchestrator_reference_promote' },
       );
     }
-    // Success or failure, no run artifact outlives the run — wipe the whole
-    // cache folder (queue, handoffs, reference example, installed task
-    // instructions). The .DELETE-ME.md inside is the fallback if we don't.
-    try {
-      rmSync(path.join(input.installDir, QUEUE_DIR_NAME), {
-        recursive: true,
-        force: true,
-      });
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'orchestrator_cache_cleanup' },
-      );
-    }
+    cleanupQueue();
     try {
       sweepRunInstalledSkills(
         claudeSkillsDir,
@@ -1285,5 +1258,5 @@ export async function runOrchestrator({
   emit({ kind: 'completion', outro });
   emit({ kind: 'lifecycle', phase: 'completed', message });
   await analytics.shutdown('success');
-  return { outcome: 'success', outro, snapshot: PENDING_SNAPSHOT };
+  return { outcome: RunOutcome.Success, outro };
 }

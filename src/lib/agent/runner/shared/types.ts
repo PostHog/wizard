@@ -181,7 +181,7 @@ export interface RunConfig {
   programId: string;
   /** The program's run definition. Its session-taking hooks are the caller's, see `hooks`. */
   run: ProgramRun;
-  /** A composed sub-run skips the terminal outro and the analytics shutdown. */
+  /** A composed sub-run leaves the terminal outro to its host. */
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;
@@ -289,21 +289,12 @@ export interface AgentFailure {
   detail?: Record<string, unknown>;
 }
 
-export type RunOutcome =
-  /** The run finished; `outro` holds what to show. */
-  | 'success'
-  /** The agent chose to stop (`[ABORT]`); `failure` holds the rendered case. */
-  | 'aborted'
-  /** A coded failure the agent decided; `failure` holds it. */
-  | 'failed'
-  /** `options.signal` aborted the run. */
-  | 'cancelled'
-  /**
-   * Something threw that the agent did not decide (a refused gateway mint, an
-   * SDK crash). `failure.error` is the original error and `failure.code` its
-   * classification, so a caller can report it or rethrow it as it did before.
-   */
-  | 'crashed';
+export enum RunOutcome {
+  Success = 'success',
+  Aborted = 'aborted',
+  Failed = 'failed',
+  Crashed = 'crashed',
+}
 
 /** Totals of every `usage` event the run emitted. */
 export interface TokenUsageTotals {
@@ -324,28 +315,34 @@ export interface RunSnapshot {
   notebookUrl?: string;
 }
 
-/**
- * `runAgent` never rejects: every ending is one of these, and every ending
- * that is not `success` carries a `failure` the caller can act on.
- */
-export interface RunResult {
-  outcome: RunOutcome;
+/** A sequence decides an outcome; the dispatcher owns its snapshot. */
+export type SequenceResult =
+  | { outcome: RunOutcome.Success; outro?: OutroData; failure?: never }
+  | {
+      outcome: RunOutcome.Aborted | RunOutcome.Failed;
+      failure: AgentFailure;
+      outro?: never;
+    };
+
+/** Every non-success result carries a failure; crashes preserve the original error. */
+export type RunResult = (
+  | SequenceResult
+  | {
+      outcome: RunOutcome.Crashed;
+      failure: AgentFailure & { error: Error };
+      outro?: never;
+    }
+) & {
   /** The skill this run installed or was for. */
   skillId?: string;
-  /** Success outro. Absent for a composed sub-run, which has no terminal outro. */
-  outro?: OutroData;
-  /** Present whenever `outcome` is not `success`. */
-  failure?: AgentFailure;
   snapshot: RunSnapshot;
-}
+};
 
 export interface RunAgentOptions {
   /** Receives every progress event in emission order. Never awaited. */
   onProgress?: (event: import('@lib/agent/progress').AgentProgress) => void;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
   interaction?: AgentInteraction;
-  /** Cancels the run at its next phase boundary and any pending question. */
-  signal?: AbortSignal;
 }
 
 /** What a sequence receives: the contracts plus the prepared run. */
@@ -355,5 +352,4 @@ export interface SequenceContext {
   boot: BootstrapResult;
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
-  signal: AbortSignal;
 }
