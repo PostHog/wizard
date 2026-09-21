@@ -1,214 +1,129 @@
 /**
  * Unified program runner — dispatcher.
  *
- * Single configurable pipeline for all programs. Each program
- * provides a ProgramRun (via the `run` field on ProgramConfig)
- * that controls:
- *   - Whether a skill is pre-installed or discovered at runtime
- *   - How the agent prompt is built
- *   - What MCP servers and package manager detector to use
- *   - What happens after the agent completes
+ * One callable, `runAgent(config, input, options)`, runs a program's agent
+ * pipeline to a decided result. `config` is resolved execution data (which
+ * program, how it is routed, which flags apply); `input` is the invocation
+ * snapshot (directory, credentials, project); `options` carries an optional
+ * progress observer, an optional answerer and an optional cancel signal.
  *
- * The pipeline runs a shared bootstrap (logging, health check, settings, OAuth,
- * flags, MCP url), then forks. The `orchestrator` variant routes to the
- * experimental task-queue runner. Every other variant runs the fixed linear
- * pipeline:
+ * The pipeline prepares the run (logging targets, gateway mint, scan triage),
+ * then forks. The `orchestrator` variant routes to the task-queue runner.
+ * Every other variant runs the fixed linear pipeline:
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
+ *
+ * The agent reports and asks, it never renders, never reads a session, never
+ * exits the process and never rejects. A decided failure comes back in
+ * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
+ * agent did not decide (a refused mint, an SDK crash) comes back as
+ * `outcome: 'crashed'` with the original error attached, so a caller can keep
+ * handling it the way it always did. The legacy adapter in
+ * `src/lib/programs/run-agent-legacy.ts` rebuilds today's session-driven
+ * behavior on top of this call for every existing caller.
  */
 
-import type { WizardSession } from '../../wizard-session';
-import { analytics } from '@utils/analytics';
-import {
-  Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-} from '@lib/constants';
+import { Sequence } from '@lib/constants';
+import { classifyRunFailure } from '@lib/errors';
 import { logToFile } from '@utils/debug';
-import { getUI } from '../../../ui';
-import type { ProgramConfig } from '../../programs/program-step';
-import type { ProgramRun, BootstrapResult } from './shared/types';
-import { bootstrapProgram } from './shared/bootstrap';
-import {
-  getSequence,
-  resolveBinding,
-  type ProgramBinding,
-  type SwitchboardCtx,
-} from './switchboard';
+import type {
+  RunAgentOptions,
+  RunConfig,
+  RunInput,
+  RunResult,
+} from './shared/types';
+import { prepareRun } from './shared/bootstrap';
+import { createProgressCollector } from './shared/progress-collector';
+import { getSequence } from './switchboard';
 import { flushScanReport } from '../../yara-hooks';
-import { startAuditLedgerWatcher } from '../../programs/audit/ledger-watcher';
-import { registerCleanup } from '../../../utils/wizard-abort';
 
 export type {
-  ProgramRun,
-  BootstrapResult,
   AbortCase,
-  PromptContext,
+  AgentFailure,
+  BootstrapResult,
   Credentials,
+  ProgramRun,
+  PromptContext,
+  ResolvedBinding,
+  RunAgentOptions,
+  RunConfig,
+  RunFlags,
+  RunHooks,
+  RunInput,
+  RunOutcome,
+  RunResult,
+  RunSnapshot,
+  SeedTaskEntry,
 } from './shared/types';
+export type {
+  AgentInteraction,
+  AgentProgress,
+  ProgressEmitter,
+} from '@lib/agent/progress';
 export { shouldDisableAsk } from './shared/bootstrap';
-
-/**
- * Resolve a ProgramConfig's agent run definition and execute the pipeline.
- * Entry point for bin.ts — handles buildRunConfig, bootstrap, and (future) run field.
- */
-export async function runAgent(
-  programConfig: ProgramConfig,
-  session: WizardSession,
-  options: { composed?: boolean } = {},
-): Promise<void> {
-  if (!programConfig.run) {
-    throw new Error(`Program "${programConfig.id}" has no run configuration.`);
-  }
-
-  // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
-  // and a watcher started later would ignore that write as pre-existing.
-  const ledger = programConfig.auditLedgerFile
-    ? startAuditLedgerWatcher(session.installDir, programConfig.auditLedgerFile)
-    : null;
-  if (ledger) registerCleanup(() => ledger.stop());
-
-  try {
-    const runDef =
-      typeof programConfig.run === 'function'
-        ? await programConfig.run(session)
-        : programConfig.run;
-
-    await runProgram(session, runDef, programConfig, options);
-  } finally {
-    ledger?.stop();
-  }
-}
+export { resolveBinding } from './switchboard';
+export type { ProgramBinding, SwitchboardCtx } from './switchboard';
 
 /**
  * Run a program's agent pipeline.
  *
- * Bootstrap → bind the program via the switchboard (resolve which sequence
- * and harness will run it, tag both axes) → dispatch to the resolved
- * sequence's runner.
+ * Prepare → dispatch to the sequence the binding names → return its result
+ * with the agent's own snapshot of what it reported. Missing observers change
+ * nothing; a throwing observer is logged and the run continues.
  */
-export async function runProgram(
-  session: WizardSession,
-  config: ProgramRun,
-  programConfig: ProgramConfig,
-  options: { composed?: boolean } = {},
-): Promise<void> {
-  const boot = await bootstrapProgram(session, config, programConfig);
+export async function runAgent(
+  config: RunConfig,
+  input: RunInput,
+  options: RunAgentOptions = {},
+): Promise<RunResult> {
+  const collector = createProgressCollector(options.onProgress);
+  const { emit } = collector;
+  const signal = options.signal ?? new AbortController().signal;
+  const log = (message: string) =>
+    emit({ kind: 'log', level: 'info', message });
 
   // Flush the warlock scan report once, at this single seam, on every
-  // termination path and for every harness (linear, orchestrator, or future):
-  //   - registerCleanup covers the abort/cancel path (wizardAbort runs the
-  //     registered cleanups; the success path never calls them)
-  //   - the finally covers normal completion and any direct throw that unwinds
-  //     through here
-  // flushScanReport is idempotent (it zeroes scan state), so the overlap is a
-  // harmless no-op. No harness has to know reporting exists.
-  registerCleanup(() => flushScanReport(session));
+  // termination path and for every harness (linear, orchestrator, or future).
+  // flushScanReport is idempotent (it zeroes scan state), so a caller that also
+  // flushes from its own cleanup path sees a harmless no-op. No harness has to
+  // know reporting exists.
   try {
-    const binding = resolveProgramRunner(
-      session,
-      programConfig,
-      boot,
-      options.composed ?? false,
-    );
-    if (binding.sequence === Sequence.orchestrator) {
-      getUI().log.info('Task-queue orchestrator enabled.');
+    const boot = await prepareRun(config, input);
+    if (config.binding.sequence === Sequence.orchestrator) {
+      log('Task-queue orchestrator enabled.');
     }
-    return await getSequence(binding.sequence).run(
-      session,
-      config,
-      programConfig,
-      boot,
-      options.composed ?? false,
+    logToFile(
+      `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
+        ` harness=${config.binding.harness} composed=${config.composed}`,
     );
+    const result = await getSequence(config.binding.sequence).run({
+      config,
+      input,
+      boot,
+      emit,
+      interaction: options.interaction,
+      signal,
+    });
+    return {
+      ...result,
+      skillId: input.skillId,
+      snapshot: collector.snapshot(),
+    };
+  } catch (error) {
+    // Not a decision the agent made. Hand it back whole rather than throw, so
+    // every ending of a run is a result the caller reads the same way.
+    const failure = classifyRunFailure(error);
+    logToFile('[agent-runner] run crashed:', error);
+    return {
+      outcome: 'crashed',
+      skillId: input.skillId,
+      failure: {
+        code: failure.code,
+        message: failure.message,
+        error: error instanceof Error ? error : new Error(String(error)),
+      },
+      snapshot: collector.snapshot(),
+    };
   } finally {
-    flushScanReport(session);
+    flushScanReport({ yaraReport: input.flags.yaraReport });
   }
-}
-
-/**
- * Resolve which sequence and harness will run a program (CLI → PostHog flag →
- * per-program binding → default), tag both axes onto analytics, and return the
- * binding for downstream dispatch.
- *
- * The one place `runner/index.ts` reaches into the switchboard — every other
- * concern (bootstrap, cleanup, dispatch, per-task per-role harness picks) is
- * either upstream or downstream of this call.
- */
-function resolveProgramRunner(
-  session: WizardSession,
-  programConfig: ProgramConfig,
-  boot: BootstrapResult,
-  composed: boolean,
-): ProgramBinding {
-  const ctx = {
-    program: programConfig.id,
-    composed,
-    flags: boot.wizardFlags,
-    flagPayloads: boot.wizardFlagPayloads,
-    cliHarness: session.harness,
-    cliSequence: session.sequence,
-    cliModel: session.model,
-  };
-  const binding = resolveBinding(ctx);
-  tagBinding(boot, binding);
-  captureSwitchboardDecision(ctx, binding);
-  return binding;
-}
-
-/**
- * One event + one log line per run: what entered the switchboard, which
- * precedence rung decided each axis, and the final pick.
- */
-function captureSwitchboardDecision(
-  ctx: SwitchboardCtx,
-  binding: ProgramBinding,
-): void {
-  const trace = ctx.trace ?? {};
-  // Unpinned orchestrator runs choose a model per task from the context-mill agent prompts; the orchestrator logs that map once the prompts load.
-  const perTaskModel =
-    binding.sequence === Sequence.orchestrator && trace.model === 'binding';
-  const model = perTaskModel ? 'chosen-per-task' : binding.model;
-  const modelSource = perTaskModel ? 'agent-prompts' : trace.model;
-  analytics.wizardCapture('switchboard resolved', {
-    program: ctx.program,
-    flag_self_driving_use_pi_harness:
-      ctx.flags[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY],
-    flag_self_driving_pi_payload: JSON.stringify(
-      ctx.flagPayloads?.[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY] ?? null,
-    ),
-    flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
-    cli_harness: ctx.cliHarness,
-    cli_sequence: ctx.cliSequence,
-    cli_model: ctx.cliModel,
-    harness_source: trace.harness,
-    model_source: modelSource,
-    sequence_source: trace.sequence,
-    harness: binding.harness,
-    model,
-    thinking_level: binding.thinkingLevel,
-    sequence: binding.sequence,
-  });
-  logToFile(
-    `[switchboard] decision: program=${ctx.program}` +
-      ` in(orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
-      ` cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
-        ctx.cliModel ?? '-'
-      })` +
-      ` → harness=${binding.harness} (${trace.harness ?? '?'})` +
-      ` model=${model} (${modelSource ?? '?'})` +
-      ` sequence=${binding.sequence} (${trace.sequence ?? '?'})`,
-  );
-}
-
-/**
- * Tag the run with its two routing axes. Sequence is stable for the whole
- * run; harness reflects the run-level (default-role) resolution — orchestrator
- * per-task calls emit their own `harness` property in their events so per-task
- * aggregations attribute correctly.
- */
-function tagBinding(boot: BootstrapResult, binding: ProgramBinding): void {
-  analytics.setTag('sequence', binding.sequence);
-  analytics.setTag('harness', binding.harness);
-  boot.wizardMetadata.SEQUENCE = binding.sequence;
-  boot.wizardMetadata.HARNESS = binding.harness;
 }

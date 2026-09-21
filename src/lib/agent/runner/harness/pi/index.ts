@@ -14,7 +14,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import {
   Harness,
@@ -41,6 +40,8 @@ import type {
   TaskRunInputs,
 } from '../types';
 import type { BootstrapResult } from '@lib/agent/runner/shared/types';
+import type { ProgressEmitter } from '@lib/agent/progress';
+import { createEmitLog } from '@lib/agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
 
@@ -147,10 +148,19 @@ export function extractText(message: unknown): string {
  * the MCP creates them) into the outro link, mirroring the anthropic path's
  * signal parsing (#9). The marker carries the URL the MCP returned.
  */
-export function applyOutroMarkers(textBlock: string): void {
+export function applyOutroMarkers(
+  textBlock: string,
+  emit: ProgressEmitter,
+): void {
   const markers: Array<[string, (url: string) => void]> = [
-    [AgentSignals.DASHBOARD_URL, (url) => getUI().setDashboardUrl(url)],
-    [AgentSignals.NOTEBOOK_URL, (url) => getUI().setNotebookUrl(url)],
+    [
+      AgentSignals.DASHBOARD_URL,
+      (url) => emit({ kind: 'url', which: 'dashboard', url }),
+    ],
+    [
+      AgentSignals.NOTEBOOK_URL,
+      (url) => emit({ kind: 'url', which: 'notebook', url }),
+    ],
   ];
   for (const [marker, apply] of markers) {
     const idx = textBlock.indexOf(marker);
@@ -195,20 +205,22 @@ export const piBackend: AgentHarness = {
   name: Harness.pi,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
-    const { session, boot, prompt, spinner, config, programConfig } = inputs;
+    const { config: runConfig, input, boot, emit, prompt, spinner } = inputs;
+    const config = runConfig.run;
     const modelId = inputs.model;
+    const log = createEmitLog(emit);
 
     const capture = createAioCapture({
-      enabled: session.captureAio,
+      enabled: input.flags.captureAio,
       projectApiKey: boot.credentials.projectApiKey,
       apiHost: boot.credentials.host.apiHost,
       runTags: boot.wizardMetadata,
     });
 
     // Init banner (parity #5).
-    getUI().log.step('Initializing Wizard agent...');
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
+    log.step('Initializing Wizard agent...');
+    log.step(`Verbose logs: ${getLogFilePath()}`);
+    log.success("Agent initialized. Let's get cooking!");
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
@@ -306,11 +318,11 @@ export const piBackend: AgentHarness = {
 
       const { createSecurityExtension } = await import('./security');
       const security = createSecurityExtension({
-        disallowedTools: programConfig.disallowedTools,
+        disallowedTools: runConfig.disallowedTools,
         getWizardAskPending: () => askState.pending,
         triageProvider: boot.triageProvider,
         // Where pi's bash runs; the rm allowance is confined to this tree.
-        workingDirectory: session.installDir,
+        workingDirectory: input.installDir,
       });
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
@@ -360,11 +372,11 @@ export const piBackend: AgentHarness = {
       }
 
       const resourceLoader = new DefaultResourceLoader({
-        cwd: session.installDir,
+        cwd: input.installDir,
         agentDir: getAgentDir(),
         systemPrompt:
           assembleCommandments({
-            program: programConfig.id,
+            program: runConfig.programId,
             sequence: Sequence.linear,
             harness: Harness.pi,
             caps: { bash: true, posthogMcp },
@@ -390,12 +402,14 @@ export const piBackend: AgentHarness = {
       const { createWizardPiTaskTools } = await import('./tasks');
       const { createDispatchAgentTool } = await import('./subagent');
       // Created once so the run loop can read the store for the completion guard.
-      const wizardTaskTools = createWizardPiTaskTools();
+      const wizardTaskTools = createWizardPiTaskTools((tasks) =>
+        emit({ kind: 'tasks', tasks }),
+      );
       // The one bash the agent (and its subagents) may use: every subprocess it
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
       const scrubbedBash = withMode(
-        createBashToolDefinition(session.installDir, {
+        createBashToolDefinition(input.installDir, {
           spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
         }),
         'sequential',
@@ -406,18 +420,18 @@ export const piBackend: AgentHarness = {
         // defaults so we can supply the env-scrubbed bash above; read/edit/write
         // are the stock definitions. Reads run in parallel so a batched turn of
         // independent reads executes at once; edit/write/bash stay sequential.
-        withMode(createReadToolDefinition(session.installDir), 'parallel'),
-        withMode(createEditToolDefinition(session.installDir), 'sequential'),
-        withMode(createWriteToolDefinition(session.installDir), 'sequential'),
+        withMode(createReadToolDefinition(input.installDir), 'parallel'),
+        withMode(createEditToolDefinition(input.installDir), 'sequential'),
+        withMode(createWriteToolDefinition(input.installDir), 'sequential'),
         scrubbedBash,
         // Native ls/find/grep so the agent explores with proper tools instead
         // of fence-blocked `bash {ls/find}` (the profiled retry-spirals came
         // from this gap). Parallel — exploration batches cleanly.
-        withMode(createLsToolDefinition(session.installDir), 'parallel'),
-        withMode(createFindToolDefinition(session.installDir), 'parallel'),
-        withMode(createGrepToolDefinition(session.installDir), 'parallel'),
+        withMode(createLsToolDefinition(input.installDir), 'parallel'),
+        withMode(createFindToolDefinition(input.installDir), 'parallel'),
+        withMode(createGrepToolDefinition(input.installDir), 'parallel'),
         ...createWizardPiTools({
-          workingDirectory: session.installDir,
+          workingDirectory: input.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
           detectPackageManager: config.detectPackageManager,
@@ -431,7 +445,7 @@ export const piBackend: AgentHarness = {
           },
           // Skip wizard_ask when the program disallows it (bare pi tool names
           // don't match the MCP-prefixed disallow list at the security gate).
-          disallowedTools: programConfig.disallowedTools,
+          disallowedTools: runConfig.disallowedTools,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.
@@ -442,7 +456,7 @@ export const piBackend: AgentHarness = {
         createDispatchAgentTool({
           model,
           modelRegistry: registry,
-          cwd: session.installDir,
+          cwd: input.installDir,
           agentDir: getAgentDir(),
           securityFactory: security.factory as (pi: unknown) => void,
           bashTool: scrubbedBash,
@@ -456,8 +470,8 @@ export const piBackend: AgentHarness = {
         // Reasoning effort from the switchboard capability matrix (undefined =
         // pi's default). Sent as `reasoning_effort` for openai-completions.
         thinkingLevel: caps.thinkingLevel,
-        cwd: session.installDir,
-        sessionManager: SessionManager.inMemory(session.installDir),
+        cwd: input.installDir,
+        sessionManager: SessionManager.inMemory(input.installDir),
         resourceLoader,
         // Disable the default built-in tools; `customTools` re-registers
         // read/edit/write + an env-scrubbed bash, so no subprocess inherits the
@@ -508,12 +522,12 @@ export const piBackend: AgentHarness = {
             const assistant = extractText(event.message).trim();
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
-              applyOutroMarkers(assistant);
+              applyOutroMarkers(assistant, emit);
               // Surface [STATUS] lines into the live spinner + status history,
               // mirroring the anthropic path — pi otherwise drops them.
               const statusText = lastStatusLine(assistant);
               if (statusText) {
-                getUI().pushStatus(statusText);
+                emit({ kind: 'status', message: statusText });
                 spinner.message(statusText);
               }
               for (const line of assistant.split('\n')) signals.push(line);
@@ -644,7 +658,7 @@ export const piBackend: AgentHarness = {
       // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
       // up host-side rather than leave a stale (often empty) artifact (#15).
       try {
-        const planFile = path.join(session.installDir, '.posthog-events.json');
+        const planFile = path.join(input.installDir, '.posthog-events.json');
         if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
       } catch (err) {
         logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
@@ -668,7 +682,7 @@ export const piBackend: AgentHarness = {
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
-      getUI().log.error(`pi backend error: ${message}`);
+      log.error(`pi backend error: ${message}`);
       const error = runErrorType(message);
       captureAborted(error);
       return { error, message };

@@ -137,7 +137,6 @@
     "test:tui": "vitest run --project tui",
     "test:cli": "vitest run --project cli",
     "test:harness": "vitest run --project harness",
-    "test:arch": "vitest run --project architecture",
     "test:goldens:update": "vitest run -u",
     "test:coverage": "pnpm build && vitest run --coverage",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",

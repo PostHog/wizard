@@ -20,31 +20,28 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import {
-  OutroKind,
-  type TaskNotice,
-  type WizardSession,
-} from '@lib/wizard-session';
-import {
-  POSTHOG_DOCS_URL,
-  WIZARD_CONTACT_EMAIL,
-  type Integration,
-} from '@lib/constants';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { OutroKind, type TaskNotice } from '@lib/wizard-session';
+import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@lib/constants';
 import {
   installSkillById,
   fetchSkillMenu,
   type SkillEntry,
 } from '@lib/wizard-tools';
-import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { wizardAbort, WizardError } from '@utils/wizard-abort';
+import { WizardError } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { BootstrapResult, ProgramRun } from '../../shared/types';
+import type { AgentInteraction } from '@lib/agent/progress';
+import type {
+  AgentFailure,
+  RunResult,
+  RunSnapshot,
+  SequenceContext,
+} from '../../shared/types';
+import { createEmitSpinner } from '../../shared/progress-collector';
+import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
@@ -61,14 +58,11 @@ import {
   TaskStatus,
   type QueuedTask,
 } from './queue';
-import { drainQueue, type RunTask } from './executor';
+import { drainQueue, RunTaskFatal, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import {
-  createWizardAskBridge,
-  LONGER_ASK_TIMEOUT_MS,
-} from '@lib/wizard-ask-bridge';
+import { LONGER_ASK_TIMEOUT_MS } from '@lib/wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
@@ -183,7 +177,7 @@ export function resolveSkillVariantId(
 }
 
 /**
- * The framework reference is the full `integration` skill. `session.skillId` is
+ * The framework reference is the full `integration` skill. `input.skillId` is
  * the bare framework (e.g. `django`), but the skill menu ids it as
  * `integration-<variant>`.
  */
@@ -222,7 +216,14 @@ export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
 export async function offerSeededTask(
   notice: TaskNotice,
   timeoutMs: number = TASK_NOTICE_TIMEOUT_MS,
+  interaction?: AgentInteraction,
+  signal: AbortSignal = new AbortController().signal,
 ): Promise<{ keep: boolean; timedOut: boolean }> {
+  // No one to show the notice to: a step nobody can answer for must not run.
+  // The same answer a non-interactive host gives today.
+  if (!interaction?.taskNotice) return { keep: false, timedOut: false };
+  const { taskNotice, cancelTaskNotice } = interaction;
+
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
   const timeout = new Promise<boolean>((resolve) => {
@@ -230,12 +231,12 @@ export async function offerSeededTask(
       timedOut = true;
       // Dismisses the overlay and settles the showTaskNotice promise too, so
       // the losing side of the race cannot leave a modal on screen.
-      getUI().cancelTaskNotice();
+      cancelTaskNotice?.();
       resolve(false);
     }, timeoutMs);
   });
   try {
-    const keep = await Promise.race([getUI().showTaskNotice(notice), timeout]);
+    const keep = await Promise.race([taskNotice(notice, { signal }), timeout]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
@@ -337,8 +338,15 @@ export async function askSeededConsent(
   type: string,
   notice: TaskNotice,
   timeoutMs?: number,
+  interaction?: AgentInteraction,
+  signal?: AbortSignal,
 ): Promise<SeededConsent> {
-  const consent = await offerSeededTask(notice, timeoutMs).then(
+  const consent = await offerSeededTask(
+    notice,
+    timeoutMs,
+    interaction,
+    signal,
+  ).then(
     (answer): SeededConsent => ({ ...answer, errored: false }),
     (err: unknown): SeededConsent => {
       logToFile(
@@ -427,33 +435,58 @@ export function displayOrder(
     .map((entry) => entry.task);
 }
 
-export async function runOrchestrator(
-  session: WizardSession,
-  config: ProgramRun,
-  programConfig: ProgramConfig,
-  boot: BootstrapResult,
-): Promise<void> {
+/** The snapshot the sequence returns; `runAgent` fills it from its collector. */
+const PENDING_SNAPSHOT: RunSnapshot = {
+  tasks: [],
+  statusMessages: [],
+  usage: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+  },
+};
+
+const failed = (failure: AgentFailure): RunResult => ({
+  outcome: 'failed',
+  failure,
+  snapshot: PENDING_SNAPSHOT,
+});
+
+export async function runOrchestrator({
+  config,
+  input,
+  boot,
+  emit,
+  interaction,
+  signal,
+}: SequenceContext): Promise<RunResult> {
   const runId = randomUUID();
+  const { run } = config;
+  const programId = config.programId;
+
+  if (signal.aborted) {
+    return {
+      outcome: 'cancelled',
+      failure: { message: 'Wizard setup cancelled.' },
+      snapshot: PENDING_SNAPSHOT,
+    };
+  }
 
   // Switchboard context — reused for every per-role harness resolution below.
-  const switchboardCtx = {
-    program: programConfig.id,
-    flags: boot.wizardFlags,
-    flagPayloads: boot.wizardFlagPayloads,
-    cliHarness: session.harness,
-    cliSequence: session.sequence,
-    cliModel: session.model,
-  };
+  // The caller resolved the run-level binding from it; per-task roles overlay
+  // `binding.contextMillOverride[role]` on the same inputs.
+  const switchboardCtx = { ...config.switchboard, trace: undefined };
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
-  const flow = programConfig.agentFlow ?? programConfig.id;
+  const flow = config.agentFlow ?? programId;
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
     exclude: ciExcludedTaskTypes(),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
-      programConfig.id,
+      programId,
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
@@ -492,7 +525,7 @@ export async function runOrchestrator(
       ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
       : undefined;
 
-  const store = new QueueStore(session.installDir, runId, {
+  const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
       // Mirror dispatch's allow-list fallback so attribution names the model that runs.
@@ -565,20 +598,20 @@ export async function runOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  // The framework key for reference + variant resolution. `session.integration`
-  // is the detected framework and always wins; `session.skillId` is the
-  // fallback for the basic-integration path, where bootstrap sets it to the
+  // The framework key for reference + variant resolution. `input.integration`
+  // is the detected framework and always wins; `input.skillId` is the
+  // fallback for the basic-integration path, where the caller sets it to the
   // framework label. Programs whose run config carries their own skill id
   // (agent-skill commands like replay-vision) would otherwise leak that id in
-  // here as a bogus framework after bootstrap overwrites the detect result.
-  const framework = session.integration ?? session.skillId ?? undefined;
+  // here as a bogus framework after the caller overwrites the detect result.
+  const framework = input.integration ?? input.skillId ?? undefined;
   const referenceSkillId = framework
     ? resolveReferenceSkillId(menuSkillEntries, framework)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
-      session.installDir,
+      input.installDir,
       boot.skillsBaseUrl,
       {
         skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
@@ -588,11 +621,11 @@ export async function runOrchestrator(
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
-      if (existsSync(path.join(session.installDir, example))) {
+      if (existsSync(path.join(input.installDir, example))) {
         examplePath = example;
       }
       const commandments = path.join(ref.path, 'references', 'COMMANDMENTS.md');
-      if (existsSync(path.join(session.installDir, commandments))) {
+      if (existsSync(path.join(input.installDir, commandments))) {
         commandmentsPath = commandments;
       }
     } else {
@@ -627,11 +660,9 @@ export async function runOrchestrator(
     }
   }
   if (missingVariants.length > 0) {
-    // The framework's own docs page from its config; generic docs when detection found none.
-    const docsUrl = framework
-      ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
-      : undefined;
-    await wizardAbort({
+    // The framework's own docs page, resolved by the caller; generic docs when detection found none.
+    const docsUrl = framework ? input.frameworkDocsUrl : undefined;
+    return failed({
       code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
         'Setup instructions for this project failed to download.\n' +
@@ -662,27 +693,28 @@ export async function runOrchestrator(
   };
 
   logToFile(
-    `[orchestrator] START program=${programConfig.id} dir=${session.installDir} run=${runId}`,
+    `[orchestrator] START program=${programId} dir=${input.installDir} run=${runId}`,
   );
   analytics.wizardCapture('orchestrator started', {
-    program_id: programConfig.id,
+    program_id: programId,
   });
-  getUI().startRun();
+  emit({ kind: 'lifecycle', phase: 'started' });
 
   // Label precedence: what the orchestrator set at enqueue, then the agent
   // prompt's default, then the bare type.
   const labelFor = (t: { type: string; label?: string }) =>
     t.label ?? registry.get(t.type)?.label ?? t.type;
   const renderQueue = () =>
-    getUI().syncTodos(
-      displayOrder(store.list(), (t) =>
+    emit({
+      kind: 'tasks',
+      tasks: displayOrder(store.list(), (t) =>
         registry.runnerSeededTypes.includes(t.type),
       ).map((t) => ({
         content: labelFor(t),
         status: toTodoStatus(t.status),
         activeForm: labelFor(t),
       })),
-    );
+    });
 
   // Each task's run binds the wizard-tools MCP server to a per-task
   // orchestrator context so complete_task / enqueue_task attribute correctly
@@ -709,7 +741,7 @@ export async function runOrchestrator(
   // Kill switch: off (or unset), the wizard queues nothing itself and the run
   // is byte-identical to a project with no detected sources.
   const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
-    ? programConfig.seedTasks?.(session) ?? []
+    ? config.seedTasks?.() ?? []
     : [];
   const seededTypes: string[] = [];
   // Kept so their dependencies can be resolved once the planner has run — they
@@ -758,7 +790,13 @@ export async function runOrchestrator(
       // not, which is why the offer lives here and not there.
       seededConsent.set(
         task.id,
-        await askSeededConsent(seeded.type, seeded.notice),
+        await askSeededConsent(
+          seeded.type,
+          seeded.notice,
+          undefined,
+          interaction,
+          signal,
+        ),
       );
     }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
@@ -790,11 +828,11 @@ export async function runOrchestrator(
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
   // Absent in CI and signup, where nobody can answer.
-  const askBridge = shouldDisableAsk(session)
+  const askBridge = shouldDisableAsk(input.flags)
     ? undefined
-    : createWizardAskBridge({
-        getSource: () => session.skillId ?? programConfig.id,
-        showQuestion: (q) => {
+    : createAskBridge(interaction, signal, {
+        getSource: () => input.skillId ?? programId,
+        beforeShow: () => {
           // How late the first ask lands is the measure of this run shape: it
           // should follow the autonomous work, not interrupt it.
           metrics.recordAsk(Date.now());
@@ -804,16 +842,14 @@ export async function runOrchestrator(
           // unanswered ask still times out into the deep-link fallback — it just
           // gives a person who stepped away a chance to come back first.
           ringTerminalBell();
-          return getUI().requestQuestion(q);
         },
-        cancelQuestion: () => getUI().cancelPendingQuestion(),
-        richLinks: config.richLinks ?? false,
+        richLinks: run.richLinks ?? false,
         // A task ask waits on a person, and the drain waits it out — the
         // executor holds the task's promise — so this is the only real limit.
         timeoutMs: LONGER_ASK_TIMEOUT_MS,
       });
 
-  const spinner = getUI().spinner();
+  const spinner = createEmitSpinner(emit);
 
   // 1. Seed the queue with the orchestrator agent. It is itself an agent prompt
   // (the WHAT), so its model and tools come from its frontmatter. The seed
@@ -826,9 +862,10 @@ export async function runOrchestrator(
   const seedHarness = requireTaskHarness(seedPick);
   const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
-    session,
-    programConfig,
+    config,
+    input,
     boot,
+    emit,
     prompt: assembleSeedPrompt(promptContext, seedPrompt.body, store.list()),
     spinner,
     model: requireKnownModel(seedModel.model, seedPick.model),
@@ -841,6 +878,9 @@ export async function runOrchestrator(
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
+  // A decided failure (a 401 the harness already reported) ends the run here,
+  // before anything is queued, exactly where the harness used to exit.
+  if (seedResult.failure) return failed(seedResult.failure);
   if (seedResult.error) {
     logToFile(
       `[orchestrator] seed error: ${seedResult.error} ${
@@ -941,7 +981,7 @@ export async function runOrchestrator(
     analytics.wizardCapture('orchestrator sink invariant violated', {
       uncovered_types: unwaited.map((t) => t.type),
     });
-    await wizardAbort({
+    return failed({
       code: ErrorCodes.AgentOrchestratorSinkInvariant,
       message: `The wizard could not plan this setup: the final step would have skipped ${unwaited
         .map((t) => t.type)
@@ -965,7 +1005,7 @@ export async function runOrchestrator(
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.
-  const claudeSkillsDir = path.join(session.installDir, '.claude', 'skills');
+  const claudeSkillsDir = path.join(input.installDir, '.claude', 'skills');
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
@@ -998,7 +1038,7 @@ export async function runOrchestrator(
         }
         const result = await installSkillById(
           variantId,
-          session.installDir,
+          input.installDir,
           boot.skillsBaseUrl,
           { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
@@ -1029,10 +1069,11 @@ export async function runOrchestrator(
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
-      await taskHarness.runTask({
-        session,
-        programConfig,
+      const taskResult = await taskHarness.runTask({
+        config,
+        input,
         boot,
+        emit,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
         model: requireKnownModel(taskModel.model, taskPick.model),
@@ -1051,6 +1092,10 @@ export async function runOrchestrator(
           harness: taskPick.harness,
         },
       });
+      // A decided failure (a 401 the harness already reported) is the run's,
+      // not the task's: stop the drain and report it, where the harness used
+      // to exit the process.
+      if (taskResult.failure) throw new RunTaskFatal(taskResult.failure);
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1074,13 +1119,17 @@ export async function runOrchestrator(
     renderQueue();
   }
 
+  let fatal: AgentFailure | undefined;
   try {
     await drainQueue(store, runTask);
+  } catch (error) {
+    if (!(error instanceof RunTaskFatal)) throw error;
+    fatal = error.failure;
   } finally {
     try {
       if (referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(
-          path.join(session.installDir, referenceInstallPath),
+          path.join(input.installDir, referenceInstallPath),
           claudeSkillsDir,
           referenceSkillId,
         );
@@ -1095,7 +1144,7 @@ export async function runOrchestrator(
     // cache folder (queue, handoffs, reference example, installed task
     // instructions). The .DELETE-ME.md inside is the fallback if we don't.
     try {
-      rmSync(path.join(session.installDir, QUEUE_DIR_NAME), {
+      rmSync(path.join(input.installDir, QUEUE_DIR_NAME), {
         recursive: true,
         force: true,
       });
@@ -1118,6 +1167,8 @@ export async function runOrchestrator(
       );
     }
   }
+
+  if (fatal) return failed(fatal);
 
   renderQueue();
 
@@ -1172,7 +1223,7 @@ export async function runOrchestrator(
             ', ',
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
-    await wizardAbort({
+    return failed({
       code: ErrorCodes.AgentOrchestratorTasksFailed,
       message,
       error: new WizardError(
@@ -1193,7 +1244,7 @@ export async function runOrchestrator(
   // usable model response (e.g. the gateway returned empty completions).
   // "0/0 completed" is a dead run, not a success with an empty denominator.
   if (summary.total === 0) {
-    await wizardAbort({
+    return failed({
       code: ErrorCodes.AgentOrchestratorHollowRun,
       message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
@@ -1219,19 +1270,20 @@ export async function runOrchestrator(
       } steps completed${
         stepNotes.length > 0 ? ` (${stepNotes.join(', ')})` : ''
       }.`;
-  getUI().setOutroData({
+  const outro = {
     kind: OutroKind.Success,
     message,
     body: conflict
       ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
       : undefined,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
-    nextSteps: config.buildOutroNextSteps?.(
-      session,
+    nextSteps: config.hooks?.buildOutroNextSteps?.(
       boot.credentials,
       completedSeededTypes(store, seededTasks),
     ),
-  });
-  getUI().outro(message);
+  };
+  emit({ kind: 'completion', outro });
+  emit({ kind: 'lifecycle', phase: 'completed', message });
   await analytics.shutdown('success');
+  return { outcome: 'success', outro, snapshot: PENDING_SNAPSHOT };
 }
