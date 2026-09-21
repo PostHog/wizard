@@ -7,6 +7,8 @@
  * to the skill's workflow, and the hard guard against every other category.
  */
 
+import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@lib/constants';
+import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { promptFor } from './helpers/integration-prompt.no-jest';
 
 describe('default integration skill workflow', () => {
@@ -23,5 +25,24 @@ describe('default integration skill workflow', () => {
       'Do NOT load or install skills from any other category',
     );
     expect(prompt).toContain('do not substitute `llm-analytics`');
+  });
+});
+
+describe('default observability flag gating', () => {
+  const excluded = (flags: Record<string, string>) =>
+    posthogIntegrationConfig.excludedTaskTypes!(flags);
+
+  it("excludes AIO and Logs only on an explicit 'false'", () => {
+    expect(excluded({ [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'false' })).toEqual([
+      'ai-observability',
+      'logs',
+    ]);
+  });
+
+  it('includes them when the flag is true, absent, or the fetch failed', () => {
+    expect(excluded({ [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'true' })).toEqual(
+      [],
+    );
+    expect(excluded({})).toEqual([]);
   });
 });

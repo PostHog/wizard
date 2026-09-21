@@ -566,6 +566,36 @@ describe('renderToolInventory', () => {
 });
 
 describe('assembleSeedPrompt', () => {
+  it('is byte-identical to a no-exclusions prompt when nothing is excluded', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    expect(assembleSeedPrompt(ctx, 'plan it', [], [])).toBe(
+      assembleSeedPrompt(ctx, 'plan it', []),
+    );
+    expect(assembleSeedPrompt(ctx, 'plan it')).not.toContain('excludes them');
+  });
+
+  it('names excluded types so the plan mentioning them reads as a skip', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    const prompt = assembleSeedPrompt(
+      ctx,
+      'plan it',
+      [],
+      ['ai-observability', 'logs'],
+    );
+    expect(prompt).toContain('this run excludes them: ai-observability, logs');
+    expect(prompt).toContain('do not queue them, do not retry them');
+  });
+
   it('names the tasks the wizard queued before the planner ran', () => {
     const ctx = {
       projectId: 1,

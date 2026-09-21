@@ -15,7 +15,10 @@ import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@lib/errors';
-import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
+import {
+  WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
+  WIZARD_INTERACTION_EVENT_NAME,
+} from '@lib/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
@@ -211,6 +214,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   seedTasks: warehouseSeedTasks,
+
+  // Kill switch over the shipped default: only an explicit 'false' excludes,
+  // so a failed flag fetch keeps AI Observability and Logs in the run.
+  excludedTaskTypes: (flags) =>
+    flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+      ? ['ai-observability', 'logs']
+      : [],
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.

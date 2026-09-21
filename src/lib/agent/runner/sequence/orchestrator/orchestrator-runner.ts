@@ -451,8 +451,14 @@ export async function runOrchestrator(
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = programConfig.agentFlow ?? programConfig.id;
+  // Also named to the planner in its seed prompt, so the plan's mention of an
+  // excluded type reads as an instructed skip instead of a guard round-trip.
+  const excludedTaskTypes = [
+    ...ciExcludedTaskTypes(),
+    ...(programConfig.excludedTaskTypes?.(boot.wizardFlags) ?? []),
+  ];
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: ciExcludedTaskTypes(),
+    exclude: excludedTaskTypes,
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
       programConfig.id,
@@ -833,7 +839,12 @@ export async function runOrchestrator(
     session,
     programConfig,
     boot,
-    prompt: assembleSeedPrompt(promptContext, seedPrompt.body, store.list()),
+    prompt: assembleSeedPrompt(
+      promptContext,
+      seedPrompt.body,
+      store.list(),
+      excludedTaskTypes,
+    ),
     spinner,
     model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,

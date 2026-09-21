@@ -92,6 +92,20 @@ const TASK_BASICS = `You are one step in a larger PostHog workflow made of sever
 const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call names the task kind in its \`type\` field (the tool has no \`task\` field) and returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. The last task you queue, the one that reports on the run, must depend on every other task in the queue — directly, or through a task it already depends on. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
 /**
+ * Injected only when the run excludes task types (a flag or CI gate), so the
+ * seed prompt of an ordinary run is byte-identical to one with no exclusions.
+ * Naming the types beats a "check the tool's list" rule: the planner has
+ * nothing to infer, and the pre-queued (runner-seeded) tasks — absent from the
+ * enqueue list by design — cannot be mistaken for exclusions.
+ */
+function excludedTypesNote(types: readonly string[]): string | null {
+  if (types.length === 0) return null;
+  return `The plan below may mention these task types, but this run excludes them: ${types.join(
+    ', ',
+  )}. enqueue_task will not accept them — do not queue them, do not retry them, and hang nothing off them.`;
+}
+
+/**
  * Tasks the wizard queued before the planner ran. It has to see them: they are
  * part of the run it is planning around, and the task that reports last has to
  * depend on them. Their ids are real, so it can wire the edge directly.
@@ -147,8 +161,15 @@ export function assembleSeedPrompt(
   ctx: OrchestratorPromptContext,
   body: string,
   preQueued: readonly { id: string; type: string }[] = [],
+  excludedTypes: readonly string[] = [],
 ): string {
-  return [projectContext(ctx), SEED_BASICS, preQueuedTasks(preQueued), body]
+  return [
+    projectContext(ctx),
+    SEED_BASICS,
+    excludedTypesNote(excludedTypes),
+    preQueuedTasks(preQueued),
+    body,
+  ]
     .filter(Boolean)
     .join('\n\n');
 }
