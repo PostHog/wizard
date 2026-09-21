@@ -242,6 +242,11 @@ The MCP route offers the same actions; the agent supplies the values.
 5. **node-pty's spawn-helper.** When the package is extracted without its build
    script, the prebuilt helper loses its execute bit and `pty.spawn` fails with
    `posix_spawnp failed`. `tui-capture.ts` restores it on each spawn.
+6. **The ledger settles after the state.** `session.runPhase` flips to
+   `completed` or `error` when the agent returns; the run record leaves
+   `running` only after the run's task stream has flushed (up to 2 s). Poll
+   `GET /runs` for the record before `POST /shutdown`, which answers 409 while
+   the ledger has an active run.
 
 ## Changing what the run does
 

@@ -124,6 +124,17 @@ async function main(): Promise<void> {
       );
     }
     log(`  final -> ${JSON.stringify(brief(state))}`);
+    // The record settles after the run's task stream flushed; a shutdown before that is a 409.
+    let settled = (await client.runs()).find((r) => r.runId === record.runId);
+    for (let i = 0; settled?.status === 'running' && i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      settled = (await client.runs()).find((r) => r.runId === record.runId);
+    }
+    log(
+      `  GET /runs [${record.runId}] -> ${settled?.status ?? 'missing'}${
+        settled?.error ? ` (${settled.error})` : ''
+      }`,
+    );
   }
   log(`GET /runs -> ${JSON.stringify(await client.runs(), null, 2)}`);
   log(
