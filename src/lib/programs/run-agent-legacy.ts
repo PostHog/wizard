@@ -55,7 +55,10 @@ import {
 } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
+import {
+  authenticate,
+  refreshAccessTokenIfNeeded,
+} from '@lib/agent/runner/shared/authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
 
@@ -474,7 +477,7 @@ function captureSwitchboardDecision(
  * back to exactly the call the agent used to make, the frame and flow goldens
  * hold without regeneration.
  */
-export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
+function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
   let spinner: SpinnerHandle | undefined;
   return (event) => {
     switch (event.kind) {
@@ -520,7 +523,7 @@ export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
 }
 
 /** The agent's questions, answered wherever `getUI()` answers them today. */
-export function uiInteraction(ui: WizardUI): AgentInteraction {
+function uiInteraction(ui: WizardUI): AgentInteraction {
   return {
     ask: (question) => ui.requestQuestion(question),
     cancelAsk: () => ui.cancelPendingQuestion(),

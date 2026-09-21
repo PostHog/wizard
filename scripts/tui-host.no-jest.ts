@@ -30,7 +30,7 @@ import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
 import { runAgent } from '@lib/programs/run-agent-legacy';
 import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
 import { getAuditChecks } from '@lib/programs/audit/types';
-import { authenticate } from '@lib/programs/authenticate';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';

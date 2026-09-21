@@ -40,30 +40,12 @@ for the coordinated change checklist.
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
 **The entry point** (`index.ts`) is the front door:
-
-```ts
-runAgent(config: RunConfig, input: RunInput, options?: {
-  onProgress?: (event: AgentProgress) => void;
-  interaction?: AgentInteraction;
-  signal?: AbortSignal;
-}): Promise<RunResult>
-```
-
-`RunConfig` is resolved execution data: the program id, its run definition, the
-binding the caller resolved, flags, run tags and tool lists. `RunInput` is the
-invocation snapshot: directory, credentials, project, skill. The agent reports
-through `onProgress` (one event per former UI call, copied data, never awaited)
-and asks through `interaction` (an optional answerer for `wizard_ask` and task
-notices). It returns a `RunResult` — outcome, outro, a failure with the same
-fields `wizardAbort` takes, and a snapshot of what it reported. It never
-renders, never reads a session, never exits the process and never rejects: a
-decided failure is `aborted` or `failed`, an error the agent did not decide is
-`crashed` with the original error attached. Types live in `shared/types.ts` and
-`../progress.ts`.
-
-Everything the caller decides first — health and settings gates, OAuth, the AI
-opt-in gate, post-auth gates, feature flags, token refresh, the binding — lives
-in `src/lib/programs/run-agent-legacy.ts`, which also maps progress back onto
+`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
+takes resolved execution data and an invocation snapshot (`shared/types.ts`),
+reports through `onProgress` and asks through `interaction` (`../progress.ts`),
+and returns every ending as a result. It never renders, reads a session or
+exits. The gates, OAuth, flags and binding lookup that used to run here live in
+`src/lib/programs/run-agent-legacy.ts`, which also maps progress back onto
 `getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
@@ -74,8 +56,7 @@ out to be linear or orchestrator, anthropic or pi, the setup is the same.
 fetched flags + any CLI overrides, it returns a `ProgramBinding` — which query
 shape (sequence), which agent SDK (harness), which model. Two independent
 middleware chains, one per axis, apply precedence rules (CLI > flag > program
-config > default). The caller resolves the run-level binding; the orchestrator
-re-resolves the harness per task role from the same inputs.
+config > default). This is the only layer that makes routing decisions.
 
 **Sequences** (`sequence/`) are LLM query shapes. Once the switchboard has
 picked one, that sequence takes over the run and owns _how the LLM's work is
@@ -115,5 +96,5 @@ Each layer is replaceable.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
 5. The scan report flushes; `runAgent` returns a `RunResult`.
-6. The caller applies it: an outro is already reported, a decided failure goes
-   to `wizardAbort`, a crash is rethrown for the runner's own handling.
+6. The caller applies it: a decided failure goes to `wizardAbort`, a crash is
+   rethrown for the runner's own handling.
