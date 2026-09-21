@@ -1,6 +1,7 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { headlessOption, regionOption } from '@lib/headless-mode';
 
 const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'ai-observability-intro' } : step,
@@ -22,6 +23,7 @@ export const aiObservabilityConfig: ProgramConfig = {
   command: 'ai-observability',
   description: 'Add PostHog AI Observability to your LLM calls',
   id: 'ai-observability',
+  cliOptions: { ...headlessOption, ...regionOption },
   steps: AI_OBSERVABILITY_STEPS,
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
   getContentBlocks,

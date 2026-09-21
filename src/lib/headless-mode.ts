@@ -24,9 +24,8 @@ import type { Options } from 'yargs';
 export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
 
 /**
- * The yargs option declaration for the headless flag. Declared per-command
- * (basic integration + audit) rather than globally, so no other command
- * accepts it. Spread into a command's `options` to opt it into headless.
+ * The yargs option declaration for the headless flag. Commands opt in so that
+ * unsupported commands reject headless execution instead of starting it.
  */
 export const headlessOption: Record<string, Options> = {
   [HEADLESS_FLAG]: {
