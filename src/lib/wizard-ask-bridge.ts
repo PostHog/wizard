@@ -53,6 +53,8 @@ export interface AskResponse {
 export interface WizardAskBridge {
   /** Open the WizardAsk overlay and resolve with the user's answers. */
   request(req: WizardAskRequest): Promise<AskResponse>;
+  /** An unresolved question keeps file mutations paused across concurrent requests. */
+  getPendingQuestion: () => PendingQuestion | null;
 }
 
 export interface WizardAskBridgeOptions {
@@ -114,8 +116,13 @@ export function createWizardAskBridge(
   opts: WizardAskBridgeOptions,
 ): WizardAskBridge {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_ASK_TIMEOUT_MS;
+  const pendingQuestions = new Map<string, PendingQuestion>();
 
   return {
+    getPendingQuestion: () => {
+      for (const pending of pendingQuestions.values()) return pending;
+      return null;
+    },
     async request({ questions, subject }) {
       const pending: PendingQuestion = {
         id: randomUUID(),
@@ -124,6 +131,7 @@ export function createWizardAskBridge(
         richLinks: opts.richLinks ?? false,
         askedAt: new Date().toISOString(),
       };
+      pendingQuestions.set(pending.id, pending);
 
       const startedAt = Date.now();
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -168,6 +176,7 @@ export function createWizardAskBridge(
         return { answers, timedOut };
       } finally {
         if (timer) clearTimeout(timer);
+        pendingQuestions.delete(pending.id);
       }
     },
   };

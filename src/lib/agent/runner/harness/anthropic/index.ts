@@ -60,6 +60,7 @@ export const anthropicBackend: AgentHarness = {
         programId: boot.programId,
         integrationLabel: config.integrationLabel,
         askBridge,
+        getPendingQuestion: askBridge?.getPendingQuestion,
         askMaxQuestions: config.maxQuestions,
         allowedTools: runConfig.allowedTools,
         disallowedTools: runConfig.disallowedTools,
@@ -141,6 +142,7 @@ export const anthropicBackend: AgentHarness = {
         // Only a task allowed to ask carries a bridge, so the Write/Edit pause
         // that rides on a pending question stays inside that task's agent.
         askBridge,
+        getPendingQuestion: askBridge?.getPendingQuestion,
         orchestrator,
         capture,
         emit,
