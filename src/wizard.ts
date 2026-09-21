@@ -53,9 +53,8 @@ export const GLOBAL_OPTIONS = {
   },
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`.
-  // NB: the experimental headless flag is deliberately NOT global — it's
-  // declared per-command (basic integration + audit) via `headlessOption`
-  // in @lib/headless-mode, so no other command accepts it.
+  // NB: the experimental headless flag is deliberately NOT global. Supported
+  // commands declare it through `headlessOption` in @lib/headless-mode.
   'base-url': {
     describe:
       'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
@@ -91,10 +90,10 @@ export class Wizard {
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
-    // flag, declared per-command on basic integration + audit via
-    // `headlessOption` (see @lib/headless-mode), so no other command accepts
-    // it. CI needs `region` globally because the workbench passes it to every
-    // command. --ci and headless stay separate so their behavior can diverge.
+    // flag, declared per-command through `headlessOption` (see
+    // @lib/headless-mode). CI needs `region` globally because the workbench
+    // passes it to every command. --ci and headless stay separate so their
+    // behavior can diverge.
     if (!IS_PRODUCTION_BUILD) {
       cli = cli
         .options(regionOption)
