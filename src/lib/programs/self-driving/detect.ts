@@ -31,6 +31,7 @@ import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { ErrorCodes } from '@lib/errors';
+import { POSTHOG_PACKAGE_RE } from '@lib/detection/posthog-dependency';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
@@ -58,11 +59,6 @@ export function getSelfDrivingDetectedTools(
       | undefined) ?? []
   );
 }
-
-// Matches `posthog` at a dependency boundary (line start, or after "'/=:.@ or
-// whitespace): catches `com.posthog:posthog-android` and `@posthog/ai`, skips
-// substrings inside other words.
-const POSTHOG_PACKAGE_RE = /(^|["'\s/=:.@])posthog/im;
 
 // Manifests grepped for a posthog dependency. Distinct from PROJECT_MANIFESTS
 // in @lib/detection/agentic (project-root discovery); keep the two in sync

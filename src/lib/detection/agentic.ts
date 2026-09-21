@@ -25,6 +25,7 @@ import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { boundedGlobResult, readProjectFile } from '@utils/bounded-fs';
 import { logToFile } from '@utils/debug';
+import { POSTHOG_PACKAGE_RE } from './posthog-dependency.js';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -114,13 +115,6 @@ export const MANIFEST_FALLBACK_DEPTH = 4;
 /** Manifest paths the prompt carries. Shallowest first, so roots survive the cut. */
 export const MAX_MANIFESTS_IN_PROMPT = 200;
 
-/**
- * Matches `posthog` at a dependency boundary. Counterpart of
- * POSTHOG_PACKAGE_RE in @lib/programs/self-driving/detect; keep the two in
- * sync. Only the agent-free fallback report uses it.
- */
-const POSTHOG_DEPENDENCY_RE = /(^|["'\s/=:.@])posthog/im;
-
 /** The manifest prescan: what it found, and which bound stopped it. */
 export type ManifestScan = {
   /** Manifest paths relative to the working directory, shallowest first. */
@@ -151,6 +145,7 @@ export async function scanProjectManifests(cwd: string): Promise<ManifestScan> {
   const full = await boundedGlobResult(manifestGlob(), { cwd });
   const paths = new Set(full.matches);
   let durationMs = full.durationMs;
+  let truncated = full.truncated;
   if (full.timedOut) {
     const shallow = await boundedGlobResult(manifestGlob(), {
       cwd,
@@ -158,18 +153,19 @@ export async function scanProjectManifests(cwd: string): Promise<ManifestScan> {
     });
     for (const match of shallow.matches) paths.add(match);
     durationMs += shallow.durationMs;
+    truncated ||= shallow.truncated;
   }
   return {
     paths: [...paths].sort(
       (a, b) => pathDepth(a) - pathDepth(b) || (a < b ? -1 : 1),
     ),
-    truncated: full.truncated,
+    truncated,
     timedOut: full.timedOut,
     durationMs,
   };
 }
 
-/** The project directory a manifest belongs to (see the prompt's three exceptions). */
+/** The project directory a manifest belongs to. */
 function manifestProjectDir(rel: string): string {
   const segments = rel.split('/');
   segments.pop();
@@ -195,7 +191,7 @@ export function manifestFallbackReport(
   for (const rel of manifestPaths) {
     const dir = manifestProjectDir(rel);
     const contents = readProjectFile(join(cwd, rel));
-    const found = contents !== null && POSTHOG_DEPENDENCY_RE.test(contents);
+    const found = contents !== null && POSTHOG_PACKAGE_RE.test(contents);
     hasPostHog.set(dir, (hasPostHog.get(dir) ?? false) || found);
   }
   const projects: AgenticProject[] = [...hasPostHog].map(([path, posthog]) => ({
