@@ -276,7 +276,7 @@ export class GatewayMintFailed extends WizardError {
 
 /**
  * Whether a mint status means "refused this run" rather than "not available".
- * 429 the daily run limit, 403 revoked project access, 400 a login covering
+ * 429 the weekly run limit, 403 revoked project access, 400 a login covering
  * more than one project, 401 a credential the mint does not accept, 404 an
  * instance without the mint endpoint.
  */
@@ -342,7 +342,7 @@ function mintRefusalMessage(status: number, detail?: string): string {
   if (detail) return detail;
   switch (status) {
     case 429:
-      return 'This wizard program has used its daily run limit. Try again tomorrow.';
+      return 'This wizard program has used its weekly run limit for your PostHog account. Try again next week.';
     case 403:
       return 'Your access to this project has changed. Re-authenticate and try again.';
     case 400:
