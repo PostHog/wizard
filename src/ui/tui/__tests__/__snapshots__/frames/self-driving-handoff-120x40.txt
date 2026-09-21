@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ ✔ PostHog is installed
+
+ Now let's make your product self-driving.
+
+ Next, the agent connects GitHub, turns on signal sources, and tunes the scouts that watch your product data.
+
+ About 10 more minutes, and it needs your input a few times. Keep this terminal open.
+
+ ▸ Set up Self-driving [Enter]
+
+ You can find your PostHog integration report at ./posthog-setup-report.md
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

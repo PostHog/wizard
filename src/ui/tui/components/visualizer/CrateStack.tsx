@@ -109,7 +109,7 @@ export const CrateStack = ({ width, height }: VisualProps) => {
             return (
               <Text
                 key={x}
-                bold={isFalling}
+                bold={!!isFalling}
                 color={
                   isFalling ? VISUALIZER_PALETTE.head : VISUALIZER_PALETTE.mid
                 }

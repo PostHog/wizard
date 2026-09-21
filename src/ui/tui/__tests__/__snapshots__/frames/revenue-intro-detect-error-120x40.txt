@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+
+
+
+
+                                                  ███ PostHog Wizard 🦔
+
+                        ✘ Cannot set up revenue analytics
+
+                        Neither PostHog nor Stripe SDKs detected (scanned 2 package.json files).
+
+                        Revenue analytics requires:
+                          • A PostHog SDK (posthog-js, posthog-node, posthog-react-native, …)
+                          • A Stripe SDK (stripe, @stripe/stripe-js, @stripe/react-stripe-js)
+
+                        Install Stripe and run npx @posthog/wizard to set up PostHog.
+
+                                                         ▸ Exit
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

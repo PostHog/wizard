@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+                        ╭──────────────────────────────────────────────────────────────────────╮
+                        │                                                                      │
+                        │                          OAuth ports in use                          │
+                        │                                                                      │
+                        │   The wizard needs a local port for OAuth. We tried these ports      │
+                        │   which are all in use:                                              │
+                        │                                                                      │
+                        │     Port 8239                                                        │
+                        │     Port 8238                                                        │
+                        │     Port 8240                                                        │
+                        │     Port 8237                                                        │
+                        │     Port 8236                                                        │
+                        │     Port 8235                                                        │
+                        │                                                                      │
+                        │   Please free one of these ports and retry.                          │
+                        │                                                                      │
+                        │   ────────────────────────────────────────────────────────────────   │
+                        │                                                                      │
+                        │    Retry after freeing ports?                                        │
+                        │                                                                      │
+                        │     ▸ Retry [Enter]    Exit [Esc]                                    │
+                        │                                                                      │
+                        ╰──────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+  ←→ switch  esc cancel  enter confirm

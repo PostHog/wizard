@@ -351,6 +351,17 @@ export interface ProgramConfig {
  * This intentional separation keeps the router focused on one question:
  * "Which screen should be rendered right now?"
  */
+/**
+ * The gated steps the agent runner awaits after `auth` and before `run`, in
+ * step order. Empty when a program has no auth step or runs before it.
+ */
+export function postAuthGateSteps(steps: ProgramStep[]): ProgramStep[] {
+  const authIndex = steps.findIndex((s) => s.screenId === 'auth');
+  const runIndex = steps.findIndex((s) => s.screenId === 'run');
+  if (authIndex === -1 || runIndex <= authIndex) return [];
+  return steps.slice(authIndex + 1, runIndex).filter((s) => s.gate);
+}
+
 export function createProgramSequence(steps: ProgramStep[]): Array<{
   id: string;
   show?: (session: WizardSession) => boolean;

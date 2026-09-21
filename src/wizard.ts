@@ -81,7 +81,7 @@ export class Wizard {
   private cli: Argv;
 
   private constructor() {
-    let cli = yargs(hideBin(process.argv))
+    let cli: Argv = yargs(hideBin(process.argv))
       .env('POSTHOG_WIZARD')
       .options(GLOBAL_OPTIONS);
 

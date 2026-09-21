@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ PostHog Setup Wizard
+
+ ⚠ PostHog AI services are disabled for your organization
+
+ The wizard uses Anthropic Claude. To proceed, enable "Enable PostHog
+  features that use third-party AI services" in your organization
+ settings.
+
+ http://localhost:8010/project/42/settings/organization-details#organization-ai
+ -consent
+
+
+ [O] Open settings in browser
+ [S] Show how to use your own AI
+ [R] Retry (after the toggle is enabled)
+ [E] Exit
+
+
+
+
+
+
+  O open settings  S show skill  R retry  E exit

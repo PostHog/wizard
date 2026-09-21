@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+
+                             ███ PostHog Wizard 🦔
+
+             We'll use AI to analyze your project and complete work.
+                .env* file contents will not leave your machine.
+
+          The Wizard will run an agent to detect your project's
+          framework(s), download the relevant docs, and implement
+          source-map uploads for you.
+
+          Ready?
+
+                                Directory ✔ /app
+
+                            ▸ Continue
+                              More info
+                              Privacy & data
+                              Cancel
+
+
+
+  ↑↓ navigate  enter select

@@ -36,7 +36,10 @@ import { CallType, getSkillsBaseUrl, IS_DEV } from '@lib/constants';
 import { VERSION } from '@lib/version';
 import { mcpUrlFor } from '@lib/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import {
+  postAuthGateSteps,
+  type ProgramConfig,
+} from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -270,16 +273,10 @@ export async function bootstrapProgram(
   // but BEFORE the agent runs — e.g. the source-maps project picker, which
   // needs credentials to scan and writes its choice to frameworkContext that
   // the run prompt reads. Generic: await every gated step between auth and run.
-  const authIndex = programConfig.steps.findIndex((s) => s.screenId === 'auth');
-  const runIndex = programConfig.steps.findIndex((s) => s.screenId === 'run');
-  if (authIndex !== -1 && runIndex > authIndex) {
-    for (const step of programConfig.steps.slice(authIndex + 1, runIndex)) {
-      if (step.gate) {
-        logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
-        await getUI().waitForGate(step.id);
-        logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
-      }
-    }
+  for (const step of postAuthGateSteps(programConfig.steps)) {
+    logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
+    await getUI().waitForGate(step.id);
+    logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
   }
 
   // Feature flags. Both arms need these, and the fork decision reads the flags.

@@ -1,0 +1,15 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ Install the MCP so you can chat to your data
+
+ • Ask your agent: "List my feature flags" — and it does.
+ • Run SQL, build dashboards, ship flags, all from your IDE.
+ • No copy-pasting tokens or context. Your agent has the keys.
+
+ Detected: Claude Code, Cursor
+
+  Install the PostHog MCP server and plugin?
+
+   ▸ Install    No thanks

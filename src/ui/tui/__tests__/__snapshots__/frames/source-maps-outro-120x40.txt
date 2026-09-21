@@ -1,0 +1,24 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ ✔ PostHog is set up!
+
+ What the wizard did:
+ • Installed the packages needed for source map upload.
+ • Wrote the PostHog upload credentials to your .env file.
+
+ How uploads work now:
+ • Every build now uploads source maps to PostHog automatically — no extra command to remember.
+ • Run your app from the built output. Source maps only resolve for errors thrown by the build that was uploaded.
+ • In CI, the build job needs the same upload credentials. If the wizard wired your pipeline, add the referenced
+ secrets to your CI provider (e.g. GitHub repo secrets) before your next deploy.
+
+ Details in /app/posthog-setup-report.md
+
+ Learn more: https://posthog.com/docs
+
+ Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.
+ How did this work for you? Drop us a line: wizard@posthog.com
+
+ Press any key to continue

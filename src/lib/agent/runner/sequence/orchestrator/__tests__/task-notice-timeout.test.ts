@@ -13,7 +13,7 @@ import type { TaskNotice } from '@lib/wizard-session';
 // factory would otherwise read these before they exist.
 const { showTaskNotice, cancelTaskNotice, wizardCapture, captureException } =
   vi.hoisted(() => ({
-    showTaskNotice: vi.fn<[TaskNotice], Promise<boolean>>(),
+    showTaskNotice: vi.fn<(notice: TaskNotice) => Promise<boolean>>(),
     cancelTaskNotice: vi.fn(),
     wizardCapture: vi.fn(),
     captureException: vi.fn(),

@@ -66,6 +66,8 @@ const call = (tool: { execute: unknown }, args: unknown): Promise<unknown> =>
     args,
   );
 
+type ExecuteLoosely = (id: string, params: unknown) => Promise<unknown>;
+
 describe('pi wizard_ask — sensitive answers are vaulted', () => {
   it('returns {secretRef}, never the raw value', async () => {
     const { wizardAsk } = makeTools({ token: SECRET, tracker: 'linear' });
@@ -687,13 +689,13 @@ describe('audit ledger tools', () => {
       status: 'pending' as const,
     });
 
-    await tool('audit_seed_checks').execute('1', {
+    await (tool('audit_seed_checks').execute as ExecuteLoosely)('1', {
       checks: [check('sdk-installed'), check('init-correct')],
     } as never);
-    await tool('audit_resolve_checks').execute('2', {
+    await (tool('audit_resolve_checks').execute as ExecuteLoosely)('2', {
       updates: [{ id: 'sdk-installed', status: 'pass' }],
     } as never);
-    await tool('audit_add_checks').execute('3', {
+    await (tool('audit_add_checks').execute as ExecuteLoosely)('3', {
       checks: [check('live-data-source-maps')],
     } as never);
 
