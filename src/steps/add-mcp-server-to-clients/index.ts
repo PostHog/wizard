@@ -125,6 +125,11 @@ export const addMCPServerToClientsStep = async ({
         failed.map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name)),
       )}`,
     );
+    // A one-line reason leaves the user stuck. Print the config the wizard
+    // could not write, so they can finish the install themselves.
+    for (const r of failed) {
+      if (r.manualFallback) ui.log.info(r.manualFallback);
+    }
   }
 
   const withServer = [...installed, ...already];

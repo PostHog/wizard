@@ -24,6 +24,8 @@ export interface McpClientResult {
   status: McpClientStatus;
   /** Short, user-facing explanation. Set for failures. */
   detail?: string;
+  /** Steps the user can follow by hand when the wizard cannot write the config. */
+  manualFallback?: string;
 }
 
 /** Result shape every client's addServer/removeServer/installPlugin returns. */
@@ -33,6 +35,8 @@ export interface InstallResult {
   alreadyInstalled?: boolean;
   /** Raw failure text from the underlying CLI or filesystem error. */
   reason?: string;
+  /** Steps the user can follow by hand when the wizard cannot write the config. */
+  manualFallback?: string;
 }
 
 /**
@@ -64,6 +68,7 @@ export const toClientResult = (
       name,
       status: McpClientStatus.Failed,
       detail: summarizeFailure(result?.reason),
+      manualFallback: result?.manualFallback,
     };
   }
   return {
