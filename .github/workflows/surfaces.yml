@@ -47,20 +47,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Production build and smoke test
         run: pnpm build
-      - name: Production chunk summary matches the fixture
+      - name: Production chunk manifest and summary
         run: |
           npx tsx scripts/chunk-manifest.no-jest.ts dist > chunk-manifest.prod.json
           npx tsx scripts/chunk-manifest.no-jest.ts dist --summary > chunk-summary.prod.json
-          npx prettier --write chunk-summary.prod.json
-          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-summary.prod.json
       - name: CI build and smoke test
         run: pnpm build:ci
-      - name: CI chunk summary matches the fixture
+      - name: CI chunk manifest and summary
         run: |
           npx tsx scripts/chunk-manifest.no-jest.ts dist > chunk-manifest.ci.json
           npx tsx scripts/chunk-manifest.no-jest.ts dist --summary > chunk-summary.ci.json
-          npx prettier --write chunk-summary.ci.json
-          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-summary.ci.json
+      - run: npx prettier --write chunk-summary.prod.json chunk-summary.ci.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -68,3 +65,9 @@ jobs:
           path: |
             chunk-manifest.*.json
             chunk-summary.*.json
+      # Both summaries are uploaded above, so a drift here still leaves the
+      # artifact to re-record the fixtures from.
+      - name: Summaries match the fixtures
+        run: |
+          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-summary.prod.json
+          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-summary.ci.json

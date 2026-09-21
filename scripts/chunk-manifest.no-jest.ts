@@ -6,10 +6,11 @@
  *   tsx scripts/chunk-manifest.no-jest.ts [distDir] > manifest.json
  *   tsx scripts/chunk-manifest.no-jest.ts [distDir] --summary > summary.json
  *
- * `--summary` prints only what is stable across platforms: the chunk names
- * and the sorted set of every bundled source. Rolldown assigns shared
- * modules to different chunks on macOS and Linux, so the per-chunk view is
- * for reading, and the summary is what CI diffs against the fixture.
+ * `--summary` prints the chunk names and the sorted set of every bundled
+ * source. Rolldown assigns shared modules to different chunks on macOS and
+ * Linux and the sourcemaps list different sources, so the fixtures under
+ * scripts/__fixtures__ are recorded from the Surfaces workflow's artifact,
+ * never from a local build. Locally, use the full manifest for reading.
  */
 import fs from 'fs';
 import path from 'path';
