@@ -375,18 +375,18 @@ export function coerceAgenticReport(
         ? p.targetId
         : null;
     const enumerated = Array.isArray(p.matchingTargets)
-      ? (validTargetIds.find((id) =>
+      ? validTargetIds.find((id) =>
           (p.matchingTargets as unknown[]).includes(id),
-        ) ?? null)
+        ) ?? null
       : null;
     const targetId =
       pick === null
         ? enumerated
         : enumerated !== null &&
-            rerankIds.includes(enumerated) &&
-            rerankIds.includes(pick)
-          ? enumerated
-          : pick;
+          rerankIds.includes(enumerated) &&
+          rerankIds.includes(pick)
+        ? enumerated
+        : pick;
     const recommended = recommend && !recommendedSeen && p.recommended === true;
     recommendedSeen ||= recommended;
     return {
