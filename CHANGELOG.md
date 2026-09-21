@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.76.1](https://github.com/PostHog/wizard/compare/v2.76.0...v2.76.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ai-observability:** allow headless runs ([#1285](https://github.com/PostHog/wizard/issues/1285)) ([e7e630f](https://github.com/PostHog/wizard/commit/e7e630fd14dd3e119bf74f18fd73e54fd16f1fce))
+
 ## [2.76.0](https://github.com/PostHog/wizard/compare/v2.75.0...v2.76.0) (2026-09-18)
 
 
