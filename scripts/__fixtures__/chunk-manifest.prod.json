@@ -300,6 +300,7 @@
       "src/store/shared/env-api-key.ts",
       "src/store/shared/environment.ts",
       "src/store/shared/terminal-bell.ts",
+      "src/store/state/run-store.ts",
       "src/store/state/store.ts",
       "src/store/task-stream/audit-areas.ts",
       "src/store/task-stream/destinations/file.ts",
