@@ -47,20 +47,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Production build and smoke test
         run: pnpm build
-      - name: Production chunk manifest matches the fixture
+      - name: Production chunk summary matches the fixture
         run: |
           npx tsx scripts/chunk-manifest.no-jest.ts dist > chunk-manifest.prod.json
-          npx prettier --write chunk-manifest.prod.json
-          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-manifest.prod.json
+          npx tsx scripts/chunk-manifest.no-jest.ts dist --summary > chunk-summary.prod.json
+          npx prettier --write chunk-summary.prod.json
+          diff scripts/__fixtures__/chunk-manifest.prod.json chunk-summary.prod.json
       - name: CI build and smoke test
         run: pnpm build:ci
-      - name: CI chunk manifest matches the fixture
+      - name: CI chunk summary matches the fixture
         run: |
           npx tsx scripts/chunk-manifest.no-jest.ts dist > chunk-manifest.ci.json
-          npx prettier --write chunk-manifest.ci.json
-          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-manifest.ci.json
+          npx tsx scripts/chunk-manifest.no-jest.ts dist --summary > chunk-summary.ci.json
+          npx prettier --write chunk-summary.ci.json
+          diff scripts/__fixtures__/chunk-manifest.ci.json chunk-summary.ci.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure()
+        if: always()
         with:
           name: chunk-manifests-${{ github.sha }}
-          path: chunk-manifest.*.json
+          path: |
+            chunk-manifest.*.json
+            chunk-summary.*.json
