@@ -7,10 +7,8 @@
  *   tsx scripts/chunk-manifest.no-jest.ts [distDir] --summary > summary.json
  *
  * `--summary` prints the chunk names and the sorted set of every bundled
- * source. Rolldown assigns shared modules to different chunks on macOS and
- * Linux and the sourcemaps list different sources, so the fixtures under
- * scripts/__fixtures__ are recorded from the Surfaces workflow's artifact,
- * never from a local build. Locally, use the full manifest for reading.
+ * source. Output differs between macOS and Linux (chunk assignment and
+ * sourcemap sources), so this is a reading tool, not a golden.
  */
 import fs from 'fs';
 import path from 'path';
