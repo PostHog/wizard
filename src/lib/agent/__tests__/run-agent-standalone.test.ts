@@ -11,7 +11,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@lib/constants';
 import { HostResolution } from '@lib/host-resolution';
-import { OutroKind, type PendingQuestion } from '@lib/wizard-session';
+import {
+  OutroKind,
+  type AskAnswers,
+  type PendingQuestion,
+} from '@lib/wizard-session';
 import { AGENT_ERROR_CODE, ErrorCodes } from '@lib/errors';
 import { AgentErrorType } from '@lib/agent/signals';
 import type { AgentFailure } from '@lib/agent/runner/shared/types';
@@ -31,6 +35,7 @@ vi.mock('@ui', () => ({
   },
 }));
 vi.mock('@utils/debug');
+vi.mock('@utils/terminal-bell');
 vi.mock('@lib/yara-hooks', async (original) => ({
   ...(await original<typeof import('@lib/yara-hooks')>()),
   flushScanReport: vi.fn(),
@@ -69,9 +74,19 @@ const harnessState = vi.hoisted(() => ({
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
 }));
 vi.mock('@lib/agent/runner/switchboard/harness', () => {
+  const askIfRequested = async (inputs: BackendRunInputs | TaskRunInputs) => {
+    if (!harnessState.askQuestions || !inputs.askBridge) return;
+    const { answers } = await inputs.askBridge.request({
+      questions: harnessState.askQuestions,
+    });
+    inputs.emit({
+      kind: 'status',
+      message: `answered:${JSON.stringify(answers)}`,
+    });
+  };
   const fake: AgentHarness = {
     name: Harness.pi,
-    runTask(inputs: TaskRunInputs) {
+    async runTask(inputs: TaskRunInputs) {
       harnessState.tasks.push(inputs);
       const { store, currentTaskId } = inputs.orchestrator;
       if (!currentTaskId) {
@@ -81,6 +96,7 @@ vi.mock('@lib/agent/runner/switchboard/harness', () => {
       } else if (harnessState.taskFailure) {
         return Promise.resolve({ failure: harnessState.taskFailure });
       } else {
+        await askIfRequested(inputs);
         store.complete(currentTaskId, {
           goals: 'install',
           did: 'installed',
@@ -114,15 +130,7 @@ vi.mock('@lib/agent/runner/switchboard/harness', () => {
           cacheCreation1h: 0,
         },
       });
-      if (harnessState.askQuestions && inputs.askBridge) {
-        const { answers } = await inputs.askBridge.request({
-          questions: harnessState.askQuestions,
-        });
-        emit({
-          kind: 'status',
-          message: `answered:${JSON.stringify(answers)}`,
-        });
-      }
+      await askIfRequested(inputs);
       if (harnessState.throws) throw harnessState.throws;
       spinner.stop('Done');
       return harnessState.result as never;
@@ -157,7 +165,7 @@ vi.mock('@lib/agent/agent-prompt-loader', async (original) => {
               'test-program',
             ),
             actual.parseAgentPrompt(
-              '---\ntype: install\n---\nInstall it',
+              '---\ntype: install\nallowedTools: [wizard_ask]\n---\nInstall it',
               'install',
               'test-program',
             ),
@@ -173,7 +181,7 @@ vi.mock('@lib/wizard-tools', async (original) => ({
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
 }));
 
-import { runAgent } from '@lib/agent/runner';
+import { runAgent, RunOutcome } from '@lib/agent/runner';
 import type { RunConfig, RunInput } from '@lib/agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
@@ -253,6 +261,93 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 describe('runAgent standalone', () => {
+  it.each([
+    [Harness.pi, Sequence.linear],
+    [Harness.anthropic, Sequence.linear],
+    [Harness.pi, Sequence.orchestrator],
+    [Harness.anthropic, Sequence.orchestrator],
+  ])(
+    'waits for the answer before completing %s %s',
+    async (harness, sequence) => {
+      harnessState.askQuestions = [
+        { id: 'q1', prompt: 'Continue?', kind: 'text' },
+      ];
+      let release: ((answers: AskAnswers) => void) | undefined;
+      const ask = vi.fn(
+        () =>
+          new Promise<AskAnswers>((resolve) => {
+            release = resolve;
+          }),
+      );
+      const events: AgentProgress[] = [];
+      let settled = false;
+      const running = runAgent(
+        config({
+          binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
+          switchboard: {
+            program: 'test-program',
+            flags: {},
+            cliHarness: harness,
+          },
+        }),
+        input(),
+        { interaction: { ask }, onProgress: (event) => events.push(event) },
+      ).then((result) => {
+        settled = true;
+        return result;
+      });
+
+      try {
+        await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(settled).toBe(false);
+        expect(events.some((event) => event.kind === 'completion')).toBe(false);
+        expect(analytics.shutdown).not.toHaveBeenCalled();
+        expect(flushScanReport).not.toHaveBeenCalled();
+      } finally {
+        release?.({ q1: 'yes' });
+      }
+
+      const result = await running;
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(result.snapshot.statusMessages).toContain('answered:{"q1":"yes"}');
+      expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+      expect(flushScanReport).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([Sequence.linear, Sequence.orchestrator])(
+    'does not wait for disabled questions in %s',
+    async (sequence) => {
+      harnessState.askQuestions = [
+        { id: 'q1', prompt: 'Continue?', kind: 'text' },
+      ];
+      const ask = vi.fn(() =>
+        Promise.reject(new Error('disabled answerer called')),
+      );
+      const runConfig = config({
+        binding: { harness: Harness.pi, sequence, model: DEFAULT_AGENT_MODEL },
+      });
+      const runInput = input();
+      runInput.flags.ci = true;
+      vi.stubEnv('WIZARD_ASK_AUTODRIVE', '');
+      try {
+        const result = await runAgent(runConfig, runInput, {
+          interaction: { ask },
+        });
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(ask).not.toHaveBeenCalled();
+        const inputs =
+          sequence === Sequence.linear
+            ? (harnessState.lastInputs as BackendRunInputs)
+            : harnessState.tasks.at(-1);
+        expect(inputs?.askBridge).toBeUndefined();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+
   it.each([Harness.pi, Harness.anthropic])(
     'dispatches %s through both sequence arms',
     async (harness) => {
