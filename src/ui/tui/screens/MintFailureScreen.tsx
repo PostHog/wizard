@@ -8,6 +8,7 @@ import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
   MINT_FAILURE_CONTACT,
+  mintFailureReason,
 } from '@ui/mint-failure';
 import type { WizardSpellbook } from '@lib/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
@@ -46,6 +47,7 @@ export function MintFailureScreen({
   const [report, setReport] = useState(false);
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
   const { spellbook } = store.session;
+  const reason = mintFailureReason(store.session);
 
   const select = async (action: Action) => {
     if (busy.current) return;
@@ -121,6 +123,11 @@ export function MintFailureScreen({
         <Text bold>
           <Mark /> {spellbook ? 'Skill saved' : MINT_FAILURE_MESSAGE} 🦔
         </Text>
+        {reason && !spellbook && (
+          <Box marginTop={1}>
+            <Text wrap="wrap">{reason}</Text>
+          </Box>
+        )}
         <Box marginTop={1}>
           <Text>
             {spellbook

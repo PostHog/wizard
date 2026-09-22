@@ -53,6 +53,7 @@ import {
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
+  runErrorType,
 } from './signals';
 import { classifyAuthFailure } from '@lib/errors';
 import { isGrantRevoked } from '@lib/auth-session-state';
@@ -865,6 +866,18 @@ export async function runAgent(
     return {};
   };
 
+  // How this run failed, so the `agent aborted` event below can name it.
+  // Every terminal path sets it through `failWith`; a run that reaches
+  // `completeWithSuccess` leaves it unset and fires no abort event.
+  let failureMode: AgentErrorType | undefined;
+  const failWith = (
+    error: AgentErrorType,
+    message?: string,
+  ): { error: AgentErrorType; message?: string } => {
+    failureMode = error;
+    return message === undefined ? { error } : { error, message };
+  };
+
   // Abort controller — lets us force-kill the SDK query when we detect an
   // [ABORT] signal in the agent's output. Also stashes the reason so the
   // runner can surface it via outroData after we unwind.
@@ -1325,27 +1338,27 @@ export async function runAgent(
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
       spinner.stop('Security check stopped the setup');
-      return { error: AgentErrorType.YARA_VIOLATION };
+      return failWith(AgentErrorType.YARA_VIOLATION);
     }
 
     // If the middleware caught an [ABORT] and aborted the SDK query, surface
     // it as a structured error before checking other signals.
     if (abortReason) {
       spinner.stop('Wizard aborted');
-      return { error: AgentErrorType.ABORT, message: abortReason };
+      return failWith(AgentErrorType.ABORT, abortReason);
     }
 
     // Check for error markers in the agent's output
     if (signals.has('MCP_MISSING')) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
-      return { error: AgentErrorType.MCP_MISSING };
+      return failWith(AgentErrorType.MCP_MISSING);
     }
 
     if (signals.has('RESOURCE_MISSING')) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
-      return { error: AgentErrorType.RESOURCE_MISSING };
+      return failWith(AgentErrorType.RESOURCE_MISSING);
     }
 
     // A clean success result already arrived. The Claude SDK can emit a second
@@ -1365,13 +1378,13 @@ export async function runAgent(
     if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+      return failWith(AgentErrorType.RATE_LIMIT, apiErrorMessage);
     }
 
     if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+      return failWith(AgentErrorType.API_ERROR, apiErrorMessage);
     }
 
     return completeWithSuccess();
@@ -1385,14 +1398,14 @@ export async function runAgent(
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
       spinner.stop('Security check stopped the setup');
-      return { error: AgentErrorType.YARA_VIOLATION };
+      return failWith(AgentErrorType.YARA_VIOLATION);
     }
 
     // If the middleware caught an [ABORT] and triggered abortController.abort(),
     // the SDK will throw an AbortError — surface it as a clean abort result.
     if (abortReason) {
       spinner.stop('Wizard aborted');
-      return { error: AgentErrorType.ABORT, message: abortReason };
+      return failWith(AgentErrorType.ABORT, abortReason);
     }
 
     // If we already received a successful result, the error is from SDK cleanup
@@ -1410,27 +1423,33 @@ export async function runAgent(
     if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+      return failWith(AgentErrorType.RATE_LIMIT, apiErrorMessage);
     }
 
     if (signals.hasApiError()) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+      return failWith(AgentErrorType.API_ERROR, apiErrorMessage);
     }
 
-    // No API error found, re-throw the original exception
+    // No API error found, re-throw the original exception. The runner codes
+    // it, but the abort event still needs a mode, so classify it here on the
+    // same rule the pi harness uses.
+    failureMode = runErrorType(errorMessage);
     spinner.stop(errorMessage);
     getUI().log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
   } finally {
-    // Always capture run duration, even on abort/error, so we can alert on
-    // long runs where the user gave up before completion.
-    if (!receivedSuccessResult) {
+    // Only a run that actually failed aborts. A run can finish without an SDK
+    // success result and still complete — keying on that result reported those
+    // runs as aborts as well, so the event counted far more failures than
+    // happened and named none of them.
+    if (failureMode !== undefined) {
       const durationMs = Date.now() - startTime;
       analytics.wizardCapture('agent aborted', {
+        failure_mode: failureMode,
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
         model: agentConfig.model,
