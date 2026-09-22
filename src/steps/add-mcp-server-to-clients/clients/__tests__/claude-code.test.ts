@@ -1,9 +1,10 @@
 import { ClaudeCodeMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude-code';
-import { execSync } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { analytics } from '@utils/analytics';
 
 vi.mock('child_process', () => ({
   execSync: vi.fn(),
+  execFile: vi.fn(),
 }));
 
 vi.mock('fs', () => ({
@@ -18,16 +19,54 @@ vi.mock('../../../../utils/debug', () => ({
   debug: vi.fn(),
 }));
 
+/** `plugin list --json` payload, trimmed to the fields the client reads. */
+const listed = (...ids: string[]) =>
+  JSON.stringify(ids.map((id) => ({ id, version: '1.1.63', scope: 'user' })));
+
+/** `marketplace list --json` payload, trimmed the same way. */
+const marketplaces = (...names: string[]) =>
+  JSON.stringify(names.map((name) => ({ name, source: 'github' })));
+
+/**
+ * Match a contiguous argument run, so `plugin list` doesn't also match
+ * `plugin marketplace list`.
+ */
+const isCmd = (cmd: string, ...parts: string[]) =>
+  cmd.includes(parts.join(' '));
+
 describe('ClaudeCodeMCPClient — plugin methods', () => {
   const execSyncMock = execSync as Mock;
+  const execFileMock = execFile as unknown as Mock;
+
+  /** Every `claude` invocation, in order, as its joined command. */
+  const claudeCalls = () =>
+    execFileMock.mock.calls.map(
+      ([file, args]: [string, string[]]) => `${file} ${args.join(' ')}`,
+    );
+
+  /** Answer claude invocations by their joined args; return an Error to fail one. */
+  const routeClaude = (handler: (cmd: string) => string | Error) => {
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        args: string[],
+        cb: (e: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        const out = handler(args.join(' '));
+        if (out instanceof Error) cb(out, '', out.message);
+        else cb(null, out, '');
+      },
+    );
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Make binary discoverable via PATH by default
+    // Binary discovery is the one sync call, and stays sync.
     execSyncMock.mockImplementation((cmd: string) => {
       if (cmd === 'command -v claude') return Buffer.from('');
       return Buffer.from('');
     });
+    routeClaude(() => '');
   });
 
   describe('supportsPlugin', () => {
@@ -46,102 +85,215 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
   });
 
   describe('isPluginInstalled', () => {
-    it('returns true when posthog appears in plugin list output', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd === 'command -v claude') return Buffer.from('');
-        if (String(cmd).includes('plugin list'))
-          return Buffer.from('posthog  1.0.0\n');
-        return Buffer.from('');
+    it('returns true for the plugin installed from the PostHog marketplace', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('posthog@posthog') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(true);
+    });
+
+    it('returns true for the same plugin installed from any other marketplace', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listed('posthog@claude-plugins-official')
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(true);
+    });
+
+    it('returns false for a different plugin whose name merely starts with posthog', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('posthog-extras@someone') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+
+    it('returns false when no plugins are installed', async () => {
+      routeClaude((cmd) => (isCmd(cmd, 'plugin', 'list') ? listed() : ''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+
+    it('falls back to scanning plain output when --json is unsupported', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, '--json'))
+          return new Error("error: unknown option '--json'");
+        if (isCmd(cmd, 'plugin', 'list')) return '  posthog@posthog\n';
+        return '';
       });
       const client = new ClaudeCodeMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(true);
     });
 
-    it('returns false when posthog is absent from plugin list output', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd === 'command -v claude') return Buffer.from('');
-        if (String(cmd).includes('plugin list'))
-          return Buffer.from('other-plugin  2.0.0\n');
-        return Buffer.from('');
-      });
-      const client = new ClaudeCodeMCPClient();
-      await expect(client.isPluginInstalled()).resolves.toBe(false);
-    });
-
-    it('returns false when plugin list command throws', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd === 'command -v claude') return Buffer.from('');
-        throw new Error('command failed');
-      });
+    it('returns false when the plugin list command fails outright', async () => {
+      routeClaude(() => new Error('command failed'));
       const client = new ClaudeCodeMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);
     });
   });
 
   describe('installPlugin', () => {
-    it('returns success on exit 0', async () => {
-      execSyncMock.mockImplementation(() => Buffer.from(''));
+    // The CLI calls clone git repos and take seconds. execSync blocks the event
+    // loop, which freezes the TUI spinner on its first frame — so this path must
+    // use the async child-process API.
+    it('runs the CLI without blocking the event loop', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        throw new Error('installPlugin must not shell out synchronously');
+      });
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        return '';
+      });
       const client = new ClaudeCodeMCPClient();
+
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
-    });
 
-    it('returns success with alreadyInstalled when stderr contains "already installed"', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (String(cmd).includes('plugin install')) {
-          throw new Error('already installed');
-        }
-        return Buffer.from('');
-      });
-      const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({
-        success: true,
-        alreadyInstalled: true,
-      });
-    });
-
-    it('returns success with alreadyInstalled when stderr contains "already exists"', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (String(cmd).includes('plugin install')) {
-          throw new Error('already exists');
-        }
-        return Buffer.from('');
-      });
-      const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({
-        success: true,
-        alreadyInstalled: true,
-      });
-    });
-
-    it('returns already-installed without running the install when plugin list already has posthog', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (String(cmd).includes('plugin list'))
-          return Buffer.from('posthog  1.0.0\n');
-        return Buffer.from('');
-      });
-      const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({
-        success: true,
-        alreadyInstalled: true,
-      });
+      // `command -v claude` is the only sync call left (binary discovery).
       expect(
-        execSyncMock.mock.calls.some((c) =>
-          String(c[0]).includes('plugin install'),
-        ),
-      ).toBe(false);
+        execSyncMock.mock.calls.filter(([c]) => c !== 'command -v claude'),
+      ).toEqual([]);
+      expect(execFileMock).toHaveBeenCalled();
+    });
+
+    it('registers the PostHog marketplace before installing the qualified plugin', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces();
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      expect(claudeCalls()).toEqual([
+        'claude plugin list --json',
+        'claude plugin marketplace list --json',
+        'claude plugin marketplace add PostHog/ai-plugin',
+        'claude plugin install posthog@posthog',
+      ]);
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('skips the marketplace add when the PostHog marketplace is already registered', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      expect(claudeCalls()).toEqual([
+        'claude plugin list --json',
+        'claude plugin marketplace list --json',
+        'claude plugin install posthog@posthog',
+      ]);
+    });
+
+    it('refreshes a stale catalog and retries when the qualified plugin is not found', async () => {
+      let installAttempts = 0;
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'install')) {
+          installAttempts += 1;
+          if (installAttempts === 1)
+            return new Error(
+              'Plugin "posthog" not found in any configured marketplace',
+            );
+        }
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      expect(claudeCalls()).toContain(
+        'claude plugin marketplace update posthog',
+      );
+      expect(installAttempts).toBe(2);
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the bare plugin name when the qualified one stays unresolvable', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'install', 'posthog@posthog'))
+          return new Error(
+            'Plugin "posthog" not found in any configured marketplace',
+          );
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      expect(claudeCalls()).toContain('claude plugin install posthog');
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('still installs, and reports nothing, when the marketplace add fails but the fallback works', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces();
+        if (isCmd(cmd, 'marketplace', 'add'))
+          return new Error('network unreachable');
+        if (isCmd(cmd, 'install', 'posthog@posthog'))
+          return new Error(
+            'Plugin "posthog" not found in any configured marketplace',
+          );
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('returns success with alreadyInstalled when the CLI reports "already installed"', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'install')) return new Error('already installed');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+    });
+
+    it('returns already-installed without running the install when the plugin is already there', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('posthog@posthog') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(claudeCalls().some((c) => isCmd(c, 'install'))).toBe(false);
     });
 
     it('returns failure with the reason and captures exception on unexpected error', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (String(cmd).includes('plugin install')) {
-          throw new Error('network timeout');
-        }
-        return Buffer.from('');
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'install')) return new Error('network timeout');
+        return '';
       });
       const client = new ClaudeCodeMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({
         success: false,
-        reason: 'network timeout',
+        reason: expect.stringContaining('network timeout'),
       });
       expect(analytics.captureException).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -159,6 +311,83 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         success: false,
         reason: expect.stringContaining('PATH'),
       });
+    });
+  });
+
+  describe('removePlugin', () => {
+    it('uninstalls every installed posthog plugin, not just one', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listed('posthog@posthog', 'posthog@claude-plugins-official')
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+
+      expect(claudeCalls()).toContain(
+        'claude plugin uninstall posthog@posthog',
+      );
+      expect(claudeCalls()).toContain(
+        'claude plugin uninstall posthog@claude-plugins-official',
+      );
+    });
+
+    it('leaves an unrelated plugin alone', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listed('posthog@posthog', 'posthog-extras@someone')
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+
+      await client.removePlugin();
+
+      expect(claudeCalls()).not.toContain(
+        'claude plugin uninstall posthog-extras@someone',
+      );
+    });
+
+    it('reports failure naming the id that could not be uninstalled', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list'))
+          return listed('posthog@posthog', 'posthog@claude-plugins-official');
+        if (isCmd(cmd, 'uninstall', 'posthog@posthog'))
+          return new Error('permission denied');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({
+        success: false,
+        reason: expect.stringContaining('posthog@posthog'),
+      });
+    });
+
+    it('falls back to the bare name when the id probe is unavailable', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, '--json'))
+          return new Error("error: unknown option '--json'");
+        if (isCmd(cmd, 'plugin', 'list')) return 'posthog  1.1.63\n';
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).toContain('claude plugin uninstall posthog');
+    });
+
+    it('reports nothing to do when no posthog plugin is installed', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('other@somewhere') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(claudeCalls().some((c) => isCmd(c, 'uninstall'))).toBe(false);
     });
   });
 });
