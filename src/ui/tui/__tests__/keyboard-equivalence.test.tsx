@@ -66,8 +66,8 @@ vi.mock('@shared/api', async (importOriginal) => ({
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@agent/tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/tools')>()),
+vi.mock('@shared/skill-menu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@utils/setup-utils', async (importOriginal) => ({

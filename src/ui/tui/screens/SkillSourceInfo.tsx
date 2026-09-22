@@ -14,7 +14,7 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
-import { fetchSkillMenu, type SkillEntry } from '@agent/tools';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { CONTEXT_MILL_RELEASES_URL, getSkillsBaseUrl } from '@shared/constants';
 
 /**

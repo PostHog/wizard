@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveSkillVariantId } from '../orchestrator-runner';
 import { Integration } from '@shared/constants';
-import { expandBundleEntry } from '@agent/tools';
-import type { SkillEntry } from '@agent/tools';
+import { expandBundleEntry, type SkillEntry } from '@shared/skill-menu';
 
 // Pinned from the real built skill-menu.json, so this suite tests the actual cross-repo contract.
 const INTEGRATION_ENTRIES = [

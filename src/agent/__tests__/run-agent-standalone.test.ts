@@ -174,8 +174,8 @@ vi.mock('@agent/agent-prompt-loader', async (original) => {
     ),
   };
 });
-vi.mock('@agent/tools', async (original) => ({
-  ...(await original<typeof import('@agent/tools')>()),
+vi.mock('@shared/skill-menu', async (original) => ({
+  ...(await original<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
 }));
 

@@ -32,101 +32,13 @@ import {
 import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
 import type { SecretVault } from '@shared/secret-vault';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
-
-// ---------------------------------------------------------------------------
-// Skill types
-// ---------------------------------------------------------------------------
-
-export type SkillEntry = {
-  id: string;
-  name: string;
-  downloadUrl: string;
-  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
-  group?: string;
-  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
-  framework?: string;
-  /** The variant a bare framework id resolves to when its family has several. */
-  default?: boolean;
-  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
-  bundle?: boolean;
-  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: { id: string; framework?: string; default?: boolean }[];
-};
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 
 /** A bundle's files, keyed by variant short id then path. */
 export type SkillBundle = {
   id: string;
   variants: Record<string, Record<string, string>>;
 };
-
-/**
- * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
- * publishes under `cliEntries` inside `skill-menu.json`. The wizard uses these
- * to register skill-backed subcommands at runtime instead of from a baked
- * build-time snapshot.
- */
-export type CliEntry = {
-  skillId: string;
-  role: 'command' | 'skill' | 'internal';
-  command?: string;
-  parentCommand?: string;
-  default?: boolean;
-  displayName: string;
-  description: string;
-};
-
-export interface SkillMenu {
-  categories: Record<string, SkillEntry[]>;
-  /**
-   * Skills exposed as CLI commands. Optional because context-mill releases
-   * older than the runtime-resolver cutover don't emit this field.
-   */
-  cliEntries?: CliEntry[];
-}
-
-// ---------------------------------------------------------------------------
-// Standalone skill helpers (usable before the MCP server is created)
-// ---------------------------------------------------------------------------
-
-/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
-export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
-  if (!entry.bundle || !entry.variants) return [entry];
-  return entry.variants.map((variant) => ({
-    ...variant,
-    name: entry.name,
-    group: entry.group,
-    bundle: true,
-    downloadUrl: entry.downloadUrl,
-  }));
-}
-
-/**
- * Fetch the skill menu from the skills server.
- * Returns parsed data on success, `null` on failure.
- */
-export async function fetchSkillMenu(
-  skillsBaseUrl: string,
-  opts: RetryOpts = {},
-): Promise<SkillMenu | null> {
-  const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
-  try {
-    logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
-    const resp = await fetchWithRetry(menuUrl, opts);
-    const data = (await resp.json()) as SkillMenu;
-    for (const [category, entries] of Object.entries(data.categories)) {
-      data.categories[category] = entries.flatMap(expandBundleEntry);
-    }
-    logToFile(
-      `fetchSkillMenu: loaded (${
-        Object.keys(data.categories).length
-      } categories)`,
-    );
-    return data;
-  } catch (err: any) {
-    logToFile(`fetchSkillMenu: error: ${err.message}`);
-    return null;
-  }
-}
 
 /** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
 function extractZipArchive(zip: Uint8Array, destDir: string): number {

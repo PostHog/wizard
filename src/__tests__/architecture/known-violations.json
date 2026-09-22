@@ -66,7 +66,6 @@
     "src/steps/upload-environment-variables/index.ts -> src/telemetry.ts",
     "src/ui/agent-progress.ts -> src/agent/progress.ts",
     "src/ui/index.ts -> src/ui/logging-ui.ts",
-    "src/ui/tui/screens/SkillSourceInfo.tsx -> src/agent/tools/index.ts",
     "src/ui/tui/screens/health/HealthCheckScreen.tsx -> src/agent/tools/index.ts",
     "src/ui/tui/services/mcp-suggested-prompts-services.ts -> src/agent/mcp-prompt-streaming.ts",
     "src/ui/wizard-ui.ts -> src/agent/progress.ts"

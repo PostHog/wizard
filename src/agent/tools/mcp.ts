@@ -45,7 +45,6 @@ import {
   ensureGitignoreCoverage,
   createAskAccounting,
   describeAskCancellation,
-  fetchSkillMenu,
   checkEnvKeys as checkEnvKeysCore,
   mergeEnvValues,
   normaliseAskSubject,
@@ -57,7 +56,6 @@ import {
   templateEnvWriteRefusal,
   legacyKeyNameRefusal,
   vaultSensitiveAnswers,
-  type SkillEntry,
   AUDIT_ADD_CHECKS_DESCRIPTION,
   AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
   AUDIT_RESOLVE_CHECKS_DESCRIPTION,
@@ -70,6 +68,7 @@ import {
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from './tools';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 
 const auditCheckSchema = z.object({
   id: z.string().min(1),

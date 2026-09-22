@@ -24,11 +24,8 @@ import {
 import * as path from 'path';
 import { OutroKind, type TaskNotice } from '@agent/progress';
 import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
-import {
-  installSkillById,
-  fetchSkillMenu,
-  type SkillEntry,
-} from '@agent/tools';
+import { installSkillById } from '@agent/tools';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
