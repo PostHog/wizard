@@ -20,7 +20,7 @@ import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { getProgramConfig } from '@lib/programs/program-registry';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),

@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
-import { withProgress } from '../telemetry';
+import { withProgress } from '../../telemetry';
 import { debug, logToFile } from './debug';
 import type { PackageJson } from './package-json';
 import {

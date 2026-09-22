@@ -14,7 +14,7 @@ vi.mock('node:fs', () => ({
   rmSync: vi.fn(),
 }));
 
-vi.mock('../../../../utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn() },
 }));
 

@@ -70,8 +70,8 @@
     "src/ui/tui/store.ts -> src/lib/agent/token-pricing.ts",
     "src/ui/wizard-ui.ts -> src/lib/agent/claude-settings.ts",
     "src/ui/wizard-ui.ts -> src/lib/agent/progress.ts",
-    "src/utils/package-manager.ts -> src/telemetry.ts",
-    "src/utils/setup-utils.ts -> src/telemetry.ts",
-    "src/utils/wizard-abort.ts -> src/ui/logging-ui.ts"
+    "src/shared/utils/package-manager.ts -> src/telemetry.ts",
+    "src/shared/utils/setup-utils.ts -> src/telemetry.ts",
+    "src/shared/utils/wizard-abort.ts -> src/ui/logging-ui.ts"
   ]
 }

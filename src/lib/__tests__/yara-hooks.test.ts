@@ -12,11 +12,11 @@ import {
 import { scan, triageMatches } from '@posthog/warlock';
 import fs from 'fs';
 import fg from 'fast-glob';
-import * as analyticsModule from '../../utils/analytics';
+import * as analyticsModule from '@utils/analytics';
 
 // Mock dependencies
-vi.mock('../../utils/debug');
-vi.mock('../../utils/analytics');
+vi.mock('@utils/debug');
+vi.mock('@utils/analytics');
 vi.mock('fs');
 vi.mock('fast-glob');
 

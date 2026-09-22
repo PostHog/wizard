@@ -21,8 +21,8 @@ import {
 } from '@lib/wizard-session';
 
 // Mock dependencies
-vi.mock('../../utils/analytics');
-vi.mock('../../utils/debug');
+vi.mock('@utils/analytics');
+vi.mock('@utils/debug');
 
 // Mock the SDK module
 const mockQuery = vi.fn();

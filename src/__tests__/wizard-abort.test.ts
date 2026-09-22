@@ -10,7 +10,7 @@ import { analytics } from '@utils/analytics';
 import { ErrorCodes } from '@lib/errors';
 import { getUI } from '../ui';
 
-vi.mock('../utils/analytics');
+vi.mock('@utils/analytics');
 vi.mock('../ui', () => ({
   getUI: vi.fn().mockReturnValue({
     outroError: vi.fn(),

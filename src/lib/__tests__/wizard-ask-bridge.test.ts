@@ -6,7 +6,7 @@ import {
 import { analytics } from '@utils/analytics';
 import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
 
-vi.mock('../../utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: {
     wizardCapture: vi.fn(),
   },

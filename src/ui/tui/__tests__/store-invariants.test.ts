@@ -34,7 +34,7 @@ import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),

@@ -20,11 +20,11 @@ vi.mock('../../../steps/add-mcp-server-to-clients/defaults.js', () => ({
   ALL_FEATURE_VALUES: ['feature-a'],
 }));
 
-vi.mock('../../../utils/debug.js', () => ({
+vi.mock('@utils/debug.js', () => ({
   logToFile: vi.fn(),
 }));
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
 

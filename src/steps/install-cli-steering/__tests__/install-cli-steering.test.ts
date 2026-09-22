@@ -12,7 +12,7 @@ import {
   installSteeringSnippet,
 } from '@steps/install-cli-steering';
 
-vi.mock('../../../utils/debug');
+vi.mock('@utils/debug');
 vi.mock('node:child_process', () => ({
   spawnSync: vi.fn(),
 }));
