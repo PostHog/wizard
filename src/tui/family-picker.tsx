@@ -23,7 +23,7 @@ import { createElement } from 'react';
 import { Colors } from '@tui/styles';
 import { PickerMenu } from '@tui/primitives/PickerMenu';
 
-import { commandKeys, type Command } from '../commands/command';
+import { commandKeys, type Command } from '@cli/commands/command';
 
 interface FamilyPickerAppProps {
   parentLabel: string;

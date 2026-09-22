@@ -4,7 +4,7 @@
  * Adding a new program:
  *   1. Create src/programs/<name>/ with index.ts exporting a ProgramConfig
  *   2. Import and add it to PROGRAM_REGISTRY below
- *   3. (If custom intro screen) add to src/ui/tui/screen-registry.tsx
+ *   3. (If custom intro screen) add to src/tui/screen-registry.tsx
  *
  * screen-sequences.ts, store.ts, and bin.ts all derive their wiring from
  * this array — no need to touch those files when adding a program.

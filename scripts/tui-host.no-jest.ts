@@ -22,7 +22,7 @@ import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
-import { loadCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
+import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import { runProgramAgent } from '@programs/run-agent-legacy';
 import {
   TaskStreamPush,

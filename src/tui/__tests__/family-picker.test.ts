@@ -10,8 +10,8 @@ vi.mock('ink', async (importOriginal) => {
 
 import { render } from 'ink';
 
-import type { Command } from '../../commands/command';
-import { auditCommand } from '../../commands/audit';
+import type { Command } from '@cli/commands/command';
+import { auditCommand } from '@cli/commands/audit';
 import {
   chooseFamilyChild,
   createFamilyPickerDefault,

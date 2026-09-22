@@ -36,13 +36,7 @@ const AGENT_TESTS = [`src/agent/**/${TESTS}`];
 const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
 const TUI_TESTS = [`src/tui/**/${TESTS}`];
 const HEADLESS_TESTS = [`src/headless/**/${TESTS}`];
-const CLI_TESTS = [
-  `src/commands/**/${TESTS}`,
-  `src/lib/runners/${TESTS}`,
-  'src/__tests__/*cli*.test.ts',
-  'src/__tests__/wizard.test.ts',
-  'src/__tests__/headless-scope.test.ts',
-];
+const CLI_TESTS = [`src/cli/**/${TESTS}`];
 const HARNESS_TESTS = [
   `e2e-harness/${TESTS}`,
   'e2e-harness/**/*.{test,spec}.{js,jsx,ts,tsx}',
@@ -91,6 +85,7 @@ export default defineConfig({
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
       { find: /^@headless\/(.*)$/, replacement: `${r('src/headless')}/$1` },
+      { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },

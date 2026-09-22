@@ -3,7 +3,7 @@ import { getProgramConfig, Program } from '@programs';
 import { metricsConfig } from '@programs/metrics/index';
 import type { ProgramRun } from '@programs/program-run';
 
-import { metricsCommand } from '../../commands/metrics';
+import { metricsCommand } from '@cli/commands/metrics';
 
 function staticRun(config: typeof metricsConfig): ProgramRun {
   if (typeof config.run === 'function') {

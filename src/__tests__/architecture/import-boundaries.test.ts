@@ -24,14 +24,7 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     ['programs', (p) => p.startsWith('src/programs/')],
     ['tui', (p) => p.startsWith('src/tui/') || p.startsWith('src/steps/')],
     ['headless', (p) => p.startsWith('src/headless/')],
-    [
-      'cli',
-      (p) =>
-        p === 'bin.ts' ||
-        p === 'src/wizard.ts' ||
-        p.startsWith('src/commands/') ||
-        p.startsWith('src/lib/runners/'),
-    ],
+    ['cli', (p) => p === 'bin.ts' || p.startsWith('src/cli/')],
   ];
 
 export function classifySurface(relPath: string): Surface {
@@ -458,8 +451,8 @@ it('keeps the callable program registry free of UI and session runtime imports',
       file.startsWith('src/ui/') ||
       file.startsWith('src/steps/') ||
       file.startsWith('src/lib/wizard-session') ||
-      file.startsWith('src/lib/runners/') ||
-      file.startsWith('src/commands/'),
+      file.startsWith('src/cli/runners/') ||
+      file.startsWith('src/cli/commands/'),
   );
   expect(forbidden).toEqual([]);
 });
@@ -538,11 +531,11 @@ describe('agent entry modules', () => {
     expect(rule('src/programs/audit/index.ts', 'src/agent/types.ts')).toBe(
       null,
     );
-    expect(rule('src/commands/skill.ts', 'src/agent/index.ts')).toBe(null);
+    expect(rule('src/cli/commands/skill.ts', 'src/agent/index.ts')).toBe(null);
     expect(
       rule('src/programs/audit/index.ts', 'src/agent/agent-runner.ts'),
     ).toBe('agent-deep-import');
-    expect(rule('src/commands/skill.ts', 'src/agent/runner/index.ts')).toBe(
+    expect(rule('src/cli/commands/skill.ts', 'src/agent/runner/index.ts')).toBe(
       'agent-deep-import',
     );
     expect(rule('src/shared/claude-settings.ts', 'src/agent/signals.ts')).toBe(
@@ -577,11 +570,13 @@ describe('programs entry modules', () => {
   const rule = (from: string, to: string) => ruleFor(from, to);
 
   it('lets hosts reach programs through its entries', () => {
-    expect(rule('src/commands/audit.ts', 'src/programs/index.ts')).toBe(null);
-    expect(rule('src/tui/store.ts', 'src/programs/types.ts')).toBe(null);
-    expect(rule('src/commands/audit.ts', 'src/programs/audit/index.ts')).toBe(
-      'programs-deep-import',
+    expect(rule('src/cli/commands/audit.ts', 'src/programs/index.ts')).toBe(
+      null,
     );
+    expect(rule('src/tui/store.ts', 'src/programs/types.ts')).toBe(null);
+    expect(
+      rule('src/cli/commands/audit.ts', 'src/programs/audit/index.ts'),
+    ).toBe('programs-deep-import');
   });
 
   it('keeps programs from reaching the TUI and CLI', () => {
@@ -589,7 +584,10 @@ describe('programs entry modules', () => {
       'matrix:programs->tui',
     );
     expect(
-      rule('src/commands/dispatch-family.ts', 'src/commands/command.ts'),
+      rule(
+        'src/cli/commands/dispatch-family.ts',
+        'src/cli/commands/command.ts',
+      ),
     ).toBe(null);
   });
 });

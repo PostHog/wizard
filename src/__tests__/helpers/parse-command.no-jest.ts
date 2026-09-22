@@ -1,7 +1,7 @@
 import yargs from 'yargs';
 import type { Arguments } from 'yargs';
-import { GLOBAL_OPTIONS } from '../../wizard';
-import { toCommandModule, type Command } from '../../commands/command';
+import { GLOBAL_OPTIONS } from '@cli/wizard';
+import { toCommandModule, type Command } from '@cli/commands/command';
 
 /**
  * Parse an argv string through a command's real yargs configuration (global

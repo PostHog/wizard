@@ -1,6 +1,6 @@
-import { runNonInteractive } from '@lib/runners/run-non-interactive';
+import { runNonInteractive } from '@cli/runners/run-non-interactive';
 import { authenticate } from '@programs/authenticate';
-import { runProgramAgent } from '@lib/runners/run-program-agent';
+import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Integration, Sequence } from '@shared/constants';
 import { uploadEnvironmentVariablesStep } from '@steps/upload-environment-variables';
