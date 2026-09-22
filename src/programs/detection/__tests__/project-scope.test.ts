@@ -150,9 +150,12 @@ describe('scopeInstallDirToProject', () => {
       expect.anything(),
       expect.objectContaining({
         programId: 'posthog-integration',
-        onProgress: host.onProgress,
+        onProgress: expect.any(Function),
       }),
     );
+    const progress = { kind: 'status' as const, message: 'Scanning' };
+    scan.mock.calls[0]?.[1].onProgress?.(progress);
+    expect(host.onProgress).toHaveBeenCalledWith(progress);
   });
 
   it('re-points installDir at the recommended project and fires recommended with scan facts', async () => {

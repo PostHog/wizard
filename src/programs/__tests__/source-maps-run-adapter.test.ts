@@ -77,6 +77,9 @@ it('preinstalls the global CLI only after a requiring variant is picked', async 
   expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
     'source maps posthog-cli preinstall failed',
     { variant: 'ios' },
-    ui.warn,
+    expect.any(Function),
   );
+  const warn = vi.mocked(preinstallPostHogCliOnce).mock.calls[0]?.[2];
+  warn?.('Preinstall warning');
+  expect(ui.warn).toHaveBeenCalledWith('Preinstall warning');
 });
