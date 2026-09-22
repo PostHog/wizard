@@ -119,13 +119,7 @@ export const addMCPServerToClientsStep = async ({
       )}`,
     );
   }
-  if (failed.length > 0) {
-    ui.log.warn(
-      `Couldn't add the MCP server to:\n${bulletList(
-        failed.map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name)),
-      )}`,
-    );
-  }
+  reportFailures(`Couldn't add the MCP server to:`, failed);
 
   const withServer = [...installed, ...already];
 
@@ -144,6 +138,24 @@ export const addMCPServerToClientsStep = async ({
 
 const bulletList = (items: string[]): string =>
   items.map((item) => `  - ${item}`).join('\n');
+
+/**
+ * Name every client that failed, then print any instructions they left. A
+ * one-line reason leaves the user stuck when the wizard could not write the
+ * config itself.
+ */
+const reportFailures = (heading: string, failed: McpClientResult[]): void => {
+  if (failed.length === 0) return;
+  const ui = getUI();
+  ui.log.warn(
+    `${heading}\n${bulletList(
+      failed.map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name)),
+    )}`,
+  );
+  for (const r of failed) {
+    if (r.manualFallback) ui.log.info(r.manualFallback);
+  }
+};
 
 export const removeMCPServerFromClientsStep = async ({
   integration,
@@ -183,13 +195,7 @@ export const removeMCPServerFromClientsStep = async ({
       `No PostHog MCP entry left to remove for:\n${bulletList(nothingToDo)}`,
     );
   }
-  if (failed.length > 0) {
-    ui.log.warn(
-      `Couldn't remove the MCP server from:\n${bulletList(
-        failed.map((r) => (r.detail ? `${r.name} — ${r.detail}` : r.name)),
-      )}`,
-    );
-  }
+  reportFailures(`Couldn't remove the MCP server from:`, failed);
 
   analytics.wizardCapture('mcp servers removed', {
     clients: removed,

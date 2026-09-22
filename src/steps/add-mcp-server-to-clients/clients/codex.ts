@@ -34,6 +34,11 @@ const STALE_MARKETPLACE_CACHE = /already added from a different source/i;
  */
 const STARTUP_TIMEOUT_SEC = 30;
 
+/** The section to paste when the wizard cannot write config.toml at all. */
+const manualSection = (serverName: string, url: string): string =>
+  `[mcp_servers.${serverName}]\nurl = "${url}"\n` +
+  `startup_timeout_sec = ${STARTUP_TIMEOUT_SEC}\n`;
+
 /**
  * The server's table header. TOML accepts a bare or quoted key for the same
  * table, and matching only the bare form means we append a second definition of
@@ -200,8 +205,7 @@ export class CodexMCPClient
         const pad = contents === '' || contents.endsWith('\n') ? '' : '\n';
         this.write(
           configPath,
-          `${contents}${pad}${gap}[mcp_servers.${serverName}]\n` +
-            `url = "${url}"\nstartup_timeout_sec = ${STARTUP_TIMEOUT_SEC}\n`,
+          `${contents}${pad}${gap}` + manualSection(serverName, url),
         );
         return { success: true };
       }
@@ -225,15 +229,39 @@ export class CodexMCPClient
       analytics.captureException(
         new Error(`Codex config.toml write failed: ${reason}`),
       );
-      return { success: false, reason };
+      return {
+        success: false,
+        reason,
+        manualFallback:
+          `Add this to ${configPath} by hand:\n\n` +
+          manualSection(serverName, url),
+      };
     }
   }
 
-  /** Write via a sibling temp file: a crash mid-write must not truncate the config. */
+  /**
+   * Write via a sibling temp file: a crash mid-write must not truncate the
+   * config. A directory can refuse a new file while the config itself stays
+   * writable, so fall back to an in-place write rather than lose the install.
+   */
   private write(configPath: string, contents: string): void {
     const tmp = `${configPath}.wizard-tmp`;
-    fs.writeFileSync(tmp, contents);
-    fs.renameSync(tmp, configPath);
+    try {
+      fs.writeFileSync(tmp, contents);
+      fs.renameSync(tmp, configPath);
+    } catch (error) {
+      // macOS denies the sibling file when it guards the directory, and EXDEV
+      // means the rename crosses a device boundary. Any other errno is about
+      // the config itself, which an in-place write cannot help.
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (!['EPERM', 'EACCES', 'EXDEV'].includes(code)) throw error;
+      try {
+        fs.rmSync(tmp, { force: true });
+      } catch {
+        // an undeletable temp file must not cost the user the write below
+      }
+      fs.writeFileSync(configPath, contents);
+    }
   }
 
   /** Codex's own login runs its OAuth and owns the token; the wizard only surfaces the command. */

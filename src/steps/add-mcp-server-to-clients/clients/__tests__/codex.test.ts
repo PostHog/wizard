@@ -27,8 +27,12 @@ describe('CodexMCPClient', () => {
   const readFileSyncMock = fs.readFileSync as Mock;
   const existsSyncMock = fs.existsSync as Mock;
   const writeFileSyncMock = fs.writeFileSync as Mock;
+  const renameSyncMock = fs.renameSync as Mock;
 
   const CODEX_PATH = '/usr/local/bin/codex';
+
+  const errno = (code: string, message: string): NodeJS.ErrnoException =>
+    Object.assign(new Error(message), { code });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,6 +44,7 @@ describe('CodexMCPClient', () => {
     readFileSyncMock.mockReturnValue('');
     existsSyncMock.mockReturnValue(false);
     writeFileSyncMock.mockReturnValue(undefined);
+    renameSyncMock.mockReturnValue(undefined);
   });
 
   describe('isClientSupported', () => {
@@ -153,6 +158,57 @@ describe('CodexMCPClient', () => {
         reason: 'network timeout',
       });
       expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    it('writes config.toml in place when the temp file is denied', async () => {
+      writeFileSyncMock.mockImplementationOnce(() => {
+        throw errno('EPERM', 'EPERM: operation not permitted, open tmp');
+      });
+      const client = new CodexMCPClient();
+      await expect(client.addServer()).resolves.toEqual({ success: true });
+      const [tmpPath] = writeFileSyncMock.mock.calls[0]!;
+      const [finalPath, finalContents] = writeFileSyncMock.mock.calls[1]!;
+      expect(tmpPath).toContain('.wizard-tmp');
+      expect(finalPath).toBe(tmpPath.replace('.wizard-tmp', ''));
+      expect(finalContents).toContain('[mcp_servers.posthog]');
+      expect(renameSyncMock).not.toHaveBeenCalled();
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('writes config.toml in place when the rename is denied', async () => {
+      renameSyncMock.mockImplementation(() => {
+        throw errno('EPERM', 'EPERM: operation not permitted, rename');
+      });
+      const client = new CodexMCPClient();
+      await expect(client.addServer()).resolves.toEqual({ success: true });
+      expect(writeFileSyncMock).toHaveBeenCalledTimes(2);
+      expect(fs.rmSync).toHaveBeenCalled();
+    });
+
+    it('offers the section to paste when both writes fail', async () => {
+      writeFileSyncMock.mockImplementation(() => {
+        throw errno('EACCES', 'EACCES: permission denied');
+      });
+      const client = new CodexMCPClient();
+      const result = await client.addServer();
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('EACCES: permission denied');
+      expect(result.manualFallback).toContain('config.toml');
+      expect(result.manualFallback).toContain('[mcp_servers.posthog]');
+      expect(result.manualFallback).toContain(
+        'url = "https://mcp.posthog.com/mcp"',
+      );
+      expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    it('does not retry in place when the temp write fails for another reason', async () => {
+      writeFileSyncMock.mockImplementationOnce(() => {
+        throw errno('ENOSPC', 'ENOSPC: no space left on device');
+      });
+      const client = new CodexMCPClient();
+      const result = await client.addServer();
+      expect(result.success).toBe(false);
+      expect(writeFileSyncMock).toHaveBeenCalledTimes(1);
     });
   });
 
