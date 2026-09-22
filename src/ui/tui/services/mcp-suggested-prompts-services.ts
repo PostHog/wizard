@@ -117,7 +117,7 @@ export function createMcpSuggestedPromptsServices(
         baseUrl: store.session.baseUrl,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,
-        // replays, errors, web analytics/AIO, cohorts, persons) plus
+        // replays, errors, web analytics, AI Observability, cohorts, persons) plus
         // annotation read/write. Persistence writes (dashboard, insight,
         // notebook) come for free from the base set. See
         // `src/lib/oauth/program-scopes.ts`.
