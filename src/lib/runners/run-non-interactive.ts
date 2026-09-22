@@ -21,9 +21,9 @@ import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
-  detectErrorCode,
   emitWizardError,
 } from '@shared/errors';
+import { detectErrorCode } from '@lib/programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**

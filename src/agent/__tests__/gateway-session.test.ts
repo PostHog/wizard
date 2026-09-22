@@ -26,7 +26,7 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
 }));
 
-vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
+vi.mock('@utils/debug', () => ({ logToFile: vi.fn(), setDebugSink: vi.fn() }));
 
 // logToFile is variadic, so a leak in any argument is a leak. Rendered every way the
 // sink might: JSON (which invokes getters and toJSON), an Error's stack, and inspect.

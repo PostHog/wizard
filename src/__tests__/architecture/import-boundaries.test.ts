@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-export type Surface = 'env' | 'legacy' | 'agent' | 'tui' | 'cli';
+export type Surface = 'env' | 'shared' | 'legacy' | 'agent' | 'tui' | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
@@ -10,6 +10,7 @@ const REPO_ROOT = path.resolve(HERE, '../../..');
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
     ['env', (p) => p === 'src/env.ts'],
+    ['shared', (p) => p.startsWith('src/shared/')],
     ['agent', (p) => p.startsWith('src/agent/')],
     [
       'tui',
@@ -26,7 +27,6 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
       (p) =>
         p === 'bin.ts' ||
         p === 'src/wizard.ts' ||
-        p === 'src/telemetry.ts' ||
         p.startsWith('src/commands/') ||
         p.startsWith('src/lib/runners/'),
     ],
@@ -42,10 +42,12 @@ export function classifySurface(relPath: string): Surface {
 
 export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   env: [],
-  legacy: ['env', 'legacy'],
-  agent: ['env', 'legacy', 'agent'],
-  tui: ['env', 'legacy', 'tui'],
-  cli: ['env', 'legacy', 'agent', 'tui', 'cli'],
+  shared: ['env', 'shared'],
+  legacy: ['env', 'shared', 'legacy'],
+  // Program types stay importable from the agent until B1 moves the bindings.
+  agent: ['env', 'shared', 'legacy', 'agent'],
+  tui: ['env', 'shared', 'legacy', 'tui'],
+  cli: ['env', 'shared', 'legacy', 'agent', 'tui', 'cli'],
 };
 
 // The agent's public entries. Outside `src/agent`, an import into the agent
@@ -396,7 +398,8 @@ describe('import boundaries', () => {
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');
-    expect(classifySurface('src/shared/utils/analytics.ts')).toBe('legacy');
+    expect(classifySurface('src/shared/utils/analytics.ts')).toBe('shared');
+    expect(classifySurface('src/shared/errors/codes.ts')).toBe('shared');
     expect(classifySurface('src/agent/agent-runner.ts')).toBe('agent');
     expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');

@@ -1,5 +1,5 @@
 import type { Integration } from '@shared/constants';
-import { withProgress } from '../telemetry';
+import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { getDotGitignore } from '@utils/bounded-fs';

@@ -8,7 +8,7 @@ vi.mock('../urls', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../urls')>()),
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
-vi.mock('../debug', () => ({ logToFile: vi.fn() }));
+vi.mock('../debug', () => ({ logToFile: vi.fn(), setDebugSink: vi.fn() }));
 
 const mockedAxios = axios as Mocked<typeof axios>;
 
