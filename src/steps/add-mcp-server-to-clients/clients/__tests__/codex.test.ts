@@ -111,10 +111,35 @@ describe('CodexMCPClient', () => {
     // The defect this replaces: a registered marketplace was read as an
     // installed plugin, so the wizard reported success while `codex plugin
     // list` said `not installed`, and never self-corrected on a re-run.
-    it('returns false when the marketplace is registered but the plugin is not installed', async () => {
+    it('reports a registered marketplace with no plugin, so removal can clear it', async () => {
+      // `index.ts` asks this to decide whether there is anything to remove.
+      // The marketplace alone is something: the wizard registered it, and
+      // answering false here strands it on the machine for good. The install
+      // decision asks the narrower question and still runs — the test below.
       readFileSyncMock.mockReturnValue(
         '[marketplaces.posthog]\nsource_type = "git"\n',
       );
+      routeCodex(() => pluginListing('not installed'));
+      const client = new CodexMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(true);
+    });
+
+    it('treats an unreadable config.toml as no marketplace, not a crash', async () => {
+      // A fresh machine has no `~/.codex/config.toml` at all. `readFileSync`
+      // throws there, and an exception out of discovery would take down every
+      // client's removal, not just Codex's.
+      readFileSyncMock.mockImplementation(() => {
+        throw new Error(
+          "ENOENT: no such file or directory, open 'config.toml'",
+        );
+      });
+      routeCodex(() => pluginListing('not installed'));
+      const client = new CodexMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+
+    it('reports nothing when neither the plugin nor our marketplace is there', async () => {
+      readFileSyncMock.mockReturnValue('');
       routeCodex(() => pluginListing('not installed'));
       const client = new CodexMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);

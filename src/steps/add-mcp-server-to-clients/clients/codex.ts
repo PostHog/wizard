@@ -495,7 +495,8 @@ export class CodexMCPClient
     return this.findCodexBinary() !== null;
   }
 
-  async isPluginInstalled(): Promise<boolean> {
+  /** The plugin itself, as the CLI reports it. The install decision's question. */
+  private async isPluginPresent(): Promise<boolean> {
     const binary = this.findCodexBinary();
     if (!binary) return false;
     const result = await runCodex(binary, [
@@ -505,6 +506,16 @@ export class CodexMCPClient
       PLUGIN_MARKETPLACE,
     ]);
     return result.ok && listedAsInstalled(result.output);
+  }
+
+  /**
+   * Anything of ours left on the machine, which is what `index.ts` asks before
+   * offering removal. A registered marketplace with no plugin is a state the
+   * wizard created — and the state this branch exists to correct — so removal
+   * has to see it, or `removePlugin` never runs and the catalog stays forever.
+   */
+  async isPluginInstalled(): Promise<boolean> {
+    return (await this.isPluginPresent()) || this.isMarketplaceRegistered();
   }
 
   /** The catalog, which the plugin is installed *from* — not the plugin. */
@@ -530,7 +541,7 @@ export class CodexMCPClient
     // Both halves are removed, and either alone is enough to act on: a user
     // left with a registered marketplace and no plugin still needs it cleared.
     const steps: string[][] = [];
-    if (await this.isPluginInstalled())
+    if (await this.isPluginPresent())
       steps.push(['plugin', 'remove', PLUGIN_REF]);
     if (this.isMarketplaceRegistered())
       steps.push(['plugin', 'marketplace', 'remove', PLUGIN_MARKETPLACE]);
@@ -554,7 +565,10 @@ export class CodexMCPClient
         reason: 'The codex CLI is no longer on your PATH.',
       };
 
-    if (await this.isPluginInstalled()) {
+    // The plugin, not the catalog: a registered marketplace with no plugin is
+    // exactly the broken state this installs over, so asking the wider question
+    // here would skip the install and leave it broken.
+    if (await this.isPluginPresent()) {
       return { success: true, alreadyInstalled: true };
     }
 
