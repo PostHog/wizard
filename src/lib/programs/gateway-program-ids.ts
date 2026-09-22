@@ -11,7 +11,7 @@
  * A leaf module with no imports, so `gateway-session` can read it without
  * importing the program registry, which imports the gateway.
  */
-export const GATEWAY_PROGRAM_IDS: readonly string[] = [
+export const GATEWAY_PROGRAM_IDS = [
   'agent-skill',
   'ai-observability',
   'audit',
@@ -32,9 +32,9 @@ export const GATEWAY_PROGRAM_IDS: readonly string[] = [
   'slack',
   'warehouse-source',
   'web-analytics-doctor',
-];
+] as const;
 
-const REGISTERED = new Set(GATEWAY_PROGRAM_IDS);
+const REGISTERED: ReadonlySet<string> = new Set(GATEWAY_PROGRAM_IDS);
 
 /** Whether the gateway will mint a token for this program id. */
 export function isGatewayProgramId(id: string): boolean {

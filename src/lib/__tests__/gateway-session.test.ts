@@ -623,7 +623,7 @@ describe('gatewayAuth', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'gateway mint refused',
-      { status: 0, outcome: 'program_unregistered', program: 'feature-flags' },
+      { outcome: 'program_unregistered', program: 'feature-flags' },
     );
   });
 

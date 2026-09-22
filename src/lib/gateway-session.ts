@@ -15,6 +15,7 @@ import type { HostResolution } from '@lib/host-resolution';
 import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
 import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import { ISSUES_URL } from '@lib/constants';
 import { isGatewayProgramId } from '@lib/programs/gateway-program-ids';
 import type { CloudRegion } from '@utils/types';
 
@@ -151,8 +152,8 @@ async function resolveGatewayAuth(
     logToFile(
       `[gateway] program "${program}" is not a registered program; failing the run`,
     );
+    // No `status`: nothing was sent, so there is no HTTP status to report.
     analytics.wizardCapture('gateway mint refused', {
-      status: 0,
       outcome: 'program_unregistered',
       program,
     });
@@ -312,7 +313,7 @@ function unregisteredProgramMessage(program: string): string {
   return (
     `PostHog does not issue gateway tokens for the wizard program "${program}". ` +
     'This is a bug in the wizard, not something you can fix — please report it at ' +
-    'https://github.com/PostHog/wizard/issues.'
+    `${ISSUES_URL}.`
   );
 }
 
