@@ -21,11 +21,39 @@ vi.mock('../../../../utils/debug', () => ({
 
 /** `plugin list --json` payload, trimmed to the fields the client reads. */
 const listed = (...ids: string[]) =>
-  JSON.stringify(ids.map((id) => ({ id, version: '1.1.63', scope: 'user' })));
+  JSON.stringify(
+    ids.map((id) => ({
+      id,
+      version: '1.1.63',
+      scope: 'user',
+      enabled: true,
+    })),
+  );
+
+/** The same payload with `enabled` set per row, as `/plugin` leaves it. */
+const listedWith = (...rows: [string, boolean][]) =>
+  JSON.stringify(
+    rows.map(([id, enabled]) => ({
+      id,
+      version: '1.1.63',
+      scope: 'user',
+      enabled,
+    })),
+  );
 
 /** `marketplace list --json` payload, trimmed the same way. */
 const marketplaces = (...names: string[]) =>
-  JSON.stringify(names.map((name) => ({ name, source: 'github' })));
+  JSON.stringify(
+    names.map((name) => ({
+      name,
+      source: 'github',
+      repo: 'PostHog/ai-plugin',
+    })),
+  );
+
+/** A marketplace under our name, published from someone else's repository. */
+const foreignMarketplace = (name: string, repo: string) =>
+  JSON.stringify([{ name, source: 'github', repo }]);
 
 /**
  * Match a contiguous argument run, so `plugin list` doesn't also match
@@ -109,6 +137,32 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       );
       const client = new ClaudeCodeMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+
+    it('returns false when the only installed copy is disabled', async () => {
+      // A disabled plugin contributes no MCP server, and Claude Code takes its
+      // server from the plugin, so reporting it installed leaves the user with
+      // nothing serving posthog and a screen that says they are done.
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(['posthog@posthog', false])
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+
+    it('returns true when a disabled copy sits beside an enabled one', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(
+              ['posthog@posthog', false],
+              ['posthog@claude-plugins-official', true],
+            )
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(true);
     });
 
     it('returns false when no plugins are installed', async () => {
@@ -255,6 +309,48 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
       expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('registers our marketplace when a foreign one holds the same name', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list'))
+          return foreignMarketplace('posthog', 'someone-else/ai-plugin');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).toContainEqual(
+        expect.stringContaining('marketplace add PostHog/ai-plugin'),
+      );
+    });
+
+    it('reports the marketplace add failure beside the install failure it caused', async () => {
+      // `not found in any configured marketplace` is also what the pre-fix bug
+      // produced, so the cause has to travel with it to stay distinguishable.
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces();
+        if (isCmd(cmd, 'marketplace', 'add'))
+          return new Error('network unreachable');
+        return new Error(
+          'Plugin "posthog" not found in any configured marketplace',
+        );
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toMatchObject({
+        success: false,
+      });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('not found in any configured'),
+        }),
+        expect.objectContaining({
+          marketplaceFailure: expect.stringContaining('network unreachable'),
+        }),
+      );
     });
 
     it('returns success with alreadyInstalled when the CLI reports "already installed"', async () => {

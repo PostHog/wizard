@@ -41,10 +41,22 @@ const NOT_IN_A_MARKETPLACE = /not found in/i;
 interface ListedPlugin {
   /** `<plugin>@<marketplace>`, e.g. `posthog@posthog`. */
   id: string;
+  /**
+   * A plugin disabled in `/plugin` stays listed with `enabled: false`. It is
+   * still installed, but it contributes no MCP server, so treating it as
+   * installed reports "you are good to go" with nothing serving posthog.
+   */
+  enabled?: boolean;
 }
 
 interface ListedMarketplace {
   name: string;
+  /**
+   * `owner/repo`, present since the CLI started emitting `--json`. A
+   * marketplace merely *named* `posthog` may be someone else's, and installing
+   * from it would ship a different plugin under our name.
+   */
+  repo?: string;
 }
 
 type ClaudeRun = { ok: boolean; output: string };
@@ -308,24 +320,33 @@ export class ClaudeCodeMCPClient
   // Every installed copy, from any marketplace: Claude Code permits
   // `posthog@posthog` and `posthog@claude-plugins-official` at the same time.
   // Null means the probe is unavailable, which is not the same as none.
-  private async installedPluginIds(binary: string): Promise<string[] | null> {
+  private async installedPlugins(
+    binary: string,
+  ): Promise<ListedPlugin[] | null> {
     const listed = await this.listJson<ListedPlugin>(binary, [
       'plugin',
       'list',
     ]);
     if (!listed) return null;
-    return listed
-      .map((p) => p?.id)
-      .filter((id): id is string => typeof id === 'string')
-      .filter((id) => id.split('@')[0] === PLUGIN_NAME);
+    return listed.filter(
+      (p): p is ListedPlugin =>
+        typeof p?.id === 'string' && p.id.split('@')[0] === PLUGIN_NAME,
+    );
+  }
+
+  private async installedPluginIds(binary: string): Promise<string[] | null> {
+    const listed = await this.installedPlugins(binary);
+    return listed?.map((p) => p.id) ?? null;
   }
 
   async isPluginInstalled(): Promise<boolean> {
     const binary = this.findClaudeBinary();
     if (!binary) return false;
 
-    const ids = await this.installedPluginIds(binary);
-    if (ids) return ids.length > 0;
+    const listed = await this.installedPlugins(binary);
+    // `enabled: false` means installed but serving nothing. Report it as not
+    // installed so the install path runs and the user ends up with a server.
+    if (listed) return listed.some((p) => p.enabled !== false);
 
     // Older CLI without `--json`. A substring scan also matches a plugin merely
     // named `posthog-something`, which is why it's the fallback and not the path.
@@ -347,7 +368,7 @@ export class ClaudeCodeMCPClient
       return { success: true, alreadyInstalled: true };
     }
 
-    await this.ensurePluginMarketplace(binary);
+    const marketplaceFailure = await this.ensurePluginMarketplace(binary);
 
     let result = await this.runClaude(binary, [
       'plugin',
@@ -378,23 +399,35 @@ export class ClaudeCodeMCPClient
     if (msg.includes('already installed') || msg.includes('already exists')) {
       return { success: true, alreadyInstalled: true };
     }
-    analytics.captureException(
-      new Error(`Claude Code plugin install failed: ${msg}`),
-    );
+    // `not found in any configured marketplace` is also what the pre-PR bug
+    // produced, so without the marketplace-add failure beside it the new root
+    // cause is indistinguishable from the old one in error tracking.
+    const failure = new Error(`Claude Code plugin install failed: ${msg}`);
+    if (marketplaceFailure) {
+      analytics.captureException(failure, { marketplaceFailure });
+    } else {
+      analytics.captureException(failure);
+    }
     return { success: false, reason: msg };
   }
 
   // Best-effort: a failure here only matters if the install also fails, since
   // the user may hold the plugin in another catalog that the fallback finds.
-  private async ensurePluginMarketplace(binary: string): Promise<void> {
+  private async ensurePluginMarketplace(
+    binary: string,
+  ): Promise<string | undefined> {
     const listed = await this.listJson<ListedMarketplace>(binary, [
       'plugin',
       'marketplace',
       'list',
     ]);
-    if (listed?.some((m) => m?.name === PLUGIN_MARKETPLACE)) {
+    const ours = (m: ListedMarketplace | undefined): boolean =>
+      m?.name === PLUGIN_MARKETPLACE &&
+      (m.repo === undefined ||
+        m.repo.toLowerCase() === PLUGIN_MARKETPLACE_SOURCE.toLowerCase());
+    if (listed?.some(ours)) {
       debug(`  Marketplace ${PLUGIN_MARKETPLACE} already registered`);
-      return;
+      return undefined;
     }
 
     // `marketplace add` is idempotent on Claude Code and exits 0 when the
@@ -406,6 +439,10 @@ export class ClaudeCodeMCPClient
       'add',
       PLUGIN_MARKETPLACE_SOURCE,
     ]);
-    if (!added.ok) debug(`  Marketplace add failed: ${added.output}`);
+    if (!added.ok) {
+      debug(`  Marketplace add failed: ${added.output}`);
+      return added.output;
+    }
+    return undefined;
   }
 }
