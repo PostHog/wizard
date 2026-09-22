@@ -1,24 +1,26 @@
 import type { PromptContext } from '@agent/types';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramRun } from '@programs/program-run';
+import type { ProgramRunHost } from '@programs/host-capabilities';
 import { errorTrackingUploadSourceMapsConfig } from '@programs/error-tracking-upload-source-maps/index';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 
-const ui = vi.hoisted(() => ({
+const ui = {
   values: {} as Record<string, unknown>,
   setFrameworkContext: vi.fn(),
-}));
+  warn: vi.fn(),
+};
 
-vi.mock('@ui', () => ({
-  getUI: () => ({
-    getFrameworkContext: (key: string) => ui.values[key],
-    setFrameworkContext: ui.setFrameworkContext,
-  }),
-}));
 vi.mock('@programs/shared/posthog-cli-preinstall', () => ({
   preinstallPostHogCliOnce: vi.fn(),
 }));
+
+const host: ProgramRunHost = {
+  getFrameworkContext: (key) => ui.values[key],
+  setFrameworkContext: ui.setFrameworkContext,
+  warn: ui.warn,
+};
 
 const context = {
   projectId: 42,
@@ -31,14 +33,16 @@ const context = {
 beforeEach(() => {
   ui.values = {};
   ui.setFrameworkContext.mockClear();
+  ui.warn.mockClear();
   vi.mocked(preinstallPostHogCliOnce).mockClear();
 });
 
 it('reads the source-maps picker after legacy run resolution', async () => {
   const resolve = errorTrackingUploadSourceMapsConfig.run as (
     session: WizardSession,
+    host: ProgramRunHost,
   ) => Promise<ProgramRun>;
-  const run = await resolve({} as WizardSession);
+  const run = await resolve({} as WizardSession, host);
   expect(run.customPrompt?.(context)).toContain(
     'Detection did not pick a source maps skill variant',
   );
@@ -62,8 +66,9 @@ it('reads the source-maps picker after legacy run resolution', async () => {
 it('preinstalls the global CLI only after a requiring variant is picked', async () => {
   const resolve = errorTrackingUploadSourceMapsConfig.run as (
     session: WizardSession,
+    host: ProgramRunHost,
   ) => Promise<ProgramRun>;
-  const run = await resolve({} as WizardSession);
+  const run = await resolve({} as WizardSession, host);
   expect(preinstallPostHogCliOnce).not.toHaveBeenCalled();
 
   ui.values[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant] = 'ios';
@@ -71,5 +76,6 @@ it('preinstalls the global CLI only after a requiring variant is picked', async 
   expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
     'source maps posthog-cli preinstall failed',
     { variant: 'ios' },
+    ui.warn,
   );
 });

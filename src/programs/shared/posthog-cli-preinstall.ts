@@ -9,7 +9,6 @@
  */
 
 import { installOrUpdatePostHogCli } from '@shared/posthog-cli-install';
-import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 
 let attempted = false;
@@ -17,6 +16,7 @@ let attempted = false;
 export function preinstallPostHogCliOnce(
   failureEvent: string,
   properties: Record<string, string>,
+  warn: (message: string) => void,
 ): void {
   if (attempted) return;
   attempted = true;
@@ -31,7 +31,7 @@ export function preinstallPostHogCliOnce(
     ...properties,
     error: String(result.error).slice(0, 500),
   });
-  getUI().log.warn(
+  warn(
     `Could not pre-install posthog-cli (${result.error}). Your release build ` +
       `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
   );
