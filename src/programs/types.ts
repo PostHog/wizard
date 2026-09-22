@@ -8,6 +8,11 @@ export type {
 } from './program-step';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
 export type {
+  ProgramInput,
+  ProgramOptions,
+  ProgramRunOutcome,
+} from './run-program';
+export type {
   ProgramBinding,
   ProgramSwitchboardCtx,
   ProgramSwitchboardTrace,
