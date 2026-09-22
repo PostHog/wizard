@@ -56,7 +56,17 @@ export const redactSecrets = (raw: string): string =>
     .replace(/\bgh[pousr]_[A-Za-z0-9]{16,}/g, '[redacted]')
     .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}/g, '[redacted]')
     // OpenAI keys: `OPENAI_API_KEY` is already a failure codex reports on.
-    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted]');
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted]')
+    // Google keys, which a config error quotes the same way.
+    .replace(/\bAIza[A-Za-z0-9_-]{16,}/g, '[redacted]')
+    // The catch-all for providers we have no shape for: a config error prints
+    // the offending line, and the variable's own name says it holds a secret.
+    // The name is kept — `OPENAI_API_KEY` is wording an expected-failure hint
+    // matches on, and masking it would turn that hint back into an exception.
+    .replace(
+      /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_]*)(\s*[=:]\s*)["']?[A-Za-z0-9_\-./+]{8,}["']?/gi,
+      '$1$2[redacted]',
+    );
 
 /**
  * Replace the user's home directory with `~`. Error tracking fingerprints on

@@ -89,6 +89,31 @@ describe('redactSecrets', () => {
     ).toBe('OPENAI_API_KEY [redacted] is invalid');
   });
 
+  it('masks a provider key we have no shape for, keeping the variable name', () => {
+    expect(
+      redactSecrets(
+        'invalid value for AZURE_OPENAI_API_KEY = "abc123def456ghi"',
+      ),
+    ).toBe('invalid value for AZURE_OPENAI_API_KEY = [redacted]');
+    expect(redactSecrets('github_token: abcdef0123456789')).toBe(
+      'github_token: [redacted]',
+    );
+  });
+
+  it('masks a google key', () => {
+    expect(redactSecrets('rejected AIzaSyA0123456789abcdefghij here')).toBe(
+      'rejected [redacted] here',
+    );
+  });
+
+  it('keeps the wording an expected-failure hint matches on', () => {
+    // The config hint fires on `OPENAI_API_KEY`; masking the name with the
+    // value would file this as an exception instead of hinting.
+    expect(
+      redactSecrets('Missing OPENAI_API_KEY=sk-proj-0123456789abcdefghij'),
+    ).toContain('OPENAI_API_KEY');
+  });
+
   it('leaves an ordinary URL and ordinary words alone', () => {
     expect(
       redactSecrets('cloning https://github.com/PostHog/ai-plugin.git failed'),

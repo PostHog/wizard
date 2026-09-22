@@ -113,6 +113,11 @@ const EXPECTED_FAILURES: ExpectedFailure[] = [
     match:
       /EACCES|EPERM|permission denied|read-only file system|not permitted/i,
     stages: ALL_STAGES,
+    // git says `Permission denied (publickey)` when an SSH clone of the
+    // marketplace cannot authenticate to GitHub. Nothing on ~/.codex is wrong
+    // there, so the hint below would send the user to chmod a directory that
+    // is already fine while the real cause goes unreported.
+    unless: /permission denied \((?:publickey|password|gssapi)/i,
     hint: 'codex could not write to its config — fix the permissions on ~/.codex, then retry',
   },
   {

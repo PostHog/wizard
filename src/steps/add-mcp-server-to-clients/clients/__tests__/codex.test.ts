@@ -532,6 +532,17 @@ describe('CodexMCPClient', () => {
       expect(analytics.captureException).toHaveBeenCalled();
     });
 
+    // git's SSH clone failure says `Permission denied (publickey)`, which has
+    // nothing to do with ~/.codex. Telling the user to fix permissions there
+    // sends them to chmod a directory that is already fine.
+    it('reports an ssh clone rejection rather than blaming ~/.codex', async () => {
+      const result = await failingPluginInstall(
+        'git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.',
+      );
+      expect(result.reason).not.toMatch(/permissions on ~\/.codex/i);
+      expect(analytics.captureException).toHaveBeenCalled();
+    });
+
     // A failure that merely mentions the config path is not a config failure.
     it('reports an unrecognised failure that only mentions config.toml', async () => {
       const result = await failingPluginInstall(
