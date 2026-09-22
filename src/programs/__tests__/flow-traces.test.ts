@@ -125,7 +125,7 @@ function advance(store: WizardStore, screen: string): boolean {
           (!st.show || st.show(s)) &&
           (!st.isComplete || !st.isComplete(s)),
       );
-      if (runStep?.run) {
+      if (runStep?.runProgramId) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Running);

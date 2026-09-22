@@ -1,5 +1,4 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import { runProgramAgent } from '@programs/run-agent-legacy';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { mayReportScanResults } from '@shared/scan-consent';
@@ -171,10 +170,8 @@ export const integrationRunStep: ProgramStep = {
   id: 'run',
   label: 'Integration',
   screenId: 'run',
-  // composed: runs inside the host program (self-driving), so skip the
-  // integration's terminal outro + analytics shutdown of the shared client.
-  run: (session) =>
-    runProgramAgent(posthogIntegrationConfig, session, { composed: true }),
+  // The host runs this child without its terminal outro or analytics shutdown.
+  runProgramId: 'posthog-integration',
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

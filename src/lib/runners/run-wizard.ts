@@ -53,11 +53,11 @@ async function prepareRunSession(
 }
 
 /** Advance one step of a composed run to completion: the auth screen
- * authenticates (every later run reuses it); a step carrying its own `run`
- * thunk runs that agent in its dir and is recorded in `completedRuns`; the
+ * authenticates (every later run reuses it); a step naming a child program
+ * runs that agent in its dir and is recorded in `completedRuns`; the
  * host program's own run screen runs `config.run`; any other screen waits for
  * the user to satisfy `isComplete`. */
-async function advanceStep(
+export async function advanceStep(
   step: Step,
   store: WizardStore,
   config: ProgramConfig,
@@ -65,8 +65,12 @@ async function advanceStep(
   if (step.screenId === 'auth') {
     await authenticate(store.session, config.id, getUI());
     maybeStampAiSdkDetected(store.session);
-  } else if (step.run) {
-    await step.run(await prepareRunSession(step, store));
+  } else if (step.runProgramId) {
+    await runProgramAgent(
+      getProgramConfig(step.runProgramId),
+      await prepareRunSession(step, store),
+      { composed: true },
+    );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
     await runProgramAgent(config, await prepareRunSession(step, store));
@@ -244,9 +248,9 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.run || s.targetDir)) {
-        // A composed program: its step list splices in run steps that carry
-        // their own agent (self-driving runs the integration before its own
+      if (config.steps.some((s) => s.runProgramId || s.targetDir)) {
+        // A composed program: its step list includes a child program run
+        // (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
         // Walk the list once, advancing each step to completion.
         for (const step of config.steps) {

@@ -73,13 +73,10 @@ export interface ProgramStep {
   screenId?: string;
 
   /**
-   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
-   * exports a self-contained run step and another imports it into its step list
-   * — e.g. posthog-integration exports a run step that runs its agent, and
-   * self-driving imports it before its own run step. Omit to run the host
-   * program's own agent (`config.run`).
+   * For a composed run step (`screenId: 'run'`): identifies the child program
+   * whose agent the host runs. Omit to run this program's own agent.
    */
-  run?: (session: WizardSession) => Promise<void>;
+  runProgramId?: ProgramId;
 
   /**
    * For a run step: prepare a derived session before its agent runs — e.g.
