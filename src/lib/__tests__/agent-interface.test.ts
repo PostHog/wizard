@@ -136,7 +136,8 @@ describe('runAgent', () => {
                 once: true,
               });
           });
-          throw new Error('SDK query aborted');
+          if (controller?.signal.aborted) throw new Error('SDK query aborted');
+          yield { type: 'assistant', message: { content: [] } };
         })();
       });
 

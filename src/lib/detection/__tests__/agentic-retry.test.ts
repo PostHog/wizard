@@ -44,11 +44,10 @@ function emitResult(text: string) {
 describe('agentic detection retry', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    init.mockImplementation(
-      async () =>
-        ({ id: init.mock.calls.length } as unknown as Awaited<
-          ReturnType<typeof initializeAgent>
-        >),
+    init.mockImplementation(() =>
+      Promise.resolve({ id: init.mock.calls.length } as unknown as Awaited<
+        ReturnType<typeof initializeAgent>
+      >),
     );
   });
 
