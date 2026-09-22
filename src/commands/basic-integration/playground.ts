@@ -1,5 +1,5 @@
 import { VERSION } from '@shared/version';
-import { startPlayground } from '@ui/tui/playground/start-playground';
+import { startPlayground } from '@tui/playground/start-playground';
 
 /** Launch the TUI primitives playground. */
 export function runPlayground(): void {

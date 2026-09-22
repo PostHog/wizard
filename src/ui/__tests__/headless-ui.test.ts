@@ -5,7 +5,7 @@
 import '@ui';
 import { HeadlessUI } from '../headless-ui';
 import { TaskStatus } from '../wizard-ui';
-import type { WizardStore } from '../tui/store';
+import type { WizardStore } from '@tui/store';
 
 describe('HeadlessUI', () => {
   it('forwards task updates to the store and still logs to the console', () => {

@@ -9,15 +9,15 @@
  * through the driver.
  */
 
-import { WizardStore } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
+import { WizardStore } from '@tui/store';
+import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase, McpOutcome } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { ScreenId, Overlay } from '@ui/tui/router';
+import { ScreenId, Overlay } from '@tui/router';
 import { Program } from '@programs';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';

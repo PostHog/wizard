@@ -62,6 +62,8 @@ module.exports = {
                   '@ui',
                   '@ui/**',
                   '**/ui/**',
+                  '@tui/**',
+                  '**/tui/**',
                   '@lib/**',
                   '**/lib/**',
                   '**/wizard-session',

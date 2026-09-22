@@ -7,7 +7,7 @@ import type { AgenticDetectionReport } from '@programs/detection/agentic';
 import { detectFramework } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { ErrorCodes } from '@shared/errors';
-import { ERROR_TRACKING_TIPS } from '@ui/tui/decks/error-tracking/tips';
+import { ERROR_TRACKING_TIPS } from '@tui/decks/error-tracking/tips';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,
   toErrorTrackingReport,

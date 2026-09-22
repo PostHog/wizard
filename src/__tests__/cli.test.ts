@@ -42,8 +42,8 @@ vi.mock('../programs/task-stream', () => ({
       ? null
       : { name: 'file', path: '/tmp/task-stream.jsonl' },
 }));
-vi.mock('../ui/tui/store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../ui/tui/store')>()),
+vi.mock('@tui/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tui/store')>()),
   WizardStore: class {
     session: unknown;
     setRunPhase = vi.fn();
@@ -62,7 +62,7 @@ vi.mock('../lib/wizard-session', async (importOriginal) => ({
 vi.mock('@utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
-vi.mock('../ui/tui/start-tui', () => ({
+vi.mock('@tui/start-tui', () => ({
   startTUI: () => ({
     unmount: vi.fn(),
     store: {

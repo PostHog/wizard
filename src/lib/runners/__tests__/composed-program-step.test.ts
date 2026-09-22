@@ -4,7 +4,7 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { selfDrivingConfig } from '@programs/self-driving/index';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { buildSession, RunPhase } from '@lib/wizard-session';
-import { WizardStore } from '@ui/tui/store';
+import { WizardStore } from '@tui/store';
 
 vi.mock('../run-program-agent', () => ({
   runProgramAgent: vi.fn().mockResolvedValue(undefined),

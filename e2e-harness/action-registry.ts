@@ -12,8 +12,8 @@
  * actions speak only in store setters and generic params.
  */
 
-import type { WizardStore } from '@ui/tui/store';
-import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
+import type { WizardStore } from '@tui/store';
+import { ScreenId, Overlay, type ScreenName } from '@tui/router';
 import { McpOutcome, OutroKind } from '@lib/wizard-session';
 import type { AskAnswers } from '@lib/wizard-session';
 import {

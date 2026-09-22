@@ -50,7 +50,7 @@ function runMcpAdd(argv: Arguments): void {
     }
 
     try {
-      const { startTUI } = await import('@ui/tui/start-tui');
+      const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.McpAdd);
       tui.store.session = buildSession({
@@ -74,7 +74,7 @@ async function runHeadlessAdd(args: {
 }): Promise<void> {
   setUI(new LoggingUI());
   const { addMCPServerToClientsStep } = await import(
-    '@steps/add-mcp-server-to-clients/index'
+    '@tui/add-mcp-server-to-clients/index'
   );
   // Never forwards `ci`: headless implies session.ci elsewhere, and the step
   // reads that as "skip MCP entirely" — the opposite of what we're here to do.

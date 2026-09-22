@@ -14,7 +14,7 @@ vi.mock('../lib/wizard-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/wizard-session')>()),
   buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
-vi.mock('../ui/tui/start-tui', () => ({
+vi.mock('@tui/start-tui', () => ({
   startTUI: () => ({
     unmount: vi.fn(),
     store: {

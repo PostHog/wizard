@@ -7,7 +7,7 @@
  * froze, so a workbench run can rely on it.
  */
 
-import { Overlay, ScreenId } from '@ui/tui/router';
+import { Overlay, ScreenId } from '@tui/router';
 import type { AskQuestion } from '@lib/wizard-session';
 import {
   DEFAULT_E2E_PROFILE,

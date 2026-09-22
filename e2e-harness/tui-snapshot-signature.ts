@@ -1,4 +1,4 @@
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 
 function digest(s: string): string {
   let h = 0x811c9dc5;

@@ -27,7 +27,7 @@ function runMcpTutorial(argv: Arguments): void {
     const localMcp = argv.local as boolean | undefined;
 
     try {
-      const { startTUI } = await import('@ui/tui/start-tui');
+      const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.McpTutorial);
       tui.store.session = buildSession({

@@ -1,6 +1,6 @@
 import { createUiReducer } from '@ui/agent-progress';
-import { InkUI } from '@ui/tui/ink-ui';
-import { WizardStore } from '@ui/tui/store';
+import { InkUI } from '@tui/ink-ui';
+import { WizardStore } from '@tui/store';
 import { tuiSnapshotSignature } from '../tui-snapshot-signature';
 
 it('captures status-only host progress through the real TUI store', () => {

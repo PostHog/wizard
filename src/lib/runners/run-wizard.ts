@@ -7,8 +7,8 @@ import { getAuditChecks } from '@programs/audit/types';
 import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
 import type { ProgramConfig } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
-import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
-import type { WizardStore } from '@ui/tui/store';
+import type { startTUI as StartTUIFn } from '@tui/start-tui';
+import type { WizardStore } from '@tui/store';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
@@ -98,7 +98,7 @@ export function runWizard(
       const installDir = (options.installDir as string) || process.cwd();
       registerCleanup(captureRunSkillCleanup(installDir));
 
-      const { startTUI } = await import('@ui/tui/start-tui');
+      const { startTUI } = await import('@tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
       const { TaskStreamPush } = await import('@programs/task-stream/index');
       const { PostHogDestination } = await import(

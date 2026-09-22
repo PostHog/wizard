@@ -34,7 +34,7 @@ function resolveTsForJs(): Plugin {
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
 const AGENT_TESTS = [`src/agent/**/${TESTS}`];
 const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
-const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
+const TUI_TESTS = [`src/tui/**/${TESTS}`];
 const CLI_TESTS = [
   `src/commands/**/${TESTS}`,
   `src/lib/runners/${TESTS}`,
@@ -88,6 +88,7 @@ export default defineConfig({
       { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
+      { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },

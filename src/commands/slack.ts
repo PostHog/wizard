@@ -27,7 +27,7 @@ function runSlackConnect(argv: Arguments): void {
     const debug = argv.debug as boolean | undefined;
 
     try {
-      const { startTUI } = await import('@ui/tui/start-tui');
+      const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.SlackConnect);
       tui.store.session = buildSession({

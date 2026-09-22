@@ -19,7 +19,7 @@ vi.mock('@lib/wizard-session', () => ({
   reportableDiscoveredFeatures: () => undefined,
   reportablePosthogSdkDetected: () => undefined,
 }));
-vi.mock('@ui/tui/start-tui', () => ({
+vi.mock('@tui/start-tui', () => ({
   startTUI: mockStartTUIMcp,
 }));
 vi.mock('@utils/env-api-key', () => ({

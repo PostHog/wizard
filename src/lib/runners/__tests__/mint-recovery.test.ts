@@ -1,12 +1,12 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard';
 import { runProgramAgent } from '../run-program-agent';
-import { startTUI } from '@ui/tui/start-tui';
-import { WizardStore } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
+import { startTUI } from '@tui/start-tui';
+import { WizardStore } from '@tui/store';
+import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui';
 import { posthogIntegrationConfig } from '@programs/posthog-integration';
-import { ScreenId } from '@ui/tui/router';
+import { ScreenId } from '@tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
 import { clearCleanup } from '@utils/wizard-abort';
@@ -15,7 +15,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 vi.mock('../run-program-agent', () => ({ runProgramAgent: vi.fn() }));
-vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
+vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@shared/local-dev', async (original) => ({
   ...(await original<typeof import('@shared/local-dev')>()),
   getLocalDev: () => ({}),
