@@ -133,7 +133,7 @@ export async function scopeInstallDirToProject(
         programId: 'posthog-integration',
         recommend: true,
         onEvent: (line) => logToFile('[agentic detect]', line),
-        onProgress: host.onProgress,
+        onProgress: (event) => host.onProgress(event),
       }),
       // The agent has no abort plumbing, so a timed-out scan is abandoned in the
       // background rather than cancelled; the run stops waiting on it either way.
