@@ -1,7 +1,7 @@
 /**
  * The linear pipeline. Single execution path for all non-orchestrator programs,
  * both skill-based (revenue analytics) and framework-based (core integration).
- * The `ProgramRun` controls what varies between them; `RunConfig`
+ * The `AgentRunDefinition` controls what varies between them; `RunConfig`
  * carries the program-level static metadata (tool allow/disallow lists, etc.).
  *
  * Reports through `emit`, asks through `interaction`, and returns a decided

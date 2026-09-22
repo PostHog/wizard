@@ -1,6 +1,6 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runProgramAgent } from '@lib/programs/run-agent-legacy';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
 import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';

@@ -21,12 +21,12 @@ import {
   runAgent,
   RunOutcome,
   resolveBinding,
-  type ProgramRun,
   type RunConfig,
   type RunInput,
   type SwitchboardCtx,
 } from '@lib/agent/runner';
 import type { ProgramBinding } from '@lib/agent/runner/switchboard';
+import type { ProgramRun } from './program-run';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   backupAndFixClaudeSettings,

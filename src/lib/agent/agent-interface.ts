@@ -729,12 +729,12 @@ export async function runAgent(
     abortCases?: readonly AbortCaseMatcher[];
     /**
      * Emit a `wizard: step` event on each agent task transition. Threaded from
-     * `ProgramRun.trackStepProgress`; defaults off for every other caller.
+     * `AgentRunDefinition.trackStepProgress`; defaults off for every other caller.
      */
     emitStepEvents?: boolean;
     /**
      * Maps an agent-authored step label to a stable `step_key`. Threaded from
-     * `ProgramRun.resolveStepKey`; absent for programs that don't define one.
+     * `AgentRunDefinition.resolveStepKey`; absent for programs that don't define one.
      */
     resolveStepKey?: (stepName: string | undefined) => string | undefined;
     /** Request the end-of-run reflection remark. Defaults to true. */
@@ -1783,7 +1783,7 @@ function handleSDKMessage(
   // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
   suppressTaskRender = false,
   // Opt-in per-step analytics, threaded from runAgent's `emitStepEvents`
-  // (ProgramRun.trackStepProgress). Off for every program that doesn't opt in.
+  // (AgentRunDefinition.trackStepProgress). Off for every program that doesn't opt in.
   emitStepEvents = false,
   // Program-supplied label -> stable key mapping for the same events.
   resolveStepKey?: (stepName: string | undefined) => string | undefined,

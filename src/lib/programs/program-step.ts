@@ -4,7 +4,7 @@ import type {
   TaskNotice,
 } from '@lib/wizard-session';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 import type { Integration } from '@lib/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';

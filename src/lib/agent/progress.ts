@@ -120,7 +120,7 @@ export interface PendingQuestion {
   /**
    * When true, the ask overlay renders standalone URLs in prompt text as
    * OSC 8 hyperlinks and copies a lone URL to the clipboard. Opt-in per
-   * program (set from `ProgramRun.richLinks` via the ask bridge); defaults
+   * program (set from `AgentRunDefinition.richLinks` via the ask bridge); defaults
    * to false so existing flows render prompts exactly as before. See
    * `LinkText` / `link-helpers`.
    */

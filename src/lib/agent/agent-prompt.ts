@@ -7,7 +7,7 @@
  *   3. Skill prompt — "follow SKILL.md" instructions (if a skill was installed)
  */
 
-import type { ProgramRun } from './agent-runner.js';
+import type { AgentRunDefinition } from './runner/shared/types';
 import type { HostResolution } from '@lib/host-resolution';
 
 /**
@@ -62,7 +62,10 @@ Important: You must read a file immediately before attempting to write it, even 
 /**
  * Assemble the final agent prompt from the program's run config.
  */
-export function assemblePrompt(runDef: ProgramRun, ctx: PromptContext): string {
+export function assemblePrompt(
+  runDef: AgentRunDefinition,
+  ctx: PromptContext,
+): string {
   const parts: string[] = [];
 
   // Always include the default project prompt

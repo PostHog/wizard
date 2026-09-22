@@ -43,7 +43,7 @@ export type {
   AgentFailure,
   BootstrapResult,
   Credentials,
-  ProgramRun,
+  AgentRunDefinition,
   PromptContext,
   ResolvedBinding,
   RunAgentOptions,

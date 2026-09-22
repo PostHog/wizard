@@ -1,8 +1,10 @@
 import { assemblePrompt, type PromptContext } from '@lib/agent/agent-prompt';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { AgentRunDefinition } from '@lib/agent/runner';
 import { HostResolution } from '@lib/host-resolution';
 
-function makeRunDef(overrides: Partial<ProgramRun> = {}): ProgramRun {
+function makeRunDef(
+  overrides: Partial<AgentRunDefinition> = {},
+): AgentRunDefinition {
   return {
     integrationLabel: 'test',
     spinnerMessage: 'Working...',
