@@ -358,97 +358,98 @@ export async function detectProjectsWithAgent(
     call_type: CallType.detection,
   };
 
-  const agent = await initializeAgent(
-    {
-      workingDirectory: cwd,
-      posthogMcpUrl: host.mcpUrl,
-      posthogApiKey: accessToken,
-      host,
-      detectPackageManager: detectNodePackageManagers,
-      skillsBaseUrl: getSkillsBaseUrl(),
-      programId,
-      integrationLabel: 'agentic-detect',
-      wizardMetadata,
-      allowedTools: ['Read', 'Grep', 'Glob'],
-      modelOverride: HAIKU_MODEL,
-    },
-    runOptions,
-  );
+  const prompt = buildPrompt(cwd, targets, purpose, recommend);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const agent = await initializeAgent(
+      {
+        workingDirectory: cwd,
+        posthogMcpUrl: host.mcpUrl,
+        posthogApiKey: accessToken,
+        host,
+        detectPackageManager: detectNodePackageManagers,
+        skillsBaseUrl: getSkillsBaseUrl(),
+        programId,
+        integrationLabel: 'agentic-detect',
+        wizardMetadata,
+        allowedTools: ['Read', 'Grep', 'Glob'],
+        modelOverride: HAIKU_MODEL,
+      },
+      runOptions,
+    );
 
-  // Keeps only the transcript tail — the report JSON is the last output.
-  const MAX_TRANSCRIPT_CHARS = 256 * 1024;
-  const collected: string[] = [];
-  let collectedChars = 0;
-  const collect = (text: string): void => {
-    collected.push(text);
-    collectedChars += text.length;
-    while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
-      collectedChars -= collected.shift()!.length;
-    }
-  };
-  let resultText = '';
-
-  const middleware = {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onMessage: (message: any): void => {
-      if (message?.type === 'assistant') {
-        for (const block of message.message?.content ?? []) {
-          if (block?.type === 'text' && typeof block.text === 'string') {
-            collect(block.text);
-            const line = block.text.trim();
-            if (line && onEvent) {
-              onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
-            }
-          } else if (block?.type === 'tool_use') {
-            onEvent?.(formatToolUse(block));
-          }
-        }
-      } else if (
-        message?.type === 'result' &&
-        typeof message.result === 'string'
-      ) {
-        resultText = message.result;
+    // Keeps only the transcript tail — the report JSON is the last output.
+    const MAX_TRANSCRIPT_CHARS = 256 * 1024;
+    const collected: string[] = [];
+    let collectedChars = 0;
+    const collect = (text: string): void => {
+      collected.push(text);
+      collectedChars += text.length;
+      while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
+        collectedChars -= collected.shift()!.length;
       }
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    finalize: (_resultMessage: any, _durationMs: number): unknown => undefined,
-  };
+    };
+    let resultText = '';
 
-  const result = await executeAgent(
-    agent,
-    buildPrompt(cwd, targets, purpose, recommend),
-    runOptions,
-    NOOP_SPINNER,
-    {
-      spinnerMessage: 'Scanning the repo...',
-      successMessage: 'Detection complete',
-      errorMessage: 'Detection failed',
-      requestRemark: false,
-    },
-    middleware,
-  );
+    const middleware = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: (message: any): void => {
+        if (message?.type === 'assistant') {
+          for (const block of message.message?.content ?? []) {
+            if (block?.type === 'text' && typeof block.text === 'string') {
+              collect(block.text);
+              const line = block.text.trim();
+              if (line && onEvent) {
+                onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
+              }
+            } else if (block?.type === 'tool_use') {
+              onEvent?.(formatToolUse(block));
+            }
+          }
+        } else if (
+          message?.type === 'result' &&
+          typeof message.result === 'string'
+        ) {
+          resultText = message.result;
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      finalize: (_resultMessage: any, _durationMs: number): unknown =>
+        undefined,
+    };
 
-  if (result.error) {
-    throw new Error(result.message || `Agent error: ${result.error}`);
-  }
+    const result = await executeAgent(
+      agent,
+      prompt,
+      runOptions,
+      NOOP_SPINNER,
+      {
+        spinnerMessage: 'Scanning the repo...',
+        successMessage: 'Detection complete',
+        errorMessage: 'Detection failed',
+        requestRemark: false,
+      },
+      middleware,
+    );
 
-  // Transcript first, final message last — its verdicts win path conflicts.
-  const output = `${collected.join('\n')}\n${resultText}`;
-  const derived = deriveReportJson(output);
-  if (derived === null) {
-    // The prompt tells the agent to emit `[ABORT] detection failed` when the
-    // repo has no recognizable project manifests. Surface that (and any other
-    // non-JSON terminal output that carries the abort signal) as an empty
-    // report so the screen renders a friendly "nothing to instrument" state
-    // instead of a cryptic "Agent did not return a JSON object" error.
+    if (result.error) {
+      throw new Error(result.message || `Agent error: ${result.error}`);
+    }
+
+    // Transcript first, final message last — its verdicts win path conflicts.
+    const output = `${collected.join('\n')}\n${resultText}`;
+    const derived = deriveReportJson(output);
+    if (derived !== null) {
+      return coerceAgenticReport(
+        derived,
+        targets.map((t) => t.id),
+        { recommend, rerankIds },
+      );
+    }
+    // No manifests are a valid empty scan, not a reason to retry.
     if (output.includes(AgentSignals.ABORT)) {
       return { repoType: 'single', projects: [] };
     }
-    throw new Error('Agent did not return a JSON object');
+    if (attempt === 0) onEvent?.('Retrying project scan...');
   }
-  return coerceAgenticReport(
-    derived,
-    targets.map((t) => t.id),
-    { recommend, rerankIds },
-  );
+  throw new Error('Agent did not return a JSON object after retry');
 }
