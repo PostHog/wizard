@@ -31,14 +31,14 @@
  *     already treats `ci || signup` as one non-interactive mode.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import type { ApiUser } from '@shared/api';
 import type { ProgramConfig, ProgramStep } from './program-step.js';
 
 /** Step id — also the ScreenId.AiOptIn enum value in screen-sequences. */
 export const AI_OPT_IN_STEP_ID = 'ai-opt-in';
 
-function aiApproved(session: WizardSession): boolean {
-  return !!session.apiUser?.organization?.is_ai_data_processing_approved;
+function aiApproved(user: ApiUser | null): boolean {
+  return !!user?.organization?.is_ai_data_processing_approved;
 }
 
 /**
@@ -64,10 +64,11 @@ export function withAiOptInGate(config: ProgramConfig): ProgramStep[] {
       !session.ci &&
       !session.signup &&
       session.apiUser != null &&
-      !aiApproved(session),
+      !aiApproved(session.apiUser),
     isComplete: (session) =>
-      session.ci || session.signup || aiApproved(session),
-    gate: (session) => session.ci || session.signup || aiApproved(session),
+      session.ci || session.signup || aiApproved(session.apiUser),
+    gate: (session) =>
+      session.ci || session.signup || aiApproved(session.apiUser),
   };
 
   return [
