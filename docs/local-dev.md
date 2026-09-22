@@ -3,6 +3,9 @@
 Running the wizard against local servers. Four things can independently be
 local, and this doc is the catalog of how to control each.
 
+For the callable agent and program contracts, see the
+[non-interactive developer interfaces](developer-interfaces.md).
+
 ## Credentials for local CI and headless runs
 
 Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need

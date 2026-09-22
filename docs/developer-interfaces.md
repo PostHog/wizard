@@ -1,0 +1,124 @@
+# Non-interactive developer interfaces
+
+Wizard has two repository-local TypeScript call surfaces and one development CLI
+mode for running without a terminal UI. The TypeScript aliases below are
+internal to this repository; `@posthog/wizard` currently publishes a CLI, not
+these functions as a stable package API.
+
+| Surface                                 | Use it for                                      | Detailed contract                                                                          |
+| --------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `runAgent(config, input, options)`      | One already-configured AI run                   | [Agent reference](../src/agent/README.md)                                                  |
+| `runProgram(programId, input, options)` | A registered program with invocation-owned data | [Programs reference](../src/programs/README.md)                                            |
+| Development `--ci`                      | A process-owned, non-interactive CLI run        | [Local CI credentials and recipe](local-dev.md#credentials-for-local-ci-and-headless-runs) |
+
+## Standalone agent
+
+`runAgent` takes a resolved `RunConfig` (run definition, binding, tools and
+policy), `RunInput` (project, credentials, optional inference-auth provider,
+flags and host), and optional `onProgress`, `interaction`, and `signal` options.
+Import the function from `@agent` and types from `@agent/types`. It returns a
+`RunResult` with a `success`, `aborted`, `failed`, or `crashed` outcome and a
+final task/status/usage snapshot. Progress is delivered in emission order;
+observer errors do not fail the run. Without `interaction`, questions have no
+answer bridge and optional task notices are declined.
+
+```ts
+import { runAgent } from '@agent';
+import type { RunConfig, RunInput } from '@agent/types';
+
+export async function runStandalone(
+  config: RunConfig,
+  input: RunInput,
+  signal?: AbortSignal,
+) {
+  return runAgent(config, input, {
+    signal,
+    onProgress: (event) => {
+      if (event.kind === 'status') console.log(event.message);
+    },
+  });
+}
+```
+
+The caller prepares `config` and `input`; the agent does not authenticate the
+PostHog user or detect the project. Supply `input.inferenceAuth` when the host
+owns gateway authentication. A legacy fallback remains when it is absent. There
+is no session control protocol on this API. An aborted signal returns an
+`aborted` result; it does not pause the run.
+
+## Callable program
+
+`runProgram` takes a registered ID, `ProgramInput` with at least `installDir`,
+and optional `ProgramOptions`. The host supplies resolved credentials or a
+credential provider, prepared detection and framework context where needed, and
+callbacks for questions, approvals, progress, or program-specific effects. An
+optional `signal` cancels an active agent run. It returns a `ProgramRunOutcome`:
+outcome and failure, final progress, actual settled agent runs, program-specific
+data, artifacts, and invocation data (including a captured event plan). The
+latter contains credentials and should not be logged.
+
+```ts
+import { runProgram } from '@programs';
+import type { ProgramOptions } from '@programs/types';
+
+export async function runAudit(
+  installDir: string,
+  credentials: NonNullable<ProgramOptions['credentials']>,
+  awaitAiApproval: NonNullable<ProgramOptions['awaitAiApproval']>,
+  signal?: AbortSignal,
+) {
+  const result = await runProgram(
+    'audit',
+    { installDir },
+    {
+      credentials,
+      awaitAiApproval,
+      signal,
+      onProgress: ({ runId, event }) => {
+        if (event.kind === 'tasks') console.log(runId, event.tasks);
+      },
+    },
+  );
+  if (result.outcome !== 'success') {
+    throw new Error(result.failure?.message ?? `Audit ${result.outcome}`);
+  }
+  return result.artifacts.reportFile;
+}
+```
+
+The caller implements the credential and approval callbacks. Some programs
+require additional prepared inputs or host effects; the
+[program reference](../src/programs/README.md#inputs-and-capabilities) lists
+them. Host callbacks such as credential resolution, approval, and MCP work do
+not receive the signal. There is no live store or step-control handle.
+
+## Development CI and experimental headless runner
+
+Development/test builds accept `--ci`. This is a whole-process CLI path, not an
+awaitable function returning `ProgramRunOutcome`. It requires an install
+directory, a PostHog personal API key, a project ID, and an already-issued
+gateway token in the file named by `WIZARD_CI_GATEWAY_TOKEN_FILE`:
+
+```bash
+WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
+  --project-id "$POSTHOG_WIZARD_PROJECT_ID" \
+  --region us --install-dir /absolute/path/to/test-app
+```
+
+The runner logs progress and writes a local task-stream JSONL dump. Callers
+observe the process exit and its logs, rather than a returned result. The
+gateway token file is read directly for CI; this path does not mint or refresh
+that token. Published builds reject `--ci`. The internal
+`runWizardCI(config, options): void` entry point still uses the legacy session
+adapter, which now calls `runProgram` for agent execution.
+
+An experimental published-build headless path exists internally as
+`runWizardHeadless(config, options): void`. It shares the process-owned runner,
+logs progress, and can push task-stream updates to PostHog when telemetry is
+enabled. Its selector is deliberately hidden and is not a supported invocation
+recipe. Neither internal function returns a structured, awaitable outcome.
+
+Controlled headless and socket control APIs are not available yet. There is no
+supported route, command, or event protocol for pausing a run, supplying an
+answer later, or reading its live state from another process.

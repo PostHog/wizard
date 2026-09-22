@@ -388,6 +388,11 @@ that conventional code implies.
 If you want to use this code as a starting place for your own project, here's a
 quick explainer on its structure.
 
+For code that runs without the terminal UI, see the
+[non-interactive developer interfaces](docs/developer-interfaces.md), including
+the [standalone agent](src/agent/README.md) and
+[callable programs](src/programs/README.md).
+
 ## Entrypoint: `run.ts`
 
 The entrypoint for this tool is `run.ts`. Use this file to interpret arguments
