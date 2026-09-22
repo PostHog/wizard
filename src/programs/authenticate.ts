@@ -10,9 +10,9 @@
  * back rather than fetching again.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
-import type { ApiUser, Credentials } from '@shared/api';
+import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import type { ProgramId } from '@programs/program-registry';
+import type { CloudRegion } from '@utils/types';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
@@ -30,8 +30,24 @@ export type TokenRefreshProjection = {
   setAccessToken(credentials: Credentials): void;
 };
 
+/** Authentication state shared with the CLI host, without TUI session fields. */
+export interface AuthSession {
+  signup: boolean;
+  ci: boolean;
+  apiKey?: string;
+  projectId?: number;
+  email?: string;
+  region?: CloudRegion;
+  baseUrl?: string;
+  localMcp: boolean;
+  credentials: Credentials | null;
+  apiProject: ApiProject | null;
+  roleAtOrganization: string | null;
+  apiUser: ApiUser | null;
+}
+
 export async function authenticate(
-  session: WizardSession,
+  session: AuthSession,
   programId: ProgramId,
   projection: AuthProjection,
 ): Promise<void> {
@@ -98,7 +114,7 @@ const DEAD_GRANT_CODES = new Set(['invalid_grant', 'invalid_client']);
 
 // Best-effort pre-run refresh: no refresh token or a failed grant keeps the existing token.
 export async function refreshAccessTokenIfNeeded(
-  session: WizardSession,
+  session: Pick<AuthSession, 'credentials' | 'baseUrl'>,
   projection: TokenRefreshProjection,
 ): Promise<void> {
   const credentials = session.credentials;

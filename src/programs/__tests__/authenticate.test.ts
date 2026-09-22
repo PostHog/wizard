@@ -1,8 +1,7 @@
-import { authenticate } from '../authenticate';
+import { authenticate, type AuthSession } from '../authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
-import type { WizardSession } from '@lib/wizard-session';
 
 vi.mock('@utils/setup-utils', () => ({ getOrAskForProjectData: vi.fn() }));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
@@ -28,11 +27,15 @@ it('publishes the first login through its projection and reuses it', async () =>
     project: null,
     missingScopes: [],
   });
-  const session = {
+  const session: AuthSession = {
     credentials: null,
     ci: false,
     signup: false,
-  } as WizardSession;
+    localMcp: false,
+    apiProject: null,
+    roleAtOrganization: null,
+    apiUser: null,
+  };
   const projection = {
     setCredentials: vi.fn(),
     setRoleAtOrganization: vi.fn(),
