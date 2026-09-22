@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
 
 import { getSkillsBaseUrl } from '@shared/constants';
-import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
+import { fetchSkillMenu, type CliEntry } from '@agent/tools';
 import { analytics } from '@utils/analytics';
 
 import { runSkillMode } from './basic-integration/skill';

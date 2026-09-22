@@ -1,7 +1,7 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { authenticate } from '@lib/programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
-import { runAgent, RunOutcome, type RunResult } from '@lib/agent/runner';
+import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
@@ -25,8 +25,8 @@ vi.mock('@utils/environment', async (original) => ({
   ...(await original<typeof import('@utils/environment')>()),
   readEnvironment: () => ({}),
 }));
-vi.mock('@lib/gateway-session', async (original) => ({
-  ...(await original<typeof import('@lib/gateway-session')>()),
+vi.mock('@agent/gateway-session', async (original) => ({
+  ...(await original<typeof import('@agent/gateway-session')>()),
   configureGatewayFromCIEnvironment: vi.fn(),
 }));
 vi.mock('@lib/task-stream/index', () => ({
@@ -50,8 +50,8 @@ vi.mock('@utils/analytics', () => ({
   },
   sessionProperties: () => ({}),
 }));
-vi.mock('@lib/agent/runner', async (original) => ({
-  ...(await original<typeof import('@lib/agent/runner')>()),
+vi.mock('@agent/runner', async (original) => ({
+  ...(await original<typeof import('@agent/runner')>()),
   runAgent: vi.fn(),
 }));
 vi.mock('@lib/programs/authenticate', () => ({

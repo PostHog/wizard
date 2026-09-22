@@ -50,7 +50,7 @@ vi.mock('@shared/api', async (actual) => ({
   fetchSlackConnected: vi.fn(pending),
   fetchGithubConnected: vi.fn(pending),
 }));
-vi.mock('@lib/wizard-tools', async (actual) => ({
+vi.mock('@agent/tools', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   fetchSkillMenu: vi.fn(pending),
   downloadSkill: vi.fn(pending),

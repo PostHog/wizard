@@ -1,4 +1,4 @@
-import { AgentErrorType } from '@lib/agent/signals';
+import { AgentErrorType } from '@agent/signals';
 import { ErrorCodes, type ErrorCode } from './codes';
 
 export const AGENT_ERROR_CODE: Record<AgentErrorType, ErrorCode> = {

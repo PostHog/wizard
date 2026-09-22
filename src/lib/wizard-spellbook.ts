@@ -8,7 +8,7 @@ import {
   fetchSkillMenu,
   type SkillEntry,
   type SkillMenu,
-} from './wizard-tools/tools';
+} from '@agent/tools/tools';
 
 export type WizardSpellbook = { path: string; skillsIncluded: boolean };
 type SpellbookSession = Pick<

@@ -32,14 +32,7 @@ function resolveTsForJs(): Plugin {
 // Per-surface Vitest projects keyed by today's directories. Each project runs
 // alone with `vitest run --project <name>`; `vitest run` runs them all.
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
-const AGENT_TESTS = [
-  `src/lib/agent/**/${TESTS}`,
-  `src/lib/middleware/**/${TESTS}`,
-  'src/lib/__tests__/agent-*.test.ts',
-  'src/lib/__tests__/gateway-session.test.ts',
-  'src/lib/__tests__/wizard-can-use-tool.test.ts',
-  'src/lib/__tests__/yara-*.test.ts',
-];
+const AGENT_TESTS = [`src/agent/**/${TESTS}`];
 const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
 const CLI_TESTS = [
   `src/commands/**/${TESTS}`,
@@ -86,6 +79,7 @@ export default defineConfig({
       },
       { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
       { find: /^@shared\/(.*)$/, replacement: `${r('src/shared')}/$1` },
+      { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },

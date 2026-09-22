@@ -26,7 +26,7 @@ import {
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
-import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
 import { getAuditChecks } from '@lib/programs/audit/types';

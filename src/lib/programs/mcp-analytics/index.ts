@@ -1,4 +1,4 @@
-import type { AbortCase } from '@lib/agent/agent-runner';
+import type { AbortCase } from '@agent/agent-runner';
 import { ErrorCodes } from '@shared/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
 

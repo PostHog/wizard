@@ -1,5 +1,5 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { POSTHOG_DOCTOR_PROGRAM } from './steps.js';
 
 export const posthogDoctorConfig: ProgramConfig = {

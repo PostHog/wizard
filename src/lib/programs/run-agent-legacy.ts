@@ -24,17 +24,17 @@ import {
   type RunConfig,
   type RunInput,
   type SwitchboardCtx,
-} from '@lib/agent/runner';
-import type { ProgramBinding } from '@lib/agent/runner/switchboard';
+} from '@agent/runner';
+import type { ProgramBinding } from '@agent/runner/switchboard';
 import type { ProgramRun } from './program-run';
-import { buildRunTags } from '@lib/agent/agent-interface';
+import { buildRunTags } from '@agent/agent-interface';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
   classifySettingsConflicts,
   restoreClaudeSettings,
 } from '@shared/claude-settings';
-import { flushScanReport } from '@lib/yara-hooks';
+import { flushScanReport } from '@agent/yara-hooks';
 import {
   evaluateWizardReadiness,
   WizardReadiness,

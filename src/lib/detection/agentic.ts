@@ -18,7 +18,7 @@ import {
   runAgent as executeAgent,
   buildRunTags,
   AgentSignals,
-} from '@lib/agent/agent-interface';
+} from '@agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@shared/constants';

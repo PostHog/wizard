@@ -3,7 +3,7 @@ vi.mock('@utils/debug');
 
 import { createUiReducer, uiInteraction } from '../agent-progress';
 import { LoggingUI } from '../logging-ui';
-import type { AgentProgress } from '@lib/agent/progress';
+import type { AgentProgress } from '@agent/progress';
 import { OutroKind } from '@lib/wizard-session';
 
 it('projects every progress event onto the matching UI call, in order', () => {

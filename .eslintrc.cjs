@@ -35,18 +35,8 @@ module.exports = {
       // progress events and asks through an injected answerer, so nothing
       // here may reach a UI, the session, detection, the CLI or a program at
       // runtime. Program types stay importable until B1 moves
-      // PROGRAM_BINDINGS to programs. Today's paths; A2b collapses them to
-      // src/agent/**.
-      files: [
-        'src/lib/agent/**/*.ts',
-        'src/lib/middleware/**/*.ts',
-        'src/lib/wizard-tools/**/*.ts',
-        'src/lib/gateway-session.ts',
-        'src/lib/safe-tools.ts',
-        'src/lib/wizard-ask-bridge.ts',
-        'src/lib/yara-hooks.ts',
-        'src/lib/yara-policy.ts',
-      ],
+      // PROGRAM_BINDINGS to programs.
+      files: ['src/agent/**/*.ts'],
       excludedFiles: ['**/__tests__/**'],
       rules: {
         '@typescript-eslint/no-restricted-imports': [
@@ -59,6 +49,12 @@ module.exports = {
                 message:
                   'The agent never exits the process: return a failure in RunResult.',
               },
+              {
+                name: '@shared/utils/wizard-abort',
+                importNames: ['wizardAbort'],
+                message:
+                  'The agent never exits the process: return a failure in RunResult.',
+              },
             ],
             patterns: [
               {
@@ -66,13 +62,12 @@ module.exports = {
                   '@ui',
                   '@ui/**',
                   '**/ui/**',
-                  '@lib/wizard-session',
+                  '@lib/**',
+                  '!@lib/programs/**',
+                  '**/lib/**',
+                  '!**/lib/programs/**',
                   '**/wizard-session',
-                  '@lib/detection/**',
                   '**/detection/**',
-                  '@lib/registry',
-                  '**/lib/registry',
-                  '@lib/runners/**',
                   '**/runners/**',
                   '**/commands/**',
                   '@steps',
@@ -80,8 +75,10 @@ module.exports = {
                   '@frameworks/**',
                   '**/frameworks/**',
                   '@utils/setup-utils',
+                  '@shared/utils/setup-utils',
                   '**/setup-utils',
                   '@utils/oauth',
+                  '@shared/utils/oauth',
                   '**/utils/oauth',
                 ],
                 message:

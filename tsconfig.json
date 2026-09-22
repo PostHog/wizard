@@ -15,7 +15,6 @@
     "bin.ts",
     "tsdown.config.ts",
     "vitest.config.ts",
-    "src/lib/**/*",
     "spec/**/*",
     "src/**/*",
     "test/**/*",

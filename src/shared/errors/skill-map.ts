@@ -1,5 +1,5 @@
 import { ErrorCodes, type ErrorCode } from './codes';
-import type { InstallSkillResult } from '@lib/wizard-tools';
+import type { InstallSkillResult } from '@agent/tools';
 
 const SKILL_CODES: Record<
   Exclude<InstallSkillResult['kind'], 'ok'>,

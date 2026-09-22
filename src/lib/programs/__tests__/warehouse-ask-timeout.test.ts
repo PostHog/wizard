@@ -22,7 +22,7 @@ import { warehouseSourceConfig } from '@lib/programs/warehouse-source/index';
 import {
   LONGER_ASK_TIMEOUT_MS,
   DEFAULT_ASK_TIMEOUT_MS,
-} from '@lib/wizard-ask-bridge';
+} from '@agent/wizard-ask-bridge';
 
 function session(): WizardSession {
   return { installDir: '/tmp/app', frameworkContext: {} } as WizardSession;

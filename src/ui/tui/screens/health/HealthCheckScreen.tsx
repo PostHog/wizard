@@ -24,7 +24,7 @@ import {
 import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
+import { fetchSkillMenu, downloadSkill } from '@agent/tools';
 import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 

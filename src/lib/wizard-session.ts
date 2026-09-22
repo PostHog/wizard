@@ -31,7 +31,7 @@ import {
   type OutroData,
   type PendingQuestion,
   type TaskNotice,
-} from './agent/progress';
+} from '@agent/progress';
 
 // These shapes moved to their owners; re-exported so every session reader
 // keeps its import path. `Credentials` sits with the API types, the
