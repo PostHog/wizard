@@ -151,7 +151,7 @@ repos.
 URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
 screen sequence
 `detect → intro → health-check → auth → self-driving-github → run → outro`). The
-TUI deck at `src/ui/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy
+TUI deck at `src/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy
 that defines signal sources + scouts + scanners in plain language, wired via
 `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every other program, so
 nothing else is affected). `selfDrivingConfig` is built from the
@@ -163,7 +163,7 @@ URLs survive wrapping), and `postRun` (just `removeInstalledSkill` — the setup
 skill is transient, marker-guarded by `.posthog-wizard`, so there's no
 keep-skills step). The outro inbox URL is the clean `…/project/:id/inbox` built
 in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
-`src/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
+`src/cli/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
 (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram`
@@ -479,7 +479,7 @@ must be running, or no scout ever dispatches.
 >      (`self-driving` — so the `programLabel` shown in the intro/exit reads
 >      `self-driving`), the `program-scopes.ts` map key, the `self-driving/`
 >      dir + `SELF_DRIVING_*` constants + `SelfDriving*` types / components,
->      `src/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
+>      `src/cli/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
 >      `self-driving-intro`, every user-facing string (intro copy,
 >      success/outro/spinner messages, `detect.ts` abort `message`/`body`,
 >      prompt header + task labels), and the report filename
@@ -583,12 +583,12 @@ must be running, or no scout ever dispatches.
 >     (plus its own `startDelay` of 2 s); `ContentSequencer.handleComplete`
 >     fires `onSequenceComplete` **only after the last block's `pause`
 >     elapses**; the deck self-driving plays is the **shared factory default** >
->     `src/ui/tui/decks/agent-skill/index.tsx` (`getContentBlocks`, last block
+>     `src/tui/decks/agent-skill/index.tsx` (`getContentBlocks`, last block
 >     `pause: 60000`) — self-driving does **not** override it today. **Scoping
 >     caveat (the whole reason this is a TODO, not a one-liner):** that deck is
 >     inherited by _every_ skill program (audit, revenue-analytics, migration,
 >     bare `wizard skill <id>`), so editing
->     `src/ui/tui/decks/agent-skill/index.tsx` changes all of them. Fix
+>     `src/tui/decks/agent-skill/index.tsx` changes all of them. Fix
 >     self-driving alone the way `getTips` already is — add a
 >     **self-driving-owned `getContentBlocks`** override to `selfDrivingConfig`
 >     (`self-driving/index.ts`, right next to the `getTips` override); only
@@ -959,7 +959,7 @@ Code anchors: posthog `products/replay_vision/backend/models/replay_scanner.py`,
 `api/scanners.py`, `temporal/scanners/prompts/signals_step.jinja` (the fixed
 defect-detection turn that `emits_signals` appends — the _why_ the skill cares
 more about a scanner's `query` than its prompt); wizard `program-scopes.ts` +
-`prompt.ts` + `src/ui/tui/decks/self-driving/tips.ts`; skill
+`prompt.ts` + `src/tui/decks/self-driving/tips.ts`; skill
 `6c-replay-vision-scanners.md`.
 
 ---

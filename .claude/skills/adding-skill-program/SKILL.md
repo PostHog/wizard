@@ -33,7 +33,7 @@ them.
   `cliEntries`. A new skill-backed child of an existing family ships through
   context-mill; inspect
   [family dispatch](../../../src/programs/dispatch-family.ts). Unpromoted
-  skills run through [the skill command](../../../src/commands/skill.ts).
+  skills run through [the skill command](../../../src/cli/commands/skill.ts).
 - **Native program:** use a
   [ProgramConfig](../../../src/programs/program-step.ts) when the wizard
   needs its own flow, screens, detection, composition, or other native behavior.
@@ -66,7 +66,7 @@ changing execution behavior.
    [Existing binding checks](../../../src/programs/__tests__/switchboard.test.ts)
    enforce coverage; `ProgramId` currently widens to `string`.
 4. For a standalone native command, create a command module with
-   [nativeCommandFactory](../../../src/commands/factories/native-command-factory.ts)
+   [nativeCommandFactory](../../../src/cli/commands/factories/native-command-factory.ts)
    and register it in [bin.ts](../../../bin.ts). A native family child uses the
    handlers in family dispatch. Program registration derives screen sequences
    and store lookup, not the top-level CLI `.use()` chain.
@@ -106,17 +106,17 @@ Reuse [AGENT_SKILL_STEPS](../../../src/programs/agent-skill/steps.ts):
 intro, health check, auth, run, outro, and keep-skills. Auth also applies the
 shared [AI opt-in gate](../../../src/programs/ai-opt-in-gate.ts) for agent
 programs. Override `screenId`, not `screen`, when adapting a step. New screens
-need an entry in [ScreenId](../../../src/ui/tui/screen-sequences.ts), a
+need an entry in [ScreenId](../../../src/tui/screen-sequences.ts), a
 component, and registration in
-[screen-registry](../../../src/ui/tui/screen-registry.tsx). Follow
+[screen-registry](../../../src/tui/screen-registry.tsx). Follow
 [ink-tui](../ink-tui/SKILL.md) for rendering and store usage.
 
 Use a headless step's `onReady` for session-dependent detection, then render
 structured `frameworkContext.detectError` data in the intro. `onInit` runs when
 the TUI starts rendering with its initial session; `onReady` runs after the real
-session is assigned. See [store hooks](../../../src/ui/tui/store.ts) and
-[run-wizard](../../../src/lib/runners/run-wizard.ts). The
-[noninteractive runner](../../../src/lib/runners/run-non-interactive.ts) also
+session is assigned. See [store hooks](../../../src/tui/store.ts) and
+[run-wizard](../../../src/cli/runners/run-wizard.ts). The
+[noninteractive runner](../../../src/cli/runners/run-non-interactive.ts) also
 walks `onReady` by default; set `ciPreRun` only when it needs a different
 prerequisite strategy.
 

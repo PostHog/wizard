@@ -517,8 +517,10 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 | `@programs/*` | `src/programs/*`, retained for internal imports and tracked migration edges |
 | `@shared/*` | `src/shared/*` |
 | `@utils/*` | `src/shared/utils/*` |
-| `@ui/*` | `src/ui/*` |
-| `@steps/*` | `src/steps/*` |
+| `@tui/*` | `src/tui/*` |
+| `@headless/*` | `src/headless/*` |
+| `@cli/*` | `src/cli/*` |
+| `@ui`, `@ui/*` | `src/ui/*`, the legacy `getUI()` singleton until Release C removes it |
 
 ## Running locally
 

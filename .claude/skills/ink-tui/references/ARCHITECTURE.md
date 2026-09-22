@@ -6,9 +6,9 @@
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [WizardSession](../../../../src/lib/wizard-session.ts)            | Run configuration, decisions, credentials, and lifecycle state                |
 | [ProgramStep](../../../../src/programs/program-step.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
-| [screen-sequences.ts](../../../../src/ui/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
-| [WizardRouter](../../../../src/ui/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
-| [WizardStore](../../../../src/ui/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
+| [screen-sequences.ts](../../../../src/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
+| [WizardRouter](../../../../src/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
+| [WizardStore](../../../../src/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
 | [WizardUI](../../../../src/ui/wizard-ui.ts)                       | Typed operations available to business logic                                  |
 
 ## Program screens
@@ -23,7 +23,7 @@ with store gate creation.
 `WizardRouter.resolve(session)` first checks the overlay stack, then returns the
 first visible, incomplete screen. It also handles the failed-authentication
 outro case. Follow this method and the
-[router tests](../../../../src/ui/tui/__tests__/router.test.ts) for exact
+[router tests](../../../../src/tui/__tests__/router.test.ts) for exact
 behavior; there is no program cursor or `next()` API.
 
 The screen sequence is a presentation projection of the program. It is distinct
@@ -40,13 +40,13 @@ Read `ProgramStep` before adding asynchronous work:
   assigned. Reserve it for work independent of that session.
 - `onReady` runs after the real session is assigned and is awaited in order.
 
-[The store](../../../../src/ui/tui/store.ts) derives gate promises from the
+[The store](../../../../src/tui/store.ts) derives gate promises from the
 program. `getGate(stepId)` resolves once: a predicate becoming false later does
 not close it again. A missing gate returns a resolved promise.
 `waitUntil(predicate)` evaluates live state at the await point; use that
 distinction when a decision can change after startup.
 
-[startTUI](../../../../src/ui/tui/start-tui.ts) invokes `runInitHooks` after
+[startTUI](../../../../src/tui/start-tui.ts) invokes `runInitHooks` after
 rendering starts. Merely constructing a store for a test or playground does not
 start those effects.
 
@@ -62,7 +62,7 @@ separate store atoms. Reuse the existing setters (`pushStatus`, `syncTodos`,
 `setEventPlan`) for those updates. Do not mutate session fields behind the store
 after attaching the session.
 
-[InkUI](../../../../src/ui/tui/ink-ui.ts) translates `getUI()` calls into store
+[InkUI](../../../../src/tui/ink-ui.ts) translates `getUI()` calls into store
 operations. Business logic should use this interface rather than import the
 store; screens can use the store directly.
 
@@ -75,10 +75,10 @@ Their cancellation methods settle pending requests and dismiss the corresponding
 overlay. Use the established methods rather than pushing a question overlay
 without its pending state or promise.
 
-Read [WizardAskScreen](../../../../src/ui/tui/screens/WizardAskScreen.tsx),
-[TaskNoticeScreen](../../../../src/ui/tui/screens/TaskNoticeScreen.tsx), and the
+Read [WizardAskScreen](../../../../src/tui/screens/WizardAskScreen.tsx),
+[TaskNoticeScreen](../../../../src/tui/screens/TaskNoticeScreen.tsx), and the
 matching store methods before changing their lifecycle.
-[LoggingUI](../../../../src/ui/logging-ui.ts) rejects question requests,
+[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) rejects question requests,
 declines optional task notices, and leaves the manual-auth-code promise pending;
 it cannot collect terminal input.
 
@@ -89,17 +89,17 @@ actual overlay values from the enum; health checks are program screens.
 
 ## Components and services
 
-[App](../../../../src/ui/tui/App.tsx) creates the service bundle and screen
+[App](../../../../src/tui/App.tsx) creates the service bundle and screen
 registry, then renders
-[ScreenContainer](../../../../src/ui/tui/primitives/ScreenContainer.tsx). The
+[ScreenContainer](../../../../src/tui/primitives/ScreenContainer.tsx). The
 registry injects services where needed, such as the
-[MCP installer](../../../../src/ui/tui/services/mcp-installer.ts). Prefer this
+[MCP installer](../../../../src/tui/services/mcp-installer.ts). Prefer this
 boundary when a screen needs external operations rather than coupling a new
 component to step internals.
 
 `ScreenContainer` owns transitions, shared keyboard hints, viewport handling,
 and
-[ScreenErrorBoundary](../../../../src/ui/tui/primitives/ScreenErrorBoundary.tsx).
+[ScreenErrorBoundary](../../../../src/tui/primitives/ScreenErrorBoundary.tsx).
 The boundary records an error outro and run phase on render failure. When
 changing completion predicates, verify that failure and dismissal remain
 reachable; the boundary does not replace those predicates.
