@@ -51,6 +51,7 @@ import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
+import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
@@ -64,6 +65,10 @@ export async function runProgramAgent(
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
+
+  // wizardAbort and TUI signal handlers drain this registry on interruption.
+  const cleanupInstalledSkills = captureRunSkillCleanup(session.installDir);
+  registerCleanup(cleanupInstalledSkills);
 
   // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
   // and a watcher started later would ignore that write as pre-existing.
@@ -79,6 +84,13 @@ export async function runProgramAgent(
         : programConfig.run;
 
     await runProgram(session, runDef, programConfig, options.composed ?? false);
+  } catch (error) {
+    try {
+      cleanupInstalledSkills();
+    } catch (cleanupError) {
+      logToFile('[agent-runner] failed-run skill cleanup error:', cleanupError);
+    }
+    throw error;
   } finally {
     ledger?.stop();
   }

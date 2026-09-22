@@ -197,6 +197,7 @@ import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
+import { gatewayAuth } from '@agent/gateway-session';
 
 let tmp: string;
 
@@ -688,5 +689,75 @@ describe('runAgent standalone', () => {
     expect(result.failure?.code).toBe(ErrorCodes.InternalUnhandled);
     // What was reported before the crash survives in the snapshot.
     expect(result.snapshot.statusMessages).toContain('Installing the SDK');
+  });
+
+  it.each([
+    [
+      'aborted',
+      { error: AgentErrorType.ABORT, message: 'No Stripe found' },
+      undefined,
+    ],
+    ['failed', { error: AgentErrorType.NO_PROGRESS }, undefined],
+    ['crashed', {}, new Error('SDK exploded')],
+  ] as const)(
+    'removes only new Wizard-installed skills after a %s run',
+    async (outcome, harnessResult, thrown) => {
+      const skillsDir = path.join(tmp, '.claude', 'skills');
+      const makeSkill = (id: string, marked: boolean) => {
+        const dir = path.join(skillsDir, id);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
+        if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+      };
+      makeSkill('preexisting', true);
+      harnessState.result = harnessResult;
+      harnessState.throws = thrown;
+
+      const result = await runAgent(config(), input(), {
+        onProgress: (event) => {
+          if (event.kind !== 'status') return;
+          makeSkill('installed-this-run', true);
+          makeSkill('user-owned-this-run', false);
+        },
+      });
+
+      expect(result.outcome).toBe(outcome);
+      expect(fs.readdirSync(skillsDir).sort()).toEqual([
+        'preexisting',
+        'user-owned-this-run',
+      ]);
+    },
+  );
+
+  it('removes a new marked skill when preparation fails before the harness starts', async () => {
+    const skillsDir = path.join(tmp, '.claude', 'skills');
+    vi.mocked(gatewayAuth).mockImplementationOnce(() => {
+      const dir = path.join(skillsDir, 'installed-during-preparation');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+      return Promise.reject(new Error('preparation blocked the run'));
+    });
+
+    const result = await runAgent(config(), input());
+
+    expect(result.outcome).toBe(RunOutcome.Crashed);
+    expect(harnessState.lastInputs).toBeUndefined();
+    expect(
+      fs.existsSync(path.join(skillsDir, 'installed-during-preparation')),
+    ).toBe(false);
+  });
+
+  it('keeps newly installed skills after a successful run', async () => {
+    const skillDir = path.join(tmp, '.claude', 'skills', 'completed-install');
+    const result = await runAgent(config(), input(), {
+      onProgress: (event) => {
+        if (event.kind !== 'status') return;
+        fs.mkdirSync(skillDir, { recursive: true });
+        fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+      },
+    });
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(fs.existsSync(skillDir)).toBe(true);
   });
 });
