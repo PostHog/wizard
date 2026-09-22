@@ -30,7 +30,6 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@lib/wizard-session';
-import { WizardError } from '@utils/wizard-abort';
 import type { AgentFailure } from './runner/shared/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
@@ -58,7 +57,7 @@ import {
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
 } from './signals';
-import { classifyAuthFailure } from '@lib/errors';
+import { classifyAuthFailure, WizardError } from '@lib/errors';
 import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
