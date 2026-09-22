@@ -45,6 +45,34 @@ export const redactSecrets = (raw: string): string =>
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(/ph[xspc]_[A-Za-z0-9_-]+/g, '[redacted]');
 
+/**
+ * Replace the user's home directory with `~`. Error tracking fingerprints on
+ * the message, so a path that differs per user splits one root cause into one
+ * issue per user — and the username itself never needs to leave the machine.
+ */
+export const scrubHomePaths = (raw: string): string =>
+  raw
+    .replace(/\/(?:Users|home)\/[^/\s'"]+/g, '~')
+    .replace(/[A-Za-z]:\\Users\\[^\\\s'"]+/gi, '~');
+
+/**
+ * A failure that lives entirely in the user's environment: a CLI too old, a
+ * broken install, an unreadable config. We can't fix these, so we hand back a
+ * hint instead of filing an issue nobody can action.
+ */
+export interface ExpectedFailure {
+  match: RegExp;
+  /** One short line, shown to the user as the failure detail. */
+  hint: string;
+}
+
+/** The first matching hint, or undefined when the failure is worth reporting. */
+export const expectedFailureHint = (
+  text: string,
+  table: ExpectedFailure[],
+): string | undefined =>
+  text.trim() ? table.find((f) => f.match.test(text))?.hint : undefined;
+
 /** First non-empty line of an error, trimmed to something a TUI line can hold. */
 export const summarizeFailure = (raw?: string): string | undefined => {
   const line = redactSecrets(raw ?? '')

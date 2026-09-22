@@ -272,10 +272,114 @@ describe('CodexMCPClient', () => {
         reason: 'network timeout',
       });
       expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Codex plugin install failed' }),
+        expect.objectContaining({ details: 'network timeout' }),
+      );
+    });
+  });
+  describe('failure reporting', () => {
+    // spawnSync splits the cause across error/stderr/stdout. Reading only
+    // stderr produced `Codex plugin install failed: ` with a blank reason —
+    // 18 events across 18 users in 30 days, useless to both the user and us.
+    it('gives an actionable reason when the binary cannot be executed', async () => {
+      spawnSyncMock.mockReturnValue({
+        error: new Error('spawn /Users/ada/.bun/bin/codex ENOENT'),
+        status: null,
+        stderr: null,
+        stdout: null,
+      });
+      const client = new CodexMCPClient();
+
+      const result = await client.installPlugin();
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toMatch(/reinstall codex/i);
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('reports the spawn error itself when the cause is unrecognised', async () => {
+      spawnSyncMock.mockReturnValue({
+        error: new Error('spawn EBADF while starting codex'),
+        status: null,
+        stderr: null,
+        stdout: null,
+      });
+      const client = new CodexMCPClient();
+
+      const result = await client.installPlugin();
+
+      expect(result.reason).toContain('EBADF');
+    });
+
+    it('never reports an empty reason, even with no output at all', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 3,
+        stderr: null,
+        stdout: null,
+      });
+      const client = new CodexMCPClient();
+
+      const result = await client.installPlugin();
+
+      expect(result.reason?.trim()).toBeTruthy();
+      expect(result.reason).toContain('3');
+    });
+
+    it('reports stdout when the CLI writes its failure there', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: '',
+        stdout: 'the marketplace rejected the manifest',
+      });
+      const client = new CodexMCPClient();
+
+      const result = await client.installPlugin();
+
+      expect(result.reason).toContain('rejected the manifest');
+    });
+
+    it.each([
+      ["error: unexpected argument 'marketplace' found", /codex/i],
+      ['Error: spawn /Users/ada/.bun/bin/codex ENOENT', /codex/i],
+      [
+        'Error: failed to load configuration\n\nCaused by: invalid type',
+        /config/i,
+      ],
+      ['EACCES: permission denied', /permission/i],
+      ['No space left on device (os error 28)', /space|disk/i],
+    ])(
+      'hints instead of reporting a local-environment failure: %s',
+      async (stderr, expected) => {
+        spawnSyncMock.mockReturnValue({ status: 1, stderr });
+        const client = new CodexMCPClient();
+
+        const result = await client.installPlugin();
+
+        expect(result.success).toBe(false);
+        expect(result.reason).toMatch(expected);
+        expect(analytics.captureException).not.toHaveBeenCalled();
+      },
+    );
+
+    // One root cause was 29 issue ids for Claude Code because $HOME sat in the
+    // message. Keep the message constant and put the detail in properties.
+    it('reports an unexpected failure under a constant message with scrubbed detail', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: 'weird new failure in /Users/ada/.codex/config.toml',
+      });
+      const client = new CodexMCPClient();
+
+      await client.installPlugin();
+
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Codex plugin install failed' }),
         expect.objectContaining({
-          message: expect.stringContaining('network timeout'),
+          details: expect.stringContaining('~/.codex/config.toml'),
         }),
       );
+      const [, props] = (analytics.captureException as Mock).mock.calls[0];
+      expect(props.details).not.toContain('/Users/ada');
     });
   });
 });

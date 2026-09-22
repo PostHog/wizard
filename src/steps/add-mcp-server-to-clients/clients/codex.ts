@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { execSync, spawnSync } from 'node:child_process';
+import type { SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -16,10 +17,78 @@ import {
 } from '@steps/add-mcp-server-to-clients/plugin-client';
 import {
   redactSecrets,
+  scrubHomePaths,
+  expectedFailureHint,
+  type ExpectedFailure,
   type InstallResult,
 } from '@steps/add-mcp-server-to-clients/results';
 
 import { analytics } from '@utils/analytics';
+
+/**
+ * Failures in the user's own environment. Reporting them files issues nobody
+ * can action, so hand back a hint instead. Drawn from what the codex install
+ * path actually produced in the field.
+ */
+const EXPECTED_FAILURES: ExpectedFailure[] = [
+  {
+    match:
+      /unexpected argument|unknown (command|option|argument)|Missing option/i,
+    hint: 'your codex CLI is too old for plugins — update codex, then run `codex plugin marketplace add PostHog/ai-plugin`',
+  },
+  {
+    match: /ENOENT|not found in PATH|spawn .* ENOENT/i,
+    hint: 'your codex install looks broken — reinstall codex, then run `codex plugin marketplace add PostHog/ai-plugin`',
+  },
+  {
+    match:
+      /failed to load (bootstrap )?configuration|invalid type|is no longer supported|must contain at least one|OPENAI_API_KEY|Missing OpenAI API key/i,
+    hint: 'codex could not read its own config — fix what it reports in ~/.codex/config.toml, then retry',
+  },
+  {
+    match:
+      /EACCES|EPERM|permission denied|read-only file system|not permitted/i,
+    hint: 'codex could not write to its config — fix the permissions on ~/.codex, then retry',
+  },
+  {
+    match: /ENOSPC|no space left/i,
+    hint: 'the disk is full — free some space, then retry',
+  },
+  {
+    match:
+      /git clone .* failed|ENOTFOUND|ETIMEDOUT|ECONNREFUSED|could not resolve host/i,
+    hint: 'codex could not reach GitHub to download the plugin — check your network, then retry',
+  },
+];
+
+/**
+ * spawnSync splits the cause across error, stderr and stdout, and sets none of
+ * them when the process merely exits non-zero. Reading stderr alone reported a
+ * blank reason to the user and filed an exception carrying nothing.
+ */
+const describeSpawn = (result: SpawnSyncReturns<string>): string => {
+  const parts = [result.error?.message, result.stderr, result.stdout]
+    .map((p) => (p ? String(p).trim() : ''))
+    .filter(Boolean);
+  return redactSecrets(
+    parts.join('\n') || `codex exited with status ${String(result.status)}`,
+  );
+};
+
+/**
+ * Turn a failed spawn into a result: an expected local failure becomes a hint,
+ * anything else is reported under a constant message so one root cause stays
+ * one issue, with the varying detail in properties.
+ */
+const reportSpawnFailure = (stage: string, details: string): InstallResult => {
+  const hint = expectedFailureHint(details, EXPECTED_FAILURES);
+  if (hint) return { success: false, reason: hint };
+  analytics.captureException(new Error(`Codex ${stage} failed`), {
+    stage,
+    details: scrubHomePaths(details),
+  });
+  return { success: false, reason: details };
+};
 
 /** Wording codex uses when the thing we're adding is already registered. */
 const ALREADY_INSTALLED_PATTERN =
@@ -141,16 +210,12 @@ export class CodexMCPClient
       ];
       const env = { ...process.env, POSTHOG_AUTH_HEADER: `Bearer ${apiKey}` };
       const result = spawnSync(binary, args, { encoding: 'utf-8', env });
-      if (result.status !== 0) {
-        const stderr = result.stderr ?? '';
-        if (ALREADY_INSTALLED_PATTERN.test(stderr)) {
+      if (result.error || result.status !== 0) {
+        const details = describeSpawn(result);
+        if (ALREADY_INSTALLED_PATTERN.test(details)) {
           return Promise.resolve({ success: true, alreadyInstalled: true });
         }
-        const reason = redactSecrets(stderr);
-        analytics.captureException(
-          new Error(`Codex MCP add failed: ${reason}`),
-        );
-        return Promise.resolve({ success: false, reason });
+        return Promise.resolve(reportSpawnFailure('MCP add', details));
       }
       return Promise.resolve({ success: true });
     }
@@ -296,14 +361,8 @@ export class CodexMCPClient
       ['plugin', 'marketplace', 'remove', 'posthog'],
       { encoding: 'utf-8' },
     );
-    if (result.status !== 0) {
-      const reason = redactSecrets(
-        result.stderr ?? 'codex plugin marketplace remove failed',
-      );
-      analytics.captureException(
-        new Error(`Codex plugin uninstall failed: ${reason}`),
-      );
-      return { success: false, reason };
+    if (result.error || result.status !== 0) {
+      return reportSpawnFailure('plugin uninstall', describeSpawn(result));
     }
     return { success: true };
   }
@@ -332,8 +391,8 @@ export class CodexMCPClient
 
     // Stale cache directory with no config.toml entry — clear it and retry
     if (
-      result.status !== 0 &&
-      STALE_MARKETPLACE_CACHE.test(result.stderr ?? '')
+      (result.error || result.status !== 0) &&
+      STALE_MARKETPLACE_CACHE.test(describeSpawn(result))
     ) {
       const staleDir = path.join(
         os.homedir(),
@@ -350,24 +409,20 @@ export class CodexMCPClient
       result = run();
     }
 
-    if (result.status !== 0) {
-      const stderr = result.stderr ?? '';
+    if (result.error || result.status !== 0) {
+      const details = describeSpawn(result);
       // The marketplace was registered by something other than us (a manual
       // `codex plugin marketplace add`, or a version that writes config.toml
       // differently) — that's still "already installed", not a failure. The
       // stale-cache wording above is deliberately excluded: that one means the
       // plugin is NOT registered, and it only reaches here if the retry failed.
       if (
-        ALREADY_INSTALLED_PATTERN.test(stderr) &&
-        !STALE_MARKETPLACE_CACHE.test(stderr)
+        ALREADY_INSTALLED_PATTERN.test(details) &&
+        !STALE_MARKETPLACE_CACHE.test(details)
       ) {
         return { success: true, alreadyInstalled: true };
       }
-      const reason = redactSecrets(stderr);
-      analytics.captureException(
-        new Error(`Codex plugin install failed: ${reason}`),
-      );
-      return { success: false, reason };
+      return reportSpawnFailure('plugin install', details);
     }
 
     return { success: true };

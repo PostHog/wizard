@@ -3,6 +3,8 @@ import {
   isOk,
   namesWithStatus,
   redactSecrets,
+  scrubHomePaths,
+  expectedFailureHint,
   summarizeFailure,
   toClientResult,
 } from '@steps/add-mcp-server-to-clients/results';
@@ -97,5 +99,51 @@ describe('namesWithStatus', () => {
     expect(namesWithStatus(results, McpClientStatus.Unchanged)).toEqual([
       'Codex',
     ]);
+  });
+});
+
+describe('scrubHomePaths', () => {
+  it('replaces a unix home directory with ~ so one cause groups as one issue', () => {
+    expect(scrubHomePaths('spawn /Users/ada/.bun/bin/codex ENOENT')).toBe(
+      'spawn ~/.bun/bin/codex ENOENT',
+    );
+    expect(scrubHomePaths('open /home/ada/.codex/config.toml')).toBe(
+      'open ~/.codex/config.toml',
+    );
+  });
+
+  it('replaces a windows user directory', () => {
+    expect(scrubHomePaths('C:\\Users\\Ada\\AppData\\npm')).toBe(
+      '~\\AppData\\npm',
+    );
+  });
+
+  it('leaves text without a home directory alone', () => {
+    expect(scrubHomePaths('error: unexpected argument')).toBe(
+      'error: unexpected argument',
+    );
+  });
+});
+
+describe('expectedFailureHint', () => {
+  const table = [
+    { match: /unexpected argument/i, hint: 'update your CLI' },
+    { match: /ENOENT/, hint: 'reinstall the CLI' },
+  ];
+
+  it('returns the hint for the first matching pattern', () => {
+    expect(
+      expectedFailureHint("error: unexpected argument 'marketplace'", table),
+    ).toBe('update your CLI');
+  });
+
+  it('returns undefined for a failure worth reporting', () => {
+    expect(
+      expectedFailureHint('something new and strange', table),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for empty text rather than matching everything', () => {
+    expect(expectedFailureHint('', table)).toBeUndefined();
   });
 });
