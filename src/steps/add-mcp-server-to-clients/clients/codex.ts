@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { execSync, spawnSync } from 'node:child_process';
-import type { SpawnSyncReturns } from 'node:child_process';
+import { execSync, execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -76,19 +75,49 @@ const EXPECTED_FAILURES: ExpectedFailure[] = [
   },
 ];
 
+interface CodexRun {
+  ok: boolean;
+  /** Never blank on a failure: the cause, or the exit code when there is none. */
+  output: string;
+}
+
 /**
- * spawnSync splits the cause across error, stderr and stdout, and sets none of
- * them when the process merely exits non-zero. Reading stderr alone reported a
- * blank reason to the user and filed an exception carrying nothing.
+ * One codex invocation. Async on purpose: `plugin marketplace add` and
+ * `plugin add` clone git repositories and take seconds, and a synchronous child
+ * process blocks the event loop, which freezes the TUI spinner on its first
+ * frame. Never throws; the caller decides what a failure means.
+ *
+ * A failure's cause is split across the error and stdout, and neither carries
+ * it when the process merely exits non-zero — reading one alone reported a
+ * blank reason and filed an exception carrying nothing.
  */
-const describeSpawn = (result: SpawnSyncReturns<string>): string => {
-  const parts = [result.error?.message, result.stderr, result.stdout]
-    .map((p) => (p ? String(p).trim() : ''))
-    .filter(Boolean);
-  return redactSecrets(
-    parts.join('\n') || `codex exited with status ${String(result.status)}`,
-  );
-};
+const runCodex = (
+  binary: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+): Promise<CodexRun> =>
+  new Promise((resolve) => {
+    execFile(binary, args, { env }, (error, stdout, stderr) => {
+      if (!error) return resolve({ ok: true, output: stdout ?? '' });
+      // stderr first: it carries what codex actually said, and the TUI shows
+      // the first line. `error.message` leads with `Command failed: <cmd>`, so
+      // preferring it would show the user our own invocation instead of the
+      // cause. It is still the fallback — a process that never started reports
+      // only there.
+      const said = [stderr, stdout]
+        .map((p) => (p ? String(p).trim() : ''))
+        .filter(Boolean)
+        .join('\n');
+      resolve({
+        ok: false,
+        output: redactSecrets(
+          said ||
+            error.message.trim() ||
+            `codex exited with code ${String(error.code)}`,
+        ),
+      });
+    });
+  });
 
 /**
  * Turn a failed spawn into a result: an expected local failure becomes a hint,
@@ -198,7 +227,7 @@ export class CodexMCPClient
     }
   }
 
-  addServer(
+  async addServer(
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
@@ -210,10 +239,10 @@ export class CodexMCPClient
     if (apiKey) {
       const binary = this.findCodexBinary();
       if (!binary)
-        return Promise.resolve({
+        return {
           success: false,
           reason: 'An API-key install into Codex needs the codex CLI.',
-        });
+        };
       const args = [
         'mcp',
         'add',
@@ -224,22 +253,21 @@ export class CodexMCPClient
         'POSTHOG_AUTH_HEADER',
       ];
       const env = { ...process.env, POSTHOG_AUTH_HEADER: `Bearer ${apiKey}` };
-      const result = spawnSync(binary, args, { encoding: 'utf-8', env });
-      if (result.error || result.status !== 0) {
-        const details = describeSpawn(result);
-        if (ALREADY_INSTALLED_PATTERN.test(details)) {
-          return Promise.resolve({ success: true, alreadyInstalled: true });
+      const result = await runCodex(binary, args, env);
+      if (!result.ok) {
+        if (ALREADY_INSTALLED_PATTERN.test(result.output)) {
+          return { success: true, alreadyInstalled: true };
         }
-        return Promise.resolve(reportSpawnFailure('MCP add', details));
+        return reportSpawnFailure('MCP add', result.output);
       }
-      return Promise.resolve({ success: true });
+      return { success: true };
     }
 
     // OAuth installs write config.toml directly: running `codex mcp add` here
     // would hang the wizard on its built-in OAuth browser wait. Codex nags
     // about the unauthenticated server until the surfaced `codex mcp login`
     // runs — the same interim state as Claude Code's "needs authentication".
-    return Promise.resolve(this.writeServerSection(serverName, url));
+    return this.writeServerSection(serverName, url);
   }
 
   /**
@@ -309,32 +337,27 @@ export class CodexMCPClient
     return `codex mcp login ${local ? 'posthog-local' : 'posthog'}`;
   }
 
-  removeServer(local?: boolean): Promise<InstallResult> {
+  async removeServer(local?: boolean): Promise<InstallResult> {
     const binary = this.findCodexBinary();
     if (!binary)
-      return Promise.resolve({
+      return {
         success: false,
         reason: 'The codex CLI is no longer on your PATH.',
-      });
+      };
 
     // `local` was ignored here, so `mcp remove --local` reported success while
     // leaving the posthog-local server in place.
     const serverName = local ? 'posthog-local' : 'posthog';
-    const result = spawnSync(binary, ['mcp', 'remove', serverName], {
-      encoding: 'utf-8',
-    });
+    const result = await runCodex(binary, ['mcp', 'remove', serverName]);
 
-    if (result.error || result.status !== 0) {
-      const reason = redactSecrets(
-        result.error?.message ?? result.stderr ?? 'codex mcp remove failed',
-      );
+    if (!result.ok) {
       analytics.captureException(
-        new Error(`Failed to remove server from Codex CLI: ${reason}`),
+        new Error(`Failed to remove server from Codex CLI: ${result.output}`),
       );
-      return Promise.resolve({ success: false, reason });
+      return { success: false, reason: result.output };
     }
 
-    return Promise.resolve({ success: true });
+    return { success: true };
   }
 
   /** The codex marketplace plugin ships skills only — the MCP server needs its own entry. */
@@ -346,16 +369,16 @@ export class CodexMCPClient
     return this.findCodexBinary() !== null;
   }
 
-  isPluginInstalled(): Promise<boolean> {
+  async isPluginInstalled(): Promise<boolean> {
     const binary = this.findCodexBinary();
-    if (!binary) return Promise.resolve(false);
-    const result = spawnSync(
-      binary,
-      ['plugin', 'list', '-m', PLUGIN_MARKETPLACE],
-      { encoding: 'utf-8' },
-    );
-    if (result.error || result.status !== 0) return Promise.resolve(false);
-    return Promise.resolve(listedAsInstalled(result.stdout ?? ''));
+    if (!binary) return false;
+    const result = await runCodex(binary, [
+      'plugin',
+      'list',
+      '-m',
+      PLUGIN_MARKETPLACE,
+    ]);
+    return result.ok && listedAsInstalled(result.output);
   }
 
   /** The catalog, which the plugin is installed *from* — not the plugin. */
@@ -389,9 +412,9 @@ export class CodexMCPClient
     if (steps.length === 0) return { success: true, alreadyInstalled: true };
 
     for (const args of steps) {
-      const result = spawnSync(binary, args, { encoding: 'utf-8' });
-      if (result.error || result.status !== 0) {
-        return reportSpawnFailure('plugin uninstall', describeSpawn(result));
+      const result = await runCodex(binary, args);
+      if (!result.ok) {
+        return reportSpawnFailure('plugin uninstall', result.output);
       }
     }
     return { success: true };
@@ -414,17 +437,15 @@ export class CodexMCPClient
     // `mcp add` looked like a failure and reported nothing at all.
     const marketplace = this.isMarketplaceRegistered()
       ? null
-      : this.registerMarketplace(binary);
+      : await this.registerMarketplace(binary);
     if (marketplace && !marketplace.success) return marketplace;
 
     // Registering the catalog does not install from it. Skipping this left the
     // user with a marketplace, no skills, and a wizard reporting success.
-    const result = spawnSync(binary, ['plugin', 'add', PLUGIN_REF], {
-      encoding: 'utf-8',
-    });
+    const result = await runCodex(binary, ['plugin', 'add', PLUGIN_REF]);
 
-    if (result.error || result.status !== 0) {
-      return reportSpawnFailure('plugin install', describeSpawn(result));
+    if (!result.ok) {
+      return reportSpawnFailure('plugin install', result.output);
     }
 
     return { success: true };
@@ -435,20 +456,20 @@ export class CodexMCPClient
    * config.toml entry reports the marketplace as added from a different source;
    * clear it and retry once.
    */
-  private registerMarketplace(binary: string): PluginInstallResult {
+  private async registerMarketplace(
+    binary: string,
+  ): Promise<PluginInstallResult> {
     const run = () =>
-      spawnSync(
-        binary,
-        ['plugin', 'marketplace', 'add', PLUGIN_MARKETPLACE_SOURCE],
-        { encoding: 'utf-8' },
-      );
+      runCodex(binary, [
+        'plugin',
+        'marketplace',
+        'add',
+        PLUGIN_MARKETPLACE_SOURCE,
+      ]);
 
-    let result = run();
+    let result = await run();
 
-    if (
-      (result.error || result.status !== 0) &&
-      STALE_MARKETPLACE_CACHE.test(describeSpawn(result))
-    ) {
+    if (!result.ok && STALE_MARKETPLACE_CACHE.test(result.output)) {
       const staleDir = path.join(
         os.homedir(),
         '.codex',
@@ -461,11 +482,11 @@ export class CodexMCPClient
       } catch {
         // ignore — retry anyway
       }
-      result = run();
+      result = await run();
     }
 
-    if (result.error || result.status !== 0) {
-      const details = describeSpawn(result);
+    if (!result.ok) {
+      const details = result.output;
       // Registered by something other than us — the plugin add below can still
       // resolve against it. The stale-cache wording is excluded: that one means
       // the marketplace is NOT usable, and only reaches here if the retry failed.
