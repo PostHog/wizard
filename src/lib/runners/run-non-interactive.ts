@@ -284,7 +284,9 @@ export function runNonInteractive(
             session.frameworkContext[key] = value;
           },
           setFrameworkConfig: () => undefined,
-          setDetectedFramework: () => undefined,
+          setDetectedFramework: (label: string) => {
+            session.detectedFrameworkLabel = label;
+          },
           // Non-interactive session is a plain object (no nanostore
           // copy-on-write), so direct assignment is safe here.
           setSkillId: (skillId: string | null) => {
@@ -362,6 +364,10 @@ export function runNonInteractive(
             ),
           });
         }
+      }
+
+      if (session.detectedFrameworkLabel) {
+        getUI().setDetectedFramework(session.detectedFrameworkLabel);
       }
 
       const { runProgramAgent } = await import('@programs/run-agent-legacy');

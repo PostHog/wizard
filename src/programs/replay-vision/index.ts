@@ -165,6 +165,9 @@ export const replayVisionConfig: ProgramConfig = {
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
     });
+    const detectedLabel =
+      frameworkConfig.metadata.getDetectedFrameworkLabel?.(context);
+    if (detectedLabel) session.detectedFrameworkLabel = detectedLabel;
     for (const [key, value] of Object.entries(context)) {
       if (!(key in session.frameworkContext)) {
         session.frameworkContext[key] = value;

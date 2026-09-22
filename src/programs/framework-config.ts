@@ -72,6 +72,9 @@ export interface FrameworkMetadata<
    */
   gatherContext?: (options: WizardRunOptions) => Promise<TContext>;
 
+  /** Label for the gathered variant, if gathering found a more specific name. */
+  getDetectedFrameworkLabel?: (context: TContext) => string | undefined;
+
   /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
   additionalMcpServers?: Record<string, { url: string }>;
 

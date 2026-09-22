@@ -64,7 +64,10 @@ export async function detectPostHogIntegration(
     // pre-copy object and the live session would never see it.
     ctx.setSkillId(detectedIntegration);
 
-    if (!session.detectedFrameworkLabel) {
+    const detectedLabel = config.metadata.getDetectedFrameworkLabel?.(context);
+    if (detectedLabel) {
+      ctx.setDetectedFramework(detectedLabel);
+    } else if (!session.detectedFrameworkLabel) {
       ctx.setDetectedFramework(config.metadata.name);
     }
 

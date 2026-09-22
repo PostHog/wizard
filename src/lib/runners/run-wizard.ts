@@ -31,8 +31,10 @@ type Step = ProgramConfig['steps'][number];
  * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
   step: Step,
-  live: WizardSession,
+  store: WizardStore,
 ): Promise<WizardSession> {
+  const live = store.session;
+  const previousLabel = live.detectedFrameworkLabel;
   const session = step.targetDir
     ? {
         ...live,
@@ -41,6 +43,12 @@ async function prepareRunSession(
       }
     : live;
   if (step.onRunPrep) await step.onRunPrep(session);
+  if (
+    session.detectedFrameworkLabel &&
+    session.detectedFrameworkLabel !== previousLabel
+  ) {
+    store.setDetectedFramework(session.detectedFrameworkLabel);
+  }
   return session;
 }
 
@@ -58,10 +66,10 @@ async function advanceStep(
     await authenticate(store.session, config.id);
     maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
-    await step.run(await prepareRunSession(step, store.session));
+    await step.run(await prepareRunSession(step, store));
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store.session));
+    await runProgramAgent(config, await prepareRunSession(step, store));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
