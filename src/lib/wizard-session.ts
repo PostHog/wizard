@@ -11,7 +11,7 @@
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
-import { DiscoveredFeature } from '@shared/scan-consent';
+import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
 import {
   AdditionalFeature,
   ADDITIONAL_FEATURE_LABELS,
@@ -37,6 +37,7 @@ import type {
 // entry would form a module cycle here.
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
 import { OutroKind } from '@agent/progress';
+import { McpOutcome, RunPhase } from '@shared/run-state';
 
 // These shapes moved to their owners; re-exported so every session reader
 // keeps its import path. `Credentials` sits with the API types, the
@@ -49,6 +50,7 @@ export {
   ADDITIONAL_FEATURE_PROMPTS,
 };
 export { OutroKind };
+export { McpOutcome, RunPhase, ScanConsent };
 export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
@@ -57,35 +59,8 @@ function parseProjectIdArg(value: string | undefined): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-/** Lifecycle phase of the main work (agent run, MCP install, etc.) */
-export enum RunPhase {
-  /** Still gathering input (intro, setup screens) */
-  Idle = 'idle',
-  /** Main work is in progress */
-  Running = 'running',
-  /** Main work finished successfully */
-  Completed = 'completed',
-  /** Main work finished with an error */
-  Error = 'error',
-}
-
 /** Compatibility export for session readers; detection owns the shared value. */
 export { DiscoveredFeature };
-
-/** Consent to report what local detection found (see `scanConsent` below). */
-export enum ScanConsent {
-  Undecided = 'undecided',
-  Granted = 'granted',
-  Declined = 'declined',
-}
-
-/** Outcome of the MCP server installation step */
-export enum McpOutcome {
-  NoClients = 'no_clients',
-  Skipped = 'skipped',
-  Installed = 'installed',
-  Failed = 'failed',
-}
 
 /**
  * PostHog dashboard URL emitted by the agent during a program run.

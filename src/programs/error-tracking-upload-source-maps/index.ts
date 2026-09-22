@@ -1,7 +1,7 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@agent';
 import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
@@ -13,7 +13,6 @@ import {
   SOURCE_MAPS_DOCS_URL,
   SOURCE_MAPS_REPORT_FILE,
 } from '@programs/resolve-run-definition';
-import { getContentBlocks } from '../../ui/tui/decks/error-tracking-upload-source-maps/index.js';
 import { getUI } from '@ui';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 
@@ -35,7 +34,6 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   requiresAi: true,
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: SOURCE_MAPS_REPORT_FILE,
-  getContentBlocks,
   requires: ['posthog-integration'],
 
   run: (_session: WizardSession): Promise<ProgramRun> => {

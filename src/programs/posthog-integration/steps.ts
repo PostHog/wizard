@@ -8,7 +8,7 @@
 
 import type { ProgramStep } from '@programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
-import { RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 import { detectPostHogIntegration } from './detect.js';
 

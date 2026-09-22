@@ -1,5 +1,5 @@
 import type { ProgramStep } from '@programs/program-step';
-import { RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 
 export const MIGRATION_PROGRAM: ProgramStep[] = [

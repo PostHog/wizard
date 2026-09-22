@@ -9,7 +9,7 @@
 
 import type { ProgramStep } from '@programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
-import { RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
 import { SOURCE_MAPS_CONTEXT_KEYS } from './detect.js';
 
 function projectSelected(session: WizardSession): boolean {

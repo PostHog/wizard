@@ -1,8 +1,8 @@
-import type { WizardStore } from '@ui/tui/store';
-import type { FileWatcherOptions } from '@lib/file-watcher';
+import type { FileWatcherOptions } from '@shared/file-watcher';
 import {
   ProgramEventPlanWatcher,
   normalizeEventPlan,
+  type PlannedEvent,
 } from '../posthog-integration/watch-event-plan.js';
 
 export { normalizeEventPlan };
@@ -12,7 +12,7 @@ export class EventPlanWatcher {
   private readonly watcher: ProgramEventPlanWatcher;
 
   constructor(
-    store: WizardStore,
+    store: { setEventPlan(events: PlannedEvent[]): void },
     path: string,
     options: FileWatcherOptions = {},
   ) {

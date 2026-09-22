@@ -4,8 +4,6 @@ import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import type { ProgramRun } from '@programs/program-run';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
-import { getContentBlocks } from '@ui/tui/decks/error-tracking/index';
-import { getTips } from '@ui/tui/decks/error-tracking/tips';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
@@ -133,8 +131,6 @@ export const errorTrackingConfig: ProgramConfig = {
   agentFlow: 'error-tracking',
   steps: ERROR_TRACKING_STEPS,
   reportFile: ERROR_TRACKING_REPORT_FILE,
-  getContentBlocks,
-  getTips,
 
   run: (session: WizardSession): Promise<ProgramRun> => {
     maybePreinstallPostHogCli(session.integration);

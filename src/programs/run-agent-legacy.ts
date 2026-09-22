@@ -53,6 +53,7 @@ import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
+import { AUDIT_CHECKS_KEY } from './audit/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 
 /**
@@ -75,7 +76,11 @@ export async function runProgramAgent(
   // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
   // and a watcher started later would ignore that write as pre-existing.
   const ledger = programConfig.auditLedgerFile
-    ? startAuditLedgerWatcher(session.installDir, programConfig.auditLedgerFile)
+    ? startAuditLedgerWatcher(
+        session.installDir,
+        programConfig.auditLedgerFile,
+        (checks) => getUI().setFrameworkContext(AUDIT_CHECKS_KEY, checks),
+      )
     : null;
   if (ledger) registerCleanup(() => ledger.stop());
 

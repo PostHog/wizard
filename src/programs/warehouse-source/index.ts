@@ -4,7 +4,6 @@ import type { WizardSession } from '@lib/wizard-session';
 import { resolveWarehouseSourceRunDefinition } from '@programs/resolve-run-definition';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import { getDetectedWarehouseSources } from './detect.js';
-import { getContentBlocks } from '../../ui/tui/decks/warehouse-source/index.js';
 
 export const warehouseSourceConfig: ProgramConfig = {
   command: 'warehouse',
@@ -12,7 +11,6 @@ export const warehouseSourceConfig: ProgramConfig = {
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
   steps: WAREHOUSE_SOURCE_PROGRAM,
-  getContentBlocks,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
   run: (session: WizardSession): Promise<ProgramRun> => {

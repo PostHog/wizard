@@ -188,15 +188,6 @@ describe('selfDrivingConfig', () => {
     );
   });
 
-  it('ships its own Learn deck ending on the self-driving closer', () => {
-    const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
-    expect(blocks.length).toBeGreaterThan(0);
-    const last = blocks[blocks.length - 1];
-    expect(
-      typeof last === 'object' && 'content' in last ? last.content : '',
-    ).toBe('Your product drives itself.');
-  });
-
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
     // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;

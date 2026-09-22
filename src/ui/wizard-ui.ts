@@ -17,17 +17,7 @@ import type {
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
-
-export enum TaskStatus {
-  Pending = 'pending',
-  InProgress = 'in_progress',
-  Completed = 'completed',
-  Skipped = 'skipped',
-}
-
-export function isTaskStatus(value: string): value is TaskStatus {
-  return (Object.values(TaskStatus) as string[]).includes(value);
-}
+export { TaskStatus, isTaskStatus } from '@shared/run-state';
 
 // Progress payloads are the agent's contract; re-exported so UI code keeps its import path.
 import type {

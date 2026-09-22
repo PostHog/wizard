@@ -1,7 +1,6 @@
 import { AI_OBSERVABILITY_REPORT_FILE, AI_OBSERVABILITY_RUN } from './run.js';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getContentBlocks } from '@ui/tui/decks/agent-skill/index';
 import { headlessOption, regionOption } from '@lib/headless-mode';
 
 const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
@@ -25,6 +24,5 @@ export const aiObservabilityConfig: ProgramConfig = {
   cliOptions: { ...headlessOption, ...regionOption },
   steps: AI_OBSERVABILITY_STEPS,
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
-  getContentBlocks,
   run: AI_OBSERVABILITY_RUN,
 };

@@ -4,6 +4,13 @@ export enum DiscoveredFeature {
   LLM = 'llm',
 }
 
+/** Consent to report what local detection found. */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
+}
+
 type ScanConsentState = { scanConsent: string };
 
 /** An undecided or declined scan never reports local detection results. */
