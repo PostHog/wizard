@@ -429,6 +429,21 @@ export function displayOrder(
     .map((entry) => entry.task);
 }
 
+/**
+ * The run's excluded task types: CI gates plus the program's flag mapping.
+ * Exported so a test can pin the flag→exclusion hookup against the real
+ * program config — the registry and seed note both read this one list.
+ */
+export function effectiveExcludedTaskTypes(
+  programConfig: ProgramConfig,
+  flags: Record<string, string>,
+): string[] {
+  return [
+    ...ciExcludedTaskTypes(),
+    ...(programConfig.excludedTaskTypes?.(flags) ?? []),
+  ];
+}
+
 export async function runOrchestrator(
   session: WizardSession,
   config: ProgramRun,
@@ -451,14 +466,8 @@ export async function runOrchestrator(
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = programConfig.agentFlow ?? programConfig.id;
-  // Also named to the planner in its seed prompt, so the plan's mention of an
-  // excluded type reads as an instructed skip instead of a guard round-trip.
-  const excludedTaskTypes = [
-    ...ciExcludedTaskTypes(),
-    ...(programConfig.excludedTaskTypes?.(boot.wizardFlags) ?? []),
-  ];
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: excludedTaskTypes,
+    exclude: effectiveExcludedTaskTypes(programConfig, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
       programConfig.id,
@@ -839,11 +848,14 @@ export async function runOrchestrator(
     session,
     programConfig,
     boot,
+    // The exclusion note names `registry.excludedTypes` — the excluded types
+    // this flow actually had — so the planner never hears about work that was
+    // never available, and overlapping exclusion sources cannot double-list.
     prompt: assembleSeedPrompt(
       promptContext,
       seedPrompt.body,
       store.list(),
-      excludedTaskTypes,
+      registry.excludedTypes,
     ),
     spinner,
     model: requireKnownModel(seedModel.model, seedPick.model),

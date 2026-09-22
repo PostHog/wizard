@@ -272,6 +272,21 @@ describe('buildRegistry', () => {
     expect(buildRegistry(prompts, 'f').types).toEqual(['build', 'dashboard']);
   });
 
+  it('reports only excluded types the flow actually had, deduped', () => {
+    const prompts = [
+      prompt({ type: 'plan', flow: 'f', seed: true }),
+      prompt({ type: 'build', flow: 'f' }),
+      prompt({ type: 'logs', flow: 'f' }),
+    ];
+    const registry = buildRegistry(prompts, 'f', {
+      // 'logs' twice (two exclusion sources overlap) and a type this flow
+      // never carried — the note must name 'logs' once and nothing else.
+      exclude: ['logs', 'logs', 'ghost-type'],
+    });
+    expect(registry.excludedTypes).toEqual(['logs']);
+    expect(buildRegistry(prompts, 'f').excludedTypes).toEqual([]);
+  });
+
   it('bakes stage overrides into the pi frontmatter at load; unnamed stages and sdk fields untouched', () => {
     const prompts = [
       prompt({

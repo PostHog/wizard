@@ -283,6 +283,13 @@ export interface AgentRegistry {
   readonly runnerSeededTypes: string[];
   /** The types whose terminal failure must not block dependents or fail the run. */
   readonly optionalTypes: string[];
+  /**
+   * The excluded types this flow actually had, deduped — the honest list for
+   * the seed prompt's exclusion note. An exclusion naming a type the flow
+   * never carried is dropped: telling the planner it was "excluded" would
+   * describe work that was never available.
+   */
+  readonly excludedTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
   get(type: string): AgentPrompt | undefined;
@@ -318,12 +325,16 @@ export function buildRegistry(
     });
   const byType = new Map(inFlow.map((p) => [p.type, p]));
   const tasks = inFlow.filter((p) => !p.seed);
+  const flowTypes = new Set(
+    prompts.filter((p) => p.flow === flow && !p.seed).map((p) => p.type),
+  );
   return {
     types: tasks.map((p) => p.type),
     enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
     sinkTypes: tasks.filter((p) => p.sink).map((p) => p.type),
     runnerSeededTypes: tasks.filter((p) => p.runnerSeeded).map((p) => p.type),
     optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
+    excludedTypes: [...excluded].filter((t) => flowTypes.has(t)),
     seed: inFlow.find((p) => p.seed),
     get: (type) => byType.get(type),
   };

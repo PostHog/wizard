@@ -475,8 +475,14 @@ describe('buildE2eResult', () => {
     ]);
   });
 
-  it('has no outcomes for a linear run, which drains no queue', () => {
-    expect(taskOutcomesFrom({ frameworkContext: {} })).toEqual([]);
+  it('distinguishes never-recorded from an orchestrator run with no tasks', () => {
+    // Linear runs (or a run that died pre-drain) never set the key → null,
+    // and the payload drops the field; an orchestrator run that drained an
+    // empty queue records [] — graders must not conflate the two.
+    expect(taskOutcomesFrom({ frameworkContext: {} })).toBeNull();
+    expect(
+      taskOutcomesFrom({ frameworkContext: { [TASK_OUTCOMES_KEY]: [] } }),
+    ).toEqual([]);
   });
 
   it('reports the sources detection found', () => {

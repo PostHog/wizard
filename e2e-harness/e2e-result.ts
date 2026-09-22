@@ -228,13 +228,15 @@ export function detectedSourcesFrom(
  * frameworkContext. Unlike the UI `tasks` rows (label + display status, where
  * done and failed both render `completed`), these carry the task `type` and
  * the queue's real terminal status — the stable vocabulary e2e expectations
- * assert on. Empty on linear runs, which have no queue.
+ * assert on. Null when nothing was recorded (a linear run, or a run that died
+ * before the drain settled) — distinct from an orchestrator run whose queue
+ * held no tasks, which records `[]`.
  */
 export function taskOutcomesFrom(
   session: Pick<WizardSession, 'frameworkContext'>,
-): TaskOutcome[] {
+): TaskOutcome[] | null {
   const raw = session.frameworkContext[TASK_OUTCOMES_KEY];
-  return Array.isArray(raw) ? (raw as TaskOutcome[]) : [];
+  return Array.isArray(raw) ? (raw as TaskOutcome[]) : null;
 }
 
 /** The keys the result payload carried before the warehouse work. */
@@ -266,7 +268,9 @@ export function buildE2eResult(args: {
     refusedAsks: recorder.refusedAsks,
     notices: recorder.notices,
     tasks: tasks.map((t) => ({ label: t.label, status: t.status })),
-    taskOutcomes: taskOutcomesFrom(session).map((t) => ({
+    // Key absent = never recorded (linear run); present-but-empty = an
+    // orchestrator run that drained no tasks. Graders must not conflate them.
+    taskOutcomes: taskOutcomesFrom(session)?.map((t) => ({
       type: t.type,
       status: t.status,
       optional: t.optional,
