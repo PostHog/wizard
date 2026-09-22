@@ -61,6 +61,17 @@ interface ListedMarketplace {
 
 type ClaudeRun = { ok: boolean; output: string };
 
+/**
+ * Our catalog, by name *and* repository. A marketplace merely called `posthog`
+ * may be someone else's, and neither installing from it nor removing it is
+ * ours to do. `repo` is absent on CLIs predating it, where the name is all
+ * there is.
+ */
+const isOurMarketplace = (m: ListedMarketplace | undefined): boolean =>
+  m?.name === PLUGIN_MARKETPLACE &&
+  (m.repo === undefined ||
+    m.repo.toLowerCase() === PLUGIN_MARKETPLACE_SOURCE.toLowerCase());
+
 export class ClaudeCodeMCPClient
   extends DefaultMCPClient
   implements PluginCapable, LoginCapable
@@ -223,18 +234,34 @@ export class ClaudeCodeMCPClient
     // `posthog@posthog` and `posthog@claude-plugins-official` installed the bare
     // call leaves the other copy enabled — and `mcp remove` would be lying.
     const ids = await this.installedPluginIds(binary);
-    if (ids?.length === 0) {
-      return { success: true, alreadyInstalled: true };
-    }
-    if (ids === null && !(await this.isPluginInstalled())) {
+    // `installPlugin` registers the marketplace, so removal owes the user the
+    // other half: a machine left with our catalog and no plugin is a state the
+    // wizard created. `codex.ts` clears both on the same call.
+    const marketplace = await this.ourMarketplaceRegistered(binary);
+
+    const nothingInstalled =
+      ids?.length === 0 || (ids === null && !(await this.isPluginInstalled()));
+    if (nothingInstalled && !marketplace) {
       return { success: true, alreadyInstalled: true };
     }
 
-    const targets = ids?.length ? ids : [PLUGIN_NAME];
+    const targets = nothingInstalled ? [] : ids?.length ? ids : [PLUGIN_NAME];
     const failures: string[] = [];
     for (const target of targets) {
       const run = await this.runClaude(binary, ['plugin', 'uninstall', target]);
       if (!run.ok) failures.push(`${target}: ${run.output}`);
+    }
+
+    // Only when we know it is there: `marketplace remove` exits non-zero on a
+    // marketplace that is absent, which would report a failure for a no-op.
+    if (marketplace) {
+      const run = await this.runClaude(binary, [
+        'plugin',
+        'marketplace',
+        'remove',
+        PLUGIN_MARKETPLACE,
+      ]);
+      if (!run.ok) failures.push(`${PLUGIN_MARKETPLACE}: ${run.output}`);
     }
 
     if (failures.length === 0) return { success: true };
@@ -423,6 +450,18 @@ export class ClaudeCodeMCPClient
 
   // Best-effort: a failure here only matters if the install also fails, since
   // the user may hold the plugin in another catalog that the fallback finds.
+  /** Registered, and ours: a catalog merely named `posthog` is someone else's. */
+  private async ourMarketplaceRegistered(
+    binary: string,
+  ): Promise<boolean | null> {
+    const listed = await this.listJson<ListedMarketplace>(binary, [
+      'plugin',
+      'marketplace',
+      'list',
+    ]);
+    return listed ? listed.some(isOurMarketplace) : null;
+  }
+
   private async ensurePluginMarketplace(
     binary: string,
   ): Promise<string | undefined> {
@@ -431,11 +470,7 @@ export class ClaudeCodeMCPClient
       'marketplace',
       'list',
     ]);
-    const ours = (m: ListedMarketplace | undefined): boolean =>
-      m?.name === PLUGIN_MARKETPLACE &&
-      (m.repo === undefined ||
-        m.repo.toLowerCase() === PLUGIN_MARKETPLACE_SOURCE.toLowerCase());
-    if (listed?.some(ours)) {
+    if (listed?.some(isOurMarketplace)) {
       debug(`  Marketplace ${PLUGIN_MARKETPLACE} already registered`);
       return undefined;
     }

@@ -512,6 +512,56 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       );
     });
 
+    it('removes our marketplace too, so removal does not leave half behind', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'plugin', 'list')) return listed('posthog@posthog');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).toContainEqual(
+        expect.stringContaining('plugin uninstall posthog@posthog'),
+      );
+      expect(claudeCalls()).toContainEqual(
+        expect.stringContaining('marketplace remove posthog'),
+      );
+    });
+
+    it('clears a marketplace left registered with no plugin', async () => {
+      // The state `installPlugin` produced when its plugin step failed.
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).toContainEqual(
+        expect.stringContaining('marketplace remove posthog'),
+      );
+      expect(claudeCalls()).not.toContainEqual(
+        expect.stringContaining('plugin uninstall'),
+      );
+    });
+
+    it('leaves a foreign marketplace under our name registered', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'marketplace', 'list'))
+          return foreignMarketplace('posthog', 'someone-else/ai-plugin');
+        if (isCmd(cmd, 'plugin', 'list')) return listed('posthog@posthog');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).not.toContainEqual(
+        expect.stringContaining('marketplace remove'),
+      );
+    });
+
     it('reports nothing to do when no posthog plugin is installed', async () => {
       routeClaude((cmd) =>
         isCmd(cmd, 'plugin', 'list') ? listed('other@somewhere') : '',
