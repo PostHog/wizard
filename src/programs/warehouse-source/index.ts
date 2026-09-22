@@ -1,6 +1,5 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
 import { resolveWarehouseSourceRunDefinition } from '@programs/resolve-run-definition';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import { getDetectedWarehouseSources } from './detect.js';
@@ -13,7 +12,9 @@ export const warehouseSourceConfig: ProgramConfig = {
   steps: WAREHOUSE_SOURCE_PROGRAM,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
-  run: (session: WizardSession): Promise<ProgramRun> => {
+  run: (
+    session: Parameters<typeof getDetectedWarehouseSources>[0],
+  ): Promise<ProgramRun> => {
     const run = resolveWarehouseSourceRunDefinition(
       getDetectedWarehouseSources(session),
     );

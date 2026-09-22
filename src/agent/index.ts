@@ -32,7 +32,7 @@ export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 /**
  * Leaves in B2. Programs own credentials and the legacy adapter dies.
  * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface
- * that detection/agentic.ts and run-agent-legacy.ts still call; they go
+ * that detection/agentic.ts and lib/runners/run-program-agent.ts still call; they go
  * through runAgent or leave with detection. CI inference auth belongs to the
  * headless provider. flushScanReport becomes a
  * progress event rather than a call. downloadSkill leaves once the skill scan

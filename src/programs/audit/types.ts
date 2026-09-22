@@ -1,4 +1,3 @@
-import type { WizardSession } from '@lib/wizard-session';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_REPORT_FILE,
@@ -28,7 +27,9 @@ export const AUDIT_SEVERITY_STYLE: Record<AuditStatus, AuditSeverityStyle> = {
 
 export const AUDIT_CHECKS_KEY = 'auditChecks';
 
-export function getAuditChecks(session: WizardSession): AuditCheck[] {
+export function getAuditChecks(session: {
+  frameworkContext: Record<string, unknown>;
+}): AuditCheck[] {
   const raw = session.frameworkContext[AUDIT_CHECKS_KEY];
   return Array.isArray(raw) ? (raw as AuditCheck[]) : [];
 }

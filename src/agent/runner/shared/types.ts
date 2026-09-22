@@ -5,7 +5,7 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. `src/programs/run-agent-legacy.ts` is the caller
+ * hands over plain data. `src/lib/runners/run-program-agent.ts` is the caller
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 

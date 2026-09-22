@@ -10,8 +10,12 @@
  */
 
 import type { ProgramReadyContext } from '@programs/program-step';
-import { DiscoveredFeature, type WizardSession } from '@lib/wizard-session';
-import { mayReportScanResults, ScanConsent } from '@shared/scan-consent';
+import {
+  DiscoveredFeature,
+  mayReportScanResults,
+  ScanConsent,
+} from '@shared/scan-consent';
+import type { ApiUser } from '@shared/api';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   detectFramework,
@@ -64,7 +68,10 @@ export async function detectPostHogIntegration(
     // pre-copy object and the live session would never see it.
     ctx.setSkillId(detectedIntegration);
 
-    if (!session.detectedFrameworkLabel) {
+    const detectedLabel = config.metadata.getDetectedFrameworkLabel?.(context);
+    if (detectedLabel) {
+      ctx.setDetectedFramework(detectedLabel);
+    } else if (!session.detectedFrameworkLabel) {
       ctx.setDetectedFramework(config.metadata.name);
     }
 
@@ -100,6 +107,20 @@ export async function detectPostHogIntegration(
  */
 const WAREHOUSE_SCAN_STATE_KEY = 'warehouseScanState';
 type WarehouseScanState = 'ok' | 'failed';
+
+type AiSdkDetectionState = {
+  apiUser: Pick<ApiUser, 'organization'> | null;
+  discoveredFeatures: DiscoveredFeature[];
+  frameworkContext: Record<string, unknown>;
+  scanConsent: ScanConsent;
+  aiSdkStampReported: boolean;
+};
+
+type WarehouseReportState = {
+  frameworkContext: Record<string, unknown>;
+  scanConsent: ScanConsent;
+  warehouseSourcesReported: boolean;
+};
 
 /**
  * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
@@ -141,7 +162,7 @@ function detectWarehouseSourcesForSuggestion(
 }
 
 function hasAiSdkEvidence(
-  session: WizardSession,
+  session: Pick<AiSdkDetectionState, 'discoveredFeatures'>,
   sources: DetectedSource[],
 ): boolean {
   return (
@@ -155,7 +176,7 @@ function hasAiSdkEvidence(
  * decline must not leak even the shape of what local detection saw.
  */
 function stampAiSdkDetected(
-  session: WizardSession,
+  session: Pick<AiSdkDetectionState, 'apiUser' | 'discoveredFeatures'>,
   sources: DetectedSource[],
 ): void {
   const organizationId = session.apiUser?.organization?.id;
@@ -178,7 +199,7 @@ function stampAiSdkDetected(
  * anyway) and this only ever runs from the later, idempotent bootstrap.ts
  * call — still correctly finding no evidence, since CI skips the detect step.
  */
-export function maybeStampAiSdkDetected(session: WizardSession): void {
+export function maybeStampAiSdkDetected(session: AiSdkDetectionState): void {
   // Direct mutation, not a store setter: unlike `warehouseSourcesReported`
   // (latched only from TUI-only consent screens), this runs from
   // `authenticate()`, which also fires in `--ci` mode, where the session is a
@@ -208,7 +229,7 @@ export function maybeStampAiSdkDetected(session: WizardSession): void {
  * without sending.
  */
 export function reportWarehouseSourcesDetected(
-  session: WizardSession,
+  session: WarehouseReportState,
 ): boolean {
   if (session.warehouseSourcesReported) return false;
   // 'undecided' means come back later, not no.

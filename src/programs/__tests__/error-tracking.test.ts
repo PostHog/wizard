@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { ProgramRun } from '@programs/program-run';
+import type { ProgramRunHost } from '@programs/host-capabilities';
 import { Integration } from '@shared/constants';
 import type { AgenticDetectionReport } from '@programs/detection/agentic';
 import { detectFramework } from '@programs/detection/index';
+import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { ErrorCodes } from '@shared/errors';
 import { ERROR_TRACKING_TIPS } from '@ui/tui/decks/error-tracking/tips';
 import {
@@ -16,9 +18,10 @@ import {
 } from '@programs/error-tracking/index';
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
-import type { WizardSession } from '@lib/wizard-session';
+import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
+import { testProgramCiHost } from '../../../test/program-host';
 
 vi.mock('@programs/detection/index', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/detection/index')>()),
@@ -40,8 +43,16 @@ vi.mock('@utils/wizard-abort', async (importOriginal) => ({
 }));
 
 const resolveRun = errorTrackingConfig.run as (
-  session: WizardSession,
+  session: { integration: Integration | null },
+  host: ProgramRunHost,
 ) => Promise<ProgramRun>;
+
+const runHost = (): ProgramRunHost => ({
+  getFrameworkContext: vi.fn(),
+  setFrameworkContext: vi.fn(),
+  warn: vi.fn(),
+  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
+});
 
 const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);
 
@@ -67,7 +78,7 @@ describe('error-tracking program', () => {
     // There is no bare `error-tracking` menu entry; a seeded skillId would
     // send the linear path to a skill-not-found abort and mislead the intro.
     expect(errorTrackingConfig.skillId).toBeUndefined();
-    const run = await resolveRun({ integration: null } as WizardSession);
+    const run = await resolveRun({ integration: null }, runHost());
     expect(run.skillId).toBeUndefined();
   });
 
@@ -166,32 +177,37 @@ describe('error-tracking project picker report', () => {
 describe('error-tracking ciPreRun', () => {
   test('stops KMP before it sets the framework', async () => {
     vi.mocked(detectFramework).mockResolvedValue(Integration.kmp);
-    const session = {
-      installDir: '/tmp/error-tracking-ci',
-      frameworkContext: {},
-    } as unknown as WizardSession;
+    const session = buildSession({ installDir: '/tmp/error-tracking-ci' });
+    const host = testProgramCiHost();
 
-    await errorTrackingConfig.ciPreRun?.(session);
+    await errorTrackingConfig.ciPreRun?.(session, host);
 
+    expect(scopeInstallDirToProject).toHaveBeenCalledWith(session, host);
     expect(wizardAbort).toHaveBeenCalledWith(
       expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),
     );
-    expect(session.integration).toBeUndefined();
+    expect(session.integration).toBeNull();
   });
 });
 
 describe('error-tracking run config', () => {
   test('pre-installs posthog-cli when run resolves, after the project pick', async () => {
-    await resolveRun({ integration: Integration.swift } as WizardSession);
+    const host = runHost();
+    await resolveRun({ integration: Integration.swift }, host);
 
     expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
       'error tracking posthog-cli preinstall failed',
       { integration: Integration.swift },
+      expect.any(Function),
     );
+    const warn = vi.mocked(preinstallPostHogCliOnce).mock.calls[0]?.[2];
+    if (!warn) throw new Error('missing preinstall warning callback');
+    warn('install warning');
+    expect(host.warn).toHaveBeenCalledWith('install warning');
   });
 
   test('skips the pre-install for platforms without symbol upload', async () => {
-    await resolveRun({ integration: Integration.nextjs } as WizardSession);
+    await resolveRun({ integration: Integration.nextjs }, runHost());
 
     expect(preinstallPostHogCliOnce).not.toHaveBeenCalled();
   });

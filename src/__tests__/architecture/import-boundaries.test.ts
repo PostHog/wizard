@@ -579,7 +579,7 @@ describe('programs entry modules', () => {
       'matrix:programs->tui',
     );
     expect(
-      rule('src/programs/dispatch-family.ts', 'src/commands/command.ts'),
-    ).toBe('matrix:programs->cli');
+      rule('src/commands/dispatch-family.ts', 'src/commands/command.ts'),
+    ).toBe(null);
   });
 });

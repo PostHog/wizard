@@ -26,6 +26,7 @@ import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
+import { testProgramRunHost } from '../../../test/program-host';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
@@ -192,7 +193,9 @@ describe('selfDrivingConfig', () => {
     // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;
     const resolved =
-      typeof run === 'function' ? await run(buildSession({})) : run;
+      typeof run === 'function'
+        ? await run(buildSession({}), testProgramRunHost())
+        : run;
     expect(resolved?.askTimeoutMs).toBe(30 * 60 * 1000);
   });
 

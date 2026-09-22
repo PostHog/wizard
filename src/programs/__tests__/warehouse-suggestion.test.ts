@@ -18,6 +18,7 @@ import { POSTHOG_INTEGRATION_PROGRAM } from '@programs/posthog-integration/steps
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { testProgramRunHost } from '../../../test/program-host';
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',
@@ -70,7 +71,7 @@ function sessionWith(sources: DetectedSource[]): WizardSession {
 async function resolveRun(session: WizardSession) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
+  return run(session, testProgramRunHost(session));
 }
 
 describe('outro suggestion', () => {
@@ -209,9 +210,9 @@ describe('flow shape', () => {
   });
 
   it('keeps the program single-run, so the outro stays terminal', () => {
-    // A step carrying its own `run` would flip run-wizard into the composed
+    // A step declaring a child program would flip run-wizard into the composed
     // walk, where a second agent run could abort before the outro is pushed.
-    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.run)).toBe(false);
+    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.runProgramId)).toBe(false);
   });
 });
 

@@ -23,10 +23,13 @@ import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
-import { getUI, type SpinnerHandle } from '@ui';
-import { createUiReducer } from '@ui/agent-progress';
+import type { Credentials } from '@shared/api';
+import type {
+  AgentProgress,
+  InferenceAuthProvider,
+  SpinnerHandle,
+} from '@agent/types';
 import { createPosthogInferenceAuthProvider } from '@programs/credentials';
 
 /** A category the agent classifies each project into (id the agent returns). */
@@ -132,7 +135,15 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
-  inferenceAuth?: import('@agent/types').InferenceAuthProvider;
+  /** Host-owned progress sink for initialization and execution events. */
+  onProgress?: (event: AgentProgress) => void;
+  inferenceAuth?: InferenceAuthProvider;
+};
+
+/** Data the detection agent needs from its host; no UI or session ownership. */
+export type AgenticDetectionContext = WizardRunOptions & {
+  credentials: Credentials | null;
+  inferenceAuth?: InferenceAuthProvider;
 };
 
 function buildPrompt(
@@ -306,7 +317,9 @@ function formatToolUse(block: any): string {
   return detail ? `${name} ${detail}` : name;
 }
 
-function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
+function sessionToWizardOptions(
+  session: AgenticDetectionContext,
+): WizardRunOptions {
   return {
     installDir: session.installDir,
     ci: session.ci,
@@ -331,7 +344,7 @@ const NOOP_SPINNER: SpinnerHandle = {
  * MCP, tools, and credentials are wired identically.
  */
 export async function detectProjectsWithAgent(
-  session: WizardSession,
+  session: AgenticDetectionContext,
   options: AgenticDetectOptions,
 ): Promise<AgenticDetectionReport> {
   if (!session.credentials) {
@@ -363,7 +376,7 @@ export async function detectProjectsWithAgent(
 
   const agent = await initializeAgent(
     {
-      emit: createUiReducer(getUI()),
+      emit: options.onProgress,
       workingDirectory: cwd,
       posthogMcpUrl: host.mcpUrl,
       posthogApiKey: accessToken,

@@ -1,6 +1,5 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
 import {
@@ -16,7 +15,10 @@ import {
 } from './run.js';
 
 /** The TUI keeps its session contract while sharing the data-only recipe. */
-const buildRun = (session: WizardSession): Promise<ProgramRun> => {
+const buildRun = (session: {
+  installDir: string;
+  frameworkContext: Record<string, unknown>;
+}): Promise<ProgramRun> => {
   const { run, hooks } = resolveSelfDrivingRun({
     installDir: session.installDir,
     detectedTools: getSelfDrivingDetectedTools(session),

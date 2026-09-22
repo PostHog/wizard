@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { testProgramRunHost } from '../../../../test/program-host';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -107,6 +108,29 @@ describe('detection always runs, independent of consent', () => {
     await detectPostHogIntegration(ctx);
 
     expect(discovered).toContain(DiscoveredFeature.Stripe);
+  });
+});
+
+describe('framework variant label projection', () => {
+  it('sends the gathered Next.js router label through the program context', async () => {
+    const installDir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(installDir, 'package.json'),
+        JSON.stringify({ dependencies: { next: '^15.0.0' } }),
+      );
+      fs.mkdirSync(path.join(installDir, 'app'));
+      fs.writeFileSync(path.join(installDir, 'app/layout.tsx'), 'export {};');
+
+      const ctx = makeCtx(buildSession({ installDir }));
+      await detectPostHogIntegration(ctx);
+
+      expect(ctx.setDetectedFramework).toHaveBeenCalledWith(
+        'Next.js app router 📱',
+      );
+    } finally {
+      cleanup(installDir);
+    }
   });
 });
 
@@ -374,7 +398,7 @@ describe('the full decline contract, end to end', () => {
 
     const { run } = posthogIntegrationConfig;
     if (typeof run !== 'function') throw new Error('expected a run function');
-    const runDef = await run(session);
+    const runDef = await run(session, testProgramRunHost(session));
     const outro = runDef.buildOutroData!(
       session,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

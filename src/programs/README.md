@@ -151,7 +151,8 @@ The callable host does not discover credentials, choose a project, or render
 questions itself. The host supplies those data and capabilities. Some legacy
 recipes still need an explicit data-only run definition; unsupported
 combinations return a failed outcome. Existing terminal and CI callers route
-their agent work through this host via `run-agent-legacy.ts`, which still owns
-session gates and UI translation. There is no socket controller or step-by-step
+their agent work through this host via
+`src/lib/runners/run-program-agent.ts`, which still owns session gates and UI
+translation. There is no socket controller or step-by-step
 control API. For the existing process-owned CI runner, see the
 [non-interactive developer interfaces](../../docs/developer-interfaces.md).

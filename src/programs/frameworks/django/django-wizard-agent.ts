@@ -33,6 +33,18 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
       const settingsFile = await findDjangoSettingsFile(options);
       return { projectType, settingsFile };
     },
+    getDetectedFrameworkLabel: (context) => {
+      switch (context.projectType) {
+        case DjangoProjectType.WAGTAIL:
+          return 'Django with Wagtail CMS';
+        case DjangoProjectType.DRF:
+          return 'Django REST Framework';
+        case DjangoProjectType.CHANNELS:
+          return 'Django Channels';
+        case DjangoProjectType.STANDARD:
+          return 'Django';
+      }
+    },
   },
 
   detection: {

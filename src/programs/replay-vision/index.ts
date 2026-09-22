@@ -3,7 +3,12 @@ import {
   detectFramework,
   gatherFrameworkContext,
 } from '@programs/detection/index';
-import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import {
+  scopeInstallDirToProject,
+  type ProjectScopeSession,
+} from '@programs/detection/project-scope';
+import type { FrameworkDetectionState } from '@programs/detection/context';
+import type { ProgramCiHost } from '@programs/host-capabilities';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { REPLAY_VISION_OPTIONS } from './run.js';
@@ -15,7 +20,6 @@ import type {
   ProgramReadyContext,
   ProgramStep,
 } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
@@ -52,6 +56,12 @@ export const REPLAY_VISION_SUPPORTED: ReadonlySet<Integration> = new Set([
   Integration.swift,
   Integration.flutter,
 ]);
+
+type ReplayVisionCiSession = ProjectScopeSession &
+  FrameworkDetectionState & {
+    integration: Integration | null;
+    skillId: string | null;
+  };
 
 async function abortUnsupportedPlatform(
   integration: Integration,
@@ -135,8 +145,11 @@ export const replayVisionConfig: ProgramConfig = {
   agentFlow: 'replay-vision',
   steps: [DETECT_STEP, ...AGENT_SKILL_STEPS],
 
-  ciPreRun: async (session: WizardSession): Promise<void> => {
-    await scopeInstallDirToProject(session);
+  ciPreRun: async (
+    session: ReplayVisionCiSession,
+    host: ProgramCiHost,
+  ): Promise<void> => {
+    await scopeInstallDirToProject(session, host);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
@@ -165,6 +178,9 @@ export const replayVisionConfig: ProgramConfig = {
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
     });
+    const detectedLabel =
+      frameworkConfig.metadata.getDetectedFrameworkLabel?.(context);
+    if (detectedLabel) session.detectedFrameworkLabel = detectedLabel;
     for (const [key, value] of Object.entries(context)) {
       if (!(key in session.frameworkContext)) {
         session.frameworkContext[key] = value;

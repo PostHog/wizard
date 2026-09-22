@@ -1,6 +1,8 @@
 import { AdditionalFeature } from '@shared/constants';
 import type { PromptContext } from '@agent/types';
 import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramRunHost } from '@programs/types';
+import { testProgramRunHost } from '../../../test/program-host';
 import { warehouseSourceConfig } from '@programs/warehouse-source/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { resolveProgramRunDefinition } from '../resolve-run-definition';
@@ -47,8 +49,9 @@ describe('data-only program run definitions', () => {
     const session = { frameworkContext: {} } as WizardSession;
     const resolve = warehouseSourceConfig.run as (
       session: WizardSession,
+      host: ProgramRunHost,
     ) => Promise<{ customPrompt?: (ctx: PromptContext) => string }>;
-    const run = await resolve(session);
+    const run = await resolve(session, testProgramRunHost(session));
     session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = [
       {
         kind: 'Postgres',

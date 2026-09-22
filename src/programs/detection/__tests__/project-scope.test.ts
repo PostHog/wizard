@@ -11,6 +11,7 @@ import {
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
 import { authenticate } from '@programs/authenticate';
+import type { ProgramCiHost } from '@programs/host-capabilities';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 
@@ -74,6 +75,15 @@ describe('chooseIntegrationProject', () => {
 });
 
 describe('scopeInstallDirToProject', () => {
+  const host: ProgramCiHost = {
+    auth: {
+      setCredentials: vi.fn(),
+      setRoleAtOrganization: vi.fn(),
+      setApiUser: vi.fn(),
+    },
+    log: { info: vi.fn(), warn: vi.fn() },
+    onProgress: vi.fn(),
+  };
   const scan = vi.mocked(detectProjectsWithAgent);
   const FLAG_ON = {
     [WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY]: 'true',
@@ -117,9 +127,13 @@ describe('scopeInstallDirToProject', () => {
   it('fires flag-off and never scans when the flag is off (or the fetch failed)', async () => {
     // A failed flag fetch surfaces as an empty map, so this path also covers "flags unavailable".
     const session = buildSession({ installDir: '/repo' });
-    await scopeInstallDirToProject(session);
+    await scopeInstallDirToProject(session, host);
 
-    expect(vi.mocked(authenticate)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(authenticate)).toHaveBeenCalledWith(
+      session,
+      'posthog-integration',
+      host.auth,
+    );
     expect(session.installDir).toBe('/repo');
     expect(outcomeEvent()).toMatchObject({ outcome: 'flag-off' });
     expect(scan).not.toHaveBeenCalled();
@@ -130,11 +144,14 @@ describe('scopeInstallDirToProject', () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({ repoType: 'single', projects: [web] });
 
-    await scopeInstallDirToProject(buildSession({ installDir: '/repo' }));
+    await scopeInstallDirToProject(buildSession({ installDir: '/repo' }), host);
 
     expect(scan).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ programId: 'posthog-integration' }),
+      expect.objectContaining({
+        programId: 'posthog-integration',
+        onProgress: host.onProgress,
+      }),
     );
   });
 
@@ -142,7 +159,7 @@ describe('scopeInstallDirToProject', () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({ repoType: 'monorepo', projects: [web] });
     const session = buildSession({ installDir: '/repo' });
-    await scopeInstallDirToProject(session);
+    await scopeInstallDirToProject(session, host);
 
     expect(session.installDir).toBe('/repo/apps/web');
     expect(outcomeEvent()).toMatchObject({
@@ -167,7 +184,7 @@ describe('scopeInstallDirToProject', () => {
       ],
     });
     const session = buildSession({ installDir: '/repo' });
-    await scopeInstallDirToProject(session);
+    await scopeInstallDirToProject(session, host);
 
     expect(session.installDir).toBe('/repo/apps/api');
     expect(outcomeEvent()).toMatchObject({
@@ -182,7 +199,7 @@ describe('scopeInstallDirToProject', () => {
     const failure = new Error('agent unavailable');
     scan.mockRejectedValue(failure);
     const session = buildSession({ installDir: '/repo' });
-    await scopeInstallDirToProject(session);
+    await scopeInstallDirToProject(session, host);
 
     expect(session.installDir).toBe('/repo');
     expect(outcomeEvent()).toMatchObject({
@@ -192,6 +209,9 @@ describe('scopeInstallDirToProject', () => {
     expect(exceptionSpy).toHaveBeenCalledWith(failure, {
       step: 'agentic_detection',
     });
+    expect(host.log.warn).toHaveBeenCalledWith(
+      'Project scan failed (agent unavailable); continuing with the install dir as-is.',
+    );
   });
 
   it('leaves the session untouched and fires timeout when the scan outruns the budget', async () => {
@@ -201,7 +221,7 @@ describe('scopeInstallDirToProject', () => {
       flagsSpy.mockResolvedValue(FLAG_ON);
       scan.mockReturnValue(new Promise(() => undefined));
       const session = buildSession({ installDir: '/repo' });
-      const done = scopeInstallDirToProject(session);
+      const done = scopeInstallDirToProject(session, host);
       await vi.advanceTimersByTimeAsync(AGENTIC_DETECTION_TIMEOUT_MS);
       await done;
 
@@ -222,7 +242,7 @@ describe('scopeInstallDirToProject', () => {
       projects: [project({ path: 'crates/core', framework: 'Rust' })],
     });
     const session = buildSession({ installDir: '/repo' });
-    await scopeInstallDirToProject(session);
+    await scopeInstallDirToProject(session, host);
 
     expect(session.installDir).toBe('/repo');
     expect(outcomeEvent()).toMatchObject({

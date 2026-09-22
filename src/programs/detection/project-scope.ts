@@ -4,19 +4,20 @@ import {
   detectProjectsWithAgent,
   resolveProjectDir,
   type AgenticDetectionReport,
+  type AgenticDetectionContext,
+  type AgenticDetectOptions,
   type AgenticProject,
   type DetectEvent,
   type DetectTarget,
 } from './agentic.js';
-import { authenticate } from '@programs/authenticate';
+import { authenticate, type AuthSession } from '@programs/authenticate';
+import type { ProgramCiHost } from '@programs/host-capabilities';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
-import type { WizardSession } from '@lib/wizard-session';
-import { getUI } from '@ui/index';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
@@ -59,12 +60,13 @@ export function toIntegrationCandidates(
 
 /** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(
-  session: WizardSession,
+  session: AgenticDetectionContext,
   options: {
     /** Program the scan bills to. Required so no caller can go unattributed. */
     programId: string;
     recommend?: boolean;
     onEvent?: DetectEvent;
+    onProgress?: AgenticDetectOptions['onProgress'];
   },
 ): Promise<AgenticDetectionReport> {
   // Spread first so the targets and purpose this function owns always win.
@@ -104,12 +106,15 @@ function captureOutcome(
   analytics.wizardCapture('agentic detection', { outcome, ...properties });
 }
 
+export type ProjectScopeSession = AuthSession & AgenticDetectionContext;
+
 /** Flag-gated non-interactive monorepo phase: scan, auto-choose the recommended project, re-point session.installDir; every failure leaves the session untouched. */
 export async function scopeInstallDirToProject(
-  session: WizardSession,
+  session: ProjectScopeSession,
+  host: ProgramCiHost,
 ): Promise<void> {
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
-  await authenticate(session, 'posthog-integration');
+  await authenticate(session, 'posthog-integration', host.auth);
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
     // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
@@ -117,7 +122,7 @@ export async function scopeInstallDirToProject(
     return;
   }
 
-  getUI().log.info('Scanning the repo for projects...');
+  host.log.info('Scanning the repo for projects...');
   const startedAt = Date.now();
   let report: AgenticDetectionReport | typeof TIMED_OUT;
   try {
@@ -128,6 +133,7 @@ export async function scopeInstallDirToProject(
         programId: 'posthog-integration',
         recommend: true,
         onEvent: (line) => logToFile('[agentic detect]', line),
+        onProgress: (event) => host.onProgress(event),
       }),
       // The agent has no abort plumbing, so a timed-out scan is abandoned in the
       // background rather than cancelled; the run stops waiting on it either way.
@@ -142,7 +148,7 @@ export async function scopeInstallDirToProject(
       duration_ms: Date.now() - startedAt,
       error_message: error.message,
     });
-    getUI().log.warn(
+    host.log.warn(
       `Project scan failed (${error.message}); continuing with the install dir as-is.`,
     );
     return;
@@ -150,7 +156,7 @@ export async function scopeInstallDirToProject(
 
   if (report === TIMED_OUT) {
     captureOutcome('timeout', { duration_ms: Date.now() - startedAt });
-    getUI().log.warn(
+    host.log.warn(
       `Project scan timed out after ${
         AGENTIC_DETECTION_TIMEOUT_MS / 1000
       }s; continuing with the install dir as-is.`,
@@ -175,7 +181,7 @@ export async function scopeInstallDirToProject(
   const project = chooseIntegrationProject(projects);
   if (!project) {
     captureOutcome('no-project', scanProperties);
-    getUI().log.info(
+    host.log.info(
       'The scan found no supported project; continuing with the install dir as-is.',
     );
     return;
@@ -187,5 +193,5 @@ export async function scopeInstallDirToProject(
     chosen_framework: project.targetId,
     chosen_path: project.path,
   });
-  getUI().log.info(`Continuing with ${project.path} (${project.framework}).`);
+  host.log.info(`Continuing with ${project.path} (${project.framework}).`);
 }

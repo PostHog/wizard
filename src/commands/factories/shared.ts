@@ -51,17 +51,17 @@ export function dispatchProgram(config: ProgramConfig, argv: Arguments): void {
 }
 
 /**
- * Merge the standard skill-program flags (`--debug`, `--install-dir`, etc.)
- * with any program-specific options declared on `cliOptions`.
+ * Merge standard flags with program options and CLI-owned command options.
  *
- * Program-specific options shadow the standard ones — that's intentional, so
- * a program can override a default flag if it ever needs to.
+ * Later entries override earlier ones so command-specific flags win.
  */
 export function mergeCommandOptions(
   config: ProgramConfig,
+  cliOptions: Record<string, Options> = {},
 ): Record<string, Options> {
   return {
     ...skillProgramOptions,
     ...((config.cliOptions ?? {}) as Record<string, Options>),
+    ...cliOptions,
   };
 }

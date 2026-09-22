@@ -28,7 +28,6 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
@@ -49,9 +48,9 @@ export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
 export const SELF_DRIVING_DETECTED_TOOLS_KEY = 'selfDrivingDetectedTools';
 
 /** Read the detected tools out of frameworkContext. */
-export function getSelfDrivingDetectedTools(
-  session: Pick<WizardSession, 'frameworkContext'>,
-): DetectedSource[] {
+export function getSelfDrivingDetectedTools(session: {
+  frameworkContext: Record<string, unknown>;
+}): DetectedSource[] {
   return (
     (session.frameworkContext[SELF_DRIVING_DETECTED_TOOLS_KEY] as
       | DetectedSource[]
@@ -290,7 +289,7 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
  * screen renders it and blocks.
  */
 export function detectSelfDrivingPrerequisites(
-  session: WizardSession,
+  session: { installDir: string },
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: SelfDrivingDetectError) =>

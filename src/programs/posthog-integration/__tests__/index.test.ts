@@ -7,9 +7,12 @@
  */
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
+import type { ProgramRunHost } from '@programs/host-capabilities';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
+import { HostResolution } from '@shared/host-resolution';
+import { Integration } from '@shared/constants';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -45,10 +48,19 @@ function sessionWithFramework(): WizardSession {
   return s;
 }
 
-async function resolveRun(session: WizardSession) {
+function runHost(): ProgramRunHost {
+  return {
+    getFrameworkContext: vi.fn(),
+    setFrameworkContext: vi.fn(),
+    warn: vi.fn(),
+    uploadEnvironmentVariables: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
+  };
+}
+
+async function resolveRun(session: WizardSession, host = runHost()) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
+  return run(session, host);
 }
 
 describe('posthog-integration run() — typescript tag', () => {
@@ -74,5 +86,60 @@ describe('posthog-integration run() — typescript tag', () => {
 
     expect(session.typescript).toBe(false);
     expect(analytics.setTag).toHaveBeenCalledWith('typescript', false);
+  });
+
+  it('routes missing package warnings through the run host', async () => {
+    (isUsingTypeScript as Mock).mockReturnValue(false);
+    const session = sessionWithFramework();
+    if (!session.frameworkConfig) throw new Error('missing framework config');
+    session.frameworkConfig = {
+      ...session.frameworkConfig,
+      detection: {
+        ...session.frameworkConfig.detection,
+        usesPackageJson: true,
+      },
+    };
+    const host = runHost();
+
+    await resolveRun(session, host);
+
+    expect(host.warn).toHaveBeenCalledWith(
+      'Could not find package.json. Continuing anyway — the agent will handle it.',
+    );
+  });
+
+  it('routes hosting uploads through the run host with the project directory', async () => {
+    (isUsingTypeScript as Mock).mockReturnValue(false);
+    const session = sessionWithFramework();
+    if (!session.frameworkConfig) throw new Error('missing framework config');
+    session.frameworkConfig = {
+      ...session.frameworkConfig,
+      metadata: {
+        ...session.frameworkConfig.metadata,
+        integration: Integration.nextjs,
+      },
+      environment: {
+        ...session.frameworkConfig.environment,
+        uploadToHosting: true,
+      },
+    };
+    const host = runHost();
+    const run = await resolveRun(session, host);
+
+    await run.postRun?.(
+      { signup: false, dashboardUrl: null, notebookUrl: null },
+      {
+        accessToken: 'token',
+        projectApiKey: 'phc_test',
+        projectId: 123,
+        host: HostResolution.fromApiHost('https://us.posthog.com'),
+      },
+    );
+
+    expect(host.uploadEnvironmentVariables).toHaveBeenCalledWith(
+      { POSTHOG_KEY: 'phc_test' },
+      Integration.nextjs,
+      '/tmp/app',
+    );
   });
 });

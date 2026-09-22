@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
+import { createUiReducer, getUI } from '@ui';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
@@ -62,11 +63,15 @@ export const SourceMapsDetectScreen = ({
     let cancelled = false;
     void (async () => {
       try {
-        const report = await detectSourceMapsProjects(store.session, (line) => {
-          if (!cancelled) {
-            setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
-          }
-        });
+        const report = await detectSourceMapsProjects(
+          store.session,
+          (line) => {
+            if (!cancelled) {
+              setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
+            }
+          },
+          createUiReducer(getUI()),
+        );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
         if (!cancelled) {

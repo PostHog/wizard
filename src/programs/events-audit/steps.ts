@@ -9,11 +9,14 @@
  */
 
 import type { ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
+import type { FrameworkConfig } from '@programs/framework-config';
 import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 
-function needsSetup(session: WizardSession): boolean {
+function needsSetup(session: {
+  frameworkConfig: FrameworkConfig | null;
+  frameworkContext: Record<string, unknown>;
+}): boolean {
   const config = session.frameworkConfig;
   if (!config?.metadata.setup?.questions) return false;
 

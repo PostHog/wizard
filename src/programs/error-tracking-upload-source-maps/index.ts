@@ -1,6 +1,6 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramRunHost } from '@programs/host-capabilities';
 import { OutroKind } from '@agent';
 import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 import {
@@ -13,7 +13,6 @@ import {
   SOURCE_MAPS_DOCS_URL,
   SOURCE_MAPS_REPORT_FILE,
 } from '@programs/resolve-run-definition';
-import { getUI } from '@ui';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 
 /**
@@ -21,10 +20,15 @@ import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstal
  * (`VARIANTS_REQUIRING_POSTHOG_CLI`). See `preinstallPostHogCliOnce` for the
  * once-per-process guard and the warn-don't-fail handling.
  */
-function ensurePostHogCli(variant: SkillVariant): void {
-  preinstallPostHogCliOnce('source maps posthog-cli preinstall failed', {
-    variant,
-  });
+function ensurePostHogCli(
+  variant: SkillVariant,
+  warn: ProgramRunHost['warn'],
+): void {
+  preinstallPostHogCliOnce(
+    'source maps posthog-cli preinstall failed',
+    { variant },
+    warn,
+  );
 }
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
@@ -36,19 +40,19 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   reportFile: SOURCE_MAPS_REPORT_FILE,
   requires: ['posthog-integration'],
 
-  run: (_session: WizardSession): Promise<ProgramRun> => {
+  run: (_session, host: ProgramRunHost): Promise<ProgramRun> => {
     // Read the picked project LIVE at prompt-build time, not here: the picker
     // screen runs AFTER this run config is resolved (post-auth), and the store
     // forks the session reference, so the `session` passed in never sees the
-    // choice. getUI().getFrameworkContext reads the live store session.
+    // choice. The host reads the live store session.
     const readSelection = () => {
-      const variant = getUI().getFrameworkContext(
+      const variant = host.getFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
       ) as SkillVariant | undefined;
-      const displayName = getUI().getFrameworkContext(
+      const displayName = host.getFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
       ) as string | undefined;
-      const projectPath = getUI().getFrameworkContext(
+      const projectPath = host.getFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedPath,
       ) as string | undefined;
       return { variant, displayName, projectPath };
@@ -63,7 +67,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         const selection = readSelection();
         const { variant } = selection;
         if (variant && VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
-          ensurePostHogCli(variant);
+          ensurePostHogCli(variant, (message) => host.warn(message));
         const prompt = resolveSourceMapsRunDefinition(selection).customPrompt;
         if (!prompt) throw new Error('Source maps run has no prompt');
         return prompt(ctx);
@@ -73,7 +77,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         // Stash a hint for the outro about what variant we shipped.
         const { variant } = readSelection();
         if (variant) {
-          getUI().setFrameworkContext('sourceMapsCompletedVariant', variant);
+          host.setFrameworkContext('sourceMapsCompletedVariant', variant);
         }
         return Promise.resolve();
       },

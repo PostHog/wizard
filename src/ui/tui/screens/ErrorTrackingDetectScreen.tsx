@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
+import { createUiReducer, getUI } from '@ui';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   detectErrorTrackingProjects,
@@ -62,6 +63,7 @@ export const ErrorTrackingDetectScreen = ({
               setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
             }
           },
+          createUiReducer(getUI()),
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {

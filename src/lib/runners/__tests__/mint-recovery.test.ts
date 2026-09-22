@@ -1,6 +1,6 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard';
-import { runProgramAgent } from '@programs/run-agent-legacy';
+import { runProgramAgent } from '../run-program-agent';
 import { startTUI } from '@ui/tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-vi.mock('@programs/run-agent-legacy', () => ({ runProgramAgent: vi.fn() }));
+vi.mock('../run-program-agent', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@shared/local-dev', async (original) => ({
   ...(await original<typeof import('@shared/local-dev')>()),

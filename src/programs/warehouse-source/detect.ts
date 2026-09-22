@@ -8,7 +8,6 @@
 
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@agent/types';
 import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
@@ -29,9 +28,9 @@ export const DETECTED_WAREHOUSE_SOURCES_KEY = 'detectedWarehouseSources';
  * Read the detected sources out of frameworkContext. Single accessor shared by
  * the intro screen and the prompt builder so the key + cast live in one place.
  */
-export function getDetectedWarehouseSources(
-  session: WizardSession,
-): DetectedSource[] {
+export function getDetectedWarehouseSources(session: {
+  frameworkContext: Record<string, unknown>;
+}): DetectedSource[] {
   return (
     (session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] as
       | DetectedSource[]
@@ -69,7 +68,7 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
  * sources (or a `detectError`) into frameworkContext for the intro screen.
  */
 export function detectWarehousePrerequisites(
-  session: WizardSession,
+  session: { installDir: string },
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: WarehouseDetectError) =>

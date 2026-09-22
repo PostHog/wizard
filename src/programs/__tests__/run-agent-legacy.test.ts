@@ -1,8 +1,9 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { authenticate } from '@programs/authenticate';
-import { runProgramAgent } from '../run-agent-legacy';
+import { runProgramAgent } from '@lib/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
-import { Harness, Sequence } from '@shared/constants';
+import { Harness, Integration, Sequence } from '@shared/constants';
+import { uploadEnvironmentVariablesStep } from '@steps/upload-environment-variables';
 import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
@@ -19,6 +20,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -61,6 +63,10 @@ vi.mock('@agent/runner', async (original) => ({
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
   refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@steps/upload-environment-variables', async (original) => ({
+  ...(await original<typeof import('@steps/upload-environment-variables')>()),
+  uploadEnvironmentVariablesStep: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
@@ -177,6 +183,82 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
     expect.anything(),
   );
   expect(analytics.shutdown).not.toHaveBeenCalled();
+});
+
+it('supplies environment upload through the run host for the requested project', async () => {
+  const config = program();
+  config.run = async (_session, host) => {
+    const uploaded = await host.uploadEnvironmentVariables(
+      { POSTHOG_KEY: 'phc_test' },
+      Integration.nextjs,
+      '/repo/apps/web',
+    );
+    expect(uploaded).toEqual(['POSTHOG_KEY']);
+    return program().run as ProgramRun;
+  };
+
+  await runProgramAgent(config, session());
+
+  expect(uploadEnvironmentVariablesStep).toHaveBeenCalledWith(
+    { POSTHOG_KEY: 'phc_test' },
+    {
+      integration: Integration.nextjs,
+      session: { installDir: '/repo/apps/web' },
+    },
+  );
+});
+
+it('reads completion data when each hook runs, after late URL updates', async () => {
+  const currentSession = session();
+  const postRun = vi.fn().mockResolvedValue(undefined);
+  const buildOutroData = vi.fn().mockReturnValue({
+    kind: OutroKind.Success,
+    message: 'Done',
+  });
+  const buildOutroNextSteps = vi.fn().mockReturnValue(undefined);
+  const config = program();
+  config.run = {
+    ...(config.run as ProgramRun),
+    postRun,
+    buildOutroData,
+    buildOutroNextSteps,
+  };
+  vi.mocked(runAgent).mockImplementationOnce(async (runConfig, input) => {
+    currentSession.dashboardUrl = 'https://us.posthog.com/dashboard/42';
+    await runConfig.hooks?.postRun?.(input.credentials);
+    currentSession.notebookUrl = 'https://us.posthog.com/notebook/7';
+    runConfig.hooks?.buildOutroData?.(input.credentials);
+    runConfig.hooks?.buildOutroNextSteps?.(input.credentials, ['seeded']);
+    return { outcome: RunOutcome.Success, snapshot };
+  });
+
+  await runProgramAgent(config, currentSession);
+
+  expect(postRun).toHaveBeenCalledWith(
+    {
+      signup: false,
+      dashboardUrl: 'https://us.posthog.com/dashboard/42',
+      notebookUrl: null,
+    },
+    currentSession.credentials,
+  );
+  expect(buildOutroData).toHaveBeenCalledWith(
+    {
+      signup: false,
+      dashboardUrl: 'https://us.posthog.com/dashboard/42',
+      notebookUrl: 'https://us.posthog.com/notebook/7',
+    },
+    currentSession.credentials,
+  );
+  expect(buildOutroNextSteps).toHaveBeenCalledWith(
+    {
+      signup: false,
+      dashboardUrl: 'https://us.posthog.com/dashboard/42',
+      notebookUrl: 'https://us.posthog.com/notebook/7',
+    },
+    currentSession.credentials,
+    ['seeded'],
+  );
 });
 
 it('passes actual self-driving GitHub gate state to the callable host', async () => {

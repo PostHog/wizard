@@ -8,11 +8,12 @@
  */
 
 import type { ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@shared/run-state';
 import { SOURCE_MAPS_CONTEXT_KEYS } from './detect.js';
 
-function projectSelected(session: WizardSession): boolean {
+function projectSelected(session: {
+  frameworkContext: Record<string, unknown>;
+}): boolean {
   return (
     session.frameworkContext[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant] != null
   );

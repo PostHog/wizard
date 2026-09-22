@@ -6,7 +6,6 @@
  */
 
 import { existsSync, statSync } from 'fs';
-import type { WizardSession } from '@lib/wizard-session';
 import { findPackageJsons } from '@programs/shared/package-scanning';
 
 export {
@@ -41,7 +40,7 @@ export { REVENUE_ABORT_CASES } from './abort-cases.js';
  * The skill install happens later in the bootstrap runner, not here.
  */
 export function detectRevenuePrerequisites(
-  session: WizardSession,
+  session: { installDir: string },
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: RevenueDetectError) =>
