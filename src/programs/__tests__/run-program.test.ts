@@ -4,6 +4,7 @@ import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { FrameworkConfig } from '../framework-config';
 import type { ResolvedProgramCredentials } from '../credentials';
+import { ErrorCodes } from '@shared/errors';
 import { getRuntimeProgramConfig } from '../runtime-registry';
 import { runProgram } from '@programs';
 
@@ -303,6 +304,26 @@ describe('runProgram', () => {
       agentFlow: 'custom-flow',
       hooks: { postRun },
     });
+  });
+
+  it('settles a pre-aborted host signal before credentials or agent startup', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const resolve = vi.fn();
+
+    const result = await runProgram(
+      'metrics',
+      { installDir: '/project' },
+      { credentials: { resolve }, signal: controller.signal },
+    );
+
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { code: ErrorCodes.AgentAbort },
+      settledRuns: [],
+    });
+    expect(resolve).not.toHaveBeenCalled();
+    expect(runAgent).not.toHaveBeenCalled();
   });
 
   it('resolves self-driving with explicit detected tools and passes completion hooks', async () => {

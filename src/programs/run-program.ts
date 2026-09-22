@@ -12,6 +12,7 @@ import type {
 } from '@agent/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import type { Integration } from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
 import type { FrameworkConfig } from './framework-config';
 import type { DetectedSource } from './warehouse-sources/types';
 import type {
@@ -100,6 +101,7 @@ export interface ProgramOptions {
   compositionWorkflow?: ProgramWorkflowConnector;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
   awaitAiApproval?: (context: { programId: string }) => Promise<boolean>;
+  signal?: AbortSignal;
 }
 
 export interface ProgramRunOutcome {
@@ -175,6 +177,12 @@ async function runProgramWithStore(
     ...fail(message),
     outcome: RunOutcome.Aborted,
   });
+  const cancelled = (): ProgramRunOutcome => ({
+    ...abort('Run cancelled by host.'),
+    failure: { code: ErrorCodes.AgentAbort, message: 'Run cancelled by host.' },
+  });
+
+  if (options.signal?.aborted) return cancelled();
 
   if (!program) return fail(`Unknown program: ${programId}`);
 
@@ -231,6 +239,7 @@ async function runProgramWithStore(
   }
   if (!credentials)
     return fail(`Credentials are required to run ${programId}.`);
+  if (options.signal?.aborted) return cancelled();
 
   if (
     program.requiresAi !== false &&
@@ -356,6 +365,7 @@ async function runProgramWithStore(
       `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
     );
   }
+  if (options.signal?.aborted) return cancelled();
   artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
 
   const flags = { ...DEFAULT_FLAGS, ...input.flags };
@@ -414,6 +424,7 @@ async function runProgramWithStore(
     {
       interaction: options.interaction,
       onProgress: (event) => adapter.onProgress(event),
+      signal: options.signal,
     },
   );
   adapter.finish(result);
