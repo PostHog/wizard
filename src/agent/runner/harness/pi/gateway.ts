@@ -170,6 +170,8 @@ export function isGatewayAuthRejection(
 
 export interface GatewayRemintOptions {
   session: { prompt(text: string): Promise<void> };
+  /** Prevent a fresh turn if the host cancels while the bearer is re-minted. */
+  signal?: AbortSignal;
   registry: { registerProvider(providerName: string, config: never): void };
   auth: GatewayAuth;
   /** The cache: the same token while fresh, a new mint past the refresh point. */
@@ -202,11 +204,14 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
       rejected = turn?.stopReason === 'error' && isGatewayAuthRejection(turn);
     },
     async prompt(text) {
+      if (opts.signal?.aborted) return;
       rejected = false;
       await opts.session.prompt(text);
-      if (!rejected || reminted || !isPastRefresh(auth)) return;
+      if (opts.signal?.aborted || !rejected || reminted || !isPastRefresh(auth))
+        return;
       reminted = true;
       auth = await opts.refreshAuth();
+      if (opts.signal?.aborted) return;
       opts.registry.registerProvider(
         GATEWAY_PROVIDER,
         buildGatewayProvider(opts.providerInputs(auth)).provider as never,
@@ -214,6 +219,7 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
       opts.onRemint?.();
       rejected = false;
       const next = opts.continueText;
+      if (opts.signal?.aborted) return;
       await opts.session.prompt(typeof next === 'function' ? next() : next);
     },
   };

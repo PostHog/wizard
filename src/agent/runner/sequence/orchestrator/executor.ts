@@ -50,6 +50,7 @@ export class RunTaskFatal extends Error {
 export interface DrainOptions {
   /** Backstop against a pathological always-one-more-pending loop. */
   maxStarts: number;
+  signal?: AbortSignal;
 }
 
 export const DEFAULT_DRAIN_OPTIONS: DrainOptions = {
@@ -60,11 +61,14 @@ async function runOne(
   store: QueueStore,
   runTask: RunTask,
   task: QueuedTask,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) return;
   store.start(task.id);
   try {
     await runTask(task);
   } catch (error) {
+    if (signal?.aborted) return;
     if (error instanceof RunTaskFatal) throw error;
     // The task threw rather than reporting. The outcome check below handles
     // the queue; the exception itself should never be silent.
@@ -74,6 +78,8 @@ async function runOne(
       { step: 'orchestrator_run_task', task_type: task.type },
     );
   }
+
+  if (signal?.aborted) return;
 
   const after = store.get(task.id);
   if (!after) return;
@@ -116,10 +122,12 @@ export async function drainQueue(
 
   try {
     for (;;) {
+      if (opts.signal?.aborted) break;
       if (failure) throw failure.error;
       for (const task of store.nextRunnable()) {
+        if (opts.signal?.aborted) break;
         if (++starts > opts.maxStarts) break;
-        const p = runOne(store, runTask, task)
+        const p = runOne(store, runTask, task, opts.signal)
           .catch((error: unknown) => {
             failure ??= { error };
           })

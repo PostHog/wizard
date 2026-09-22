@@ -19,6 +19,28 @@ beforeEach(() => {
 });
 
 describe('createWizardAskBridge', () => {
+  it('dismisses an unanswered overlay when the host cancels the run', async () => {
+    const controller = new AbortController();
+    const cancelQuestion = vi.fn();
+    const bridge = createWizardAskBridge({
+      getSource: () => 'skill',
+      showQuestion: () => new Promise<AskAnswers>(() => undefined),
+      cancelQuestion,
+      signal: controller.signal,
+    });
+    const pending = bridge.request({
+      questions: [{ id: 'answer', prompt: 'Answer?', kind: 'text' }],
+    });
+
+    controller.abort();
+    await expect(pending).resolves.toEqual({
+      answers: { answer: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+    expect(cancelQuestion).toHaveBeenCalledTimes(1);
+    expect(bridge.getPendingQuestion()).toBeNull();
+  });
+
   it('forwards questions to showQuestion and resolves with the captured answers', async () => {
     const captured: PendingQuestion[] = [];
     let resolveAnswers!: (answers: AskAnswers) => void;

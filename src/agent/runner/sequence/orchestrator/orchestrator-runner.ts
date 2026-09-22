@@ -10,7 +10,7 @@
  * task resolve to a prompt fetched at startup into the registry. The wizard side
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
-import { failed } from '../../shared/errors';
+import { failed, hostAborted } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
 import { randomUUID } from 'crypto';
 import {
@@ -53,7 +53,12 @@ import {
   TaskStatus,
   type QueuedTask,
 } from './queue';
-import { drainQueue, RunTaskFatal, type RunTask } from './executor';
+import {
+  DEFAULT_DRAIN_OPTIONS,
+  drainQueue,
+  RunTaskFatal,
+  type RunTask,
+} from './executor';
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
@@ -203,6 +208,7 @@ export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
 interface SeededTaskOptions {
   timeoutMs?: number;
   interaction?: AgentInteraction;
+  signal?: AbortSignal;
 }
 
 /**
@@ -215,8 +221,13 @@ interface SeededTaskOptions {
  */
 export async function offerSeededTask(
   notice: TaskNotice,
-  { timeoutMs = TASK_NOTICE_TIMEOUT_MS, interaction }: SeededTaskOptions = {},
+  {
+    timeoutMs = TASK_NOTICE_TIMEOUT_MS,
+    interaction,
+    signal,
+  }: SeededTaskOptions = {},
 ): Promise<{ keep: boolean; timedOut: boolean }> {
+  if (signal?.aborted) return { keep: false, timedOut: false };
   // No one to show the notice to: a step nobody can answer for must not run.
   // The same answer a non-interactive host gives today.
   if (!interaction?.taskNotice) return { keep: false, timedOut: false };
@@ -224,6 +235,7 @@ export async function offerSeededTask(
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
+  let cancelForAbort: (() => void) | undefined;
   const timeout = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true;
@@ -233,11 +245,23 @@ export async function offerSeededTask(
       resolve(false);
     }, timeoutMs);
   });
+  const aborted = new Promise<boolean>((resolve) => {
+    cancelForAbort = () => {
+      try {
+        cancelTaskNotice?.();
+      } finally {
+        resolve(false);
+      }
+    };
+    signal?.addEventListener('abort', cancelForAbort, { once: true });
+    if (signal?.aborted) cancelForAbort();
+  });
   try {
-    const keep = await Promise.race([taskNotice(notice), timeout]);
+    const keep = await Promise.race([taskNotice(notice), timeout, aborted]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
+    if (cancelForAbort) signal?.removeEventListener('abort', cancelForAbort);
   }
 }
 
@@ -453,9 +477,10 @@ export async function runOrchestrator(
 }
 
 async function executeOrchestrator(
-  { config, input, boot, emit, interaction }: SequenceContext,
+  { config, input, boot, emit, interaction, signal }: SequenceContext,
   cleanupQueue: () => void,
 ): Promise<SequenceResult> {
+  if (signal?.aborted) return hostAborted();
   const runId = randomUUID();
   const { run } = config;
   const programId = config.programId;
@@ -469,6 +494,7 @@ async function executeOrchestrator(
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: config.stageOverrides,
   });
+  if (signal?.aborted) return hostAborted();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
@@ -576,6 +602,7 @@ async function executeOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
+  if (signal?.aborted) return hostAborted();
   // The framework key for reference + variant resolution. `input.integration`
   // is the detected framework and always wins; `input.skillId` is the
   // fallback for the basic-integration path, where the caller sets it to the
@@ -596,6 +623,7 @@ async function executeOrchestrator(
         triage: boot.triageProvider,
       },
     );
+    if (signal?.aborted) return hostAborted();
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -768,8 +796,12 @@ async function executeOrchestrator(
       // not, which is why the offer lives here and not there.
       seededConsent.set(
         task.id,
-        await askSeededConsent(seeded.type, seeded.notice, { interaction }),
+        await askSeededConsent(seeded.type, seeded.notice, {
+          interaction,
+          signal,
+        }),
       );
+      if (signal?.aborted) return hostAborted();
     }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
@@ -803,6 +835,7 @@ async function executeOrchestrator(
   const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
+        signal,
         getSource: () => input.skillId ?? programId,
         beforeShow: () => {
           // How late the first ask lands is the measure of this run shape: it
@@ -834,6 +867,7 @@ async function executeOrchestrator(
   const seedHarness = requireTaskHarness(seedPick);
   const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
+    signal,
     config,
     input,
     boot,
@@ -850,6 +884,7 @@ async function executeOrchestrator(
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
+  if (signal?.aborted) return hostAborted();
   // A decided seed failure ends the run and releases its queue artifacts.
   if (seedResult.failure) return failed(seedResult.failure);
   if (seedResult.error) {
@@ -981,6 +1016,7 @@ async function executeOrchestrator(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
   const runTask: RunTask = async (task) => {
+    if (signal?.aborted) return;
     renderQueue();
 
     try {
@@ -991,6 +1027,7 @@ async function executeOrchestrator(
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
+        if (signal?.aborted) return;
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
@@ -1013,6 +1050,7 @@ async function executeOrchestrator(
           boot.skillsBaseUrl,
           { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
+        if (signal?.aborted) return;
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
         } else {
@@ -1040,6 +1078,7 @@ async function executeOrchestrator(
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       const taskResult = await taskHarness.runTask({
+        signal,
         config,
         input,
         boot,
@@ -1062,6 +1101,7 @@ async function executeOrchestrator(
           harness: taskPick.harness,
         },
       });
+      if (signal?.aborted) return;
       // A decided failure (a 401 the harness already reported) is the run's,
       // not the task's: stop the drain and report it, where the harness used
       // to exit the process.
@@ -1091,13 +1131,13 @@ async function executeOrchestrator(
 
   let fatal: AgentFailure | undefined;
   try {
-    await drainQueue(store, runTask);
+    await drainQueue(store, runTask, { ...DEFAULT_DRAIN_OPTIONS, signal });
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error.failure;
   } finally {
     try {
-      if (referenceSkillId && referenceInstallPath) {
+      if (!signal?.aborted && referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(
           path.join(input.installDir, referenceInstallPath),
           claudeSkillsDir,
@@ -1124,6 +1164,8 @@ async function executeOrchestrator(
       );
     }
   }
+
+  if (signal?.aborted) return hostAborted();
 
   if (fatal) return failed(fatal);
 

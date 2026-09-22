@@ -3,13 +3,19 @@
  */
 
 import type { InstallSkillResult } from '@agent/tools';
-import { skillErrorCode } from '@shared/errors';
+import { ErrorCodes, skillErrorCode } from '@shared/errors';
 import { WizardError } from '@shared/errors';
 import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
 
 export const failed = (failure: AgentFailure): SequenceResult => ({
   outcome: RunOutcome.Failed,
   failure,
+});
+
+/** A host cancellation is a decided abort, regardless of SDK error wording. */
+export const hostAborted = (): SequenceResult => ({
+  outcome: RunOutcome.Aborted,
+  failure: { code: ErrorCodes.AgentAbort, message: 'Run cancelled by host.' },
 });
 
 /** The failure a skill install error decides. The caller reports and exits. */

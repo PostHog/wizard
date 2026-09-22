@@ -48,6 +48,7 @@ export interface RunMiddleware {
  * re-derives run context.
  */
 export interface BackendRunInputs {
+  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;
@@ -87,6 +88,7 @@ export type AgentResult = {
  * them from the program-level config the linear pipeline assembles once.
  */
 export interface TaskRunInputs {
+  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;

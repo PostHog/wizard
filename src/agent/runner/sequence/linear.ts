@@ -21,7 +21,7 @@ import { formatYaraAbortMessage } from '@agent/yara-hooks';
 import { installSkillById } from '@agent/tools';
 import { assemblePrompt } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
-import { failed, installFailure } from '../shared/errors';
+import { failed, hostAborted, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
 import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
 import { createEmitSpinner } from '../shared/progress-collector';
@@ -34,7 +34,9 @@ export async function runLinearProgram({
   boot,
   emit,
   interaction,
+  signal,
 }: SequenceContext): Promise<SequenceResult> {
+  if (signal?.aborted) return hostAborted();
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
@@ -50,11 +52,13 @@ export async function runLinearProgram({
       { triage: boot.triageProvider },
     );
     if (installResult.kind !== 'ok') {
+      if (signal?.aborted) return hostAborted();
       return failed(installFailure(run.integrationLabel, installResult));
     }
     skillPath = installResult.path;
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
+  if (signal?.aborted) return hostAborted();
 
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
@@ -73,6 +77,7 @@ export async function runLinearProgram({
         getSource: () => input.skillId ?? run.integrationLabel,
         richLinks: run.richLinks ?? false,
         timeoutMs: run.askTimeoutMs,
+        signal,
       });
 
   const middleware = input.flags.benchmark
@@ -102,6 +107,7 @@ export async function runLinearProgram({
   // bridge, error routing, outro) stays here so every harness shares it.
   const { harness, model, thinkingLevel } = config.binding;
   const agentResult = await getHarness(harness).run({
+    signal,
     config,
     input,
     boot,
@@ -114,6 +120,7 @@ export async function runLinearProgram({
     model,
     thinkingLevel,
   });
+  if (signal?.aborted) return hostAborted();
 
   // 9. Error handling (full set from both harnesses)
   if (agentResult.failure) {
@@ -290,6 +297,7 @@ export async function runLinearProgram({
   if (config.hooks?.postRun) {
     await config.hooks.postRun(credentials);
   }
+  if (signal?.aborted) return hostAborted();
 
   // A composed sub-run leaves the terminal outro to its host.
   if (composed) {
@@ -309,6 +317,7 @@ export async function runLinearProgram({
           : undefined,
       };
   if (outroData) {
+    if (signal?.aborted) return hostAborted();
     emit({ kind: 'completion', outro: outroData });
   }
 

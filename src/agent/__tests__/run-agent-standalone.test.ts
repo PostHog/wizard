@@ -74,8 +74,16 @@ const harnessState = vi.hoisted(() => ({
   seedFailure: undefined as AgentFailure | undefined,
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
   taskCapability: true,
+  waitForAbort: false,
 }));
 vi.mock('@agent/runner/switchboard/harness', () => {
+  const waitForAbort = async (signal: AbortSignal | undefined) => {
+    if (!signal) throw new Error('host signal did not reach active harness');
+    if (signal.aborted) return;
+    await new Promise<void>((resolve) =>
+      signal.addEventListener('abort', () => resolve(), { once: true }),
+    );
+  };
   const askIfRequested = async (inputs: BackendRunInputs | TaskRunInputs) => {
     if (!harnessState.askQuestions || !inputs.askBridge) return;
     const { answers } = await inputs.askBridge.request({
@@ -91,6 +99,10 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     async runTask(inputs: TaskRunInputs) {
       harnessState.tasks.push(inputs);
       const { store, currentTaskId } = inputs.orchestrator;
+      if (currentTaskId && harnessState.waitForAbort) {
+        await waitForAbort(inputs.signal);
+        return {};
+      }
       if (!currentTaskId) {
         if (harnessState.seedFailure)
           return Promise.resolve({ failure: harnessState.seedFailure });
@@ -109,6 +121,10 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     },
     async run(inputs: BackendRunInputs) {
       harnessState.lastInputs = inputs;
+      if (harnessState.waitForAbort) {
+        await waitForAbort(inputs.signal);
+        return {};
+      }
       const { emit, spinner } = inputs;
       emit({ kind: 'log', level: 'step', message: 'Initializing agent' });
       spinner.start('Working');
@@ -264,6 +280,7 @@ beforeEach(() => {
   harnessState.lastInputs = undefined;
   harnessState.askQuestions = undefined;
   harnessState.taskCapability = true;
+  harnessState.waitForAbort = false;
   vi.mocked(analytics.shutdown).mockClear();
   vi.mocked(initLogFile).mockClear();
   vi.mocked(flushScanReport).mockClear();
@@ -272,6 +289,75 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 describe('runAgent standalone', () => {
+  it.each([Sequence.linear, Sequence.orchestrator])(
+    'returns a typed abort before bootstrapping %s',
+    async (sequence) => {
+      const controller = new AbortController();
+      controller.abort();
+      const result = await runAgent(
+        config({
+          binding: {
+            harness: Harness.pi,
+            sequence,
+            model: DEFAULT_AGENT_MODEL,
+          },
+        }),
+        input(),
+        { signal: controller.signal },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
+      expect(harnessState.selected).toEqual([]);
+      expect(harnessState.tasks).toEqual([]);
+      expect(flushScanReport).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([Sequence.linear, Sequence.orchestrator])(
+    'aborts an active %s harness before outro and cleans the queue',
+    async (sequence) => {
+      harnessState.waitForAbort = true;
+      const controller = new AbortController();
+      const postRun = vi.fn();
+      const events: AgentProgress[] = [];
+      const running = runAgent(
+        config({
+          binding: {
+            harness: Harness.pi,
+            sequence,
+            model: DEFAULT_AGENT_MODEL,
+          },
+          hooks: { postRun },
+        }),
+        input(),
+        {
+          signal: controller.signal,
+          onProgress: (event) => events.push(event),
+        },
+      );
+
+      await vi.waitFor(() =>
+        expect(
+          sequence === Sequence.linear
+            ? harnessState.lastInputs
+            : harnessState.tasks.some(
+                (task) => task.orchestrator.currentTaskId,
+              ),
+        ).toBeTruthy(),
+      );
+      controller.abort();
+      const result = await running;
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
+      expect(postRun).not.toHaveBeenCalled();
+      expect(events.some((event) => event.kind === 'completion')).toBe(false);
+      expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
+      expect(flushScanReport).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each([
     [Harness.pi, Sequence.linear],
     [Harness.anthropic, Sequence.linear],

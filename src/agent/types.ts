@@ -12,6 +12,7 @@ export type {
   AgentRunDefinition,
   PromptContext,
   InferenceAuthProvider,
+  RunAgentOptions,
   RunConfig,
   ResolvedBinding,
   RunFlags,

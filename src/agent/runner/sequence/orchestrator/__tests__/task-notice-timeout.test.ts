@@ -60,6 +60,19 @@ const resetMocks = () => {
 describe('task notice timeout', () => {
   beforeEach(resetMocks);
 
+  it('dismisses an unanswered notice when the host cancels the run', async () => {
+    const controller = new AbortController();
+    showTaskNotice.mockReturnValue(new Promise<boolean>(() => undefined));
+    const pending = offerSeededTask(NOTICE, {
+      interaction,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    await expect(pending).resolves.toEqual({ keep: false, timedOut: false });
+    expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+  });
+
   it('waits five minutes before giving up on an answer', () => {
     expect(TASK_NOTICE_TIMEOUT_MS).toBe(5 * 60 * 1000);
   });

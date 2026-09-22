@@ -72,6 +72,7 @@ export const anthropicBackend: AgentHarness = {
       },
       runOptions(input),
     );
+    if (inputs.signal?.aborted) return {};
     log.step(`Verbose logs: ${getLogFilePath()}`);
     log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
@@ -92,6 +93,7 @@ export const anthropicBackend: AgentHarness = {
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
         triageProvider: boot.triageProvider,
+        signal: inputs.signal,
       },
       middleware,
     );
@@ -153,6 +155,7 @@ export const anthropicBackend: AgentHarness = {
       },
       options,
     );
+    if (inputs.signal?.aborted) return {};
 
     return executeAgent(
       { ...agent, model, allowedTools, disallowedTools },
@@ -166,6 +169,7 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
+        signal: inputs.signal,
       },
     );
   },

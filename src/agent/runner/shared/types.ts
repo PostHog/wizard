@@ -322,6 +322,8 @@ export type RunResult = (
 };
 
 export interface RunAgentOptions {
+  /** Cancels this run, including its active harness operation. */
+  signal?: AbortSignal;
   /** Receives every progress event in emission order. Never awaited. */
   onProgress?: (event: import('@agent/progress').AgentProgress) => void;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
@@ -330,6 +332,7 @@ export interface RunAgentOptions {
 
 /** What a sequence receives: the contracts plus the prepared run. */
 export interface SequenceContext {
+  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;

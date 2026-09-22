@@ -44,6 +44,7 @@ import type { ProgressEmitter } from '@agent/progress';
 import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
+import { bindPiCancellation } from './cancellation';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
 function piMcpContext(
@@ -205,6 +206,7 @@ export const piBackend: AgentHarness = {
   name: Harness.pi,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
+    if (inputs.signal?.aborted) return {};
     const { config: runConfig, input, boot, emit, prompt, spinner } = inputs;
     const config = runConfig.run;
     const modelId = inputs.model;
@@ -481,12 +483,20 @@ export const piBackend: AgentHarness = {
       // emit session_start on its own, and the MCP adapter connects on that
       // event; without this its tools report "MCP not initialized".
       await agentSession.bindExtensions({});
+      const cancellation = bindPiCancellation(
+        inputs.signal,
+        agentSession,
+        (error) => {
+          logToFile(`[pi] abort failed: ${String(error)}`);
+        },
+      );
 
       // A turn that ends on a 401 from an aged bearer re-mints once and
       // continues; pi resolves the provider's apiKey per request, so
       // re-registering is enough.
       const turns = withGatewayRemint({
         session: agentSession,
+        signal: inputs.signal,
         registry,
         auth,
         refreshAuth,
@@ -569,6 +579,10 @@ export const piBackend: AgentHarness = {
       capture.setInitialPrompt(prompt);
 
       try {
+        if (inputs.signal?.aborted) {
+          spinner.stop('Run cancelled');
+          return {};
+        }
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await turns.prompt(prompt);
@@ -579,6 +593,7 @@ export const piBackend: AgentHarness = {
         let continueNudges = 0;
         while (
           continueNudges < MAX_CONTINUE_NUDGES &&
+          !inputs.signal?.aborted &&
           !security.state.criticalViolation &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
@@ -590,7 +605,7 @@ export const piBackend: AgentHarness = {
         }
 
         // Best-effort remark ask — a failed turn never fails a successful run.
-        if (!security.state.criticalViolation) {
+        if (!security.state.criticalViolation && !inputs.signal?.aborted) {
           try {
             await agentSession.prompt(REMARK_INSTRUCTION);
           } catch (err) {
@@ -598,8 +613,14 @@ export const piBackend: AgentHarness = {
           }
         }
       } finally {
+        await cancellation.settle();
         unsubscribe();
         mcpCleanup?.();
+      }
+
+      if (inputs.signal?.aborted) {
+        spinner.stop('Run cancelled');
+        return {};
       }
 
       // A latched post-scan violation terminates the run as a YARA violation,
@@ -675,6 +696,10 @@ export const piBackend: AgentHarness = {
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       return {};
     } catch (err) {
+      if (inputs.signal?.aborted) {
+        spinner.stop('Run cancelled');
+        return {};
+      }
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
@@ -690,6 +715,7 @@ export const piBackend: AgentHarness = {
   // task.ts pulls in typebox (ESM), which must stay out of the static module
   // graph so CommonJS unit tests can load the backend seam without parsing it.
   async runTask(inputs: TaskRunInputs): Promise<AgentResult> {
+    if (inputs.signal?.aborted) return {};
     const { runPiTask } = await import('./task');
     return runPiTask(inputs);
   },

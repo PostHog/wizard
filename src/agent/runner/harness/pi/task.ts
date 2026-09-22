@@ -42,6 +42,7 @@ import {
   withGatewayRemint,
 } from './gateway';
 import { runErrorType } from './completion';
+import { bindPiCancellation } from './cancellation';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
@@ -164,6 +165,7 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
 }
 
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
+  if (inputs.signal?.aborted) return {};
   const {
     config,
     input,
@@ -390,11 +392,19 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       customTools,
     });
     await agentSession.bindExtensions({});
+    const cancellation = bindPiCancellation(
+      inputs.signal,
+      agentSession,
+      (error) => {
+        logToFile(`[pi-task] abort failed: ${String(error)}`);
+      },
+    );
 
     // A turn that ends on a 401 from an aged bearer re-mints once and
     // continues with the nudge the task would get anyway.
     const turns = withGatewayRemint({
       session: agentSession,
+      signal: inputs.signal,
       registry,
       auth,
       refreshAuth,
@@ -468,6 +478,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     capture.setInitialPrompt(taskPrompt);
 
     try {
+      if (inputs.signal?.aborted) {
+        if (spinnerMessage) spinner.stop('Run cancelled');
+        return {};
+      }
       await turns.prompt(taskPrompt);
 
       // pi's prompt() resolves the moment a turn carries no tool call — which
@@ -476,6 +490,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       let nudges = 0;
       while (
         nudges < MAX_TASK_NUDGES &&
+        !inputs.signal?.aborted &&
         !security.state.criticalViolation &&
         !isSettled(orchestrator)
       ) {
@@ -488,7 +503,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         );
       }
 
-      if (requestRemark && !security.state.criticalViolation) {
+      if (
+        requestRemark &&
+        !security.state.criticalViolation &&
+        !inputs.signal?.aborted
+      ) {
         try {
           await agentSession.prompt(REMARK_INSTRUCTION);
         } catch (err) {
@@ -496,8 +515,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         }
       }
     } finally {
+      await cancellation.settle();
       unsubscribe();
       mcpCleanup?.();
+    }
+
+    if (inputs.signal?.aborted) {
+      if (spinnerMessage) spinner.stop('Run cancelled');
+      return {};
     }
 
     if (security.state.criticalViolation) {
@@ -539,6 +564,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     if (successMessage) spinner.stop(successMessage);
     return {};
   } catch (err) {
+    if (inputs.signal?.aborted) {
+      if (spinnerMessage) spinner.stop('Run cancelled');
+      return {};
+    }
     const message = err instanceof Error ? err.message : String(err);
     logToFile(`[pi-task] run error: ${message}`);
     if (errorMessage || spinnerMessage) {

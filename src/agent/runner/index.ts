@@ -38,6 +38,7 @@ import { createProgressCollector } from './shared/progress-collector';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { hostAborted } from './shared/errors';
 
 export type {
   AbortCase,
@@ -99,7 +100,21 @@ export async function runAgent(
   try {
     // Capture before preparation so pre-harness failures also clean new skills.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
+    if (options.signal?.aborted) {
+      return {
+        ...hostAborted(),
+        skillId: input.skillId,
+        snapshot: collector.snapshot(),
+      };
+    }
     const boot = await prepareRun(config, input);
+    if (options.signal?.aborted) {
+      return {
+        ...hostAborted(),
+        skillId: input.skillId,
+        snapshot: collector.snapshot(),
+      };
+    }
     if (config.binding.sequence === Sequence.orchestrator) {
       log('Task-queue orchestrator enabled.');
     }
@@ -113,14 +128,22 @@ export async function runAgent(
       boot,
       emit,
       interaction: options.interaction,
+      signal: options.signal,
     });
     if (result.outcome !== RunOutcome.Success) cleanFailedRun();
     return {
-      ...result,
+      ...(options.signal?.aborted ? hostAborted() : result),
       skillId: input.skillId,
       snapshot: collector.snapshot(),
     };
   } catch (error) {
+    if (options.signal?.aborted) {
+      return {
+        ...hostAborted(),
+        skillId: input.skillId,
+        snapshot: collector.snapshot(),
+      };
+    }
     // Not a decision the agent made. Hand it back whole rather than throw, so
     // every ending of a run is a result the caller reads the same way.
     const failure = classifyRunFailure(error);

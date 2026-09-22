@@ -119,6 +119,39 @@ describe('runAgent', () => {
   });
 
   describe('race condition handling', () => {
+    it('aborts the active SDK query when the host cancels', async () => {
+      const host = new AbortController();
+      let sdkAbort: AbortSignal | undefined;
+      mockQuery.mockImplementation(
+        ({ options }: { options: { abortController: AbortController } }) => {
+          sdkAbort = options.abortController.signal;
+          return (async function* () {
+            yield* [];
+            await new Promise<void>((resolve) =>
+              sdkAbort?.addEventListener('abort', () => resolve(), {
+                once: true,
+              }),
+            );
+            throw new Error('SDK aborted');
+          })();
+        },
+      );
+
+      const running = runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        { signal: host.signal },
+      );
+      await vi.waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1));
+      host.abort();
+
+      expect(await running).toEqual({});
+      expect(sdkAbort?.aborted).toBe(true);
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Run cancelled');
+    });
+
     it('should return success when agent completes successfully then SDK cleanup fails', async () => {
       // This simulates the race condition:
       // 1. Agent completes with success result

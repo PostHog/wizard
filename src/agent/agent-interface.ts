@@ -757,6 +757,8 @@ export async function runAgent(
      * aborted` events (e.g. the orchestrator's task type and id).
      */
     analyticsProperties?: Record<string, unknown>;
+    /** Host cancellation; aborts the active SDK query and unblocks its prompt stream. */
+    signal?: AbortSignal;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -896,6 +898,14 @@ export async function runAgent(
   // [ABORT] signal in the agent's output. Also stashes the reason so the
   // runner can surface it via outroData after we unwind.
   let abortController = new AbortController();
+  let hostAborted = false;
+  const onHostAbort = () => {
+    hostAborted = true;
+    abortController.abort();
+    signalDone();
+  };
+  config?.signal?.addEventListener('abort', onHostAbort, { once: true });
+  if (config?.signal?.aborted) onHostAbort();
   let abortReason: string | null = null;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
@@ -909,9 +919,8 @@ export async function runAgent(
   // A 401 on a fresh bearer: the auth screen was reported, and this is the
   // failure the caller ends the run with. The query is aborted to unwind.
   let authFailure: AgentFailure | undefined;
-  const agentConfigDir = createIsolatedAgentConfigDir();
-
   try {
+    const agentConfigDir = createIsolatedAgentConfigDir();
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
@@ -1368,7 +1377,12 @@ export async function runAgent(
     };
 
     const refreshGatewayAuth = agentConfig.refreshGatewayAuth;
-    if ((await runQuery()) === 'remint' && refreshGatewayAuth) {
+    const queryResult = hostAborted ? 'done' : await runQuery();
+    if (hostAborted) {
+      spinner.stop('Run cancelled');
+      return {};
+    }
+    if (queryResult === 'remint' && refreshGatewayAuth) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
       reminted = true;
@@ -1379,6 +1393,10 @@ export async function runAgent(
       const stale = agentConfig.gatewayAuth;
       // A refusal or failure here ends the run with its own message.
       agentConfig.gatewayAuth = await refreshGatewayAuth();
+      if (hostAborted) {
+        spinner.stop('Run cancelled');
+        return {};
+      }
       logToFile(
         `Gateway token renewed after a 401 (${Math.round(
           (Date.now() - stale.refreshAtMs) / 1000,
@@ -1391,6 +1409,11 @@ export async function runAgent(
       });
       spinner.message(spinnerMessage);
       await runQuery(sessionId);
+    }
+
+    if (hostAborted) {
+      spinner.stop('Run cancelled');
+      return {};
     }
 
     // A fresh bearer was rejected. The auth screen is already up; hand the
@@ -1456,6 +1479,10 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone();
+    if (hostAborted) {
+      spinner.stop('Run cancelled');
+      return {};
+    }
 
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
@@ -1508,6 +1535,7 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
+    config?.signal?.removeEventListener('abort', onHostAbort);
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion. A 401 never reached
     // this block before (the process exited first), so it still does not count.
