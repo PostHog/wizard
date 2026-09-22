@@ -1,4 +1,6 @@
 import type { AgentProgress, RunResult } from '../agent/types.js';
+import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
+import type { Integration } from '../shared/constants.js';
 import { appendStatus } from '../shared/status-history.js';
 
 export type ProgramProgress = {
@@ -28,6 +30,38 @@ export type ProgramStoreProjection = {
     eventKind: AgentProgress['kind'];
     message: string;
   }[];
+};
+
+/** Data owned by one program invocation, independent of its progress feed. */
+export type ProgramInvocationData = {
+  credentials: Credentials | null;
+  apiProject: ApiProject | null;
+  apiUser: ApiUser | null;
+  detection: {
+    integration: Integration | null;
+    typescript: boolean;
+    detectedFrameworkLabel: string | null;
+    complete: boolean;
+    frameworkContext: Record<string, unknown>;
+  };
+  composition: {
+    parentProgramId: string | null;
+    completedRuns: string[];
+  };
+};
+
+export type ProgramInvocationDataInit = Partial<
+  Pick<ProgramInvocationData, 'credentials' | 'apiProject' | 'apiUser'>
+> & {
+  detection?: Partial<ProgramInvocationData['detection']>;
+  composition?: Partial<ProgramInvocationData['composition']>;
+};
+
+/** An actual result accepted by finish(), in completion order. */
+export type SettledProgramRun = {
+  runId: string;
+  stepId?: string;
+  result: RunResult;
 };
 
 export type AgentProgressAdapter = {
@@ -134,7 +168,77 @@ function applyAgentProgress(run: RunEntry, event: AgentProgress): void {
 
 export class ProgramStore {
   private readonly runs: RunEntry[] = [];
+  private readonly settled: SettledProgramRun[] = [];
   private readonly diagnostics: ProgramStoreProjection['diagnostics'] = [];
+  private readonly data: ProgramInvocationData;
+
+  constructor(initial: ProgramInvocationDataInit = {}) {
+    this.data = structuredClone({
+      credentials: initial.credentials ?? null,
+      apiProject: initial.apiProject ?? null,
+      apiUser: initial.apiUser ?? null,
+      detection: {
+        integration: initial.detection?.integration ?? null,
+        typescript: initial.detection?.typescript ?? false,
+        detectedFrameworkLabel:
+          initial.detection?.detectedFrameworkLabel ?? null,
+        complete: initial.detection?.complete ?? false,
+        frameworkContext: initial.detection?.frameworkContext ?? {},
+      },
+      composition: {
+        parentProgramId: initial.composition?.parentProgramId ?? null,
+        completedRuns: initial.composition?.completedRuns ?? [],
+      },
+    });
+  }
+
+  readData(): ProgramInvocationData {
+    return structuredClone(this.data);
+  }
+
+  setAuthenticated(
+    auth: Pick<ProgramInvocationData, 'credentials' | 'apiProject' | 'apiUser'>,
+  ): void {
+    Object.assign(this.data, structuredClone(auth));
+  }
+
+  setDetection(
+    patch: Partial<
+      Omit<ProgramInvocationData['detection'], 'frameworkContext'>
+    >,
+  ): void {
+    if (patch.integration !== undefined) {
+      this.data.detection.integration = patch.integration;
+    }
+    if (patch.typescript !== undefined) {
+      this.data.detection.typescript = patch.typescript;
+    }
+    if (patch.detectedFrameworkLabel !== undefined) {
+      this.data.detection.detectedFrameworkLabel = patch.detectedFrameworkLabel;
+    }
+    if (patch.complete !== undefined) {
+      this.data.detection.complete = patch.complete;
+    }
+  }
+
+  setFrameworkContext(key: string, value: unknown): void {
+    this.data.detection.frameworkContext[key] = structuredClone(value);
+  }
+
+  setComposition(patch: Partial<ProgramInvocationData['composition']>): void {
+    if (patch.parentProgramId !== undefined) {
+      this.data.composition.parentProgramId = patch.parentProgramId;
+    }
+    if (patch.completedRuns !== undefined) {
+      this.data.composition.completedRuns = [...patch.completedRuns];
+    }
+  }
+
+  markProgramCompleted(programId: string): void {
+    if (!this.data.composition.completedRuns.includes(programId)) {
+      this.data.composition.completedRuns.push(programId);
+    }
+  }
 
   beginRun(
     identity: { runId: string; stepId?: string },
@@ -187,8 +291,21 @@ export class ProgramStore {
             : ownedResult.failure.outroData;
         if (finalOutro) run.outro = structuredClone(finalOutro);
         run.state = { phase: 'finished', result: ownedResult };
+        this.settled.push({
+          runId: run.runId,
+          stepId: run.stepId,
+          result: ownedResult,
+        });
       },
     };
+  }
+
+  settledRuns(): SettledProgramRun[] {
+    return this.settled.map((run) => ({
+      runId: run.runId,
+      stepId: run.stepId,
+      result: cloneRunResult(run.result),
+    }));
   }
 
   read(): ProgramStoreProjection {

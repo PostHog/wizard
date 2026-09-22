@@ -1,5 +1,8 @@
 import { RunOutcome } from '@agent';
+import { OutroKind } from '@agent/progress';
 import type { RunResult } from '@agent/types';
+import type { ApiProject, ApiUser, Credentials } from '@shared/api';
+import { Integration } from '@shared/constants';
 import { ProgramStore, type ProgramProgress } from '../program-store';
 
 function success(snapshot: RunResult['snapshot'], skillId?: string): RunResult {
@@ -241,4 +244,167 @@ it('keeps crash errors detached without losing their type or metadata', () => {
   expect((reread.failure.error as GatewayFailure).code).toBe(
     'gateway_unavailable',
   );
+});
+
+it('owns authentication, detection, and composition data independently of progress', () => {
+  const store = new ProgramStore();
+  expect(store.readData()).toEqual({
+    credentials: null,
+    apiProject: null,
+    apiUser: null,
+    detection: {
+      integration: null,
+      typescript: false,
+      detectedFrameworkLabel: null,
+      complete: false,
+      frameworkContext: {},
+    },
+    composition: { parentProgramId: null, completedRuns: [] },
+  });
+
+  const credentials = {
+    accessToken: 'test-access-token',
+    projectApiKey: 'test-project-key',
+    projectId: 42,
+    host: { region: 'us', apiHost: 'https://example.test' },
+  } as Credentials;
+  const apiProject = {
+    id: 42,
+    name: 'Example project',
+  } as ApiProject;
+  const apiUser = { distinct_id: 'test-user' } as ApiUser;
+  const frameworkValue = { paths: ['apps/web'] };
+  const completedRuns = ['integrate-run'];
+
+  store.setAuthenticated({ credentials, apiProject, apiUser });
+  store.setDetection({
+    integration: Integration.nextjs,
+    typescript: true,
+    detectedFrameworkLabel: 'Next.js app',
+    complete: true,
+  });
+  store.setDetection({ detectedFrameworkLabel: undefined });
+  store.setFrameworkContext('selectedProject', frameworkValue);
+  store.setComposition({ parentProgramId: 'self-driving', completedRuns });
+  store.markProgramCompleted('follow-up');
+  store.markProgramCompleted('follow-up');
+
+  credentials.accessToken = 'changed input';
+  apiProject.name = 'Changed input';
+  apiUser.distinct_id = 'changed input';
+  frameworkValue.paths.push('changed input');
+  completedRuns.push('changed input');
+
+  expect(store.readData()).toMatchObject({
+    credentials: { accessToken: 'test-access-token' },
+    apiProject: { name: 'Example project' },
+    apiUser: { distinct_id: 'test-user' },
+    detection: {
+      integration: Integration.nextjs,
+      typescript: true,
+      detectedFrameworkLabel: 'Next.js app',
+      complete: true,
+      frameworkContext: { selectedProject: { paths: ['apps/web'] } },
+    },
+    composition: {
+      parentProgramId: 'self-driving',
+      completedRuns: ['integrate-run', 'follow-up'],
+    },
+  });
+
+  const copy = store.readData();
+  if (!copy.credentials) throw new Error('Expected credentials');
+  copy.credentials.accessToken = 'changed output';
+  (
+    copy.detection.frameworkContext.selectedProject as { paths: string[] }
+  ).paths.push('changed output');
+  copy.composition.completedRuns.push('changed output');
+  expect(store.readData().credentials?.accessToken).toBe('test-access-token');
+  expect(store.readData().detection.frameworkContext.selectedProject).toEqual({
+    paths: ['apps/web'],
+  });
+  expect(store.readData().composition.completedRuns).toEqual([
+    'integrate-run',
+    'follow-up',
+  ]);
+  store.setAuthenticated({
+    credentials: { ...credentials, accessToken: 'refreshed-test-token' },
+    apiProject,
+    apiUser,
+  });
+  expect(store.readData().credentials?.accessToken).toBe(
+    'refreshed-test-token',
+  );
+  expect(store.read()).toEqual({ runs: [], diagnostics: [] });
+});
+
+it('copies invocation data supplied when the store is created', () => {
+  const frameworkContext = { selectedProject: { paths: ['apps/web'] } };
+  const completedRuns = ['integrate-run'];
+  const store = new ProgramStore({
+    detection: { frameworkContext, integration: Integration.nextjs },
+    composition: { completedRuns },
+  });
+
+  frameworkContext.selectedProject.paths.push('changed input');
+  completedRuns.push('changed input');
+  expect(store.readData().detection.frameworkContext).toEqual({
+    selectedProject: { paths: ['apps/web'] },
+  });
+  expect(store.readData().composition.completedRuns).toEqual(['integrate-run']);
+});
+
+it('records only settled agent results in finish order, separate from progress', () => {
+  const store = new ProgramStore();
+  const first = store.beginRun({ runId: 'first', stepId: 'integrate' });
+  const second = store.beginRun({ runId: 'second' });
+  first.onProgress({
+    kind: 'completion',
+    outro: { kind: OutroKind.Success, message: 'Projected completion' },
+  });
+
+  expect(store.read().runs[0]).toMatchObject({
+    runId: 'first',
+    phase: 'pending',
+    outro: { message: 'Projected completion' },
+  });
+  expect(store.settledRuns()).toEqual([]);
+
+  const secondResult = success({
+    tasks: [],
+    statusMessages: ['Second finished'],
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    },
+  });
+  const firstResult = success({
+    tasks: [],
+    statusMessages: ['First finished'],
+    usage: {
+      inputTokens: 1,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    },
+  });
+  second.finish(secondResult);
+  first.finish(firstResult);
+
+  expect(store.settledRuns()).toEqual([
+    { runId: 'second', stepId: undefined, result: secondResult },
+    { runId: 'first', stepId: 'integrate', result: firstResult },
+  ]);
+  expect(store.results()).toEqual([firstResult, secondResult]);
+
+  secondResult.snapshot.statusMessages.push('changed input');
+  const ledgerCopy = store.settledRuns();
+  ledgerCopy[0].result.snapshot.statusMessages.push('changed output');
+  expect(store.settledRuns()[0].result.snapshot.statusMessages).toEqual([
+    'Second finished',
+  ]);
+  expect(() => first.finish(firstResult)).toThrow('already finished');
+  expect(store.settledRuns()).toHaveLength(2);
 });
