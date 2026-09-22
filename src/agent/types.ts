@@ -9,7 +9,7 @@
  * (AgentProgress, AgentInteraction and their payload shapes) are final.
  * ProgramBinding and SwitchboardCtx leave in B1 with the bindings table.
  * AgentChunk leaves in C2 with runMcpPromptViaSdk. InstallSkillResult
- * leaves in A4 with downloadSkill.
+ * leaves with downloadSkill in Release B.
  */
 export type {
   AbortCase,

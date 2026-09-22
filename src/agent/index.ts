@@ -28,7 +28,8 @@
  *                                  CI inference auth; headless provider owns it
  *   flushScanReport                the report becomes a progress event, not a call
  *
- * Leaves in A4 (scan at load; skill install becomes shared):
+ * Leaves with Release B, when the skill scan moves to load time and skill
+ * install becomes shared:
  *   downloadSkill
  *
  * Leaves in C2 (the TUI receives agent data through program state):
