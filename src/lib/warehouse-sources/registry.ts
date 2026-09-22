@@ -31,6 +31,10 @@ const CORE_SOURCE_DETECTORS: SourceDetector[] = [
         /^PG(HOST|DATABASE|USER|PORT)$/,
       ],
     },
+    // Neon and Supabase are hosted Postgres, and a project on either still
+    // names its connection with the generic signals above. Two sources over
+    // one database import the same tables twice.
+    supersededBy: ['Neon', 'Supabase'],
   },
   {
     kind: 'MySQL',

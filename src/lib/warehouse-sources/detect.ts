@@ -52,7 +52,8 @@ function addCapped(set: Set<string>, value: string): void {
 /**
  * Detect which warehouse sources the project at `installDir` appears to use.
  * Returns one `DetectedSource` per matched registry entry (kinds are unique,
- * so the result is naturally deduped).
+ * so the result is naturally deduped), minus the entries a more specific
+ * match supersedes.
  */
 export function detectWarehouseSources(installDir: string): DetectedSource[] {
   // No directory guard here: walkProjectFiles is best-effort and yields no
@@ -60,19 +61,34 @@ export function detectWarehouseSources(installDir: string): DetectedSource[] {
   // step is responsible for surfacing a structured `bad-directory` error.
   const signals = collectSignals(installDir);
 
-  const detected: DetectedSource[] = [];
+  const matched: { detector: SourceDetector; signal: string }[] = [];
   for (const detector of SOURCE_DETECTORS) {
-    const match = matchDetector(detector, signals);
-    if (match) {
-      detected.push({
-        kind: detector.kind,
-        label: detector.label,
-        mode: detector.mode,
-        matchedSignal: match,
-      });
-    }
+    const signal = matchDetector(detector, signals);
+    if (signal) matched.push({ detector, signal });
   }
-  return detected;
+
+  const kinds = new Set(matched.map((m) => m.detector.kind));
+  return matched
+    .filter(({ detector }) => !isSuperseded(detector, kinds))
+    .map(({ detector, signal }) => ({
+      kind: detector.kind,
+      label: detector.label,
+      mode: detector.mode,
+      matchedSignal: signal,
+    }));
+}
+
+/**
+ * Whether a more specific match covers this detector's data. Every consumer
+ * treats a detected kind as a source to create, so a project whose Postgres
+ * lives on Neon or Supabase would otherwise be offered both and end up with
+ * the same tables imported twice.
+ */
+function isSuperseded(
+  detector: SourceDetector,
+  detectedKinds: ReadonlySet<string>,
+): boolean {
+  return (detector.supersededBy ?? []).some((kind) => detectedKinds.has(kind));
 }
 
 /** Returns a human-readable description of the first matching signal, or null. */
