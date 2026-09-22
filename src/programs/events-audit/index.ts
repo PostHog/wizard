@@ -2,9 +2,9 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
-import { SPINNER_MESSAGE } from '@programs/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { WIZARD_TOOL_NAMES } from '@agent';
+import { resolveEventsAuditRunDefinition } from '@programs/resolve-run-definition';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { seedAuditLedger } from '@programs/audit/seed';
@@ -16,8 +16,6 @@ import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 // them directly from `./constants` — no re-export needed.
 import { SETUP_REPORT_FILE } from './constants.js';
 export { SETUP_REPORT_FILE };
-
-const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
 /**
  * No CLI word of its own since the audit family took over: `wizard audit
@@ -54,28 +52,12 @@ export const eventsAuditConfig: ProgramConfig = {
     seedAuditLedger(session.installDir, EVENTS_AUDIT_SEED_CHECKS);
     session.frameworkContext[AUDIT_CHECKS_KEY] = EVENTS_AUDIT_SEED_CHECKS;
 
-    return Promise.resolve({
-      skillId: 'events-audit',
-      integrationLabel: 'events-audit',
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage:
-        'Events audit complete! You can view the report at ./posthog-events-audit-report.md',
-      estimatedDurationMinutes: 5,
-      reportFile: SETUP_REPORT_FILE,
-      docsUrl: DOCS_URL,
-      errorMessage: 'Events audit failed',
+    const run = resolveEventsAuditRunDefinition({
+      typescript: typeScriptDetected,
       additionalFeatureQueue: session.additionalFeatureQueue,
-
-      customPrompt: (ctx) =>
-        `Audit PostHog event capture in this project. Do not modify any project files — produce a read-only report only.
-
-Project context:
-- PostHog Project ID: ${ctx.projectId}
-- TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
-- PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host.apiHost}
-`,
-
+    });
+    return Promise.resolve({
+      ...run,
       buildOutroData: (sess, credentials) => {
         const cloudUrl = credentials.host.appHost;
         const continueUrl = sess.signup
@@ -97,7 +79,7 @@ Project context:
           message: 'Your events audit was successful',
           reportFile: SETUP_REPORT_FILE,
           changes: [],
-          docsUrl: DOCS_URL,
+          docsUrl: run.docsUrl,
           continueUrl,
           dashboardUrl,
           notebookUrl,
