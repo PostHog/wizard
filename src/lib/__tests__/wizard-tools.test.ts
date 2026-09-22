@@ -3,6 +3,8 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
+import { scan } from '@posthog/warlock';
+import { analytics } from '@utils/analytics';
 import {
   ASK_BATCH_THRESHOLD,
   ASK_CANCELLED_NOTE,
@@ -1394,6 +1396,43 @@ describe('downloadSkill (e2e over HTTP)', () => {
       expect(hits).toBe(2); // one 503, then the successful retry
       expect(fs.existsSync(skillFile())).toBe(true);
     } finally {
+      await server.close();
+    }
+  });
+
+  // The engine is WASM and has failed to instantiate in the field. Reported as
+  // `extract` it reads as a corrupt archive, which the pure-JS unzip cannot
+  // produce, and the run is told to check directory permissions instead.
+  it('reports a scanner engine failure as the scan step, not extract', async () => {
+    const zip = dummyZip();
+    const server = await startServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/zip' });
+      res.end(Buffer.from(zip));
+    });
+    const captured = vi.spyOn(analytics, 'wizardCapture').mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      () => {},
+    );
+    vi.mocked(scan).mockRejectedValueOnce(new Error('WebAssembly.Module()'));
+
+    try {
+      const result = await downloadSkill(
+        {
+          id: 'dummy',
+          name: 'Dummy',
+          downloadUrl: `${server.baseUrl}/skill.zip`,
+        },
+        tmpDir,
+        { triage: undefined },
+      );
+
+      expect(result.success).toBe(false);
+      expect(captured).toHaveBeenCalledWith(
+        'skill install failed',
+        expect.objectContaining({ step: 'scan', skill_id: 'dummy' }),
+      );
+    } finally {
+      captured.mockRestore();
       await server.close();
     }
   });
