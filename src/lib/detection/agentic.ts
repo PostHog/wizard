@@ -19,10 +19,13 @@ import {
   buildRunTags,
   AgentSignals,
 } from '@lib/agent/agent-interface';
-import { isAbsolute, resolve, sep } from 'path';
+import { isAbsolute, join, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import { analytics } from '@utils/analytics';
+import { boundedGlobResult, readProjectFile } from '@utils/bounded-fs';
+import { logToFile } from '@utils/debug';
+import { POSTHOG_PACKAGE_RE } from './posthog-dependency.js';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -106,6 +109,103 @@ export function manifestGlob(): string {
   return `**/{${PROJECT_MANIFESTS.join(',')}}`;
 }
 
+/** Depth the fallback scan stops at when the full crawl outruns its deadline. */
+export const MANIFEST_FALLBACK_DEPTH = 4;
+
+/** Manifest paths the prompt carries. Shallowest first, so roots survive the cut. */
+export const MAX_MANIFESTS_IN_PROMPT = 200;
+
+/** The manifest prescan: what it found, and which bound stopped it. */
+export type ManifestScan = {
+  /** Manifest paths relative to the working directory, shallowest first. */
+  paths: string[];
+  /** The crawl returned the match cap, so deeper manifests may be missing. */
+  truncated: boolean;
+  /** The full crawl outran its deadline; `paths` include the depth-bounded scan. */
+  timedOut: boolean;
+  durationMs: number;
+};
+
+/** Directory depth of a repo-relative path — the prescan's sort key. */
+function pathDepth(rel: string): number {
+  return rel.split('/').length;
+}
+
+/**
+ * Find every project manifest with a bounded glob, on the wizard side.
+ *
+ * The agent used to run this glob itself and drop the ignored directories
+ * from the results, which is filtering after the walk has already paid for
+ * them: a tree holding hundreds of worktrees or dependency dirs timed the
+ * tool out. `boundedGlobResult` applies PROJECT_IGNORE_GLOBS during the
+ * crawl and caps both matches and wall time, and a crawl that still runs out
+ * of time is retried depth-bounded so a wide repo returns its roots.
+ */
+export async function scanProjectManifests(cwd: string): Promise<ManifestScan> {
+  const full = await boundedGlobResult(manifestGlob(), { cwd });
+  const paths = new Set(full.matches);
+  let durationMs = full.durationMs;
+  let truncated = full.truncated;
+  if (full.timedOut) {
+    const shallow = await boundedGlobResult(manifestGlob(), {
+      cwd,
+      deep: MANIFEST_FALLBACK_DEPTH,
+    });
+    for (const match of shallow.matches) paths.add(match);
+    durationMs += shallow.durationMs;
+    truncated ||= shallow.truncated;
+  }
+  return {
+    paths: [...paths].sort(
+      (a, b) => pathDepth(a) - pathDepth(b) || (a < b ? -1 : 1),
+    ),
+    truncated,
+    timedOut: full.timedOut,
+    durationMs,
+  };
+}
+
+/** The project directory a manifest belongs to. */
+function manifestProjectDir(rel: string): string {
+  const segments = rel.split('/');
+  segments.pop();
+  const last = segments[segments.length - 1];
+  // A .pbxproj lives in a `<Name>.xcodeproj/` wrapper; a version catalog in a
+  // `gradle/` directory. Both belong to the parent project.
+  if (last?.endsWith('.xcodeproj') || last === 'gradle') segments.pop();
+  return segments.length === 0 ? '.' : segments.join('/');
+}
+
+/**
+ * A report built from the manifest prescan alone, with no agent verdicts.
+ * Used when the agent returns nothing parseable: the run keeps the project
+ * roots it already found, rather than ending in a thrown error. Frameworks
+ * stay unknown and no project matches a target — the caller degrades to its
+ * "nothing to instrument" path instead of a stack trace.
+ */
+export function manifestFallbackReport(
+  cwd: string,
+  manifestPaths: readonly string[],
+): AgenticDetectionReport {
+  const hasPostHog = new Map<string, boolean>();
+  for (const rel of manifestPaths) {
+    const dir = manifestProjectDir(rel);
+    const contents = readProjectFile(join(cwd, rel));
+    const found = contents !== null && POSTHOG_PACKAGE_RE.test(contents);
+    hasPostHog.set(dir, (hasPostHog.get(dir) ?? false) || found);
+  }
+  const projects: AgenticProject[] = [...hasPostHog].map(([path, posthog]) => ({
+    path,
+    framework: 'Unknown',
+    targetId: null,
+    hasPostHog: posthog,
+  }));
+  return {
+    repoType: projects.length > 1 ? 'monorepo' : 'single',
+    projects,
+  };
+}
+
 export type AgenticDetectOptions = {
   /**
    * Categories to classify each project into. Order matters: list targets by
@@ -137,6 +237,7 @@ function buildPrompt(
   targets: readonly DetectTarget[],
   purpose: string,
   recommend: boolean,
+  manifestPaths: readonly string[],
 ): string {
   const targetList = targets.map((t) => `- ${t.id} → ${t.name}`).join('\n');
   // matchingTargets precedes targetId: the model enumerates before it picks.
@@ -151,7 +252,11 @@ function buildPrompt(
     'A "project" is a directory containing one or more of the manifest files below. Find projects by their manifests, NOT by walking directories — never report a directory that has no manifest.',
     '',
     'Do exactly this:',
-    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, site-packages/, target/, Pods/, Carthage/, or DerivedData/. Group the remaining results by directory — each directory is one project. Three exceptions to "directory = project": a project.pbxproj lives inside a "<Name>.xcodeproj/" wrapper, so the project root is the PARENT of that .xcodeproj directory; a project.yml at a directory root is an XcodeGen-generated Xcode app rooted at that directory; a gradle/libs.versions.toml is a version catalog belonging to the gradle project rooted at the PARENT of that gradle/ directory (read it alongside the build.gradle when deciding hasPostHog), never its own project.`,
+    `1. These are every project manifest in the repo, already found for you and already filtered of dependency, build and worktree directories — do NOT search for more, and do not run any Glob:\n${manifestPaths
+      .map((rel) => `- ${rel}`)
+      .join(
+        '\n',
+      )}\nGroup them by directory — each directory is one project. Three exceptions to "directory = project": a project.pbxproj lives inside a "<Name>.xcodeproj/" wrapper, so the project root is the PARENT of that .xcodeproj directory; a project.yml at a directory root is an XcodeGen-generated Xcode app rooted at that directory; a gradle/libs.versions.toml is a version catalog belonging to the gradle project rooted at the PARENT of that gradle/ directory (read it alongside the build.gradle when deciding hasPostHog), never its own project.`,
     '2. Decide repoType: "monorepo" if the root package.json has a "workspaces" field OR a pnpm-workspace.yaml / turbo.json / nx.json / lerna.json was found at the root, else "single".',
     `3. For EACH project directory, ONE AT A TIME: Read its manifest(s) ONCE, decide the fields below, then IMMEDIATELY — before reading any other project — write that project's verdict as one JSON line of shape ${projectShape}. Never write a verdict from memory of an earlier Read; the manifest you just read is the only source. Decide from its dependency lists:`,
     '   - the human-readable framework name (e.g. "Next.js", "Django", "Rails"),',
@@ -180,7 +285,7 @@ function buildPrompt(
           '- Exactly one project has "recommended": true; every other project has "recommended": false.',
         ]
       : []),
-    `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
+    `- If none of the listed manifests is readable, respond with exactly: ${AgentSignals.ABORT} detection failed`,
   ].join('\n');
 }
 
@@ -346,6 +451,24 @@ export async function detectProjectsWithAgent(
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
+  // Bounded, wizard-side, and before the agent is initialized: a repo with no
+  // manifest ends here rather than minting a gateway run to discover that.
+  const scan = await scanProjectManifests(cwd);
+  const manifestPaths = scan.paths.slice(0, MAX_MANIFESTS_IN_PROMPT);
+  analytics.wizardCapture('detection manifest scan', {
+    program_id: programId,
+    duration_ms: scan.durationMs,
+    manifest_count: scan.paths.length,
+    truncated: scan.truncated,
+    timed_out: scan.timedOut,
+  });
+  logToFile(
+    `[agentic detect] ${scan.paths.length} manifests in ${scan.durationMs}ms (truncated=${scan.truncated} timedOut=${scan.timedOut})`,
+  );
+  if (manifestPaths.length === 0) {
+    return { repoType: 'single', projects: [] };
+  }
+
   // Built here rather than inherited: this scan runs before
   // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
   const wizardMetadata = {
@@ -369,7 +492,9 @@ export async function detectProjectsWithAgent(
       programId,
       integrationLabel: 'agentic-detect',
       wizardMetadata,
-      allowedTools: ['Read', 'Grep', 'Glob'],
+      // No Glob: the manifest list is in the prompt, and a repo-wide glob is
+      // exactly the unbounded walk this scan must not pay for.
+      allowedTools: ['Read', 'Grep'],
       modelOverride: HAIKU_MODEL,
     },
     runOptions,
@@ -416,7 +541,7 @@ export async function detectProjectsWithAgent(
 
   const result = await executeAgent(
     agent,
-    buildPrompt(cwd, targets, purpose, recommend),
+    buildPrompt(cwd, targets, purpose, recommend, manifestPaths),
     runOptions,
     NOOP_SPINNER,
     {
@@ -444,7 +569,15 @@ export async function detectProjectsWithAgent(
     if (output.includes(AgentSignals.ABORT)) {
       return { repoType: 'single', projects: [] };
     }
-    throw new Error('Agent did not return a JSON object');
+    // The manifests are already in hand, so the run reports those project
+    // roots instead of throwing. A retry would mint another gateway run
+    // against the account's limit for the same unparseable answer.
+    analytics.wizardCapture('detection fallback', {
+      program_id: programId,
+      reason: 'unparseable-agent-output',
+      manifest_count: scan.paths.length,
+    });
+    return manifestFallbackReport(cwd, manifestPaths);
   }
   return coerceAgenticReport(
     derived,

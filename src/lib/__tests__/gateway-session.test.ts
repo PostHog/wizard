@@ -321,7 +321,7 @@ describe('gatewayAuth', () => {
   });
 
   it.each([
-    [429, 'daily run limit'],
+    [429, 'weekly run limit'],
     [400, 'exactly one project'],
     [403, 'access to this project'],
   ])('refuses the run on HTTP %i', async (status, fragment) => {

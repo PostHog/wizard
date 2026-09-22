@@ -92,6 +92,9 @@ export const IGNORED_DIRS = new Set<string>([
   'site-packages',
   'DerivedData',
   'Pods',
+  // Git worktree checkouts: each one is a full copy of the repo, so a tree
+  // holding hundreds of them multiplies every scan by that many repos.
+  'worktrees',
 ]);
 
 /** IGNORED_DIRS as fast-glob ignore patterns. */
@@ -126,15 +129,28 @@ export interface BoundedGlobOptions {
   deep?: number;
 }
 
+/** A glob's matches plus why the crawl stopped. */
+export interface BoundedGlobResult {
+  /** Paths relative to `cwd`, possibly incomplete. */
+  matches: string[];
+  /** The crawl hit `limit`: the tree holds more matches than these. */
+  truncated: boolean;
+  /** The crawl hit GLOB_DEADLINE_MS and was destroyed. */
+  timedOut: boolean;
+  durationMs: number;
+}
+
 /**
  * Streams matches, stops at `limit`, destroys the crawl at GLOB_DEADLINE_MS.
- * Returns paths relative to `cwd`, possibly truncated.
+ * Reports which of those bounds ended the crawl, so a caller can widen,
+ * narrow, or fall back instead of trusting a partial result.
  */
-export async function boundedGlob(
+export async function boundedGlobResult(
   patterns: string | string[],
   options: BoundedGlobOptions,
-): Promise<string[]> {
+): Promise<BoundedGlobResult> {
   const limit = options.limit ?? MAX_GLOB_MATCHES;
+  const startedAt = Date.now();
   const stream = fg.stream(patterns, {
     cwd: options.cwd,
     dot: options.dot ?? false,
@@ -146,21 +162,30 @@ export async function boundedGlob(
   }) as NodeJS.ReadableStream & { destroy(): void };
 
   const matches: string[] = [];
+  let truncated = false;
+  let timedOut = false;
   return new Promise((resolve) => {
     let settled = false;
     const finish = (): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(matches);
+      resolve({
+        matches,
+        truncated,
+        timedOut,
+        durationMs: Date.now() - startedAt,
+      });
     };
     const timer = setTimeout(() => {
+      timedOut = true;
       stream.destroy();
       finish();
     }, GLOB_DEADLINE_MS);
     stream.on('data', (entry: string | Buffer) => {
       matches.push(String(entry));
       if (matches.length >= limit) {
+        truncated = true;
         stream.destroy();
         finish();
       }
@@ -169,6 +194,14 @@ export async function boundedGlob(
     stream.once('end', finish);
     stream.once('close', finish);
   });
+}
+
+/** `boundedGlobResult`'s matches alone. */
+export async function boundedGlob(
+  patterns: string | string[],
+  options: BoundedGlobOptions,
+): Promise<string[]> {
+  return (await boundedGlobResult(patterns, options)).matches;
 }
 
 /**

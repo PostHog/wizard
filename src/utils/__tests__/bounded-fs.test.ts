@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   boundedGlob,
+  boundedGlobResult,
   readFileHead,
   readProjectFile,
   MAX_GLOB_MATCHES,
@@ -42,6 +43,14 @@ describe('boundedGlob', () => {
     expect(matches).toEqual(['app.ts']);
   });
 
+  it('never descends into a worktrees tree', async () => {
+    fs.mkdirSync(path.join(dir, 'worktrees/branch-a'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'worktrees/branch-a/app.ts'), 'x');
+    fs.writeFileSync(path.join(dir, 'app.ts'), 'x');
+    const matches = await boundedGlob('**/*.ts', { cwd: dir });
+    expect(matches).toEqual(['app.ts']);
+  });
+
   it('applies extraIgnore on top of the shared set', async () => {
     fs.mkdirSync(path.join(dir, 'storage'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'storage/z.php'), 'x');
@@ -51,6 +60,41 @@ describe('boundedGlob', () => {
       extraIgnore: ['**/storage/**'],
     });
     expect(matches).toEqual(['app.php']);
+  });
+});
+
+describe('boundedGlobResult', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-glob-result-'));
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('reports a complete crawl', async () => {
+    fs.writeFileSync(path.join(dir, 'a.ts'), 'x');
+    const result = await boundedGlobResult('**/*.ts', { cwd: dir });
+    expect(result.matches).toEqual(['a.ts']);
+    expect(result.truncated).toBe(false);
+    expect(result.timedOut).toBe(false);
+  });
+
+  it('reports truncation at the limit', async () => {
+    for (let i = 0; i < 20; i++) {
+      fs.writeFileSync(path.join(dir, `file-${i}.ts`), 'x');
+    }
+    const result = await boundedGlobResult('**/*.ts', { cwd: dir, limit: 5 });
+    expect(result.matches.length).toBe(5);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('honours the depth bound', async () => {
+    fs.mkdirSync(path.join(dir, 'a/b/c'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a/b/c/deep.ts'), 'x');
+    fs.writeFileSync(path.join(dir, 'a/shallow.ts'), 'x');
+    const result = await boundedGlobResult('**/*.ts', { cwd: dir, deep: 2 });
+    expect(result.matches).toEqual(['a/shallow.ts']);
   });
 });
 

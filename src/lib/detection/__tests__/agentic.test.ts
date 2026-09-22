@@ -1,8 +1,13 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   coerceAgenticReport,
   deriveReportJson,
+  manifestFallbackReport,
   manifestGlob,
   resolveProjectDir,
+  scanProjectManifests,
 } from '@lib/detection/agentic';
 
 const TARGETS = ['nextjs', 'node', 'vite'];
@@ -290,5 +295,93 @@ describe('coerceAgenticReport recommendation', () => {
     );
     expect(report.projects[0].path).toBe('.');
     expect(report.projects[0].recommended).toBe(true);
+  });
+});
+
+describe('scanProjectManifests', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-scan-'));
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const write = (rel: string, body = '{}'): void => {
+    fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), body);
+  };
+
+  it('skips dependency, build and worktree trees during the crawl', async () => {
+    write('package.json');
+    write('apps/web/package.json');
+    write('node_modules/dep/package.json');
+    write('dist/package.json');
+    write('worktrees/branch-a/package.json');
+    write('.git/modules/x/package.json');
+
+    const scan = await scanProjectManifests(dir);
+
+    expect(scan.paths).toEqual(['package.json', 'apps/web/package.json']);
+    expect(scan.timedOut).toBe(false);
+    expect(scan.truncated).toBe(false);
+  });
+
+  it('returns the shallowest manifests first', async () => {
+    write('services/api/deep/pyproject.toml', '');
+    write('Cargo.toml', '');
+    write('apps/web/package.json');
+
+    const scan = await scanProjectManifests(dir);
+
+    expect(scan.paths[0]).toBe('Cargo.toml');
+  });
+
+  it('finds nothing in a repo with no manifest', async () => {
+    write('README.md', '# hi');
+    expect((await scanProjectManifests(dir)).paths).toEqual([]);
+  });
+});
+
+describe('manifestFallbackReport', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-fallback-'));
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const write = (rel: string, body: string): void => {
+    fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), body);
+  };
+
+  it('groups manifests into projects and greps for a PostHog dependency', () => {
+    write('package.json', '{"dependencies":{"posthog-js":"1.0.0"}}');
+    write('api/pyproject.toml', '[project]\nname = "api"\n');
+
+    const report = manifestFallbackReport(dir, [
+      'package.json',
+      'api/pyproject.toml',
+    ]);
+
+    expect(report.repoType).toBe('monorepo');
+    expect(report.projects).toEqual([
+      { path: '.', framework: 'Unknown', targetId: null, hasPostHog: true },
+      { path: 'api', framework: 'Unknown', targetId: null, hasPostHog: false },
+    ]);
+  });
+
+  it('roots an Xcode project and a gradle version catalog at the parent', () => {
+    write('ios/App.xcodeproj/project.pbxproj', 'objects = {}');
+    write('android/gradle/libs.versions.toml', '[libraries]');
+
+    const report = manifestFallbackReport(dir, [
+      'ios/App.xcodeproj/project.pbxproj',
+      'android/gradle/libs.versions.toml',
+    ]);
+
+    expect(report.projects.map((p) => p.path)).toEqual(['ios', 'android']);
   });
 });
