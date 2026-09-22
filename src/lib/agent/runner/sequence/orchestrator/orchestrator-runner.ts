@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type TaskNotice } from '@lib/wizard-session';
+import { OutroKind, type TaskNotice } from '@lib/agent/progress';
 import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@lib/constants';
 import {
   installSkillById,

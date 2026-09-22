@@ -2,7 +2,6 @@
   "violations": [
     "src/commands/factories/family-picker.tsx -> src/commands/command.ts",
     "src/env.ts -> src/lib/headless-mode.ts",
-    "src/lib/agent/mcp-prompt-streaming.ts -> src/ui/tui/services/mcp-suggested-prompts-services.ts",
     "src/lib/detection/agentic.ts -> src/lib/agent/agent-interface.ts",
     "src/lib/detection/project-scope.ts -> src/lib/agent/runner/shared/authenticate.ts",
     "src/lib/errors/agent-map.ts -> src/lib/agent/signals.ts",
@@ -55,7 +54,9 @@
     "src/lib/programs/web-analytics-doctor/detect.ts -> src/lib/agent/agent-runner.ts",
     "src/lib/task-stream/event-plan-watcher.ts -> src/ui/tui/store.ts",
     "src/lib/task-stream/task-stream-push.ts -> src/ui/tui/store.ts",
+    "src/lib/wizard-ask-bridge.ts -> src/lib/agent/progress.ts",
     "src/lib/wizard-session.ts -> src/lib/agent/claude-settings.ts",
+    "src/lib/wizard-session.ts -> src/lib/agent/progress.ts",
     "src/lib/wizard-tools/index.ts -> src/lib/wizard-tools/mcp.ts",
     "src/lib/wizard-tools/tools.ts -> src/lib/yara-hooks.ts",
     "src/steps/add-mcp-server-to-clients/index.ts -> src/telemetry.ts",
@@ -75,6 +76,7 @@
     "src/ui/tui/store.ts -> src/lib/agent/claude-settings.ts",
     "src/ui/tui/store.ts -> src/lib/agent/token-pricing.ts",
     "src/ui/wizard-ui.ts -> src/lib/agent/claude-settings.ts",
+    "src/ui/wizard-ui.ts -> src/lib/agent/progress.ts",
     "src/utils/package-manager.ts -> src/telemetry.ts",
     "src/utils/setup-utils.ts -> src/telemetry.ts",
     "src/utils/wizard-abort.ts -> src/ui/logging-ui.ts"

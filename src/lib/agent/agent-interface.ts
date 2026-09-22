@@ -25,11 +25,9 @@ import {
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
   AWS_SKILLS_BASE_URL,
-} from '@lib/constants';
-import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '@lib/wizard-session';
+} from '@lib/constants';
 import type { AgentFailure } from './runner/shared/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
@@ -231,9 +229,7 @@ export type AgentConfig = {
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
    */
-  getPendingQuestion?: () =>
-    | import('@lib/wizard-session').PendingQuestion
-    | null;
+  getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
    * Orchestrator queue context. Present only when the `wizard-orchestrator`
    * flag routes the run here; threaded into wizard-tools so the orchestrator
@@ -337,9 +333,7 @@ type AgentRunConfig = {
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
    */
-  getPendingQuestion?: () =>
-    | import('@lib/wizard-session').PendingQuestion
-    | null;
+  getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
    * The orchestrator owns the TUI task panel (it renders its queue), so its
    * runs suppress the agent's own TaskCreate/TaskUpdate rendering. Set from

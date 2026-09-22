@@ -17,7 +17,7 @@ import type {
   AskAnswers,
   AskQuestion,
   PendingQuestion,
-} from './wizard-session';
+} from './agent/progress';
 
 export interface WizardAskRequest {
   questions: AskQuestion[];

@@ -10,7 +10,7 @@
  * arguments, so the caller's exit sequence is unchanged.
  */
 
-import { OutroKind, type OutroData } from '@lib/wizard-session';
+import { OutroKind, type OutroData } from '@lib/agent/progress';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';

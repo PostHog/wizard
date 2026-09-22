@@ -9,14 +9,11 @@
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
-import type {
-  AdditionalFeature,
-  CloudRegion,
-  Credentials,
-  OutroData,
-  TaskNotice,
-  WizardSession,
-} from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
+import type { AdditionalFeature } from '@lib/constants';
+import type { CloudRegion } from '@utils/types';
+import type { Credentials } from '@lib/api';
+import type { OutroData, TaskNotice } from '@lib/agent/progress';
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import type { ApiProject, ApiUser } from '@lib/api';
