@@ -7,7 +7,8 @@
  *   pipeline.finalize(resultMessage, durationMs);
  */
 
-import { getUI, type SpinnerHandle } from '@ui';
+import { getUI } from '@ui';
+import type { SpinnerHandle } from '@lib/agent/progress';
 import { logToFile, getLogFilePath, configureLogFile } from '@utils/debug';
 import { MiddlewarePipeline } from './pipeline';
 import { PhaseDetector } from './phase-detector';

@@ -1,4 +1,5 @@
-import { getUI, type SpinnerHandle } from '@ui';
+import { getUI } from '@ui';
+import type { SpinnerHandle } from '@lib/agent/progress';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type {
   Middleware,
