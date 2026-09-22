@@ -281,6 +281,30 @@ describe('runProgram', () => {
     expect(runAgent).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a host-prepared run policy for legacy and custom adapters', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const postRun = vi.fn();
+
+    await runProgram('metrics', {
+      installDir: '/project',
+      credentials,
+      allowedTools: ['Agent', 'special-tool'],
+      disallowedTools: ['unsafe-tool'],
+      agentFlow: 'custom-flow',
+      hooks: { postRun },
+    });
+
+    expect(vi.mocked(runAgent).mock.calls[0][0]).toMatchObject({
+      allowedTools: ['Agent', 'special-tool'],
+      disallowedTools: ['unsafe-tool'],
+      agentFlow: 'custom-flow',
+      hooks: { postRun },
+    });
+  });
+
   it('resolves self-driving with explicit detected tools and passes completion hooks', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'self-driving',

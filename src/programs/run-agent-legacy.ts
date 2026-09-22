@@ -17,8 +17,10 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
-import { buildRunTags, flushScanReport, runAgent, RunOutcome } from '@agent';
+import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
 import type { RunConfig, RunInput } from '@agent/types';
+import { runProgram as runCallableProgram } from './run-program';
+import { createPosthogInferenceAuthProvider } from './credentials';
 import { resolveProgramBinding, type ProgramSwitchboardCtx } from './binding';
 import { getProgramCommandments } from './commandments';
 import { captureSwitchboardDecision } from './binding-telemetry';
@@ -281,17 +283,56 @@ async function runProgram(
     },
   };
 
-  const result = await runAgent(config, input, {
-    onProgress: createUiReducer(ui),
-    interaction: uiInteraction(ui),
-  });
+  const reduceUi = createUiReducer(ui);
+  const programResult = await runCallableProgram(
+    programConfig.id,
+    {
+      installDir: input.installDir,
+      credentials: {
+        posthog: input.credentials,
+        inferenceAuth: createPosthogInferenceAuthProvider(
+          input.credentials,
+          programConfig.id,
+        ),
+        project: input.project,
+        apiUser: input.apiUser,
+      },
+      run: config.run,
+      binding: config.binding,
+      composed: config.composed,
+      skillId: input.skillId,
+      integration: input.integration,
+      frameworkDocsUrl: input.frameworkDocsUrl,
+      flags: input.flags,
+      host: input.host,
+      wizardFlags: config.wizardFlags,
+      wizardFlagPayloads: config.wizardFlagPayloads,
+      wizardMetadata: config.wizardMetadata,
+      seedTasks: config.seedTasks,
+      hooks: config.hooks,
+      allowedTools: config.allowedTools,
+      disallowedTools: config.disallowedTools,
+      agentFlow: config.agentFlow,
+    },
+    {
+      onProgress: ({ event }) => reduceUi(event),
+      interaction: uiInteraction(ui),
+      awaitAiApproval: async () => {
+        await ui.waitForAiOptIn();
+        return true;
+      },
+    },
+  );
 
   // The host owns process exits and rethrowing crashes.
-  if (result.outcome === RunOutcome.Crashed) {
-    throw result.failure.error;
+  if (programResult.outcome === RunOutcome.Crashed) {
+    throw (
+      programResult.failure?.error ??
+      new Error(programResult.failure?.message ?? 'Program run crashed')
+    );
   }
-  if (result.outcome !== RunOutcome.Success) {
-    await wizardAbort(result.failure);
+  if (programResult.outcome !== RunOutcome.Success) {
+    await wizardAbort(programResult.failure ?? {});
   }
 }
 

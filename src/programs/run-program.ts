@@ -65,6 +65,10 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   wizardFlagPayloads?: Record<string, unknown>;
   wizardMetadata?: Record<string, string>;
   seedTasks?: RunConfig['seedTasks'];
+  hooks?: RunHooks;
+  allowedTools?: RunConfig['allowedTools'];
+  disallowedTools?: RunConfig['disallowedTools'];
+  agentFlow?: string;
   frameworkConfig?: FrameworkConfig;
   frameworkContext?: Record<string, unknown>;
   warehouseSources?: readonly DetectedSource[];
@@ -307,7 +311,7 @@ async function runProgramWithStore(
   }
 
   let run: AgentRunDefinition | undefined | null = input.run;
-  let hooks: RunHooks | undefined;
+  let hooks: RunHooks | undefined = input.hooks;
   let seedTasks = input.seedTasks;
   if (!run && programId === 'posthog-integration') {
     if (!input.frameworkConfig || !options.integrationEffects) {
@@ -330,7 +334,7 @@ async function runProgramWithStore(
         options.integrationEffects,
       );
       run = resolved.run;
-      hooks = resolved.hooks;
+      hooks ??= resolved.hooks;
       seedTasks ??= () => resolved.seedTasks;
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
@@ -341,7 +345,7 @@ async function runProgramWithStore(
       detectedTools: input.detectedTools ?? [],
     });
     run = resolved.run;
-    hooks = resolved.hooks;
+    hooks ??= resolved.hooks;
   }
   run ??=
     typeof program.run === 'object'
@@ -364,7 +368,7 @@ async function runProgramWithStore(
     flagPayloads: wizardFlagPayloads,
   };
   const binding = input.binding ?? resolveProgramBinding(switchboard);
-  captureSwitchboardDecision(switchboard, binding);
+  if (!input.binding) captureSwitchboardDecision(switchboard, binding);
   const wizardMetadata = {
     ...input.wizardMetadata,
     SEQUENCE: binding.sequence,
@@ -389,9 +393,9 @@ async function runProgramWithStore(
       wizardFlags,
       wizardFlagPayloads,
       wizardMetadata,
-      allowedTools: program.allowedTools,
-      disallowedTools: program.disallowedTools,
-      agentFlow: program.agentFlow,
+      allowedTools: input.allowedTools ?? program.allowedTools,
+      disallowedTools: input.disallowedTools ?? program.disallowedTools,
+      agentFlow: input.agentFlow ?? program.agentFlow,
       seedTasks,
       hooks,
     },
