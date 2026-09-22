@@ -5,59 +5,51 @@
  * the startup chunk imports this module, so anything re-exported here loads
  * before the wizard does any work. Heavy paths stay behind a lazy import.
  *
- * Audited against the stack plan (docs: workbench/wizard-functional-stack-plan.md,
- * sections 4.1 to 4.5 and 7). What stays and what leaves:
- *
- * Final, the agent's contract:
- *   runAgent, RunOutcome           the one way to run the agent (4.1)
- *   AgentSignals                   prompt marker strings program prompts embed
- *   WIZARD_TOOL_NAMES              tool ids programs put in allowedTools/disallowedTools
- *
- * Leaves in B1 (bindings and program data move to programs, 4.5):
- *   resolveBinding                 keyed by PROGRAM_BINDINGS; agent keeps only
- *                                  "run from an already-resolved binding"
- *   shouldDisableAsk               a flags policy programs decide, then pass in
- *   LONGER_ASK_TIMEOUT_MS          a tuning number; programs own askTimeoutMs
- *
- * Leaves in B2 (programs own credentials and the legacy adapter dies):
- *   initializeAgent, executeAgent, buildRunTags
- *                                  the pre-runAgent surface detection/agentic.ts
- *                                  and run-agent-legacy.ts still call; they go
- *                                  through runAgent or leave with detection
- *   configureGatewayFromCIEnvironment
- *                                  CI inference auth; headless provider owns it
- *   flushScanReport                the report becomes a progress event, not a call
- *
- * Leaves with Release B, when the skill scan moves to load time and skill
- * install becomes shared:
- *   downloadSkill
- *
- * Leaves in C2 (the TUI receives agent data through program state):
- *   runMcpPromptViaSdk
+ * Grouped by fate, per the stack plan (sections 4.1 to 4.5 and 7).
+ */
+
+/**
+ * Stays. The agent's contract: the one way to run it, the marker strings
+ * program prompts embed, and the tool ids programs put in allowedTools and
+ * disallowedTools.
  */
 export type * from './types';
+export { runAgent, RunOutcome } from './runner';
+export { AgentSignals } from './agent-interface';
+export { WIZARD_TOOL_NAMES } from './tools';
+
+/**
+ * Leaves in B1. Bindings and program data move to programs: resolveBinding
+ * is keyed by PROGRAM_BINDINGS and the agent keeps only "run from an
+ * already-resolved binding"; shouldDisableAsk is a flags policy programs
+ * decide and pass in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own
+ * as askTimeoutMs.
+ */
+export { resolveBinding, shouldDisableAsk } from './runner';
+export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
+
+/**
+ * Leaves in B2. Programs own credentials and the legacy adapter dies.
+ * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface
+ * that detection/agentic.ts and run-agent-legacy.ts still call; they go
+ * through runAgent or leave with detection. configureGatewayFromCIEnvironment
+ * is CI inference auth the headless provider owns. flushScanReport becomes a
+ * progress event rather than a call. downloadSkill leaves once the skill scan
+ * runs at load and skill install becomes shared.
+ */
 export {
-  resolveBinding,
-  runAgent,
-  RunOutcome,
-  shouldDisableAsk,
-} from './runner';
-export {
-  AgentSignals,
   buildRunTags,
   initializeAgent,
   runAgent as executeAgent,
 } from './agent-interface';
-// TODO(B2): leaves the entry when the headless provider owns CI gateway auth.
 export { configureGatewayFromCIEnvironment } from './gateway-session';
-export { downloadSkill, WIZARD_TOOL_NAMES } from './tools';
-export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 export { flushScanReport } from './yara-hooks';
+export { downloadSkill } from './tools';
 
 /**
- * Stream an MCP tutorial prompt through the SDK. Loaded on first call: the
- * streaming module is the one agent module the startup chunk does not already
- * hold, and the TUI reaches it only from the suggested-prompts screen.
+ * Leaves in C2. The TUI receives agent data through program state. Until
+ * then the suggested-prompts screen streams through this wrapper, which loads
+ * the streaming module on first call so the startup chunk does not grow.
  */
 export async function* runMcpPromptViaSdk(
   args: Parameters<
