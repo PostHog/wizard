@@ -2,7 +2,8 @@ import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { runProgramAgent } from '@programs/run-agent-legacy';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { mayReportScanResults, RunPhase } from '@lib/wizard-session';
+import { mayReportScanResults } from '@shared/scan-consent';
+import { RunPhase } from '@shared/run-state';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { hasDeclaredDependency } from '@utils/package-json';
@@ -20,7 +21,6 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
 import {
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,
@@ -52,7 +52,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
-  getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents

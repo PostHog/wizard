@@ -16,14 +16,9 @@
  * latest state once the current one settles.
  */
 
-import type { WizardStore, TaskItem } from '@ui/tui/store';
-import { TaskStatus } from '@ui/wizard-ui';
-import {
-  RunPhase,
-  OutroKind,
-  type OutroData,
-  type PendingQuestion,
-} from '@lib/wizard-session';
+import { RunPhase, TaskStatus } from '@shared/run-state';
+import { OutroKind } from '@agent';
+import type { OutroData, PendingQuestion } from '@agent/types';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
@@ -34,6 +29,7 @@ import {
   StreamEvent,
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
+import type { PlannedEvent } from '../posthog-integration/watch-event-plan.js';
 import { rollUpAuditAreas } from './audit-areas';
 import { logToFile } from '@utils/debug';
 import { sanitizeErrorDetail } from '@shared/errors';
@@ -51,7 +47,9 @@ const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
   [TaskStatus.Skipped]: StreamTaskStatus.Completed,
 };
 
-function buildTasks(items: TaskItem[]): StreamTask[] {
+function buildTasks(
+  items: ReadonlyArray<{ label: string; status: TaskStatus }>,
+): StreamTask[] {
   return items.map((item, i) => ({
     id: String(i),
     title: item.label,
@@ -110,8 +108,22 @@ function buildPendingInput(
   };
 }
 
+export interface TaskStreamSource {
+  readonly session: {
+    skillId: string | null;
+    runPhase: RunPhase;
+    outroData: OutroData | null;
+    pendingQuestion: PendingQuestion | null;
+  };
+  readonly tasks: ReadonlyArray<{ label: string; status: TaskStatus }>;
+  readonly eventPlan: PlannedEvent[];
+  readonly handoffText: string | null;
+  setEventPlan(events: PlannedEvent[]): void;
+  subscribe(callback: () => void): () => void;
+}
+
 export interface TaskStreamPushOptions {
-  store: WizardStore;
+  store: TaskStreamSource;
   programId: string;
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
@@ -123,7 +135,7 @@ export interface TaskStreamPushOptions {
 }
 
 export class TaskStreamPush {
-  private readonly store: WizardStore;
+  private readonly store: TaskStreamSource;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
   private readonly programId: string;
@@ -167,7 +179,7 @@ export class TaskStreamPush {
    * remains disabled when `enabled === false`, but the plan still populates the
    * store for local and headless consumers.
    */
-  attach(store?: WizardStore): void {
+  attach(store?: TaskStreamSource): void {
     this.eventPlanWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;

@@ -466,6 +466,17 @@ it('keeps the callable runProgram closure free of UI, session, and legacy regist
   expect(forbidden).toEqual([]);
 });
 
+it('keeps program decks and task-stream state behind the TUI boundary', () => {
+  const forbidden = analysis.edges.filter(
+    (edge) =>
+      (edge.startsWith('src/programs/') &&
+        edge.includes(' -> src/ui/tui/decks/')) ||
+      (edge.startsWith('src/programs/task-stream/') &&
+        edge.includes(' -> src/ui/')),
+  );
+  expect(forbidden).toEqual([]);
+});
+
 it.each([
   'src/programs/audit/watch-ledger.ts',
   'src/programs/posthog-integration/watch-event-plan.ts',

@@ -27,14 +27,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   routes), supplied program commandments and stage policy, the skills origin,
   flag snapshot, trace tags, tool allow and deny lists, seed tasks and bound
   completion `hooks`.
-- `RunInput`: install directory, resolved PostHog credentials, optional
+- `RunInput`: install directory, resolved PostHog credentials, required
   `inferenceAuth`, project and user payloads, skill id, detected integration,
   `flags` (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`,
-  `benchmark`, `yaraReport`) and the host the CLI was told. The caller can
-  supply an `InferenceAuthProvider` whose `resolve()` returns gateway
+  `benchmark`, `yaraReport`) and the host the CLI was told. The caller supplies
+  an `InferenceAuthProvider` whose `resolve()` returns gateway
   authentication. The agent resolves it before execution and again when the
-  harness needs refreshed auth; if absent, the legacy gateway-auth fallback
-  remains.
+  harness needs refreshed auth.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
   (`AgentFailure`: message, outro data, error, exit code, error code, detail).
@@ -60,8 +59,8 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
 `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`,
-`configureGatewayFromCIEnvironment`, `downloadSkill`, `WIZARD_TOOL_NAMES`,
-`LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and `runMcpPromptViaSdk`, which
+`downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`,
+`flushScanReport`, and `runMcpPromptViaSdk`, which
 loads the streaming module on first call.
 
 Minimal invocation:
@@ -105,7 +104,7 @@ resolved skill, handoff text, usage and the final result. It depends on
 
 ```text
 caller ── RunConfig + RunInput ──▶ runAgent
-                                      │ prepareRun: resolve inference auth, triage provider
+                                      │ prepareRun: supplied gateway auth, triage provider
                                       ▼
                           sequence (linear | orchestrator)
                                       │

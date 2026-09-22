@@ -21,7 +21,6 @@
 
 import type { ProgramConfig } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/agent-skill/index.js';
 import {
   skillRunDefinition,
   type SkillProgramOptions,
@@ -37,7 +36,6 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
     skillId: opts.skillId,
     steps: AGENT_SKILL_STEPS,
     reportFile: opts.reportFile,
-    getContentBlocks,
     run: skillRunDefinition(opts),
     requires: opts.requires,
   };

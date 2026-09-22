@@ -2,14 +2,13 @@
  * Shared preparation for the runner pipeline.
  *
  * Runs before the fork into the linear or orchestrator arm: logging targets,
- * the gateway mint and the scan-triage classifier built on it. Everything the
+ * caller-owned gateway auth and the scan-triage classifier built on it. Everything the
  * caller must decide first — health gates, settings conflicts, authentication,
  * the AI opt-in gate, post-auth gates, feature flags, run tags, token refresh —
  * arrives already resolved in `RunConfig` and `RunInput`.
  */
 
 import { createTriageLLMProvider } from '@agent/triage-provider';
-import { gatewayAuth } from '@agent/gateway-session';
 import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';
@@ -58,8 +57,8 @@ export function runOptions(input: RunInput): WizardRunOptions {
 // ── Prepare ───────────────────────────────────────────────────────────
 
 /**
- * Shared setup for both arms: logging targets, then the gateway mint and the
- * triage classifier. Throws when the mint is refused, so the run fails before
+ * Shared setup for both arms: logging targets, then the supplied gateway auth and
+ * triage classifier. Throws when auth is refused, so the run fails before
  * any agent starts — the caller maps that the way it maps any unexpected error.
  */
 export async function prepareRun(
@@ -80,14 +79,9 @@ export async function prepareRun(
   const { credentials } = input;
   const { wizardFlags, wizardFlagPayloads, wizardMetadata, programId } = config;
 
-  // Mint now so a refusal fails the boot before any agent starts. Later
-  // readers re-resolve through the cache, which re-mints past the refresh
-  // point.
-  // Legacy callers still mint here until the B2 host supplies its provider.
-  const inferenceAuth = input.inferenceAuth ?? {
-    resolve: () =>
-      gatewayAuth(credentials.host, credentials.accessToken, programId),
-  };
+  // Resolve before starting either sequence, so a refusal stops the run.
+  const inferenceAuth = input.inferenceAuth;
+  if (!inferenceAuth) throw new Error('Inference auth provider is required.');
   await inferenceAuth.resolve();
 
   return {

@@ -4,20 +4,18 @@
  * every path gets it — including the e2e host, which builds no task stream.
  */
 
-import { getUI } from '@ui';
-import type { FileWatcherHandle, FileWatcherOptions } from '@lib/file-watcher';
-import { AUDIT_CHECKS_KEY } from './types.js';
+import type {
+  FileWatcherHandle,
+  FileWatcherOptions,
+} from '@shared/file-watcher';
+import type { AuditCheck } from '@shared/audit-ledger';
 import { watchAuditLedger } from './watch-ledger.js';
 
 export function startAuditLedgerWatcher(
   installDir: string,
   file: string,
+  onChecks: (checks: AuditCheck[]) => void,
   options: FileWatcherOptions = {},
 ): FileWatcherHandle {
-  return watchAuditLedger(
-    installDir,
-    file,
-    (checks) => getUI().setFrameworkContext(AUDIT_CHECKS_KEY, checks),
-    options,
-  );
+  return watchAuditLedger(installDir, file, onChecks, options);
 }

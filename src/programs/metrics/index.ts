@@ -1,7 +1,6 @@
 import { METRICS_REPORT_FILE, METRICS_RUN } from './run.js';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getContentBlocks } from '@ui/tui/decks/agent-skill/index';
 
 const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
@@ -28,6 +27,5 @@ export const metricsConfig: ProgramConfig = {
   agentFlow: 'metrics',
   steps: METRICS_STEPS,
   reportFile: METRICS_REPORT_FILE,
-  getContentBlocks,
   run: METRICS_RUN,
 };

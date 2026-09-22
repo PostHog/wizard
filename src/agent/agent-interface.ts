@@ -36,10 +36,9 @@ import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   buildWizardPropertiesBlob,
-  gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
-} from '@agent/gateway-session';
+} from '@shared/gateway-auth';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
 import {
@@ -215,7 +214,7 @@ export type AgentConfig = {
    */
   programId: string;
   /** Program-owned inference auth, refreshed at each model call. */
-  inferenceAuth?: InferenceAuthProvider;
+  inferenceAuth: InferenceAuthProvider;
   /** Program-owned guidance supplied as data, never looked up here. */
   programCommandments?: readonly string[];
   /** Program identifier — selects the model for that program. */
@@ -549,15 +548,10 @@ export async function initializeAgent(
   const emit = config.emit ?? NO_PROGRESS;
 
   try {
-    // Configure model routing (inherited by the SDK subprocess). All model
-    // calls route through the PostHog AI gateway with the scoped token
-    // gatewayAuth mints for this run.
+    // Configure model routing with the program-supplied gateway bearer.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () =>
-      config.inferenceAuth
-        ? config.inferenceAuth.resolve()
-        : gatewayAuth(config.host, config.posthogApiKey, config.programId);
+    const currentGatewayAuth = () => config.inferenceAuth.resolve();
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;

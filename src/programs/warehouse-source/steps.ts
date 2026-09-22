@@ -7,7 +7,7 @@
  */
 
 import type { ProgramStep } from '@programs/program-step';
-import { RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
 import { detectWarehousePrerequisites } from './detect.js';
 
 export const WAREHOUSE_SOURCE_PROGRAM: ProgramStep[] = [

@@ -1,7 +1,7 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@agent';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { resolveEventsAuditRunDefinition } from '@programs/resolve-run-definition';

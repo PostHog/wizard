@@ -5,7 +5,7 @@ import {
 import type { ProgramStep, ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@lib/headless-mode';
 import {

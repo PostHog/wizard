@@ -14,8 +14,6 @@ import {
   REPORT_FILE,
   DOCS_URL,
 } from './run.js';
-import { getTips } from '../../ui/tui/decks/self-driving/tips.js';
-import { getContentBlocks } from '../../ui/tui/decks/self-driving/index.js';
 
 /** The TUI keeps its session contract while sharing the data-only recipe. */
 const buildRun = (session: WizardSession): Promise<ProgramRun> => {
@@ -50,8 +48,6 @@ export const selfDrivingConfig: ProgramConfig = {
   }),
   steps: SELF_DRIVING_PROGRAM,
   run: buildRun,
-  getTips,
-  getContentBlocks,
 };
 
 export { SELF_DRIVING_PROGRAM } from './steps.js';

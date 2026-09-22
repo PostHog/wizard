@@ -6,30 +6,13 @@
  * unattributed money to hide an outage.
  */
 
-import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import type { HostResolution } from '@shared/host-resolution';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
-import type { CloudRegion } from '@utils/types';
-
-export interface GatewayAuth {
-  /** Base URL for model calls (no `/v1`; transports append their route). */
-  gatewayUrl: string;
-  /** Gateway bearer, minted normally or supplied directly by CI. */
-  token: string;
-  /** Team verified by the mint, or explicitly supplied for CI attribution. */
-  teamId?: number;
-  /**
-   * Instant past which a 401 on this bearer is age rather than a bad
-   * credential: the cache re-mints past it, and a session still holding the
-   * old bearer may re-mint once. Before it the mint has to be trusted.
-   */
-  refreshAtMs: number;
-}
+import { isTrustedGatewayUrl, type GatewayAuth } from '@shared/gateway-auth';
 
 interface CachedAuth {
   key: string;
@@ -44,64 +27,6 @@ let cached: CachedAuth | null = null;
  * task at once, and each would otherwise take its own token and its own cap.
  */
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
-let ciAuth: GatewayAuth | null = null;
-
-// Snapshot CI supplies a gateway bearer without minting or re-minting.
-export function configureGatewayCredentialsForCI(
-  token: string,
-  projectId: number,
-  gatewayUrl: string,
-): void {
-  const auth = createCiGatewayAuth(token, projectId, gatewayUrl);
-  resetGatewaySession();
-  ciAuth = auth;
-}
-
-/** Fixed CI bearer without process-wide mutation, for the headless provider. */
-export function createCiGatewayAuth(
-  token: string,
-  projectId: number,
-  gatewayUrl: string,
-): GatewayAuth {
-  if (IS_PRODUCTION_BUILD)
-    throw new Error('CI gateway auth requires a non-production build');
-  if (!token.trim() || !Number.isSafeInteger(projectId) || projectId <= 0) {
-    throw new Error('CI gateway auth requires a token and valid project ID');
-  }
-  if (
-    !/^https?:\/\//.test(gatewayUrl) ||
-    !isTrustedGatewayUrl(gatewayUrl, '')
-  ) {
-    throw new Error('CI gateway auth requires a trusted gateway origin');
-  }
-  return {
-    token: token.trim(),
-    teamId: projectId,
-    gatewayUrl: gatewayUrl.replace(/\/+$/, ''),
-    refreshAtMs: Infinity,
-  };
-}
-
-// TODO(B2): CI credential loading belongs to the headless provider, not the
-// agent. Leaves with the rest of this module once RunInput carries resolved
-// inference auth.
-export function configureGatewayFromCIEnvironment(
-  projectId: number,
-  region: CloudRegion,
-): void {
-  if (IS_PRODUCTION_BUILD)
-    throw new Error('CI gateway auth requires a non-production build');
-  const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
-  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
-  const token = readFileSync(path, 'utf8');
-  delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
-  configureGatewayCredentialsForCI(
-    token,
-    projectId,
-    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
-      `https://ai-gateway.${region}.posthog.com`,
-  );
-}
 
 /**
  * Adoption floor. The anthropic subprocess holds its credential until a 401
@@ -124,7 +49,6 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
-  if (ciAuth) return ciAuth;
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
   const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
@@ -198,55 +122,6 @@ async function resolveGatewayAuth(
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
-  ciAuth = null;
-}
-
-/** Whether a 401 on this bearer may be age (past its refresh instant) rather than a bad credential. */
-export function isPastRefresh(auth: GatewayAuth, now = Date.now()): boolean {
-  return now >= auth.refreshAtMs;
-}
-
-/**
- * Whether a server-supplied origin may receive a bearer and prompt content:
- * https (loopback excepted), and either a current cloud gateway or the host the run
- * authenticated against.
- */
-export function isTrustedGatewayUrl(value: string, apiHost: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  // Consumers append routes to this value, so anything beyond an origin
-  // (path, query, fragment, userinfo) would build a malformed endpoint.
-  if (
-    url.pathname !== '/' ||
-    url.search ||
-    url.hash ||
-    url.username ||
-    url.password
-  ) {
-    return false;
-  }
-  const localhost =
-    url.hostname === 'localhost' ||
-    url.hostname === '127.0.0.1' ||
-    url.hostname === 'host.docker.internal';
-  // Loopback is the dev gateway, and is the one case allowed over http.
-  if (localhost) return true;
-  if (url.protocol !== 'https:') return false;
-  if (url.hostname.endsWith('.posthog.com')) {
-    return (
-      url.origin === 'https://ai-gateway.us.posthog.com' ||
-      url.origin === 'https://ai-gateway.eu.posthog.com'
-    );
-  }
-  try {
-    return url.hostname === new URL(apiHost).hostname;
-  } catch {
-    return false;
-  }
 }
 
 interface MintedToken {
@@ -459,39 +334,4 @@ async function mintGatewayToken(
       `could not reach the PostHog gateway (${String(e)})`,
     );
   }
-}
-
-/**
- * The v2 run-metadata carrier: one JSON blob for the `X-PostHog-Properties`
- * header. Plain keys only, since the gateway strips `$`-prefixed keys as reserved,
- * so feature-flag variants land as `wizard_flag_<key>` instead of the legacy
- * `$feature/<key>` (dashboards keying on `$feature/wizard-*` read the new key
- * post-cutover).
- */
-export function buildWizardPropertiesBlob(
-  wizardMetadata: Record<string, string>,
-  wizardFlags: Record<string, string>,
-  teamId?: number,
-): string {
-  // The gateway pins `$ai_product` to `wizard:<program>`, and rejects a legacy
-  // product override on a scoped token, so the unprefixed key every cost and
-  // error consumer reads is only present if this blob declares it.
-  const props: Record<string, string | number> = { ai_product: 'wizard' };
-  if (teamId !== undefined) props.team_id = teamId;
-  for (const [key, value] of Object.entries(wizardMetadata)) {
-    props[stripPropertyPrefix(key)] = value;
-  }
-  for (const [flagKey, variant] of Object.entries(wizardFlags)) {
-    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
-    props[`wizard_flag_${flagKey.toLowerCase()}`] = variant;
-  }
-  return JSON.stringify(props);
-}
-
-const LEGACY_PROPERTY_PREFIX = 'X-POSTHOG-PROPERTY-';
-
-function stripPropertyPrefix(key: string): string {
-  return key.toUpperCase().startsWith(LEGACY_PROPERTY_PREFIX)
-    ? key.slice(LEGACY_PROPERTY_PREFIX.length).toLowerCase()
-    : key;
 }

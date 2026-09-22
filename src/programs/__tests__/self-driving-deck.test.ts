@@ -8,6 +8,10 @@
 
 import type { ReactNode, ReactElement } from 'react';
 import { getContentBlocks } from '@ui/tui/decks/self-driving/index';
+import {
+  getProgramContentBlocks,
+  getProgramTips,
+} from '@ui/tui/decks/registry';
 
 /** paneWidth in LearnCard at 80 cols: (min(120, 80) - 2) / 2 - 2 */
 const PANE_WIDTH_80COL = 37;
@@ -25,6 +29,15 @@ describe('self-driving learn deck', () => {
 
   it('has blocks', () => {
     expect(blocks.length).toBeGreaterThan(0);
+  });
+
+  it('selects the self-driving deck and tips for its program', () => {
+    const selected = getProgramContentBlocks('self-driving');
+    const last = selected[selected.length - 1];
+    expect(
+      typeof last === 'object' && 'content' in last ? last.content : '',
+    ).toBe('Your product drives itself.');
+    expect(getProgramTips('self-driving')?.[0]?.id).toBe('signal-source');
   });
 
   it('keeps every fixed-layout line within the 80-col pane', () => {

@@ -6,7 +6,6 @@ import {
 } from './run.js';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { MIGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/migration/index.js';
 
 export const migrationConfig: ProgramConfig = {
   command: 'migrate',
@@ -15,7 +14,6 @@ export const migrationConfig: ProgramConfig = {
   skillId: DEFAULT_MIGRATE_SKILL_ID,
   steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
-  getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   run: MIGRATION_RUN,

@@ -64,6 +64,14 @@ async function initializeHarness(
       },
       host: {},
       credentials,
+      inferenceAuth: {
+        resolve: () =>
+          Promise.resolve({
+            gatewayUrl: 'https://ai-gateway.us.posthog.com',
+            token: 'phe_test',
+            refreshAtMs: Infinity,
+          }),
+      },
       project: null,
       apiUser: null,
     },

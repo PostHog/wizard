@@ -16,7 +16,8 @@
 
 import type { ProgramStep } from '@programs/program-step';
 import { resolveProjectDir } from '@programs/detection/agentic';
-import { RunPhase, type WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 import { integrationRunStep } from '@programs/posthog-integration/index';
 import {

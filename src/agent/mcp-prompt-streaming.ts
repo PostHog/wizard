@@ -13,9 +13,9 @@
  */
 
 import type { Credentials } from '@shared/api';
+import type { InferenceAuthProvider } from '@agent/types';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import { gatewayAuth } from '@agent/gateway-session';
 import { buildAgentEnv, buildRunTags } from '@agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 import { createIsolatedAgentConfigDir } from '@agent/stored-login';
@@ -214,6 +214,7 @@ export function buildTutorialRunTags(args: {
 export async function* runMcpPromptViaSdk(args: {
   prompt: string;
   credentials: Credentials;
+  inferenceAuth: InferenceAuthProvider;
   signal: AbortSignal;
   /** When set, the SDK loads the named session's prior turns as
    *  context so the follow-up prompt can reference what the agent
@@ -242,11 +243,9 @@ export async function* runMcpPromptViaSdk(args: {
 
   // The url and the bearer are one unit: a run must take both from the same
   // mint.
-  const auth = await gatewayAuth(
-    credentials.host,
-    credentials.accessToken,
-    args.programId,
-  );
+  if (!args.inferenceAuth)
+    throw new Error('Inference auth provider is required.');
+  const auth = await args.inferenceAuth.resolve();
   const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = auth.token;

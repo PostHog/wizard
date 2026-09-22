@@ -169,6 +169,19 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
+    name: 'setInferenceAuth',
+    invoke: (s) =>
+      s.setInferenceAuth({
+        resolve: () =>
+          Promise.resolve({
+            gatewayUrl: 'https://ai-gateway.us.posthog.com',
+            token: 'phe_test',
+            refreshAtMs: Infinity,
+          }),
+      }),
+    emits: 1,
+  },
+  {
     name: 'setAccessToken',
     invoke: (s) => s.setAccessToken(CREDENTIALS),
     emits: 1,
