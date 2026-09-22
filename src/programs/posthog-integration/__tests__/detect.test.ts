@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { testProgramRunHost } from '../../../../test/program-host';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -397,7 +398,7 @@ describe('the full decline contract, end to end', () => {
 
     const { run } = posthogIntegrationConfig;
     if (typeof run !== 'function') throw new Error('expected a run function');
-    const runDef = await run(session);
+    const runDef = await run(session, testProgramRunHost(session));
     const outro = runDef.buildOutroData!(
       session,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

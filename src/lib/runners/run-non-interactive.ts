@@ -9,7 +9,7 @@ import {
   POSTHOG_LOCAL_URL,
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
-import { getUI, setUI } from '@ui';
+import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@programs/types';
 import type { InferenceAuthProvider } from '@agent/types';
@@ -276,7 +276,12 @@ export function runNonInteractive(
         store?.setInferenceAuth(ciInferenceAuth);
       }
       if (config.ciPreRun) {
-        await config.ciPreRun(session);
+        const ui = getUI();
+        await config.ciPreRun(session, {
+          auth: ui,
+          log: ui.log,
+          onProgress: createUiReducer(ui),
+        });
       } else {
         const readyCtx = {
           session,
@@ -370,7 +375,7 @@ export function runNonInteractive(
         getUI().setDetectedFramework(session.detectedFrameworkLabel);
       }
 
-      const { runProgramAgent } = await import('@programs/run-agent-legacy');
+      const { runProgramAgent } = await import('./run-program-agent');
       await runProgramAgent(config, session, {
         inferenceAuth: ciInferenceAuth,
       });

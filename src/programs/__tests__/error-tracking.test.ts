@@ -19,6 +19,7 @@ import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstal
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
+import { testProgramCiHost } from '../../../test/program-host';
 
 vi.mock('@programs/detection/index', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/detection/index')>()),
@@ -171,7 +172,7 @@ describe('error-tracking ciPreRun', () => {
       frameworkContext: {},
     } as unknown as WizardSession;
 
-    await errorTrackingConfig.ciPreRun?.(session);
+    await errorTrackingConfig.ciPreRun?.(session, testProgramCiHost());
 
     expect(wizardAbort).toHaveBeenCalledWith(
       expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),

@@ -1,6 +1,6 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { authenticate } from '@programs/authenticate';
-import { runProgramAgent } from '../run-agent-legacy';
+import { runProgramAgent } from '@lib/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
 import { checkLocalServices } from '@shared/local-dev';

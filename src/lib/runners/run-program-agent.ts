@@ -1,16 +1,16 @@
 /**
- * The session-driven agent runner every existing caller uses.
+ * The session-driven host adapter for legacy TUI and CI runs.
  *
- * `runProgramAgent(programConfig, session)` rebuilds today's behavior on top of the
- * functional `runAgent(config, input, options)` in `@lib/agent/runner`: it
+ * `runProgramAgent(programConfig, session)` bridges the host to the callable
+ * program: it
  * runs the gates the TUI owns (health, settings, AI opt-in, post-auth steps),
  * authenticates, resolves the program's binding, builds the agent's inputs
  * from the session, maps every progress event back onto `getUI()` one call
  * per event, answers the agent's questions through `getUI()`, and applies the
  * result — `wizardAbort` for a decided failure, nothing more for success.
  *
- * This is the only file that knows about `getUI()`, the session and
- * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
+ * The host owns `getUI()`, the legacy session, and `wizardAbort`; the callable
+ * program receives explicit input and effects.
  */
 
 import type { WizardSession } from '@lib/wizard-session';
@@ -18,13 +18,18 @@ import { analytics } from '@utils/analytics';
 import { createUiReducer, getUI, uiInteraction } from '@ui';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
 import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
-import { runProgram as runCallableProgram } from './run-program';
-import { createPosthogInferenceAuthProvider } from './credentials';
-import { resolveProgramBinding, type ProgramSwitchboardCtx } from './binding';
-import { getProgramCommandments } from './commandments';
-import { captureSwitchboardDecision } from './binding-telemetry';
-import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
-import type { ProgramCompletionContext, ProgramRun } from './program-run';
+import {
+  runProgram as runCallableProgram,
+  createPosthogInferenceAuthProvider,
+  resolveProgramBinding,
+  getProgramCommandments,
+  captureSwitchboardDecision,
+  areSeededTasksEnabled,
+  resolveStageOverrides,
+  type ProgramSwitchboardCtx,
+} from '@programs';
+import type { ProgramCompletionContext, ProgramRunHost } from '@programs/types';
+import type { ProgramRun } from '@programs/program-run';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
@@ -48,11 +53,15 @@ import {
   type Integration,
 } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
-import { maybeStampAiSdkDetected } from './posthog-integration/detect';
-import { startAuditLedgerWatcher } from './audit/ledger-watcher';
-import { AUDIT_CHECKS_KEY } from './audit/types';
+import { postAuthGateSteps } from '@programs/program-step';
+import type { ProgramConfig } from '@programs/types';
+import {
+  authenticate,
+  refreshAccessTokenIfNeeded,
+} from '@programs/authenticate';
+import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
+import { startAuditLedgerWatcher } from '@programs/audit/ledger-watcher';
+import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 
 /**
@@ -84,9 +93,15 @@ export async function runProgramAgent(
   if (ledger) registerCleanup(() => ledger.stop());
 
   try {
+    const ui = getUI();
+    const runHost: ProgramRunHost = {
+      getFrameworkContext: (key) => ui.getFrameworkContext(key),
+      setFrameworkContext: (key, value) => ui.setFrameworkContext(key, value),
+      warn: (message) => ui.log.warn(message),
+    };
     const runDef =
       typeof programConfig.run === 'function'
-        ? await programConfig.run(session)
+        ? await programConfig.run(session, runHost)
         : programConfig.run;
 
     await runProgram(

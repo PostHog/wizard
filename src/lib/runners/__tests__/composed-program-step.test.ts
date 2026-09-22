@@ -1,12 +1,12 @@
 import { advanceStep } from '../run-wizard';
-import { runProgramAgent } from '@programs/run-agent-legacy';
+import { runProgramAgent } from '../run-program-agent';
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { selfDrivingConfig } from '@programs/self-driving/index';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { WizardStore } from '@ui/tui/store';
 
-vi.mock('@programs/run-agent-legacy', () => ({
+vi.mock('../run-program-agent', () => ({
   runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 

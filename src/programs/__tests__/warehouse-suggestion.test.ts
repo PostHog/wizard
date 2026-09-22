@@ -18,6 +18,7 @@ import { POSTHOG_INTEGRATION_PROGRAM } from '@programs/posthog-integration/steps
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { testProgramRunHost } from '../../../test/program-host';
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',
@@ -70,7 +71,7 @@ function sessionWith(sources: DetectedSource[]): WizardSession {
 async function resolveRun(session: WizardSession) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
+  return run(session, testProgramRunHost(session));
 }
 
 describe('outro suggestion', () => {

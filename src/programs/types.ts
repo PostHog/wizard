@@ -8,6 +8,7 @@ export type {
 } from './program-step';
 export type { ProgramCompletionContext } from './program-run';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
+export type { ProgramCiHost, ProgramRunHost } from './host-capabilities';
 export type {
   ProgramInput,
   ProgramOptions,
