@@ -15,7 +15,7 @@ vi.mock('node:fs', () => ({
 }));
 
 vi.mock('../../../../utils/analytics', () => ({
-  analytics: { captureException: vi.fn() },
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
 
 describe('CodexMCPClient', () => {
@@ -439,6 +439,250 @@ describe('CodexMCPClient', () => {
       expect(props.details).not.toContain('/Users/ada');
     });
   });
+  /**
+   * Silencing a failure is the expensive direction: a hint retires it from
+   * error tracking, so a pattern that claims too much turns one of our bugs
+   * into advice the user cannot act on and nobody counts.
+   */
+  describe('what the hint table refuses to claim', () => {
+    /** An API-key install, which is the only path through `codex mcp add`. */
+    const failingApiKeyInstall = async (stderr: string) => {
+      routeCodex(() => cliError(stderr));
+      const client = new CodexMCPClient();
+      return client.addServer('phx_test');
+    };
+
+    /** A plugin install that gets past the listing and fails on `plugin add`. */
+    const failingPluginInstall = async (stderr: string) => {
+      routeCodex((cmd) => {
+        if (cmd.startsWith('plugin list'))
+          return pluginListing('not installed');
+        if (cmd.startsWith('plugin add')) return cliError(stderr);
+        return '';
+      });
+      const client = new CodexMCPClient();
+      return client.installPlugin();
+    };
+
+    // The plugin advice fires on an old CLI, but during `mcp add` the rejected
+    // argument is a flag we passed, not a plugin subcommand, so sending the
+    // user to `codex plugin marketplace add` names a command that has nothing
+    // to do with what just failed.
+    it('does not give plugin advice when an old CLI rejects an mcp add flag', async () => {
+      const result = await failingApiKeyInstall(
+        "error: unexpected argument '--bearer-token-env-var' found",
+      );
+      expect(result.success).toBe(false);
+      expect(result.reason).toMatch(/update codex/i);
+      expect(result.reason).not.toMatch(/plugin marketplace add/i);
+    });
+
+    // Serde wording says nothing about whose file it came from. Blaming the
+    // user's config for our own broken manifest sends them to edit a file that
+    // is fine, and takes our bug out of error tracking on the way.
+    it.each([
+      ['invalid type: string, expected a sequence in plugin.toml'],
+      ['field `entrypoint` is no longer supported (PostHog/ai-plugin)'],
+      ['`skills` must contain at least one entry in plugin.toml'],
+    ])(
+      'reports a broken plugin manifest rather than blaming the config: %s',
+      async (stderr) => {
+        const result = await failingPluginInstall(stderr);
+        expect(result.reason).not.toMatch(/could not read its own config/i);
+        expect(analytics.captureException).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'Codex plugin install failed' }),
+          expect.anything(),
+        );
+      },
+    );
+
+    // A clone that fails because the repo is gone is our publishing problem.
+    // "Check your network" buries a renamed or deleted PostHog/ai-plugin where
+    // nobody will ever see it.
+    it('reports a missing plugin repository rather than blaming the network', async () => {
+      const result = await failingPluginInstall(
+        'git clone https://github.com/PostHog/ai-plugin failed: repository not found',
+      );
+      expect(result.reason).not.toMatch(/check your network/i);
+      expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    // A failure that merely mentions the config path is not a config failure.
+    it('reports an unrecognised failure that only mentions config.toml', async () => {
+      const result = await failingPluginInstall(
+        'weird new failure while reading /Users/ada/.codex/config.toml',
+      );
+      expect(result.reason).not.toMatch(/could not read its own config/i);
+      expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    // A genuine config failure still hints, or the narrowing went too far.
+    it('still hints when codex cannot load its own configuration', async () => {
+      const result = await failingPluginInstall(
+        'failed to load configuration: invalid type: string, expected a map',
+      );
+      expect(result.reason).toMatch(/could not read its own config/i);
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    // Hinting removes the failure from error tracking, so without a counter the
+    // only sign a pattern has started over-matching is that our exception count
+    // fell — which reads exactly like the fix working.
+    it('counts a hinted failure so over-matching stays visible', async () => {
+      await failingPluginInstall('ENOSPC: no space left on device');
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'mcp expected failure hinted',
+        expect.objectContaining({ client: 'Codex', stage: 'plugin install' }),
+      );
+    });
+
+    it('scrubs home directories from the counted detail', async () => {
+      await failingPluginInstall(
+        'EACCES: permission denied on /Users/ada/.codex/config.toml',
+      );
+      const [, props] = (analytics.wizardCapture as Mock).mock.calls[0] as [
+        string,
+        Record<string, string>,
+      ];
+      expect(props.details).toContain('~/.codex');
+      expect(props.details).not.toContain('/Users/ada');
+    });
+  });
+
+  /**
+   * `execFile` always sets a message, and it leads with the full binary path —
+   * a per-user string. Reporting it splits one root cause into one issue per
+   * machine, which is the failure this reporting exists to prevent.
+   */
+  // The listing can report "not installed" when it merely failed to run, and
+  // every other spawn here reads codex's own wording rather than turning a
+  // no-op into a reported failure.
+  describe('plugin add on an already-installed plugin', () => {
+    it('treats codex saying it is already installed as success', async () => {
+      routeCodex((cmd) => {
+        if (cmd.startsWith('plugin list'))
+          return pluginListing('not installed');
+        if (cmd.startsWith('plugin add'))
+          return cliError('plugin posthog@posthog is already installed');
+        return '';
+      });
+      const client = new CodexMCPClient();
+      const result = await client.installPlugin();
+      expect(result).toEqual({ success: true, alreadyInstalled: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+  });
+
+  // `mcp remove` used to interpolate its reason into the exception message, so
+  // a config path in the reason filed one issue per user.
+  describe('removeServer failure reporting', () => {
+    it('reports under a constant message with the detail in properties', async () => {
+      routeCodex(() =>
+        cliError('could not write /Users/ada/.codex/config.toml'),
+      );
+      const client = new CodexMCPClient();
+      const result = await client.removeServer();
+      expect(result.success).toBe(false);
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Codex MCP remove failed' }),
+        expect.objectContaining({
+          details: expect.not.stringContaining('/Users/ada'),
+        }),
+      );
+    });
+  });
+
+  describe('what a failure reports when neither stream spoke', () => {
+    const silentExit = () => ({
+      error: Object.assign(
+        new Error(
+          'Command failed: /Users/ada/.bun/bin/codex plugin add posthog@posthog',
+        ),
+        { code: 3 },
+      ),
+      stdout: '',
+      stderr: '',
+    });
+
+    const runSilentFailure = async () => {
+      routeCodex((cmd) => {
+        if (cmd.startsWith('plugin list'))
+          return pluginListing('not installed');
+        if (cmd.startsWith('plugin add')) return silentExit();
+        return '';
+      });
+      const client = new CodexMCPClient();
+      return client.installPlugin();
+    };
+
+    it('reports the exit status rather than our own invocation', async () => {
+      const result = await runSilentFailure();
+      expect(result.reason).toContain('3');
+      expect(result.reason).not.toContain('Command failed');
+      expect(result.reason).not.toContain('/Users/ada');
+    });
+
+    it('keeps the reported detail free of the user home directory', async () => {
+      await runSilentFailure();
+      const [, props] = (analytics.captureException as Mock).mock.calls[0] as [
+        Error,
+        Record<string, string>,
+      ];
+      expect(props.details).not.toContain('/Users/ada');
+    });
+
+    // The bearer token is passed to `codex mcp add` in the environment, so a
+    // CLI that echoes its environment back on failure puts it in the reason and
+    // in the analytics properties.
+    it('redacts a bearer token the CLI echoed back', async () => {
+      routeCodex(() =>
+        cliError('rejected request with header Bearer phx_supersecrettoken'),
+      );
+      const client = new CodexMCPClient();
+      const result = await client.addServer('phx_supersecrettoken');
+      expect(result.reason).not.toContain('phx_supersecrettoken');
+      expect(result.reason).toContain('[redacted]');
+    });
+
+    // A kill is ours, not codex's. Whatever the streams got out before we cut
+    // them off reads as codex rejecting the install, which sends the user to
+    // fix something that was never wrong.
+    it('reports our own kill rather than the output it interrupted', async () => {
+      routeCodex((cmd) => {
+        if (cmd.startsWith('plugin list'))
+          return pluginListing('not installed');
+        if (cmd.startsWith('plugin add'))
+          return {
+            error: Object.assign(new Error('Command failed: codex'), {
+              killed: true,
+              code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+            }),
+            stderr: 'Cloning into ...',
+          };
+        return '';
+      });
+      const client = new CodexMCPClient();
+      const result = await client.installPlugin();
+      expect(result.reason).not.toContain('Cloning into');
+      expect(result.reason).toMatch(/more output than|stopped/i);
+    });
+
+    // A codex that waits on input never settles the promise, and a clone that
+    // outgrows the buffer gets killed and reads as codex rejecting the install.
+    it('bounds every invocation with a timeout and an output ceiling', async () => {
+      routeCodex(() => pluginListing('installed, enabled'));
+      const client = new CodexMCPClient();
+      await client.isPluginInstalled();
+      const [, , options] = execFileMock.mock.calls[0] as [
+        string,
+        string[],
+        { timeout?: number; maxBuffer?: number },
+      ];
+      expect(options.timeout).toBeGreaterThan(0);
+      expect(options.maxBuffer).toBeGreaterThan(1024 * 1024);
+    });
+  });
+
   describe('plugin install and removal', () => {
     // `plugin marketplace add` registers the catalog only; without the
     // `plugin add` the wizard reported success and the user got no skills.

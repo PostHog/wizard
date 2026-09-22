@@ -59,19 +59,50 @@ export const scrubHomePaths = (raw: string): string =>
  * A failure that lives entirely in the user's environment: a CLI too old, a
  * broken install, an unreadable config. We can't fix these, so we hand back a
  * hint instead of filing an issue nobody can action.
+ *
+ * Silencing a failure is the expensive direction: a pattern that matches too
+ * much retires a real bug of ours into a hint nobody reads. So an entry says
+ * where it applies (`stages`) and what disqualifies it (`unless`), and anything
+ * it cannot claim confidently goes back to being reported.
  */
 export interface ExpectedFailure {
   match: RegExp;
+  /**
+   * Stages this hint is allowed to fire on. Omitted means any stage. Wording
+   * that means one thing during `plugin install` can mean something else during
+   * `mcp add`, and a hint naming the wrong command is worse than none.
+   */
+  stages?: string[];
+  /**
+   * Wording that disqualifies the match even when `match` hits — the tell that
+   * the failure is ours, not the environment's.
+   */
+  unless?: RegExp;
   /** One short line, shown to the user as the failure detail. */
   hint: string;
 }
 
-/** The first matching hint, or undefined when the failure is worth reporting. */
+/**
+ * The first matching hint, or undefined when the failure is worth reporting.
+ *
+ * `stage` is the caller's name for what it was doing. Passing it lets an entry
+ * narrow itself; omitting it only considers entries that claim every stage,
+ * because an unscoped call cannot honour a scoped entry.
+ */
 export const expectedFailureHint = (
   text: string,
   table: ExpectedFailure[],
-): string | undefined =>
-  text.trim() ? table.find((f) => f.match.test(text))?.hint : undefined;
+  stage?: string,
+): string | undefined => {
+  if (!text.trim()) return undefined;
+  return table.find(
+    (f) =>
+      (f.stages === undefined ||
+        (stage !== undefined && f.stages.includes(stage))) &&
+      f.match.test(text) &&
+      !f.unless?.test(text),
+  )?.hint;
+};
 
 /** First non-empty line of an error, trimmed to something a TUI line can hold. */
 export const summarizeFailure = (raw?: string): string | undefined => {

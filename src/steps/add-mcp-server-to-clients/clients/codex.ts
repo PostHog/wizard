@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { execSync, execFile } from 'node:child_process';
+import { execSync, execFile, type ExecFileException } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -40,46 +40,148 @@ const listedAsInstalled = (stdout: string): boolean => {
 };
 
 /**
+ * What `reportSpawnFailure` was doing, for hint scoping and for the report.
+ * A union rather than loose strings: a hint scoped to a stage nobody passes is
+ * silently dead, which is how `marketplace add` lost its hint the first time.
+ */
+type CodexStage =
+  | 'MCP add'
+  | 'MCP remove'
+  | 'plugin install'
+  | 'plugin uninstall'
+  | 'marketplace add';
+
+const PLUGIN_STAGES: CodexStage[] = [
+  'plugin install',
+  'plugin uninstall',
+  'marketplace add',
+];
+const MCP_STAGES: CodexStage[] = ['MCP add', 'MCP remove'];
+const ALL_STAGES: CodexStage[] = [...PLUGIN_STAGES, ...MCP_STAGES];
+
+/**
+ * Wording that proves the file codex choked on is the plugin's, not the user's.
+ * Serde phrasing alone ("invalid type", "is no longer supported") says nothing
+ * about whose file it came from, and blaming `~/.codex/config.toml` for our own
+ * broken manifest sends the user to edit a file that is fine.
+ */
+const OUR_MANIFEST =
+  /ai-plugin|plugin\.toml|plugin\.json|marketplace\.toml|posthog@posthog/i;
+
+/**
  * Failures in the user's own environment. Reporting them files issues nobody
  * can action, so hand back a hint instead. Drawn from what the codex install
  * path actually produced in the field.
+ *
+ * Every entry is scoped: a hint that fires on the wrong stage tells the user to
+ * run a command that has nothing to do with what just failed.
  */
 const EXPECTED_FAILURES: ExpectedFailure[] = [
   {
+    // `plugin`/`marketplace` subcommands a pre-plugin codex doesn't have.
     match:
       /unexpected argument|unknown (command|option|argument)|Missing option/i,
+    stages: PLUGIN_STAGES,
     hint: 'your codex CLI is too old for plugins — update codex, then run `codex plugin marketplace add PostHog/ai-plugin`',
   },
   {
+    // The same wording during `mcp add` is a flag we passed, not a plugin
+    // subcommand, so the plugin advice above would send the user nowhere.
+    match:
+      /unexpected argument|unknown (command|option|argument)|Missing option/i,
+    stages: MCP_STAGES,
+    hint: 'your codex CLI is too old for this install — update codex, then run `npx @posthog/wizard mcp add` again',
+  },
+  {
     match: /ENOENT|not found in PATH|spawn .* ENOENT/i,
+    stages: ALL_STAGES,
     hint: 'your codex install looks broken — reinstall codex, then run `codex plugin marketplace add PostHog/ai-plugin`',
   },
   {
+    // Either codex says outright that it could not load its configuration, or
+    // serde phrasing appears alongside `config.toml`. Bare serde wording cannot
+    // tell the user's file from the plugin's, and `config.toml` on its own
+    // silences any failure that merely mentions the path — both send someone to
+    // edit a file that is fine, so the ambiguous case stays reportable.
     match:
-      /failed to load (bootstrap )?configuration|invalid type|is no longer supported|must contain at least one|OPENAI_API_KEY|Missing OpenAI API key/i,
+      /failed to load (bootstrap )?configuration|OPENAI_API_KEY|Missing OpenAI API key|(?=[\s\S]*config\.toml)[\s\S]*(invalid type|unknown field|is no longer supported|must contain at least one)/i,
+    stages: ALL_STAGES,
+    unless: OUR_MANIFEST,
     hint: 'codex could not read its own config — fix what it reports in ~/.codex/config.toml, then retry',
   },
   {
     match:
       /EACCES|EPERM|permission denied|read-only file system|not permitted/i,
+    stages: ALL_STAGES,
     hint: 'codex could not write to its config — fix the permissions on ~/.codex, then retry',
   },
   {
     match: /ENOSPC|no space left/i,
+    stages: ALL_STAGES,
     hint: 'the disk is full — free some space, then retry',
   },
   {
+    // A clone that fails because the repo is missing is our publishing problem,
+    // not the user's network, and telling them to check their connection buries
+    // a renamed or deleted PostHog/ai-plugin where nobody will see it.
     match:
       /git clone .* failed|ENOTFOUND|ETIMEDOUT|ECONNREFUSED|could not resolve host/i,
+    stages: ALL_STAGES,
+    unless:
+      /repository not found|not found|404|does not exist|authentication failed/i,
     hint: 'codex could not reach GitHub to download the plugin — check your network, then retry',
   },
 ];
 
 interface CodexRun {
   ok: boolean;
-  /** Never blank on a failure: the cause, or the exit code when there is none. */
+  /** Never blank on a failure: the cause, or the exit status when there is none. */
   output: string;
 }
+
+/**
+ * A clone of the plugin marketplace is the slowest thing we run. Past this the
+ * command is not slow, it is stuck, and the wizard should say so rather than
+ * wait forever.
+ */
+const RUN_TIMEOUT_MS = 120_000;
+
+/**
+ * `execFile` kills the child once output passes this. The default is 1 MB,
+ * which a verbose clone can reach, and the kill then looks like codex rejecting
+ * the install rather than us cutting it off.
+ */
+const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+
+/**
+ * What `execFile` puts in `error.message` when the command itself never spoke:
+ * the full binary path and arguments. That path contains the user's home
+ * directory, so reporting it fingerprints one root cause per machine — the
+ * failure this reporting was built to stop. Never send it onward.
+ */
+const COMMAND_FAILED_PREAMBLE = /^Command failed:.*$/m;
+
+/**
+ * The cause when neither stream carried one. `execFile` always sets a message,
+ * so there is no "empty error" case to fall through — the message just isn't
+ * usable as it stands.
+ */
+const describeExecFailure = (error: ExecFileException): string => {
+  if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
+    return 'codex produced more output than the wizard can hold, so it was stopped';
+  if (error.killed)
+    return `codex did not finish within ${
+      RUN_TIMEOUT_MS / 1000
+    }s, so it was stopped`;
+  if (error.signal) return `codex was killed by ${error.signal}`;
+
+  const said = error.message.replace(COMMAND_FAILED_PREAMBLE, '').trim();
+  if (said) return said;
+  if (typeof error.code === 'number')
+    return `codex exited with code ${error.code}`;
+  if (error.code) return `codex failed with ${error.code}`;
+  return 'codex failed without reporting a reason';
+};
 
 /**
  * One codex invocation. Async on purpose: `plugin marketplace add` and
@@ -87,9 +189,9 @@ interface CodexRun {
  * process blocks the event loop, which freezes the TUI spinner on its first
  * frame. Never throws; the caller decides what a failure means.
  *
- * A failure's cause is split across the error and stdout, and neither carries
- * it when the process merely exits non-zero — reading one alone reported a
- * blank reason and filed an exception carrying nothing.
+ * A failure's cause is split across the error and the two streams, and none of
+ * them carries it when the process merely exits non-zero — reading one alone
+ * reported a blank reason and filed an exception carrying nothing.
  */
 const runCodex = (
   binary: string,
@@ -97,26 +199,37 @@ const runCodex = (
   env?: NodeJS.ProcessEnv,
 ): Promise<CodexRun> =>
   new Promise((resolve) => {
-    execFile(binary, args, { env }, (error, stdout, stderr) => {
-      if (!error) return resolve({ ok: true, output: stdout ?? '' });
-      // stderr first: it carries what codex actually said, and the TUI shows
-      // the first line. `error.message` leads with `Command failed: <cmd>`, so
-      // preferring it would show the user our own invocation instead of the
-      // cause. It is still the fallback — a process that never started reports
-      // only there.
-      const said = [stderr, stdout]
-        .map((p) => (p ? String(p).trim() : ''))
-        .filter(Boolean)
-        .join('\n');
-      resolve({
-        ok: false,
-        output: redactSecrets(
-          said ||
-            error.message.trim() ||
-            `codex exited with code ${String(error.code)}`,
-        ),
-      });
-    });
+    const child = execFile(
+      binary,
+      args,
+      { env, timeout: RUN_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES },
+      (error, stdout, stderr) => {
+        if (!error) return resolve({ ok: true, output: stdout ?? '' });
+        // stderr first: it carries what codex actually said, and the TUI shows
+        // the first line. `error.message` leads with our own invocation, so
+        // preferring it would show the user the command instead of the cause.
+        const said = [stderr, stdout]
+          .map((p) => (p ? String(p).trim() : ''))
+          .filter(Boolean)
+          .join('\n');
+        // A kill is ours, not codex's, so it outranks whatever the streams got
+        // out before we cut them off.
+        const stopped =
+          error.killed ||
+          !!error.signal ||
+          error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+        resolve({
+          ok: false,
+          output: redactSecrets(
+            stopped || !said ? describeExecFailure(error) : said,
+          ),
+        });
+      },
+    );
+    // codex asks for nothing on stdin here. Leaving the pipe open means a
+    // command that does ask waits on input that never comes, and the promise
+    // never settles. `spawnSync` closed it for us.
+    child.stdin?.end();
   });
 
 /**
@@ -124,9 +237,23 @@ const runCodex = (
  * anything else is reported under a constant message so one root cause stays
  * one issue, with the varying detail in properties.
  */
-const reportSpawnFailure = (stage: string, details: string): InstallResult => {
-  const hint = expectedFailureHint(details, EXPECTED_FAILURES);
-  if (hint) return { success: false, reason: hint };
+const reportSpawnFailure = (
+  stage: CodexStage,
+  details: string,
+): InstallResult => {
+  const hint = expectedFailureHint(details, EXPECTED_FAILURES, stage);
+  if (hint) {
+    // Hinting takes a failure out of error tracking, so without this the only
+    // evidence a pattern has started over-matching is that our exception count
+    // fell, which reads as the fix working. An event keeps the count.
+    analytics.wizardCapture('mcp expected failure hinted', {
+      client: 'Codex',
+      stage,
+      hint,
+      details: scrubHomePaths(details),
+    });
+    return { success: false, reason: hint };
+  }
   analytics.captureException(new Error(`Codex ${stage} failed`), {
     stage,
     details: scrubHomePaths(details),
@@ -317,9 +444,11 @@ export class CodexMCPClient
       return { success: true };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      analytics.captureException(
-        new Error(`Codex config.toml write failed: ${reason}`),
-      );
+      // Constant message, varying detail in properties: the reason carries the
+      // config path, so interpolating it filed one issue per user.
+      analytics.captureException(new Error('Codex config.toml write failed'), {
+        details: scrubHomePaths(reason),
+      });
       return { success: false, reason };
     }
   }
@@ -351,10 +480,7 @@ export class CodexMCPClient
     const result = await runCodex(binary, ['mcp', 'remove', serverName]);
 
     if (!result.ok) {
-      analytics.captureException(
-        new Error(`Failed to remove server from Codex CLI: ${result.output}`),
-      );
-      return { success: false, reason: result.output };
+      return reportSpawnFailure('MCP remove', result.output);
     }
 
     return { success: true };
@@ -445,6 +571,12 @@ export class CodexMCPClient
     const result = await runCodex(binary, ['plugin', 'add', PLUGIN_REF]);
 
     if (!result.ok) {
+      // The listing above can report "not installed" when it merely failed to
+      // run, and every other spawn here reads codex's own wording rather than
+      // turning a no-op into a reported failure.
+      if (ALREADY_INSTALLED_PATTERN.test(result.output)) {
+        return { success: true, alreadyInstalled: true };
+      }
       return reportSpawnFailure('plugin install', result.output);
     }
 

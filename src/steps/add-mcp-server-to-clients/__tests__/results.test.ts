@@ -146,4 +146,71 @@ describe('expectedFailureHint', () => {
   it('returns undefined for empty text rather than matching everything', () => {
     expect(expectedFailureHint('', table)).toBeUndefined();
   });
+
+  // Wording that means one thing during one stage can mean something else
+  // during another, and a hint naming the wrong command is worse than none.
+  describe('scoping a hint to the stages it makes sense on', () => {
+    const scoped = [
+      {
+        match: /unexpected argument/i,
+        stages: ['plugin install'],
+        hint: 'update codex, then add the marketplace',
+      },
+      { match: /unexpected argument/i, hint: 'update codex' },
+    ];
+
+    it("prefers the entry scoped to the caller's stage", () => {
+      expect(
+        expectedFailureHint('unexpected argument', scoped, 'plugin install'),
+      ).toBe('update codex, then add the marketplace');
+    });
+
+    it('skips a scoped entry on another stage', () => {
+      expect(
+        expectedFailureHint('unexpected argument', scoped, 'MCP add'),
+      ).toBe('update codex');
+    });
+
+    // A scoped entry cannot be honoured by a caller that did not say what it
+    // was doing, so it must not fire by default.
+    it('ignores scoped entries when no stage is given', () => {
+      expect(expectedFailureHint('unexpected argument', scoped)).toBe(
+        'update codex',
+      );
+    });
+
+    it('reports when only a mismatched scoped entry exists', () => {
+      const onlyScoped = [scoped[0]];
+      expect(
+        expectedFailureHint('unexpected argument', onlyScoped, 'MCP add'),
+      ).toBeUndefined();
+    });
+  });
+
+  // The tell that a failure is ours, not the environment's. Silencing it would
+  // retire one of our own bugs into advice nobody can act on.
+  describe('disqualifying a match that is really our problem', () => {
+    const guarded = [
+      {
+        match: /git clone .* failed/i,
+        unless: /repository not found/i,
+        hint: 'check your network',
+      },
+    ];
+
+    it('hints when nothing disqualifies the match', () => {
+      expect(
+        expectedFailureHint('git clone x failed: timed out', guarded),
+      ).toBe('check your network');
+    });
+
+    it('reports when the disqualifying wording is present', () => {
+      expect(
+        expectedFailureHint(
+          'git clone x failed: repository not found',
+          guarded,
+        ),
+      ).toBeUndefined();
+    });
+  });
 });
