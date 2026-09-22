@@ -93,6 +93,24 @@ describe('resolveEnvPath', () => {
       'Path traversal rejected',
     );
   });
+
+  it('accepts in-workspace paths when the working directory is not canonical', () => {
+    // Regression guard: a trailing-slash or relative install dir rejected
+    // every write, ".env" included (reported as PHW_AGENT_ORCHESTRATOR_TASKS_FAILED).
+    expect(resolveEnvPath('/project/', '.env')).toBe(
+      path.resolve('/project', '.env'),
+    );
+    expect(resolveEnvPath('/project/sub/..', '.env')).toBe(
+      path.resolve('/project', '.env'),
+    );
+    expect(resolveEnvPath('.', '.env')).toBe(path.resolve('.env'));
+    expect(() => resolveEnvPath('/project/', '../etc/passwd')).toThrow(
+      'Path traversal rejected',
+    );
+    expect(() => resolveEnvPath('.', '../escape/.env')).toThrow(
+      'Path traversal rejected',
+    );
+  });
 });
 
 describe('parseEnvKeys', () => {

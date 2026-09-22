@@ -692,13 +692,12 @@ export function resolveEnvPath(
   workingDirectory: string,
   filePath: string,
 ): string {
-  const resolved = path.resolve(workingDirectory, filePath);
-  if (
-    !resolved.startsWith(workingDirectory + path.sep) &&
-    resolved !== workingDirectory
-  ) {
+  // Canonicalize first: a trailing-slash or relative root fails the prefix check for every path.
+  const root = path.resolve(workingDirectory);
+  const resolved = path.resolve(root, filePath);
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
     throw new Error(
-      `Path traversal rejected: "${filePath}" resolves outside working directory`,
+      `Path traversal rejected: "${filePath}" resolves outside working directory "${root}"`,
     );
   }
   return resolved;
