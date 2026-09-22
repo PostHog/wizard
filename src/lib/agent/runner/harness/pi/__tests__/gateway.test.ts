@@ -58,6 +58,19 @@ describe('buildGatewayProvider transport', () => {
     expect(baseUrl).toBe('https://ai-gateway.us.posthog.com/v1');
   });
 
+  it('never claims the developer role, which the gateway reserves', () => {
+    // pi sends the system prompt as `developer` on a reasoning model unless a
+    // model spec says otherwise, and the gateway refuses that role under an
+    // operator prompt. Both shapes must therefore send `system`.
+    for (const modelId of ['openai/gpt-5.6-terra', 'claude-sonnet-5']) {
+      const { provider } = buildGatewayProvider({ ...base, modelId });
+      const models = (
+        provider as { models: { compat?: Record<string, unknown> }[] }
+      ).models;
+      expect(models[0].compat).toMatchObject({ supportsDeveloperRole: false });
+    }
+  });
+
   it('routes anthropic models over anthropic-messages without /v1', () => {
     const { api, baseUrl } = buildGatewayProvider({
       ...base,
