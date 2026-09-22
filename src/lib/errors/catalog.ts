@@ -176,7 +176,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'case-by-case',
     description: 'The agent emitted an [ABORT] signal with a reason.',
   },
-  [ErrorCodes.AgentTimeout]: {
+  [ErrorCodes.AgenticDetectionTimeout]: {
     group: 'agent',
     retry: 'yes',
     description: 'The agent run exceeded its configured time limit.',

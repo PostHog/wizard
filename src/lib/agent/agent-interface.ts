@@ -1350,7 +1350,7 @@ export async function runAgent(
     if (timedOut) {
       spinner.stop('Agent run timed out');
       return {
-        error: AgentErrorType.TIMEOUT,
+        error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
         message: `Agent run timed out after ${timeoutMs! / 1000}s`,
       };
     }
@@ -1426,7 +1426,7 @@ export async function runAgent(
     if (timedOut) {
       spinner.stop('Agent run timed out');
       return {
-        error: AgentErrorType.TIMEOUT,
+        error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
         message: `Agent run timed out after ${timeoutMs! / 1000}s`,
       };
     }

@@ -91,7 +91,9 @@ describe('agentic detection retry', () => {
 
   it('retries a timed-out first run with a fresh Haiku session', async () => {
     const events: string[] = [];
-    execute.mockResolvedValueOnce({ error: AgentErrorType.TIMEOUT });
+    execute.mockResolvedValueOnce({
+      error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+    });
     emitResult(
       '{"path":".","framework":"Next.js","targetId":"nextjs","hasPostHog":false}',
     );
@@ -113,7 +115,9 @@ describe('agentic detection retry', () => {
   });
 
   it('reports a typed timeout when the retry also times out', async () => {
-    execute.mockResolvedValue({ error: AgentErrorType.TIMEOUT });
+    execute.mockResolvedValue({
+      error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+    });
 
     await expect(detectProjectsWithAgent(session(), options)).rejects.toThrow(
       AgenticDetectionTimeoutError,

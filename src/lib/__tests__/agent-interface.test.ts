@@ -153,7 +153,7 @@ describe('runAgent', () => {
 
       expect(controller?.signal.aborted).toBe(true);
       expect(await pending).toEqual({
-        error: AgentErrorType.TIMEOUT,
+        error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
         message: 'Agent run timed out after 60s',
       });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Agent run timed out');

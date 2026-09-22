@@ -452,7 +452,7 @@ export async function detectProjectsWithAgent(
       middleware,
     );
 
-    if (result.error === AgentErrorType.TIMEOUT) {
+    if (result.error === AgentErrorType.AGENTIC_DETECTION_TIMEOUT) {
       if (attempt === 0) {
         onEvent?.('Project scan timed out; retrying...');
         continue;
