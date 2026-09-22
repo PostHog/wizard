@@ -184,6 +184,19 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
+it('passes actual self-driving GitHub gate state to the callable host', async () => {
+  const notConnected = session();
+  notConnected.githubConnected = false;
+  await runProgramAgent(program('self-driving'), notConnected);
+  expect(runAgent).not.toHaveBeenCalled();
+
+  const connected = session();
+  connected.githubConnected = true;
+  connected.selfDrivingHandoffConfirmed = true;
+  await runProgramAgent(program('self-driving'), connected);
+  expect(runAgent).toHaveBeenCalledOnce();
+});
+
 it('passes the fixed CI bearer through the callable host without agent-global gateway state', async () => {
   const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-auth-'));
   const tokenFile = path.join(installDir, 'gateway-token');

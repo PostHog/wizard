@@ -322,11 +322,14 @@ async function runProgram(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       agentFlow: config.agentFlow,
-      // The TUI step flow has already required the GitHub connection before
-      // reaching this run screen; tell the callable host that gate passed.
+      // Carry the actual TUI gate state into the callable host. A non-TUI
+      // caller of this legacy adapter must not be treated as connected.
       composition:
         programConfig.id === 'self-driving'
-          ? { githubConnected: true, handoffConfirmed: true }
+          ? {
+              githubConnected: session.githubConnected === true,
+              handoffConfirmed: session.selfDrivingHandoffConfirmed,
+            }
           : undefined,
     },
     {
