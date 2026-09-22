@@ -72,7 +72,7 @@ import { withMode } from './index';
 import {
   detectNodePackageManagers,
   type PackageManagerDetector,
-} from '@lib/detection/package-manager';
+} from '@utils/package-manager';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];

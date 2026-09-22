@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { makeMutex } from '@utils/atomic-ledger';
-import type { PackageManagerDetector } from '../detection/package-manager';
+import type { PackageManagerDetector } from '@utils/package-manager';
 import {
   AUDIT_CHECKS_FILE,
   type AuditCheck,

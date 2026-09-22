@@ -7,7 +7,7 @@ import {
 } from '@lib/agent/agent-interface';
 import { createAioCapture } from '@lib/agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
-import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import { detectNodePackageManagers } from '@utils/package-manager';
 import { runOptions } from '@lib/agent/runner/shared/bootstrap';
 import { createEmitLog } from '@lib/agent/runner/shared/progress-collector';
 import type {

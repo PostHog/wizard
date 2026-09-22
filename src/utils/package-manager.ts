@@ -170,3 +170,70 @@ export function detectAllPackageManagers({
     return matches;
   });
 }
+
+// ---------------------------------------------------------------------------
+// The detector contract the agent's `detect_package_manager` tool calls
+// ---------------------------------------------------------------------------
+
+/** Structured package manager info the agent can act on */
+export interface DetectedPackageManager {
+  name: string;
+  label: string;
+  installCommand: string;
+  runCommand?: string;
+}
+
+/** Result returned by every detector */
+export interface PackageManagerInfo {
+  detected: DetectedPackageManager[];
+  primary: DetectedPackageManager | null;
+  recommendation: string;
+}
+
+/** Signature each framework implements */
+export type PackageManagerDetector = (
+  installDir: string,
+) => Promise<PackageManagerInfo>;
+
+// ---------------------------------------------------------------------------
+// Node.js helper
+// ---------------------------------------------------------------------------
+
+function serializeNodePM(pm: PackageManager): DetectedPackageManager {
+  return {
+    name: pm.name,
+    label: pm.label,
+    installCommand: pm.installCommand,
+    runCommand: pm.runScriptCommand,
+  };
+}
+
+/**
+ * Detect Node.js package managers via lockfiles.
+ * Wraps detectAllPackageManagers() above.
+ */
+export function detectNodePackageManagers(
+  installDir: string,
+): Promise<PackageManagerInfo> {
+  const detected = detectAllPackageManagers({ installDir }).map(
+    serializeNodePM,
+  );
+
+  if (detected.length === 0) {
+    return Promise.resolve({
+      detected: [],
+      primary: null,
+      recommendation: 'No lockfile found. Default to npm (npm add, npm run).',
+    });
+  }
+
+  const primary = detected[0];
+  return Promise.resolve({
+    detected,
+    primary,
+    recommendation:
+      detected.length === 1
+        ? `Use ${primary.label} (${primary.installCommand}).`
+        : `Multiple package managers detected. Prefer ${primary.label} (${primary.installCommand}).`,
+  });
+}
