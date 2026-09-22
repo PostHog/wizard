@@ -1,5 +1,5 @@
 import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';

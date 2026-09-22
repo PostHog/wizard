@@ -4,7 +4,7 @@
 // logging-ui has finished initializing.
 import '@ui';
 import { HeadlessUI } from '../headless-ui';
-import { TaskStatus } from '../wizard-ui';
+import { TaskStatus } from '@ui/wizard-ui';
 import type { WizardStore } from '@tui/store';
 
 describe('HeadlessUI', () => {

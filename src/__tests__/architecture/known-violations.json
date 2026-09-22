@@ -16,6 +16,7 @@
     "src/commands/upload-sourcemaps.ts -> src/programs/error-tracking-upload-source-maps/index.ts",
     "src/commands/warehouse.ts -> src/programs/warehouse-source/index.ts",
     "src/env.ts -> src/lib/headless-mode.ts",
+    "src/headless/renderers/headless-ui.ts -> src/tui/store.ts",
     "src/lib/runners/run-non-interactive.ts -> src/programs/audit/types.ts",
     "src/lib/runners/run-non-interactive.ts -> src/programs/detect-map.ts",
     "src/lib/runners/run-non-interactive.ts -> src/programs/task-stream/index.ts",
@@ -43,9 +44,9 @@
     "src/shared/utils/setup-utils.ts -> src/programs/oauth/program-scopes.ts",
     "src/shared/utils/setup-utils.ts -> src/programs/types.ts",
     "src/shared/utils/setup-utils.ts -> src/ui/index.ts",
+    "src/shared/utils/wizard-abort.ts -> src/headless/renderers/logging-ui.ts",
     "src/shared/utils/wizard-abort.ts -> src/lib/wizard-session.ts",
     "src/shared/utils/wizard-abort.ts -> src/ui/index.ts",
-    "src/shared/utils/wizard-abort.ts -> src/ui/logging-ui.ts",
     "src/tui/decks/error-tracking/tips.ts -> src/programs/replay-vision/index.ts",
     "src/tui/family-picker.tsx -> src/commands/command.ts",
     "src/tui/playground/demos/AuditChecksDemo.tsx -> src/programs/audit/types.ts",
@@ -84,6 +85,7 @@
     "src/tui/services/wizard-spellbook.ts -> src/agent/index.ts",
     "src/tui/services/wizard-spellbook.ts -> src/programs/program-step.ts",
     "src/tui/store.ts -> src/programs/ai-opt-in-gate.ts",
-    "src/tui/store.ts -> src/programs/posthog-integration/detect.ts"
+    "src/tui/store.ts -> src/programs/posthog-integration/detect.ts",
+    "src/ui/index.ts -> src/headless/renderers/logging-ui.ts"
   ]
 }

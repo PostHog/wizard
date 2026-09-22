@@ -2,7 +2,7 @@ vi.mock('@ui', () => ({ getUI: vi.fn() }));
 vi.mock('@utils/debug');
 
 import { createUiReducer, uiInteraction } from '../agent-progress';
-import { LoggingUI } from '../logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { AgentProgress } from '@agent/progress';
 import { OutroKind } from '@lib/wizard-session';
 

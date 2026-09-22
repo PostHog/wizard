@@ -7,7 +7,7 @@ import { uploadEnvironmentVariablesStep } from '@steps/upload-environment-variab
 import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import { setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';

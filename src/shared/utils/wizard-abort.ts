@@ -9,7 +9,7 @@
 import { analytics } from './analytics';
 import { logToFile } from './debug';
 import { getUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@shared/errors';
 import {

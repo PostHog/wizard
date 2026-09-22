@@ -10,6 +10,7 @@ export type Surface =
   | 'agent'
   | 'programs'
   | 'tui'
+  | 'headless'
   | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -21,13 +22,8 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     ['shared', (p) => p.startsWith('src/shared/')],
     ['agent', (p) => p.startsWith('src/agent/')],
     ['programs', (p) => p.startsWith('src/programs/')],
-    [
-      'tui',
-      (p) =>
-        p.startsWith('src/tui/') ||
-        p.startsWith('src/ui/') ||
-        p.startsWith('src/steps/'),
-    ],
+    ['tui', (p) => p.startsWith('src/tui/') || p.startsWith('src/steps/')],
+    ['headless', (p) => p.startsWith('src/headless/')],
     [
       'cli',
       (p) =>
@@ -54,7 +50,17 @@ export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   agent: ['env', 'shared', 'agent'],
   programs: ['env', 'shared', 'agent', 'programs'],
   tui: ['env', 'shared', 'legacy', 'programs', 'tui'],
-  cli: ['env', 'shared', 'legacy', 'agent', 'programs', 'tui', 'cli'],
+  headless: ['env', 'shared', 'legacy', 'programs', 'headless'],
+  cli: [
+    'env',
+    'shared',
+    'legacy',
+    'agent',
+    'programs',
+    'tui',
+    'headless',
+    'cli',
+  ],
 };
 
 // The agent's public entries. Outside `src/agent`, an import into the agent
@@ -73,7 +79,10 @@ export function ruleFor(fromFile: string, toFile: string): string | null {
     if (target !== AGENT_VALUES_ENTRY && target !== AGENT_TYPES_ENTRY) {
       return 'agent-deep-import';
     }
-    if (from === 'tui' && target !== AGENT_TYPES_ENTRY) {
+    if (
+      (from === 'tui' || from === 'headless') &&
+      target !== AGENT_TYPES_ENTRY
+    ) {
       return `matrix:${from}->${to}`;
     }
     return null;
@@ -501,7 +510,10 @@ describe('surface classification', () => {
       'programs',
     );
     expect(classifySurface('src/tui/App.tsx')).toBe('tui');
-    expect(classifySurface('src/ui/index.ts')).toBe('tui');
+    expect(classifySurface('src/ui/index.ts')).toBe('legacy');
+    expect(classifySurface('src/headless/renderers/logging-ui.ts')).toBe(
+      'headless',
+    );
     expect(classifySurface('src/steps/index.ts')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');

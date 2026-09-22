@@ -35,6 +35,7 @@ const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
 const AGENT_TESTS = [`src/agent/**/${TESTS}`];
 const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
 const TUI_TESTS = [`src/tui/**/${TESTS}`];
+const HEADLESS_TESTS = [`src/headless/**/${TESTS}`];
 const CLI_TESTS = [
   `src/commands/**/${TESTS}`,
   `src/lib/runners/${TESTS}`,
@@ -89,6 +90,7 @@ export default defineConfig({
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
+      { find: /^@headless\/(.*)$/, replacement: `${r('src/headless')}/$1` },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
@@ -104,6 +106,7 @@ export default defineConfig({
       project('agent', AGENT_TESTS),
       project('programs', PROGRAM_TESTS),
       project('tui', TUI_TESTS),
+      project('headless', HEADLESS_TESTS),
       project('cli', CLI_TESTS),
       project('harness', HARNESS_TESTS),
       project('architecture', ARCH_TESTS),
@@ -116,6 +119,7 @@ export default defineConfig({
           ...AGENT_TESTS,
           ...PROGRAM_TESTS,
           ...TUI_TESTS,
+          ...HEADLESS_TESTS,
           ...CLI_TESTS,
           ...ARCH_TESTS,
         ],

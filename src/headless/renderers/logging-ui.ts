@@ -10,7 +10,7 @@ import {
   type SpinnerHandle,
   type AuthErrorDetail,
   type TokenUsageDelta,
-} from './wizard-ui';
+} from '@ui/wizard-ui';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser } from '@shared/api';
 import { OAUTH_TIMEOUT_MS } from '@shared/constants';

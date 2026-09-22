@@ -27,6 +27,7 @@
       "@programs/types": ["./src/programs/types.ts"],
       "@programs/*": ["./src/programs/*"],
       "@tui/*": ["./src/tui/*"],
+      "@headless/*": ["./src/headless/*"],
       "@lib/*": ["./src/lib/*"],
       "@e2e-harness/*": ["./e2e-harness/*"],
       "@utils/*": ["./src/shared/utils/*"],

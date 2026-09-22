@@ -10,7 +10,7 @@ import {
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { createUiReducer, getUI, setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { ProgramConfig } from '@programs/types';
 import type { InferenceAuthProvider } from '@agent/types';
 import { getAuditChecks } from '@programs/audit/types';
@@ -207,7 +207,7 @@ export function runNonInteractive(
     let taskStream: TaskStreamPush | null = null;
     {
       const { WizardStore } = await import('@tui/store');
-      const { HeadlessUI } = await import('@ui/headless-ui');
+      const { HeadlessUI } = await import('@headless/renderers/headless-ui');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await import('@programs/task-stream/index');
 
