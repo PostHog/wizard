@@ -44,6 +44,7 @@ async function initializeHarness(
         sequence: Sequence.linear,
         model: 'test',
       },
+      programCommandments: ['Follow the program rule'],
       skillsBaseUrl: 'https://skills.test',
       wizardFlags: {},
       wizardFlagPayloads: {},
@@ -119,6 +120,23 @@ async function initializeHarness(
     }
   };
 }
+
+describe.each(['linear', 'task'] as const)(
+  'Anthropic %s resolved program inputs',
+  (mode) => {
+    it('forwards inference auth and program commandments into initialization', async () => {
+      await initializeHarness(mode, undefined);
+      const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
+      expect(config).toMatchObject({
+        programCommandments: ['Follow the program rule'],
+        inferenceAuth: { resolve: expect.any(Function) },
+      });
+      await expect(config.inferenceAuth?.resolve()).resolves.toMatchObject({
+        token: 'phe_fixture',
+      });
+    });
+  },
+);
 
 afterEach(() => {
   vi.useRealTimers();
