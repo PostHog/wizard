@@ -343,10 +343,11 @@ export class ClaudeCodeMCPClient
     const binary = this.findClaudeBinary();
     if (!binary) return false;
 
+    // Presence, not health: `index.ts` asks this to decide whether there is
+    // anything to remove, and a disabled plugin still has to be uninstalled.
+    // Whether it actually serves is `installPlugin`'s question, not this one.
     const listed = await this.installedPlugins(binary);
-    // `enabled: false` means installed but serving nothing. Report it as not
-    // installed so the install path runs and the user ends up with a server.
-    if (listed) return listed.some((p) => p.enabled !== false);
+    if (listed) return listed.length > 0;
 
     // Older CLI without `--json`. A substring scan also matches a plugin merely
     // named `posthog-something`, which is why it's the fallback and not the path.
@@ -364,7 +365,16 @@ export class ClaudeCodeMCPClient
 
     // Ask before installing so a re-run reports "already installed" rather than
     // relying on the CLI's error text to spot the no-op.
-    if (await this.isPluginInstalled()) {
+    //
+    // A plugin disabled in `/plugin` is installed but serves nothing, and
+    // Claude Code takes its MCP server from the plugin. Reporting it as
+    // already installed leaves the user with no server and a screen saying
+    // they are done, so fall through and install: the CLI re-enables it.
+    const listed = await this.installedPlugins(binary);
+    const serving = listed
+      ? listed.some((p) => p.enabled !== false)
+      : await this.isPluginInstalled();
+    if (serving) {
       return { success: true, alreadyInstalled: true };
     }
 

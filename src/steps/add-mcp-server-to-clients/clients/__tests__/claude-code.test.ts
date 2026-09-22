@@ -139,26 +139,13 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       await expect(client.isPluginInstalled()).resolves.toBe(false);
     });
 
-    it('returns false when the only installed copy is disabled', async () => {
-      // A disabled plugin contributes no MCP server, and Claude Code takes its
-      // server from the plugin, so reporting it installed leaves the user with
-      // nothing serving posthog and a screen that says they are done.
+    it('counts a disabled copy as installed, because removal still has to clear it', async () => {
+      // `index.ts` asks this to decide whether there is anything to remove.
+      // Answering false for a disabled plugin hides it from `mcp remove` and
+      // leaves it on the machine forever.
       routeClaude((cmd) =>
         isCmd(cmd, 'plugin', 'list')
           ? listedWith(['posthog@posthog', false])
-          : '',
-      );
-      const client = new ClaudeCodeMCPClient();
-      await expect(client.isPluginInstalled()).resolves.toBe(false);
-    });
-
-    it('returns true when a disabled copy sits beside an enabled one', async () => {
-      routeClaude((cmd) =>
-        isCmd(cmd, 'plugin', 'list')
-          ? listedWith(
-              ['posthog@posthog', false],
-              ['posthog@claude-plugins-official', true],
-            )
           : '',
       );
       const client = new ClaudeCodeMCPClient();
@@ -309,6 +296,44 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
       expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('installs over a disabled plugin instead of reporting it already installed', async () => {
+      // Disabled means installed but serving nothing, and Claude Code takes
+      // its MCP server from the plugin. The CLI re-enables on install, so the
+      // install has to actually run.
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list'))
+          return listedWith(['posthog@posthog', false]);
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).toContainEqual(
+        expect.stringContaining('plugin install posthog@posthog'),
+      );
+    });
+
+    it('reports already installed when an enabled copy is present', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(
+              ['posthog@posthog', false],
+              ['posthog@claude-plugins-official', true],
+            )
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(claudeCalls()).not.toContainEqual(
+        expect.stringContaining('plugin install'),
+      );
     });
 
     it('registers our marketplace when a foreign one holds the same name', async () => {
@@ -471,6 +496,20 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
       await expect(client.removePlugin()).resolves.toEqual({ success: true });
       expect(claudeCalls()).toContain('claude plugin uninstall posthog');
+    });
+
+    it('uninstalls a disabled copy, which discovery must still surface', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(['posthog@posthog', false])
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+      expect(claudeCalls()).toContainEqual(
+        expect.stringContaining('plugin uninstall posthog@posthog'),
+      );
     });
 
     it('reports nothing to do when no posthog plugin is installed', async () => {
