@@ -455,6 +455,17 @@ it('keeps the callable program registry free of UI and session runtime imports',
   expect(forbidden).toEqual([]);
 });
 
+it('keeps the callable runProgram closure free of UI, session, and legacy registry imports', () => {
+  const forbidden = runtimeClosure('src/programs/run-program.ts').filter(
+    (file) =>
+      file === 'src/programs/program-registry.ts' ||
+      file.startsWith('src/ui/') ||
+      file.startsWith('src/steps/') ||
+      file.startsWith('src/lib/wizard-session'),
+  );
+  expect(forbidden).toEqual([]);
+});
+
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');

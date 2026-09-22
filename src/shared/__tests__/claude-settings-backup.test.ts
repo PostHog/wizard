@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
 
 const { captureException, wizardCapture } = vi.hoisted(() => ({
   captureException: vi.fn(),
@@ -35,12 +36,14 @@ describe('claude settings backup/restore', () => {
   let claudeDir: string;
 
   beforeEach(() => {
+    clearCleanup();
     captureException.mockClear();
     wizardCapture.mockClear();
     ({ dir, claudeDir } = makeProject());
   });
 
   afterEach(() => {
+    clearCleanup();
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -58,6 +61,16 @@ describe('claude settings backup/restore', () => {
       expect(exists(SETTINGS)).toBe(false);
       expect(read(BACKUP)).toBe('{"apiKeyHelper":"x"}');
       expect(captureException).not.toHaveBeenCalled();
+    });
+
+    it('registers restoration with the process cleanup registry', () => {
+      fs.writeFileSync(path.join(claudeDir, SETTINGS), '{"apiKeyHelper":"x"}');
+
+      expect(backupAndFixClaudeSettings(dir)).toBe(true);
+      runCleanups();
+
+      expect(read(SETTINGS)).toBe('{"apiKeyHelper":"x"}');
+      expect(exists(BACKUP)).toBe(false);
     });
 
     it('returns false and stays silent when there is nothing to back up', () => {

@@ -2,7 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readFileHead } from './bounded-fs';
 import { withProgress } from './telemetry';
-import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
+import {
+  readProjectPackageJson,
+  writeProjectPackageJson,
+} from './package-json-io';
 import type { PackageJson } from './package-json';
 import { analytics } from './analytics';
 import type { WizardRunOptions } from './types';
@@ -48,7 +51,7 @@ async function writeOverride(
   pkgVersion: string,
   { installDir }: InstallDirOpt,
 ): Promise<void> {
-  const pkg = await getPackageDotJson({ installDir });
+  const pkg = await readProjectPackageJson(installDir);
   let next: PackageJson;
   if (slot === 'yarn') {
     next = {
@@ -69,7 +72,7 @@ async function writeOverride(
       overrides: { ...(pkg.overrides ?? {}), [pkgName]: pkgVersion },
     };
   }
-  await updatePackageDotJson(next, { installDir });
+  await writeProjectPackageJson(installDir, next);
 }
 
 export const BUN: PackageManager = {
