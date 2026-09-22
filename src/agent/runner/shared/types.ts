@@ -21,7 +21,7 @@ import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
-import type { GatewayAuth } from '@agent/gateway-session';
+import type { GatewayAuth } from '@shared/gateway-auth';
 
 export type { PromptContext, Credentials };
 
@@ -208,8 +208,8 @@ export interface RunInput {
   installDir: string;
   /** Resolved credentials, including the host family and its MCP url. */
   credentials: Credentials;
-  /** B2 migration seam: programs may supply already-resolved inference auth. */
-  inferenceAuth?: InferenceAuthProvider;
+  /** Caller-owned gateway auth, including refresh policy. */
+  inferenceAuth: InferenceAuthProvider;
   /** Project payload resolved at authentication, for prompt context. */
   project: ApiProject | null;
   /** User payload resolved at authentication, for the AI opt-in prompt line. */

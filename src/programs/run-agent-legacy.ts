@@ -187,6 +187,10 @@ async function runProgram(
   // `session.credentials`; narrow once at this boundary — `authenticate` above
   // set them — so downstream readers get a non-null type without asserting.
   const credentials = session.credentials!;
+  const resolvedInferenceAuth =
+    inferenceAuth ??
+    session.inferenceAuth ??
+    createPosthogInferenceAuthProvider(credentials, programConfig.id);
 
   // Resolve which sequence and harness will run a program (CLI → PostHog flag →
   // per-program binding → default), tag both axes onto analytics, and hand the
@@ -264,6 +268,7 @@ async function runProgram(
   const input: RunInput = {
     installDir: session.installDir,
     credentials,
+    inferenceAuth: resolvedInferenceAuth,
     project: session.apiProject,
     apiUser: session.apiUser,
     skillId: session.skillId ?? undefined,
@@ -297,12 +302,7 @@ async function runProgram(
       installDir: input.installDir,
       credentials: {
         posthog: input.credentials,
-        inferenceAuth:
-          inferenceAuth ??
-          createPosthogInferenceAuthProvider(
-            input.credentials,
-            programConfig.id,
-          ),
+        inferenceAuth: input.inferenceAuth,
         project: input.project,
         apiUser: input.apiUser,
       },

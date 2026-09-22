@@ -17,13 +17,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 ```
 
 - `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill, tools, copy), the resolved `binding` (sequence, harness, model and task-role routes), supplied program commandments and stage policy, the skills origin, flag snapshot, trace tags, tool allow and deny lists, seed tasks and bound completion `hooks`.
-- `RunInput`: install directory, resolved credentials, project and user payloads, skill id, detected integration, `flags` (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`, `benchmark`, `yaraReport`) and the host the CLI was told.
+- `RunInput`: install directory, resolved PostHog credentials and inference-auth provider, project and user payloads, skill id, detected integration, `flags` (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`, `benchmark`, `yaraReport`) and the host the CLI was told.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`. Success may carry an `outro`; the other three carry a `failure` (`AgentFailure`: message, outro data, error, exit code, error code, detail). Every result carries `skillId` and a `snapshot` of what the run reported: tasks, status lines, stage, token usage totals, final cost, dashboard and notebook URLs, handoff text.
 - `AgentProgress`: one event per thing the run reports, in emission order. Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`, `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are copies, never live objects.
 - `AgentInteraction`: every member optional. `ask(question)` resolves with answers, `cancelAsk()` dismisses the open question, `taskNotice(notice)` resolves with whether to keep an optional task, `cancelTaskNotice()` declines it.
 - Errors: the agent does not exit the process and does not throw for a decided failure. An unexpected throw becomes `outcome: Crashed` with the error attached. A gateway 401 emits `authError` and then fails.
 
-Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`, `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`, `configureGatewayFromCIEnvironment`, `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on first call.
+Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`, `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`, `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on first call.
 
 Minimal invocation:
 
@@ -55,7 +55,7 @@ The agent owns run state for one invocation: the task queue, phase, status, reso
 
 ```text
 caller ── RunConfig + RunInput ──▶ runAgent
-                                      │ prepareRun: gateway mint, triage provider
+                                      │ prepareRun: supplied gateway auth, triage provider
                                       ▼
                           sequence (linear | orchestrator)
                                       │

@@ -33,8 +33,8 @@ export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
  * Leaves in B2. Programs own credentials and the legacy adapter dies.
  * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface
  * that detection/agentic.ts and run-agent-legacy.ts still call; they go
- * through runAgent or leave with detection. configureGatewayFromCIEnvironment
- * is CI inference auth the headless provider owns. flushScanReport becomes a
+ * through runAgent or leave with detection. CI inference auth belongs to the
+ * headless provider. flushScanReport becomes a
  * progress event rather than a call. downloadSkill leaves once the skill scan
  * runs at load and skill install becomes shared.
  */
@@ -43,10 +43,6 @@ export {
   initializeAgent,
   runAgent as executeAgent,
 } from './agent-interface';
-export { configureGatewayFromCIEnvironment } from './gateway-session';
-// B2 migration seam: program-owned providers use the existing mint until the
-// session implementation moves out of the agent with all harness call sites.
-export { gatewayAuth, createCiGatewayAuth } from './gateway-session';
 export { flushScanReport } from './yara-hooks';
 export { downloadSkill } from './tools';
 

@@ -2,7 +2,6 @@ import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
-import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { Harness, Sequence } from '@shared/constants';
 import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
@@ -33,10 +32,6 @@ vi.mock('@shared/local-dev', async (original) => ({
 vi.mock('@utils/environment', async (original) => ({
   ...(await original<typeof import('@utils/environment')>()),
   readEnvironment: () => ({}),
-}));
-vi.mock('@agent/gateway-session', async (original) => ({
-  ...(await original<typeof import('@agent/gateway-session')>()),
-  configureGatewayFromCIEnvironment: vi.fn(),
 }));
 vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
@@ -184,20 +179,43 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
+it('passes a session-scoped CI bearer to a composed child run', async () => {
+  const inferenceAuth = {
+    resolve: vi.fn().mockResolvedValue({
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      token: 'fixed-ci-bearer',
+      teamId: 42,
+      refreshAtMs: Infinity,
+    }),
+  };
+  const scopedSession = Object.assign(session(), { inferenceAuth });
+
+  await runProgramAgent(program(), scopedSession, { composed: true });
+
+  expect(vi.mocked(runAgent).mock.calls[0]?.[1].inferenceAuth).toBe(
+    inferenceAuth,
+  );
+});
+
 it('passes the fixed CI bearer through the callable host without agent-global gateway state', async () => {
   const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-auth-'));
   const tokenFile = path.join(installDir, 'gateway-token');
   fs.writeFileSync(tokenFile, ' fixed-ci-bearer \n');
   vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
   try {
+    const ciPreRun = vi.fn(async (session: ReturnType<typeof buildSession>) => {
+      expect(await session.inferenceAuth?.resolve()).toMatchObject({
+        token: 'fixed-ci-bearer',
+      });
+    });
     runNonInteractive(
-      program(),
+      { ...program(), ciPreRun },
       { apiKey: 'phx_test', projectId: '42', installDir, telemetry: false },
       'ci',
     );
     await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+    expect(ciPreRun).toHaveBeenCalledOnce();
 
-    expect(configureGatewayFromCIEnvironment).not.toHaveBeenCalled();
     const input = vi.mocked(runAgent).mock.calls[0]?.[1];
     expect(input).toBeDefined();
     expect(await input?.inferenceAuth?.resolve()).toEqual({

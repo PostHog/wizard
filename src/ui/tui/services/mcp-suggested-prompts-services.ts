@@ -12,7 +12,7 @@
 
 import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { Program } from '@programs';
+import { Program, createPosthogInferenceAuthProvider } from '@programs';
 import type { WizardStore } from '@ui/tui/store';
 import type { ApiUser } from '@shared/api';
 import {
@@ -130,6 +130,12 @@ export function createMcpSuggestedPromptsServices(
         // trace tags are built where the headers are, keeping the agent module
         // out of the TUI's startup graph.
         programId: store.analyticsProgramId,
+        inferenceAuth:
+          store.session.inferenceAuth ??
+          createPosthogInferenceAuthProvider(
+            args.credentials,
+            store.analyticsProgramId,
+          ),
         integration: store.session.integration ?? undefined,
       }),
 
@@ -153,6 +159,7 @@ export function createMcpSuggestedPromptsServices(
 async function* runProductionPromptStreaming(args: {
   prompt: string;
   credentials: Credentials;
+  inferenceAuth: import('@agent/types').InferenceAuthProvider;
   signal: AbortSignal;
   resumeSessionId?: string;
   programId?: string;
