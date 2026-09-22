@@ -9,6 +9,7 @@ import {
 } from '@steps/add-mcp-server-to-clients/plugin-client';
 import {
   redactSecrets,
+  scrubHomePaths,
   type InstallResult,
 } from '@steps/add-mcp-server-to-clients/results';
 import { LoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
@@ -60,6 +61,20 @@ interface ListedMarketplace {
 }
 
 type ClaudeRun = { ok: boolean; output: string };
+
+/**
+ * `plugin marketplace add` clones a git repository, the slowest thing we run.
+ * Past this the command is not slow, it is stuck, and a clone waiting on a
+ * credential prompt would otherwise hang the wizard with the spinner frozen.
+ */
+const RUN_TIMEOUT_MS = 120_000;
+
+/**
+ * `execFile` kills the child once output passes this. The default is 1 MB,
+ * which a verbose clone can reach, and the kill then looks like Claude Code
+ * rejecting the install rather than us cutting it off.
+ */
+const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 /**
  * Our catalog, by name *and* repository. A marketplace merely called `posthog`
@@ -319,13 +334,34 @@ export class ClaudeCodeMCPClient
   // throws; the caller decides what a failure means.
   private runClaude(binary: string, args: string[]): Promise<ClaudeRun> {
     return new Promise((resolve) => {
-      execFile(binary, args, (error, stdout) => {
-        if (!error)
-          return resolve({ ok: true, output: stdout?.toString() ?? '' });
-        // execFile puts `Command failed: <cmd>` and stderr in the message, the
-        // same text execSync produced, so failure matching is unchanged.
-        resolve({ ok: false, output: error.message });
-      });
+      execFile(
+        binary,
+        args,
+        { timeout: RUN_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES },
+        (error, stdout) => {
+          if (!error)
+            return resolve({ ok: true, output: stdout?.toString() ?? '' });
+          if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
+            return resolve({
+              ok: false,
+              output:
+                'claude produced more output than the wizard can hold, so it was stopped',
+            });
+          if (error.killed || error.signal)
+            return resolve({
+              ok: false,
+              output: `claude did not finish within ${
+                RUN_TIMEOUT_MS / 1000
+              }s, so it was stopped`,
+            });
+          // execFile puts `Command failed: <cmd>` and stderr in the message, the
+          // same text execSync produced, so failure matching is unchanged.
+          resolve({
+            ok: false,
+            output: scrubHomePaths(redactSecrets(error.message)),
+          });
+        },
+      );
     });
   }
 

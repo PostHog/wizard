@@ -45,6 +45,12 @@ export const redactSecrets = (raw: string): string =>
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(/ph[xspc]_[A-Za-z0-9_-]+/g, '[redacted]');
 
+/** Remove home directories before reporting CLI failures. */
+export const scrubHomePaths = (raw: string): string =>
+  raw
+    .replace(/\/(?:Users|home)\/[^/\s'"]+/g, '~')
+    .replace(/[A-Za-z]:\\Users\\[^\\\s'"]+/gi, '~');
+
 /** First non-empty line of an error, trimmed to something a TUI line can hold. */
 export const summarizeFailure = (raw?: string): string | undefined => {
   const line = redactSecrets(raw ?? '')

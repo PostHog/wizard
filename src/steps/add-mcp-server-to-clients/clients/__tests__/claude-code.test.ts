@@ -72,14 +72,24 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       ([file, args]: [string, string[]]) => `${file} ${args.join(' ')}`,
     );
 
+  type ExecFileCb = (e: Error | null, stdout: string, stderr: string) => void;
+
+  /** The options argument every `claude` invocation is spawned with. */
+  const execFileOptions = () =>
+    execFileMock.mock.calls.map(
+      ([, , options]: [string, string[], unknown]) => options,
+    );
+
   /** Answer claude invocations by their joined args; return an Error to fail one. */
   const routeClaude = (handler: (cmd: string) => string | Error) => {
     execFileMock.mockImplementation(
       (
         _file: string,
         args: string[],
-        cb: (e: Error | null, stdout: string, stderr: string) => void,
+        optionsOrCb: unknown,
+        maybeCb?: ExecFileCb,
       ) => {
+        const cb = (maybeCb ?? optionsOrCb) as ExecFileCb;
         const out = handler(args.join(' '));
         if (out instanceof Error) cb(out, '', out.message);
         else cb(null, out, '');
@@ -199,6 +209,86 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         execSyncMock.mock.calls.filter(([c]) => c !== 'command -v claude'),
       ).toEqual([]);
       expect(execFileMock).toHaveBeenCalled();
+    });
+
+    // A marketplace clone that stalls on a credential prompt never calls back,
+    // so without a timeout the wizard waits on it forever with the spinner
+    // frozen. The buffer cap is the same story from the other side: a verbose
+    // clone past the 1 MB default kills the child and reads as a rejection.
+    it('bounds every CLI call with a timeout and an output cap', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      await client.installPlugin();
+
+      expect(execFileOptions().length).toBeGreaterThan(0);
+      for (const options of execFileOptions()) {
+        expect(options).toEqual(
+          expect.objectContaining({
+            timeout: 120_000,
+            maxBuffer: 16 * 1024 * 1024,
+          }),
+        );
+      }
+    });
+
+    it('reports a stalled CLI as a timeout rather than an empty reason', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces();
+        if (isCmd(cmd, 'plugin', 'install')) {
+          const killed = new Error(
+            'Command failed: claude plugin install posthog@posthog',
+          ) as Error & { killed: boolean };
+          killed.killed = true;
+          return killed;
+        }
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+
+      const result = await client.installPlugin();
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toMatch(/did not finish within/i);
+      expect(result.reason).not.toMatch(/Command failed/i);
+    });
+
+    it.each([
+      [
+        'buffer overflow',
+        Object.assign(new Error('maxBuffer exceeded'), {
+          code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+          killed: true,
+        }),
+        'more output',
+      ],
+      [
+        'private error',
+        new Error(
+          'failed /Users/example/.local/bin/claude: Bearer fake-test-token',
+        ),
+        'failed ~/.local/bin/claude: Bearer [redacted]',
+      ],
+    ])('sanitizes and classifies %s', async (_name, error, expected) => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        return error;
+      });
+      const result = await new ClaudeCodeMCPClient().installPlugin();
+      expect(result.success).toBe(false);
+      expect(result.reason).toContain(expected);
+      expect(
+        JSON.stringify((analytics.captureException as Mock).mock.calls),
+      ).not.toContain('/Users/example');
+      expect(
+        JSON.stringify((analytics.captureException as Mock).mock.calls),
+      ).not.toContain('fake-test-token');
     });
 
     it('registers the PostHog marketplace before installing the qualified plugin', async () => {
