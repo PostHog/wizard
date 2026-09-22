@@ -18,17 +18,16 @@ import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@shared/version';
-import {
-  Program,
-  getProgramConfig,
-  type ProgramId,
-} from '@programs';
+import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { runProgramAgent } from '@programs/run-agent-legacy';
-import { TaskStreamPush, createFileDestination } from '@programs/task-stream/index';
+import {
+  TaskStreamPush,
+  createFileDestination,
+} from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
 import { authenticate } from '@programs/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
@@ -56,16 +55,7 @@ import {
   buildE2eResult,
   readReportFile,
 } from '@e2e-harness/e2e-result';
-
-/** Cheap 32-bit FNV-1a, to fold framework-context values into a signature. */
-function digest(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36);
-}
+import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -454,18 +444,8 @@ async function main() {
     // signature and serialized.
     let lastSig = '';
     let chain: Promise<void> = Promise.resolve();
-    const signature = () =>
-      JSON.stringify({
-        screen: store.currentScreen,
-        overlay: store.router.hasOverlay,
-        tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
-        phase: store.session.runPhase,
-        // Values, not just keys: a screen rerendering from an artifact updated
-        // in place (the audit ledger) keeps its key and would snap once, empty.
-        ctx: digest(JSON.stringify(store.session.frameworkContext)),
-      });
     const snap = (): Promise<void> => {
-      const sig = signature();
+      const sig = tuiSnapshotSignature(store);
       if (sig === lastSig) return chain;
       lastSig = sig;
       const screen = store.currentScreen;
@@ -627,8 +607,8 @@ async function main() {
     // integration re-writes it after keep-skills (skillsComplete). Registered
     // on `exit` too: `wizardAbort` renders the error outro and exits, and an
     // aborted run would otherwise write nothing at all.
-    const writeResult = (): void => {
-      if (!process.env.E2E_RESULT_JSON || resultWritten) return;
+    const writeResult = (final = false): void => {
+      if (!process.env.E2E_RESULT_JSON || (resultWritten && !final)) return;
       resultWritten = true;
       const appDir = process.env.APP_DIR!;
       // One dependency-name pattern per ecosystem manifest. A run only needs
@@ -717,7 +697,7 @@ async function main() {
     unsubResult();
     await snap(); // the final screen
     await chain; // flush any pending snapshots
-    writeResult(); // final write (integration: after keep-skills)
+    writeResult(true); // integration: replace the early outro result after keep-skills
     process.exit(0);
   }
 }
