@@ -6,6 +6,7 @@ import {
   getProgramConfig,
   getSubcommandPrograms,
 } from '@lib/programs/program-registry';
+import { GATEWAY_PROGRAM_IDS } from '@lib/programs/gateway-program-ids';
 import type { WizardSession } from '@lib/wizard-session';
 
 describe('PROGRAM_REGISTRY', () => {
@@ -17,6 +18,19 @@ describe('PROGRAM_REGISTRY', () => {
       expect(config.description).toBeTruthy();
       expect(config.steps.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('GATEWAY_PROGRAM_IDS', () => {
+  it('lists exactly the registered program ids', () => {
+    // Every run mints a gateway token under its program id, and the backend
+    // admits only the ids in its own `WIZARD_GATEWAY_PROGRAM_IDS` setting. A
+    // program missing from this list refuses every run of that program, so the
+    // drift has to fail here rather than in the field. When this fails, update
+    // the list and the backend setting together.
+    expect([...GATEWAY_PROGRAM_IDS].sort()).toEqual(
+      PROGRAM_REGISTRY.map((c) => c.id).sort(),
+    );
   });
 });
 

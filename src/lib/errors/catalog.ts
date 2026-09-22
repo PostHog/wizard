@@ -250,6 +250,13 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     description:
       'The PostHog backend could not mint a gateway token: unreachable, a 5xx, or an unusable response.',
   },
+  [ErrorCodes.GatewayProgramUnregistered]: {
+    group: 'gateway',
+    // A wizard defect: the same run repeats it until the id is registered.
+    retry: 'no',
+    description:
+      'The run asked for a gateway token under a program id the backend does not admit.',
+  },
   [ErrorCodes.SettingsUnfixableConflict]: {
     group: 'settings',
     retry: 'no',

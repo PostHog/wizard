@@ -2,6 +2,7 @@ import { inspect } from 'node:util';
 import {
   GatewayMintFailed,
   GatewayMintRefused,
+  GatewayProgramUnregistered,
   buildWizardPropertiesBlob,
   configureGatewayCredentialsForCI,
   configureGatewayFromCIEnvironment,
@@ -78,7 +79,7 @@ describe('gatewayAuth', () => {
       refreshAtMs: Infinity,
     };
     const results = await Promise.all(
-      ['integration', 'audit', undefined].map((program) =>
+      ['posthog-integration', 'audit', undefined].map((program) =>
         gatewayAuth(host, 'phx_project', program),
       ),
     );
@@ -87,9 +88,9 @@ describe('gatewayAuth', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(Number.MAX_SAFE_INTEGER);
     try {
-      expect(await gatewayAuth(host, 'phx_project', 'integration')).toEqual(
-        auth,
-      );
+      expect(
+        await gatewayAuth(host, 'phx_project', 'posthog-integration'),
+      ).toEqual(auth);
       expect(isPastRefresh(auth)).toBe(false);
     } finally {
       clock.mockRestore();
@@ -157,7 +158,7 @@ describe('gatewayAuth', () => {
         }),
     });
 
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
     expect(auth).toEqual({
       gatewayUrl: 'https://ai-gateway.us.posthog.com',
       token: 'phe_minted',
@@ -175,7 +176,7 @@ describe('gatewayAuth', () => {
     );
 
     // Second resolve inside the TTL reuses the cache, so no second mint.
-    await gatewayAuth(host, 'pha_oauth', 'integration');
+    await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(
       'https://ai-gateway.us.posthog.com',
@@ -199,14 +200,14 @@ describe('gatewayAuth', () => {
         error: 'private dependency details',
       });
       await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
       ).rejects.toMatchObject({
         name: 'WizardError',
         code: ErrorCodes.EnvServiceOutage,
         message:
           'The PostHog AI gateway is unavailable. Please try again later.',
       });
-      await gatewayAuth(host, 'pha_oauth', 'integration');
+      await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(checkLlmGatewayHealth).toHaveBeenCalledTimes(2);
     },
@@ -224,12 +225,12 @@ describe('gatewayAuth', () => {
         }),
     });
 
-    await gatewayAuth(host, 'pha_oauth', 'integration');
+    await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
 
     const lines = loggedLines();
     const minted = lines.filter((l) => l.includes('minted a scoped token'));
     expect(minted).toHaveLength(1);
-    expect(minted[0]).toContain('program=integration');
+    expect(minted[0]).toContain('program=posthog-integration');
     expect(minted[0]).toContain('team=42');
     expect(lines.join('\n')).not.toContain('phe_secret_value');
   });
@@ -247,8 +248,8 @@ describe('gatewayAuth', () => {
         }),
     });
 
-    const first = await gatewayAuth(host, 'pha_oauth', 'integration');
-    const second = await gatewayAuth(host, 'pha_oauth', 'integration');
+    const first = await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
+    const second = await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
     expect(first.token).toBe('phe_short');
     expect(second.token).toBe('phe_short');
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -266,9 +267,9 @@ describe('gatewayAuth', () => {
     });
 
     const results = await Promise.all([
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ]);
     expect(results.map((r) => r.token)).toEqual([
       'phe_shared',
@@ -297,9 +298,9 @@ describe('gatewayAuth', () => {
       ok: true,
       json: () => Promise.resolve(body),
     });
-    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
-      want,
-    );
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+    ).rejects.toThrow(want);
   });
 
   it('fails the run when the mint returns a token too short to be worth caching', async () => {
@@ -316,7 +317,7 @@ describe('gatewayAuth', () => {
     // A token with seconds of life would 401 mid-run, and the subprocess holds
     // it for the whole session.
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
@@ -328,9 +329,9 @@ describe('gatewayAuth', () => {
     fetchMock.mockResolvedValue({ ok: false, status });
     // A refusal is the mint enforcing a limit; the run must not proceed
     // without it.
-    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
-      new RegExp(String(fragment), 'i'),
-    );
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+    ).rejects.toThrow(new RegExp(String(fragment), 'i'));
   });
 
   it('shows the server detail on a refusal when it sends one', async () => {
@@ -344,9 +345,9 @@ describe('gatewayAuth', () => {
           detail: 'This account is blocked. Contact wizard@posthog.com.',
         }),
     });
-    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
-      'Contact wizard@posthog.com',
-    );
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+    ).rejects.toThrow('Contact wizard@posthog.com');
   });
 
   it('keeps the fixed message when the detail is only control characters', async () => {
@@ -357,9 +358,9 @@ describe('gatewayAuth', () => {
       status: 403,
       json: () => Promise.resolve({ detail: '\u0007\u009b\u001b' }),
     });
-    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
-      /access to this project/i,
-    );
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+    ).rejects.toThrow(/access to this project/i);
   });
 
   it('strips control characters before the detail reaches the terminal', async () => {
@@ -369,9 +370,9 @@ describe('gatewayAuth', () => {
       json: () =>
         Promise.resolve({ detail: 'Upgrade\u001b[2J\u0007 the wizard.' }),
     });
-    await expect(gatewayAuth(host, 'pha_oauth', 'integration')).rejects.toThrow(
-      'Upgrade [2J  the wizard.',
-    );
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+    ).rejects.toThrow('Upgrade [2J  the wizard.');
   });
 
   it.each([
@@ -384,7 +385,7 @@ describe('gatewayAuth', () => {
     async (_label, json) => {
       fetchMock.mockResolvedValue({ ok: false, status: 403, json });
       await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
       ).rejects.toThrow(/access to this project/i);
     },
   );
@@ -402,7 +403,7 @@ describe('gatewayAuth', () => {
       const err: unknown = await gatewayAuth(
         host,
         'pha_oauth',
-        'integration',
+        'posthog-integration',
       ).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(GatewayMintRefused);
       expect((err as GatewayMintRefused).status).toBe(status);
@@ -417,7 +418,7 @@ describe('gatewayAuth', () => {
       // Downgrading here would spend the whole run uncapped and unattributed to
       // hide an outage.
       await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
       ).rejects.toBeInstanceOf(GatewayMintFailed);
     },
   );
@@ -516,11 +517,11 @@ describe('gatewayAuth', () => {
     async (_label, json) => {
       fetchMock.mockResolvedValue({ ok: false, status: 429, json });
       await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
       ).rejects.toBeInstanceOf(GatewayMintRefused);
       expect(analytics.wizardCapture).toHaveBeenCalledWith(
         'gateway mint refused',
-        { status: 429, outcome: undefined, program: 'integration' },
+        { status: 429, outcome: undefined, program: 'posthog-integration' },
       );
     },
   );
@@ -529,7 +530,7 @@ describe('gatewayAuth', () => {
     // A 5xx is the mint being unavailable, not a decision about this run.
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
   });
@@ -543,7 +544,7 @@ describe('gatewayAuth', () => {
     const refused: unknown = await gatewayAuth(
       host,
       'pha_oauth',
-      'integration',
+      'posthog-integration',
     ).catch((e: unknown) => e);
     expect(refused).toBeInstanceOf(WizardError);
     expect((refused as WizardError).code).toBe(ErrorCodes.GatewayMintRefused);
@@ -557,7 +558,7 @@ describe('gatewayAuth', () => {
     const failed: unknown = await gatewayAuth(
       host,
       'pha_oauth',
-      'integration',
+      'posthog-integration',
     ).catch((e: unknown) => e);
     expect(failed).toBeInstanceOf(WizardError);
     expect((failed as WizardError).code).toBe(ErrorCodes.GatewayMintFailed);
@@ -568,7 +569,7 @@ describe('gatewayAuth', () => {
     // treats every throw as a transport failure would silently restore fallback.
     fetchMock.mockResolvedValue({ ok: false, status: 429 });
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintRefused);
   });
 
@@ -605,6 +606,48 @@ describe('gatewayAuth', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('fails the run before the mint when the program is not registered', async () => {
+    // The backend admits only the ids in its own allowlist, and answers any
+    // other with advice to upgrade, which cannot register an id. Stop first.
+    const err: unknown = await gatewayAuth(
+      host,
+      'pha_oauth',
+      'feature-flags',
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GatewayProgramUnregistered);
+    expect((err as GatewayProgramUnregistered).program).toBe('feature-flags');
+    expect((err as GatewayProgramUnregistered).message).toContain(
+      'feature-flags',
+    );
+    expect((err as GatewayProgramUnregistered).message).not.toContain('npx');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway mint refused',
+      { status: 0, outcome: 'program_unregistered', program: 'feature-flags' },
+    );
+  });
+
+  it('never relays upgrade advice for a program_unknown refusal', async () => {
+    // A registered id the backend has not been given yet: the run still dies,
+    // but the message names the defect rather than asking for an upgrade.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          code: 'program_unknown',
+          detail: 'Upgrade with `npx @posthog/wizard@latest` and try again.',
+        }),
+    });
+    const err: unknown = await gatewayAuth(host, 'pha_oauth', 'metrics').catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(GatewayMintRefused);
+    expect((err as GatewayMintRefused).outcome).toBe('program_unknown');
+    expect((err as GatewayMintRefused).message).toContain('metrics');
+    expect((err as GatewayMintRefused).message).not.toContain('npx');
+  });
+
   it('caches per program rather than per session', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
@@ -617,7 +660,7 @@ describe('gatewayAuth', () => {
     });
 
     await gatewayAuth(host, 'pha_oauth', 'audit');
-    await gatewayAuth(host, 'pha_oauth', 'integration');
+    await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
 
     // A token is pinned to one program's node at mint, so reusing it across
     // programs would bill the wrong budget.
@@ -637,7 +680,7 @@ describe('gatewayAuth', () => {
         }),
     });
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
@@ -652,7 +695,7 @@ describe('gatewayAuth', () => {
         }),
     });
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
@@ -675,17 +718,17 @@ describe('gatewayAuth', () => {
         }),
       );
 
-      await gatewayAuth(host, 'pha_oauth', 'integration');
+      await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       // Just short of the refresh point: still served from cache.
       vi.setSystemTime(Date.now() + ttlMs * 0.79);
-      await gatewayAuth(host, 'pha_oauth', 'integration');
+      await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       // Past it: re-resolved.
       vi.setSystemTime(Date.now() + ttlMs * 0.05);
-      await gatewayAuth(host, 'pha_oauth', 'integration');
+      await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
@@ -705,7 +748,7 @@ describe('gatewayAuth', () => {
             gateway_url: 'https://ai-gateway.us.posthog.com',
           }),
       });
-      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+      const auth = await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
       expect(auth.refreshAtMs).toBe(Date.now() + ttlMs * 0.8);
       // A 401 before this instant is a bad credential; after it, an aged
       // bearer that one re-mint recovers.
@@ -723,7 +766,7 @@ describe('gatewayAuth', () => {
     // process lifetime.
     fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
 
     fetchMock.mockResolvedValueOnce({
@@ -735,7 +778,7 @@ describe('gatewayAuth', () => {
           gateway_url: 'https://ai-gateway.us.posthog.com',
         }),
     });
-    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+    const auth = await gatewayAuth(host, 'pha_oauth', 'posthog-integration');
     expect(auth.token).toBe('phe_after_retry');
   });
 
@@ -744,9 +787,9 @@ describe('gatewayAuth', () => {
     // All three join one in-flight promise; a joiner that resolved instead would
     // be running on a posture nobody validated.
     const results = await Promise.allSettled([
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-      gatewayAuth(host, 'pha_oauth', 'integration'),
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ]);
     expect(results.every((r) => r.status === 'rejected')).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -769,7 +812,7 @@ describe('gatewayAuth', () => {
           }),
       });
       await expect(
-        gatewayAuth(host, 'pha_oauth', 'integration'),
+        gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
       ).rejects.toBeInstanceOf(GatewayMintFailed);
     },
   );
@@ -778,7 +821,7 @@ describe('gatewayAuth', () => {
     fetchMock.mockRejectedValue(new Error('network down'));
 
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 
@@ -789,7 +832,7 @@ describe('gatewayAuth', () => {
     });
 
     await expect(
-      gatewayAuth(host, 'pha_oauth', 'integration'),
+      gatewayAuth(host, 'pha_oauth', 'posthog-integration'),
     ).rejects.toBeInstanceOf(GatewayMintFailed);
   });
 });
