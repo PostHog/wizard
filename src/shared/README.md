@@ -14,6 +14,7 @@ Modules callers reach most:
 - `@shared/host-resolution`: `HostResolution`, the immutable snapshot of where the wizard talks to.
 - `@shared/fetch-retry`: `fetchWithRetry(url, { fetchImpl?, sleepImpl?, maxAttempts? })`, one retry and failover policy for every critical-path fetch.
 - `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the parsed `SkillMenu` or `null`; `expandBundleEntry`, `SkillEntry`, `CliEntry`.
+- `@shared/skill-download`: fetches and extracts zip or bundle skills, returning a receipt that can restore overwritten files and remove only newly written files.
 - `@shared/claude-settings`: settings conflict detection, backup and restore.
 - `@shared/secret-vault`: the session-scoped vault the tools resolve secret references through.
 - `@shared/health-checks`: `evaluateWizardReadiness`, `checkAllExternalServices` and the gateway and skills-origin endpoint checks.
