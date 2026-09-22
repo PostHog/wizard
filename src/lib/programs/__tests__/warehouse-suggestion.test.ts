@@ -257,6 +257,23 @@ describe('orchestrated outro suggestion', () => {
     expect(await nextSteps(s, ['warehouse'])).toBeUndefined();
   });
 
+  it('still carries the sources the seeded step was never given', async () => {
+    // The step is capped, so "it completed" means it connected the ones it was
+    // handed — the tail is as unconnected as if the step had never run.
+    const tail: DetectedSource = {
+      kind: 'resend',
+      label: 'Resend',
+      mode: 'in-cli',
+      matchedSignal: 'resend in package.json',
+    };
+    const s = sessionWith([POSTGRES, STRIPE, POSTGRES, tail]);
+
+    const text = (await nextSteps(s, ['warehouse']))!.items.join('\n');
+
+    expect(text).toContain('kind=resend');
+    expect(text).not.toContain('kind=stripe');
+  });
+
   it('offers nothing when nothing was detected', async () => {
     expect(await nextSteps(sessionWith([]), [])).toBeUndefined();
   });
