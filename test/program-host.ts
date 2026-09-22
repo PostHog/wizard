@@ -10,6 +10,7 @@ export function testProgramRunHost(session?: {
       context[key] = value;
     },
     warn: () => undefined,
+    uploadEnvironmentVariables: () => Promise.resolve([]),
   };
 }
 

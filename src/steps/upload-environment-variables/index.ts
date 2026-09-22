@@ -2,7 +2,6 @@ import type { Integration } from '@shared/constants';
 import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
-import type { WizardSession } from '@lib/wizard-session';
 import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
 
@@ -13,7 +12,7 @@ export const uploadEnvironmentVariablesStep = async (
     session,
   }: {
     integration: Integration;
-    session: WizardSession;
+    session: { installDir: string };
   },
 ): Promise<string[]> => {
   const providers: EnvironmentProvider[] = [

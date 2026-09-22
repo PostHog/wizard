@@ -1,7 +1,12 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
+import type {
+  ProgramCiHost,
+  ProgramRunHost,
+} from '@programs/host-capabilities';
+import type { FrameworkDetectionState } from '@programs/detection/context';
 import { mayReportScanResults } from '@shared/scan-consent';
+import type { Integration } from '@shared/constants';
 import { RunPhase } from '@shared/run-state';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
@@ -11,11 +16,13 @@ import {
   detectFramework,
   gatherFrameworkContext,
 } from '@programs/detection/index';
-import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import {
+  scopeInstallDirToProject,
+  type ProjectScopeSession,
+} from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
@@ -23,10 +30,29 @@ import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import {
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,
+  type PosthogIntegrationRunInput,
 } from './run.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+
+type IntegrationCiSession = ProjectScopeSession &
+  FrameworkDetectionState & {
+    integration: Integration | null;
+  };
+
+type IntegrationRunSession = Pick<
+  PosthogIntegrationRunInput,
+  'installDir' | 'frameworkContext' | 'additionalFeatureQueue'
+> & {
+  frameworkConfig: PosthogIntegrationRunInput['frameworkConfig'] | null;
+  typescript: boolean;
+  ci: boolean;
+  signup: boolean;
+  e2eAsk: boolean;
+  scanConsent: string;
+  notebookUrl: string | null;
+};
 
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (session) =>
   resolvePosthogIntegrationSeedTasks(
@@ -61,8 +87,11 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
-  ciPreRun: async (session: WizardSession): Promise<void> => {
-    await scopeInstallDirToProject(session);
+  ciPreRun: async (
+    session: IntegrationCiSession,
+    host: ProgramCiHost,
+  ): Promise<void> => {
+    await scopeInstallDirToProject(session, host);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
@@ -96,7 +125,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
     }
   },
 
-  run: async (session: WizardSession): Promise<ProgramRun> => {
+  run: async (
+    session: IntegrationRunSession,
+    host: ProgramRunHost,
+  ): Promise<ProgramRun> => {
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,
     });
@@ -122,18 +154,15 @@ export const posthogIntegrationConfig: ProgramConfig = {
       {
         readPackageJson: (installDir) => tryGetPackageJson({ installDir }),
         hasDeclaredDependency,
-        warn: (message) => getUI().log.warn(message),
+        warn: (message) => host.warn(message),
         setTag: (key, value) => analytics.setTag(key, value),
         capture: (event, properties) => analytics.capture(event, properties),
-        uploadEnvironmentVariables: async (envVars, integration) => {
-          const { uploadEnvironmentVariablesStep } = await import(
-            '@steps/index'
-          );
-          return uploadEnvironmentVariablesStep(envVars, {
+        uploadEnvironmentVariables: (envVars, integration) =>
+          host.uploadEnvironmentVariables(
+            envVars,
             integration,
-            session,
-          });
-        },
+            session.installDir,
+          ),
         requestDeepLink: (credentials) =>
           requestDeepLink(credentials.accessToken, credentials.host),
         openDashboardDeepLink: (url) =>

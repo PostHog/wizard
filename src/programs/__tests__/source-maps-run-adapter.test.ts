@@ -20,6 +20,7 @@ const host: ProgramRunHost = {
   getFrameworkContext: (key) => ui.values[key],
   setFrameworkContext: ui.setFrameworkContext,
   warn: ui.warn,
+  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
 };
 
 const context = {

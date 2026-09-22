@@ -98,6 +98,15 @@ export async function runProgramAgent(
       getFrameworkContext: (key) => ui.getFrameworkContext(key),
       setFrameworkContext: (key, value) => ui.setFrameworkContext(key, value),
       warn: (message) => ui.log.warn(message),
+      uploadEnvironmentVariables: async (envVars, integration, installDir) => {
+        const { uploadEnvironmentVariablesStep } = await import(
+          '@steps/upload-environment-variables'
+        );
+        return uploadEnvironmentVariablesStep(envVars, {
+          integration,
+          session: { installDir },
+        });
+      },
     };
     const runDef =
       typeof programConfig.run === 'function'
