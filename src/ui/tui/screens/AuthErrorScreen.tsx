@@ -1,5 +1,6 @@
 /**
- * AuthErrorScreen — Shown when the PostHog LLM Gateway returns a 401.
+ * AuthErrorScreen — Shown when the PostHog LLM Gateway, or the PostHog API a
+ * gate polls, returns a 401.
  *
  * Distinct causes, most specific first:
  *  0. The OAuth grant is gone — a pre-run refresh already got `invalid_grant`
@@ -47,8 +48,8 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
         <>
           <Box flexDirection="column" marginTop={1}>
             <Text>
-              Your PostHog login expired while the wizard was running, so the
-              LLM Gateway rejected it (401). Nothing on this machine is
+              Your PostHog login expired while the wizard was running, so
+              PostHog rejected it (401). Nothing on this machine is
               misconfigured — the session simply ran out.
             </Text>
           </Box>
