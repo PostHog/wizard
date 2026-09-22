@@ -46,6 +46,24 @@ const sectionHeader = (serverName: string): RegExp =>
     'm',
   );
 
+type Section = { headerStart: number; bodyStart: number; bodyEnd: number };
+
+/**
+ * Locate the server's section. Everything up to the next table header belongs
+ * to this server, so the body ends there, or at the end of the file.
+ */
+const findSection = (contents: string, serverName: string): Section | null => {
+  const header = sectionHeader(serverName).exec(contents);
+  if (!header) return null;
+  const bodyStart = header.index + header[0].length;
+  const next = /^\[/m.exec(contents.slice(bodyStart));
+  return {
+    headerStart: header.index,
+    bodyStart,
+    bodyEnd: next ? bodyStart + next.index : contents.length,
+  };
+};
+
 /**
  * Set `key = value` inside a section body, inserting it when absent. Scans the
  * whole body rather than the line after the header: TOML does not care about
@@ -176,8 +194,8 @@ export class CodexMCPClient
         ? fs.readFileSync(configPath, 'utf-8')
         : '';
 
-      const header = sectionHeader(serverName).exec(contents);
-      if (!header) {
+      const section = findSection(contents, serverName);
+      if (!section) {
         const gap = contents === '' || contents.endsWith('\n\n') ? '' : '\n';
         const pad = contents === '' || contents.endsWith('\n') ? '' : '\n';
         this.write(
@@ -188,13 +206,8 @@ export class CodexMCPClient
         return { success: true };
       }
 
-      // Everything up to the next table header belongs to this server.
-      const start = header.index + header[0].length;
-      const rest = contents.slice(start);
-      const next = /^\[/m.exec(rest);
-      const end = next ? start + next.index : contents.length;
-
-      const body = contents.slice(start, end);
+      const { bodyStart, bodyEnd } = section;
+      const body = contents.slice(bodyStart, bodyEnd);
       const updated = setKey(
         setKey(body, 'url', `"${url}"`),
         'startup_timeout_sec',
@@ -204,7 +217,7 @@ export class CodexMCPClient
 
       this.write(
         configPath,
-        contents.slice(0, start) + updated + contents.slice(end),
+        contents.slice(0, bodyStart) + updated + contents.slice(bodyEnd),
       );
       return { success: true };
     } catch (error) {
@@ -230,31 +243,52 @@ export class CodexMCPClient
   }
 
   removeServer(local?: boolean): Promise<InstallResult> {
-    const binary = this.findCodexBinary();
-    if (!binary)
-      return Promise.resolve({
-        success: false,
-        reason: 'The codex CLI is no longer on your PATH.',
-      });
-
     // `local` was ignored here, so `mcp remove --local` reported success while
     // leaving the posthog-local server in place.
     const serverName = local ? 'posthog-local' : 'posthog';
-    const result = spawnSync(binary, ['mcp', 'remove', serverName], {
-      encoding: 'utf-8',
-    });
+    const binary = this.findCodexBinary();
 
-    if (result.error || result.status !== 0) {
-      const reason = redactSecrets(
-        result.error?.message ?? result.stderr ?? 'codex mcp remove failed',
-      );
-      analytics.captureException(
-        new Error(`Failed to remove server from Codex CLI: ${reason}`),
-      );
-      return Promise.resolve({ success: false, reason });
+    if (binary) {
+      const result = spawnSync(binary, ['mcp', 'remove', serverName], {
+        encoding: 'utf-8',
+      });
+      if (!result.error && result.status === 0) {
+        return Promise.resolve({ success: true });
+      }
     }
 
-    return Promise.resolve({ success: true });
+    // The CLI is absent, or it crashed on something that isn't ours — a codex
+    // wrapper that cannot spawn its own native binary, for one. The install
+    // path writes this section itself, so remove it the same way instead of
+    // leaving the entry behind and reporting a third-party crash as ours.
+    return Promise.resolve(this.deleteServerSection(serverName));
+  }
+
+  /** Delete the `[mcp_servers.<name>]` section, the mirror of writeServerSection. */
+  private deleteServerSection(serverName: string): InstallResult {
+    const configPath = this.configPath();
+    try {
+      if (!fs.existsSync(configPath)) {
+        return { success: true, alreadyInstalled: true };
+      }
+      const contents = fs.readFileSync(configPath, 'utf-8');
+      const section = findSection(contents, serverName);
+      // Nothing registered, so the requested end state already holds.
+      if (!section) return { success: true, alreadyInstalled: true };
+
+      this.write(
+        configPath,
+        contents.slice(0, section.headerStart) +
+          contents.slice(section.bodyEnd),
+      );
+      return { success: true };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      analytics.captureException(
+        new Error(`Codex config.toml server removal failed: ${reason}`),
+      );
+      return { success: false, reason };
+    }
   }
 
   /** The codex marketplace plugin ships skills only — the MCP server needs its own entry. */
