@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import * as ts from 'typescript';
 
 export type Surface =
   | 'env'
@@ -347,6 +348,38 @@ function analyze(): Analysis {
 
 const analysis = analyze();
 
+function runtimeClosure(entry: string): string[] {
+  const aliases = loadAliases();
+  const pending = [entry];
+  const visited = new Set<string>();
+
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (!file) continue;
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const source = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+    const output = ts.transpileModule(source, {
+      fileName: file,
+      compilerOptions: {
+        module: ts.ModuleKind.ESNext,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    }).outputText;
+
+    for (const spec of specifiersIn(stripComments(output))) {
+      const base = spec.startsWith('.')
+        ? path.resolve(REPO_ROOT, path.dirname(file), spec)
+        : aliasTarget(spec, aliases);
+      const target = base && probe(base);
+      if (target) pending.push(toRepoRelative(target));
+    }
+  }
+
+  return [...visited].sort();
+}
+
 const known = (
   JSON.parse(
     fs.readFileSync(path.join(HERE, 'known-violations.json'), 'utf8'),
@@ -407,6 +440,19 @@ describe('import boundaries', () => {
       'stale entries, delete them from known-violations.json',
     ).toEqual([]);
   });
+});
+
+it('keeps the callable program registry free of UI and session runtime imports', () => {
+  const forbidden = runtimeClosure('src/programs/runtime-registry.ts').filter(
+    (file) =>
+      file === 'src/programs/program-registry.ts' ||
+      file.startsWith('src/ui/') ||
+      file.startsWith('src/steps/') ||
+      file.startsWith('src/lib/wizard-session') ||
+      file.startsWith('src/lib/runners/') ||
+      file.startsWith('src/commands/'),
+  );
+  expect(forbidden).toEqual([]);
 });
 
 describe('surface classification', () => {

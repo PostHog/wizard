@@ -20,36 +20,14 @@
  */
 
 import type { ProgramConfig } from '@programs/program-step';
-import type { AbortCase } from '@agent/types';
-import type { ProgramRun } from '@programs/program-run';
 import { AGENT_SKILL_STEPS } from './steps.js';
 import { getContentBlocks } from '../../ui/tui/decks/agent-skill/index.js';
+import {
+  skillRunDefinition,
+  type SkillProgramOptions,
+} from './run-definition.js';
 
-export interface SkillProgramOptions {
-  /** Context-mill skill ID to install */
-  skillId: string;
-  /** CLI subcommand name */
-  command: string;
-  /** Unique flow key — must match a Program enum entry */
-  id: string;
-  /** CLI description shown in --help */
-  description: string;
-  /** Analytics integration label */
-  integrationLabel: string;
-  /** Custom prompt instruction. Appended after default project prompt. */
-  customPrompt?: string;
-  successMessage: string;
-  reportFile: string;
-  docsUrl: string;
-  spinnerMessage: string;
-  estimatedDurationMinutes: number;
-  /** Other program ids that must be satisfied first */
-  requires?: string[];
-  /** Override the default outro. Receives the same args as ProgramRun.buildOutroData. */
-  buildOutroData?: ProgramRun['buildOutroData'];
-  /** Known `[ABORT] <reason>` cases the skill can emit. */
-  abortCases?: AbortCase[];
-}
+export type { SkillProgramOptions } from './run-definition.js';
 
 export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
   return {
@@ -60,18 +38,7 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
     steps: AGENT_SKILL_STEPS,
     reportFile: opts.reportFile,
     getContentBlocks,
-    run: {
-      skillId: opts.skillId,
-      integrationLabel: opts.integrationLabel,
-      customPrompt: opts.customPrompt ? () => opts.customPrompt! : undefined,
-      successMessage: opts.successMessage,
-      reportFile: opts.reportFile,
-      docsUrl: opts.docsUrl,
-      spinnerMessage: opts.spinnerMessage,
-      estimatedDurationMinutes: opts.estimatedDurationMinutes,
-      buildOutroData: opts.buildOutroData,
-      abortCases: opts.abortCases,
-    },
+    run: skillRunDefinition(opts),
     requires: opts.requires,
   };
 }
