@@ -65,6 +65,8 @@ export const RESUME_INSTRUCTION =
  * These correspond to the error signals that the agent emits.
  */
 export enum AgentErrorType {
+  /** The configured run deadline elapsed and the SDK query was aborted */
+  TIMEOUT = 'WIZARD_TIMEOUT',
   /** Agent could not access the PostHog MCP server */
   MCP_MISSING = 'WIZARD_MCP_MISSING',
   /** Agent could not access the setup resource */

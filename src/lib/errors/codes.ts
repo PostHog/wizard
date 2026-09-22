@@ -33,6 +33,7 @@ export const ErrorCodes = {
   SkillNotFound: 'PHW_SKILL_NOT_FOUND',
   SkillDownloadFailed: 'PHW_SKILL_DOWNLOAD_FAILED',
   AgentAbort: 'PHW_AGENT_ABORT',
+  AgentTimeout: 'PHW_AGENT_TIMEOUT',
   AgentMcpMissing: 'PHW_AGENT_MCP_MISSING',
   AgentResourceMissing: 'PHW_AGENT_RESOURCE_MISSING',
   AgentRateLimit: 'PHW_AGENT_RATE_LIMIT',

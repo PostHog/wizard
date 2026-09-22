@@ -18,10 +18,17 @@ import {
   runAgent as executeAgent,
   buildRunTags,
   AgentSignals,
+  AgentErrorType,
 } from '@lib/agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import {
+  AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
+  AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
+  CallType,
+  getSkillsBaseUrl,
+  HAIKU_MODEL,
+} from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
@@ -48,6 +55,15 @@ export type AgenticDetectionReport = {
   repoType: 'monorepo' | 'single';
   projects: AgenticProject[];
 };
+
+export class AgenticDetectionTimeoutError extends Error {
+  constructor(attempt: number, timeoutMs: number) {
+    super(
+      `Project scan attempt ${attempt} timed out after ${timeoutMs / 1000}s`,
+    );
+    this.name = 'AgenticDetectionTimeoutError';
+  }
+}
 
 /** Streaming progress callback — one short activity line per agent step. */
 export type DetectEvent = (line: string) => void;
@@ -360,6 +376,10 @@ export async function detectProjectsWithAgent(
 
   const prompt = buildPrompt(cwd, targets, purpose, recommend);
   for (let attempt = 0; attempt < 2; attempt++) {
+    const timeoutMs =
+      attempt === 0
+        ? AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS
+        : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
     const agent = await initializeAgent(
       {
         workingDirectory: cwd,
@@ -427,10 +447,18 @@ export async function detectProjectsWithAgent(
         successMessage: 'Detection complete',
         errorMessage: 'Detection failed',
         requestRemark: false,
+        timeoutMs,
       },
       middleware,
     );
 
+    if (result.error === AgentErrorType.TIMEOUT) {
+      if (attempt === 0) {
+        onEvent?.('Project scan timed out; retrying...');
+        continue;
+      }
+      throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
+    }
     if (result.error) {
       throw new Error(result.message || `Agent error: ${result.error}`);
     }
