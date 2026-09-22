@@ -32,7 +32,7 @@ New models require Wizard capabilities **and** mint model/effort allowlists,
 gateway provider/transport support, and compatibility with required Wizard and
 security-triage prompt policies. Local model constants cannot bypass admission.
 See the
-[development guide](../../../../.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
+[development guide](../../../.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
 for the coordinated change checklist.
 
 ## The pieces

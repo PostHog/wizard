@@ -29,7 +29,7 @@ prompt and valid task-skill variants. Metrics already has a Pi/orchestrator
 binding; other routes can be selected through scoped flags or development CLI
 overrides. The retired `experiment/orchestrator` branch is not a prerequisite.
 See
-[adding a program](../../../../../.claude/skills/adding-skill-program/SKILL.md).
+[adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 
 ### Task metadata
 
