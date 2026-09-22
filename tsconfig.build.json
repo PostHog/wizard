@@ -33,8 +33,7 @@
       "@e2e-harness/*": ["./e2e-harness/*"],
       "@utils/*": ["./src/shared/utils/*"],
       "@ui": ["./src/ui/index.ts"],
-      "@ui/*": ["./src/ui/*"],
-      "@steps/*": ["./src/steps/*"]
+      "@ui/*": ["./src/ui/*"]
     }
   }
 }

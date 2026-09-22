@@ -13,6 +13,7 @@ import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
+import { uploadEnvironmentVariablesStep } from '@programs/posthog-integration/upload-environment-variables';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -20,6 +21,10 @@ vi.mock('@utils/analytics', () => ({
     setTag: vi.fn(),
     capture: vi.fn(),
   },
+}));
+
+vi.mock('@programs/posthog-integration/upload-environment-variables', () => ({
+  uploadEnvironmentVariablesStep: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
 }));
 
 vi.mock('@utils/setup-utils', () => ({
@@ -52,8 +57,9 @@ function runHost(): ProgramRunHost {
   return {
     getFrameworkContext: vi.fn(),
     setFrameworkContext: vi.fn(),
+    info: vi.fn(),
     warn: vi.fn(),
-    uploadEnvironmentVariables: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
+    spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
   };
 }
 
@@ -108,7 +114,7 @@ describe('posthog-integration run() — typescript tag', () => {
     );
   });
 
-  it('routes hosting uploads through the run host with the project directory', async () => {
+  it('uploads to hosting from the program, reporting through the run host', async () => {
     (isUsingTypeScript as Mock).mockReturnValue(false);
     const session = sessionWithFramework();
     if (!session.frameworkConfig) throw new Error('missing framework config');
@@ -136,10 +142,18 @@ describe('posthog-integration run() — typescript tag', () => {
       },
     );
 
-    expect(host.uploadEnvironmentVariables).toHaveBeenCalledWith(
+    expect(uploadEnvironmentVariablesStep).toHaveBeenCalledWith(
       { POSTHOG_KEY: 'phc_test' },
-      Integration.nextjs,
-      '/tmp/app',
+      expect.objectContaining({
+        integration: Integration.nextjs,
+        installDir: '/tmp/app',
+      }),
+    );
+    const { report } = (uploadEnvironmentVariablesStep as Mock).mock
+      .calls[0][1] as { report: { info(message: string): void } };
+    report.info('Uploading environment variables to Vercel...');
+    expect(host.info).toHaveBeenCalledWith(
+      'Uploading environment variables to Vercel...',
     );
   });
 });

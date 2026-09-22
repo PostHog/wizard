@@ -19,8 +19,9 @@ vi.mock('@programs/shared/posthog-cli-preinstall', () => ({
 const host: ProgramRunHost = {
   getFrameworkContext: (key) => ui.values[key],
   setFrameworkContext: ui.setFrameworkContext,
+  info: vi.fn(),
   warn: ui.warn,
-  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
+  spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
 };
 
 const context = {

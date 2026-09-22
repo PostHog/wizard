@@ -1,15 +1,17 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import { EnvironmentProvider } from '@steps/upload-environment-variables/EnvironmentProvider';
+import {
+  EnvironmentProvider,
+  type EnvironmentProviderOptions,
+} from '../EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 
 export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
   environments = ['production', 'preview', 'development'];
 
-  constructor(options: { installDir: string }) {
+  constructor(options: EnvironmentProviderOptions) {
     super(options);
   }
 
@@ -126,7 +128,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     const results: Record<string, boolean> = {};
 
     for (const [key, value] of Object.entries(vars)) {
-      const spinner = getUI().spinner();
+      const spinner = this.options.report.spinner();
 
       spinner.start(`Uploading ${key} to ${this.name}...`);
       await Promise.all(

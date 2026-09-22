@@ -20,18 +20,18 @@ anchors are point-in-time — the symbol names are the durable part.
 
 ### Where to look
 
-| Need                                   | Go to                                                      |
-| -------------------------------------- | ---------------------------------------------------------- |
-| The ordered steps                      | `src/programs/self-driving/prompt.ts`                  |
-| What each step _does_                  | `context-mill/context/skills/self-driving/references/*.md` |
-| Program registration / lifecycle       | `src/programs/self-driving/index.ts`                   |
-| `wizard_ask` / `.env` tools            | `src/agent/tools/tools.ts`, `src/agent/wizard-ask-bridge.ts`  |
-| OAuth scopes (+ prod ceiling)          | `src/programs/oauth/program-scopes.ts` (§3, §7)                 |
-| Signals models / MCP / sync            | `posthog/products/signals/backend/…` (§5)                  |
-| Why a team gets no findings            | §6                                                         |
-| What to change for prod                | §7                                                         |
-| Local dev + reset                      | §8                                                         |
-| Proactive product enablement (step 3) | §9                                                         |
+| Need                                  | Go to                                                        |
+| ------------------------------------- | ------------------------------------------------------------ |
+| The ordered steps                     | `src/programs/self-driving/prompt.ts`                        |
+| What each step _does_                 | `context-mill/context/skills/self-driving/references/*.md`   |
+| Program registration / lifecycle      | `src/programs/self-driving/index.ts`                         |
+| `wizard_ask` / `.env` tools           | `src/agent/tools/tools.ts`, `src/agent/wizard-ask-bridge.ts` |
+| OAuth scopes (+ prod ceiling)         | `src/programs/oauth/program-scopes.ts` (§3, §7)              |
+| Signals models / MCP / sync           | `posthog/products/signals/backend/…` (§5)                    |
+| Why a team gets no findings           | §6                                                           |
+| What to change for prod               | §7                                                           |
+| Local dev + reset                     | §8                                                           |
+| Proactive product enablement (step 3) | §9                                                           |
 
 ---
 
@@ -61,13 +61,12 @@ install dir (checked in `detect.ts`).
 
 ## 2. The run (10 steps)
 
-The agent makes its 10-item task list up front (one `TaskCreate`), drives it with
-`TaskUpdate`, and asks the user only via `wizard_ask` (batched). Each prompt
-STEP names a skill reference whose matching context-mill file carries the HOW.
-**Step labels mirror the skill files exactly** — including the letter-suffix
-sub-steps `6b` (custom scouts) and `6c` (Replay Vision
-scanners) — so a prompt `STEP` and its `(skill: …)` reference never disagree on
-the number.
+The agent makes its 10-item task list up front (one `TaskCreate`), drives it
+with `TaskUpdate`, and asks the user only via `wizard_ask` (batched). Each
+prompt STEP names a skill reference whose matching context-mill file carries the
+HOW. **Step labels mirror the skill files exactly** — including the
+letter-suffix sub-steps `6b` (custom scouts) and `6c` (Replay Vision scanners) —
+so a prompt `STEP` and its `(skill: …)` reference never disagree on the number.
 
 **Step backbone (expected action, one line each):**
 
@@ -100,8 +99,8 @@ the number.
   verification (a downstream reminder prompts the user to finish). Enable a
   (possibly dormant) responder for every pick.
 - **6 — Configure scout troop** — materialize the canonical troop, read the
-  enforced run budget via `scout-metadata-get` (100 scout runs/day per project by
-  default during early access), then enable a selective set: `general`
+  enforced run budget via `scout-metadata-get` (100 scout runs/day per project
+  by default during early access), then enable a selective set: `general`
   (always) + the **3–5 specialists** for the products this project uses most,
   with the whole troop (including step 6b) capped at **~10 enabled scouts**;
   never `error-tracking`/`session-replay` (consumed as native sources); disable
@@ -112,30 +111,31 @@ the number.
   (starting from the repo's for-agents context — AGENTS.md, CLAUDE.md,
   ARCHITECTURE.md, `.cursor/rules` — when present), propose **at most 5**
   candidates in one ask (fewer when the ~10-scout troop ceiling or a low
-  enforced run budget leaves less room, and zero is a valid outcome) (each a plain-language `label` + a dimmed `description`,
-  behind a leading "None — keep the built-in troop" default option), create the
-  approved subset (the only place custom scouts are made).
-- **6c — Replay Vision scanners** — the push layer: create the scanner
-  skeletons the skill defines, with `emits_signals: true`, filling only the
-  per-product blanks (`query`, `{{PRODUCT_CONTEXT}}`) from the repo. Never
-  aborts. The skill owns the skeletons and the rules that keep them cheap and
-  non-duplicative; the wizard owns the scope and this ordering. See §10.
+  enforced run budget leaves less room, and zero is a valid outcome) (each a
+  plain-language `label` + a dimmed `description`, behind a leading "None — keep
+  the built-in troop" default option), create the approved subset (the only
+  place custom scouts are made).
+- **6c — Replay Vision scanners** — the push layer: create the scanner skeletons
+  the skill defines, with `emits_signals: true`, filling only the per-product
+  blanks (`query`, `{{PRODUCT_CONTEXT}}`) from the repo. Never aborts. The skill
+  owns the skeletons and the rules that keep them cheap and non-duplicative; the
+  wizard owns the scope and this ordering. See §10.
 - **7 — Write report** — write `./posthog-self-driving-report.md` (everything
   changed + follow-ups); findings reach the inbox in ~30 min.
 
 The table below adds the skill reference and the tool/MCP surface for each.
 
-| #   | Step                             | Skill ref / file                      | Tools · surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --- | -------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Check access                     | `1-check-access.md`                   | **No probe — instant** (open beta: available to every team). Marks the task in_progress→completed immediately, calls no MCP tool. The `[ABORT] self-driving is not available for this project` string remains a safety net for a genuine Signals-API outage during the run, not a beta gate.                                                                                                                                                                                                                                                                                                                                            |
-| 2   | Read project & Signals state     | `2-read-context.md`                   | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT").                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| 3   | Enable products                  | `3-enable-products.md`                | `products-enable {products:[session_replay,error_tracking,conversations]}` flips the product toggles (server-owned recipes, conservative defaults). Idempotent. Web also gets a posthog-js init check; backend/mobile are inert → recorded for the report. See §9.                                                                                                                                                                                                                                                                                                                                                                      |
-| 4   | Enable signal sources            | `4-sources.md`                        | Create/enable `SignalSourceConfig` rows (`inbox-source-configs-*`). The native sources for the step-3 products (error tracking, support) go on by default; others follow step-2 evidence. Always enables the scout gate `signals_scout`/`cross_source_issue`. Always enable the health check gate `health_checks`/`health_issue`. Never enables an unconfirmed connected tool.                                                                                                                                                                                                                                                           |
-| 5   | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (GitHub Issues: one connected repo → use it by default, no repo research; Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick.                                                                                                                                                                                                    |
-| 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); `scout-metadata-get` reports the enforced run budget (100 runs/day default); enable `general` + the **3–5 specialists** for the most-used products (agent judgment over step-2 evidence), keeping the whole troop at or under **~10 enabled scouts**, never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`.                                                                                                                                                                                  |
+| #   | Step                             | Skill ref / file                      | Tools · surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --- | -------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Check access                     | `1-check-access.md`                   | **No probe — instant** (open beta: available to every team). Marks the task in_progress→completed immediately, calls no MCP tool. The `[ABORT] self-driving is not available for this project` string remains a safety net for a genuine Signals-API outage during the run, not a beta gate.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2   | Read project & Signals state     | `2-read-context.md`                   | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 3   | Enable products                  | `3-enable-products.md`                | `products-enable {products:[session_replay,error_tracking,conversations]}` flips the product toggles (server-owned recipes, conservative defaults). Idempotent. Web also gets a posthog-js init check; backend/mobile are inert → recorded for the report. See §9.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 4   | Enable signal sources            | `4-sources.md`                        | Create/enable `SignalSourceConfig` rows (`inbox-source-configs-*`). The native sources for the step-3 products (error tracking, support) go on by default; others follow step-2 evidence. Always enables the scout gate `signals_scout`/`cross_source_issue`. Always enable the health check gate `health_checks`/`health_issue`. Never enables an unconfirmed connected tool.                                                                                                                                                                                                                                                                                                                               |
+| 5   | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (GitHub Issues: one connected repo → use it by default, no repo research; Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick.                                                                                                                                                                                                                                                                         |
+| 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); `scout-metadata-get` reports the enforced run budget (100 runs/day default); enable `general` + the **3–5 specialists** for the most-used products (agent judgment over step-2 evidence), keeping the whole troop at or under **~10 enabled scouts**, never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`.                                                                                                              |
 | 6b  | Design custom scouts             | `6b-tailor-scouts.md`                 | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the troop, reading the repo's for-agents context first (AGENTS.md, CLAUDE.md, ARCHITECTURE.md, `.cursor/rules`) as the map of surfaces and vocabulary; propose **at most 5** in ONE `wizard_ask` (bounded by the ~10-scout troop ceiling and the enforced run budget), each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
-| 6c  | Replay Vision scanners           | `6c-replay-vision-scanners.md`        | `vision-scanners-*` (list/create/update, plus the advisory estimate). Creates the skill's scanner skeletons with `emits_signals: true`; the agent fills only `query` + `{{PRODUCT_CONTEXT}}`. **No `SignalSourceConfig` row** — `emits_signals` on the scanner *is* the per-source config (`replay_vision`/`scanner_finding` is self-authorizing server-side), so step 4 skips it. Never aborts. See §10.                                                                                                                                                                                          |
-| 7   | Write report & hand off          | `7-report.md`                         | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 6c  | Replay Vision scanners           | `6c-replay-vision-scanners.md`        | `vision-scanners-*` (list/create/update, plus the advisory estimate). Creates the skill's scanner skeletons with `emits_signals: true`; the agent fills only `query` + `{{PRODUCT_CONTEXT}}`. **No `SignalSourceConfig` row** — `emits_signals` on the scanner _is_ the per-source config (`replay_vision`/`scanner_finding` is self-authorizing server-side), so step 4 skips it. Never aborts. See §10.                                                                                                                                                                                                                                                                                                    |
+| 7   | Write report & hand off          | `7-report.md`                         | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard
 matches them against `SELF_DRIVING_ABORT_CASES` (`detect.ts`) for tailored error
@@ -149,18 +149,18 @@ repos.
 **Program definition** (`src/programs/self-driving/`, four core files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 10 steps + mechanics + project
 URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
-screen sequence `detect → intro → health-check → auth → self-driving-github →
-run → outro`). The TUI deck at
-`src/ui/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy that defines signal
-sources + scouts + scanners in plain language, wired via `getTips`; `RunScreen` falls back
-to `DEFAULT_TIPS` for every other program, so nothing else is affected).
-`selfDrivingConfig` is built from the `createSkillProgram` factory
-(`src/programs/agent-skill/`) with overrides. Notables in `index.ts`:
-`SELF_DRIVING_SKILL_ID = 'self-driving-setup'`,
+screen sequence
+`detect → intro → health-check → auth → self-driving-github → run → outro`). The
+TUI deck at `src/ui/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy
+that defines signal sources + scouts + scanners in plain language, wired via
+`getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every other program, so
+nothing else is affected). `selfDrivingConfig` is built from the
+`createSkillProgram` factory (`src/programs/agent-skill/`) with overrides.
+Notables in `index.ts`: `SELF_DRIVING_SKILL_ID = 'self-driving-setup'`,
 `REPORT_FILE = 'posthog-self-driving-report.md'`, `maxQuestions: 13` (tracker
-picks + custom-scout proposal), `richLinks: true` (OSC-8 links so long
-OAuth URLs survive wrapping), and `postRun` (just `removeInstalledSkill` — the
-setup skill is transient, marker-guarded by `.posthog-wizard`, so there's no
+picks + custom-scout proposal), `richLinks: true` (OSC-8 links so long OAuth
+URLs survive wrapping), and `postRun` (just `removeInstalledSkill` — the setup
+skill is transient, marker-guarded by `.posthog-wizard`, so there's no
 keep-skills step). The outro inbox URL is the clean `…/project/:id/inbox` built
 in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
 `src/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
@@ -187,44 +187,46 @@ against `config.abortCases`. `PromptContext` (project/host + AI-consent
 batch-your-questions nudge counts consecutive calls **per subject**, so a step
 that walks a list (one call per detected source) is never interrupted, while
 repeated prompting about one thing still gets nudged. Each `single`/`multi`
-option is `{ label, value, description? }`.
-`description` is **optional and additive** (added for STEP 7): rendered dimmed
-and wrapped beneath the label, and **only in the multi-select render path**
-(`PickerMenu` `MultiPickerMenu` + `WizardAskScreen`); when a question omits it,
-every other ask renders byte-for-byte as before, so no other program is touched.
-A multi-select's default focus is its first enabled option and an empty `enter`
-submits that focused option — which is why a **decline option, when present, is
-placed first** (it becomes the safe default). No bridge (CI/non-interactive) →
-returns an error telling the agent to default or emit
-`[ABORT] requires-interactive-mode`. The bridge (`src/agent/wizard-ask-bridge.ts`)
-brokers into the TUI overlay; cancelled/timed-out fields resolve to
-`CANCELLED_SENTINEL = '__cancelled__'`.
+option is `{ label, value, description? }`. `description` is **optional and
+additive** (added for STEP 7): rendered dimmed and wrapped beneath the label,
+and **only in the multi-select render path** (`PickerMenu` `MultiPickerMenu` +
+`WizardAskScreen`); when a question omits it, every other ask renders
+byte-for-byte as before, so no other program is touched. A multi-select's
+default focus is its first enabled option and an empty `enter` submits that
+focused option — which is why a **decline option, when present, is placed
+first** (it becomes the safe default). No bridge (CI/non-interactive) → returns
+an error telling the agent to default or emit
+`[ABORT] requires-interactive-mode`. The bridge
+(`src/agent/wizard-ask-bridge.ts`) brokers into the TUI overlay;
+cancelled/timed-out fields resolve to `CANCELLED_SENTINEL = '__cancelled__'`.
 
-**OAuth scopes** (`src/programs/oauth/program-scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
-(`src/shared/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**,
-requested via a PKCE auth-code flow:
+**OAuth scopes** (`src/programs/oauth/program-scopes.ts`). Base
+`WIZARD_OAUTH_SCOPES` (`src/shared/constants.ts`) ∪
+`SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**, requested via a PKCE auth-code
+flow:
 
-| Scope                                                          | Why                                                                                                                         |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `task:read`, `task:write`                                      | The signal **source** config API (`inbox-source-configs-*`) is under the generic `task` scope (not a Signals-specific one). |
-| `integration:read`                                             | `integrations-list` — the pre-run GitHub gate + step 5's tracker verify.                                                                               |
-| `signal_scout:read`, `signal_scout:write`                      | List/sync/tune the scout troop (STEP 6).                                                                                    |
-| `session_recording:read`, `survey:read`, `error_tracking:read` | Read-only usage probes (STEP 2).                                                                                            |
-| `external_data_source:read`, `external_data_source:write`      | Create/verify warehouse sources (STEP 5).                                                                                   |
-| `llm_skill:read`, `llm_skill:write`                            | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7).                                        |
+| Scope                                                          | Why                                                                                                                                                                                          |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task:read`, `task:write`                                      | The signal **source** config API (`inbox-source-configs-*`) is under the generic `task` scope (not a Signals-specific one).                                                                  |
+| `integration:read`                                             | `integrations-list` — the pre-run GitHub gate + step 5's tracker verify.                                                                                                                     |
+| `signal_scout:read`, `signal_scout:write`                      | List/sync/tune the scout troop (STEP 6).                                                                                                                                                     |
+| `session_recording:read`, `survey:read`, `error_tracking:read` | Read-only usage probes (STEP 2).                                                                                                                                                             |
+| `external_data_source:read`, `external_data_source:write`      | Create/verify warehouse sources (STEP 5).                                                                                                                                                    |
+| `llm_skill:read`, `llm_skill:write`                            | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7).                                                                                                         |
 | `replay_scanner:read`, `replay_scanner:write`                  | List/create Replay Vision scanners (STEP 6c). Object is `replay_scanner` — the `vision-scanners-*` names are MCP tools, not scopes. Create/update also use `session_recording:read` (above). |
 
 The prod `OAuthApplication.scopes` ceiling **uses the `@default` sentinel**
 (`posthog/scopes.py`, `resolve_ceiling`), not an exhaustive literal list. The
-live US value is `@default,llm_gateway:read,wizard_session:read,wizard_session:write`,
-where `@default` resolves to `UNPRIVILEGED_SCOPES` — every public
-(non-privileged, non-internal, non-hidden) `obj:action` scope, auto-tracking new
-ones. **Every addition above is a normal public scope object, so all are already
-inside the ceiling — no per-scope ceiling edit is needed.** Only a
+live US value is
+`@default,llm_gateway:read,wizard_session:read,wizard_session:write`, where
+`@default` resolves to `UNPRIVILEGED_SCOPES` — every public (non-privileged,
+non-internal, non-hidden) `obj:action` scope, auto-tracking new ones. **Every
+addition above is a normal public scope object, so all are already inside the
+ceiling — no per-scope ceiling edit is needed.** Only a
 privileged/internal/hidden object would need a manual per-app edit; the wizard
-requests none. (An *exhaustive* ceiling — no `@default` — is possible and would
-reject anything unlisted, but the wizard apps aren't configured that way.) See §7
-item 1 and the README's "OAuth app scope ceiling".
+requests none. (An _exhaustive_ ceiling — no `@default` — is possible and would
+reject anything unlisted, but the wizard apps aren't configured that way.) See
+§7 item 1 and the README's "OAuth app scope ceiling".
 
 **Security & TUI.** YARA hooks (`src/agent/yara-hooks.ts`) scan
 Bash/Write/Edit/Read content and installed skills via the `warlock` scanner
@@ -243,12 +245,12 @@ Source: `context-mill/context/skills/self-driving/`. `config.yaml`
 `description.md` (becomes `SKILL.md`; declares the 10-step chain + the
 cross-cutting rules: trust the setup report, list-before-create idempotency,
 only switch sources on, ask-then-connect, **canonical scout bodies never edited
-— new scouts only in step 6b**, decline-option-first on every `wizard_ask`), and the `references/` chain
-`1-check-access → 2-read-context → 3-enable-products → 4-sources →
-5-connected-tools` (+
-`5a-github`, `5b-linear`) `→ 6-scouts → 6b-tailor-scouts →
-6c-replay-vision-scanners → 7-report` (chained by
-`next_step` frontmatter; what each does is in the §2 table).
+— new scouts only in step 6b**, decline-option-first on every `wizard_ask`), and
+the `references/` chain
+`1-check-access → 2-read-context → 3-enable-products → 4-sources → 5-connected-tools`
+(+ `5a-github`, `5b-linear`)
+`→ 6-scouts → 6b-tailor-scouts → 6c-replay-vision-scanners → 7-report` (chained
+by `next_step` frontmatter; what each does is in the §2 table).
 
 The canonical `signals-scout-*` skills do **not** live here — they're in posthog
 (§5). context-mill ships only the orchestration skill.
@@ -286,32 +288,31 @@ sync).
 `run_interval_minutes` (default 1440 — daily). Canonical troop (~19
 `signals-scout-*` skills, and growing) in `posthog/products/signals/skills/`.
 Scout runs are budgeted per team: the coordinator enforces caps resolved from
-the `signals-scout` flag payload (`team_configs[team]` → `default_team_config`
-→ code constant, `scout_harness/team_limits.py`); `default_team_config` currently
+the `signals-scout` flag payload (`team_configs[team]` → `default_team_config` →
+code constant, `scout_harness/team_limits.py`); `default_team_config` currently
 sets `max_runs_per_day: 100` and `max_runs_per_tick: 3`, so a project gets up to
 100 scout runs/day by default during early access. Note the two caps compose —
 the coordinator ticks every 30 minutes, so the per-tick cap bounds a team at
 `max_runs_per_tick × 48` a day regardless of the daily number. The MCP
-`scout-metadata-get` tool
-(`scout/metadata/current/`) reports the enforced limits + the announcement
-banner, and STEP 6 reads it to size the troop. STEP 6 does **not**
-hardcode the list — it works from whatever `signals-scout-config-sync` returns
-and enables a **selective set**: `general` is the only **always-on**
-scout; **3–5 specialists** are enabled for the products this project uses most
-(agent judgment over step-2 evidence — `top_events` volume, recent activity,
-active config counts). The specialist candidate pool is the rest of the troop —
-the surface-specific scouts (`product-analytics`, `web-analytics`,
-`feature-flags`, `surveys`, `revenue-analytics`, `ai-observability`, `logs`,
-`csp-violations`, `experiments`, `customer-analytics`, `data-pipelines`,
-`replay-vision`) plus the cross-product
+`scout-metadata-get` tool (`scout/metadata/current/`) reports the enforced
+limits + the announcement banner, and STEP 6 reads it to size the troop. STEP 6
+does **not** hardcode the list — it works from whatever
+`signals-scout-config-sync` returns and enables a **selective set**: `general`
+is the only **always-on** scout; **3–5 specialists** are enabled for the
+products this project uses most (agent judgment over step-2 evidence —
+`top_events` volume, recent activity, active config counts). The specialist
+candidate pool is the rest of the troop — the surface-specific scouts
+(`product-analytics`, `web-analytics`, `feature-flags`, `surveys`,
+`revenue-analytics`, `ai-observability`, `logs`, `csp-violations`,
+`experiments`, `customer-analytics`, `data-pipelines`, `replay-vision`) plus the
+cross-product
 `anomaly-detection`/`observability-gaps`/`health-checks`/`inbox-validation` —
 **excluding** `error-tracking`/`session-replay`, which are deliberately never
 enabled because each surface already has its own pipeline (step 4's native
 source for error tracking, step 6c's scanners for replay) that a scout would
-duplicate. If no surface clearly qualifies, one universal cross-product
-scout (`anomaly-detection` or `health-checks`) is the fallback so ≥1 specialist
-always runs. Everything else is disabled; the enabled troop caps at **~10**
-(general
+duplicate. If no surface clearly qualifies, one universal cross-product scout
+(`anomaly-detection` or `health-checks`) is the fallback so ≥1 specialist always
+runs. Everything else is disabled; the enabled troop caps at **~10** (general
 
 - 3–5 specialists + 0–5 custom from STEP 7). Per `6-scouts.md`; plus the
   `authoring-signals-scouts` companion (not a scout). `lazy_seed.py` mirrors the
@@ -382,9 +383,8 @@ source is enabled.
    skill has an AI-approval step anymore — the gate fully owns consent before
    the agent starts.
 4. **GitHub integration** (kind `"github"`, team or user level) — required and
-   verified by the wizard's pre-run gate, or
-   repo selection degrades to `no_repo`. UI:
-   `/settings/environment-integrations#integration-github`.
+   verified by the wizard's pre-run gate, or repo selection degrades to
+   `no_repo`. UI: `/settings/environment-integrations#integration-github`.
 
 Plus the **Temporal coordinator schedule**
 (`signals-scout-coordinator-schedule`, workflow `run-signals-scout-coordinator`)
@@ -398,8 +398,8 @@ must be running, or no scout ever dispatches.
 > not deploys** — easiest to forget. Update this list whenever you add/rename a
 > scope, flag, or backend surface.
 
-1. **OAuth scope ceiling — NO ACTION NEEDED for self-driving's scopes.** The live
-   wizard apps' `OAuthApplication.scopes` use the `@default` sentinel
+1. **OAuth scope ceiling — NO ACTION NEEDED for self-driving's scopes.** The
+   live wizard apps' `OAuthApplication.scopes` use the `@default` sentinel
    (`posthog/scopes.py`, `resolve_ceiling`) — US prod is
    `@default,llm_gateway:read,wizard_session:read,wizard_session:write`.
    `@default` resolves to `UNPRIVILEGED_SCOPES`, i.e. every public
@@ -410,16 +410,16 @@ must be running, or no scout ever dispatches.
    they are already inside the ceiling.** Verify before launch rather than
    assuming:
    `python manage.py seed_oauth_app_scopes --client-id <id> --scopes @default,llm_gateway:read,wizard_session:read,wizard_session:write --dry-run`
-   (posthog), or evaluate the requested set against `resolve_ceiling`.
-   A ceiling edit is required **only** if a future addition is a
+   (posthog), or evaluate the requested set against `resolve_ceiling`. A ceiling
+   edit is required **only** if a future addition is a
    privileged/internal/hidden object (e.g. `llm_gateway:*`), which `@default`
    excludes by design. **One naming trap for step 6c:** the scope object is
    `replay_scanner` — `vision-scanners-*` are MCP tool names, not scopes;
    request the tool name and nothing is granted, so the step 403s. Client IDs
    (for reference, not for editing): US prod
    `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, dev
-   `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` (`localhost:8010`), and the prod EU
-   app in the EU deployment (via `WIZARD_CLOUD_RUN_OAUTH_CLIENT_ID`) — each
+   `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` (`localhost:8010`), and the prod
+   EU app in the EU deployment (via `WIZARD_CLOUD_RUN_OAUTH_CLIENT_ID`) — each
    should carry the same `@default,…` value.
 2. **context-mill skill release.** Merge `self-driving-setup` to `main` with the
    `mcp-publish` label so the `latest` release contains the skill ZIP — else the
@@ -530,7 +530,7 @@ must be running, or no scout ever dispatches.
 >    user-facing inbox label is "Self-driving inbox" across the intro bullet,
 >    run-sidebar tips, and outro (ahead of the full item-4 rename).
 > 7. Update Inbox UI to propose to run Wizard command for self-driving
-> 8. ~~**Disable scouts that replicate pipeline (error tracking/replay).**~~
+> 8. ~~**Disable scouts that replicate pipeline (error tracking/replay).**~~ >
 >    **DONE — folded into the STEP 6 troop-narrowing.** The `error-tracking` and
 >    `session-replay` scouts are now disabled unconditionally (step 4 consumes
 >    both as native sources, so a scout duplicates that pipeline) — and step 6
@@ -556,16 +556,16 @@ must be running, or no scout ever dispatches.
 >     first on every self-driving `wizard_ask`** so it is the default highlight
 >     and an accidental `enter` declines: step 7 ("None — keep the built-in
 >     troop"), step 5 ("None of these"), 5a ("Skip GitHub Issues" + fallback
->     "Skip for now"), 5b ("Skip Linear"). Enforced as a
->     cross-cutting rule in `description.md` (the agent builds every ask), so
->     **no wizard code and no blast radius to other programs**. The shared
->     `PickerMenu` empty-submit behavior (an empty `enter` selects the focused
->     option, not `[]`) was **deliberately left unchanged**; decline-first
->     neutralizes it for self-driving without touching the primitive.
->     **Residual:** navigating onto a non-decline row and pressing `enter`
->     without `space` still selects it (inherent to the untouched primitive; the
->     cure is a one-line empty-`enter` → `[]` change if ever wanted).
->     **Prod-sequencing** for the `description` field is in checklist item 2.
+>     "Skip for now"), 5b ("Skip Linear"). Enforced as a cross-cutting rule in
+>     `description.md` (the agent builds every ask), so **no wizard code and no
+>     blast radius to other programs**. The shared `PickerMenu` empty-submit
+>     behavior (an empty `enter` selects the focused option, not `[]`) was
+>     **deliberately left unchanged**; decline-first neutralizes it for
+>     self-driving without touching the primitive. **Residual:** navigating onto
+>     a non-decline row and pressing `enter` without `space` still selects it
+>     (inherent to the untouched primitive; the cure is a one-line empty-`enter`
+>     → `[]` change if ever wanted). **Prod-sequencing** for the `description`
+>     field is in checklist item 2.
 > 11. **Run screen lingers on the generic "Learn" deck ~70s before the
 >     Self-driving "Tips" pane appears.** During the run the left pane plays the
 >     generic **Learn** deck ("Welcome." → "The Wizard is an agent." → "Running
@@ -587,32 +587,32 @@ must be running, or no scout ever dispatches.
 >     `pause: 60000`) — self-driving does **not** override it today. **Scoping
 >     caveat (the whole reason this is a TODO, not a one-liner):** that deck is
 >     inherited by _every_ skill program (audit, revenue-analytics, migration,
->     bare `wizard skill <id>`), so editing `src/ui/tui/decks/agent-skill/index.tsx`
->     changes all of them. Fix self-driving alone the way `getTips` already is —
->     add a **self-driving-owned `getContentBlocks`** override to
->     `selfDrivingConfig` (`self-driving/index.ts`, right next to the `getTips`
->     override); only self-driving runs pick it up, every other program keeps
->     the shared deck. **Do NOT** branch on `activeProgram === 'self-driving'`
->     inside `RunScreen` / `LearnCard` — product knowledge in shared TUI
->     machinery is the repo's core anti-pattern. Three behaviours the override
->     could carry: (a) same deck with a short final `pause` (~5 s) — smallest,
->     zero shared-code edits; (b) **progress-driven** flip (Tips the moment the
->     first task/`[STATUS]` lands) via a new _generic_ `ProgramConfig` predicate
->     hook the run screen consults — keeps the machinery generic, only
->     self-driving supplies the predicate; (c) **no deck** (Tips from the start)
->     — needs a generic "empty deck ⇒ complete immediately" guard in `LearnCard`
->     / `RunScreen`, because an empty `getContentBlocks` never fires
->     `onSequenceComplete` and would otherwise hang on a blank Learn pane. UI
->     polish — deferred.
-> 12. **Proactive product enablement (replay / error tracking / support).**
+>     bare `wizard skill <id>`), so editing
+>     `src/ui/tui/decks/agent-skill/index.tsx` changes all of them. Fix
+>     self-driving alone the way `getTips` already is — add a
+>     **self-driving-owned `getContentBlocks`** override to `selfDrivingConfig`
+>     (`self-driving/index.ts`, right next to the `getTips` override); only
+>     self-driving runs pick it up, every other program keeps the shared deck.
+>     **Do NOT** branch on `activeProgram === 'self-driving'` inside `RunScreen`
+>     / `LearnCard` — product knowledge in shared TUI machinery is the repo's
+>     core anti-pattern. Three behaviours the override could carry: (a) same
+>     deck with a short final `pause` (~5 s) — smallest, zero shared-code edits;
+>     (b) **progress-driven** flip (Tips the moment the first task/`[STATUS]`
+>     lands) via a new _generic_ `ProgramConfig` predicate hook the run screen
+>     consults — keeps the machinery generic, only self-driving supplies the
+>     predicate; (c) **no deck** (Tips from the start) — needs a generic "empty
+>     deck ⇒ complete immediately" guard in `LearnCard` / `RunScreen`, because
+>     an empty `getContentBlocks` never fires `onSequenceComplete` and would
+>     otherwise hang on a blank Learn pane. UI polish — deferred.
+> 12. **Proactive product enablement (replay / error tracking / support).** >
 >     ~~Planned.~~ **Landed as step 3b** — turns products ON (web server-flip)
 >     **before** sources are enabled, via an intent-based `products-enable` MCP
 >     tool (one narrow `product_enablement:write` scope, server-owned recipes)
 >     instead of `project:write`; Support is flag-on + a report CTA. Full
 >     design, decisions, and status in **§9**. (An earlier draft flagged a
->     manual OAuth-ceiling edit as outstanding — that was based on a stale reading
->     of the ceiling; `product_enablement` is inside `@default`, so there is no
->     such step. See §7 item 1.)
+>     manual OAuth-ceiling edit as outstanding — that was based on a stale
+>     reading of the ceiling; `product_enablement` is inside `@default`, so
+>     there is no such step. See §7 item 1.)
 
 ---
 
@@ -683,11 +683,11 @@ self-driving state and leave the products as they are.
 > outstanding**: `product_enablement` is a normal public scope object, so
 > `product_enablement:write` is already inside the wizard apps' `@default`
 > ceiling — no OAuth-ceiling edit (§7 item 1; an earlier draft wrongly flagged
-> one). A new
-> step turns PostHog products ON (so the signal sources have data to read)
-> **before** sources are enabled. Spans **wizard + posthog + context-mill**.
-> Code anchors: posthog `products/signals/backend/product_enablement.py` (+
-> `routes.py`, `posthog/scopes.py`, `products/signals/mcp/tools.yaml`); wizard
+> one). A new step turns PostHog products ON (so the signal sources have data to
+> read) **before** sources are enabled. Spans **wizard + posthog +
+> context-mill**. Code anchors: posthog
+> `products/signals/backend/product_enablement.py` (+ `routes.py`,
+> `posthog/scopes.py`, `products/signals/mcp/tools.yaml`); wizard
 > `program-scopes.ts` + `prompt.ts`; context-mill
 > `references/3b-enable-products.md`. The design rationale below is preserved;
 > the corrections from the build are folded into 9.1/9.3/9.7/9.8. Symbol names
@@ -874,16 +874,16 @@ repo), so it's a context-mill skill change, not platform work:
   (the spec must be rebuilt from the new endpoint first; the committed
   `openapi.json` is stale until then).
 - **OAuth ceiling — NO ACTION.** `product_enablement:write` is inside the
-  `@default` ceiling the wizard apps use, so the consent server grants it with no
-  edit. (An earlier revision of this line claimed a manual edit was outstanding;
-  that was a misreading of the ceiling — see §7 item 1 for the `@default`
-  mechanics and how to verify.)
+  `@default` ceiling the wizard apps use, so the consent server grants it with
+  no edit. (An earlier revision of this line claimed a manual edit was
+  outstanding; that was a misreading of the ceiling — see §7 item 1 for the
+  `@default` mechanics and how to verify.)
 - **wizard — DONE.** `product_enablement:write` in
-  `SELF_DRIVING_SCOPE_ADDITIONS` (`program-scopes.ts`); STEP 3 "Enable
-  products" in `prompt.ts` (label mirrors the skill's `3-enable-products.md`; +
-  README ceiling list). **Deviation:** platform (web vs backend/mobile) is left
-  to the skill + the agent's repo read — `session.integration` is null on the
-  common "PostHog already present" path, so threading a `frameworkFamily` into
+  `SELF_DRIVING_SCOPE_ADDITIONS` (`program-scopes.ts`); STEP 3 "Enable products"
+  in `prompt.ts` (label mirrors the skill's `3-enable-products.md`; + README
+  ceiling list). **Deviation:** platform (web vs backend/mobile) is left to the
+  skill + the agent's repo read — `session.integration` is null on the common
+  "PostHog already present" path, so threading a `frameworkFamily` into
   `PromptContext` would be unreliable and was skipped. The enable is harmless on
   backend/mobile (inert flags), and idempotency rides the existing
   `teamProductOptIns` read.
@@ -916,18 +916,18 @@ repo), so it's a context-mill skill change, not platform work:
 ## 10. Replay Vision scanners (step 6c)
 
 The **push** layer of the inbox: scanners watch individual recordings and emit
-what they see, where sources and scouts *pull*. **The wizard owns almost none of
-it** — just the OAuth scope (§3) and the STEP that names the skill. The skeletons,
-the per-product blanks the agent fills, the rules that keep the scanners cheap and
-non-duplicative (query scoping, the disjoint-query constraint, the quota
-sanity-check) all live in the skill
+what they see, where sources and scouts _pull_. **The wizard owns almost none of
+it** — just the OAuth scope (§3) and the STEP that names the skill. The
+skeletons, the per-product blanks the agent fills, the rules that keep the
+scanners cheap and non-duplicative (query scoping, the disjoint-query
+constraint, the quota sanity-check) all live in the skill
 (`context-mill/.../6c-replay-vision-scanners.md`), so they can change without a
-wizard release — which is the whole reason they live there and not here. Read that
-file for the design; this section records only the facts that are about the
+wizard release — which is the whole reason they live there and not here. Read
+that file for the design; this section records only the facts that are about the
 **wizard flow**, not the scanner content.
 
 - **Scope.** Object is `replay_scanner` — the `vision-scanners-*` names are MCP
-  *tools*, not scopes, so requesting a tool name grants nothing and the step
+  _tools_, not scopes, so requesting a tool name grants nothing and the step
   403s. Create/update also need `session_recording:read` (the API pairs them —
   configuring a scanner indirectly exposes recording contents). Both are normal
   public objects inside the wizard apps' `@default` ceiling, so **no ceiling
@@ -939,26 +939,28 @@ file for the design; this section records only the facts that are about the
   `ReplayScanner`, default false) is the entire mechanism — no new contract,
   enum, or migration. `SignalSourceConfig.is_source_enabled` returns `True` for
   `replay_vision`/`scanner_finding` unconditionally, because the flag on the
-  scanner *is* the per-source config. That's why STEP 4 must **not** create a
+  scanner _is_ the per-source config. That's why STEP 4 must **not** create a
   `replay_vision` source row.
 
-- **Separate layer from the scout.** The scanner is the *sensor* (one recording →
-  one observation → the per-session finding). `signals-scout-replay-vision` is the
-  *analyst* reading **across** accumulated observations, left off by default and
-  untouched here. Because 6c runs *after* step 6 and its scanners have produced
-  nothing yet, that scout stays an evidence-based no in step 6 — don't enable it
-  on the strength of having just created scanners.
+- **Separate layer from the scout.** The scanner is the _sensor_ (one recording
+  → one observation → the per-session finding). `signals-scout-replay-vision` is
+  the _analyst_ reading **across** accumulated observations, left off by default
+  and untouched here. Because 6c runs _after_ step 6 and its scanners have
+  produced nothing yet, that scout stays an evidence-based no in step 6 — don't
+  enable it on the strength of having just created scanners.
 
-- **Never aborts.** No recordings yet (the scanners arm and start when recordings
-  begin), a backend-only project, the `replay-vision` flag off (endpoints 404
-  behind `ReplayVisionEnabledPermission` — in practice on for everyone), a missing
-  tool, or a single failed create are all recorded follow-ups, then step 7.
+- **Never aborts.** No recordings yet (the scanners arm and start when
+  recordings begin), a backend-only project, the `replay-vision` flag off
+  (endpoints 404 behind `ReplayVisionEnabledPermission` — in practice on for
+  everyone), a missing tool, or a single failed create are all recorded
+  follow-ups, then step 7.
 
 Code anchors: posthog `products/replay_vision/backend/models/replay_scanner.py`,
 `api/scanners.py`, `temporal/scanners/prompts/signals_step.jinja` (the fixed
-defect-detection turn that `emits_signals` appends — the *why* the skill cares
+defect-detection turn that `emits_signals` appends — the _why_ the skill cares
 more about a scanner's `query` than its prompt); wizard `program-scopes.ts` +
-`prompt.ts` + `src/ui/tui/decks/self-driving/tips.ts`; skill `6c-replay-vision-scanners.md`.
+`prompt.ts` + `src/ui/tui/decks/self-driving/tips.ts`; skill
+`6c-replay-vision-scanners.md`.
 
 ---
 

@@ -2,8 +2,7 @@ import { runNonInteractive } from '@cli/runners/run-non-interactive';
 import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
-import { Harness, Integration, Sequence } from '@shared/constants';
-import { uploadEnvironmentVariablesStep } from '@steps/upload-environment-variables';
+import { Harness, Sequence } from '@shared/constants';
 import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
@@ -63,10 +62,6 @@ vi.mock('@agent/runner', async (original) => ({
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
   refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock('@steps/upload-environment-variables', async (original) => ({
-  ...(await original<typeof import('@steps/upload-environment-variables')>()),
-  uploadEnvironmentVariablesStep: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
@@ -185,27 +180,27 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
-it('supplies environment upload through the run host for the requested project', async () => {
+it('reports info, warnings and spinners through the current UI', async () => {
+  const ui = new LoggingUI();
+  const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+  vi.spyOn(ui.log, 'info');
+  vi.spyOn(ui.log, 'warn');
+  vi.spyOn(ui, 'spinner').mockReturnValue(spinner);
+  setUI(ui);
   const config = program();
-  config.run = async (_session, host) => {
-    const uploaded = await host.uploadEnvironmentVariables(
-      { POSTHOG_KEY: 'phc_test' },
-      Integration.nextjs,
-      '/repo/apps/web',
-    );
-    expect(uploaded).toEqual(['POSTHOG_KEY']);
-    return program().run as ProgramRun;
+  config.run = (_session, host) => {
+    host.info('Uploading environment variables to Vercel...');
+    host.warn('careful');
+    expect(host.spinner()).toBe(spinner);
+    return Promise.resolve(program().run as ProgramRun);
   };
 
   await runProgramAgent(config, session());
 
-  expect(uploadEnvironmentVariablesStep).toHaveBeenCalledWith(
-    { POSTHOG_KEY: 'phc_test' },
-    {
-      integration: Integration.nextjs,
-      session: { installDir: '/repo/apps/web' },
-    },
+  expect(ui.log.info).toHaveBeenCalledWith(
+    'Uploading environment variables to Vercel...',
   );
+  expect(ui.log.warn).toHaveBeenCalledWith('careful');
 });
 
 it('reads completion data when each hook runs, after late URL updates', async () => {

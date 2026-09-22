@@ -9,8 +9,13 @@ export function testProgramRunHost(session?: {
     setFrameworkContext: (key, value) => {
       context[key] = value;
     },
+    info: () => undefined,
     warn: () => undefined,
-    uploadEnvironmentVariables: () => Promise.resolve([]),
+    spinner: () => ({
+      start: () => undefined,
+      stop: () => undefined,
+      message: () => undefined,
+    }),
   };
 }
 

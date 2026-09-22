@@ -50,8 +50,9 @@ const resolveRun = errorTrackingConfig.run as (
 const runHost = (): ProgramRunHost => ({
   getFrameworkContext: vi.fn(),
   setFrameworkContext: vi.fn(),
+  info: vi.fn(),
   warn: vi.fn(),
-  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
+  spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
 });
 
 const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);

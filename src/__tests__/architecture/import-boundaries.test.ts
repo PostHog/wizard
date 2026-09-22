@@ -22,7 +22,7 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     ['shared', (p) => p.startsWith('src/shared/')],
     ['agent', (p) => p.startsWith('src/agent/')],
     ['programs', (p) => p.startsWith('src/programs/')],
-    ['tui', (p) => p.startsWith('src/tui/') || p.startsWith('src/steps/')],
+    ['tui', (p) => p.startsWith('src/tui/')],
     ['headless', (p) => p.startsWith('src/headless/')],
     ['cli', (p) => p === 'bin.ts' || p.startsWith('src/cli/')],
   ];
@@ -449,7 +449,8 @@ it('keeps the callable program registry free of UI and session runtime imports',
     (file) =>
       file === 'src/programs/program-registry.ts' ||
       file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
+      file.startsWith('src/tui/') ||
+      file.startsWith('src/headless/') ||
       file.startsWith('src/lib/wizard-session') ||
       file.startsWith('src/cli/runners/') ||
       file.startsWith('src/cli/commands/'),
@@ -462,7 +463,8 @@ it('keeps the callable runProgram closure free of UI, session, and legacy regist
     (file) =>
       file === 'src/programs/program-registry.ts' ||
       file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
+      file.startsWith('src/tui/') ||
+      file.startsWith('src/headless/') ||
       file.startsWith('src/lib/wizard-session'),
   );
   expect(forbidden).toEqual([]);
@@ -474,7 +476,7 @@ it('keeps program decks and task-stream state behind the TUI boundary', () => {
       (edge.startsWith('src/programs/') &&
         edge.includes(' -> src/tui/decks/')) ||
       (edge.startsWith('src/programs/task-stream/') &&
-        edge.includes(' -> src/ui/')),
+        (edge.includes(' -> src/ui/') || edge.includes(' -> src/tui/'))),
   );
   expect(forbidden).toEqual([]);
 });
@@ -486,7 +488,8 @@ it.each([
   const forbidden = runtimeClosure(entry).filter(
     (file) =>
       file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
+      file.startsWith('src/tui/') ||
+      file.startsWith('src/headless/') ||
       file.startsWith('src/lib/wizard-session') ||
       file.startsWith('src/programs/task-stream/'),
   );
@@ -507,7 +510,6 @@ describe('surface classification', () => {
     expect(classifySurface('src/headless/renderers/logging-ui.ts')).toBe(
       'headless',
     );
-    expect(classifySurface('src/steps/index.ts')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
     expect(classifySurface('src/agent/tools/tools.ts')).toBe('agent');

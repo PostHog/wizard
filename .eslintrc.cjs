@@ -70,8 +70,6 @@ module.exports = {
                   '**/detection/**',
                   '**/runners/**',
                   '**/commands/**',
-                  '@steps',
-                  '@steps/**',
                   '**/frameworks/**',
                   '@utils/setup-utils',
                   '@shared/utils/setup-utils',

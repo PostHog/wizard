@@ -91,7 +91,6 @@ export default defineConfig({
       { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
       { find: /^@ui$/, replacement: r('src/ui/index.ts') },
       { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },
-      { find: /^@steps\/(.*)$/, replacement: `${r('src/steps')}/$1` },
     ],
   },
   test: {

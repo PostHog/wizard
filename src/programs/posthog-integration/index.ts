@@ -157,12 +157,19 @@ export const posthogIntegrationConfig: ProgramConfig = {
         warn: (message) => host.warn(message),
         setTag: (key, value) => analytics.setTag(key, value),
         capture: (event, properties) => analytics.capture(event, properties),
-        uploadEnvironmentVariables: (envVars, integration) =>
-          host.uploadEnvironmentVariables(
-            envVars,
+        uploadEnvironmentVariables: async (envVars, integration) => {
+          const { uploadEnvironmentVariablesStep } = await import(
+            './upload-environment-variables'
+          );
+          return uploadEnvironmentVariablesStep(envVars, {
             integration,
-            session.installDir,
-          ),
+            installDir: session.installDir,
+            report: {
+              info: (message) => host.info(message),
+              spinner: () => host.spinner(),
+            },
+          });
+        },
         requestDeepLink: (credentials) =>
           requestDeepLink(credentials.accessToken, credentials.host),
         openDashboardDeepLink: (url) =>
