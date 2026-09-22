@@ -1,9 +1,7 @@
-import { gatewayAuth } from '@agent/gateway-session';
 import { createTriageLLMProvider } from '@agent/triage-provider';
 import { prepareRun } from '../shared/bootstrap';
 import type { RunConfig, RunInput } from '../shared/types';
 
-vi.mock('@agent/gateway-session', () => ({ gatewayAuth: vi.fn() }));
 vi.mock('@agent/triage-provider', () => ({ createTriageLLMProvider: vi.fn() }));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
@@ -36,7 +34,6 @@ const input = {
 describe('agent inference auth input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(gatewayAuth).mockResolvedValue(auth);
   });
 
   it('uses the provided resolver for boot and triage without touching the PostHog access token', async () => {
@@ -47,7 +44,6 @@ describe('agent inference auth input', () => {
     });
 
     expect(resolve).toHaveBeenCalledTimes(1);
-    expect(gatewayAuth).not.toHaveBeenCalled();
     expect(boot.inferenceAuth).toEqual({ resolve });
     expect(createTriageLLMProvider).toHaveBeenCalledWith(
       expect.any(Function),
@@ -64,17 +60,11 @@ describe('agent inference auth input', () => {
       }),
     );
     expect(resolve).toHaveBeenCalledTimes(2);
-    expect(gatewayAuth).not.toHaveBeenCalled();
   });
 
-  it('retains the legacy mint when no provider was supplied', async () => {
-    const boot = await prepareRun(config, input);
-
-    expect(gatewayAuth).toHaveBeenCalledWith(
-      input.credentials.host,
-      input.credentials.accessToken,
-      config.programId,
+  it('rejects missing auth before the agent starts', async () => {
+    await expect(prepareRun(config, input)).rejects.toThrow(
+      'Inference auth provider is required',
     );
-    expect(await boot.inferenceAuth.resolve()).toEqual(auth);
   });
 });

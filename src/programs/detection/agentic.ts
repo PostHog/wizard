@@ -27,6 +27,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import { getUI, type SpinnerHandle } from '@ui';
 import { createUiReducer } from '@ui/agent-progress';
+import { createPosthogInferenceAuthProvider } from '@programs/credentials';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -131,6 +132,7 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
+  inferenceAuth?: import('@agent/types').InferenceAuthProvider;
 };
 
 function buildPrompt(
@@ -369,6 +371,10 @@ export async function detectProjectsWithAgent(
       detectPackageManager: detectNodePackageManagers,
       skillsBaseUrl: getSkillsBaseUrl(),
       programId,
+      inferenceAuth:
+        options.inferenceAuth ??
+        session.inferenceAuth ??
+        createPosthogInferenceAuthProvider(session.credentials, programId),
       integrationLabel: 'agentic-detect',
       wizardMetadata,
       allowedTools: ['Read', 'Grep', 'Glob'],

@@ -52,15 +52,6 @@ vi.mock('@utils/analytics', () => ({
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
 }));
-vi.mock('@agent/gateway-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/gateway-session')>()),
-  gatewayAuth: vi.fn().mockResolvedValue({
-    gatewayUrl: 'https://gateway.test',
-    token: 'phe_run',
-    teamId: 1,
-    refreshAtMs: Date.now() + 3_600_000,
-  }),
-}));
 
 // The fake harness: reports a little of everything, then returns what the
 // current test told it to.
@@ -213,7 +204,6 @@ import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
-import { gatewayAuth } from '@agent/gateway-session';
 
 let tmp: string;
 
@@ -251,6 +241,15 @@ const input = (over: Partial<RunInput> = {}): RunInput => ({
     projectApiKey: 'phc_test',
     host: HostResolution.fromApiHost('https://us.posthog.com'),
     projectId: 1,
+  },
+  inferenceAuth: {
+    resolve: () =>
+      Promise.resolve({
+        gatewayUrl: 'https://gateway.test',
+        token: 'phe_run',
+        teamId: 1,
+        refreshAtMs: Date.now() + 3_600_000,
+      }),
   },
   project: null,
   apiUser: null,
@@ -826,20 +825,37 @@ describe('runAgent standalone', () => {
 
   it('removes a new marked skill when preparation fails before the harness starts', async () => {
     const skillsDir = path.join(tmp, '.claude', 'skills');
-    vi.mocked(gatewayAuth).mockImplementationOnce(() => {
-      const dir = path.join(skillsDir, 'installed-during-preparation');
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
-      return Promise.reject(new Error('preparation blocked the run'));
+    const failedInput = input({
+      inferenceAuth: {
+        resolve: () => {
+          const dir = path.join(skillsDir, 'installed-during-preparation');
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+          return Promise.reject(new Error('preparation blocked the run'));
+        },
+      },
     });
 
-    const result = await runAgent(config(), input());
+    const result = await runAgent(config(), failedInput);
 
     expect(result.outcome).toBe(RunOutcome.Crashed);
     expect(harnessState.lastInputs).toBeUndefined();
     expect(
       fs.existsSync(path.join(skillsDir, 'installed-during-preparation')),
     ).toBe(false);
+  });
+
+  it('rejects a standalone agent run without a caller-owned inference provider', async () => {
+    const missingProvider = input();
+    delete (missingProvider as Partial<RunInput>).inferenceAuth;
+
+    const result = await runAgent(config(), missingProvider);
+
+    expect(result.outcome).toBe(RunOutcome.Crashed);
+    expect(result.failure?.message).toContain(
+      'Inference auth provider is required',
+    );
+    expect(harnessState.lastInputs).toBeUndefined();
   });
 
   it('keeps newly installed skills after a successful run', async () => {

@@ -272,6 +272,8 @@ export function runNonInteractive(
           Number(session.projectId),
           session.region ?? 'us',
         );
+        session.inferenceAuth = ciInferenceAuth;
+        store?.setInferenceAuth(ciInferenceAuth);
       }
       if (config.ciPreRun) {
         await config.ciPreRun(session);

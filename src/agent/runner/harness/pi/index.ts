@@ -26,7 +26,7 @@ import { AgentErrorType } from '@agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
-import type { GatewayAuth } from '@agent/gateway-session';
+import type { GatewayAuth } from '@shared/gateway-auth';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,

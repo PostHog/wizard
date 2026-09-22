@@ -1,7 +1,7 @@
 /** CI owns the token-file input and hands a fixed bearer to the program. */
 
 import { readFileSync } from 'node:fs';
-import { createCiGatewayAuth } from '@agent';
+import { createCiGatewayAuth } from '@shared/ci-gateway-auth';
 import type { InferenceAuthProvider } from '@agent/types';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';

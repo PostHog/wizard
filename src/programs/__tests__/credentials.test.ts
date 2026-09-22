@@ -1,9 +1,9 @@
 import { HostResolution } from '@shared/host-resolution';
 import type { Credentials } from '@shared/api';
-import { gatewayAuth } from '@agent';
+import { gatewayAuth } from '../gateway-session';
 import { createPosthogInferenceAuthProvider } from '../credentials';
 
-vi.mock('@agent', () => ({ gatewayAuth: vi.fn() }));
+vi.mock('../gateway-session', () => ({ gatewayAuth: vi.fn() }));
 
 const posthog: Credentials = {
   accessToken: 'pha_fixture',
