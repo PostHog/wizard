@@ -39,8 +39,8 @@ export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
  * — `Object.values(Harness)` gives an iterable of the values when an array is
  * needed. Adding a member is enough to pick it up everywhere.
  *
- * Naming matches the directory layout — see `src/lib/agent/runner/harness/`
- * and `src/lib/agent/runner/sequence/`.
+ * Naming matches the directory layout — see `src/agent/runner/harness/`
+ * and `src/agent/runner/sequence/`.
  */
 export enum Harness {
   anthropic = 'anthropic',

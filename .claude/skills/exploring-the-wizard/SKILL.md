@@ -114,7 +114,7 @@ MCP snapshots are plain `.txt`; the CI snapshot route writes colored `.ans`
 frames. Keep the screen path and failure evidence with the snapshots. Do not
 stop a progressing run at an invented turn count: the MCP exposes no turn limit;
 Pi's continuation and tool-call guards are described in its
-[harness README](../../../src/lib/agent/runner/harness/pi/README.md).
+[harness README](../../../src/agent/runner/harness/pi/README.md).
 
 ## Sweep the workbench
 

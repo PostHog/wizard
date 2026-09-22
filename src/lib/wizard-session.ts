@@ -140,7 +140,7 @@ export interface WizardSession {
    * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
    * into the authenticated project's AI Observability tab. Dev/test builds
    * only — the flag is undeclared in published builds so this stays `false`
-   * there. See `src/lib/agent/aio-capture.ts`.
+   * there. See `src/agent/aio-capture.ts`.
    */
   captureAio: boolean;
 
@@ -204,7 +204,7 @@ export interface WizardSession {
   /**
    * Full user payload from `/api/users/@me/` — identifiers, profile,
    * current team + organization, preferences, etc. Null until OAuth /
-   * CI-key auth populates it. Schema lives in `src/lib/api.ts` and
+   * CI-key auth populates it. Schema lives in `src/shared/api.ts` and
    * passes through unknown upstream fields so downstream features can
    * read account context (plan, org name, email, etc.) without
    * re-fetching.

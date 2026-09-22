@@ -7,7 +7,7 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
   // These are the exact `[ABORT] <reason>` strings the mcp-analytics skill
   // emits (context-mill `context/skills/mcp-analytics/description.md`), with
   // the `[ABORT] ` prefix already stripped — matching what the runner passes
-  // to `AbortCase.match` (src/lib/agent/runner/sequence/linear.ts).
+  // to `AbortCase.match` (src/agent/runner/sequence/linear.ts).
   const reasons = [
     'no mcp server found',
     'unsupported language for mcp analytics',
