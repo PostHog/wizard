@@ -25,7 +25,7 @@ import { resolveProgramBinding, type ProgramSwitchboardCtx } from './binding';
 import { getProgramCommandments } from './commandments';
 import { captureSwitchboardDecision } from './binding-telemetry';
 import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
-import type { ProgramRun } from './program-run';
+import type { ProgramCompletionContext, ProgramRun } from './program-run';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
@@ -235,6 +235,11 @@ async function runProgram(
   }
 
   const framework = session.integration ?? session.skillId ?? undefined;
+  const completionContext = (): ProgramCompletionContext => ({
+    signup: session.signup,
+    dashboardUrl: session.dashboardUrl,
+    notebookUrl: session.notebookUrl,
+  });
   const config: RunConfig = {
     programId: programConfig.id,
     run,
@@ -259,14 +264,15 @@ async function runProgram(
       : undefined,
     hooks: {
       postRun: run.postRun
-        ? (creds) => run.postRun!(session, creds)
+        ? (creds) => run.postRun!(completionContext(), creds)
         : undefined,
       buildOutroData: run.buildOutroData
-        ? (creds) => run.buildOutroData!(session, creds) ?? undefined
+        ? (creds) =>
+            run.buildOutroData!(completionContext(), creds) ?? undefined
         : undefined,
       buildOutroNextSteps: run.buildOutroNextSteps
         ? (creds, completed) =>
-            run.buildOutroNextSteps!(session, creds, completed)
+            run.buildOutroNextSteps!(completionContext(), creds, completed)
         : undefined,
     },
   };

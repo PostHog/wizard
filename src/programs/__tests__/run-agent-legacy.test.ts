@@ -19,6 +19,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -177,6 +178,59 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
     expect.anything(),
   );
   expect(analytics.shutdown).not.toHaveBeenCalled();
+});
+
+it('reads completion data when each hook runs, after late URL updates', async () => {
+  const currentSession = session();
+  const postRun = vi.fn().mockResolvedValue(undefined);
+  const buildOutroData = vi.fn().mockReturnValue({
+    kind: OutroKind.Success,
+    message: 'Done',
+  });
+  const buildOutroNextSteps = vi.fn().mockReturnValue(undefined);
+  const config = program();
+  config.run = {
+    ...(config.run as ProgramRun),
+    postRun,
+    buildOutroData,
+    buildOutroNextSteps,
+  };
+  vi.mocked(runAgent).mockImplementationOnce(async (runConfig, input) => {
+    currentSession.dashboardUrl = 'https://us.posthog.com/dashboard/42';
+    await runConfig.hooks?.postRun?.(input.credentials);
+    currentSession.notebookUrl = 'https://us.posthog.com/notebook/7';
+    runConfig.hooks?.buildOutroData?.(input.credentials);
+    runConfig.hooks?.buildOutroNextSteps?.(input.credentials, ['seeded']);
+    return { outcome: RunOutcome.Success, snapshot };
+  });
+
+  await runProgramAgent(config, currentSession);
+
+  expect(postRun).toHaveBeenCalledWith(
+    {
+      signup: false,
+      dashboardUrl: 'https://us.posthog.com/dashboard/42',
+      notebookUrl: null,
+    },
+    currentSession.credentials,
+  );
+  expect(buildOutroData).toHaveBeenCalledWith(
+    {
+      signup: false,
+      dashboardUrl: 'https://us.posthog.com/dashboard/42',
+      notebookUrl: 'https://us.posthog.com/notebook/7',
+    },
+    currentSession.credentials,
+  );
+  expect(buildOutroNextSteps).toHaveBeenCalledWith(
+    {
+      signup: false,
+      dashboardUrl: 'https://us.posthog.com/dashboard/42',
+      notebookUrl: 'https://us.posthog.com/notebook/7',
+    },
+    currentSession.credentials,
+    ['seeded'],
+  );
 });
 
 it('passes actual self-driving GitHub gate state to the callable host', async () => {
