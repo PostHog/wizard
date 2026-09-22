@@ -92,7 +92,9 @@ export function resolveHarness(
     };
   });
   logToFile(
-    `[switchboard] resolved: program=${ctx.program ?? '?'} harness=${pick.harness}` +
+    `[switchboard] resolved: program=${ctx.program ?? '?'} harness=${
+      pick.harness
+    }` +
       `${ctx.trace?.harness ? ` (${ctx.trace.harness})` : ''} model=${
         pick.model
       }` +

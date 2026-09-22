@@ -103,7 +103,6 @@
     "src/programs/self-driving/detect.ts -> src/lib/wizard-session.ts",
     "src/programs/self-driving/index.ts -> src/lib/wizard-session.ts",
     "src/programs/self-driving/index.ts -> src/ui/tui/decks/self-driving/index.tsx",
-    "src/programs/self-driving/index.ts -> src/ui/tui/decks/self-driving/pricing.ts",
     "src/programs/self-driving/index.ts -> src/ui/tui/decks/self-driving/tips.ts",
     "src/programs/self-driving/steps.ts -> src/lib/wizard-session.ts",
     "src/programs/shared/health-check-step.ts -> src/lib/wizard-session.ts",

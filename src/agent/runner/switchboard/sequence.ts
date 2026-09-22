@@ -116,7 +116,9 @@ export function resolveSequence(ctx: SwitchboardCtx): Sequence {
     return binding.sequence;
   });
   logToFile(
-    `[switchboard] resolved: program=${ctx.program ?? '?'} sequence=${sequence}` +
+    `[switchboard] resolved: program=${
+      ctx.program ?? '?'
+    } sequence=${sequence}` +
       `${ctx.trace?.sequence ? ` (${ctx.trace.sequence})` : ''}`,
   );
   return sequence;

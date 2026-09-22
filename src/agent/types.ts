@@ -15,6 +15,7 @@ export type {
   RunConfig,
   ResolvedBinding,
   RunFlags,
+  RunHooks,
   RunInput,
   RunResult,
   SeedTaskEntry,

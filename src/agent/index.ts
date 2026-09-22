@@ -16,6 +16,7 @@
 export type * from './types';
 export { runAgent, RunOutcome } from './runner';
 export { AgentSignals } from './agent-interface';
+export { OutroKind } from './progress';
 export { WIZARD_TOOL_NAMES } from './tools';
 export { DEFAULT_AGENT_BINDING } from './default-binding';
 export { resolveHarness } from './runner/switchboard';
