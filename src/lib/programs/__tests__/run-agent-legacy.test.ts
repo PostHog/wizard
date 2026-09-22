@@ -1,5 +1,5 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
-import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { authenticate } from '@lib/programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@lib/agent/runner';
 import { Harness, Sequence } from '@lib/constants';
@@ -54,7 +54,7 @@ vi.mock('@lib/agent/runner', async (original) => ({
   ...(await original<typeof import('@lib/agent/runner')>()),
   runAgent: vi.fn(),
 }));
-vi.mock('@lib/agent/runner/shared/authenticate', () => ({
+vi.mock('@lib/programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
   refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
 }));

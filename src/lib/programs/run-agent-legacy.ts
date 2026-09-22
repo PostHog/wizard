@@ -55,10 +55,7 @@ import {
 } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import {
-  authenticate,
-  refreshAccessTokenIfNeeded,
-} from '@lib/agent/runner/shared/authenticate';
+import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
 
