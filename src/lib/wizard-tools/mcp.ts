@@ -19,7 +19,7 @@ import {
   AUDIT_CHECKS_FILE,
   type AuditCheck,
   type AuditStatus,
-} from '../programs/audit/types';
+} from '../audit-ledger';
 import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,

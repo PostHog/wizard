@@ -62,8 +62,11 @@ import {
   publishHandoff,
 } from '@lib/wizard-tools/handoff';
 import { createSecretVault } from '@lib/secret-vault';
-import { AUDIT_CHECKS_FILE } from '@lib/programs/audit/types';
-import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
+import {
+  AUDIT_CHECKS_FILE,
+  type AuditCheck,
+  type AuditStatus,
+} from '@lib/audit-ledger';
 import { makeMutex } from '@utils/atomic-ledger';
 import { withMode } from './index';
 import {
