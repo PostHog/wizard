@@ -15,7 +15,7 @@ import { registerCleanup } from '@utils/wizard-abort';
 import {
   BLOCKED_AGENT_ENV_KEYS,
   BLOCKED_AGENT_ENV_PATTERNS,
-} from './agent-env-isolation';
+} from '@lib/agent/agent-env-isolation';
 
 /** The file names Claude Code accepts for project settings, in priority order. */
 const SETTINGS_FILENAMES = ['settings.json', 'settings'] as const;

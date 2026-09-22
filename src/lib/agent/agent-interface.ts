@@ -47,7 +47,7 @@ import {
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
-import { classifyToolToStage } from './agent-phase';
+import { classifyToolToStage } from '@shared/agent-phase';
 import type { PackageManagerDetector } from '@utils/package-manager';
 import {
   AgentSignals,
@@ -68,7 +68,7 @@ import {
   checkAllSettingsConflicts,
   type SettingsConflict,
   type SettingsConflictSource,
-} from './claude-settings';
+} from '@shared/claude-settings';
 import {
   detectStoredClaudeLogin,
   hasStoredClaudeLogin,

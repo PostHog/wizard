@@ -14,8 +14,8 @@
  */
 
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
-import { classifySettingsConflicts } from '@lib/agent/claude-settings';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import { classifySettingsConflicts } from '@shared/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 
 // Every env-based avenue (one key each), plus the gateway routing and benign
 // env that must survive. Grouped by avenue for readability; the snapshot sorts.

@@ -58,7 +58,7 @@ vi.mock('@lib/programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
   refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('@lib/agent/claude-settings', () => ({
+vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));

@@ -13,7 +13,7 @@ import type {
   TokenUsageDelta,
 } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiUser } from '@shared/api';
 import type {

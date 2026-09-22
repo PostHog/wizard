@@ -16,7 +16,7 @@
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
 import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
-import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
+import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
 
 const RESET_ATTRS = '\x1b[0m';

@@ -9,7 +9,7 @@
  * every existing runner is unchanged.
  */
 
-import type { SettingsConflict } from './claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 
 // ── What the agent hands back and asks with ─────────────────────────
 

@@ -3,7 +3,7 @@ import type {
   MiddlewareContext,
   MiddlewareStore,
 } from '@lib/middleware/types';
-import { computeTokenCostUsd } from '@lib/agent/token-pricing';
+import { computeTokenCostUsd } from '@shared/token-pricing';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';
 

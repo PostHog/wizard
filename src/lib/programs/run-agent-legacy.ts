@@ -33,7 +33,7 @@ import {
   checkAllSettingsConflicts,
   classifySettingsConflicts,
   restoreClaudeSettings,
-} from '@lib/agent/claude-settings';
+} from '@shared/claude-settings';
 import { flushScanReport } from '@lib/yara-hooks';
 import {
   evaluateWizardReadiness,

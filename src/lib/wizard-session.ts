@@ -21,7 +21,7 @@ import {
 } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { SettingsConflict } from './agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
 import {

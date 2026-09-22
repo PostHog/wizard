@@ -11,7 +11,7 @@ import {
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from './wizard-ui';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser } from '@shared/api';
 import { OAUTH_TIMEOUT_MS } from '@shared/constants';
 import {

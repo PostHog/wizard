@@ -8,7 +8,7 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiUser } from '@shared/api';
 import type { Credentials, TaskNotice } from '@lib/wizard-session';
