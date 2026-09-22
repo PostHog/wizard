@@ -1,13 +1,7 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
-import {
-  DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
-  GPT5_6_TERRA_MODEL,
-  Harness,
-  Sequence,
-} from '@shared/constants';
-import type { ProgramId } from '@programs/types';
+import { Harness, Sequence } from '@shared/constants';
+import { DEFAULT_AGENT_BINDING } from '@agent/default-binding';
 import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';
@@ -29,12 +23,22 @@ export interface SwitchboardTrace {
 
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
-  program: ProgramId;
+  /** Opaque log label. Program lookup stays with the caller. */
+  program?: string;
+  /** The caller's selected base binding, before route/CLI overlays. */
+  baseBinding?: ProgramBinding;
   /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
   composed?: boolean;
-  flags: Record<string, string>;
-  /** Flag payloads from the same snapshot (payload-carrying flags, e.g. self-driving pi). */
-  flagPayloads?: Record<string, unknown>;
+  /** Already validated experiment route; no flag parsing happens in the agent. */
+  flagRoute?: {
+    harness?: Harness;
+    model?: string;
+    thinkingLevel?: EffortLevel;
+    sequence?: Sequence;
+  };
+  flagSequence?: Sequence;
+  /** Raw boolean only for the existing capability-clamp log line. */
+  orchestratorFlagOn?: boolean;
   /** CLI override (`--harness`). Wins over `flags`. */
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
@@ -102,68 +106,8 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-// Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
-export const DEFAULT_BINDING: ProgramBinding = {
-  sequence: Sequence.linear,
-  harness: Harness.pi,
-  model: GPT5_6_SOL_MODEL,
-  thinkingLevel: 'medium',
-};
-
-/**
- * Per-program routing. Kept in lockstep with `PROGRAM_REGISTRY` by the
- * switchboard test. Anything absent falls back to `DEFAULT_BINDING`.
- */
-export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
-  'posthog-integration': DEFAULT_BINDING,
-  'revenue-analytics-setup': DEFAULT_BINDING,
-  'warehouse-source': DEFAULT_BINDING,
-  'error-tracking-upload-source-maps': {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
-  },
-  audit: DEFAULT_BINDING,
-  'events-audit': DEFAULT_BINDING,
-  'posthog-doctor': DEFAULT_BINDING,
-  'web-analytics-doctor': DEFAULT_BINDING,
-  migration: DEFAULT_BINDING,
-  'self-driving': DEFAULT_BINDING,
-  'agent-skill': DEFAULT_BINDING,
-  'mcp-add': DEFAULT_BINDING,
-  'mcp-remove': DEFAULT_BINDING,
-  'mcp-tutorial': DEFAULT_BINDING,
-  'mcp-analytics': DEFAULT_BINDING,
-  // Orchestrator on pi. The binding routes only; every stage's model and
-  // effort are pinned context-mill side in the flow's frontmatter
-  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
-  metrics: {
-    sequence: Sequence.orchestrator,
-    harness: Harness.pi,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  'replay-vision': {
-    sequence: Sequence.orchestrator,
-    harness: Harness.anthropic,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  // Orchestrator on pi, like metrics. The binding routes only; every stage's
-  // model and effort are pinned context-mill side in the flow's frontmatter
-  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
-  'error-tracking': {
-    sequence: Sequence.orchestrator,
-    harness: Harness.pi,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  'ai-observability': {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_TERRA_MODEL,
-    thinkingLevel: 'high',
-  },
-  slack: DEFAULT_BINDING,
-};
+/** Legacy alias until the public runner export is removed in B2 integration. */
+export const DEFAULT_BINDING: ProgramBinding = DEFAULT_AGENT_BINDING;
 
 // ── Unified resolver ────────────────────────────────────────────────────
 
@@ -186,8 +130,4 @@ export {
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export {
-  isOrchestratorEnabled,
-  areSeededTasksEnabled,
-  resolveStageOverrides,
-} from './flags';
+export { resolveRoleHarness } from './harness';

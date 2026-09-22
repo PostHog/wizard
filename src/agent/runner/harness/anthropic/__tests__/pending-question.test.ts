@@ -44,7 +44,6 @@ async function initializeHarness(
         sequence: Sequence.linear,
         model: 'test',
       },
-      switchboard: { program: 'test', flags: {} },
       skillsBaseUrl: 'https://skills.test',
       wizardFlags: {},
       wizardFlagPayloads: {},

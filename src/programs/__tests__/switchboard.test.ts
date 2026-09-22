@@ -2,7 +2,7 @@
  * Switchboard machinery tests: binding registry lockstep, precedence chains,
  * trace stamping, model capabilities, and structural clamps. Per-experiment
  * flag behavior and cross-program isolation live in one file per experiment
- * under `switchboard/flags/__tests__/`.
+ * under `experiments/__tests__/`.
  *
  * Every resolution test is a BindingCase: (SwitchboardCtx in) → (full
  * four-axis resolveBinding out), optionally pinning the trace.
@@ -24,10 +24,10 @@ import {
 } from '@shared/constants';
 import {
   PROGRAM_BINDINGS,
-  DEFAULT_BINDING,
-  resolveBinding,
-  type SwitchboardCtx,
-} from '@agent/runner/switchboard';
+  resolveProgramBinding as resolveBinding,
+} from '@programs';
+import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
+import { DEFAULT_AGENT_BINDING as DEFAULT_BINDING } from '@agent';
 import {
   modelCapabilities,
   MINT_ALLOWED_EFFORTS,
@@ -36,7 +36,7 @@ import {
   TRIAGE_MODELS,
   VALID_MODELS,
 } from '@agent/runner/switchboard/models';
-import { runBindingCases } from '@agent/runner/switchboard/flags/__tests__/binding-cases';
+import { runBindingCases } from '@programs/experiments/__tests__/binding-cases';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const DEFAULT_RESOLVED = {

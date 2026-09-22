@@ -21,7 +21,6 @@ import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
-import type { SwitchboardCtx } from '../switchboard';
 import type { GatewayAuth } from '@agent/gateway-session';
 
 export type { PromptContext, Credentials };
@@ -141,6 +140,11 @@ export interface ResolvedBinding {
   model: string;
   /** Reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
+  /** Role-specific routes resolved by the caller before the agent starts. */
+  roleBindings?: Record<
+    string,
+    { harness: Harness; model: string; thinkingLevel?: EffortLevel }
+  >;
 }
 
 /**
@@ -149,7 +153,7 @@ export interface ResolvedBinding {
  * treats every label as opaque.
  */
 export interface RunConfig {
-  /** Program id: gateway spend pin, analytics label, commandments axis. */
+  /** Opaque program label for gateway spend pin and analytics. */
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
@@ -157,11 +161,12 @@ export interface RunConfig {
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;
-  /**
-   * The inputs the run-level binding was resolved from. The orchestrator
-   * re-resolves the harness per task role from these; nothing else reads them.
-   */
-  switchboard: SwitchboardCtx;
+  /** Program text selected by the caller; the agent only assembles it. */
+  programCommandments?: readonly string[];
+  /** Validated stage policy selected by the caller; absent keeps flow frontmatter. */
+  stageOverrides?: Record<string, { model?: string; effort?: EffortLevel }>;
+  /** The caller's resolved seeded-task experiment. */
+  seededTasksEnabled?: boolean;
   /** Primary skills origin (context-mill dev or GitHub Releases). */
   skillsBaseUrl: string;
   /** Feature flag key → variant, evaluated before the run. */

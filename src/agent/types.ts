@@ -13,8 +13,11 @@ export type {
   PromptContext,
   InferenceAuthProvider,
   RunConfig,
+  ResolvedBinding,
+  RunFlags,
   RunInput,
   RunResult,
+  SeedTaskEntry,
 } from './runner';
 export type { GatewayAuth } from './gateway-session';
 export type {
@@ -30,8 +33,9 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Leaves in B1 with the bindings table. */
+/** Generic switchboard input types retained for the B2 compatibility export. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
+export type { EffortLevel } from './runner/switchboard/models';
 
 /** Leaves in B2 with downloadSkill. */
 export type { InstallSkillResult } from './tools';

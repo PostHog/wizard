@@ -73,6 +73,7 @@ const harnessState = vi.hoisted(() => ({
   taskFailure: undefined as AgentFailure | undefined,
   seedFailure: undefined as AgentFailure | undefined,
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
+  taskCapability: true,
 }));
 vi.mock('@agent/runner/switchboard/harness', () => {
   const askIfRequested = async (inputs: BackendRunInputs | TaskRunInputs) => {
@@ -141,12 +142,22 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     HARNESS_OPTIONS: { [Harness.pi]: fake },
     getHarness: (name: Harness) => {
       harnessState.selected.push(name);
-      return { ...fake, name };
+      return {
+        ...fake,
+        name,
+        runTask: harnessState.taskCapability ? fake.runTask : undefined,
+      };
     },
     resolveHarness: (ctx: { cliHarness?: Harness }) => ({
       harness: ctx.cliHarness ?? Harness.pi,
       model: DEFAULT_AGENT_MODEL,
     }),
+    resolveRoleHarness: (binding: RunConfig['binding'], role: string) =>
+      binding.roleBindings?.[role] ?? {
+        harness: binding.harness,
+        model: binding.model,
+        thinkingLevel: binding.thinkingLevel,
+      },
   };
 });
 
@@ -209,7 +220,6 @@ const config = (over: Partial<RunConfig> = {}): RunConfig => ({
   },
   composed: false,
   binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
-  switchboard: { program: 'test-program', flags: {} },
   skillsBaseUrl: 'https://skills.test',
   wizardFlags: {},
   wizardFlagPayloads: {},
@@ -252,6 +262,7 @@ beforeEach(() => {
   harnessState.throws = undefined;
   harnessState.lastInputs = undefined;
   harnessState.askQuestions = undefined;
+  harnessState.taskCapability = true;
   vi.mocked(analytics.shutdown).mockClear();
   vi.mocked(initLogFile).mockClear();
   vi.mocked(flushScanReport).mockClear();
@@ -283,11 +294,6 @@ describe('runAgent standalone', () => {
       const running = runAgent(
         config({
           binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
-          switchboard: {
-            program: 'test-program',
-            flags: {},
-            cliHarness: harness,
-          },
         }),
         input(),
         { interaction: { ask }, onProgress: (event) => events.push(event) },
@@ -354,11 +360,6 @@ describe('runAgent standalone', () => {
         const result = await runAgent(
           config({
             binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
-            switchboard: {
-              program: 'test-program',
-              flags: {},
-              cliHarness: harness,
-            },
           }),
           input(),
         );
@@ -381,6 +382,24 @@ describe('runAgent standalone', () => {
     },
   );
 
+  it('keeps an explicit orchestrator route as a hard error without runTask', async () => {
+    harnessState.taskCapability = false;
+    const result = await runAgent(
+      config({
+        binding: {
+          harness: Harness.anthropic,
+          sequence: Sequence.orchestrator,
+          model: DEFAULT_AGENT_MODEL,
+        },
+      }),
+      input(),
+    );
+    expect(result.outcome).toBe(RunOutcome.Crashed);
+    expect(result.failure?.error?.message).toContain(
+      'does not implement runTask; orchestrator mode requires it',
+    );
+  });
+
   it('cleans up when the seed fails before the drain starts', async () => {
     const failure = { message: 'Authentication failed (401)' };
     harnessState.seedFailure = failure;
@@ -390,11 +409,6 @@ describe('runAgent standalone', () => {
           harness: Harness.anthropic,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.anthropic,
         },
       }),
       input(),
@@ -417,11 +431,6 @@ describe('runAgent standalone', () => {
           harness: Harness.anthropic,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.anthropic,
         },
       }),
       input(),

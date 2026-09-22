@@ -7,3 +7,8 @@ export type {
   StoreInitContext,
 } from './program-step';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
+export type {
+  ProgramBinding,
+  ProgramSwitchboardCtx,
+  ProgramSwitchboardTrace,
+} from './binding';

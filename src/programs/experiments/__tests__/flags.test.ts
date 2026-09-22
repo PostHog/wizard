@@ -15,17 +15,14 @@ import {
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
-import {
-  areSeededTasksEnabled,
-  resolveBinding,
-  resolveStageOverrides,
-  type SwitchboardCtx,
-} from '@agent/runner/switchboard';
+import { resolveProgramBinding as resolveBinding } from '@programs';
+import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
+import { areSeededTasksEnabled, resolveStageOverrides } from '..';
 import {
   ORCHESTRATOR_SEQUENCE_ROUTE,
   ORCHESTRATOR_HARNESS_ROUTE,
-} from '@agent/runner/switchboard/flags/orchestrator';
-import { SELF_DRIVING_EXPERIMENT } from '@agent/runner/switchboard/flags/self-driving';
+} from '@programs/experiments/orchestrator';
+import { SELF_DRIVING_EXPERIMENT } from '@programs/experiments/self-driving';
 import { runBindingCases } from './binding-cases';
 
 const envState = vi.hoisted(() => ({
@@ -332,22 +329,17 @@ describe('isolation — everything on at once', () => {
   });
 });
 
-describe('seam scan — routing reads live only in flags/', () => {
-  const switchboardDir = join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
-  );
-  // orchestrator-runner consumes a flags/ resolver; it may pass the snapshot through, never index it.
+describe('seam scan — routing reads live only in experiments/', () => {
+  const programsDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   for (const file of [
-    'harness.ts',
-    'sequence.ts',
-    'models.ts',
-    'index.ts',
-    '../sequence/orchestrator/orchestrator-runner.ts',
+    '../agent/runner/switchboard/harness.ts',
+    '../agent/runner/switchboard/sequence.ts',
+    '../agent/runner/switchboard/models.ts',
+    '../agent/runner/switchboard/index.ts',
+    '../agent/runner/sequence/orchestrator/orchestrator-runner.ts',
   ]) {
     it(`${file} contains no direct flag reads or flag-key imports`, () => {
-      const src = readFileSync(join(switchboardDir, file), 'utf8');
+      const src = readFileSync(join(programsDir, file), 'utf8');
       expect(src).not.toMatch(/ctx\.flags\[/);
       expect(src).not.toMatch(/flags\[['"`]/);
       expect(src).not.toMatch(/WIZARD_\w+_FLAG_KEY/);

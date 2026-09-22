@@ -17,13 +17,13 @@ export type * from './types';
 export { runAgent, RunOutcome } from './runner';
 export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
+export { DEFAULT_AGENT_BINDING } from './default-binding';
+export { resolveHarness } from './runner/switchboard';
 
 /**
- * Leaves in B1. Bindings and program data move to programs: resolveBinding
- * is keyed by PROGRAM_BINDINGS and the agent keeps only "run from an
- * already-resolved binding"; shouldDisableAsk is a flags policy programs
- * decide and pass in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own
- * as askTimeoutMs.
+ * Temporary compatibility helpers while B2 callers move. `resolveBinding`
+ * applies generic precedence and clamps to caller-selected data; it has no
+ * program registry. The final agent entry keeps only resolved-run behavior.
  */
 export { resolveBinding, shouldDisableAsk } from './runner';
 export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';

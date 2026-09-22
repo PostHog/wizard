@@ -22,7 +22,7 @@ infrastructure should consume those boundaries.
 | Framework detection, context, env conventions         | [FrameworkConfig](../../../src/programs/framework-config.ts) and [framework configs](../../../src/programs/frameworks/)                                                                       |
 | Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                         |
 | Programs, steps, prerequisites and outcomes           | [programs](../../../src/programs/)                                                                                                                                          |
-| Sequence, harness, model and effort selection         | [switchboard](../../../src/agent/runner/switchboard/)                                                                                                                       |
+| Sequence, harness, model and effort selection         | [program bindings](../../../src/programs/binding.ts) and [agent clamps](../../../src/agent/runner/switchboard/)                                                               |
 | Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/agent-interface.ts), [YARA hooks](../../../src/agent/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
 | Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                   |
 | Token admission and budgets                           | [PostHog mint endpoint](https://github.com/PostHog/posthog/blob/master/posthog/llm/wizard_gateway_token.py) and [ai-gateway](https://github.com/PostHog/ai-gateway)             |
@@ -43,8 +43,8 @@ infrastructure should consume those boundaries.
   new Anthropic models.
 
 Existing routing has not all migrated:
-[DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) still
-selects Anthropic + linear, with per-program and flag overrides. Set new
+[DEFAULT_AGENT_BINDING](../../../src/agent/default-binding.ts) selects Pi + linear
+for standalone runs; programs apply their own binding and flag overrides. Set new
 bindings explicitly. Migrating an existing program requires checking its flow,
 tasks, and lifecycle hooks; changing the default constant alone is insufficient.
 Both harnesses implement `run` and `runTask`.

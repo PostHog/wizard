@@ -49,6 +49,7 @@ frontmatter contract rather than copying an old manifest example:
   task types after planning. It is not a universal automatic graph built from
   frontmatter.
 
-Per-role `PROGRAM_BINDINGS[id].contextMillOverride` can adjust a task's harness,
-model or effort. New task types usually belong in context-mill; new native
+Per-role routes in the resolved binding can adjust a task's harness, model or
+effort. Programs resolve `PROGRAM_BINDINGS[id].contextMillOverride` before the
+agent starts. New task types usually belong in context-mill; new native
 behavior still requires the appropriate Wizard configuration or implementation.
