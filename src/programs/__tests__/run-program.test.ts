@@ -1,11 +1,17 @@
 import { runAgent, RunOutcome } from '@agent';
-import { Harness, Sequence } from '@shared/constants';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { EVENT_PLAN_FILE, Harness, Sequence } from '@shared/constants';
+import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { FrameworkConfig } from '../framework-config';
 import type { ResolvedProgramCredentials } from '../credentials';
 import { ErrorCodes } from '@shared/errors';
 import { getRuntimeProgramConfig } from '../runtime-registry';
+import * as auditWatcher from '../audit/watch-ledger';
+import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
 
 vi.mock('@agent', async (importOriginal) => ({
@@ -175,6 +181,132 @@ describe('runProgram', () => {
     );
   });
 
+  it('seeds and observes this audit run’s ledger, then releases its watcher', async () => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-audit-host-'),
+    );
+    const ledgerFile = path.join(installDir, AUDIT_CHECKS_FILE);
+    const stale = [
+      { id: 'old', area: 'Events', label: 'old', status: 'pending' as const },
+    ];
+    const seed = [
+      { id: 'seed', area: 'Events', label: 'seed', status: 'pending' as const },
+    ];
+    const updated = [
+      { id: 'seed', area: 'Events', label: 'seed', status: 'pass' as const },
+    ];
+    fs.writeFileSync(ledgerFile, JSON.stringify(stale));
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'audit',
+      auditLedgerFile: AUDIT_CHECKS_FILE,
+      auditSeedChecks: seed,
+    });
+    const originalWatch = auditWatcher.watchAuditLedger;
+    const stop = vi.fn();
+    const watcherSpy = vi
+      .spyOn(auditWatcher, 'watchAuditLedger')
+      .mockImplementation((...args) => {
+        const handle = originalWatch(...args);
+        return {
+          refresh: () => handle.refresh(),
+          stop: () => {
+            stop();
+            handle.stop();
+          },
+        };
+      });
+    vi.mocked(runAgent).mockImplementation(() => {
+      expect(JSON.parse(fs.readFileSync(ledgerFile, 'utf8'))).toEqual(seed);
+      fs.writeFileSync(ledgerFile, JSON.stringify(updated));
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      const result = await runProgram('audit', {
+        installDir,
+        credentials,
+        run,
+      });
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(result.data.detection.frameworkContext.auditChecks).toEqual(
+        updated,
+      );
+      expect(watcherSpy).toHaveBeenCalledExactlyOnceWith(
+        installDir,
+        AUDIT_CHECKS_FILE,
+        expect.any(Function),
+      );
+      expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+      watcherSpy.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns the current integration event plan and stops its watcher on settlement', async () => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-plan-host-'),
+    );
+    const planFile = path.join(installDir, EVENT_PLAN_FILE);
+    fs.writeFileSync(planFile, JSON.stringify([{ event_name: 'stale' }]));
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'posthog-integration',
+      eventPlanFile: EVENT_PLAN_FILE,
+    });
+    const stop = vi.spyOn(ProgramEventPlanWatcher.prototype, 'stop');
+    vi.mocked(runAgent).mockImplementation(() => {
+      fs.writeFileSync(
+        planFile,
+        JSON.stringify([{ event_name: 'checkout_started', description: 'A' }]),
+      );
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      const result = await runProgram('posthog-integration', {
+        installDir,
+        credentials,
+        run,
+      });
+
+      expect(result.data.eventPlan).toEqual([
+        { name: 'checkout_started', description: 'A' },
+      ]);
+      // First capture stops its own watch; the host still drains lifecycle.
+      expect(stop).toHaveBeenCalledTimes(2);
+    } finally {
+      stop.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  });
+
+  it('releases an uncaptured event-plan watcher when the agent throws', async () => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-plan-error-'),
+    );
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'posthog-integration',
+      eventPlanFile: EVENT_PLAN_FILE,
+    });
+    const stop = vi.spyOn(ProgramEventPlanWatcher.prototype, 'stop');
+    vi.mocked(runAgent).mockRejectedValue(new Error('agent crashed'));
+
+    try {
+      await expect(
+        runProgram('posthog-integration', {
+          installDir,
+          credentials,
+          run,
+        }),
+      ).rejects.toThrow('agent crashed');
+      expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+      stop.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  });
+
   it('runs a no-agent program through a host capability without credentials', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'mcp-add',
@@ -338,6 +470,7 @@ describe('runProgram', () => {
     const result = await runProgram('self-driving', {
       installDir: '/project',
       credentials,
+      composition: { githubConnected: true },
       detectedTools: [
         {
           kind: 'Linear',
@@ -353,6 +486,23 @@ describe('runProgram', () => {
     expect(config.run.skillId).toBe('self-driving-setup');
     expect(config.run.customPrompt?.(credentials.posthog)).toContain('Linear');
     expect(config.hooks?.buildOutroData).toBeTypeOf('function');
+  });
+
+  it('requires a confirmed GitHub connection before self-driving starts', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'self-driving',
+    });
+
+    const result = await runProgram('self-driving', {
+      installDir: '/project',
+      credentials,
+    });
+
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { message: 'GitHub connection was not confirmed.' },
+    });
+    expect(runAgent).not.toHaveBeenCalled();
   });
 
   it('requires prepared framework data and host effects for callable integration', async () => {
@@ -543,5 +693,51 @@ describe('runProgram', () => {
       settledRuns: [{ stepId: 'integrate-run' }],
     });
     expect(runAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans a child skill if a later composition gate aborts', async () => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-compose-'),
+    );
+    const childDir = path.join(installDir, 'app');
+    const skillRoot = path.join(childDir, '.claude', 'skills');
+    const oldSkill = path.join(skillRoot, 'before-run');
+    const newSkill = path.join(skillRoot, 'during-run');
+    fs.mkdirSync(oldSkill, { recursive: true });
+    fs.writeFileSync(path.join(oldSkill, '.posthog-wizard'), '');
+    vi.mocked(getRuntimeProgramConfig).mockImplementation((id) => ({ id }));
+    vi.mocked(runAgent).mockImplementation(() => {
+      fs.mkdirSync(newSkill);
+      fs.writeFileSync(path.join(newSkill, '.posthog-wizard'), '');
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      const result = await runProgram(
+        'self-driving',
+        {
+          installDir,
+          credentials,
+          composition: {
+            integration: {
+              installDir: childDir,
+              run: { ...run, integrationLabel: 'nextjs' },
+            },
+          },
+        },
+        {
+          compositionWorkflow: {
+            confirmStep: vi.fn().mockResolvedValue(false),
+          },
+        },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(fs.existsSync(newSkill)).toBe(false);
+      expect(fs.existsSync(oldSkill)).toBe(true);
+      expect(runAgent).toHaveBeenCalledTimes(1);
+    } finally {
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
   });
 });

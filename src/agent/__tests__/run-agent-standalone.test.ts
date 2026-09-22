@@ -318,6 +318,10 @@ describe('runAgent standalone', () => {
     'aborts an active %s harness before outro and cleans the queue',
     async (sequence) => {
       harnessState.waitForAbort = true;
+      const skillRoot = path.join(tmp, '.claude', 'skills');
+      const preexistingSkill = path.join(skillRoot, 'preexisting');
+      fs.mkdirSync(preexistingSkill, { recursive: true });
+      fs.writeFileSync(path.join(preexistingSkill, '.posthog-wizard'), '');
       const controller = new AbortController();
       const postRun = vi.fn();
       const events: AgentProgress[] = [];
@@ -346,6 +350,9 @@ describe('runAgent standalone', () => {
               ),
         ).toBeTruthy(),
       );
+      const runSkill = path.join(skillRoot, 'installed-during-run');
+      fs.mkdirSync(runSkill);
+      fs.writeFileSync(path.join(runSkill, '.posthog-wizard'), '');
       controller.abort();
       const result = await running;
 
@@ -354,6 +361,8 @@ describe('runAgent standalone', () => {
       expect(postRun).not.toHaveBeenCalled();
       expect(events.some((event) => event.kind === 'completion')).toBe(false);
       expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
+      expect(fs.existsSync(runSkill)).toBe(false);
+      expect(fs.existsSync(preexistingSkill)).toBe(true);
       expect(flushScanReport).toHaveBeenCalledTimes(1);
     },
   );

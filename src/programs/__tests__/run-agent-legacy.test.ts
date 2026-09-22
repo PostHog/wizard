@@ -2,6 +2,7 @@ import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { Harness, Sequence } from '@shared/constants';
 import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
@@ -183,6 +184,35 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
+it('passes the fixed CI bearer through the callable host without agent-global gateway state', async () => {
+  const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-auth-'));
+  const tokenFile = path.join(installDir, 'gateway-token');
+  fs.writeFileSync(tokenFile, ' fixed-ci-bearer \n');
+  vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
+  try {
+    runNonInteractive(
+      program(),
+      { apiKey: 'phx_test', projectId: '42', installDir, telemetry: false },
+      'ci',
+    );
+    await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+
+    expect(configureGatewayFromCIEnvironment).not.toHaveBeenCalled();
+    const input = vi.mocked(runAgent).mock.calls[0]?.[1];
+    expect(input).toBeDefined();
+    expect(await input?.inferenceAuth?.resolve()).toEqual({
+      token: 'fixed-ci-bearer',
+      teamId: 42,
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      refreshAtMs: Infinity,
+    });
+    expect(process.env.WIZARD_CI_GATEWAY_TOKEN_FILE).toBeUndefined();
+  } finally {
+    vi.unstubAllEnvs();
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
 it('cleans new Wizard skills when non-interactive startup crashes before the agent', async () => {
   const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-crash-'));
   const skillDir = path.join(
@@ -303,6 +333,9 @@ it.each([
       path.join(os.tmpdir(), 'wizard-ci-signal-'),
     );
     const skillsDir = path.join(installDir, '.claude', 'skills');
+    const tokenFile = path.join(installDir, 'gateway-token');
+    fs.writeFileSync(tokenFile, 'fixed-ci-bearer');
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
     const makeSkill = (id: string, marked: boolean) => {
       const dir = path.join(skillsDir, id);
       fs.mkdirSync(dir, { recursive: true });
@@ -334,6 +367,7 @@ it.each([
       ]);
     } finally {
       exit.mockRestore();
+      vi.unstubAllEnvs();
       fs.rmSync(installDir, { recursive: true, force: true });
     }
   },

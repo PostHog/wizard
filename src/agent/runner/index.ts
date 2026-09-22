@@ -101,6 +101,7 @@ export async function runAgent(
     // Capture before preparation so pre-harness failures also clean new skills.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     if (options.signal?.aborted) {
+      cleanFailedRun();
       return {
         ...hostAborted(),
         skillId: input.skillId,
@@ -109,6 +110,7 @@ export async function runAgent(
     }
     const boot = await prepareRun(config, input);
     if (options.signal?.aborted) {
+      cleanFailedRun();
       return {
         ...hostAborted(),
         skillId: input.skillId,
@@ -130,7 +132,8 @@ export async function runAgent(
       interaction: options.interaction,
       signal: options.signal,
     });
-    if (result.outcome !== RunOutcome.Success) cleanFailedRun();
+    if (result.outcome !== RunOutcome.Success || options.signal?.aborted)
+      cleanFailedRun();
     return {
       ...(options.signal?.aborted ? hostAborted() : result),
       skillId: input.skillId,
@@ -138,6 +141,7 @@ export async function runAgent(
     };
   } catch (error) {
     if (options.signal?.aborted) {
+      cleanFailedRun();
       return {
         ...hostAborted(),
         skillId: input.skillId,

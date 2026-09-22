@@ -1,5 +1,9 @@
 import type { AgentRunDefinition } from '@agent/types';
+import { EVENT_PLAN_FILE } from '@shared/constants';
+import { AUDIT_CHECKS_FILE, type AuditCheck } from '@shared/audit-ledger';
 import { skillRunDefinition } from './agent-skill/run-definition.js';
+import { AUDIT_SEED_CHECKS } from './audit/seed.js';
+import { EVENTS_AUDIT_SEED_CHECKS } from './events-audit/seed.js';
 import { AI_OBSERVABILITY_RUN } from './ai-observability/run.js';
 import { MCP_ANALYTICS_OPTIONS } from './mcp-analytics/run.js';
 import { METRICS_RUN } from './metrics/run.js';
@@ -15,6 +19,9 @@ export type RuntimeProgramConfig = {
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
   run?: AgentRunDefinition;
+  auditLedgerFile?: string;
+  auditSeedChecks?: readonly AuditCheck[];
+  eventPlanFile?: string;
 };
 
 const WIZARD_ASK = 'mcp__wizard-tools__wizard_ask';
@@ -30,6 +37,7 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     id: 'posthog-integration',
     agentFlow: 'integration-v2',
     disallowedTools: [WIZARD_ASK],
+    eventPlanFile: EVENT_PLAN_FILE,
   },
   {
     id: 'revenue-analytics-setup',
@@ -44,11 +52,15 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     id: 'audit',
     allowedTools: AUDIT_TOOLS,
     disallowedTools: [WIZARD_ASK],
+    auditLedgerFile: AUDIT_CHECKS_FILE,
+    auditSeedChecks: AUDIT_SEED_CHECKS,
   },
   {
     id: 'events-audit',
     allowedTools: AUDIT_TOOLS,
     disallowedTools: [WIZARD_ASK],
+    auditLedgerFile: AUDIT_CHECKS_FILE,
+    auditSeedChecks: EVENTS_AUDIT_SEED_CHECKS,
   },
   {
     id: 'posthog-doctor',

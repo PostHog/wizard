@@ -4,35 +4,20 @@
  * every path gets it — including the e2e host, which builds no task stream.
  */
 
-import path from 'path';
 import { getUI } from '@ui';
-import {
-  startFileWatcher,
-  type FileWatcherHandle,
-  type FileWatcherOptions,
-} from '@lib/file-watcher';
-import { logToFile } from '@utils/debug';
-import { AUDIT_CHECKS_KEY, coerceAuditChecks } from './types.js';
-
-const MAX_LEDGER_FILE_BYTES = 256 * 1024;
+import type { FileWatcherHandle, FileWatcherOptions } from '@lib/file-watcher';
+import { AUDIT_CHECKS_KEY } from './types.js';
+import { watchAuditLedger } from './watch-ledger.js';
 
 export function startAuditLedgerWatcher(
   installDir: string,
   file: string,
   options: FileWatcherOptions = {},
 ): FileWatcherHandle {
-  const target = path.join(installDir, file);
-  logToFile(`[audit-ledger] watching ${target}`);
-
-  return startFileWatcher(
-    target,
-    (parsed) =>
-      getUI().setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
-    {
-      // A ledger an earlier run left behind stays ignored until this run writes.
-      ignoreInitialFile: true,
-      maxFileSizeBytes: MAX_LEDGER_FILE_BYTES,
-      ...options,
-    },
+  return watchAuditLedger(
+    installDir,
+    file,
+    (checks) => getUI().setFrameworkContext(AUDIT_CHECKS_KEY, checks),
+    options,
   );
 }

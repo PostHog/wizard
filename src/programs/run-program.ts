@@ -13,6 +13,8 @@ import type {
 import { getSkillsBaseUrl } from '@shared/constants';
 import type { Integration } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
+import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { logToFile } from '@utils/debug';
 import type { FrameworkConfig } from './framework-config';
 import type { DetectedSource } from './warehouse-sources/types';
 import type {
@@ -20,6 +22,7 @@ import type {
   ResolvedProgramCredentials,
 } from './credentials';
 import { getRuntimeProgramConfig } from './runtime-registry';
+import { startProgramFileWatchers } from './program-file-watchers';
 import { resolveProgramBinding } from './binding';
 import { getProgramCommandments } from './commandments';
 import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
@@ -146,9 +149,37 @@ export async function runProgram(
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
   const store = new ProgramStore();
-  return runProgramWithStore(programId, input, options, store, undefined, {
-    granted: false,
-  });
+  const installDirs = new Set([
+    input.installDir,
+    ...(input.composition?.integration
+      ? [input.composition.integration.installDir]
+      : []),
+  ]);
+  const cleanups = [...installDirs].map(captureRunSkillCleanup);
+  const cleanFailedInvocation = () => {
+    for (const cleanup of cleanups) {
+      try {
+        cleanup();
+      } catch (error) {
+        logToFile('[programs] failed-run skill cleanup error:', error);
+      }
+    }
+  };
+  try {
+    const result = await runProgramWithStore(
+      programId,
+      input,
+      options,
+      store,
+      undefined,
+      { granted: false },
+    );
+    if (result.outcome !== RunOutcome.Success) cleanFailedInvocation();
+    return result;
+  } catch (error) {
+    cleanFailedInvocation();
+    throw error;
+  }
 }
 
 async function runProgramWithStore(
@@ -262,9 +293,9 @@ async function runProgramWithStore(
     if (!approval.granted) return abort('AI processing approval declined.');
   }
 
-  if (programId === 'self-driving' && input.composition) {
+  if (programId === 'self-driving') {
     try {
-      const composition = input.composition;
+      const composition = input.composition ?? {};
       if (composition.integration) {
         store.setComposition({ parentProgramId: programId });
         const childInput = composition.integration;
@@ -300,8 +331,8 @@ async function runProgramWithStore(
             });
           if (!continueAfterHandoff)
             return abort('Self-driving handoff declined.');
-        } else if (composition.handoffConfirmed === false) {
-          return abort('Self-driving handoff declined.');
+        } else if (composition.handoffConfirmed !== true) {
+          return abort('Self-driving handoff was not confirmed.');
         }
       }
       if (options.compositionWorkflow) {
@@ -311,136 +342,148 @@ async function runProgramWithStore(
           installDir: input.installDir,
         });
         if (!githubConnected) return abort('GitHub connection declined.');
-      } else if (composition.githubConnected === false) {
-        return abort('GitHub connection declined.');
+      } else if (composition.githubConnected !== true) {
+        return abort('GitHub connection was not confirmed.');
       }
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }
   }
 
-  let run: AgentRunDefinition | undefined | null = input.run;
-  let hooks: RunHooks | undefined = input.hooks;
-  let seedTasks = input.seedTasks;
-  if (!run && programId === 'posthog-integration') {
-    if (!input.frameworkConfig || !options.integrationEffects) {
-      return fail(
-        'PostHog integration requires prepared framework configuration and host effects.',
-      );
-    }
-    try {
-      const resolved = await resolvePosthogIntegrationRun(
-        {
-          installDir: input.installDir,
-          frameworkConfig: input.frameworkConfig,
-          frameworkContext: input.frameworkContext ?? {},
-          typescript: input.typescript ?? false,
-          additionalFeatureQueue: input.additionalFeatureQueue,
-          warehouseSources: input.warehouseSources ?? [],
-          flags: { ...DEFAULT_FLAGS, ...input.flags },
-          mayReportScanResults: input.mayReportScanResults ?? false,
-        },
-        options.integrationEffects,
-      );
+  const fileWatchers = startProgramFileWatchers(
+    program,
+    input.installDir,
+    store,
+  );
+  try {
+    fileWatchers.seedAuditLedger();
+
+    let run: AgentRunDefinition | undefined | null = input.run;
+    let hooks: RunHooks | undefined = input.hooks;
+    let seedTasks = input.seedTasks;
+    if (!run && programId === 'posthog-integration') {
+      if (!input.frameworkConfig || !options.integrationEffects) {
+        return fail(
+          'PostHog integration requires prepared framework configuration and host effects.',
+        );
+      }
+      try {
+        const resolved = await resolvePosthogIntegrationRun(
+          {
+            installDir: input.installDir,
+            frameworkConfig: input.frameworkConfig,
+            frameworkContext: input.frameworkContext ?? {},
+            typescript: input.typescript ?? false,
+            additionalFeatureQueue: input.additionalFeatureQueue,
+            warehouseSources: input.warehouseSources ?? [],
+            flags: { ...DEFAULT_FLAGS, ...input.flags },
+            mayReportScanResults: input.mayReportScanResults ?? false,
+          },
+          options.integrationEffects,
+        );
+        run = resolved.run;
+        hooks ??= resolved.hooks;
+        seedTasks ??= () => resolved.seedTasks;
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+    } else if (!run && programId === 'self-driving') {
+      const resolved = resolveSelfDrivingRun({
+        installDir: input.installDir,
+        detectedTools: input.detectedTools ?? [],
+      });
       run = resolved.run;
       hooks ??= resolved.hooks;
-      seedTasks ??= () => resolved.seedTasks;
-    } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
     }
-  } else if (!run && programId === 'self-driving') {
-    const resolved = resolveSelfDrivingRun({
-      installDir: input.installDir,
-      detectedTools: input.detectedTools ?? [],
-    });
-    run = resolved.run;
-    hooks ??= resolved.hooks;
-  }
-  run ??=
-    typeof program.run === 'object'
-      ? program.run
-      : resolveProgramRunDefinition(programId, input);
-  if (!run) {
-    return fail(
-      `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
-    );
-  }
-  if (options.signal?.aborted) return cancelled();
-  artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
+    run ??=
+      typeof program.run === 'object'
+        ? program.run
+        : resolveProgramRunDefinition(programId, input);
+    if (!run) {
+      return fail(
+        `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
+      );
+    }
+    if (options.signal?.aborted) return cancelled();
+    artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
 
-  const flags = { ...DEFAULT_FLAGS, ...input.flags };
-  const wizardFlags = { ...input.wizardFlags };
-  const wizardFlagPayloads = { ...input.wizardFlagPayloads };
-  const switchboard = {
-    program: programId,
-    composed: input.composed ?? false,
-    flags: wizardFlags,
-    flagPayloads: wizardFlagPayloads,
-  };
-  const binding = input.binding ?? resolveProgramBinding(switchboard);
-  if (!input.binding) captureSwitchboardDecision(switchboard, binding);
-  const wizardMetadata = {
-    ...input.wizardMetadata,
-    SEQUENCE: binding.sequence,
-    HARNESS: binding.harness,
-  };
-  const adapter = store.beginRun({ runId, stepId }, options.onProgress);
-
-  const result = await runAgent(
-    {
-      programId,
-      run,
+    const flags = { ...DEFAULT_FLAGS, ...input.flags };
+    const wizardFlags = { ...input.wizardFlags };
+    const wizardFlagPayloads = { ...input.wizardFlagPayloads };
+    const switchboard = {
+      program: programId,
       composed: input.composed ?? false,
-      binding,
-      programCommandments: getProgramCommandments(programId),
-      stageOverrides: resolveStageOverrides(
+      flags: wizardFlags,
+      flagPayloads: wizardFlagPayloads,
+    };
+    const binding = input.binding ?? resolveProgramBinding(switchboard);
+    if (!input.binding) captureSwitchboardDecision(switchboard, binding);
+    const wizardMetadata = {
+      ...input.wizardMetadata,
+      SEQUENCE: binding.sequence,
+      HARNESS: binding.harness,
+    };
+    const adapter = store.beginRun({ runId, stepId }, options.onProgress);
+
+    const result = await runAgent(
+      {
         programId,
+        run,
+        composed: input.composed ?? false,
+        binding,
+        programCommandments: getProgramCommandments(programId),
+        stageOverrides: resolveStageOverrides(
+          programId,
+          wizardFlags,
+          wizardFlagPayloads,
+        ),
+        seededTasksEnabled: areSeededTasksEnabled(wizardFlags),
+        skillsBaseUrl: getSkillsBaseUrl(),
         wizardFlags,
         wizardFlagPayloads,
-      ),
-      seededTasksEnabled: areSeededTasksEnabled(wizardFlags),
-      skillsBaseUrl: getSkillsBaseUrl(),
-      wizardFlags,
-      wizardFlagPayloads,
-      wizardMetadata,
-      allowedTools: input.allowedTools ?? program.allowedTools,
-      disallowedTools: input.disallowedTools ?? program.disallowedTools,
-      agentFlow: input.agentFlow ?? program.agentFlow,
-      seedTasks,
-      hooks,
-    },
-    {
-      installDir: input.installDir,
-      credentials: credentials.posthog,
-      inferenceAuth: credentials.inferenceAuth,
-      project: credentials.project,
-      apiUser: credentials.apiUser,
-      skillId: input.skillId ?? run.skillId ?? run.integrationLabel,
-      integration: input.integration,
-      frameworkDocsUrl: input.frameworkDocsUrl,
-      flags,
-      host: { ...input.host },
-    } as RunInput,
-    {
-      interaction: options.interaction,
-      onProgress: (event) => adapter.onProgress(event),
-      signal: options.signal,
-    },
-  );
-  adapter.finish(result);
-  if (result.outcome === RunOutcome.Success) {
-    store.markProgramCompleted(programId);
+        wizardMetadata,
+        allowedTools: input.allowedTools ?? program.allowedTools,
+        disallowedTools: input.disallowedTools ?? program.disallowedTools,
+        agentFlow: input.agentFlow ?? program.agentFlow,
+        seedTasks,
+        hooks,
+      },
+      {
+        installDir: input.installDir,
+        credentials: credentials.posthog,
+        inferenceAuth: credentials.inferenceAuth,
+        project: credentials.project,
+        apiUser: credentials.apiUser,
+        skillId: input.skillId ?? run.skillId ?? run.integrationLabel,
+        integration: input.integration,
+        frameworkDocsUrl: input.frameworkDocsUrl,
+        flags,
+        host: { ...input.host },
+      } as RunInput,
+      {
+        interaction: options.interaction,
+        onProgress: (event) => adapter.onProgress(event),
+        signal: options.signal,
+      },
+    );
+    adapter.finish(result);
+    fileWatchers.refresh();
+    if (result.outcome === RunOutcome.Success) {
+      store.markProgramCompleted(programId);
+    }
+    return {
+      programId,
+      outcome: result.outcome,
+      runResults: store.results(),
+      data: store.readData(),
+      progress: store.read(),
+      settledRuns: store.settledRuns(),
+      artifacts,
+      ...(result.outcome === RunOutcome.Success
+        ? {}
+        : { failure: result.failure }),
+    };
+  } finally {
+    fileWatchers.stop();
   }
-  return {
-    programId,
-    outcome: result.outcome,
-    runResults: store.results(),
-    data: store.readData(),
-    progress: store.read(),
-    settledRuns: store.settledRuns(),
-    artifacts,
-    ...(result.outcome === RunOutcome.Success
-      ? {}
-      : { failure: result.failure }),
-  };
 }

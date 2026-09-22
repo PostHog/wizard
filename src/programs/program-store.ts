@@ -2,6 +2,7 @@ import type { AgentProgress, RunResult } from '../agent/types.js';
 import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
 import type { Integration } from '../shared/constants.js';
 import { appendStatus } from '../shared/status-history.js';
+import type { PlannedEvent } from './posthog-integration/watch-event-plan.js';
 
 export type ProgramProgress = {
   runId: string;
@@ -44,6 +45,7 @@ export type ProgramInvocationData = {
     complete: boolean;
     frameworkContext: Record<string, unknown>;
   };
+  eventPlan: PlannedEvent[];
   composition: {
     parentProgramId: string | null;
     completedRuns: string[];
@@ -51,7 +53,10 @@ export type ProgramInvocationData = {
 };
 
 export type ProgramInvocationDataInit = Partial<
-  Pick<ProgramInvocationData, 'credentials' | 'apiProject' | 'apiUser'>
+  Pick<
+    ProgramInvocationData,
+    'credentials' | 'apiProject' | 'apiUser' | 'eventPlan'
+  >
 > & {
   detection?: Partial<ProgramInvocationData['detection']>;
   composition?: Partial<ProgramInvocationData['composition']>;
@@ -185,6 +190,7 @@ export class ProgramStore {
         complete: initial.detection?.complete ?? false,
         frameworkContext: initial.detection?.frameworkContext ?? {},
       },
+      eventPlan: initial.eventPlan ?? [],
       composition: {
         parentProgramId: initial.composition?.parentProgramId ?? null,
         completedRuns: initial.composition?.completedRuns ?? [],
@@ -223,6 +229,10 @@ export class ProgramStore {
 
   setFrameworkContext(key: string, value: unknown): void {
     this.data.detection.frameworkContext[key] = structuredClone(value);
+  }
+
+  setEventPlan(events: PlannedEvent[]): void {
+    this.data.eventPlan = structuredClone(events);
   }
 
   setComposition(patch: Partial<ProgramInvocationData['composition']>): void {

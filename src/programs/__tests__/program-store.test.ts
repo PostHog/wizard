@@ -260,6 +260,7 @@ it('owns authentication, detection, and composition data independently of progre
       frameworkContext: {},
     },
     composition: { parentProgramId: null, completedRuns: [] },
+    eventPlan: [],
   });
 
   const credentials = {
@@ -285,6 +286,8 @@ it('owns authentication, detection, and composition data independently of progre
   });
   store.setDetection({ detectedFrameworkLabel: undefined });
   store.setFrameworkContext('selectedProject', frameworkValue);
+  const eventPlan = [{ name: 'signup', description: 'Account created' }];
+  store.setEventPlan(eventPlan);
   store.setComposition({ parentProgramId: 'self-driving', completedRuns });
   store.markProgramCompleted('follow-up');
   store.markProgramCompleted('follow-up');
@@ -293,6 +296,7 @@ it('owns authentication, detection, and composition data independently of progre
   apiProject.name = 'Changed input';
   apiUser.distinct_id = 'changed input';
   frameworkValue.paths.push('changed input');
+  eventPlan[0].name = 'changed input';
   completedRuns.push('changed input');
 
   expect(store.readData()).toMatchObject({
@@ -310,6 +314,7 @@ it('owns authentication, detection, and composition data independently of progre
       parentProgramId: 'self-driving',
       completedRuns: ['integrate-run', 'follow-up'],
     },
+    eventPlan: [{ name: 'signup', description: 'Account created' }],
   });
 
   const copy = store.readData();
@@ -319,6 +324,7 @@ it('owns authentication, detection, and composition data independently of progre
     copy.detection.frameworkContext.selectedProject as { paths: string[] }
   ).paths.push('changed output');
   copy.composition.completedRuns.push('changed output');
+  copy.eventPlan[0].name = 'changed output';
   expect(store.readData().credentials?.accessToken).toBe('test-access-token');
   expect(store.readData().detection.frameworkContext.selectedProject).toEqual({
     paths: ['apps/web'],
@@ -326,6 +332,9 @@ it('owns authentication, detection, and composition data independently of progre
   expect(store.readData().composition.completedRuns).toEqual([
     'integrate-run',
     'follow-up',
+  ]);
+  expect(store.readData().eventPlan).toEqual([
+    { name: 'signup', description: 'Account created' },
   ]);
   store.setAuthenticated({
     credentials: { ...credentials, accessToken: 'refreshed-test-token' },

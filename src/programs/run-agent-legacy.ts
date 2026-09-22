@@ -18,7 +18,7 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
-import type { RunConfig, RunInput } from '@agent/types';
+import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
 import { runProgram as runCallableProgram } from './run-program';
 import { createPosthogInferenceAuthProvider } from './credentials';
 import { resolveProgramBinding, type ProgramSwitchboardCtx } from './binding';
@@ -62,7 +62,7 @@ import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 export async function runProgramAgent(
   programConfig: ProgramConfig,
   session: WizardSession,
-  options: { composed?: boolean } = {},
+  options: { composed?: boolean; inferenceAuth?: InferenceAuthProvider } = {},
 ): Promise<void> {
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
@@ -85,7 +85,13 @@ export async function runProgramAgent(
         ? await programConfig.run(session)
         : programConfig.run;
 
-    await runProgram(session, runDef, programConfig, options.composed ?? false);
+    await runProgram(
+      session,
+      runDef,
+      programConfig,
+      options.composed ?? false,
+      options.inferenceAuth,
+    );
   } catch (error) {
     try {
       cleanupInstalledSkills();
@@ -107,6 +113,7 @@ async function runProgram(
   run: ProgramRun,
   programConfig: ProgramConfig,
   composed: boolean,
+  inferenceAuth?: InferenceAuthProvider,
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
@@ -290,10 +297,12 @@ async function runProgram(
       installDir: input.installDir,
       credentials: {
         posthog: input.credentials,
-        inferenceAuth: createPosthogInferenceAuthProvider(
-          input.credentials,
-          programConfig.id,
-        ),
+        inferenceAuth:
+          inferenceAuth ??
+          createPosthogInferenceAuthProvider(
+            input.credentials,
+            programConfig.id,
+          ),
         project: input.project,
         apiUser: input.apiUser,
       },
@@ -313,6 +322,12 @@ async function runProgram(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       agentFlow: config.agentFlow,
+      // The TUI step flow has already required the GitHub connection before
+      // reaching this run screen; tell the callable host that gate passed.
+      composition:
+        programConfig.id === 'self-driving'
+          ? { githubConnected: true, handoffConfirmed: true }
+          : undefined,
     },
     {
       onProgress: ({ event }) => reduceUi(event),

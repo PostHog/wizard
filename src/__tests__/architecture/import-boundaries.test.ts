@@ -466,6 +466,20 @@ it('keeps the callable runProgram closure free of UI, session, and legacy regist
   expect(forbidden).toEqual([]);
 });
 
+it.each([
+  'src/programs/audit/watch-ledger.ts',
+  'src/programs/posthog-integration/watch-event-plan.ts',
+])('keeps %s free of UI, session, and task-stream runtime imports', (entry) => {
+  const forbidden = runtimeClosure(entry).filter(
+    (file) =>
+      file.startsWith('src/ui/') ||
+      file.startsWith('src/steps/') ||
+      file.startsWith('src/lib/wizard-session') ||
+      file.startsWith('src/programs/task-stream/'),
+  );
+  expect(forbidden).toEqual([]);
+});
+
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');
