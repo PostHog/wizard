@@ -44,7 +44,6 @@
     "src/programs/program-step.ts -> src/lib/wizard-session.ts",
     "src/programs/replay-vision/index.ts -> src/lib/wizard-session.ts",
     "src/programs/run-agent-legacy.ts -> src/lib/wizard-session.ts",
-    "src/programs/run-agent-legacy.ts -> src/ui/agent-progress.ts",
     "src/programs/run-agent-legacy.ts -> src/ui/index.ts",
     "src/programs/shared/posthog-cli-preinstall.ts -> src/ui/index.ts",
     "src/programs/warehouse-source/index.ts -> src/lib/wizard-session.ts",

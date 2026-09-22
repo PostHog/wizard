@@ -15,8 +15,7 @@
 
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
-import { createUiReducer, uiInteraction } from '@ui/agent-progress';
+import { createUiReducer, getUI, uiInteraction } from '@ui';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
 import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
 import { runProgram as runCallableProgram } from './run-program';
