@@ -443,6 +443,7 @@ describe('runAgent standalone', () => {
       });
       vi.mocked(flushScanReport).mockImplementationOnce(() => {
         order.push('scan-flush');
+        return undefined;
       });
       const result = await runAgent(
         config({

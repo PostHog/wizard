@@ -198,7 +198,10 @@ async function runProgram(
   // Cleanup coverage for the abort/cancel path: `wizardAbort` runs the
   // registered cleanups, and the agent's own `finally` covers completion.
   // flushScanReport is idempotent, so the overlap is a harmless no-op.
-  registerCleanup(() => flushScanReport({ yaraReport: session.yaraReport }));
+  registerCleanup(() => {
+    const report = flushScanReport({ yaraReport: session.yaraReport });
+    if (report) ui.log.info(report);
+  });
 
   // Linear settings restoration fires on entry to the outro screen, so it
   // is registered before the run can reach that screen. Same owner, same

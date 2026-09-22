@@ -35,8 +35,6 @@ import type {
 import { logToFile } from '@utils/debug';
 import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
-import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
 import {
   highestSeverityMatch,
@@ -425,18 +423,23 @@ export function captureScanReport(): void {
  * which is what makes this whole function idempotent — a second call from
  * another termination path (e.g. finally after an abort already flushed) finds
  * scanCount === 0 and every step no-ops.
+ *
+ * Returns the user-facing report line when a report was written; the caller
+ * decides where it goes (the runner emits it as progress).
  */
-export function flushScanReport(
-  session: Pick<WizardSession, 'yaraReport'>,
-): void {
-  if (session.yaraReport) {
+export function flushScanReport(options: {
+  yaraReport: boolean;
+}): string | undefined {
+  let line: string | undefined;
+  if (options.yaraReport) {
     const reportPath = writeScanReport();
     if (reportPath) {
       const summary = formatScanReport();
-      getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+      line = `YARA scan report: ${reportPath}${summary ?? ''}`;
     }
   }
   captureScanReport();
+  return line;
 }
 
 // ─── Wizard-documentation allowlist ───────────────────────────────
