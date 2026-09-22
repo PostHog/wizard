@@ -10,7 +10,7 @@ vi.mock('@lib/runners', () => ({
 
 import type { Arguments } from 'yargs';
 
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig } from '@programs/types';
 
 import { nativeCommandFactory } from '../native-command-factory';
 

@@ -25,7 +25,7 @@ vi.mock('@ui/tui/start-tui', () => ({
 vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: mockReadApiKeyFromEnvMcp,
 }));
-vi.mock('@lib/programs/program-registry', () => ({
+vi.mock('@programs', () => ({
   Program: {
     McpAdd: 'mcp-add',
     McpRemove: 'mcp-remove',

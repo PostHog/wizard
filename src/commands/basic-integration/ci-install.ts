@@ -4,7 +4,7 @@ import { LoggingUI } from '@ui/logging-ui';
 import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
+import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { PROGRAM_REGISTRY } from '@programs';
 import * as constants from '@shared/constants';
 import {
   DEFAULT_AGENT_MODEL,

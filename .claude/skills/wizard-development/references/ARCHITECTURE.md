@@ -54,7 +54,7 @@ signatures.
 
 Do not migrate a linear program merely by changing its binding if it depends on
 these hooks. Inspect the orchestrator's flow and completion path instead.
-[Metrics](../../../../src/lib/programs/metrics/) is a current Pi/orchestrator
+[Metrics](../../../../src/programs/metrics/) is a current Pi/orchestrator
 example. Native command modules still need registration in
 [bin.ts](../../../../bin.ts); screen sequences derive from the program registry.
 

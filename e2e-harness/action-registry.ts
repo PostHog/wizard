@@ -19,11 +19,11 @@ import type { AskAnswers } from '@lib/wizard-session';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
-} from '@lib/programs/error-tracking-upload-source-maps/index';
+} from '@programs/error-tracking-upload-source-maps/index';
 import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
-} from '@lib/programs/self-driving/detect';
+} from '@programs/self-driving/detect';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {

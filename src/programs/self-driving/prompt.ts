@@ -1,0 +1,220 @@
+import { AgentSignals } from '@agent';
+import type { PromptContext } from '@agent/types';
+import type { DetectedSource } from '@programs/warehouse-sources/types';
+
+/**
+ * Render the deterministic codebase-tool scan for the prompt. STEP 4 and
+ * STEP 5 read this instead of the agent doing its own flaky "light scan":
+ * enable the matching signal sources, and surface detected tools first in the
+ * connected-tools ask rather than dumping the full ~500-source catalog. When
+ * nothing is detected we still say so explicitly, so the agent falls back to
+ * the skill's default ordering instead of inventing a scan.
+ */
+function renderDetectedTools(sources: DetectedSource[]): string {
+  if (sources.length === 0) {
+    return `Tools detected in this codebase: none found by the dependency + env scan. Use the skill's default ordering for STEP 5.`;
+  }
+
+  const lines = sources.map(
+    (s) => `- ${s.label} (source_type: ${s.kind}) — ${s.matchedSignal}`,
+  );
+  return [
+    'Tools detected in this codebase (deterministic dependency + env-key scan — this is evidence, not a guess):',
+    ...lines,
+    '',
+    'Use this list in STEP 4 (enable the matching signal sources) and STEP 5 ' +
+      '(surface these detected tools first in the connected-tools ask, ahead ' +
+      'of the SaaS basics and the "others" option), exactly as the skill ' +
+      'describes. Never enable or pre-select a tool the user has not confirmed.',
+  ].join('\n');
+}
+
+/**
+ * Build the self-driving run prompt. The installed
+ * `self-driving-setup` skill is the source of truth for the HOW of
+ * every step (which MCP tools to call, which sources/scouts apply, how
+ * to verify); this prompt carries the order, the wizard-specific
+ * mechanics (wizard_ask, abort signals), and the project URLs.
+ *
+ * `detectedSources` is the deterministic codebase scan (from the detect step);
+ * it drives STEP 4/STEP 5 tool prioritisation. Empty is fine — the block then
+ * tells the agent to use the skill's default ordering.
+ *
+ * Integration (when the project has no PostHog yet) runs as a separate phase
+ * before this — the real integration program, with its own screens and task
+ * list — so this prompt only covers the Self-driving steps.
+ */
+export function buildSelfDrivingPrompt(
+  ctx: PromptContext,
+  detectedSources: DetectedSource[] = [],
+): string {
+  const uiHost = ctx.host.appHost.replace(/\/$/, '');
+  const projectBase = `${uiHost}/project/${ctx.projectId}`;
+  const integrationsSettingsUrl = `${projectBase}/settings/environment-integrations`;
+  const orgAiSettingsUrl = `${uiHost}/settings/organization#organization-ai-consent`;
+  const newWarehouseSourceUrl = `${projectBase}/pipeline/new/source`;
+  const inboxUrl = `${projectBase}/inbox`;
+  const optIn = (value: boolean | null | undefined): string =>
+    value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
+  const optIns = ctx.teamProductOptIns;
+
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
+
+Project URLs:
+- Integrations settings: ${integrationsSettingsUrl}
+- Organization AI settings: ${orgAiSettingsUrl}
+- New data warehouse source (Linear / Zendesk / GitHub issues / pganalyze): ${newWarehouseSourceUrl}
+- Self-driving inbox: ${inboxUrl}
+
+Project state read at auth time (PostHog project settings — authoritative
+for whether a product is enabled, regardless of what this repo
+instruments; products are often instrumented from other repos or the
+snippet, so repo evidence may rule a product IN but never OUT):
+- Session replay recording: ${optIn(optIns?.sessionReplay)}
+- Exception autocapture (error tracking): ${optIn(optIns?.exceptionAutocapture)}
+- Surveys: ${optIn(optIns?.surveys)}
+
+${renderDetectedTools(detectedSources)}
+
+The installed skill is the source of truth for the HOW of every step:
+which MCP tools to call, which sources and scouts apply to this product,
+and how to verify each change. The STEPS below give the order and the
+wizard-specific mechanics — read the matching skill reference before
+doing the work, and do not invent steps the skill doesn't describe.
+
+Before doing any work, create your FULL task list in a single TaskCreate
+call so the user can follow your progress in the TUI. Use exactly these
+tasks, in this order:
+  1. Check Self-driving access
+  2. Read project and current Self-driving state
+  3. Enable products (replay, error tracking, support)
+  4. Enable signal sources
+  5. Offer issue-tracker integrations
+  6. Configure the scout troop
+  6b. Design custom scouts
+  6c. Set up Replay Vision scanners
+  7. Write report and hand off
+Drive the list with TaskUpdate — mark a task in_progress when you start
+it and completed when done. If a step turns out to be a no-op (e.g. a
+product is already enabled), still mark its task completed.
+
+The PostHog GitHub App is already connected — the wizard verified it
+before this run started, so never ask the user to connect or install it.
+
+Wizard mechanics:
+- Ask the user things ONLY with the wizard_ask MCP tool, and batch
+  related questions (e.g. one multi-select for all issue trackers, not
+  one ask per tool). The per-run ask budget is limited.
+- If wizard_ask is unavailable (CI / non-interactive), emit
+  ${AgentSignals.ABORT} requires-interactive-mode and halt.
+- When a step requires the user to do something in the browser, give
+  them the exact URL inside the wizard_ask prompt text — do not try to
+  open a browser yourself.
+- Emit ${AgentSignals.STATUS} lines as you complete each step so the
+  user sees progress.
+
+Follow these steps IN ORDER. Do not skip or reorder.
+
+STEP 1 — Check Self-driving access. (skill: "Check access")
+   Self-driving is in open beta and available to every team, so there is
+   no access gate to probe. Do NOT call any MCP tool here — mark this task
+   in_progress and then completed right away and emit the
+   ${AgentSignals.STATUS} line, so the user sees an immediate first step.
+   Only if the Signals API later turns out to be genuinely unreachable for
+   this project (a hard error on every Signals call, unexpected in open
+   beta) should you emit
+   ${AgentSignals.ABORT} self-driving is not available for this project
+   and halt.
+
+STEP 2 — Read project and current Signals state. (skill: "Read context")
+   If ./posthog-setup-report.md exists, read it as a strong hint for what
+   THIS repo instruments — but it is often absent (users frequently don't
+   commit it), so do NOT depend on it. Combine whatever you find with the
+   project-state block above and the skill's server-side usage probes —
+   repo evidence rules products in, never out. Do a light scan ONLY for
+   what neither covers. List the currently enabled signal sources so every
+   later write is idempotent.
+
+STEP 3 — Enable products. (skill: "Enable products")
+   Turn ON the PostHog products Signals reads from — Session Replay,
+   Error Tracking, and Support — so the sources you enable next, and the
+   Replay Vision scanners in STEP 6c, have data to read. These are
+   server-side enables with conservative defaults (owned by the server,
+   not you). The project-state block above covers
+   only Session Replay and Error Tracking, so you can skip those if they
+   are already ON; it does not show Support, but every enable is idempotent
+   so enabling any of them again is safe regardless. For a web app, also
+   make sure this repo's posthog-js
+   init doesn't disable them; for a pure backend or mobile app the server
+   flip is inert, so just record that for the report and move on. The skill
+   names the exact tool and the per-platform detail.
+
+STEP 4 — Enable signal sources. (skill: "Enable sources")
+   Enable the sources that match what this product actually uses, per
+   the skill. Never enable a source for a tool the user hasn't
+   confirmed they use.
+
+STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
+   One batched multi-select wizard_ask for the external tools the skill
+   lists. Order it per the skill: the tools from the "Tools detected in
+   this codebase" list above come first, then the SaaS basics, then an
+   "others" option for the long tail — never dump the whole catalog.
+   The run auto-connects the ones it can (GitHub Issues, and
+   Linear via a one-click OAuth link), verifying each with a single
+   silent check — never nudge. For GitHub Issues: when the GitHub
+   integration has exactly one repository connected, use that repo by
+   default and skip repo research entirely — research which repo
+   matches this project only when several are connected. It arms the
+   rest as dormant responders to
+   finish later: for tools it can't auto-connect (Zendesk, pganalyze) it
+   never sends the user to paste credentials and never re-prompts. Enable
+   a source only for a tool the user picked.
+
+STEP 6 — Configure the scout troop. (skill: "Scouts")
+   Materialize the troop, read the project's enforced scout-run budget
+   (100 runs a day by default), then enable a selective set — the
+   "general" scout plus the three to five specialists for the products
+   this project uses most — and disable the rest, per the skill. The
+   whole troop, including step 6b's custom scouts, stays at or under
+   ten enabled scouts.
+
+   Then tell the user what the troop is, before STEP 6b asks them to add
+   to it. Scouts are PostHog's built-in ones, and the user has not seen
+   the list: without it, STEP 6b asks them to approve additions to a
+   baseline they cannot picture. Send one short message naming each
+   scout you enabled with a plain one-line description of what it
+   watches, and say how many you left disabled and that they can turn
+   those on later from the inbox. No wizard_ask here, it is not a
+   question. Keep each line to one sentence and do not restate the
+   skill's internals.
+
+STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
+   You are the only actor that has read this repo — turn that into
+   coverage per the skill: a real gap analysis of the project's
+   watchable surfaces against what the built-in troop already covers,
+   then custom scouts for the uncovered ones. Start the gap analysis
+   from the repo's for-agents context when present (AGENTS.md,
+   CLAUDE.md, ARCHITECTURE.md, .cursor/rules, agent-facing docs) — it
+   is a maintained map of the product's surfaces and vocabulary, so
+   read it before scanning source. Keep scout bodies
+   high-level: describe the behavior and signal conditions to watch,
+   referencing repo evidence by file/function name — never paste raw
+   source, secrets, env values, or customer data into a scout body.
+   Never edit built-in scout bodies. Propose all candidates in ONE
+   batched wizard_ask
+   before creating anything; the user declining everything (or finding
+   no gap at all) is a valid outcome, not an abort. Mark the task
+   completed either way.
+
+STEP 6c — Set up Replay Vision scanners. (skill: "Replay Vision scanners")
+   Create the scanner skeletons the skill defines, filling the per-product
+   blanks it leaves you from this repo's code. Scanners need Session Replay
+   on (STEP 3). Every failure here — no recordings yet, a backend-only
+   project, the scanner API missing — is a follow-up, never an abort; mark
+   the task completed regardless.
+
+STEP 7 — Write the report and hand off. (skill: "Report")
+   Write the report per the skill, including follow-ups for anything
+   deferred. Tell the user findings will start appearing in their inbox
+   at ${inboxUrl} within about 30 minutes.`;
+}

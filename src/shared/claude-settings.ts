@@ -12,13 +12,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/wizard-abort';
-// Leaf module on purpose: shared analytics imports the session, which this
-// file feeds, so the agent entry would form a module cycle here.
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B1: shared stops feeding the session
 import {
   BLOCKED_AGENT_ENV_KEYS,
   BLOCKED_AGENT_ENV_PATTERNS,
-} from '@agent/agent-env-isolation';
+} from './agent-env-isolation';
 
 /** The file names Claude Code accepts for project settings, in priority order. */
 const SETTINGS_FILENAMES = ['settings.json', 'settings'] as const;

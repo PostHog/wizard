@@ -1,4 +1,4 @@
-import { revenueAnalyticsConfig } from '@lib/programs/revenue-analytics/index';
+import { revenueAnalyticsConfig } from '@programs/revenue-analytics/index';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

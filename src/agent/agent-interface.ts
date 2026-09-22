@@ -75,7 +75,7 @@ import {
   claudeConfigDir,
   createIsolatedAgentConfigDir,
 } from './stored-login';
-import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
+import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;

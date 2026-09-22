@@ -28,7 +28,7 @@ import {
 import type { ContentBlock, ProgressItem } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
 import type { WizardStore } from '@ui/tui/store';
-import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { PROGRAM_REGISTRY } from '@programs';
 import { AUDIT_AREA_SLIDES } from '@ui/tui/screens/audit/slides/index';
 import type { AreaSlide } from '@ui/tui/screens/audit/slides/shared';
 

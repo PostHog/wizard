@@ -16,7 +16,7 @@ import { Integration } from '@shared/constants';
 import {
   getCommandPath,
   getLaunchablePrograms,
-} from '@lib/programs/program-registry';
+} from '@programs';
 import {
   PickerMenu,
   LoadingBox,
@@ -102,7 +102,7 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@lib/registry').then(({ FRAMEWORK_REGISTRY }) => {
+        void import('@programs/registry').then(({ FRAMEWORK_REGISTRY }) => {
           const config = FRAMEWORK_REGISTRY[integration];
           store.setFrameworkConfig(integration, config);
           store.setDetectedFramework(config.metadata.name);

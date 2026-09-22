@@ -22,8 +22,8 @@
 import fs from 'fs';
 import path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import type { DetectedSource } from '@lib/warehouse-sources/types';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
+import type { DetectedSource } from '@programs/warehouse-sources/types';
 import type { E2eDecisionReport } from './e2e-profile.js';
 
 /** One `wizard_ask` batch the run was shown. */

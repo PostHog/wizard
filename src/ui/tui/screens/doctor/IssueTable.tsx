@@ -5,7 +5,7 @@ import {
   getKindMeta,
   type HealthIssue,
   type HealthIssueSeverity,
-} from '@lib/programs/posthog-doctor/index';
+} from '@programs/posthog-doctor/index';
 
 export const SEVERITY_ORDER: HealthIssueSeverity[] = [
   'critical',

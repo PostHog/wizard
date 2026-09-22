@@ -16,7 +16,8 @@ import {
   type AskAnswers,
   type PendingQuestion,
 } from '@lib/wizard-session';
-import { AGENT_ERROR_CODE, ErrorCodes } from '@shared/errors';
+import { ErrorCodes } from '@shared/errors';
+import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { AgentErrorType } from '@agent/signals';
 import type { AgentFailure } from '@agent/runner/shared/types';
 import type { AgentProgress } from '@agent/progress';

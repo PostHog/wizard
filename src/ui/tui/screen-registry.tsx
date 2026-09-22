@@ -55,7 +55,7 @@ import { MintFailureScreen } from './screens/MintFailureScreen.js';
 import type { MintFailureServices } from './screens/MintFailureScreen.js';
 import { openCodingAgent } from './services/coding-agent-launcher.js';
 import { writeWizardSpellbook } from '@lib/wizard-spellbook';
-import { getProgramConfig } from '@lib/programs/program-registry';
+import { getProgramConfig } from '@programs';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { SessionTimeoutScreen } from './screens/SessionTimeoutScreen.js';

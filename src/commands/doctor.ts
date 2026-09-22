@@ -8,7 +8,7 @@ import {
   posthogDoctorConfig,
   fetchHealthIssues,
   getKindMeta,
-} from '@lib/programs/posthog-doctor/index';
+} from '@programs/posthog-doctor/index';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 

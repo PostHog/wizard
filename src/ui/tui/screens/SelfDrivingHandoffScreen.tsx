@@ -12,8 +12,8 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
-import { SETUP_REPORT_FILE } from '@lib/programs/posthog-integration/index';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import { SETUP_REPORT_FILE } from '@programs/posthog-integration/index';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 
 interface SelfDrivingHandoffScreenProps {
   store: WizardStore;

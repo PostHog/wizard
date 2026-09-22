@@ -12,7 +12,7 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
-import type { SetupQuestion } from '@lib/framework-config';
+import type { SetupQuestion } from '@programs/types';
 
 interface SetupScreenProps {
   store: WizardStore;

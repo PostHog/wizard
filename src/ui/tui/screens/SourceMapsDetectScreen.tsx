@@ -16,12 +16,12 @@ import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
   MANUAL_SDK_VARIANTS,
-} from '@lib/programs/error-tracking-upload-source-maps/index';
+} from '@programs/error-tracking-upload-source-maps/index';
 import {
   detectSourceMapsProjects,
   type DetectedProject,
   type DetectionReport,
-} from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
+} from '@programs/error-tracking-upload-source-maps/detect-agentic';
 
 interface SourceMapsDetectScreenProps {
   store: WizardStore;

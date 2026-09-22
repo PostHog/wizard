@@ -45,7 +45,7 @@ if (result.outcome !== RunOutcome.Success) {
 
 ## Intent
 
-Programs call the agent to do the work a skill describes. The TUI and the headless runner observe the run through `onProgress` and answer it through `interaction`; today `src/lib/programs/run-agent-legacy.ts` does both on top of the session.
+Programs call the agent to do the work a skill describes. The TUI and the headless runner observe the run through `onProgress` and answer it through `interaction`; today `src/programs/run-agent-legacy.ts` does both on top of the session.
 
 Without `onProgress` the run completes and its snapshot still comes back in the result. Without `interaction` the agent installs no ask bridge: `wizard_ask` returns its "not available" error and optional task notices are declined, which is what a `--ci` run does. A throwing observer is logged and the run continues.
 

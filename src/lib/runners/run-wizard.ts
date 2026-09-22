@@ -1,16 +1,16 @@
 import { VERSION } from '@shared/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
-import { runProgramAgent } from '@lib/programs/run-agent-legacy';
-import { authenticate } from '@lib/programs/authenticate';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { getAuditChecks } from '@lib/programs/audit/types';
-import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import { runProgramAgent } from '@programs/run-agent-legacy';
+import { authenticate } from '@programs/authenticate';
+import { getProgramConfig } from '@programs';
+import { getAuditChecks } from '@programs/audit/types';
+import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
+import type { ProgramConfig } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
+import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
@@ -86,12 +86,12 @@ export function runWizard(
 
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
-      const { TaskStreamPush } = await import('@lib/task-stream/index');
+      const { TaskStreamPush } = await import('@programs/task-stream/index');
       const { PostHogDestination } = await import(
-        '@lib/task-stream/destinations/posthog'
+        '@programs/task-stream/destinations/posthog'
       );
       const { createFileDestination } = await import(
-        '@lib/task-stream/destinations/file'
+        '@programs/task-stream/destinations/file'
       );
 
       // Before the TUI mounts: once Ink owns the alt screen, anything written

@@ -34,7 +34,7 @@ module.exports = {
       // The agent surface. It takes resolved data in, reports through
       // progress events and asks through an injected answerer, so nothing
       // here may reach a UI, the session, detection, the CLI or a program at
-      // runtime. Program types stay importable until B1 moves
+      // runtime. ProgramId remains a type-only exception until B2 moves
       // PROGRAM_BINDINGS to programs.
       files: ['src/agent/**/*.ts'],
       excludedFiles: ['**/__tests__/**'],
@@ -63,16 +63,13 @@ module.exports = {
                   '@ui/**',
                   '**/ui/**',
                   '@lib/**',
-                  '!@lib/programs/**',
                   '**/lib/**',
-                  '!**/lib/programs/**',
                   '**/wizard-session',
                   '**/detection/**',
                   '**/runners/**',
                   '**/commands/**',
                   '@steps',
                   '@steps/**',
-                  '@frameworks/**',
                   '**/frameworks/**',
                   '@utils/setup-utils',
                   '@shared/utils/setup-utils',
@@ -85,10 +82,10 @@ module.exports = {
                   'The agent reports through progress events and asks through AgentInteraction; it takes everything else through RunConfig and RunInput.',
               },
               {
-                group: ['@lib/programs/**', '**/programs/**'],
+                group: ['@programs/**', '**/programs/**'],
                 allowTypeImports: true,
                 message:
-                  'The agent takes program data through RunConfig. Types only, until B1 moves PROGRAM_BINDINGS to programs.',
+                  'The agent takes program data through RunConfig. ProgramId types remain until B2 moves PROGRAM_BINDINGS to programs.',
               },
             ],
           },

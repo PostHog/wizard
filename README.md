@@ -156,13 +156,13 @@ route review to their owning team instead.
 |---|---|
 | `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
 | `src/agent/` | `@PostHog/team-wizard-docs` |
-| `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
-| `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
-| `src/lib/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/lib/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/lib/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-| `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+| `src/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
+| `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
@@ -273,7 +273,7 @@ health_issue:read wizard_session:read wizard_session:write
 The source of truth is `WIZARD_OAUTH_SCOPES` in `src/shared/constants.ts`, which
 documents why each scope is needed — if this block drifts, trust the code.
 Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
-`src/lib/oauth/program-scopes.ts`); the default integration flow adds
+`src/programs/oauth/program-scopes.ts`); the default integration flow adds
 `integration:read` and `external_data_source:read` /
 `external_data_source:write`.
 
@@ -281,7 +281,7 @@ Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
-`src/lib/oauth/program-scopes.ts`) must be grantable under that ceiling, or
+`src/programs/oauth/program-scopes.ts`) must be grantable under that ceiling, or
 `/authorize` drops it and the call that needs it 403s.
 
 **A granted token can be narrower than the request even with a correct
@@ -507,11 +507,13 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 | `@agent` | `src/agent/index.ts`, the agent's runtime entry; the only agent import outside `src/agent` besides types |
 | `@agent/types` | `src/agent/types.ts`, type-only |
 | `@agent/*` | `src/agent/*`, inside `src/agent` and its tests only |
+| `@programs` | `src/programs/index.ts`, the programs runtime entry |
+| `@programs/types` | `src/programs/types.ts`, type-only |
+| `@programs/*` | `src/programs/*`, retained for internal imports and tracked migration edges |
 | `@shared/*` | `src/shared/*` |
 | `@utils/*` | `src/shared/utils/*` |
 | `@ui/*` | `src/ui/*` |
 | `@steps/*` | `src/steps/*` |
-| `@frameworks/*` | `src/frameworks/*` |
 
 ## Running locally
 

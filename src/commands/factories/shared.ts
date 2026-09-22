@@ -2,7 +2,7 @@ import type { Arguments, Options } from 'yargs';
 
 import { runWizard, runWizardCI, runWizardHeadless } from '@lib/runners';
 import { isHeadless } from '@lib/headless-mode';
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig } from '@programs/types';
 
 import { skillProgramOptions } from '../skill-program-options';
 import { ErrorCodes } from '@shared/errors';

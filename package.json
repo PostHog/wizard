@@ -134,6 +134,7 @@
     "test": "pnpm build && vitest run",
     "test:legacy": "vitest run --project legacy",
     "test:agent": "vitest run --project agent",
+    "test:programs": "vitest run --project programs",
     "test:tui": "vitest run --project tui",
     "test:cli": "vitest run --project cli",
     "test:harness": "vitest run --project harness",

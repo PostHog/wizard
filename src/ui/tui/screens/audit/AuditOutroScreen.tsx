@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
-import { getAuditChecks } from '@lib/programs/audit/types';
+import { getAuditChecks } from '@programs/audit/types';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 

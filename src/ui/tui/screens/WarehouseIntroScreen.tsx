@@ -18,7 +18,7 @@ import { IntroScreenLayout } from './IntroScreenLayout.js';
 import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
-} from '@lib/programs/warehouse-source/index';
+} from '@programs/warehouse-source/index';
 
 interface WarehouseIntroScreenProps {
   store: WizardStore;

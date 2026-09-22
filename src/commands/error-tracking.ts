@@ -1,4 +1,4 @@
-import { errorTrackingConfig } from '@lib/programs/error-tracking/index';
+import { errorTrackingConfig } from '@programs/error-tracking/index';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

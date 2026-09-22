@@ -5,7 +5,7 @@
 | Surface                                                           | Owns                                                                          |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [WizardSession](../../../../src/lib/wizard-session.ts)            | Run configuration, decisions, credentials, and lifecycle state                |
-| [ProgramStep](../../../../src/lib/programs/program-step.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
+| [ProgramStep](../../../../src/programs/program-step.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
 | [screen-sequences.ts](../../../../src/ui/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
 | [WizardRouter](../../../../src/ui/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
 | [WizardStore](../../../../src/ui/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
@@ -17,7 +17,7 @@
 entries: `id`, `show`, and `isComplete`. Completion defaults to the step's
 `gate` when no separate `isComplete` is provided. Steps without a screen are
 omitted, and the exit screen is appended. The projection applies
-[withAiOptInGate](../../../../src/lib/programs/ai-opt-in-gate.ts) consistently
+[withAiOptInGate](../../../../src/programs/ai-opt-in-gate.ts) consistently
 with store gate creation.
 
 `WizardRouter.resolve(session)` first checks the overlay stack, then returns the

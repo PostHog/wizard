@@ -19,7 +19,7 @@ import {
   type Integration,
   type Sequence,
 } from '@shared/constants';
-import type { FrameworkConfig } from './framework-config';
+import type { FrameworkConfig } from '../programs/framework-config';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';

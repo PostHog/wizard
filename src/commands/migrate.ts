@@ -1,4 +1,4 @@
-import { migrationConfig } from '@lib/programs/migration/index';
+import { migrationConfig } from '@programs/migration/index';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

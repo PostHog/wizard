@@ -1,7 +1,7 @@
 import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { PROGRAM_SEQUENCES, ScreenId } from '@ui/tui/screen-sequences';
-import { Program, type ProgramId } from '@lib/programs/program-registry';
+import { Program, type ProgramId } from '@programs';
 
 function getEntry(program: ProgramId, id: ScreenId) {
   const entry = PROGRAM_SEQUENCES[program].find(
