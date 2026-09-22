@@ -25,6 +25,21 @@ import {
 
 import { analytics } from '@utils/analytics';
 
+const PLUGIN_MARKETPLACE = 'posthog';
+const PLUGIN_MARKETPLACE_SOURCE = 'PostHog/ai-plugin';
+const PLUGIN_REF = `posthog@${PLUGIN_MARKETPLACE}`;
+
+/**
+ * The plugin's row in `codex plugin list`, whose STATUS column reads
+ * `installed, enabled` or `not installed`. Registering the marketplace only
+ * publishes the catalog, so the marketplace section in config.toml says nothing
+ * about whether the plugin itself is there.
+ */
+const listedAsInstalled = (stdout: string): boolean => {
+  const row = new RegExp(`^${PLUGIN_REF}\\s+(.*)$`, 'm').exec(stdout)?.[1];
+  return !!row && /\binstalled\b/.test(row) && !/\bnot installed\b/.test(row);
+};
+
 /**
  * Failures in the user's own environment. Reporting them files issues nobody
  * can action, so hand back a hint instead. Drawn from what the codex install
@@ -332,15 +347,26 @@ export class CodexMCPClient
   }
 
   isPluginInstalled(): Promise<boolean> {
-    const configPath = path.join(os.homedir(), '.codex', 'config.toml');
+    const binary = this.findCodexBinary();
+    if (!binary) return Promise.resolve(false);
+    const result = spawnSync(
+      binary,
+      ['plugin', 'list', '-m', PLUGIN_MARKETPLACE],
+      { encoding: 'utf-8' },
+    );
+    if (result.error || result.status !== 0) return Promise.resolve(false);
+    return Promise.resolve(listedAsInstalled(result.stdout ?? ''));
+  }
+
+  /** The catalog, which the plugin is installed *from* — not the plugin. */
+  private isMarketplaceRegistered(): boolean {
     try {
-      const contents = fs.readFileSync(configPath, 'utf-8');
-      // Marketplace installs appear as [marketplaces.posthog] in config.toml
-      return Promise.resolve(
-        contents.toLowerCase().includes('[marketplaces.posthog]'),
-      );
+      const contents = fs.readFileSync(this.configPath(), 'utf-8');
+      return contents
+        .toLowerCase()
+        .includes(`[marketplaces.${PLUGIN_MARKETPLACE}]`);
     } catch {
-      return Promise.resolve(false);
+      return false;
     }
   }
 
@@ -352,17 +378,21 @@ export class CodexMCPClient
         reason: 'The codex CLI is no longer on your PATH.',
       };
 
-    if (!(await this.isPluginInstalled())) {
-      return { success: true, alreadyInstalled: true };
-    }
+    // Both halves are removed, and either alone is enough to act on: a user
+    // left with a registered marketplace and no plugin still needs it cleared.
+    const steps: string[][] = [];
+    if (await this.isPluginInstalled())
+      steps.push(['plugin', 'remove', PLUGIN_REF]);
+    if (this.isMarketplaceRegistered())
+      steps.push(['plugin', 'marketplace', 'remove', PLUGIN_MARKETPLACE]);
 
-    const result = spawnSync(
-      binary,
-      ['plugin', 'marketplace', 'remove', 'posthog'],
-      { encoding: 'utf-8' },
-    );
-    if (result.error || result.status !== 0) {
-      return reportSpawnFailure('plugin uninstall', describeSpawn(result));
+    if (steps.length === 0) return { success: true, alreadyInstalled: true };
+
+    for (const args of steps) {
+      const result = spawnSync(binary, args, { encoding: 'utf-8' });
+      if (result.error || result.status !== 0) {
+        return reportSpawnFailure('plugin uninstall', describeSpawn(result));
+      }
     }
     return { success: true };
   }
@@ -375,21 +405,46 @@ export class CodexMCPClient
         reason: 'The codex CLI is no longer on your PATH.',
       };
 
-    // `codex plugin marketplace add` exits non-zero once the marketplace is
-    // registered, so ask config.toml first. Without this the second run of
-    // `mcp add` looked like a failure and reported nothing at all.
     if (await this.isPluginInstalled()) {
       return { success: true, alreadyInstalled: true };
     }
 
+    // `codex plugin marketplace add` exits non-zero once the marketplace is
+    // registered, so ask config.toml first. Without this the second run of
+    // `mcp add` looked like a failure and reported nothing at all.
+    const marketplace = this.isMarketplaceRegistered()
+      ? null
+      : this.registerMarketplace(binary);
+    if (marketplace && !marketplace.success) return marketplace;
+
+    // Registering the catalog does not install from it. Skipping this left the
+    // user with a marketplace, no skills, and a wizard reporting success.
+    const result = spawnSync(binary, ['plugin', 'add', PLUGIN_REF], {
+      encoding: 'utf-8',
+    });
+
+    if (result.error || result.status !== 0) {
+      return reportSpawnFailure('plugin install', describeSpawn(result));
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Add the catalog the plugin is published in. A stale cache directory with no
+   * config.toml entry reports the marketplace as added from a different source;
+   * clear it and retry once.
+   */
+  private registerMarketplace(binary: string): PluginInstallResult {
     const run = () =>
-      spawnSync(binary, ['plugin', 'marketplace', 'add', 'PostHog/ai-plugin'], {
-        encoding: 'utf-8',
-      });
+      spawnSync(
+        binary,
+        ['plugin', 'marketplace', 'add', PLUGIN_MARKETPLACE_SOURCE],
+        { encoding: 'utf-8' },
+      );
 
     let result = run();
 
-    // Stale cache directory with no config.toml entry — clear it and retry
     if (
       (result.error || result.status !== 0) &&
       STALE_MARKETPLACE_CACHE.test(describeSpawn(result))
@@ -399,7 +454,7 @@ export class CodexMCPClient
         '.codex',
         '.tmp',
         'marketplaces',
-        'posthog',
+        PLUGIN_MARKETPLACE,
       );
       try {
         fs.rmSync(staleDir, { recursive: true, force: true });
@@ -411,20 +466,17 @@ export class CodexMCPClient
 
     if (result.error || result.status !== 0) {
       const details = describeSpawn(result);
-      // The marketplace was registered by something other than us (a manual
-      // `codex plugin marketplace add`, or a version that writes config.toml
-      // differently) — that's still "already installed", not a failure. The
-      // stale-cache wording above is deliberately excluded: that one means the
-      // plugin is NOT registered, and it only reaches here if the retry failed.
+      // Registered by something other than us — the plugin add below can still
+      // resolve against it. The stale-cache wording is excluded: that one means
+      // the marketplace is NOT usable, and only reaches here if the retry failed.
       if (
         ALREADY_INSTALLED_PATTERN.test(details) &&
         !STALE_MARKETPLACE_CACHE.test(details)
       ) {
-        return { success: true, alreadyInstalled: true };
+        return { success: true };
       }
-      return reportSpawnFailure('plugin install', details);
+      return reportSpawnFailure('marketplace add', details);
     }
-
     return { success: true };
   }
 }

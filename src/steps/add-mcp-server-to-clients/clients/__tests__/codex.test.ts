@@ -53,26 +53,52 @@ describe('CodexMCPClient', () => {
     });
   });
 
+  /** A `codex plugin list -m posthog` table with the given status column. */
+  const pluginListing = (status: string) =>
+    `Marketplace \`posthog\`\n\nPLUGIN           STATUS  VERSION  SOURCE\nposthog@posthog  ${status}  1.0.61   https://github.com/PostHog/ai-plugin.git\n`;
+
   describe('isPluginInstalled', () => {
-    it('returns true when posthog marketplace section exists in config.toml', async () => {
-      readFileSyncMock.mockReturnValue(
-        '[marketplaces.posthog]\nsource_type = "git"\n',
-      );
+    it('returns true when the plugin itself is installed', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: pluginListing('installed, enabled'),
+        stderr: '',
+      });
       const client = new CodexMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(true);
     });
 
-    it('returns false when posthog is absent from config.toml', async () => {
+    // The defect this replaces: a registered marketplace was read as an
+    // installed plugin, so the wizard reported success while `codex plugin
+    // list` said `not installed`, and never self-corrected on a re-run.
+    it('returns false when the marketplace is registered but the plugin is not installed', async () => {
       readFileSyncMock.mockReturnValue(
-        '[marketplaces.openai-bundled]\nsource_type = "local"\n',
+        '[marketplaces.posthog]\nsource_type = "git"\n',
       );
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: pluginListing('not installed'),
+        stderr: '',
+      });
       const client = new CodexMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);
     });
 
-    it('returns false when config.toml cannot be read', async () => {
-      readFileSyncMock.mockImplementation(() => {
-        throw new Error('ENOENT');
+    it('returns false when the plugin is absent from the listing', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 0,
+        stdout: 'PLUGIN  STATUS  VERSION  SOURCE\n',
+        stderr: '',
+      });
+      const client = new CodexMCPClient();
+      await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+
+    it('returns false when the listing command fails', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: "error: unexpected argument 'plugin'",
       });
       const client = new CodexMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);
@@ -211,42 +237,75 @@ describe('CodexMCPClient', () => {
     });
 
     it('clears stale cache and retries when marketplace is already added from a different source', async () => {
-      spawnSyncMock
-        .mockReturnValueOnce({
-          status: 1,
-          stderr:
-            "Error: marketplace 'posthog' is already added from a different source",
-        })
-        .mockReturnValueOnce({ status: 0, stderr: '' });
+      let adds = 0;
+      spawnSyncMock.mockImplementation((_bin: string, args: string[]) => {
+        const cmd = args.join(' ');
+        if (cmd.startsWith('plugin list'))
+          return {
+            status: 0,
+            stdout: pluginListing('not installed'),
+            stderr: '',
+          };
+        if (cmd.startsWith('plugin marketplace add')) {
+          adds += 1;
+          return adds === 1
+            ? {
+                status: 1,
+                stderr:
+                  "Error: marketplace 'posthog' is already added from a different source",
+              }
+            : { status: 0, stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      });
       const client = new CodexMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
       expect(fs.rmSync).toHaveBeenCalledWith(
         expect.stringContaining('marketplaces/posthog'),
         { recursive: true, force: true },
       );
-      expect(spawnSyncMock).toHaveBeenCalledTimes(2);
+      expect(adds).toBe(2);
     });
 
-    it('returns already-installed without shelling out when config.toml already has the marketplace', async () => {
+    it('skips the marketplace add when config.toml already has the marketplace', async () => {
       readFileSyncMock.mockReturnValue('[marketplaces.posthog]\n');
+      spawnSyncMock.mockImplementation((_bin: string, args: string[]) =>
+        args.join(' ').startsWith('plugin list')
+          ? { status: 0, stdout: pluginListing('not installed'), stderr: '' }
+          : { status: 0, stdout: '', stderr: '' },
+      );
       const client = new CodexMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({
-        success: true,
-        alreadyInstalled: true,
-      });
-      expect(spawnSyncMock).not.toHaveBeenCalled();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      const commands = spawnSyncMock.mock.calls.map(
+        ([, args]: [string, string[]]) => args.join(' '),
+      );
+      expect(commands).not.toContain(
+        'plugin marketplace add PostHog/ai-plugin',
+      );
+      expect(commands).toContain('plugin add posthog@posthog');
     });
 
-    it('reports "already" stderr as already-installed rather than a failure', async () => {
-      spawnSyncMock.mockReturnValue({
-        status: 1,
-        stderr: "marketplace 'posthog' is already installed",
+    it('installs anyway when the marketplace add reports it is already there', async () => {
+      spawnSyncMock.mockImplementation((_bin: string, args: string[]) => {
+        const cmd = args.join(' ');
+        if (cmd.startsWith('plugin list'))
+          return {
+            status: 0,
+            stdout: pluginListing('not installed'),
+            stderr: '',
+          };
+        if (cmd.startsWith('plugin marketplace add'))
+          return {
+            status: 1,
+            stderr: "marketplace 'posthog' is already installed",
+          };
+        return { status: 0, stdout: '', stderr: '' };
       });
       const client = new CodexMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({
-        success: true,
-        alreadyInstalled: true,
-      });
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
       expect(analytics.captureException).not.toHaveBeenCalled();
     });
 
@@ -265,7 +324,18 @@ describe('CodexMCPClient', () => {
     });
 
     it('returns failure with the reason and captures exception on unexpected error', async () => {
-      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
+      spawnSyncMock.mockImplementation((_bin: string, args: string[]) => {
+        const cmd = args.join(' ');
+        if (cmd.startsWith('plugin list'))
+          return {
+            status: 0,
+            stdout: pluginListing('not installed'),
+            stderr: '',
+          };
+        if (cmd.startsWith('plugin add'))
+          return { status: 1, stderr: 'network timeout' };
+        return { status: 0, stdout: '', stderr: '' };
+      });
       const client = new CodexMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({
         success: false,
@@ -364,9 +434,20 @@ describe('CodexMCPClient', () => {
     // One root cause was 29 issue ids for Claude Code because $HOME sat in the
     // message. Keep the message constant and put the detail in properties.
     it('reports an unexpected failure under a constant message with scrubbed detail', async () => {
-      spawnSyncMock.mockReturnValue({
-        status: 1,
-        stderr: 'weird new failure in /Users/ada/.codex/config.toml',
+      spawnSyncMock.mockImplementation((_bin: string, args: string[]) => {
+        const cmd = args.join(' ');
+        if (cmd.startsWith('plugin list'))
+          return {
+            status: 0,
+            stdout: pluginListing('not installed'),
+            stderr: '',
+          };
+        if (cmd.startsWith('plugin add'))
+          return {
+            status: 1,
+            stderr: 'weird new failure in /Users/ada/.codex/config.toml',
+          };
+        return { status: 0, stdout: '', stderr: '' };
       });
       const client = new CodexMCPClient();
 
@@ -380,6 +461,140 @@ describe('CodexMCPClient', () => {
       );
       const [, props] = (analytics.captureException as Mock).mock.calls[0];
       expect(props.details).not.toContain('/Users/ada');
+    });
+  });
+  describe('plugin install and removal', () => {
+    /** Every codex invocation, in order, as its joined command. */
+    const codexCalls = () =>
+      spawnSyncMock.mock.calls.map(([, args]: [string, string[]]) =>
+        args.join(' '),
+      );
+
+    const route = (handler: (cmd: string) => object) => {
+      spawnSyncMock.mockImplementation((_bin: string, args: string[]) =>
+        handler(args.join(' ')),
+      );
+    };
+
+    // `plugin marketplace add` registers the catalog only; without the
+    // `plugin add` the wizard reported success and the user got no skills.
+    it('installs the plugin after registering the marketplace', async () => {
+      route((cmd) =>
+        cmd.startsWith('plugin list')
+          ? { status: 0, stdout: pluginListing('not installed'), stderr: '' }
+          : { status: 0, stdout: '', stderr: '' },
+      );
+      const client = new CodexMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      expect(codexCalls()).toContain(
+        'plugin marketplace add PostHog/ai-plugin',
+      );
+      expect(codexCalls()).toContain('plugin add posthog@posthog');
+    });
+
+    it('installs the plugin for a user who already has the marketplace', async () => {
+      readFileSyncMock.mockReturnValue('[marketplaces.posthog]\n');
+      route((cmd) =>
+        cmd.startsWith('plugin list')
+          ? { status: 0, stdout: pluginListing('not installed'), stderr: '' }
+          : { status: 0, stdout: '', stderr: '' },
+      );
+      const client = new CodexMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+
+      expect(codexCalls()).toContain('plugin add posthog@posthog');
+    });
+
+    it('does nothing when the plugin is already installed', async () => {
+      route(() => ({
+        status: 0,
+        stdout: pluginListing('installed, enabled'),
+        stderr: '',
+      }));
+      const client = new CodexMCPClient();
+
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(codexCalls().some((c) => c.startsWith('plugin add'))).toBe(false);
+    });
+
+    it('reports a failing plugin add rather than claiming success', async () => {
+      route((cmd) => {
+        if (cmd.startsWith('plugin list'))
+          return {
+            status: 0,
+            stdout: pluginListing('not installed'),
+            stderr: '',
+          };
+        if (cmd.startsWith('plugin add'))
+          return { status: 1, stdout: '', stderr: 'manifest rejected' };
+        return { status: 0, stdout: '', stderr: '' };
+      });
+      const client = new CodexMCPClient();
+
+      const result = await client.installPlugin();
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toContain('manifest rejected');
+    });
+
+    it('removes the plugin and the marketplace it came from', async () => {
+      readFileSyncMock.mockReturnValue('[marketplaces.posthog]\n');
+      route((cmd) =>
+        cmd.startsWith('plugin list')
+          ? {
+              status: 0,
+              stdout: pluginListing('installed, enabled'),
+              stderr: '',
+            }
+          : { status: 0, stdout: '', stderr: '' },
+      );
+      const client = new CodexMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+
+      expect(codexCalls()).toContain('plugin remove posthog@posthog');
+      expect(codexCalls()).toContain('plugin marketplace remove posthog');
+    });
+
+    // The state this PR fixes: marketplace registered, plugin never installed.
+    // `mcp remove` must still clear the marketplace rather than skip.
+    it('removes a registered marketplace even when no plugin was installed', async () => {
+      readFileSyncMock.mockReturnValue('[marketplaces.posthog]\n');
+      route((cmd) =>
+        cmd.startsWith('plugin list')
+          ? { status: 0, stdout: pluginListing('not installed'), stderr: '' }
+          : { status: 0, stdout: '', stderr: '' },
+      );
+      const client = new CodexMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({ success: true });
+
+      expect(codexCalls()).toContain('plugin marketplace remove posthog');
+      expect(codexCalls().some((c) => c.startsWith('plugin remove'))).toBe(
+        false,
+      );
+    });
+
+    it('reports nothing to do when neither the plugin nor the marketplace is there', async () => {
+      readFileSyncMock.mockReturnValue('');
+      route((cmd) =>
+        cmd.startsWith('plugin list')
+          ? { status: 0, stdout: pluginListing('not installed'), stderr: '' }
+          : { status: 0, stdout: '', stderr: '' },
+      );
+      const client = new CodexMCPClient();
+
+      await expect(client.removePlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
+      expect(codexCalls().some((c) => c.includes('remove'))).toBe(false);
     });
   });
 });
