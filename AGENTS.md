@@ -133,7 +133,7 @@ confuse it with the top-level `wizard skill` command.
   ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts).
+  [`src/commands/dispatch-family.ts`](src/commands/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 

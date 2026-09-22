@@ -4,6 +4,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { debug } from '@utils/debug';
+import { cliSpawnOptions } from '@shared/posthog-cli-install';
+export {
+  installOrUpdatePostHogCli,
+  type CliInstallResult,
+} from '@shared/posthog-cli-install';
 
 /**
  * A coding agent whose global instructions file the PostHog CLI steering
@@ -63,59 +68,6 @@ export interface SteeringInstallResult {
   error?: string;
 }
 
-export interface CliInstallResult {
-  success: boolean;
-  error?: string;
-  /**
-   * The underlying failure as an Error, for callers that report to error
-   * tracking. Carries the real spawn error (with its stack) when npm couldn't
-   * launch; a synthesized Error for a non-zero exit. Set whenever success is
-   * false.
-   */
-  errorObject?: Error;
-}
-
-const spawnOptions = {
-  encoding: 'utf-8' as const,
-  // npm/posthog-cli are npm.cmd/posthog-cli.cmd on Windows; spawnSync only
-  // resolves them through a shell.
-  shell: process.platform === 'win32',
-};
-
-/**
- * Install or update the PostHog CLI in the user's environment. `npm install
- * --global @posthog/cli@latest` covers both first-time installs and upgrades
- * for existing npm-installed CLIs.
- */
-export function installOrUpdatePostHogCli(): CliInstallResult {
-  const args = ['install', '--global', '@posthog/cli@latest'];
-  debug(`Running npm ${args.join(' ')}`);
-
-  const result = spawnSync('npm', args, spawnOptions);
-
-  if (result.error) {
-    return {
-      success: false,
-      error: `Failed to run npm: ${result.error.message}. Is Node.js installed?`,
-      errorObject: result.error,
-    };
-  }
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').trim();
-    const message =
-      detail ||
-      `npm install --global @posthog/cli@latest exited with status ${
-        result.status ?? 'unknown'
-      }`;
-    return {
-      success: false,
-      error: message,
-      errorObject: new Error(message),
-    };
-  }
-  return { success: true };
-}
-
 /**
  * Delegate the actual write to the installed `posthog-cli api agents-md
  * install`. The steering snippet lives in the CLI (its single source of truth),
@@ -129,7 +81,7 @@ export function installSteeringSnippet(
   debug(`Running posthog-cli ${args.join(' ')}`);
 
   const result = spawnSync('posthog-cli', args, {
-    ...spawnOptions,
+    ...cliSpawnOptions,
     env: { ...process.env, POSTHOG_CLI_EXPERIMENTAL_API: '1' },
   });
 

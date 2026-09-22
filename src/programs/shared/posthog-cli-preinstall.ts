@@ -8,7 +8,7 @@
  * needs the CLI.
  */
 
-import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import { installOrUpdatePostHogCli } from '@shared/posthog-cli-install';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 

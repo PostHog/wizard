@@ -1,4 +1,5 @@
 import { auditConfig } from '@programs/audit/index';
+import { headlessOption, regionOption } from '@lib/headless-mode';
 
 import type { Command } from './command';
 import { familyCommandFactory } from './factories/family-command-factory';
@@ -19,4 +20,5 @@ export const auditCommand: Command = familyCommandFactory({
   family: 'audit',
   description: auditConfig.description,
   optionsFrom: auditConfig,
+  cliOptions: { ...headlessOption, ...regionOption },
 });

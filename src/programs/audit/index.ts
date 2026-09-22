@@ -7,7 +7,6 @@ import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { headlessOption, regionOption } from '@lib/headless-mode';
 import {
   AUDIT_PROGRAM_OPTIONS,
   resolveAuditRunDefinition,
@@ -85,8 +84,4 @@ export const auditConfig: ProgramConfig = {
     WIZARD_TOOL_NAMES.auditResolveChecks,
   ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
-  // The experimental headless flag — declared on `audit` (and basic
-  // integration) rather than globally. mergeCommandOptions lands it on the
-  // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.
-  cliOptions: { ...headlessOption, ...regionOption },
 };

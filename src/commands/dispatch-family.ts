@@ -1,17 +1,15 @@
 import type { Arguments } from 'yargs';
 
-import { auditConfig } from '@programs/audit/index';
-import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
+import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { agentSkillConfig } from '@programs/program-registry';
-import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
-import type { ProgramConfig } from '@programs/program-step';
+import { getProgramConfig } from '@programs';
+import type { ProgramConfig } from '@programs/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 
-import { dispatchProgram } from '../commands/factories/shared';
-import type { Command } from '../commands/command';
+import { dispatchProgram } from './factories/shared';
+import type { Command } from './command';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 
@@ -50,7 +48,7 @@ async function exitDispatchError(
 
 /** Wizard-native subcommands keyed by family. */
 const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
-  audit: { 'web-analytics': webAnalyticsDoctorConfig },
+  audit: { 'web-analytics': getProgramConfig('web-analytics-doctor') },
 };
 
 /**
@@ -64,7 +62,8 @@ const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
  * generic skill program picks up the ledger here rather than for every skill.
  */
 function configForCliEntry(entry: CliEntry, family: string): ProgramConfig {
-  if (entry.skillId === 'audit') return auditConfig;
+  if (entry.skillId === 'audit') return getProgramConfig('audit');
+  const agentSkillConfig = getProgramConfig('agent-skill');
   return {
     ...agentSkillConfig,
     skillId: entry.skillId,
