@@ -16,12 +16,23 @@
 import { POSTHOG_INTEGRATION_PROGRAM } from '@lib/programs/posthog-integration/steps';
 import type { WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
+import { analytics } from '@utils/analytics';
+
 import {
   CREDENTIALS,
   promptFor,
   resolveRun,
   sessionWith,
 } from './helpers/integration-prompt.no-jest';
+
+// The run builder reads the run's wizard flags; pin them empty so these
+// tests stay hermetic (empty map = flags unreadable = shipped default).
+beforeEach(() => {
+  vi.spyOn(analytics, 'getAllFlagsForWizard').mockResolvedValue({});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',
