@@ -11,7 +11,14 @@ export type {
   ProgramInput,
   ProgramOptions,
   ProgramRunOutcome,
+  ProgramWorkflowConnector,
 } from './run-program';
+export type {
+  ProgramInvocationData,
+  ProgramProgress,
+  ProgramStoreProjection,
+  SettledProgramRun,
+} from './program-store';
 export type {
   ProgramBinding,
   ProgramSwitchboardCtx,

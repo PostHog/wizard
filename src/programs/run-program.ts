@@ -18,7 +18,7 @@ import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
 } from './credentials';
-import { getProgramConfig } from './program-registry';
+import { getRuntimeProgramConfig } from './runtime-registry';
 import { resolveProgramBinding } from './binding';
 import { getProgramCommandments } from './commandments';
 import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
@@ -39,8 +39,10 @@ import {
 import { resolveSelfDrivingRun } from './self-driving/run';
 import {
   ProgramStore,
+  type ProgramInvocationData,
   type ProgramProgress,
   type ProgramStoreProjection,
+  type SettledProgramRun,
 } from './program-store';
 
 export interface ProgramInput extends ProgramRunDefinitionInput {
@@ -68,6 +70,20 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   warehouseSources?: readonly DetectedSource[];
   detectedTools?: readonly DetectedSource[];
   mayReportScanResults?: boolean;
+  /** Prepared child integration and gate decisions for a composed run. */
+  composition?: {
+    integration?: ProgramInput;
+    handoffConfirmed?: boolean;
+    githubConnected?: boolean;
+  };
+}
+
+export interface ProgramWorkflowConnector {
+  confirmStep(request: {
+    programId: 'self-driving';
+    stepId: 'self-driving-handoff' | 'self-driving-github';
+    installDir: string;
+  }): Promise<boolean>;
 }
 
 export interface ProgramOptions {
@@ -77,13 +93,21 @@ export interface ProgramOptions {
   mcp?: NoAgentMcpPort;
   workflow?: NoAgentProgramOptions['workflow'];
   integrationEffects?: PosthogIntegrationRunEffects;
+  compositionWorkflow?: ProgramWorkflowConnector;
+  /** Wait for the host's AI-processing approval gate when org approval is absent. */
+  awaitAiApproval?: (context: { programId: string }) => Promise<boolean>;
 }
 
 export interface ProgramRunOutcome {
   programId: string;
   outcome: RunOutcome;
   runResults: RunResult[];
-  data: ProgramStoreProjection;
+  /** Final invocation-owned authentication, detection, and composition data. */
+  data: ProgramInvocationData;
+  /** Snapshot of each agent run's attributed progress. */
+  progress: ProgramStoreProjection;
+  /** Actual completed agent invocations, in settlement order. */
+  settledRuns: SettledProgramRun[];
   /** Program-specific outcome data, such as doctor issues or MCP client results. */
   programData?: Record<string, unknown>;
   artifacts: { reportFile?: string };
@@ -116,19 +140,50 @@ export async function runProgram(
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
   const store = new ProgramStore();
-  const program = getProgramConfig(programId);
+  return runProgramWithStore(programId, input, options, store, undefined, {
+    granted: false,
+  });
+}
+
+async function runProgramWithStore(
+  programId: string,
+  input: ProgramInput,
+  options: ProgramOptions,
+  store: ProgramStore,
+  stepId?: string,
+  approval: { granted: boolean } = { granted: false },
+): Promise<ProgramRunOutcome> {
+  const program = getRuntimeProgramConfig(programId);
   const artifacts: ProgramRunOutcome['artifacts'] = {};
+  const runId = input.runId ?? randomUUID();
 
   const fail = (message: string): ProgramRunOutcome => ({
     programId,
     outcome: RunOutcome.Failed,
-    runResults: [],
-    data: store.read(),
+    runResults: store.results(),
+    data: store.readData(),
+    progress: store.read(),
+    settledRuns: store.settledRuns(),
     artifacts,
     failure: { message },
   });
+  const abort = (message: string): ProgramRunOutcome => ({
+    ...fail(message),
+    outcome: RunOutcome.Aborted,
+  });
 
   if (!program) return fail(`Unknown program: ${programId}`);
+
+  if (input.integration !== undefined || input.typescript !== undefined) {
+    store.setDetection({
+      integration: input.integration,
+      typescript: input.typescript,
+      complete: input.frameworkConfig !== undefined,
+    });
+  }
+  for (const [key, value] of Object.entries(input.frameworkContext ?? {})) {
+    store.setFrameworkContext(key, value);
+  }
 
   let credentials = input.credentials;
   if (!credentials && options.credentials) {
@@ -137,6 +192,13 @@ export async function runProgram(
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }
+  }
+  if (credentials) {
+    store.setAuthenticated({
+      credentials: credentials.posthog,
+      apiProject: credentials.project,
+      apiUser: credentials.apiUser,
+    });
   }
   if (NO_AGENT_PROGRAMS.has(programId)) {
     const result = await runNoAgentProgram(
@@ -155,7 +217,9 @@ export async function runProgram(
           ? RunOutcome.Failed
           : (result.outcome as RunOutcome),
       runResults: [],
-      data: store.read(),
+      data: store.readData(),
+      progress: store.read(),
+      settledRuns: store.settledRuns(),
       programData: result.data,
       artifacts,
       ...('failure' in result ? { failure: result.failure } : {}),
@@ -163,6 +227,84 @@ export async function runProgram(
   }
   if (!credentials)
     return fail(`Credentials are required to run ${programId}.`);
+
+  if (
+    program.requiresAi !== false &&
+    !input.flags?.ci &&
+    !input.flags?.signup &&
+    credentials.apiUser?.organization?.is_ai_data_processing_approved !==
+      true &&
+    !approval.granted
+  ) {
+    if (!options.awaitAiApproval) {
+      return fail(
+        'AI processing approval is required before this program can run.',
+      );
+    }
+    try {
+      approval.granted = await options.awaitAiApproval({ programId });
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error));
+    }
+    if (!approval.granted) return abort('AI processing approval declined.');
+  }
+
+  if (programId === 'self-driving' && input.composition) {
+    try {
+      const composition = input.composition;
+      if (composition.integration) {
+        store.setComposition({ parentProgramId: programId });
+        const childInput = composition.integration;
+        const childResult = await runProgramWithStore(
+          'posthog-integration',
+          {
+            ...childInput,
+            credentials: childInput.credentials ?? credentials,
+            composed: true,
+            runId: childInput.runId ?? `${runId}:integrate-run`,
+            flags: { ...input.flags, ...childInput.flags },
+            wizardFlags: { ...input.wizardFlags, ...childInput.wizardFlags },
+            wizardFlagPayloads: {
+              ...input.wizardFlagPayloads,
+              ...childInput.wizardFlagPayloads,
+            },
+          },
+          options,
+          store,
+          'integrate-run',
+          approval,
+        );
+        if (childResult.outcome !== RunOutcome.Success) {
+          return { ...childResult, programId };
+        }
+        store.markProgramCompleted('integrate-run');
+        if (options.compositionWorkflow) {
+          const continueAfterHandoff =
+            await options.compositionWorkflow.confirmStep({
+              programId: 'self-driving',
+              stepId: 'self-driving-handoff',
+              installDir: input.installDir,
+            });
+          if (!continueAfterHandoff)
+            return abort('Self-driving handoff declined.');
+        } else if (composition.handoffConfirmed === false) {
+          return abort('Self-driving handoff declined.');
+        }
+      }
+      if (options.compositionWorkflow) {
+        const githubConnected = await options.compositionWorkflow.confirmStep({
+          programId: 'self-driving',
+          stepId: 'self-driving-github',
+          installDir: input.installDir,
+        });
+        if (!githubConnected) return abort('GitHub connection declined.');
+      } else if (composition.githubConnected === false) {
+        return abort('GitHub connection declined.');
+      }
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   let run: AgentRunDefinition | undefined | null = input.run;
   let hooks: RunHooks | undefined;
@@ -228,8 +370,7 @@ export async function runProgram(
     SEQUENCE: binding.sequence,
     HARNESS: binding.harness,
   };
-  const runId = input.runId ?? randomUUID();
-  const adapter = store.beginRun({ runId }, options.onProgress);
+  const adapter = store.beginRun({ runId, stepId }, options.onProgress);
 
   const result = await runAgent(
     {
@@ -272,11 +413,16 @@ export async function runProgram(
     },
   );
   adapter.finish(result);
+  if (result.outcome === RunOutcome.Success) {
+    store.markProgramCompleted(programId);
+  }
   return {
     programId,
     outcome: result.outcome,
     runResults: store.results(),
-    data: store.read(),
+    data: store.readData(),
+    progress: store.read(),
+    settledRuns: store.settledRuns(),
     artifacts,
     ...(result.outcome === RunOutcome.Success
       ? {}
