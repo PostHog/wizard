@@ -36,13 +36,13 @@ import {
 } from '@ui/tui/posthog-integration-intro';
 
 /**
- * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
+ * Replaces IntroScreenLayout's default subtitle for this screen only. The
  * shared default (".env* file contents will not leave your machine") is true
  * of values and false of variable names, which this screen reads and reports.
  * Two lines carry the fact and name the screen that holds the detail, so the
  * disclosure reaches people who never open it.
  */
-const SUBTITLE = (
+const Subtitle = () => (
   <>
     <Text dimColor>
       We'll use AI to analyze your project and complete work.
@@ -367,7 +367,7 @@ export const PostHogIntegrationIntroScreen = ({
       installDir={session.installDir}
       title={title}
       showSubtitle={view === 'default'}
-      subtitle={SUBTITLE}
+      subtitle={<Subtitle />}
       body={body}
       showDetection={showContinue}
       detectionRows={detectionRows}

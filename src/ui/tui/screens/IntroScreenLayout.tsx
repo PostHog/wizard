@@ -130,7 +130,7 @@ const WizardTitle = ({ title }: { title: string }) => (
 );
 
 /** Generic subtitle shown when a screen doesn't supply its own. */
-const DEFAULT_SUBTITLE = (
+const DefaultSubtitle = () => (
   <>
     <Text dimColor>
       We'll use AI to analyze your project and complete work.
@@ -251,7 +251,7 @@ export const IntroScreenLayout = ({
 
           {showSubtitle && !showingPrivacy && (
             <Box flexDirection="column" alignItems="center" marginTop={1}>
-              {subtitle ?? DEFAULT_SUBTITLE}
+              {subtitle ?? <DefaultSubtitle />}
             </Box>
           )}
 
