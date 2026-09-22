@@ -18,10 +18,10 @@ import {
   OutroKind,
   type WizardSession,
 } from '@lib/wizard-session';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { HostResolution } from '@lib/host-resolution';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { HostResolution } from '@shared/host-resolution';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import { analytics } from '@utils/analytics';
 import {
   PROGRAM_REGISTRY,

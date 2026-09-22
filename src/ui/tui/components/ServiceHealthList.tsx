@@ -5,8 +5,8 @@ import {
   ServiceHealthStatus,
   type AllServicesHealth,
   type HealthCheckKey,
-} from '@lib/health-checks/types';
-import { SERVICE_LABELS } from '@lib/health-checks/readiness';
+} from '@shared/health-checks/types';
+import { SERVICE_LABELS } from '@shared/health-checks/readiness';
 import { Icons } from '@ui/tui/styles';
 
 function statusIcon(status: ServiceHealthStatus): {

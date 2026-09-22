@@ -12,7 +12,7 @@ import {
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { RESUME_INSTRUCTION } from '@lib/agent/signals';
 import { analytics } from '@utils/analytics';
-import { Sequence } from '@lib/constants';
+import { Sequence } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
 import {

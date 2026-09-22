@@ -19,6 +19,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@env": ["./src/env.ts"],
+      "@shared/*": ["./src/shared/*"],
       "@lib/*": ["./src/lib/*"],
       "@e2e-harness/*": ["./e2e-harness/*"],
       "@utils/*": ["./src/shared/utils/*"],

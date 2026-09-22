@@ -4,7 +4,7 @@
  * `runBindingCases` turns a table into `it` blocks — specs stay declarative.
  */
 import { describe, it, expect } from 'vitest';
-import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@lib/constants';
+import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
 import {
   resolveBinding,
   type SwitchboardCtx,

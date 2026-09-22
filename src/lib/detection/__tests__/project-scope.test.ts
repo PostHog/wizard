@@ -9,7 +9,7 @@ import {
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-} from '@lib/constants';
+} from '@shared/constants';
 import { authenticate } from '@lib/programs/authenticate';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';

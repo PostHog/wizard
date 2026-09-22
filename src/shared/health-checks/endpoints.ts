@@ -1,4 +1,4 @@
-import { AWS_SKILLS_BASE_URL, GITHUB_SKILLS_BASE_URL } from '@lib/constants';
+import { AWS_SKILLS_BASE_URL, GITHUB_SKILLS_BASE_URL } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 

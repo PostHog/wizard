@@ -21,7 +21,7 @@ import {
 } from '@lib/agent/agent-interface';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';

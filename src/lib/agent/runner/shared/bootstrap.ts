@@ -11,9 +11,9 @@
 import { createTriageLLMProvider } from '@lib/agent/triage-provider';
 import { gatewayAuth } from '@lib/gateway-session';
 import { logToFile } from '@utils/debug';
-import { CallType, IS_DEV } from '@lib/constants';
-import { VERSION } from '@lib/version';
-import { mcpUrlFor } from '@lib/host-resolution';
+import { CallType, IS_DEV } from '@shared/constants';
+import { VERSION } from '@shared/version';
+import { mcpUrlFor } from '@shared/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
 import type { BootstrapResult, RunConfig, RunFlags, RunInput } from './types';
 

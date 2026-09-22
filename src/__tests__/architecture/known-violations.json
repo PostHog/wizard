@@ -3,7 +3,7 @@
     "src/commands/factories/family-picker.tsx -> src/commands/command.ts",
     "src/env.ts -> src/lib/headless-mode.ts",
     "src/lib/detection/agentic.ts -> src/lib/agent/agent-interface.ts",
-    "src/lib/errors/agent-map.ts -> src/lib/agent/signals.ts",
+    "src/shared/errors/agent-map.ts -> src/lib/agent/signals.ts",
     "src/lib/programs/agent-skill/index.ts -> src/lib/agent/agent-runner.ts",
     "src/lib/programs/agent-skill/index.ts -> src/lib/programs/agent-skill/content/index.tsx",
     "src/lib/programs/ai-observability/index.ts -> src/lib/programs/agent-skill/content/index.tsx",

@@ -28,10 +28,10 @@ import {
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from '../audit-ledger';
+} from '@shared/audit-ledger';
 import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
-import type { SecretVault } from '../secret-vault';
-import { fetchWithRetry, type RetryOpts } from '../fetch-retry';
+import type { SecretVault } from '@shared/secret-vault';
+import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
 
 // ---------------------------------------------------------------------------
 // Skill types

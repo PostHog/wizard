@@ -35,7 +35,7 @@ import {
   DEFAULT_AGENT_MODEL,
   HAIKU_MODEL,
   SONNET_5_MODEL,
-} from '@lib/constants';
+} from '@shared/constants';
 
 export interface PricePerMtok {
   input: number;

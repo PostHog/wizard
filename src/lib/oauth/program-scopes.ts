@@ -35,7 +35,7 @@ import type { ProgramId } from '@lib/programs/program-registry';
 import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
-} from '@lib/constants';
+} from '@shared/constants';
 
 /**
  * Extra scopes the MCP tutorial needs on top of `WIZARD_OAUTH_SCOPES`.

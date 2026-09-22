@@ -285,7 +285,7 @@ describe('CLI argument parsing', () => {
     // from a buildSession arg — so assert the URL the run would actually fetch.
     async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
       const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
-        '../lib/constants'
+        '@shared/constants'
       );
       return { actual: getSkillsBaseUrl(), local: LOCAL_SKILLS_BASE_URL };
     }

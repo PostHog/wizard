@@ -5,7 +5,7 @@ import {
   GPT5_6_LUNA_MODEL,
   HAIKU_TRIAGE_MODEL,
   Harness,
-} from '@lib/constants';
+} from '@shared/constants';
 import { triageModelFor } from '@lib/agent/runner/switchboard/models';
 
 vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));

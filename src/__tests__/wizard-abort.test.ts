@@ -7,7 +7,7 @@ import {
   runCleanups,
 } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 import { getUI } from '../ui';
 
 vi.mock('@utils/analytics');

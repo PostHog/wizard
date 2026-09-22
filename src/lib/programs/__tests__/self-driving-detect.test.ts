@@ -22,7 +22,7 @@ import {
   PROJECT_MANIFESTS,
   type AgenticDetectionReport,
 } from '@lib/detection/agentic';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';

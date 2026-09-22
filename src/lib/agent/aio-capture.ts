@@ -25,7 +25,7 @@
  */
 
 import { logToFile } from '@utils/debug';
-import { VERSION } from '@lib/version';
+import { VERSION } from '@shared/version';
 
 /** Conversation turn shape both harnesses normalize to. Matches Anthropic
  *  message role/content conventions, which is also what AIO's Conversation

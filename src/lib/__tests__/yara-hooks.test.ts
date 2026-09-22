@@ -21,7 +21,7 @@ vi.mock('fs');
 vi.mock('fast-glob');
 
 // Mock isSkillInstallCommand from skill-install (extracted to break circular dep)
-vi.mock('../skill-install', () => ({
+vi.mock('@shared/skill-install', () => ({
   isSkillInstallCommand: (command: string) =>
     command.startsWith('mkdir -p .claude/skills/') &&
     command.includes('curl -sL') &&

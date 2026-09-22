@@ -12,8 +12,8 @@
  * `for await (...)` and render as they arrive.
  */
 
-import type { Credentials } from '@lib/api';
-import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
+import type { Credentials } from '@shared/api';
+import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import { gatewayAuth } from '@lib/gateway-session';
 import { buildAgentEnv, buildRunTags } from '@lib/agent/agent-interface';

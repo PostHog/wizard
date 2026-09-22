@@ -21,7 +21,7 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-} from '@lib/constants';
+} from '@shared/constants';
 import {
   PROGRAM_BINDINGS,
   DEFAULT_BINDING,

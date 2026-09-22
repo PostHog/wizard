@@ -13,10 +13,10 @@ import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import { buildSession } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
-import { Integration } from '@lib/constants';
+import { HostResolution } from '@shared/host-resolution';
+import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { getProgramConfig } from '@lib/programs/program-registry';
 
@@ -30,7 +30,7 @@ vi.mock('@utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-vi.mock('../../../lib/health-checks/readiness.js', () => ({
+vi.mock('@shared/health-checks/readiness.js', () => ({
   evaluateWizardReadiness: vi.fn().mockResolvedValue({
     decision: 'yes',
     health: {},

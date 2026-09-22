@@ -3,8 +3,8 @@
  */
 
 import type { InstallSkillResult } from '@lib/wizard-tools';
-import { skillErrorCode } from '@lib/errors';
-import { WizardError } from '@lib/errors';
+import { skillErrorCode } from '@shared/errors';
+import { WizardError } from '@shared/errors';
 import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
 
 export const failed = (failure: AgentFailure): SequenceResult => ({

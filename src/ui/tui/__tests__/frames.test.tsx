@@ -44,7 +44,7 @@ vi.mock('@utils/setup-utils', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   getOrAskForProjectData: vi.fn(pending),
 }));
-vi.mock('@lib/api', async (actual) => ({
+vi.mock('@shared/api', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   fetchUserData: vi.fn(pending),
   fetchSlackConnected: vi.fn(pending),
@@ -108,16 +108,16 @@ import {
   RunPhase,
   McpOutcome,
 } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
-import { Integration } from '@lib/constants';
+import { HostResolution } from '@shared/host-resolution';
+import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   WizardReadiness,
   type WizardReadinessResult,
-} from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
+} from '@shared/health-checks/readiness';
+import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/detect';
 import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
 import { AUDIT_SEED_CHECKS } from '@lib/programs/audit/seed';

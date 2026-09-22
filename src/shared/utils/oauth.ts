@@ -11,7 +11,7 @@ import {
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
-} from '@lib/constants';
+} from '@shared/constants';
 import { getOAuthUrl, resolveBaseUrl } from './urls';
 import { abort } from './setup-utils';
 import { openTrackedLink, withUtm } from './links';

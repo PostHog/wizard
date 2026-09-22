@@ -1,6 +1,6 @@
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { detectRegion } from '@utils/urls';
-import { fetchProjectData, fetchUserData } from '@lib/api';
+import { fetchProjectData, fetchUserData } from '@shared/api';
 import { performOAuthFlow } from '@utils/oauth';
 
 vi.mock('@ui', () => ({
@@ -15,7 +15,7 @@ vi.mock('@utils/urls', () => ({
   getUiHostFromHost: (host: string) => host,
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
-vi.mock('@lib/api', () => ({
+vi.mock('@shared/api', () => ({
   fetchProjectData: vi.fn(),
   fetchUserData: vi.fn(),
 }));

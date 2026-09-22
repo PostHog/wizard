@@ -17,7 +17,7 @@ const WIZARD_MARKER = '.posthog-wizard';
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
-import { CONTEXT_MILL_URL } from '@lib/constants';
+import { CONTEXT_MILL_URL } from '@shared/constants';
 
 interface KeepSkillsScreenProps {
   store: WizardStore;

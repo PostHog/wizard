@@ -62,12 +62,12 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from '@lib/wizard-tools/handoff';
-import { createSecretVault } from '@lib/secret-vault';
+import { createSecretVault } from '@shared/secret-vault';
 import {
   AUDIT_CHECKS_FILE,
   type AuditCheck,
   type AuditStatus,
-} from '@lib/audit-ledger';
+} from '@shared/audit-ledger';
 import { makeMutex } from '@utils/atomic-ledger';
 import { withMode } from './index';
 import {

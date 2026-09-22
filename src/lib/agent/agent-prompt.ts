@@ -8,7 +8,7 @@
  */
 
 import type { AgentRunDefinition } from './runner/shared/types';
-import type { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@shared/host-resolution';
 
 /**
  * Values available to prompt builders after OAuth completes.

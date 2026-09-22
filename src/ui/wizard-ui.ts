@@ -9,8 +9,8 @@
  */
 
 import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ApiUser } from '@lib/api';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ApiUser } from '@shared/api';
 import type { Credentials, TaskNotice } from '@lib/wizard-session';
 import type {
   AskAnswers,

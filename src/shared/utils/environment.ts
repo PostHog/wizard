@@ -7,7 +7,7 @@ const readEnv =
 import { tryGetPackageJson } from './setup-utils';
 import type { WizardRunOptions } from './types';
 import { boundedGlob } from './bounded-fs';
-import { IS_DEV } from '@lib/constants';
+import { IS_DEV } from '@shared/constants';
 
 export function isNonInteractiveEnvironment(): boolean {
   if (IS_DEV) {

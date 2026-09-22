@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveSkillVariantId } from '../orchestrator-runner';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { expandBundleEntry } from '@lib/wizard-tools';
 import type { SkillEntry } from '@lib/wizard-tools';
 

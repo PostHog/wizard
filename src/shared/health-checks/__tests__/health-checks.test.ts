@@ -5,12 +5,12 @@ import {
   evaluateWizardReadiness,
   ServiceHealthStatus,
   WizardReadiness,
-} from '@lib/health-checks/index';
+} from '@shared/health-checks/index';
 import {
   checkLlmGatewayHealth,
   fetchEndpointHealth,
-} from '@lib/health-checks/endpoints';
-import { SIGNUP_WIZARD_READINESS_CONFIG } from '@lib/health-checks/readiness';
+} from '@shared/health-checks/endpoints';
+import { SIGNUP_WIZARD_READINESS_CONFIG } from '@shared/health-checks/readiness';
 
 const URLS = {
   githubSkillMenu:

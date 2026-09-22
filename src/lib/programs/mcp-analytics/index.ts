@@ -1,5 +1,5 @@
 import type { AbortCase } from '@lib/agent/agent-runner';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';

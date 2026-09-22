@@ -41,10 +41,10 @@ import {
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import {
   getSkillsBaseUrl,
@@ -52,7 +52,7 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   type Integration,
-} from '@lib/constants';
+} from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';

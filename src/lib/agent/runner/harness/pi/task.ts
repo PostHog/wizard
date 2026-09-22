@@ -23,7 +23,7 @@ import {
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-} from '@lib/constants';
+} from '@shared/constants';
 import {
   allowsPostHogMcp,
   queueTools,

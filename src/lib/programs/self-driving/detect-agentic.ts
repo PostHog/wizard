@@ -20,7 +20,7 @@ import {
   toIntegrationCandidates,
 } from '@lib/detection/project-scope';
 import { gatherFrameworkContext } from '@lib/detection/index';
-import type { Integration } from '@lib/constants';
+import type { Integration } from '@shared/constants';
 import type { WizardSession } from '@lib/wizard-session';
 
 export type { DetectEvent };

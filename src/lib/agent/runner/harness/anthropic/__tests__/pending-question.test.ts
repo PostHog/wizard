@@ -3,8 +3,8 @@ import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
 import type { AskAnswers } from '@lib/wizard-session';
-import { Harness, Sequence } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
+import { Harness, Sequence } from '@shared/constants';
+import { HostResolution } from '@shared/host-resolution';
 
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');

@@ -19,7 +19,7 @@ import {
   AUDIT_CHECKS_FILE,
   type AuditCheck,
   type AuditStatus,
-} from '../audit-ledger';
+} from '@shared/audit-ledger';
 import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
@@ -27,7 +27,7 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from './handoff';
-import { createSecretVault, type SecretVault } from '../secret-vault';
+import { createSecretVault, type SecretVault } from '@shared/secret-vault';
 import type { ProgressEmitter } from '@lib/agent/progress';
 import {
   buildOrchestratorTools,

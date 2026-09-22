@@ -9,7 +9,7 @@
  */
 
 import { logToFile } from '@utils/debug';
-import { appendStatus } from '@lib/status-history';
+import { appendStatus } from '@shared/status-history';
 import type {
   AgentProgress,
   ProgressEmitter,

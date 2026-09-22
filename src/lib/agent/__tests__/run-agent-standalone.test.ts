@@ -9,14 +9,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
+import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
+import { HostResolution } from '@shared/host-resolution';
 import {
   OutroKind,
   type AskAnswers,
   type PendingQuestion,
 } from '@lib/wizard-session';
-import { AGENT_ERROR_CODE, ErrorCodes } from '@lib/errors';
+import { AGENT_ERROR_CODE, ErrorCodes } from '@shared/errors';
 import { AgentErrorType } from '@lib/agent/signals';
 import type { AgentFailure } from '@lib/agent/runner/shared/types';
 import type { AgentProgress } from '@lib/agent/progress';

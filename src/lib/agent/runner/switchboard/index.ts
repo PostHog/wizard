@@ -6,7 +6,7 @@ import {
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
-} from '@lib/constants';
+} from '@shared/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';

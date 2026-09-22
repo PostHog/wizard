@@ -12,7 +12,7 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import {
   getCommandPath,
   getLaunchablePrograms,

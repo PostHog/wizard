@@ -2,9 +2,9 @@ import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { authenticate } from '@lib/programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@lib/agent/runner';
-import { Harness, Sequence } from '@lib/constants';
+import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { setUI } from '@ui';
 import { analytics } from '@utils/analytics';
@@ -17,8 +17,8 @@ vi.mock('@env', async (original) => ({
   ...(await original<typeof import('@env')>()),
   IS_PRODUCTION_BUILD: false,
 }));
-vi.mock('@lib/local-dev', async (original) => ({
-  ...(await original<typeof import('@lib/local-dev')>()),
+vi.mock('@shared/local-dev', async (original) => ({
+  ...(await original<typeof import('@shared/local-dev')>()),
   checkLocalServices: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@utils/environment', async (original) => ({

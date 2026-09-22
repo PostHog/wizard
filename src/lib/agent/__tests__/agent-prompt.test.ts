@@ -1,6 +1,6 @@
 import { assemblePrompt, type PromptContext } from '@lib/agent/agent-prompt';
 import type { AgentRunDefinition } from '@lib/agent/runner';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
 function makeRunDef(
   overrides: Partial<AgentRunDefinition> = {},

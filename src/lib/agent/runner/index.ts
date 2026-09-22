@@ -22,10 +22,10 @@
  * behavior on top of this call for every existing caller.
  */
 
-import { Sequence } from '@lib/constants';
+import { Sequence } from '@shared/constants';
 import { RunOutcome } from './shared/types';
 export { RunOutcome } from './shared/types';
-import { classifyRunFailure } from '@lib/errors';
+import { classifyRunFailure } from '@shared/errors';
 import { logToFile } from '@utils/debug';
 import type {
   RunAgentOptions,

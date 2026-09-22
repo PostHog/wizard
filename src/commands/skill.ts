@@ -1,14 +1,14 @@
 import type { Arguments } from 'yargs';
 
-import { getSkillsBaseUrl } from '@lib/constants';
+import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { analytics } from '@utils/analytics';
 
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
 import { runCommandHandler } from './factories/shared';
-import { ErrorCodes } from '@lib/errors';
-import { emitWizardError } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 import type { Command } from './command';
 
 /** Read the `<skill-name>` positional (yargs camelCases the hyphenated key). */

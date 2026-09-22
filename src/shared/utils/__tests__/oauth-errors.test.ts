@@ -11,7 +11,7 @@ import {
   ISSUES_URL,
   POSTHOG_STATUS_PAGE_URL,
   WIZARD_CONTACT_EMAIL,
-} from '@lib/constants';
+} from '@shared/constants';
 
 describe('OAuthError', () => {
   it('keeps the exact legacy message shape so fingerprint parsing still works', () => {

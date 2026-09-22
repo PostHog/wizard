@@ -85,6 +85,7 @@ export default defineConfig({
         replacement: r('__mocks__/@posthog/warlock.ts'),
       },
       { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
+      { find: /^@shared\/(.*)$/, replacement: `${r('src/shared')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },

@@ -1,6 +1,6 @@
 // Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
-import { Harness } from '@lib/constants';
+import { Harness } from '@shared/constants';
 import {
   initializeAgent,
   runAgent as executeAgent,

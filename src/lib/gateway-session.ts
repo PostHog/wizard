@@ -9,10 +9,10 @@
 import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { ErrorCodes, WizardError } from '@lib/errors';
-import type { HostResolution } from '@lib/host-resolution';
-import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
+import { ErrorCodes, WizardError } from '@shared/errors';
+import type { HostResolution } from '@shared/host-resolution';
+import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
+import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 

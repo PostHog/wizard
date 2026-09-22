@@ -14,7 +14,7 @@ import {
   ISSUES_URL,
   POSTHOG_STATUS_PAGE_URL,
   WIZARD_CONTACT_EMAIL,
-} from '@lib/constants';
+} from '@shared/constants';
 
 /**
  * A structured OAuth failure (RFC 6749 §4.1.2.1 authorize errors, §5.2 token

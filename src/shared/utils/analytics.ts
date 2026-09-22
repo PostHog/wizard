@@ -4,16 +4,16 @@ import {
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
   WIZARD_FLAG_KEYS,
-} from '@lib/constants';
+} from '@shared/constants';
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
   type WizardSession,
 } from '@lib/wizard-session';
-import type { ApiUser } from '@lib/api';
+import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
-import { VERSION } from '@lib/version';
+import { VERSION } from '@shared/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 

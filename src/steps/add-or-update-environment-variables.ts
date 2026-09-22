@@ -1,4 +1,4 @@
-import type { Integration } from '@lib/constants';
+import type { Integration } from '@shared/constants';
 import { withProgress } from '../telemetry';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';

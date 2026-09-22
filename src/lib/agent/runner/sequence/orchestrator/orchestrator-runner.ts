@@ -23,7 +23,7 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type TaskNotice } from '@lib/agent/progress';
-import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@lib/constants';
+import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
 import {
   installSkillById,
   fetchSkillMenu,
@@ -33,7 +33,7 @@ import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { ErrorCodes, WizardError } from '@lib/errors';
+import { ErrorCodes, WizardError } from '@shared/errors';
 import type { AgentInteraction } from '@lib/agent/progress';
 import type {
   AgentFailure,

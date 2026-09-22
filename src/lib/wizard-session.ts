@@ -10,7 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
+import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
 import {
   AdditionalFeature,
   ADDITIONAL_FEATURE_LABELS,
@@ -18,11 +18,11 @@ import {
   type Harness,
   type Integration,
   type Sequence,
-} from './constants';
+} from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
-import type { WizardReadinessResult } from './health-checks/readiness';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
-import type { ApiUser, ApiProject, Credentials } from './api';
+import type { ApiUser, ApiProject, Credentials } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
 import {
   OutroKind,

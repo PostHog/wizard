@@ -9,15 +9,15 @@
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
-import type { AdditionalFeature } from '@lib/constants';
+import type { AdditionalFeature } from '@shared/constants';
 import type { CloudRegion } from '@utils/types';
-import type { Credentials } from '@lib/api';
+import type { Credentials } from '@shared/api';
 import type { OutroData, TaskNotice } from '@lib/agent/progress';
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@utils/package-manager';
-import type { ApiProject, ApiUser } from '@lib/api';
-import type { Harness, Integration, Sequence } from '@lib/constants';
-import type { ErrorCode } from '@lib/errors';
+import type { ApiProject, ApiUser } from '@shared/api';
+import type { Harness, Integration, Sequence } from '@shared/constants';
+import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@lib/agent/progress';
 import type { EffortLevel } from '../switchboard/models';

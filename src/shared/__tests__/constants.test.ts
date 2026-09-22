@@ -1,4 +1,7 @@
-import { WIZARD_USER_AGENT, wizardUserAgentForProgram } from '@lib/constants';
+import {
+  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
+} from '@shared/constants';
 
 describe('wizardUserAgentForProgram', () => {
   it('tags the program so the backend can attribute created_via (self-driving → self_driving)', () => {

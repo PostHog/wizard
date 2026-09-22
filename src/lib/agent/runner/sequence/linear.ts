@@ -14,7 +14,7 @@ import { OutroKind, type OutroData } from '@lib/agent/progress';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { logToFile } from '@utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
-import { AGENT_ERROR_CODE, ErrorCodes, WizardError } from '@lib/errors';
+import { AGENT_ERROR_CODE, ErrorCodes, WizardError } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage } from '../../../yara-hooks';
 import { installSkillById } from '../../../wizard-tools';

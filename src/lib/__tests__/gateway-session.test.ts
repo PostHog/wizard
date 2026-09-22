@@ -10,15 +10,15 @@ import {
   isTrustedGatewayUrl,
   resetGatewaySession,
 } from '@lib/gateway-session';
-import type { HostResolution } from '@lib/host-resolution';
-import { ErrorCodes } from '@lib/errors';
+import type { HostResolution } from '@shared/host-resolution';
+import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
+import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
+import { ServiceHealthStatus } from '@shared/health-checks/types';
 
-vi.mock('@lib/health-checks/endpoints', () => ({
+vi.mock('@shared/health-checks/endpoints', () => ({
   checkLlmGatewayHealth: vi.fn(),
 }));
 

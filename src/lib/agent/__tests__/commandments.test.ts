@@ -1,6 +1,6 @@
 import { WIZARD_COMMANDMENTS } from '@lib/agent/commandments';
 import { assembleCommandments } from '@lib/agent/runner/switchboard/commandments';
-import { Harness, Sequence } from '@lib/constants';
+import { Harness, Sequence } from '@shared/constants';
 
 const global = WIZARD_COMMANDMENTS.join('\n');
 

@@ -26,9 +26,9 @@ import {
 } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { PROGRAM_SEQUENCES } from '@ui/tui/screen-sequences';
-import { WizardReadiness } from '@lib/health-checks/readiness';
-import { HostResolution } from '@lib/host-resolution';
-import { Integration } from '@lib/constants';
+import { WizardReadiness } from '@shared/health-checks/readiness';
+import { HostResolution } from '@shared/host-resolution';
+import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
@@ -45,7 +45,7 @@ vi.mock('@utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-vi.mock('../../../lib/health-checks/readiness.js', () => ({
+vi.mock('@shared/health-checks/readiness.js', () => ({
   evaluateWizardReadiness: vi.fn().mockResolvedValue({
     decision: 'yes',
     health: {},

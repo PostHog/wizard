@@ -1,6 +1,6 @@
 /* Kotlin Multiplatform (KMP) wizard using posthog-agent with PostHog MCP */
 import type { FrameworkConfig } from '../../lib/framework-config';
-import { Integration } from '../../lib/constants';
+import { Integration } from '@shared/constants';
 import { gradlePackageManager } from '../../lib/detection/package-manager';
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as path from 'node:path';

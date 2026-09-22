@@ -18,7 +18,7 @@ import {
 } from '@utils/bounded-fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 
 /**
  * Skill variants published under the `error-tracking-upload-source-maps`

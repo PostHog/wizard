@@ -12,7 +12,7 @@
  * an import cycle.
  */
 
-import { Harness, Sequence } from '@lib/constants';
+import { Harness, Sequence } from '@shared/constants';
 import { WIZARD_COMMANDMENTS } from '@lib/agent/commandments';
 import { piRuntimeNotes, type RuntimeCaps } from '../harness/pi/runtime-notes';
 

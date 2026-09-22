@@ -14,7 +14,7 @@ import {
 } from './package-manager';
 import type { CloudRegion, WizardRunOptions } from './types';
 import { getDeclaredVersion } from './package-json';
-import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@lib/constants';
+import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@shared/constants';
 import {
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
@@ -22,7 +22,7 @@ import {
 import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import {
   assertWizardCompletionScope,
   missingOAuthScopes,
@@ -38,7 +38,7 @@ import {
   fetchProjectData,
   type ApiUser,
   type ApiProject,
-} from '@lib/api';
+} from '@shared/api';
 import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 import { OutroKind } from '@lib/wizard-session';

@@ -20,14 +20,14 @@ import type {
   QueuedTask,
 } from './runner/sequence/orchestrator/queue';
 import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
-import type { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@shared/host-resolution';
 import {
   isThinkingLevel,
   type ThinkingLevel,
 } from './runner/switchboard/models';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { fetchWithRetry } from '@lib/fetch-retry';
+import { fetchWithRetry } from '@shared/fetch-retry';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools/tools';
 
 /**

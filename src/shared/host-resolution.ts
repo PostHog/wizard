@@ -24,7 +24,7 @@ import {
   resolveBaseUrl,
 } from '@utils/urls';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
-import { MCP_LOCAL_URL } from '@lib/local-dev';
+import { MCP_LOCAL_URL } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
 
 // The wizard's client gets CLI mode (a single `exec` tool) by server default,

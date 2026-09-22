@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
+import { HostResolution, mcpUrlFor } from '@shared/host-resolution';
 
 /**
  * Contract test for HostResolution — the durable record of what the host family
@@ -102,7 +102,7 @@ describe('mcpUrlFor', () => {
     process.env.MCP_URL = 'https://evil.example.com/mcp';
     try {
       vi.resetModules();
-      const fresh = await import('@lib/host-resolution');
+      const fresh = await import('@shared/host-resolution');
       expect(fresh.mcpUrlFor(false)).toBe('https://mcp.posthog.com/mcp');
       expect(fresh.mcpUrlFor(true)).toBe('http://localhost:8787/mcp');
     } finally {

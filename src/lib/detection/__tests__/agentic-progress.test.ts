@@ -4,7 +4,7 @@ import {
   runAgent as executeAgent,
 } from '@lib/agent/agent-interface';
 import { buildSession } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
 
 vi.mock('@utils/debug');

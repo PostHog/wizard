@@ -6,7 +6,7 @@ import {
   dispatchFamily,
   pickerChildrenToShow,
 } from '@lib/programs/dispatch-family';
-import { getSkillsBaseUrl } from '@lib/constants';
+import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@lib/wizard-tools';
 
 import type { Command } from '../command';

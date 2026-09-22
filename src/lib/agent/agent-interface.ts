@@ -27,10 +27,10 @@ import {
   AWS_SKILLS_BASE_URL,
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '@lib/constants';
+} from '@shared/constants';
 import type { AgentFailure } from './runner/shared/types';
 import { createCustomHeaders } from '@utils/custom-headers';
-import type { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@shared/host-resolution';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -55,8 +55,8 @@ import {
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
 } from './signals';
-import { classifyAuthFailure, WizardError } from '@lib/errors';
-import { isGrantRevoked } from '@lib/auth-session-state';
+import { classifyAuthFailure, WizardError } from '@shared/errors';
+import { isGrantRevoked } from '@shared/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -421,7 +421,7 @@ export function buildAgentEnv(
 }
 
 // Re-export for backwards compatibility — canonical source is skill-install.ts
-export { isSkillInstallCommand } from '@lib/skill-install';
+export { isSkillInstallCommand } from '@shared/skill-install';
 
 /**
  * Permission hook that allows only safe commands. Bash commands are gated by

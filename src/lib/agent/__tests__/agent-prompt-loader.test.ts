@@ -18,7 +18,7 @@ import {
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-loader-test-'));

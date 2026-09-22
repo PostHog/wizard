@@ -11,12 +11,12 @@ import {
   localMcpSkillsNotice,
   resetLocalDev,
   resolveLocalDev,
-} from '@lib/local-dev';
+} from '@shared/local-dev';
 import {
   getSkillsBaseUrl,
   GITHUB_SKILLS_BASE_URL,
   LOCAL_SKILLS_BASE_URL,
-} from '@lib/constants';
+} from '@shared/constants';
 
 describe('local dev endpoints', () => {
   it('pins each service to its own port', () => {

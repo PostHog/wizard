@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 import { Agent, setGlobalDispatcher } from 'undici';
-import { ErrorCodes } from './src/lib/errors/codes.js';
-import { emitWizardError } from './src/lib/errors/emit.js';
+import { ErrorCodes } from '@shared/errors/codes.js';
+import { emitWizardError } from '@shared/errors/emit.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node

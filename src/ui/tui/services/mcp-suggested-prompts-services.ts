@@ -14,7 +14,7 @@ import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { Program } from '@lib/programs/program-registry';
 import type { WizardStore } from '@ui/tui/store';
-import type { ApiUser } from '@lib/api';
+import type { ApiUser } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,

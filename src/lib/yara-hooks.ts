@@ -35,7 +35,7 @@ import type {
 import { logToFile } from '@utils/debug';
 import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
-import { isSkillInstallCommand } from './skill-install';
+import { isSkillInstallCommand } from '@shared/skill-install';
 import {
   highestSeverityMatch,
   publishBlockingMatch,
@@ -53,8 +53,8 @@ import {
   EVENT_INVENTORY_FILE,
   EVENT_INVENTORY_PART_PATTERN,
   EVENT_PLAN_FILE,
-} from '@lib/constants';
-import { AUDIT_REPORT_FILE } from '@lib/audit-ledger';
+} from '@shared/constants';
+import { AUDIT_REPORT_FILE } from '@shared/audit-ledger';
 
 // ─── Warlock module accessor ─────────────────────────────────────
 // Warlock is ESM-only and lazily inits its WASM engine + compiles rules on the

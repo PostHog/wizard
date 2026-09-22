@@ -12,7 +12,7 @@ import {
   Harness,
   Sequence,
   SONNET_5_MODEL,
-} from '@lib/constants';
+} from '@shared/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { logToFile } from '@utils/debug';
 import type { EffortLevel } from '../models';

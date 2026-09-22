@@ -4,7 +4,7 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence } from '@lib/constants';
+import { Sequence } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import {
   isOrchestratorEnabled,

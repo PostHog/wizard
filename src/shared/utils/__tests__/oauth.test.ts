@@ -9,7 +9,7 @@ import {
 import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
-} from '@lib/constants';
+} from '@shared/constants';
 import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 
 describe('extractOAuthCode', () => {

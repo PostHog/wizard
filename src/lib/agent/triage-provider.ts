@@ -5,7 +5,7 @@
  * transport, reasoning effort and trace headers come from one place.
  */
 
-import { Harness } from '@lib/constants';
+import { Harness } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import {
   buildGatewayModel,

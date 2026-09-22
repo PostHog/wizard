@@ -1,7 +1,10 @@
 import { refreshAccessTokenIfNeeded } from '../authenticate';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
-import { isGrantRevoked, resetAuthSessionState } from '@lib/auth-session-state';
+import {
+  isGrantRevoked,
+  resetAuthSessionState,
+} from '@shared/auth-session-state';
 import type { WizardSession, Credentials } from '@lib/wizard-session';
 
 vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));

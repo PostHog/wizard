@@ -20,7 +20,7 @@ import {
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-} from '@lib/constants';
+} from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';

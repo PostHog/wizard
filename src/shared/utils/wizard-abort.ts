@@ -11,8 +11,12 @@ import { logToFile } from './debug';
 import { getUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
-import type { ErrorCode } from '@lib/errors';
-import { WizardError, emitWizardError, sanitizeErrorDetail } from '@lib/errors';
+import type { ErrorCode } from '@shared/errors';
+import {
+  WizardError,
+  emitWizardError,
+  sanitizeErrorDetail,
+} from '@shared/errors';
 
 // Still importable from here; the class lives with the error codes.
 export { WizardError };

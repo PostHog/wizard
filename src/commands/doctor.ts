@@ -1,8 +1,8 @@
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
-import { ErrorCodes } from '@lib/errors';
-import { emitWizardError } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 import { runWizard } from '@lib/runners';
 import {
   posthogDoctorConfig,
@@ -87,7 +87,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
     }
     process.exit(1);
   } catch (error) {
-    const { ApiError } = await import('@lib/api');
+    const { ApiError } = await import('@shared/api');
     const message =
       error instanceof ApiError && error.statusCode === 401
         ? 'Your PostHog API key is invalid or expired.'
