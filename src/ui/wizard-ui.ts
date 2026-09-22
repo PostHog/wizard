@@ -34,7 +34,7 @@ import type {
   AuthErrorDetail,
   SpinnerHandle,
   TokenUsageDelta,
-} from '@agent/progress';
+} from '@agent/types';
 export type { AuthErrorDetail, SpinnerHandle, TokenUsageDelta };
 
 export interface WizardUI {

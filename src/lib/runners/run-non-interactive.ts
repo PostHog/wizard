@@ -242,9 +242,7 @@ export function runNonInteractive(
 
     try {
       if (mode === 'ci') {
-        const { configureGatewayFromCIEnvironment } = await import(
-          '@agent/gateway-session'
-        );
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',

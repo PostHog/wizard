@@ -6,7 +6,7 @@ import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
-import { WIZARD_TOOL_NAMES } from '@agent/tools';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@lib/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import {

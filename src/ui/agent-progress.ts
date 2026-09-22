@@ -1,5 +1,5 @@
 import type { WizardUI, SpinnerHandle } from './wizard-ui';
-import type { AgentInteraction, AgentProgress } from '@agent/progress';
+import type { AgentInteraction, AgentProgress } from '@agent/types';
 
 // ── Progress → WizardUI, one call per event ───────────────────────────
 

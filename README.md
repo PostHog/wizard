@@ -504,7 +504,9 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 |---|---|
 | `@env` | `src/env.ts` |
 | `@lib/*` | `src/lib/*` |
-| `@agent/*` | `src/agent/*` |
+| `@agent` | `src/agent/index.ts`, the agent's runtime entry; the only agent import outside `src/agent` besides types |
+| `@agent/types` | `src/agent/types.ts`, type-only |
+| `@agent/*` | `src/agent/*`, inside `src/agent` and its tests only |
 | `@shared/*` | `src/shared/*` |
 | `@utils/*` | `src/shared/utils/*` |
 | `@ui/*` | `src/ui/*` |

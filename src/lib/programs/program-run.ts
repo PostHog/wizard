@@ -5,7 +5,7 @@
  * agent `RunConfig.hooks`.
  */
 
-import type { AgentRunDefinition } from '@agent/runner';
+import type { AgentRunDefinition } from '@agent/types';
 import type { Credentials, WizardSession } from '@lib/wizard-session';
 
 export interface ProgramRun extends AgentRunDefinition {

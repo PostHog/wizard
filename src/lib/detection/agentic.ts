@@ -15,10 +15,10 @@
 
 import {
   initializeAgent,
-  runAgent as executeAgent,
+  executeAgent,
   buildRunTags,
   AgentSignals,
-} from '@agent/agent-interface';
+} from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@shared/constants';

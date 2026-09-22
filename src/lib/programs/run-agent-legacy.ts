@@ -18,23 +18,25 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import {
+  buildRunTags,
+  flushScanReport,
+  resolveBinding,
   runAgent,
   RunOutcome,
-  resolveBinding,
-  type RunConfig,
-  type RunInput,
-  type SwitchboardCtx,
-} from '@agent/runner';
-import type { ProgramBinding } from '@agent/runner/switchboard';
+} from '@agent';
+import type {
+  ProgramBinding,
+  RunConfig,
+  RunInput,
+  SwitchboardCtx,
+} from '@agent/types';
 import type { ProgramRun } from './program-run';
-import { buildRunTags } from '@agent/agent-interface';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
   classifySettingsConflicts,
   restoreClaudeSettings,
 } from '@shared/claude-settings';
-import { flushScanReport } from '@agent/yara-hooks';
 import {
   evaluateWizardReadiness,
   WizardReadiness,

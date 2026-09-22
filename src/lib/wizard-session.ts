@@ -24,14 +24,17 @@ import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
-import {
-  OutroKind,
-  type AskAnswers,
-  type AskQuestion,
-  type OutroData,
-  type PendingQuestion,
-  type TaskNotice,
-} from '@agent/progress';
+import type {
+  AskAnswers,
+  AskQuestion,
+  OutroData,
+  PendingQuestion,
+  TaskNotice,
+} from '@agent/types';
+// Leaf module on purpose: shared analytics imports this file, so the agent
+// entry would form a module cycle here.
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
+import { OutroKind } from '@agent/progress';
 
 // These shapes moved to their owners; re-exported so every session reader
 // keeps its import path. `Credentials` sits with the API types, the

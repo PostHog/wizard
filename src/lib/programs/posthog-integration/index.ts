@@ -1,10 +1,9 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import type { ProgramRun } from '@lib/programs/program-run';
-import { WIZARD_TOOL_NAMES } from '@agent/tools';
+import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
 import type { WizardSession } from '@lib/wizard-session';
 import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
-import { AgentSignals } from '@agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
@@ -22,7 +21,6 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
-import { shouldDisableAsk } from '@agent/agent-runner';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';

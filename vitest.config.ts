@@ -79,6 +79,8 @@ export default defineConfig({
       },
       { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
       { find: /^@shared\/(.*)$/, replacement: `${r('src/shared')}/$1` },
+      { find: /^@agent$/, replacement: r('src/agent/index.ts') },
+      { find: /^@agent\/types$/, replacement: r('src/agent/types.ts') },
       { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
