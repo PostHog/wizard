@@ -1,6 +1,6 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
+import type { AdditionalFeature } from '@shared/constants';
 import { OutroKind } from '@agent';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { WIZARD_TOOL_NAMES } from '@agent';
@@ -16,6 +16,13 @@ import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 // them directly from `./constants` — no re-export needed.
 import { SETUP_REPORT_FILE } from './constants.js';
 export { SETUP_REPORT_FILE };
+
+type EventsAuditRunState = {
+  installDir: string;
+  typescript: boolean;
+  frameworkContext: Record<string, unknown>;
+  additionalFeatureQueue: AdditionalFeature[];
+};
 
 /**
  * No CLI word of its own since the audit family took over: `wizard audit
@@ -40,7 +47,7 @@ export const eventsAuditConfig: ProgramConfig = {
   ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
-  run: (session: WizardSession): Promise<ProgramRun> => {
+  run: (session: EventsAuditRunState): Promise<ProgramRun> => {
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,
     });

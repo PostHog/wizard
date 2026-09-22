@@ -6,6 +6,7 @@ export type {
   ProgramReadyContext,
   StoreInitContext,
 } from './program-step';
+export type { ProgramCompletionContext } from './program-run';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
 export type {
   ProgramInput,

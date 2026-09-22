@@ -4,7 +4,6 @@ import {
 } from '@programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import {
@@ -21,7 +20,14 @@ const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
   outro: 'audit-outro',
 };
 
-const seedBeforeAuditRun = (session: WizardSession): void => {
+type AuditRunState = {
+  installDir: string;
+  frameworkContext: Record<string, unknown>;
+  dashboardUrl: string | null;
+  notebookUrl: string | null;
+};
+
+const seedBeforeAuditRun = (session: AuditRunState): void => {
   seedAuditLedger(session.installDir);
   session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
@@ -36,7 +42,7 @@ const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
 const baseConfig = createSkillProgram(AUDIT_PROGRAM_OPTIONS);
 
-const auditRun = (session: WizardSession): Promise<ProgramRun> => {
+const auditRun = (session: AuditRunState): Promise<ProgramRun> => {
   seedBeforeAuditRun(session);
 
   const baseRun = resolveAuditRunDefinition();

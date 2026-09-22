@@ -1,6 +1,5 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@agent';
 import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 import {
@@ -36,7 +35,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   reportFile: SOURCE_MAPS_REPORT_FILE,
   requires: ['posthog-integration'],
 
-  run: (_session: WizardSession): Promise<ProgramRun> => {
+  run: (): Promise<ProgramRun> => {
     // Read the picked project LIVE at prompt-build time, not here: the picker
     // screen runs AFTER this run config is resolved (post-auth), and the store
     // forks the session reference, so the `session` passed in never sees the
