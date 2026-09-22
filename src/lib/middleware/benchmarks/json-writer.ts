@@ -6,7 +6,7 @@
  */
 
 import fs from 'fs';
-import { getUI } from '@ui';
+import type { ProgressEmitter } from '@lib/agent/progress';
 import { logToFile } from '@utils/debug';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type {
@@ -56,9 +56,11 @@ export class JsonWriterPlugin implements Middleware {
   readonly name = 'jsonWriter';
 
   private outputPath: string;
+  private readonly info: (message: string) => void;
 
-  constructor(outputPath: string) {
+  constructor(outputPath: string, emit: ProgressEmitter) {
     this.outputPath = outputPath;
+    this.info = (message) => emit({ kind: 'log', level: 'info', message });
   }
 
   onFinalize(
@@ -170,7 +172,7 @@ export class JsonWriterPlugin implements Middleware {
     try {
       fs.writeFileSync(this.outputPath, JSON.stringify(data, null, 2));
       logToFile(`Benchmark data written to ${this.outputPath}`);
-      getUI().log.info(
+      this.info(
         `● ${AgentSignals.BENCHMARK} Results written to ${this.outputPath}`,
       );
     } catch (error) {

@@ -1,5 +1,4 @@
-import { getUI } from '@ui';
-import type { SpinnerHandle } from '@lib/agent/progress';
+import type { ProgressEmitter, SpinnerHandle } from '@lib/agent/progress';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type {
   Middleware,
@@ -98,8 +97,11 @@ export class SummaryPlugin implements Middleware {
 
   private spinner: SpinnerHandle;
 
-  constructor(spinner: SpinnerHandle) {
+  private readonly info: (message: string) => void;
+
+  constructor(spinner: SpinnerHandle, emit: ProgressEmitter) {
     this.spinner = spinner;
+    this.info = (message) => emit({ kind: 'log', level: 'info', message });
   }
 
   onPhaseTransition(
@@ -118,7 +120,7 @@ export class SummaryPlugin implements Middleware {
       this.spinner.stop(`${AgentSignals.BENCHMARK} ${fromPhase}`);
     }
 
-    getUI().log.info(`${AgentSignals.BENCHMARK} Starting phase: ${toPhase}`);
+    this.info(`${AgentSignals.BENCHMARK} Starting phase: ${toPhase}`);
     this.spinner.start(`Integrating PostHog (${toPhase})...`);
   }
 
@@ -136,31 +138,31 @@ export class SummaryPlugin implements Middleware {
     const phaseCount = duration?.phaseSnapshots.length ?? 0;
     const totalCost = cost?.totalCost ?? 0;
 
-    getUI().log.info('');
-    getUI().log.info(
+    this.info('');
+    this.info(
       `◇ ${AgentSignals.BENCHMARK} ${phaseCount} phases in ${fmtDuration(
         totalDurationMs,
       )}, cost: ${fmtCost(totalCost)}`,
     );
-    getUI().log.info(
+    this.info(
       `  total in: ${fmtTok(tokens?.totalInput ?? 0)}, out: ${fmtTok(
         tokens?.totalOutput ?? 0,
       )}, cache_read: ${fmtTok(cache?.totalRead ?? 0)}, cache_5m: ${fmtTok(
         cache?.totalCreation5m ?? 0,
       )}, cache_1h: ${fmtTok(cache?.totalCreation1h ?? 0)}`,
     );
-    getUI().log.info('');
-    getUI().log.info(`● ${AgentSignals.BENCHMARK} Summary by phase:`);
+    this.info('');
+    this.info(`● ${AgentSignals.BENCHMARK} Summary by phase:`);
 
     if (duration?.phaseSnapshots) {
       for (let i = 0; i < duration.phaseSnapshots.length; i++) {
         const stats = getPhaseStats(i, ctx);
         if (stats) {
-          getUI().log.info(printPhase(stats));
+          this.info(printPhase(stats));
         }
       }
     }
 
-    getUI().log.info('');
+    this.info('');
   }
 }

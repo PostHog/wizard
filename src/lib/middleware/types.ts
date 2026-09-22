@@ -5,7 +5,7 @@
  * and can publish data to a shared store for downstream middleware to read.
  */
 
-import type { SpinnerHandle } from '@lib/agent/progress';
+import type { ProgressEmitter, SpinnerHandle } from '@lib/agent/progress';
 
 export type SDKMessage = any;
 
@@ -54,6 +54,8 @@ export interface Middleware {
 
 /** Options bag passed to middleware factories during construction */
 export interface MiddlewareFactoryOptions {
+  /** Where a plugin's user-facing lines go: the run's progress events. */
+  emit: ProgressEmitter;
   spinner?: SpinnerHandle;
   outputPath?: string;
   phased?: boolean;

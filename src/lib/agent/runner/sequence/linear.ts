@@ -75,7 +75,7 @@ export async function runLinearProgram({
       });
 
   const middleware = input.flags.benchmark
-    ? createBenchmarkPipeline(spinner, runOptions(input))
+    ? createBenchmarkPipeline(emit, spinner, runOptions(input))
     : undefined;
 
   // 7. Build prompt
