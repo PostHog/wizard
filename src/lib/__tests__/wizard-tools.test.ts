@@ -93,6 +93,29 @@ describe('resolveEnvPath', () => {
       'Path traversal rejected',
     );
   });
+
+  it('accepts a non-canonical working directory', () => {
+    expect(resolveEnvPath(`/project${path.sep}`, '.env')).toBe(
+      path.resolve('/project', '.env'),
+    );
+    expect(resolveEnvPath('/project/./app', '.env')).toBe(
+      path.resolve('/project/app', '.env'),
+    );
+    expect(resolveEnvPath('project', '.env')).toBe(
+      path.resolve('project', '.env'),
+    );
+    expect(() => resolveEnvPath(`/project${path.sep}`, '../.env')).toThrow(
+      'Path traversal rejected',
+    );
+  });
+
+  it('accepts a working directory that is a file-system root', () => {
+    const root = path.parse(process.cwd()).root;
+    expect(resolveEnvPath(root, '.env')).toBe(path.resolve(root, '.env'));
+    expect(resolveEnvPath(root, 'sub/.env')).toBe(
+      path.resolve(root, 'sub/.env'),
+    );
+  });
 });
 
 describe('parseEnvKeys', () => {
