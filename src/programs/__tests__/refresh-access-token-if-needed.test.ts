@@ -15,8 +15,11 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 const setAccessToken = vi.fn();
+const projection = { setAccessToken };
 vi.mock('@ui', () => ({
-  getUI: () => ({ setAccessToken }),
+  getUI: () => {
+    throw new Error('refresh must use the supplied projection');
+  },
 }));
 
 const mockedRefresh = refreshAccessToken as Mock;
@@ -40,9 +43,10 @@ describe('refreshAccessTokenIfNeeded', () => {
   });
 
   it('is a no-op without a refresh token (CI api-key runs, refresh-less grants)', async () => {
-    await refreshAccessTokenIfNeeded(sessionWith(null));
+    await refreshAccessTokenIfNeeded(sessionWith(null), projection);
     await refreshAccessTokenIfNeeded(
       sessionWith({ accessToken: 'pha_ci_key', expiresAt: 0 }),
+      projection,
     );
     expect(mockedRefresh).not.toHaveBeenCalled();
   });
@@ -50,6 +54,7 @@ describe('refreshAccessTokenIfNeeded', () => {
   it('skips a token that still has most of its lifetime left', async () => {
     await refreshAccessTokenIfNeeded(
       sessionWith(aging({ expiresAt: Date.now() + 59 * 60 * 1000 })),
+      projection,
     );
     expect(mockedRefresh).not.toHaveBeenCalled();
   });
@@ -58,6 +63,7 @@ describe('refreshAccessTokenIfNeeded', () => {
   it('skips a credential carrying a refresh token but no expiry', async () => {
     await refreshAccessTokenIfNeeded(
       sessionWith({ accessToken: 'pha_old', refreshToken: 'phr_old' }),
+      projection,
     );
     expect(mockedRefresh).not.toHaveBeenCalled();
   });
@@ -72,7 +78,7 @@ describe('refreshAccessTokenIfNeeded', () => {
     });
     const session = sessionWith(aging({ projectId: 7 }));
 
-    await refreshAccessTokenIfNeeded(session);
+    await refreshAccessTokenIfNeeded(session, projection);
 
     expect(mockedRefresh).toHaveBeenCalledWith('phr_old', undefined, undefined);
     expect(session.credentials!.accessToken).toBe('pha_new');
@@ -92,6 +98,7 @@ describe('refreshAccessTokenIfNeeded', () => {
 
     await refreshAccessTokenIfNeeded(
       sessionWith(aging({ oauthClientId: 'client_us_provisioning' })),
+      projection,
     );
 
     expect(mockedRefresh).toHaveBeenCalledWith(
@@ -111,7 +118,7 @@ describe('refreshAccessTokenIfNeeded', () => {
     const session = sessionWith(aging());
     const before = session.credentials;
 
-    await refreshAccessTokenIfNeeded(session);
+    await refreshAccessTokenIfNeeded(session, projection);
 
     expect(session.credentials).not.toBe(before);
     expect(before!.accessToken).toBe('pha_old');
@@ -123,7 +130,9 @@ describe('refreshAccessTokenIfNeeded', () => {
     mockedRefresh.mockRejectedValueOnce(new Error('network down'));
     const session = sessionWith(aging());
 
-    await expect(refreshAccessTokenIfNeeded(session)).resolves.toBeUndefined();
+    await expect(
+      refreshAccessTokenIfNeeded(session, projection),
+    ).resolves.toBeUndefined();
     expect(session.credentials!.accessToken).toBe('pha_old');
     expect(setAccessToken).not.toHaveBeenCalled();
   });
@@ -131,7 +140,7 @@ describe('refreshAccessTokenIfNeeded', () => {
   it('marks the grant revoked on invalid_grant, so a later 401 can name the cause', async () => {
     mockedRefresh.mockRejectedValueOnce(new OAuthError('invalid_grant'));
 
-    await refreshAccessTokenIfNeeded(sessionWith(aging()));
+    await refreshAccessTokenIfNeeded(sessionWith(aging()), projection);
 
     expect(isGrantRevoked()).toBe(true);
   });
@@ -139,7 +148,7 @@ describe('refreshAccessTokenIfNeeded', () => {
   it('leaves the grant unmarked for a transport failure, which says nothing about the login', async () => {
     mockedRefresh.mockRejectedValueOnce(new Error('ETIMEDOUT'));
 
-    await refreshAccessTokenIfNeeded(sessionWith(aging()));
+    await refreshAccessTokenIfNeeded(sessionWith(aging()), projection);
 
     expect(isGrantRevoked()).toBe(false);
   });

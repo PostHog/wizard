@@ -34,7 +34,6 @@
     "src/lib/wizard-session.ts -> src/programs/framework-config.ts",
     "src/lib/wizard-spellbook.ts -> src/programs/program-step.ts",
     "src/programs/authenticate.ts -> src/lib/wizard-session.ts",
-    "src/programs/authenticate.ts -> src/ui/index.ts",
     "src/programs/detection/agentic.ts -> src/lib/wizard-session.ts",
     "src/programs/detection/agentic.ts -> src/ui/agent-progress.ts",
     "src/programs/detection/agentic.ts -> src/ui/index.ts",

@@ -149,7 +149,7 @@ async function runProgram(
   // agent run in the same invocation (self-driving's integration phase) reuses
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
-  await authenticate(session, programConfig.id);
+  await authenticate(session, programConfig.id, getUI());
   maybeStampAiSdkDetected(session);
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -186,7 +186,7 @@ async function runProgram(
 
   // The agent can't swap tokens mid-run, so freshness is measured after every
   // park above, right before the agent mints.
-  await refreshAccessTokenIfNeeded(session);
+  await refreshAccessTokenIfNeeded(session, getUI());
 
   // Credentials (incl. the resolved host family and its MCP url) live on
   // `session.credentials`; narrow once at this boundary — `authenticate` above

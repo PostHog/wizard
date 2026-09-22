@@ -63,7 +63,7 @@ async function advanceStep(
   config: ProgramConfig,
 ): Promise<void> {
   if (step.screenId === 'auth') {
-    await authenticate(store.session, config.id);
+    await authenticate(store.session, config.id, getUI());
     maybeStampAiSdkDetected(store.session);
   } else if (step.run) {
     await step.run(await prepareRunSession(step, store));

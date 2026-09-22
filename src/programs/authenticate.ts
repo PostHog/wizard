@@ -10,19 +10,30 @@
  * back rather than fetching again.
  */
 
-import type { Credentials, WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
+import type { ApiUser, Credentials } from '@shared/api';
 import type { ProgramId } from '@programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
 import { markGrantRevoked } from '@shared/auth-session-state';
 import { analytics, groupsFromUser } from '@utils/analytics';
-import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
+
+export type AuthProjection = {
+  setCredentials(credentials: Credentials): void;
+  setRoleAtOrganization(role: string | null): void;
+  setApiUser(user: ApiUser | null): void;
+};
+
+export type TokenRefreshProjection = {
+  setAccessToken(credentials: Credentials): void;
+};
 
 export async function authenticate(
   session: WizardSession,
   programId: ProgramId,
+  projection: AuthProjection,
 ): Promise<void> {
   if (session.credentials) return;
 
@@ -65,9 +76,9 @@ export async function authenticate(
   session.roleAtOrganization = roleAtOrganization;
   session.apiUser = user;
 
-  getUI().setCredentials(session.credentials);
-  getUI().setRoleAtOrganization(roleAtOrganization);
-  getUI().setApiUser(user);
+  projection.setCredentials(session.credentials);
+  projection.setRoleAtOrganization(roleAtOrganization);
+  projection.setApiUser(user);
 
   // Identify the user (email, name) before flags are evaluated, so flags can
   // target the individual user and not just $app_name.
@@ -88,6 +99,7 @@ const DEAD_GRANT_CODES = new Set(['invalid_grant', 'invalid_client']);
 // Best-effort pre-run refresh: no refresh token or a failed grant keeps the existing token.
 export async function refreshAccessTokenIfNeeded(
   session: WizardSession,
+  projection: TokenRefreshProjection,
 ): Promise<void> {
   const credentials = session.credentials;
   if (!credentials?.refreshToken) return;
@@ -113,7 +125,7 @@ export async function refreshAccessTokenIfNeeded(
       expiresAt: Date.now() + token.expires_in * 1000,
     };
     session.credentials = refreshed;
-    getUI().setAccessToken(refreshed);
+    projection.setAccessToken(refreshed);
   } catch (error) {
     // A dead grant is recorded but not thrown: the current token may still have
     // minutes of life, and failing here would break runs that would have worked.

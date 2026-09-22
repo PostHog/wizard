@@ -109,7 +109,7 @@ export async function scopeInstallDirToProject(
   session: WizardSession,
 ): Promise<void> {
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
-  await authenticate(session, 'posthog-integration');
+  await authenticate(session, 'posthog-integration', getUI());
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
     // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
