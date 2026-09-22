@@ -292,15 +292,11 @@ async function main() {
   // Pass the pre-run gates and run the program's real agent. The auth and run
   // screens never advance on their own; this is what moves them. Mirrors
   // run-wizard's flow, including in-program run phases.
-  let gatewayConfigured = false;
   const runProgram = async () => {
-    if (!gatewayConfigured) {
-      configureGatewayFromCIEnvironment(
-        Number(projectId),
-        store.session.region ?? 'us',
-      );
-      gatewayConfigured = true;
-    }
+    configureGatewayFromCIEnvironment(
+      Number(projectId),
+      store.session.region ?? 'us',
+    );
     await store.getGate('intro');
     await store.getGate('integration-check');
     await store.getGate('health-check');

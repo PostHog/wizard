@@ -95,6 +95,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'yes',
     description: 'Blocking external services are down.',
   },
+  [ErrorCodes.EnvMissingCiToken]: {
+    group: 'env',
+    retry: 'no',
+    description:
+      'A --ci run has no WIZARD_CI_GATEWAY_TOKEN_FILE in its environment.',
+  },
   [ErrorCodes.DetectBadDirectory]: {
     group: 'detect',
     retry: 'no',
