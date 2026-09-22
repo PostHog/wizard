@@ -31,9 +31,9 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   `inferenceAuth`, project and user payloads, skill id, detected integration,
   `flags` (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`,
   `benchmark`, `yaraReport`) and the host the CLI was told. The caller supplies
-  an `InferenceAuthProvider` whose `resolve()` returns gateway
-  authentication. The agent resolves it before execution and again when the
-  harness needs refreshed auth.
+  an `InferenceAuthProvider` whose `resolve()` returns gateway authentication.
+  The agent resolves it before execution and again when the harness needs
+  refreshed auth.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
   (`AgentFailure`: message, outro data, error, exit code, error code, detail).
@@ -60,8 +60,8 @@ Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
 `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`,
 `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`,
-`flushScanReport`, and `runMcpPromptViaSdk`, which
-loads the streaming module on first call.
+`flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on
+first call.
 
 Minimal invocation:
 

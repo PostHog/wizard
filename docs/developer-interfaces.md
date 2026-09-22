@@ -14,7 +14,7 @@ these functions as a stable package API.
 ## Standalone agent
 
 `runAgent` takes a resolved `RunConfig` (run definition, binding, tools and
-policy), `RunInput` (project, credentials, optional inference-auth provider,
+policy), `RunInput` (project, credentials, required inference-auth provider,
 flags and host), and optional `onProgress`, `interaction`, and `signal` options.
 Import the function from `@agent` and types from `@agent/types`. It returns a
 `RunResult` with a `success`, `aborted`, `failed`, or `crashed` outcome and a
@@ -41,10 +41,10 @@ export async function runStandalone(
 ```
 
 The caller prepares `config` and `input`; the agent does not authenticate the
-PostHog user or detect the project. Supply `input.inferenceAuth` when the host
-owns gateway authentication. A legacy fallback remains when it is absent. There
-is no session control protocol on this API. An aborted signal returns an
-`aborted` result; it does not pause the run.
+PostHog user or detect the project. The caller must supply
+`input.inferenceAuth`, whose `resolve()` returns gateway authentication and can
+refresh it during a long run. There is no session control protocol on this API.
+An aborted signal returns an `aborted` result; it does not pause the run.
 
 ## Callable program
 
@@ -108,8 +108,9 @@ pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
 
 The runner logs progress and writes a local task-stream JSONL dump. Callers
 observe the process exit and its logs, rather than a returned result. The
-gateway token file is read directly for CI; this path does not mint or refresh
-that token. Published builds reject `--ci`. The internal
+gateway token file is read into a fixed provider for CI. Pre-run detection and
+composed child runs use that same provider; this path does not mint or refresh
+the token. Published builds reject `--ci`. The internal
 `runWizardCI(config, options): void` entry point still uses the legacy session
 adapter, which now calls `runProgram` for agent execution.
 
