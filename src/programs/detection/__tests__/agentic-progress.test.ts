@@ -6,6 +6,7 @@ import {
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
+import { createUiReducer } from '@ui/agent-progress';
 
 vi.mock('@utils/debug');
 vi.mock('@ui', () => ({ getUI: () => ui }));
@@ -65,11 +66,20 @@ it('keeps initialization and execution progress visible during detection', async
     projectId: 1,
     host: HostResolution.fromApiHost('https://us.posthog.com'),
   };
+  const onProgress = vi.fn(createUiReducer(getUI()));
   const report = await detectProjectsWithAgent(session, {
     programId: 'posthog-integration',
     targets: [{ id: 'node', name: 'Node.js' }],
+    onProgress,
   });
   expect(report.projects[0].targetId).toBe('node');
+  expect(onProgress.mock.calls.map(([event]) => event.kind)).toEqual([
+    'log',
+    'usage',
+    'stage',
+    'status',
+    'log',
+  ]);
   expect(getUI().addTokenUsage).toHaveBeenCalledWith(delta);
   expect(ui.setStage).toHaveBeenCalledWith('Scanning');
   expect(ui.pushStatus).toHaveBeenCalledWith('Found a project');

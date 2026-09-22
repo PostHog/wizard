@@ -4,6 +4,8 @@ import {
   detectProjectsWithAgent,
   resolveProjectDir,
   type AgenticDetectionReport,
+  type AgenticDetectionContext,
+  type AgenticDetectOptions,
   type AgenticProject,
   type DetectEvent,
   type DetectTarget,
@@ -16,7 +18,7 @@ import {
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
 import type { WizardSession } from '@lib/wizard-session';
-import { getUI } from '@ui/index';
+import { createUiReducer, getUI } from '@ui/index';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
@@ -59,12 +61,13 @@ export function toIntegrationCandidates(
 
 /** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(
-  session: WizardSession,
+  session: AgenticDetectionContext,
   options: {
     /** Program the scan bills to. Required so no caller can go unattributed. */
     programId: string;
     recommend?: boolean;
     onEvent?: DetectEvent;
+    onProgress?: AgenticDetectOptions['onProgress'];
   },
 ): Promise<AgenticDetectionReport> {
   // Spread first so the targets and purpose this function owns always win.
@@ -128,6 +131,7 @@ export async function scopeInstallDirToProject(
         programId: 'posthog-integration',
         recommend: true,
         onEvent: (line) => logToFile('[agentic detect]', line),
+        onProgress: createUiReducer(getUI()),
       }),
       // The agent has no abort plumbing, so a timed-out scan is abandoned in the
       // background rather than cancelled; the run stops waiting on it either way.

@@ -134,7 +134,10 @@ describe('scopeInstallDirToProject', () => {
 
     expect(scan).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ programId: 'posthog-integration' }),
+      expect.objectContaining({
+        programId: 'posthog-integration',
+        onProgress: expect.any(Function),
+      }),
     );
   });
 
