@@ -39,11 +39,24 @@ export interface InstallResult {
  * Failure text comes from CLIs we invoke with the user's personal API key on the
  * command line (`--header "Authorization: Bearer phx_..."`), so it can carry the
  * key into the log file, the TUI and exception reports. Mask it first.
+ *
+ * The plugin stages clone git repositories and read the user's own config, so
+ * the text reaching here is no longer only ours: a failing clone echoes the
+ * remote URL with any credentials embedded in it, and a config error can quote
+ * a foreign provider's key. Each pattern below is a shape we have seen a CLI
+ * print, not a guess at every possible secret.
  */
 export const redactSecrets = (raw: string): string =>
   raw
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/ph[xspc]_[A-Za-z0-9_-]+/g, '[redacted]');
+    .replace(/ph[xspc]_[A-Za-z0-9_-]+/g, '[redacted]')
+    // `https://user:token@github.com/...` — git prints the whole remote back.
+    .replace(/(\bhttps?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@')
+    // GitHub tokens, which a clone failure quotes verbatim.
+    .replace(/\bgh[pousr]_[A-Za-z0-9]{16,}/g, '[redacted]')
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}/g, '[redacted]')
+    // OpenAI keys: `OPENAI_API_KEY` is already a failure codex reports on.
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted]');
 
 /**
  * Replace the user's home directory with `~`. Error tracking fingerprints on

@@ -64,6 +64,36 @@ describe('redactSecrets', () => {
       'bad key [redacted] rejected',
     );
   });
+
+  it('masks credentials embedded in a git remote a failed clone echoes back', () => {
+    const out = redactSecrets(
+      "fatal: could not read from 'https://vincent:ghp_AAAAAAAAAAAAAAAAAAAA@github.com/PostHog/ai-plugin.git'",
+    );
+    expect(out).not.toContain('ghp_AAAAAAAAAAAAAAAAAAAA');
+    expect(out).not.toContain('vincent:');
+    expect(out).toContain('github.com/PostHog/ai-plugin.git');
+  });
+
+  it('masks a bare GitHub token', () => {
+    expect(redactSecrets('remote: token ghp_0123456789abcdefghij denied')).toBe(
+      'remote: token [redacted] denied',
+    );
+    expect(
+      redactSecrets('using github_pat_0123456789abcdefghij_more now'),
+    ).toBe('using [redacted] now');
+  });
+
+  it("masks another provider's key quoted out of the user's config", () => {
+    expect(
+      redactSecrets('OPENAI_API_KEY sk-proj-0123456789abcdefghij is invalid'),
+    ).toBe('OPENAI_API_KEY [redacted] is invalid');
+  });
+
+  it('leaves an ordinary URL and ordinary words alone', () => {
+    expect(
+      redactSecrets('cloning https://github.com/PostHog/ai-plugin.git failed'),
+    ).toBe('cloning https://github.com/PostHog/ai-plugin.git failed');
+  });
 });
 
 describe('summarizeFailure', () => {
