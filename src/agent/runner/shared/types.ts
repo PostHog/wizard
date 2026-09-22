@@ -22,8 +22,14 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { SwitchboardCtx } from '../switchboard';
+import type { GatewayAuth } from '@agent/gateway-session';
 
 export type { PromptContext, Credentials };
+
+/** Agent-facing capability; programs decide where inference auth comes from. */
+export type InferenceAuthProvider = {
+  resolve(): Promise<GatewayAuth>;
+};
 
 /**
  * A known `[ABORT] <reason>` case. First matching entry is rendered on
@@ -197,6 +203,8 @@ export interface RunInput {
   installDir: string;
   /** Resolved credentials, including the host family and its MCP url. */
   credentials: Credentials;
+  /** B2 migration seam: programs may supply already-resolved inference auth. */
+  inferenceAuth?: InferenceAuthProvider;
   /** Project payload resolved at authentication, for prompt context. */
   project: ApiProject | null;
   /** User payload resolved at authentication, for the AI opt-in prompt line. */
@@ -228,6 +236,8 @@ export interface BootstrapResult {
   skillsBaseUrl: string;
   /** Resolved credentials (incl. the host family and its MCP url). */
   credentials: Credentials;
+  /** Resolve again near expiry; the provider owns mint and refresh policy. */
+  inferenceAuth: InferenceAuthProvider;
   /** Program this run is, and the node its gateway spend pins to. */
   programId: string;
   wizardFlags: Record<string, string>;

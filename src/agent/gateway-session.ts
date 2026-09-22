@@ -52,6 +52,17 @@ export function configureGatewayCredentialsForCI(
   projectId: number,
   gatewayUrl: string,
 ): void {
+  const auth = createCiGatewayAuth(token, projectId, gatewayUrl);
+  resetGatewaySession();
+  ciAuth = auth;
+}
+
+/** Fixed CI bearer without process-wide mutation, for the headless provider. */
+export function createCiGatewayAuth(
+  token: string,
+  projectId: number,
+  gatewayUrl: string,
+): GatewayAuth {
   if (IS_PRODUCTION_BUILD)
     throw new Error('CI gateway auth requires a non-production build');
   if (!token.trim() || !Number.isSafeInteger(projectId) || projectId <= 0) {
@@ -63,8 +74,7 @@ export function configureGatewayCredentialsForCI(
   ) {
     throw new Error('CI gateway auth requires a trusted gateway origin');
   }
-  resetGatewaySession();
-  ciAuth = {
+  return {
     token: token.trim(),
     teamId: projectId,
     gatewayUrl: gatewayUrl.replace(/\/+$/, ''),

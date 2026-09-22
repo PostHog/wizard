@@ -43,6 +43,7 @@ export type {
   AgentFailure,
   BootstrapResult,
   Credentials,
+  InferenceAuthProvider,
   AgentRunDefinition,
   PromptContext,
   ResolvedBinding,

@@ -11,10 +11,12 @@ export type {
   AgentFailure,
   AgentRunDefinition,
   PromptContext,
+  InferenceAuthProvider,
   RunConfig,
   RunInput,
   RunResult,
 } from './runner';
+export type { GatewayAuth } from './gateway-session';
 export type {
   AgentInteraction,
   AgentProgress,

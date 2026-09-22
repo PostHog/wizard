@@ -83,18 +83,17 @@ export async function prepareRun(
   // Mint now so a refusal fails the boot before any agent starts. Later
   // readers re-resolve through the cache, which re-mints past the refresh
   // point.
-  const currentGatewayAuth = () =>
-    // TODO(B2): the agent must not mint inference auth. It receives the
-    // PostHog token here and derives a gateway token from it, re-minting near
-    // expiry. Programs own credentials (stack plan 4.5): pass a resolved
-    // inference-auth provider on RunInput.credentials and move
-    // gateway-session.ts out of src/agent with it.
-    gatewayAuth(credentials.host, credentials.accessToken, programId);
-  await currentGatewayAuth();
+  // Legacy callers still mint here until the B2 host supplies its provider.
+  const inferenceAuth = input.inferenceAuth ?? {
+    resolve: () =>
+      gatewayAuth(credentials.host, credentials.accessToken, programId),
+  };
+  await inferenceAuth.resolve();
 
   return {
     skillsBaseUrl,
     credentials,
+    inferenceAuth,
     // Carried so per-task sessions re-resolve against the same program the boot
     // minted for, rather than digging it back out of the metadata bag.
     programId,
@@ -105,7 +104,7 @@ export async function prepareRun(
     // Resolved once, here: the only place holding both the run-level harness
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(async () => {
-      const auth = await currentGatewayAuth();
+      const auth = await inferenceAuth.resolve();
       return {
         baseURL: auth.gatewayUrl,
         authToken: auth.token,

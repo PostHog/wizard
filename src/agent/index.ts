@@ -43,6 +43,9 @@ export {
   runAgent as executeAgent,
 } from './agent-interface';
 export { configureGatewayFromCIEnvironment } from './gateway-session';
+// B2 migration seam: program-owned providers use the existing mint until the
+// session implementation moves out of the agent with all harness call sites.
+export { gatewayAuth, createCiGatewayAuth } from './gateway-session';
 export { flushScanReport } from './yara-hooks';
 export { downloadSkill } from './tools';
 

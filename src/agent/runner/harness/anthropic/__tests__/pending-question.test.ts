@@ -71,6 +71,14 @@ async function initializeHarness(
       programId: 'test',
       skillsBaseUrl: 'https://skills.test',
       credentials,
+      inferenceAuth: {
+        resolve: () =>
+          Promise.resolve({
+            gatewayUrl: 'https://ai-gateway.us.posthog.com',
+            token: 'phe_fixture',
+            refreshAtMs: Infinity,
+          }),
+      },
       wizardFlags: {},
       wizardFlagPayloads: {},
       wizardMetadata: {},
