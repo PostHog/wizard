@@ -54,6 +54,7 @@ import {
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from '@lib/wizard-tools/tools';
 import type { LLMProvider } from '@posthog/warlock';
+import type { ProgressEmitter } from '@lib/agent/progress';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
@@ -96,6 +97,8 @@ export interface PiToolsContext {
   disallowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
+  /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
+  emit?: ProgressEmitter;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -556,7 +559,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       }),
     }),
     execute(_id, args) {
-      const result = publishHandoff(args.content);
+      const result = publishHandoff(args.content, ctx.emit);
       logToFile(`[pi] publish_handoff: ${result.message}`);
       return Promise.resolve(text(result.message));
     },
@@ -572,7 +575,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     withMode(auditSeedChecks, 'parallel'),
     withMode(auditAddChecks, 'parallel'),
     withMode(auditResolveChecks, 'parallel'),
-    // Sequential: it mutates the store's handoff state.
+    // Sequential: it publishes the run's handoff.
     withMode(publishHandoffTool, 'sequential'),
   ];
   // Register wizard_ask only when the program allows it. posthog-integration

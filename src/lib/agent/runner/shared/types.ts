@@ -279,6 +279,8 @@ export interface RunSnapshot {
   finalCostUsd?: number;
   dashboardUrl?: string;
   notebookUrl?: string;
+  /** The handoff document the agent published, when it did. */
+  handoffText?: string;
 }
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */

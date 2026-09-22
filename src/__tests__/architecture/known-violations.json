@@ -49,6 +49,7 @@
     "src/lib/wizard-ask-bridge.ts -> src/lib/agent/progress.ts",
     "src/lib/wizard-session.ts -> src/lib/agent/claude-settings.ts",
     "src/lib/wizard-session.ts -> src/lib/agent/progress.ts",
+    "src/lib/wizard-tools/handoff.ts -> src/lib/agent/progress.ts",
     "src/lib/wizard-tools/index.ts -> src/lib/wizard-tools/mcp.ts",
     "src/lib/wizard-tools/tools.ts -> src/lib/yara-hooks.ts",
     "src/steps/add-mcp-server-to-clients/index.ts -> src/telemetry.ts",

@@ -47,6 +47,9 @@ export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
       case 'authError':
         ui.showAuthError(event.detail);
         break;
+      case 'handoff':
+        ui.setHandoffText(event.text);
+        break;
       case 'completion':
         ui.setOutroData(event.outro);
         break;

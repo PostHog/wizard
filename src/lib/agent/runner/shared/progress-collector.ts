@@ -63,6 +63,9 @@ export function createProgressCollector(
       case 'finalCost':
         snapshot.finalCostUsd = event.usd;
         break;
+      case 'handoff':
+        snapshot.handoffText = event.text;
+        break;
       default:
         break;
     }

@@ -28,6 +28,7 @@ import {
   publishHandoff,
 } from './handoff';
 import { createSecretVault, type SecretVault } from '../secret-vault';
+import type { ProgressEmitter } from '@lib/agent/progress';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
@@ -147,6 +148,9 @@ export interface WizardToolsOptions {
 
   /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
   triageProvider: LLMProvider;
+
+  /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
+  emit?: ProgressEmitter;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -168,6 +172,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     secretVault = createSecretVault(),
     orchestrator,
     triageProvider,
+    emit,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -755,7 +760,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
     },
     (args: { content: string }) => {
-      const result = publishHandoff(args.content);
+      const result = publishHandoff(args.content, emit);
       logToFile(`publish_handoff: ${result.message}`);
       return {
         content: [{ type: 'text' as const, text: result.message }],

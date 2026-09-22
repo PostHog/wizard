@@ -644,6 +644,7 @@ export async function initializeAgent(
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
       triageProvider,
+      emit: config.emit,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

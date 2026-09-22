@@ -20,6 +20,7 @@ it('projects every progress event onto the matching UI call, in order', () => {
     'addTokenUsage',
     'setFinalTokenCostUsd',
     'showAuthError',
+    'setHandoffText',
     'setOutroData',
   ] as const;
   for (const method of methods) {
@@ -72,6 +73,7 @@ it('projects every progress event onto the matching UI call, in order', () => {
     { kind: 'usage', delta },
     { kind: 'finalCost', usd: 1.25 },
     { kind: 'authError', detail },
+    { kind: 'handoff', text: '# Report' },
     { kind: 'completion', outro },
     { kind: 'lifecycle', phase: 'completed', message: 'Finished' },
   ];
@@ -97,6 +99,7 @@ it('projects every progress event onto the matching UI call, in order', () => {
     ['addTokenUsage', delta],
     ['setFinalTokenCostUsd', 1.25],
     ['showAuthError', detail],
+    ['setHandoffText', '# Report'],
     ['setOutroData', outro],
     ['outro', 'Finished'],
   ]);

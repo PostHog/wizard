@@ -229,6 +229,8 @@ export type AgentProgress =
   | { kind: 'finalCost'; usd: number }
   /** The gateway returned 401; a failure follows (`WizardUI.showAuthError`). */
   | { kind: 'authError'; detail: AuthErrorDetail }
+  /** The handoff document the agent published (`WizardUI.setHandoffText`). */
+  | { kind: 'handoff'; text: string }
   /** The run's final outro payload (`WizardUI.setOutroData`). */
   | { kind: 'completion'; outro: OutroData };
 
