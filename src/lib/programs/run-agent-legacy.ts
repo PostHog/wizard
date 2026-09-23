@@ -239,6 +239,7 @@ async function runProgram(
     allowedTools: programConfig.allowedTools,
     disallowedTools: programConfig.disallowedTools,
     agentFlow: programConfig.agentFlow,
+    agentPrompts: programConfig.agentPrompts,
     excludedTaskTypes: programConfig.excludedTaskTypes,
     seedTasks: programConfig.seedTasks
       ? () => programConfig.seedTasks!(session)

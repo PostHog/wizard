@@ -220,6 +220,12 @@ export interface ProgramConfig {
    */
   agentFlow?: string;
   /**
+   * Agent prompts bundled with the wizard for `agentFlow`. When set, the
+   * orchestrator builds the registry from these and does not fetch
+   * `agent-menu.json`.
+   */
+  agentPrompts?: readonly string[];
+  /**
    * Whether this program's agent run requires third-party AI services.
    *
    * When true (the default), the wizard checks

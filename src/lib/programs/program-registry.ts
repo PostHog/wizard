@@ -22,6 +22,7 @@ import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
 import { errorTrackingConfig } from './error-tracking/index.js';
+import { featureFlagsConfig } from './feature-flags/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
@@ -72,6 +73,7 @@ export const PROGRAM_REGISTRY = [
   warehouseSourceConfig,
   errorTrackingUploadSourceMapsConfig,
   errorTrackingConfig,
+  featureFlagsConfig,
   auditConfig,
   eventsAuditConfig,
   posthogDoctorConfig,
@@ -100,6 +102,7 @@ export const Program = {
   WarehouseSource: warehouseSourceConfig.id,
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   ErrorTracking: errorTrackingConfig.id,
+  FeatureFlags: featureFlagsConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,

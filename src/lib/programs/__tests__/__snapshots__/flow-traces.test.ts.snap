@@ -324,6 +324,59 @@ exports[`flow traces per program > events-audit (node) 1`] = `
 }
 `;
 
+exports[`flow traces per program > feature-flags (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "agent-skill-intro",
+      "program": "feature-flags",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "feature-flags",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "feature-flags",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "feature-flags",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "feature-flags",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "feature-flags",
+    },
+    {
+      "event": "screen keep-skills",
+      "from": "outro",
+      "program": "feature-flags",
+    },
+  ],
+  "program": "feature-flags",
+  "screens": [
+    "agent-skill-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "keep-skills",
+  ],
+  "stoppedOn": null,
+}
+`;
+
 exports[`flow traces per program > mcp-add (node) 1`] = `
 {
   "events": [

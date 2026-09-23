@@ -1,0 +1,40 @@
+{
+  "program": "feature-flags",
+  "summary": "Happy path: detect framework, confirm intro, run the feature-flags orchestrator flow (install/init when PostHog is absent, create one example flag per side (frontend, backend), evaluate each once on its side, report), delete installed skills. The driver answers the report's verify ask with \"skip\" because no one runs the app during e2e, so the report ends in \"Verify later\".",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first",
+    "askAnswers": [{ "match": "verify-flag", "value": "skip" }]
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "orchestrator / pi; stage models from the bundled prompts (terra seed, install, init and create-flag, sol evaluate and report)"
+    }
+  ],
+  "path": [
+    {
+      "screen": "detect",
+      "auto": "(headless) framework detection puts the framework id on session.skillId"
+    },
+    { "screen": "agent-skill-intro", "auto": "confirm & continue" },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage and proceed even if the readiness probe flags an issue"
+    },
+    {
+      "screen": "auth",
+      "auto": "(external) the runner resolves credentials from the phx key"
+    },
+    {
+      "screen": "run",
+      "auto": "(external) the orchestrator flow; the profile answers wizard_ask \"verify-flag\" with \"skip\""
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    { "screen": "keep-skills", "auto": "delete the installed skills" }
+  ]
+}

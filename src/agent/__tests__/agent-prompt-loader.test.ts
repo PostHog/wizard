@@ -7,6 +7,7 @@ import {
   assembleSeedPrompt,
   assembleTaskPrompt,
   buildRegistry,
+  loadAgentRegistry,
   parseAgentPrompt,
   promptModelFor,
   queueTools,
@@ -676,5 +677,35 @@ describe('allowsPostHogMcp', () => {
     const { allowedTools } = agentRunTools(p);
     expect(allowedTools).toEqual(['Read', 'mcp__posthog-wizard__exec']);
     expect(allowsPostHogMcp(allowedTools)).toBe(true);
+  });
+});
+
+describe('loadAgentRegistry', () => {
+  const bundledSeed = `---
+type: plan
+flow: bundled
+seed: true
+---
+Plan.`;
+  const bundledTask = `---
+type: report
+flow: bundled
+sink: true
+---
+Report.`;
+
+  it('builds bundled prompts without fetching the agent menu', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch');
+
+    const registry = await loadAgentRegistry(
+      'http://skills.invalid',
+      'bundled',
+      undefined,
+      [bundledSeed, bundledTask],
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(registry.seed?.type).toBe('plan');
+    expect(registry.sinkTypes).toEqual(['report']);
   });
 });
