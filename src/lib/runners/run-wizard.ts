@@ -295,19 +295,24 @@ export function runWizard(
       }
 
       const runFailed = isRunFailure(activeTui.store.session);
-      if (!runFailed) commitRegisteredRunSkillCleanups();
       await activeTui.store.waitUntil((s) => {
         if (s.mintHandoff === 'exit') return true;
         if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
       });
+      if (signalled) return;
 
-      exitInProgress = true;
       await activeStream.shutdown(2000);
+      if (signalled) return;
+      exitInProgress = true;
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
-      if (runFailed) await analytics.shutdown('error');
+      if (runFailed) {
+        runCleanups();
+        await analytics.shutdown('error');
+      }
       activeTui.unmount();
+      if (!runFailed) commitRegisteredRunSkillCleanups();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
