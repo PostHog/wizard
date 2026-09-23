@@ -1,6 +1,7 @@
 export const FEATURE_FLAGS_REPORT_FILE = 'posthog-feature-flags-report.md';
 export const FRONTEND_FLAG_KEY = 'wizard-example-frontend-flag';
 export const BACKEND_FLAG_KEY = 'wizard-example-backend-flag';
+export const FEATURE_FLAGS_STEP_SKILL_ID = 'integration-v2-feature-flags-step';
 
 const SEED_PROMPT = `---
 type: setup-feature-flags
@@ -184,7 +185,7 @@ flow: feature-flags
 label: Evaluate the flags in the app
 model_pi: openai/gpt-5.6-sol
 effort_pi: medium
-skills: [integration-v2-feature-flags-step]
+skills: [${FEATURE_FLAGS_STEP_SKILL_ID}]
 allowedTools: [Read, Write, Edit, Glob, Grep]
 disallowedTools: [enqueue_task]
 dependsOn: []
