@@ -12,7 +12,7 @@ import { Box, Text, measureElement, type DOMElement } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { useTick } from '@ui/tui/hooks/useTick';
-import { AgentPhase } from '@lib/agent/agent-phase';
+import { AgentPhase } from '@shared/agent-phase';
 import { MATRIX_FADE } from './visualizer/panel';
 import { VISUALIZER_PALETTE } from './visualizer/palette';
 import { MatrixRain } from './visualizer/MatrixRain';

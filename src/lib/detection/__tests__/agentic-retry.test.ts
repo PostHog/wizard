@@ -6,12 +6,12 @@ import {
   AgentErrorType,
   initializeAgent,
   runAgent,
-} from '@lib/agent/agent-interface';
+} from '@agent/agent-interface';
 import { buildSession } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
-vi.mock('@lib/agent/agent-interface', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lib/agent/agent-interface')>()),
+vi.mock('@agent/agent-interface', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/agent-interface')>()),
   initializeAgent: vi.fn(),
   runAgent: vi.fn(),
 }));

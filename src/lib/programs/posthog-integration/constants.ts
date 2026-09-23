@@ -4,4 +4,4 @@
  * can name it without importing this program.
  */
 
-export { EVENT_PLAN_FILE } from '@lib/constants';
+export { EVENT_PLAN_FILE } from '@shared/constants';

@@ -5,7 +5,7 @@
  */
 import type { TaskNotice } from '@lib/wizard-session';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),

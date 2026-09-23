@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
-import { fetchGithubConnected } from '@lib/api';
+import { fetchGithubConnected } from '@shared/api';
 import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
 

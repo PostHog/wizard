@@ -1,10 +1,10 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import type { ProgramRun } from '@lib/programs/program-run';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import type { WizardSession } from '@lib/wizard-session';
 import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
-import { AgentSignals } from '@lib/agent/agent-interface';
+import { AgentSignals } from '@agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
@@ -15,17 +15,17 @@ import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
-} from '@lib/constants';
+} from '@shared/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
-import type { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
-import { shouldDisableAsk } from '@lib/agent/agent-runner';
+import { shouldDisableAsk } from '@agent/agent-runner';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';

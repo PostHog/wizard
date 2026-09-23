@@ -24,10 +24,10 @@ import {
   OutroKind,
   type WizardSession,
 } from '@lib/wizard-session';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { HostResolution } from '@lib/host-resolution';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { HostResolution } from '@shared/host-resolution';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/detect';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
 import { ScreenContainer } from '../primitives/ScreenContainer';
@@ -61,13 +61,13 @@ vi.mock('@utils/clipboard', async (importOriginal) => ({
   openInBrowser: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('opn', () => ({ default: vi.fn() }));
-vi.mock('@lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lib/api')>()),
+vi.mock('@shared/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/api')>()),
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@lib/wizard-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lib/wizard-tools')>()),
+vi.mock('@agent/tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/tools')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@utils/setup-utils', async (importOriginal) => ({

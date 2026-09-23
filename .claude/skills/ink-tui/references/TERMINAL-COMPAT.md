@@ -38,7 +38,7 @@ Mode selection belongs to command/runner entry points. The
 [default integration command](../../../../src/commands/basic-integration/index.ts)
 routes explicit CI/headless requests separately and rejects a detected
 noninteractive environment for the ordinary interactive path.
-[Environment detection](../../../../src/utils/environment.ts) checks
+[Environment detection](../../../../src/shared/utils/environment.ts) checks
 stdout/stderr TTY state outside development mode; checking stdin alone does not
 describe this command's behavior.
 

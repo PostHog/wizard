@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
-import type { AbortCase } from '@lib/agent/agent-runner';
-import { ErrorCodes } from '@lib/errors';
+import type { AbortCase } from '@agent/agent-runner';
+import { ErrorCodes } from '@shared/errors';
 import { findPackageJsons } from '@lib/programs/shared/package-scanning';
 
 export type WebAnalyticsDetectError =

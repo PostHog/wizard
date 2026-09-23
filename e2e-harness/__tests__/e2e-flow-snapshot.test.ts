@@ -17,10 +17,10 @@ import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase } from '@lib/wizard-session';
-import { Integration } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
+import { Integration } from '@shared/constants';
+import { HostResolution } from '@shared/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import {
   Program,
   getProgramConfig,

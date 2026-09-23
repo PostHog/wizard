@@ -29,8 +29,8 @@ import {
 import { join } from 'path';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
-import type { AbortCase } from '@lib/agent/agent-runner';
-import { ErrorCodes } from '@lib/errors';
+import type { AbortCase } from '@agent/agent-runner';
+import { ErrorCodes } from '@shared/errors';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 

@@ -17,16 +17,16 @@ import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
-import { VERSION } from '@lib/version';
+import { VERSION } from '@shared/version';
 import {
   Program,
   getProgramConfig,
   type ProgramId,
 } from '@lib/programs/program-registry';
-import type { Harness, Sequence } from '@lib/constants';
+import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
-import { initLocalDev } from '@lib/local-dev';
-import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
+import { initLocalDev } from '@shared/local-dev';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
 import { getAuditChecks } from '@lib/programs/audit/types';
@@ -36,7 +36,7 @@ import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import type { Integration } from '@lib/constants';
+import type { Integration } from '@shared/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@lib/programs/error-tracking/detect-agentic';
 import {

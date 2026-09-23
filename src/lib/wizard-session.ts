@@ -10,7 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
+import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
 import {
   AdditionalFeature,
   ADDITIONAL_FEATURE_LABELS,
@@ -18,11 +18,11 @@ import {
   type Harness,
   type Integration,
   type Sequence,
-} from './constants';
+} from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
-import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/claude-settings';
-import type { ApiUser, ApiProject, Credentials } from './api';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { ApiUser, ApiProject, Credentials } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
 import {
   OutroKind,
@@ -31,7 +31,7 @@ import {
   type OutroData,
   type PendingQuestion,
   type TaskNotice,
-} from './agent/progress';
+} from '@agent/progress';
 
 // These shapes moved to their owners; re-exported so every session reader
 // keeps its import path. `Credentials` sits with the API types, the
@@ -140,7 +140,7 @@ export interface WizardSession {
    * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
    * into the authenticated project's AI Observability tab. Dev/test builds
    * only — the flag is undeclared in published builds so this stays `false`
-   * there. See `src/lib/agent/aio-capture.ts`.
+   * there. See `src/agent/aio-capture.ts`.
    */
   captureAio: boolean;
 
@@ -204,7 +204,7 @@ export interface WizardSession {
   /**
    * Full user payload from `/api/users/@me/` — identifiers, profile,
    * current team + organization, preferences, etc. Null until OAuth /
-   * CI-key auth populates it. Schema lives in `src/lib/api.ts` and
+   * CI-key auth populates it. Schema lives in `src/shared/api.ts` and
    * passes through unknown upstream fields so downstream features can
    * read account context (plan, org name, email, etc.) without
    * re-fetching.

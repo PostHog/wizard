@@ -5,7 +5,7 @@ const { mockProvisionNewAccountSubcmd } = vi.hoisted(() => ({
 }));
 
 vi.mock('semver', () => ({ satisfies: () => true }));
-vi.mock('../utils/provisioning', () => ({
+vi.mock('@utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountSubcmd,
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
@@ -40,14 +40,14 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
     run: () => Promise.resolve(),
   },
 }));
-vi.mock('../utils/environment', () => ({
+vi.mock('@utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
-vi.mock('../utils/env-api-key', () => ({
+vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-vi.mock('../utils/debug', () => ({
+vi.mock('@utils/debug', () => ({
   configureLogFileFromEnvironment: vi.fn(),
   logToFile: vi.fn(),
 }));
@@ -56,11 +56,11 @@ vi.mock('../lib/detection/index', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
-vi.mock('../utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));
-vi.mock('../utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
+vi.mock('@utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
 vi.mock('../lib/programs/run-agent-legacy', () => ({

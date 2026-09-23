@@ -1,4 +1,4 @@
-import type { Integration } from './constants';
+import type { Integration } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { PackageManagerDetector } from './detection/package-manager';
 

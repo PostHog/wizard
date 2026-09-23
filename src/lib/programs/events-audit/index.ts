@@ -4,7 +4,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { SPINNER_MESSAGE } from '@lib/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
 import { seedAuditLedger } from '@lib/programs/audit/seed';

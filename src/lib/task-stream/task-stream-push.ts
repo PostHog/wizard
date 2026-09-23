@@ -36,7 +36,7 @@ import {
 import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
 import { logToFile } from '@utils/debug';
-import { sanitizeErrorDetail } from '@lib/errors';
+import { sanitizeErrorDetail } from '@shared/errors';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;

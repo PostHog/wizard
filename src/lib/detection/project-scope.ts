@@ -14,7 +14,7 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-} from '@lib/constants';
+} from '@shared/constants';
 import type { WizardSession } from '@lib/wizard-session';
 import { getUI } from '@ui/index';
 import { analytics } from '@utils/analytics';

@@ -10,16 +10,7 @@ const REPO_ROOT = path.resolve(HERE, '../../..');
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
     ['env', (p) => p === 'src/env.ts'],
-    [
-      'agent',
-      (p) =>
-        p.startsWith('src/lib/agent/') ||
-        p.startsWith('src/lib/middleware/') ||
-        p === 'src/lib/gateway-session.ts' ||
-        p === 'src/lib/yara-hooks.ts' ||
-        p === 'src/lib/yara-policy.ts' ||
-        p === 'src/lib/wizard-tools/mcp.ts',
-    ],
+    ['agent', (p) => p.startsWith('src/agent/')],
     [
       'tui',
       (p) =>
@@ -384,12 +375,12 @@ describe('import boundaries', () => {
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');
-    expect(classifySurface('src/utils/analytics.ts')).toBe('legacy');
-    expect(classifySurface('src/lib/agent/agent-runner.ts')).toBe('agent');
+    expect(classifySurface('src/shared/utils/analytics.ts')).toBe('legacy');
+    expect(classifySurface('src/agent/agent-runner.ts')).toBe('agent');
     expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
     expect(classifySurface('bin.ts')).toBe('cli');
-    expect(classifySurface('src/lib/wizard-tools/mcp.ts')).toBe('agent');
-    expect(classifySurface('src/lib/wizard-tools/tools.ts')).toBe('legacy');
+    expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
+    expect(classifySurface('src/agent/tools/tools.ts')).toBe('agent');
     expect(classifySurface('src/commands/factories/family-picker.tsx')).toBe(
       'tui',
     );

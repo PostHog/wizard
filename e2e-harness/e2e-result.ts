@@ -25,7 +25,7 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import {
   TASK_OUTCOMES_KEY,
   type TaskOutcome,
-} from '@lib/agent/runner/sequence/orchestrator/queue';
+} from '@agent/runner/sequence/orchestrator/queue';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 import type { E2eDecisionReport } from './e2e-profile.js';

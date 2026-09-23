@@ -14,8 +14,8 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
-import { fetchSkillMenu, type SkillEntry } from '@lib/wizard-tools';
-import { CONTEXT_MILL_RELEASES_URL, getSkillsBaseUrl } from '@lib/constants';
+import { fetchSkillMenu, type SkillEntry } from '@agent/tools';
+import { CONTEXT_MILL_RELEASES_URL, getSkillsBaseUrl } from '@shared/constants';
 
 /**
  * Resolve a session skillId against the skill-menu entries.

@@ -15,7 +15,7 @@ import type { ProgramId } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
-import { markGrantRevoked } from '@lib/auth-session-state';
+import { markGrantRevoked } from '@shared/auth-session-state';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';

@@ -11,11 +11,11 @@ vi.mock('fs', () => ({
   existsSync: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../../../utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn() },
 }));
 
-vi.mock('../../../../utils/debug', () => ({
+vi.mock('@utils/debug', () => ({
   debug: vi.fn(),
 }));
 

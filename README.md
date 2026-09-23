@@ -155,7 +155,7 @@ route review to their owning team instead.
 | Path | Owning team |
 |---|---|
 | `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
-| `src/lib/agent/` | `@PostHog/team-wizard-docs` |
+| `src/agent/` | `@PostHog/team-wizard-docs` |
 | `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
 | `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
 | `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
@@ -270,7 +270,7 @@ dashboard:write insight:write notebook:write event_definition:write
 health_issue:read wizard_session:read wizard_session:write
 ```
 
-The source of truth is `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts`, which
+The source of truth is `WIZARD_OAUTH_SCOPES` in `src/shared/constants.ts`, which
 documents why each scope is needed — if this block drifts, trust the code.
 Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
 `src/lib/oauth/program-scopes.ts`); the default integration flow adds
@@ -291,7 +291,7 @@ are clamped silently (`clamp_scopes_to_ceiling`) — neither path errors;
 `/oauth/token` just returns a smaller `scope`. So never assume the token
 carries what was requested: the token response's `scope` field is the truth.
 The wizard diffs granted vs requested at login (`missingOAuthScopes` in
-`src/utils/oauth.ts`), warns the user which permissions are missing, and emits
+`src/shared/utils/oauth.ts`), warns the user which permissions are missing, and emits
 `wizard: oauth grant narrowed` so narrowed runs are countable in analytics.
 The diff also rides on the session (`credentials.missingScopes`), so when a
 run does fail on a scope-gated step, the error names the missing permission
@@ -396,7 +396,7 @@ and set up the general flow of the application.
 ## Analytics
 
 Did you know you can capture PostHog events even for smaller, supporting
-products like a command line tool? `src/utils/analytics.ts` is a great example
+products like a command line tool? `src/shared/utils/analytics.ts` is a great example
 of how to do it.
 
 This file wraps `posthog-node` with some convenience functions to set up an
@@ -417,7 +417,7 @@ set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
 Supporting agent sessions after we leave is important. There are plenty of ways
 to break or misconfigure PostHog, so guarding against this is key.
 
-`src/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
+`src/shared/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
 rules files and store them in the project's `.cursor/rules` directory.
 
 ## Prompts and LLM interactions
@@ -433,7 +433,7 @@ _If_ they are well prompted.
 chaotic process. Every wizard session gets the same prompt, tailored to the
 specific files in the project.
 
-These prompts are channeled using `src/utils/query.ts` to an LLM interface we
+These prompts are channeled using `src/shared/utils/query.ts` to an LLM interface we
 host. This gives us more control: we can be certain of the model version and
 provider which interpret the prompts and modify the files. This way, we can find
 the right tools for the job and again, apply them consistently.
@@ -450,14 +450,14 @@ orchestrates that journey, but the raw value should _never_ enter the LLM
 conversation, where it would be sent to the model provider, written to
 transcripts, and captured in logs.
 
-`src/lib/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
+`src/shared/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
 session-scoped, in-memory vault: a tool that handles a secret calls `put()` to
 store the raw value and hands the agent an opaque `secret:<uuid>` reference
 instead. The agent passes that ref between tools as if it were the value; the
 host resolves it back to the real secret only at the last moment, inside the
 process, when it writes the file.
 
-Two tools in `src/lib/wizard-tools.ts` form the ends of that pipe:
+Two tools in `src/agent/tools/tools.ts` form the ends of that pipe:
 
 - `wizard_ask` with `sensitive: true` vaults the user's typed answer and returns
   `{ secretRef: "secret:..." }` to the agent rather than the string.
@@ -504,7 +504,9 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 |---|---|
 | `@env` | `src/env.ts` |
 | `@lib/*` | `src/lib/*` |
-| `@utils/*` | `src/utils/*` |
+| `@agent/*` | `src/agent/*` |
+| `@shared/*` | `src/shared/*` |
+| `@utils/*` | `src/shared/utils/*` |
 | `@ui/*` | `src/ui/*` |
 | `@steps/*` | `src/steps/*` |
 | `@frameworks/*` | `src/frameworks/*` |
@@ -605,7 +607,7 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/lib/health-checks/` checks skills download origins before the wizard runs.
+`src/shared/health-checks/` checks skills download origins before the wizard runs.
 The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
 
 | Decision            | Meaning                                                         |
@@ -645,7 +647,7 @@ gateway URL and reports an unavailable gateway through the existing error path.
 
 `skillsOrigin` is one entry covering two origins: skills are published to
 GitHub Releases and an AWS mirror under the same filenames, and downloads fail
-over between them (`src/lib/fetch-retry.ts`). Both are probed in parallel, so
+over between them (`src/shared/fetch-retry.ts`). Both are probed in parallel, so
 the key only reports **Down** when neither origin answers — a GitHub Releases
 outage on its own doesn't block a run, including a 403 or 404, which is as
 often about the origin (expired asset redirect, blocked region, a publish that

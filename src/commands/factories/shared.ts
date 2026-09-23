@@ -5,8 +5,8 @@ import { isHeadless } from '@lib/headless-mode';
 import type { ProgramConfig } from '@lib/programs/program-step';
 
 import { skillProgramOptions } from '../skill-program-options';
-import { ErrorCodes } from '@lib/errors';
-import { emitWizardError } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 
 /**
  * Dispatch a parsed yargs invocation to the wizard runner. Applies the

@@ -1,5 +1,5 @@
 import type { FrameworkConfig } from './framework-config';
-import { Integration } from './constants';
+import { Integration } from '@shared/constants';
 import { NEXTJS_AGENT_CONFIG } from '@frameworks/nextjs/nextjs-wizard-agent';
 import { NUXT_AGENT_CONFIG } from '@frameworks/nuxt/nuxt-wizard-agent';
 import { VUE_AGENT_CONFIG } from '@frameworks/vue/vue-wizard-agent';

@@ -1,5 +1,5 @@
 import { resolveSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
-import type { SkillEntry } from '@lib/wizard-tools';
+import type { SkillEntry } from '@agent/tools';
 
 const entry = (id: string): SkillEntry =>
   ({ id, downloadUrl: `https://example.com/${id}.tar.gz` } as SkillEntry);

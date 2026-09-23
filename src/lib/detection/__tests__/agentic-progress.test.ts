@@ -2,9 +2,9 @@ import { detectProjectsWithAgent } from '../agentic';
 import {
   initializeAgent,
   runAgent as executeAgent,
-} from '@lib/agent/agent-interface';
+} from '@agent/agent-interface';
 import { buildSession } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
 
 vi.mock('@utils/debug');
@@ -15,8 +15,8 @@ const ui = vi.hoisted(() => ({
   pushStatus: vi.fn(),
   log: { error: vi.fn() },
 }));
-vi.mock('@lib/agent/agent-interface', async (original) => ({
-  ...(await original<typeof import('@lib/agent/agent-interface')>()),
+vi.mock('@agent/agent-interface', async (original) => ({
+  ...(await original<typeof import('@agent/agent-interface')>()),
   initializeAgent: vi.fn(),
   runAgent: vi.fn(),
 }));

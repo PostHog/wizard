@@ -7,7 +7,7 @@
  * to the skill's workflow, and the hard guard against every other category.
  */
 
-import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@lib/constants';
+import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@shared/constants';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 import { analytics } from '@utils/analytics';
 import { promptFor } from './helpers/integration-prompt.no-jest';

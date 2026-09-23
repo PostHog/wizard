@@ -9,7 +9,7 @@
 
 import { vi } from 'vitest';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),

@@ -1,4 +1,4 @@
-import { AgentSignals } from '@lib/agent/agent-interface';
+import { AgentSignals } from '@agent/agent-interface';
 import type { SkillVariant } from './detect.js';
 
 export type SourceMapsUploadPromptParams = {

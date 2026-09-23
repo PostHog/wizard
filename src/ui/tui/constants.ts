@@ -6,4 +6,4 @@
  */
 
 export const COLLAPSED_COUNT = 2;
-export { MAX_STATUS_MESSAGES as EXPANDED_COUNT } from '@lib/status-history';
+export { MAX_STATUS_MESSAGES as EXPANDED_COUNT } from '@shared/status-history';

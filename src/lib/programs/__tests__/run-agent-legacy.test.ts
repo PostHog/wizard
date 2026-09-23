@@ -2,10 +2,10 @@ import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
 import { authenticate } from '@lib/programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
-import { runAgent, RunOutcome, type RunResult } from '@lib/agent/runner';
-import { Harness, Sequence } from '@lib/constants';
+import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
+import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
 import { startTUI } from '@ui/tui/start-tui';
@@ -21,16 +21,16 @@ vi.mock('@env', async (original) => ({
   ...(await original<typeof import('@env')>()),
   IS_PRODUCTION_BUILD: false,
 }));
-vi.mock('@lib/local-dev', async (original) => ({
-  ...(await original<typeof import('@lib/local-dev')>()),
+vi.mock('@shared/local-dev', async (original) => ({
+  ...(await original<typeof import('@shared/local-dev')>()),
   checkLocalServices: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@utils/environment', async (original) => ({
   ...(await original<typeof import('@utils/environment')>()),
   readEnvironment: () => ({}),
 }));
-vi.mock('@lib/gateway-session', async (original) => ({
-  ...(await original<typeof import('@lib/gateway-session')>()),
+vi.mock('@agent/gateway-session', async (original) => ({
+  ...(await original<typeof import('@agent/gateway-session')>()),
   configureGatewayFromCIEnvironment: vi.fn(),
 }));
 vi.mock('@lib/task-stream/index', () => ({
@@ -56,15 +56,15 @@ vi.mock('@utils/analytics', () => ({
   },
   sessionProperties: () => ({}),
 }));
-vi.mock('@lib/agent/runner', async (original) => ({
-  ...(await original<typeof import('@lib/agent/runner')>()),
+vi.mock('@agent/runner', async (original) => ({
+  ...(await original<typeof import('@agent/runner')>()),
   runAgent: vi.fn(),
 }));
 vi.mock('@lib/programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
   refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('@lib/agent/claude-settings', () => ({
+vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));

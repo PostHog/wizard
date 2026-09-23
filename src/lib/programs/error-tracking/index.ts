@@ -1,4 +1,4 @@
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { detectFramework } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
@@ -16,7 +16,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
 const ERROR_TRACKING_DOCS_URL = 'https://posthog.com/docs/error-tracking';

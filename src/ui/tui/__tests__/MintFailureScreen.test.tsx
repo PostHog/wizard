@@ -7,7 +7,7 @@ import {
 } from '../screens/MintFailureScreen';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
 import { OutroKind } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { ScreenId } from '../router';
 
 vi.mock('ink', () =>

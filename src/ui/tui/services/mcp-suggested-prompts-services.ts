@@ -14,7 +14,7 @@ import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { Program } from '@lib/programs/program-registry';
 import type { WizardStore } from '@ui/tui/store';
-import type { ApiUser } from '@lib/api';
+import type { ApiUser } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,
@@ -23,7 +23,7 @@ import { seedDemoEvents as runSeed } from '@lib/mcp-seed-events';
 
 // The streamed event shape is the agent's; re-exported so the screen and the
 // playground keep their import path.
-import type { AgentChunk } from '@lib/agent/mcp-prompt-streaming';
+import type { AgentChunk } from '@agent/mcp-prompt-streaming';
 export type { AgentChunk };
 
 export interface McpSuggestedPromptsServices {
@@ -161,8 +161,6 @@ async function* runProductionPromptStreaming(args: {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo
   // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import(
-    '@lib/agent/mcp-prompt-streaming'
-  );
+  const { runMcpPromptViaSdk } = await import('@agent/mcp-prompt-streaming');
   yield* runMcpPromptViaSdk(args);
 }

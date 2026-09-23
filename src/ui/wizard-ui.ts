@@ -8,9 +8,9 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ApiUser } from '@lib/api';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ApiUser } from '@shared/api';
 import type { Credentials, TaskNotice } from '@lib/wizard-session';
 import type {
   AskAnswers,
@@ -34,7 +34,7 @@ import type {
   AuthErrorDetail,
   SpinnerHandle,
   TokenUsageDelta,
-} from '@lib/agent/progress';
+} from '@agent/progress';
 export type { AuthErrorDetail, SpinnerHandle, TokenUsageDelta };
 
 export interface WizardUI {

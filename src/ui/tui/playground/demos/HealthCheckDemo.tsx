@@ -5,9 +5,9 @@ import { Box, Text } from 'ink';
 import { LoadingBox, ModalOverlay } from '@ui/tui/primitives/index';
 import { Icons } from '@ui/tui/styles';
 import { ServiceHealthList } from '@ui/tui/components/ServiceHealthList';
-import { getBlockingServiceKeys } from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
-import type { AllServicesHealth } from '@lib/health-checks/types';
+import { getBlockingServiceKeys } from '@shared/health-checks/readiness';
+import { ServiceHealthStatus } from '@shared/health-checks/types';
+import type { AllServicesHealth } from '@shared/health-checks/types';
 
 const MOCK_CONFIRMED_OUTAGE: AllServicesHealth = {
   skillsOrigin: { status: ServiceHealthStatus.Down },

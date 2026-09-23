@@ -1,9 +1,13 @@
-import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
+import {
+  POSTHOG_DOCS_URL,
+  type Harness,
+  type Sequence,
+} from '@shared/constants';
 import {
   checkLocalServices,
   getLocalDev,
   POSTHOG_LOCAL_URL,
-} from '@lib/local-dev';
+} from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
@@ -19,7 +23,7 @@ import {
   classifyRunFailure,
   detectErrorCode,
   emitWizardError,
-} from '@lib/errors';
+} from '@shared/errors';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -239,7 +243,7 @@ export function runNonInteractive(
     try {
       if (mode === 'ci') {
         const { configureGatewayFromCIEnvironment } = await import(
-          '@lib/gateway-session'
+          '@agent/gateway-session'
         );
         configureGatewayFromCIEnvironment(
           Number(session.projectId),

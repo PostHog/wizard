@@ -69,7 +69,7 @@ import {
   isKnownCloudHost,
   type ProjectDataProfile,
 } from '@lib/mcp-project-profile';
-import type { Integration } from '@lib/constants';
+import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {

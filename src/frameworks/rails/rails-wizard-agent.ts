@@ -2,7 +2,7 @@
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { bundlerPackageManager } from '@lib/detection/package-manager';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import {
   getRailsVersion,
   getRailsProjectType,

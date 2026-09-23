@@ -7,7 +7,7 @@ import {
   chooseIntegrationProject,
   scopeInstallDirToProject,
 } from '@lib/detection/project-scope';
-import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
+import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@shared/constants';
 import { authenticate } from '@lib/programs/authenticate';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';

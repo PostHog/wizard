@@ -20,4 +20,4 @@
 /src/lib/programs/web-analytics-doctor/                 @PostHog/team-web-analytics
 
 # Agent runner (harness, model, and tools)
-/src/lib/agent/                                         @PostHog/team-wizard-docs
+/src/agent/                                             @PostHog/team-wizard-docs

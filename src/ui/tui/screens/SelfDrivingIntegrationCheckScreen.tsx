@@ -26,7 +26,7 @@ import {
   PRIVACY_PANEL_LABEL,
 } from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
-import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@lib/constants';
+import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@shared/constants';
 import { Colors } from '@ui/tui/styles';
 
 interface SelfDrivingIntegrationCheckScreenProps {

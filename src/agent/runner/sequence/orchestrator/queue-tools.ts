@@ -1,0 +1,559 @@
+/**
+ * Orchestrator MCP tools, registered into the existing `wizard-tools` server when
+ * a queue is present. They let the orchestrator agent and task agents grow the
+ * queue, report completion with a structured handoff, and read prior handoffs.
+ *
+ * The guard logic and the apply functions are plain, exported, and unit-tested.
+ * `buildOrchestratorTools` wraps them in the SDK `tool()` shape.
+ */
+import { z } from 'zod';
+import { analytics } from '@utils/analytics';
+import { isValidModel, VALID_MODELS } from '@agent/runner/switchboard/models';
+import {
+  isNotNeededReason,
+  NotNeededReason,
+  SkipReason,
+  TaskStatus,
+  type QueueStore,
+  type QueuedTask,
+  type TaskHandoff,
+} from './queue';
+
+/**
+ * The `complete_task` `notNeededReason` description, shared by both harnesses'
+ * schemas so the ask cannot drift between them.
+ *
+ * Named per value rather than left to prose: the distinction the flow needs is
+ * "the user did not hand over a credential" against "there was nothing here to
+ * connect", and an agent asked for that in free text writes it into the handoff
+ * — where {@link applyComplete} deliberately cannot forward it, because handoff
+ * prose on this step reaches live database passwords.
+ */
+export const NOT_NEEDED_REASON_ASK = `Required when status is 'not needed': which of these ended the task. '${NotNeededReason.NotApplicable}' — the step genuinely does not apply to this project. '${NotNeededReason.UserDeclined}' — you asked the user and they declined, cancelled, or never answered. '${NotNeededReason.Blocked}' — something outside your and the user's control stopped you (a credential the project does not have, a plan or permission it lacks, an endpoint you could not reach). Ignored for any other status.`;
+
+/**
+ * The `enqueue_task` `model` description, shared by both harnesses' schemas.
+ *
+ * The field was declared as a bare optional string while
+ * {@link checkEnqueueGuards} rejects anything outside {@link VALID_MODELS}, so
+ * the allow-list existed only in the rejection message — an agent had to guess
+ * a gateway model id, trip the `invalid-model` guard, and spend a turn reading
+ * the list back before it could enqueue. Naming the list where the agent picks
+ * the value costs nothing and makes the guess unnecessary.
+ */
+export const ENQUEUE_MODEL_DESCRIPTION = `Optional model override for this task. Omit it to use the task's default, which is almost always right. If you do set it, it must be one of: ${[
+  ...VALID_MODELS,
+].join(', ')}.`;
+
+/**
+ * The `complete_task` tool description, shared by both harnesses' schemas so
+ * the outcome contract cannot drift — the same discipline {@link HANDOFF_FIELDS}
+ * applies to the fields inside the handoff.
+ *
+ * The closing sentence names the nesting because agents kept learning it from a
+ * rejection instead: a first call with `goals`/`did`/`forNextAgent` at the top
+ * level fails schema validation, and reading that error back was the only place
+ * the shape was stated. Naming it where the agent fills the call in costs
+ * nothing, the same reasoning as {@link ENQUEUE_MODEL_DESCRIPTION}.
+ */
+export const COMPLETE_TASK_DESCRIPTION =
+  'Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. ' +
+  "Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'. " +
+  'The handoff is one nested object: put `goals`, `did` and `forNextAgent` — all three required — inside `handoff`, along with any optional fields, never at the top level.';
+
+/** The per-task remark ask, shared by both harnesses' complete_task schemas. */
+export const REMARK_ASK =
+  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
+
+export interface OrchestratorToolsContext {
+  store: QueueStore;
+  /** Task types the registry knows about. enqueue_task rejects anything else. */
+  validTypes: readonly string[];
+  /**
+   * Types marked `sink: true` — the ones that run last and must therefore
+   * depend, transitively, on every other task in the queue. Enqueuing one with
+   * an incomplete closure is rejected, so a task the runner seeded before the
+   * planner ran can never be left un-awaited.
+   */
+  sinkTypes?: readonly string[];
+  /**
+   * Types the wizard queues itself, before the planner runs. They are deferred
+   * to the end of the drain and may stop to ask the user for input, so the edge
+   * to them is one-way: the sink depends on them, nothing else may. See
+   * {@link seededDepViolations}.
+   */
+  runnerSeededTypes?: readonly string[];
+  /**
+   * Types marked `optional: true` in their frontmatter. Enqueue stamps the flag
+   * from this list — the task's definition decides, never the enqueuing agent —
+   * so terminal failure of such a task unblocks dependents and never fails the
+   * run.
+   */
+  optionalTypes?: readonly string[];
+  /**
+   * The id of the task this tool server is bound to. Each task agent gets its
+   * own wizard-tools server, so attribution holds when independent tasks run
+   * in parallel. Absent for the seed, which is not a task.
+   */
+  currentTaskId?: string;
+}
+
+export interface EnqueueArgs {
+  type: string;
+  label?: string;
+  inputs?: Record<string, unknown>;
+  dependsOn?: string[];
+  model?: string;
+  reason: string;
+}
+
+export type GuardResult =
+  | { ok: true }
+  | { ok: false; guard: string; message: string };
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(
+    ([a], [b]) => a.localeCompare(b),
+  );
+  return `{${entries
+    .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`)
+    .join(',')}}`;
+}
+
+function dedupKey(type: string, inputs: Record<string, unknown>): string {
+  return `${type}::${stableStringify(inputs)}`;
+}
+
+/**
+ * A backstop on total queue size. Tasks can enqueue tasks, so a misbehaving
+ * type could grow the queue without bound. Keeping the graph small is the job
+ * of good agent and skill design, not this number — it only stops a runaway.
+ * The real flow is ~9 tasks, so this sits well clear of it.
+ */
+const MAX_QUEUE_TASKS = 30;
+
+/** Every task id reachable from `roots` through dependsOn edges, roots included. */
+export function dependencyClosure(
+  store: QueueStore,
+  roots: readonly string[],
+): Set<string> {
+  const seen = new Set<string>();
+  const visit = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    for (const dep of store.get(id)?.dependsOn ?? []) visit(dep);
+  };
+  for (const id of roots) visit(id);
+  return seen;
+}
+
+/**
+ * Tasks a sink would fail to wait for. A sink runs last by definition, so any
+ * queued task outside its dependency closure is work whose handoff the sink
+ * would miss — the exact failure mode of a task seeded before the planner ran.
+ * Empty for a non-sink type, and for a sink that covers everything.
+ */
+export function uncoveredBySink(
+  ctx: OrchestratorToolsContext,
+  args: Pick<EnqueueArgs, 'type' | 'dependsOn'>,
+): QueuedTask[] {
+  if (!ctx.sinkTypes?.includes(args.type)) return [];
+  const covered = dependencyClosure(ctx.store, args.dependsOn ?? []);
+  return ctx.store.list().filter((t) => !covered.has(t.id));
+}
+
+/**
+ * Runner-seeded tasks a non-sink task would end up waiting for.
+ *
+ * The edge to a runner-seeded task is one-way. Such a task is deferred to the
+ * end of the drain and may stop to ask the user for input, so anything that
+ * waits on it inherits that wait — a coding step gated on someone typing a
+ * database password. The sink is the sole exception: it runs last by
+ * definition and must depend on every task, this one included.
+ *
+ * The whole closure is checked, not just direct dependencies, so the rule
+ * cannot be reached through an intermediate hop.
+ *
+ * Empty for a sink, and for any task that does not reach a seeded task.
+ */
+export function seededDepViolations(
+  ctx: OrchestratorToolsContext,
+  args: Pick<EnqueueArgs, 'type' | 'dependsOn'>,
+): QueuedTask[] {
+  const seeded = ctx.runnerSeededTypes ?? [];
+  if (seeded.length === 0) return [];
+  if (ctx.sinkTypes?.includes(args.type)) return [];
+  const reached = dependencyClosure(ctx.store, args.dependsOn ?? []);
+  return ctx.store
+    .list()
+    .filter((t) => reached.has(t.id) && seeded.includes(t.type));
+}
+
+/**
+ * Validate an enqueue. Structural checks only — a real type, real dependencies,
+ * a sink that waits for everything, no non-sink task waiting on a runner-seeded
+ * one, not a literal duplicate, and not past the runaway backstop. How much
+ * runs, and in what shape, is the task graph's business, not a knob's.
+ */
+export function checkEnqueueGuards(
+  ctx: OrchestratorToolsContext,
+  args: EnqueueArgs,
+): GuardResult {
+  const tasks = ctx.store.list();
+
+  if (tasks.length >= MAX_QUEUE_TASKS) {
+    return {
+      ok: false,
+      guard: 'queue-full',
+      message: `The queue already holds ${tasks.length} tasks (cap ${MAX_QUEUE_TASKS}). Refine the existing tasks rather than adding more.`,
+    };
+  }
+
+  if (!ctx.validTypes.includes(args.type)) {
+    return {
+      ok: false,
+      guard: 'unknown-type',
+      message: `Unknown task type "${
+        args.type
+      }". Valid types: ${ctx.validTypes.join(', ')}.`,
+    };
+  }
+
+  // Reject an agent pinning a task to a non-allow-listed model.
+  if (args.model !== undefined && !isValidModel(args.model)) {
+    return {
+      ok: false,
+      guard: 'invalid-model',
+      message: `Model "${
+        args.model
+      }" is not allowed. Omit model to use the task default, or pick one of: ${[
+        ...VALID_MODELS,
+      ].join(', ')}.`,
+    };
+  }
+
+  for (const dep of args.dependsOn ?? []) {
+    if (!ctx.store.get(dep)) {
+      return {
+        ok: false,
+        guard: 'unknown-dep',
+        message: `Dependency "${dep}" is not a known task id.`,
+      };
+    }
+  }
+
+  const seededDeps = seededDepViolations(ctx, args);
+  if (seededDeps.length > 0) {
+    return {
+      ok: false,
+      guard: 'seeded-dep',
+      message: `A "${args.type}" task must not wait for ${seededDeps
+        .map((t) => `${t.type} (${t.id})`)
+        .join(
+          ', ',
+        )} — directly or through its dependencies. The wizard placed those, runs them at the end, and they stop to ask the user for input, so anything waiting on one waits on a person. Remove them from dependsOn and enqueue it again; only the final reporting task may depend on them.`,
+    };
+  }
+
+  const uncovered = uncoveredBySink(ctx, args);
+  if (uncovered.length > 0) {
+    const seededUncovered = uncovered.filter((t) =>
+      (ctx.runnerSeededTypes ?? []).includes(t.type),
+    );
+    // "Or to a task already in dependsOn" is the right advice for an ordinary
+    // task and exactly wrong for a runner-seeded one — routing it through an
+    // intermediate satisfies the closure while breaking the one-way rule above.
+    // So a seeded task is named with the only placement that is legal for it.
+    const how =
+      seededUncovered.length === uncovered.length
+        ? "Add them to this task's own dependsOn — for a task the wizard placed, that is the only legal spot — and enqueue it again."
+        : 'Add them to dependsOn, or to a task already in dependsOn, and enqueue it again.';
+    return {
+      ok: false,
+      guard: 'sink-closure',
+      message: `A "${
+        args.type
+      }" task runs last, so it must depend on every other task — directly or through its dependencies. These are not covered: ${uncovered
+        .map((t) => `${t.type} (${t.id})`)
+        .join(', ')}. ${how}`,
+    };
+  }
+
+  const key = dedupKey(args.type, args.inputs ?? {});
+  if (
+    tasks.some(
+      (t) =>
+        t.status !== TaskStatus.Failed && dedupKey(t.type, t.inputs) === key,
+    )
+  ) {
+    return {
+      ok: false,
+      guard: 'dedup',
+      message: `A "${args.type}" task with these inputs already exists.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+export type EnqueueResult =
+  | { ok: true; task: QueuedTask }
+  | { ok: false; guard: string; message: string };
+
+export function applyEnqueue(
+  ctx: OrchestratorToolsContext,
+  args: EnqueueArgs,
+): EnqueueResult {
+  const guard = checkEnqueueGuards(ctx, args);
+  if (!guard.ok) return guard;
+
+  const task = ctx.store.enqueue({
+    type: args.type,
+    label: args.label,
+    inputs: args.inputs ?? {},
+    dependsOn: args.dependsOn ?? [],
+    model: args.model,
+    optional: (ctx.optionalTypes ?? []).includes(args.type) || undefined,
+    enqueuedBy: ctx.currentTaskId ?? 'orchestrator',
+  });
+  return { ok: true, task };
+}
+
+export type CompleteResult = { ok: true } | { ok: false; message: string };
+
+export type CompleteArgs = {
+  status: 'done' | 'failed' | 'not needed';
+  handoff: TaskHandoff;
+  remark?: string;
+  notNeededReason?: NotNeededReason;
+};
+
+export function applyComplete(
+  ctx: OrchestratorToolsContext,
+  args: CompleteArgs,
+): CompleteResult {
+  const id = ctx.currentTaskId;
+  if (!id) {
+    return {
+      ok: false,
+      message: 'complete_task can only be called by a running task agent.',
+    };
+  }
+  if (args.remark) {
+    analytics.wizardCapture('orchestrator remark', {
+      task_type: ctx.store.get(id)?.type,
+      remark: args.remark,
+    });
+  }
+  if (args.status === TaskStatus.Failed) {
+    ctx.store.fail(
+      id,
+      { type: 'self-reported', message: args.handoff.forNextAgent },
+      args.handoff,
+    );
+  } else if (args.status === TaskStatus.Skipped) {
+    // The agent's own words stay in the handoff and out of telemetry. This flow
+    // reaches live database and API credentials, and the repo has no redaction
+    // pass for handoff prose, so the event carries the task type, the reason,
+    // and the closed set of `notNeededReason` values — enough to separate an
+    // agent no-op from a user decline from a blocked step, with no free text.
+    ctx.store.skip(
+      id,
+      SkipReason.AgentNotNeeded,
+      args.handoff,
+      isNotNeededReason(args.notNeededReason)
+        ? args.notNeededReason
+        : undefined,
+    );
+  } else {
+    ctx.store.complete(id, args.handoff);
+  }
+  return { ok: true };
+}
+
+export function applyReadHandoffs(
+  ctx: OrchestratorToolsContext,
+  args: { type?: string; taskId?: string },
+): TaskHandoff[] {
+  if (args.taskId) {
+    const h = ctx.store.readHandoff(args.taskId);
+    return h ? [h] : [];
+  }
+  if (args.type) {
+    return ctx.store.readHandoffsByType(args.type);
+  }
+  // No filter: every handoff of a dependency of the current task.
+  const currentId = ctx.currentTaskId;
+  const current = currentId ? ctx.store.get(currentId) : undefined;
+  if (!current) return [];
+  return current.dependsOn
+    .map((depId) => ctx.store.readHandoff(depId))
+    .filter((h): h is TaskHandoff => h !== null);
+}
+
+// Caps each LLM-authored free-text field; queue.json rewrites whole per transition.
+const HANDOFF_TEXT_MAX = 8_000;
+
+/**
+ * The one description of every handoff field, shared by both harnesses'
+ * `complete_task` schemas — the zod shape below and the typebox mirror in
+ * `harness/pi/orchestrator-tools.ts`. A field an agent cannot see is a field it
+ * cannot fill, so the two drifting silently drops whatever the missing field
+ * carried; `__tests__/handoff-schema-parity.test.ts` holds them level.
+ */
+export const HANDOFF_FIELDS = {
+  goals: 'What this task was asked to achieve.',
+  did: 'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+  forNextAgent: 'What the next agent should know.',
+  filesTouched: 'Paths of every file you edited.',
+  evidence:
+    'How you know it worked — what you ran or observed, not what you expect.',
+  assumptions: 'What you assumed about the app and could not verify.',
+  conflict:
+    'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
+  reportSection:
+    'A finished markdown section about your work for the run report, written only when your task instructions ask for one. The reporting task includes it as its own section instead of rewriting it.',
+} as const satisfies Record<keyof Required<TaskHandoff>, string>;
+
+const HANDOFF_SHAPE = {
+  goals: z.string().max(HANDOFF_TEXT_MAX).describe(HANDOFF_FIELDS.goals),
+  did: z.string().max(HANDOFF_TEXT_MAX).describe(HANDOFF_FIELDS.did),
+  forNextAgent: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .describe(HANDOFF_FIELDS.forNextAgent),
+  filesTouched: z
+    .array(z.string().max(1_000))
+    .max(200)
+    .optional()
+    .describe(HANDOFF_FIELDS.filesTouched),
+  evidence: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(HANDOFF_FIELDS.evidence),
+  assumptions: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(HANDOFF_FIELDS.assumptions),
+  conflict: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(HANDOFF_FIELDS.conflict),
+  reportSection: z
+    .string()
+    .max(HANDOFF_TEXT_MAX)
+    .optional()
+    .describe(HANDOFF_FIELDS.reportSection),
+};
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const HANDOFF_SHAPE_KEYS: readonly string[] = Object.keys(HANDOFF_SHAPE);
+
+/**
+ * `complete_task`'s own arguments, held level with the pi mirror by the same
+ * parity test that guards the handoff — a top-level field can go missing on the
+ * harness that runs just as easily as a nested one.
+ */
+const COMPLETE_SHAPE = {
+  status: z.enum(['done', 'failed', 'not needed']),
+  handoff: z.object(HANDOFF_SHAPE),
+  remark: z.string().optional().describe(REMARK_ASK),
+  notNeededReason: z
+    .enum([
+      NotNeededReason.NotApplicable,
+      NotNeededReason.UserDeclined,
+      NotNeededReason.Blocked,
+    ])
+    .optional()
+    .describe(NOT_NEEDED_REASON_ASK),
+};
+
+/** Exported so the parity test can compare both harnesses' field sets. */
+export const COMPLETE_SHAPE_KEYS: readonly string[] =
+  Object.keys(COMPLETE_SHAPE);
+
+type SdkTool = (
+  name: string,
+  description: string,
+  // The SDK accepts a plain object of zod fields as the schema.
+  schema: Record<string, z.ZodTypeAny>,
+  handler: (args: never) => unknown,
+) => unknown;
+
+function textResult(text: string, isError = false) {
+  return { isError, content: [{ type: 'text' as const, text }] };
+}
+
+/**
+ * Build the orchestrator tools in the SDK `tool()` shape. Called from
+ * createWizardToolsServer only when a queue context is present.
+ */
+export function buildOrchestratorTools(
+  tool: SdkTool,
+  ctx: OrchestratorToolsContext,
+): unknown[] {
+  const enqueueTask = tool(
+    'enqueue_task',
+    'Add a task to the orchestrator queue. Use it to seed work and to enqueue follow-up work you discover. Keep tasks small and discrete.',
+    {
+      type: z
+        .string()
+        .describe(`The task type. One of: ${ctx.validTypes.join(', ')}.`),
+      label: z
+        .string()
+        .optional()
+        .describe(
+          'A short label for the UI — the action in a few words (e.g. "Add the PostHog SDK", "Initialize PostHog"). Leave out file names, class names, and other specifics.',
+        ),
+      inputs: z.record(z.unknown()).optional(),
+      dependsOn: z
+        .array(z.string())
+        .optional()
+        .describe('Task ids that must be done before this task runs.'),
+      model: z.string().optional().describe(ENQUEUE_MODEL_DESCRIPTION),
+      reason: z.string().describe('One line on why this task is needed.'),
+    },
+    ((args: EnqueueArgs) => {
+      const res = applyEnqueue(ctx, args);
+      if (!res.ok) {
+        analytics.wizardCapture('orchestrator guard tripped', {
+          guard: res.guard,
+          type: args.type,
+        });
+        return textResult(res.message, true);
+      }
+      return textResult(JSON.stringify({ id: res.task.id }));
+    }) as (args: never) => unknown,
+  );
+
+  const completeTask = tool(
+    'complete_task',
+    COMPLETE_TASK_DESCRIPTION,
+    COMPLETE_SHAPE,
+    ((args: CompleteArgs) => {
+      const res = applyComplete(ctx, args);
+      if (!res.ok) return textResult(res.message, true);
+      return textResult('ok');
+    }) as (args: never) => unknown,
+  );
+
+  const readHandoffs = tool(
+    'read_handoffs',
+    'Read structured handoffs from earlier tasks. With no argument, returns the handoffs of your dependencies.',
+    {
+      type: z.string().optional(),
+      taskId: z.string().optional(),
+    },
+    ((args: { type?: string; taskId?: string }) => {
+      const handoffs = applyReadHandoffs(ctx, args);
+      return textResult(JSON.stringify(handoffs, null, 2));
+    }) as (args: never) => unknown,
+  );
+
+  return [enqueueTask, completeTask, readHandoffs];
+}
