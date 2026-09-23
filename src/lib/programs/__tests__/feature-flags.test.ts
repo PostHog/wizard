@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import {
-  buildRegistry,
-  parseAgentPrompt,
-} from '@agent/agent-prompt-loader';
+import { buildRegistry, parseAgentPrompt } from '@agent/agent-prompt-loader';
 import { Integration } from '@shared/constants';
 import { featureFlagsConfig } from '@lib/programs/feature-flags/index';
 import { FEATURE_FLAGS_PROMPTS } from '@lib/programs/feature-flags/prompts';
