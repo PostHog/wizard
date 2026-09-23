@@ -19,6 +19,7 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   signal?: AbortSignal;
   onProgress?: (event: AgentProgress) => void;
   interaction?: AgentInteraction;
+  signal?: AbortSignal;
 }): Promise<RunResult>
 ```
 
@@ -36,13 +37,12 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   refreshed auth.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
-  (`AgentFailure`: optional message, outro data, `Error`, exit code, error code,
-  and detail). `failure.error` may be present when the agent caught an `Error`;
-  `Crashed` requires one. A missing `Error` object does not mean the outcome
-  succeeded, and not every failed result has a code or message. Every result
-  carries `skillId` and a `snapshot` of what the run reported: tasks, status
-  lines, stage, token usage totals, final cost, dashboard and notebook URLs,
-  handoff text.
+  (`AgentFailure`: a stable error code and a message, plus optional outro data,
+  `Error`, exit code and detail). `failure.error` may be present when the agent
+  caught an `Error`; `Crashed` requires one. A missing `Error` object does not
+  mean the outcome succeeded. Every result carries `skillId` and a `snapshot` of
+  what the run reported: tasks, status lines, stage, token usage totals, final
+  cost, dashboard and notebook URLs, handoff text.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
   `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
@@ -52,16 +52,18 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   resolves with whether to keep an optional task, `cancelTaskNotice()` declines
   it.
 - `signal`: an optional `AbortSignal` from the host. A pre-aborted signal
-  returns `Aborted` before execution; aborting during execution is passed to the
-  active harness and returns `Aborted` with the current snapshot. It does not
+  returns `Aborted` before execution. Aborting during execution is passed to the
+  active harness and returns `Aborted` with the current snapshot, unless the run
+  had already decided a failure; that failure stays the outcome. It does not
   pause or resume a run.
-- Errors: the agent does not exit the process or throw for a decided failure. It
-  catches unexpected errors in its run body, logs them, and returns
-  `outcome: Crashed` with the caught `Error` attached (or an `Error` wrapper for
-  a non-`Error` throw). A gateway 401 emits `authError` and then fails. The host
-  decides how to present a returned failure, set an exit code, or rethrow an
-  attached error. Final scan-report flushing runs outside that catch and can
-  still reject the promise; hosts requiring a hard promise boundary catch it.
+- Errors: the agent does not exit the process or throw for a decided failure.
+  It catches errors in its run body and logs them: a coded error becomes
+  `Failed`, and an uncoded throw becomes `Crashed` with the caught `Error`
+  attached (or an `Error` wrapper for a non-`Error` throw). A gateway 401 emits
+  `authError` and returns an auth failure. The host decides how to present a
+  returned failure, show auth UI, set an exit code, or rethrow an attached
+  error. Failed-run skill cleanup and the final scan-report flush are best
+  effort and never replace the outcome.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
