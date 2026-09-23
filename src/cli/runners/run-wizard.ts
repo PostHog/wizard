@@ -20,6 +20,7 @@ import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
+import { cliAuthHost } from './auth-host';
 
 const WIZARD_VERSION = VERSION;
 
@@ -63,7 +64,7 @@ export async function advanceStep(
   config: ProgramConfig,
 ): Promise<void> {
   if (step.screenId === 'auth') {
-    await authenticate(store.session, config.id, getUI());
+    await authenticate(store.session, config.id, cliAuthHost());
     maybeStampAiSdkDetected(store.session);
   } else if (step.runProgramId) {
     await runProgramAgent(
@@ -258,16 +259,19 @@ export function runWizard(
           if (shown(step)) await advanceStep(step, activeTui.store, config);
         }
       } else if (skipAgent) {
-        const { getOrAskForProjectData } = await import('@utils/setup-utils');
+        const { getOrAskForProjectData } = await import('@programs');
         const { projectApiKey, host, accessToken, projectId } =
-          await getOrAskForProjectData({
-            signup: session.signup,
-            ci: session.ci,
-            apiKey: session.apiKey,
-            projectId: session.projectId,
-            baseUrl: session.baseUrl,
-            programId: config.id,
-          });
+          await getOrAskForProjectData(
+            {
+              signup: session.signup,
+              ci: session.ci,
+              apiKey: session.apiKey,
+              projectId: session.projectId,
+              baseUrl: session.baseUrl,
+              programId: config.id,
+            },
+            cliAuthHost(),
+          );
         activeTui.store.setCredentials({
           accessToken,
           projectApiKey,

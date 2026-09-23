@@ -74,8 +74,8 @@ vi.mock('@shared/skill-menu', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@utils/setup-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/setup-utils')>()),
+vi.mock('@programs/project-data', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/project-data')>()),
   getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@utils/wizard-abort', async (importOriginal) => ({

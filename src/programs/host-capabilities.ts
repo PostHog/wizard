@@ -1,9 +1,10 @@
-import type { AgentProgress, SpinnerHandle } from '@agent/types';
-import type { AuthProjection } from '@programs/authenticate';
+import type { AgentProgress, OutroData, SpinnerHandle } from '@agent/types';
+import type { ErrorCode } from '@shared/errors';
+import type { AuthHost } from '@programs/authenticate';
 
 /** Effects the non-interactive host supplies while a program scopes its project. */
 export type ProgramCiHost = {
-  auth: AuthProjection;
+  auth: AuthHost;
   log: {
     info(message: string): void;
     warn(message: string): void;
@@ -18,4 +19,14 @@ export type ProgramRunHost = {
   info(message: string): void;
   warn(message: string): void;
   spinner(): SpinnerHandle;
+};
+
+/** A failure the host ends the run with, as its abort path renders and exits. */
+export type HostFailure = {
+  message?: string;
+  outroData?: OutroData;
+  error?: Error;
+  exitCode?: number;
+  code?: ErrorCode;
+  detail?: Record<string, unknown>;
 };

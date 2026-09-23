@@ -11,7 +11,8 @@
  */
 
 import type { Credentials } from '@lib/wizard-session';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@programs';
+import { tuiAuthHost } from '@tui/auth-host';
 import { Program, createPosthogInferenceAuthProvider } from '@programs';
 import type { WizardStore } from '@tui/store';
 import type { ApiUser } from '@shared/api';
@@ -95,22 +96,25 @@ export function createMcpSuggestedPromptsServices(
 ): McpSuggestedPromptsServices {
   return {
     performLogin: async () => {
-      const result = await getOrAskForProjectData({
-        signup: false,
-        ci: false,
-        apiKey: undefined,
-        projectId: undefined,
-        email: undefined,
-        region: undefined,
-        baseUrl: store.session.baseUrl,
-        // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
-        // read on every product surface (flags, experiments, surveys,
-        // replays, errors, web/LLM analytics, cohorts, persons) plus
-        // annotation read/write. Persistence writes (dashboard, insight,
-        // notebook) come for free from the base set. See
-        // `src/programs/oauth/program-scopes.ts`.
-        programId: Program.McpTutorial,
-      });
+      const result = await getOrAskForProjectData(
+        {
+          signup: false,
+          ci: false,
+          apiKey: undefined,
+          projectId: undefined,
+          email: undefined,
+          region: undefined,
+          baseUrl: store.session.baseUrl,
+          // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
+          // read on every product surface (flags, experiments, surveys,
+          // replays, errors, web/LLM analytics, cohorts, persons) plus
+          // annotation read/write. Persistence writes (dashboard, insight,
+          // notebook) come for free from the base set. See
+          // `src/programs/oauth/program-scopes.ts`.
+          programId: Program.McpTutorial,
+        },
+        tuiAuthHost(store),
+      );
       return {
         credentials: {
           accessToken: result.accessToken,

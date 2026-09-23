@@ -46,11 +46,7 @@ export {
 export { flushScanReport } from './yara-hooks';
 export { downloadSkill } from './tools';
 
-/**
- * Streams one suggested MCP prompt. Hosts reach it through `@programs`; the
- * wrapper loads the streaming module on first call so the startup chunk does
- * not grow.
- */
+/** Streams one suggested MCP prompt; hosts reach it through `@programs`, loaded on first call. */
 export async function* runMcpPromptViaSdk(
   args: Parameters<
     typeof import('./mcp-prompt-streaming').runMcpPromptViaSdk

@@ -30,7 +30,7 @@ import {
 } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
 import { authenticate } from '@programs/authenticate';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@programs/project-data';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';

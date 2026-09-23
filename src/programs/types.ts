@@ -8,7 +8,13 @@ export type {
 } from './program-step';
 export type { ProgramCompletionContext } from './program-run';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
-export type { ProgramCiHost, ProgramRunHost } from './host-capabilities';
+export type {
+  HostFailure,
+  ProgramCiHost,
+  ProgramRunHost,
+} from './host-capabilities';
+export type { AuthHost } from './authenticate';
+export type { ProjectDataHost } from './project-data';
 export type {
   ProgramInput,
   ProgramOptions,

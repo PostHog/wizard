@@ -148,12 +148,8 @@ export interface TokenUsageDelta {
   model?: string;
 }
 
-/** The run spinner as the agent drives it: `WizardUI.spinner()` returns one. */
-export interface SpinnerHandle {
-  start(message?: string): void;
-  stop(message?: string): void;
-  message(msg?: string): void;
-}
+/** The run spinner as the agent drives it; the host renders it. */
+export type { SpinnerHandle } from '@shared/spinner';
 
 /**
  * Context the agent attaches to a 401 so the host can pick the right copy.

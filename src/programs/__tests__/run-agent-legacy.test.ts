@@ -59,7 +59,8 @@ vi.mock('@agent/runner', async (original) => ({
   ...(await original<typeof import('@agent/runner')>()),
   runAgent: vi.fn(),
 }));
-vi.mock('@programs/authenticate', () => ({
+vi.mock('@programs/authenticate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/authenticate')>()),
   authenticate: vi.fn().mockResolvedValue(undefined),
   refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
 }));

@@ -33,7 +33,8 @@ import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@tui/services/mcp-role-prompts';
 import { fetchSlackConnected } from '@shared/api';
 import { Program } from '@programs';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@programs';
+import { tuiAuthHost } from '@tui/auth-host';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { openTrackedLink, withUtm } from '@utils/links';
@@ -225,13 +226,16 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
     void (async () => {
       try {
-        const data = await getOrAskForProjectData({
-          signup: false,
-          ci: false,
-          apiKey: undefined,
-          projectId: undefined,
-          programId: Program.SlackConnect,
-        });
+        const data = await getOrAskForProjectData(
+          {
+            signup: false,
+            ci: false,
+            apiKey: undefined,
+            projectId: undefined,
+            programId: Program.SlackConnect,
+          },
+          tuiAuthHost(store),
+        );
         if (cancelled) return;
         store.setCredentials({
           accessToken: data.accessToken,

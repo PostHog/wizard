@@ -1,4 +1,4 @@
-import type { ProgramCiHost, ProgramRunHost } from '@programs/types';
+import type { AuthHost, ProgramCiHost, ProgramRunHost } from '@programs/types';
 
 export function testProgramRunHost(session?: {
   frameworkContext: Record<string, unknown>;
@@ -21,15 +21,28 @@ export function testProgramRunHost(session?: {
 
 export function testProgramCiHost(): ProgramCiHost {
   return {
-    auth: {
-      setCredentials: () => undefined,
-      setRoleAtOrganization: () => undefined,
-      setApiUser: () => undefined,
-    },
+    auth: testAuthHost(),
     log: {
       info: () => undefined,
       warn: () => undefined,
     },
     onProgress: () => undefined,
+  };
+}
+
+export function testAuthHost(): AuthHost {
+  const noop = () => undefined;
+  return {
+    log: { info: noop, warn: noop, error: noop, success: noop },
+    spinner: () => ({ start: noop, stop: noop, message: noop }),
+    setLoginUrl: noop,
+    setAuthorizeUrl: noop,
+    waitForManualAuthCode: () => new Promise<string>(noop),
+    showSessionTimeout: noop,
+    showPortConflict: () => Promise.resolve(),
+    setCredentials: noop,
+    setRoleAtOrganization: noop,
+    setApiUser: noop,
+    abort: () => Promise.reject(new Error('aborted')),
   };
 }

@@ -27,6 +27,7 @@ import {
 import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { cliAuthHost } from './auth-host';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -278,7 +279,7 @@ export function runNonInteractive(
       if (config.ciPreRun) {
         const ui = getUI();
         await config.ciPreRun(session, {
-          auth: ui,
+          auth: cliAuthHost(),
           log: ui.log,
           onProgress: createUiReducer(ui),
         });

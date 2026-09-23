@@ -63,6 +63,7 @@ import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
 import { startAuditLedgerWatcher } from '@programs/audit/ledger-watcher';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { cliAuthHost } from './auth-host';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
@@ -165,7 +166,7 @@ async function runProgram(
   // agent run in the same invocation (self-driving's integration phase) reuses
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
-  await authenticate(session, programConfig.id, getUI());
+  await authenticate(session, programConfig.id, cliAuthHost());
   maybeStampAiSdkDetected(session);
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is

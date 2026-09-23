@@ -13,10 +13,12 @@ import {
 import { authenticate } from '@programs/authenticate';
 import type { ProgramCiHost } from '@programs/host-capabilities';
 import { buildSession } from '@lib/wizard-session';
+import { testAuthHost } from '../../../../test/program-host';
 import { analytics } from '@utils/analytics';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
-vi.mock('@programs/authenticate', () => ({
+vi.mock('@programs/authenticate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/authenticate')>()),
   authenticate: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@programs/detection/agentic', async (importOriginal) => ({
@@ -77,6 +79,7 @@ describe('chooseIntegrationProject', () => {
 describe('scopeInstallDirToProject', () => {
   const host: ProgramCiHost = {
     auth: {
+      ...testAuthHost(),
       setCredentials: vi.fn(),
       setRoleAtOrganization: vi.fn(),
       setApiUser: vi.fn(),

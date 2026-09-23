@@ -40,7 +40,7 @@ vi.mock('@utils/debug', async (actual) => ({
   logToFile: vi.fn(),
   debug: vi.fn(),
 }));
-vi.mock('@utils/setup-utils', async (actual) => ({
+vi.mock('@programs/project-data', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   getOrAskForProjectData: vi.fn(pending),
 }));

@@ -40,11 +40,7 @@ export async function detectSourceMapsProjects(
   );
   return entry.detectSourceMapsProjects(...args);
 }
-/**
- * Agent capabilities a host reaches through programs: skill installs (scanned
- * with the agent's rules) and the suggested-prompt stream, whose SDK module
- * the agent loads on first call.
- */
+/** Agent capabilities hosts reach through programs; the prompt stream loads on first call. */
 export { downloadSkill, runMcpPromptViaSdk } from '@agent';
 /** Task streaming loads when a run starts, not at CLI startup. */
 export const loadTaskStream = () => import('./task-stream/index');
@@ -58,8 +54,13 @@ export {
 } from './program-registry';
 export { agentSkillConfig } from './program-registry';
 export { FRAMEWORK_REGISTRY } from './registry';
-export { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
+export {
+  authenticate,
+  bindAuthHost,
+  refreshAccessTokenIfNeeded,
+} from './authenticate';
 export { detectErrorCode } from './detect-map';
+export { getOrAskForProjectData } from './project-data';
 export {
   AUDIT_CHECKS_KEY,
   AUDIT_REPORT_FILE,

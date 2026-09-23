@@ -151,8 +151,8 @@ repos.
 URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
 screen sequence
 `detect → intro → health-check → auth → self-driving-github → run → outro`). The
-TUI deck at `src/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy
-that defines signal sources + scouts + scanners in plain language, wired via
+TUI deck at `src/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy that
+defines signal sources + scouts + scanners in plain language, wired via
 `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every other program, so
 nothing else is affected). `selfDrivingConfig` is built from the
 `createSkillProgram` factory (`src/programs/agent-skill/`) with overrides.
