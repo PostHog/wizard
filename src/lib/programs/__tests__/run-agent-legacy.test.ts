@@ -80,6 +80,7 @@ vi.mock('@utils/wizard-abort', async (original) => ({
 }));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
+  detectPostHogIntegration: vi.fn(),
 }));
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
