@@ -21,6 +21,8 @@ import {
 import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
+import { analytics } from '@utils/analytics';
+import { captureSwitchboardDecision } from '../binding-telemetry';
 
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
@@ -37,6 +39,13 @@ vi.mock('@agent', async (importOriginal) => ({
     Crashed: 'crashed',
   },
 }));
+vi.mock('../binding-telemetry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../binding-telemetry')>();
+  return {
+    ...actual,
+    captureSwitchboardDecision: vi.fn(actual.captureSwitchboardDecision),
+  };
+});
 vi.mock('../runtime-registry', () => ({
   getRuntimeProgramConfig: vi.fn(),
 }));
@@ -452,6 +461,162 @@ describe('runProgram', () => {
       failure: { code: ErrorCodes.AgentAbort },
     });
     expect(workflow).not.toHaveBeenCalled();
+  });
+
+  it('overrides reach the binding and the decision is captured once', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const setTag = vi.spyOn(analytics, 'setTag');
+    const observed: ProgramProgress[] = [];
+
+    try {
+      const result = await runProgram(
+        'metrics',
+        {
+          installDir: '/project',
+          credentials,
+          overrides: { harness: Harness.anthropic, sequence: Sequence.linear },
+        },
+        { onProgress: (progress) => observed.push(progress) },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      const binding = vi.mocked(runAgent).mock.calls[0][0].binding;
+      expect(binding).toMatchObject({
+        sequence: Sequence.linear,
+        harness: Harness.anthropic,
+      });
+      expect(captureSwitchboardDecision).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          program: 'metrics',
+          cliHarness: Harness.anthropic,
+          cliSequence: Sequence.linear,
+        }),
+        binding,
+      );
+      expect(setTag).toHaveBeenCalledWith('sequence', Sequence.linear);
+      expect(setTag).toHaveBeenCalledWith('harness', Harness.anthropic);
+      expect(
+        setTag.mock.calls.filter(
+          ([key]) => key === 'sequence' || key === 'harness',
+        ),
+      ).toHaveLength(2);
+      expect(observed).toContainEqual({
+        kind: 'program',
+        data: expect.objectContaining({ binding }),
+      });
+      expect(result.data.binding).toEqual(binding);
+    } finally {
+      setTag.mockRestore();
+    }
+  });
+
+  it('uses a host-resolved binding without capturing the decision again', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const setTag = vi.spyOn(analytics, 'setTag');
+    const binding = {
+      sequence: Sequence.linear,
+      harness: Harness.anthropic,
+      model: 'claude-test',
+    };
+
+    try {
+      const result = await runProgram('metrics', {
+        installDir: '/project',
+        credentials,
+        binding,
+        overrides: { harness: Harness.pi },
+      });
+
+      expect(vi.mocked(runAgent).mock.calls[0][0].binding).toBe(binding);
+      expect(captureSwitchboardDecision).not.toHaveBeenCalled();
+      expect(setTag).not.toHaveBeenCalledWith('harness', expect.anything());
+      expect(result.data.binding).toEqual(binding);
+    } finally {
+      setTag.mockRestore();
+    }
+  });
+
+  it('flags load after credentials resolve and AI approval', async () => {
+    const order: string[] = [];
+    vi.mocked(runAgent).mockImplementation(() => {
+      order.push('runAgent');
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+    const resolve = vi.fn(() => {
+      order.push('credentials');
+      return Promise.resolve({ ...credentials, apiUser: null });
+    });
+    const awaitAiApproval = vi.fn(() => {
+      order.push('approval');
+      return Promise.resolve(true);
+    });
+    const featureFlags = vi.fn(() => {
+      order.push('flags');
+      return Promise.resolve({
+        flags: { 'wizard-test-flag': 'on' },
+        payloads: { 'wizard-test-flag': { variant: 'b' } },
+      });
+    });
+
+    const result = await runProgram(
+      'metrics',
+      { installDir: '/project' },
+      { credentials: { resolve }, awaitAiApproval, featureFlags },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(order).toEqual(['credentials', 'approval', 'flags', 'runAgent']);
+    expect(vi.mocked(runAgent).mock.calls[0][0]).toMatchObject({
+      wizardFlags: { 'wizard-test-flag': 'on' },
+      wizardFlagPayloads: { 'wizard-test-flag': { variant: 'b' } },
+    });
+  });
+
+  it('prefers the input flags over the loader', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const featureFlags = vi.fn();
+
+    await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        credentials,
+        wizardFlags: { 'wizard-test-flag': 'input' },
+      },
+      { featureFlags },
+    );
+
+    expect(featureFlags).not.toHaveBeenCalled();
+    expect(vi.mocked(runAgent).mock.calls[0][0].wizardFlags).toEqual({
+      'wizard-test-flag': 'input',
+    });
+  });
+
+  it('returns a decided failure when the flag loader rejects', async () => {
+    const featureFlags = vi
+      .fn()
+      .mockRejectedValue(new Error('malformed CI flag override'));
+
+    const result = await runProgram(
+      'metrics',
+      { installDir: '/project', credentials },
+      { featureFlags },
+    );
+
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Failed,
+      failure: { message: 'malformed CI flag override' },
+    });
+    expect(runAgent).not.toHaveBeenCalled();
   });
 
   it('resolves credentials once through the caller provider', async () => {
@@ -882,6 +1047,52 @@ describe('runProgram', () => {
       'parent',
     ]);
     expect(result.data.composition.completedRuns).toContain('integrate-run');
+  });
+
+  it('passes overrides to a composed child and loads its flags when neither input has them', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const featureFlags = vi
+      .fn()
+      .mockResolvedValue({ flags: { 'wizard-test-flag': 'on' }, payloads: {} });
+
+    const result = await runProgram(
+      'self-driving',
+      {
+        installDir: '/project',
+        credentials,
+        overrides: { harness: Harness.anthropic },
+        composition: {
+          integration: {
+            installDir: '/project/app',
+            run: { ...run, integrationLabel: 'nextjs' },
+          },
+          handoffConfirmed: true,
+          githubConnected: true,
+        },
+      },
+      { featureFlags },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(featureFlags).toHaveBeenCalledTimes(2);
+    expect(
+      vi
+        .mocked(runAgent)
+        .mock.calls.map(([config]) => [
+          config.programId,
+          config.binding.harness,
+          config.wizardFlags,
+        ]),
+    ).toEqual([
+      ['posthog-integration', Harness.anthropic, { 'wizard-test-flag': 'on' }],
+      ['self-driving', Harness.anthropic, { 'wizard-test-flag': 'on' }],
+    ]);
   });
 
   it('stops the composed run when the child fails', async () => {

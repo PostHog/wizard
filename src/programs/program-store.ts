@@ -1,4 +1,8 @@
-import type { AgentProgress, RunResult } from '../agent/types.js';
+import type {
+  AgentProgress,
+  ResolvedBinding,
+  RunResult,
+} from '../agent/types.js';
 import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
 import type { Integration } from '../shared/constants.js';
 import { appendStatus } from '../shared/status-history.js';
@@ -61,6 +65,8 @@ export type ProgramInvocationData = {
     parentProgramId: string | null;
     completedRuns: string[];
   };
+  /** The route of the latest agent run; null until one resolves. */
+  binding: ResolvedBinding | null;
 };
 
 export type ProgramInvocationDataInit = Partial<
@@ -242,6 +248,7 @@ export class ProgramStore {
         parentProgramId: initial.composition?.parentProgramId ?? null,
         completedRuns: initial.composition?.completedRuns ?? [],
       },
+      binding: null,
     });
   }
 
@@ -293,6 +300,11 @@ export class ProgramStore {
     if (patch.completedRuns !== undefined) {
       this.data.composition.completedRuns = [...patch.completedRuns];
     }
+    this.emitData();
+  }
+
+  setBinding(binding: ResolvedBinding): void {
+    this.data.binding = structuredClone(binding);
     this.emitData();
   }
 

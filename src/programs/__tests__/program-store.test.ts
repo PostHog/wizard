@@ -2,7 +2,7 @@ import { RunOutcome } from '@agent';
 import { OutroKind } from '@agent/progress';
 import type { RunResult } from '@agent/types';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
-import { Integration } from '@shared/constants';
+import { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import {
   ProgramStore,
@@ -313,6 +313,7 @@ it('owns authentication, detection, and composition data independently of progre
     },
     composition: { parentProgramId: null, completedRuns: [] },
     eventPlan: [],
+    binding: null,
   });
 
   const credentials = {
@@ -343,6 +344,12 @@ it('owns authentication, detection, and composition data independently of progre
   store.setComposition({ parentProgramId: 'self-driving', completedRuns });
   store.markProgramCompleted('follow-up');
   store.markProgramCompleted('follow-up');
+  const binding = {
+    sequence: Sequence.linear,
+    harness: Harness.anthropic,
+    model: 'claude-test',
+  };
+  store.setBinding(binding);
 
   credentials.accessToken = 'changed input';
   apiProject.name = 'Changed input';
@@ -350,6 +357,7 @@ it('owns authentication, detection, and composition data independently of progre
   frameworkValue.paths.push('changed input');
   eventPlan[0].name = 'changed input';
   completedRuns.push('changed input');
+  binding.model = 'changed input';
 
   expect(store.readData()).toMatchObject({
     credentials: { accessToken: 'test-access-token' },
@@ -367,6 +375,7 @@ it('owns authentication, detection, and composition data independently of progre
       completedRuns: ['integrate-run', 'follow-up'],
     },
     eventPlan: [{ name: 'signup', description: 'Account created' }],
+    binding: { sequence: Sequence.linear, model: 'claude-test' },
   });
 
   const copy = store.readData();

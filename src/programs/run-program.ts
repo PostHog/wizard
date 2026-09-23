@@ -11,9 +11,10 @@ import type {
   RunResult,
 } from '@agent/types';
 import { getSkillsBaseUrl } from '@shared/constants';
-import type { Integration } from '@shared/constants';
+import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { FrameworkConfig } from './framework-config';
 import type { DetectedSource } from './warehouse-sources/types';
@@ -46,6 +47,19 @@ import {
   type SettledProgramRun,
 } from './program-store';
 
+/** Launch-time routing choices, such as the CLI's --harness, --sequence and --model. */
+export type ProgramOverrides = {
+  harness?: Harness;
+  sequence?: Sequence;
+  model?: string;
+};
+
+/** Feature flags and their payloads from one evaluation. */
+export type WizardFlagSnapshot = {
+  flags: Record<string, string>;
+  payloads: Record<string, unknown>;
+};
+
 export interface ProgramInput extends ProgramRunDefinitionInput {
   installDir: string;
   /** Run-scoped credentials, or provide options.credentials instead. */
@@ -54,7 +68,9 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   runId?: string;
   /** Data-only override for a program whose legacy recipe still takes a session. */
   run?: AgentRunDefinition;
+  /** An already-resolved binding; runProgram then skips routing and its telemetry. */
   binding?: RunConfig['binding'];
+  overrides?: ProgramOverrides;
   composed?: boolean;
   skillId?: string;
   integration?: Integration | null;
@@ -62,6 +78,7 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   flags?: Partial<RunInput['flags']>;
   mcp?: { features?: string[]; apiKey?: string };
   host?: RunInput['host'];
+  /** Evaluated flags; when absent, runProgram asks options.featureFlags. */
   wizardFlags?: Record<string, string>;
   wizardFlagPayloads?: Record<string, unknown>;
   wizardMetadata?: Record<string, string>;
@@ -104,6 +121,8 @@ export interface ProgramOptions {
     programId: string;
     signal: AbortSignal;
   }) => Promise<boolean>;
+  /** Evaluate feature flags for a run whose input carries none. */
+  featureFlags?: () => Promise<WizardFlagSnapshot>;
   signal?: AbortSignal;
 }
 
@@ -316,11 +335,12 @@ async function runProgramWithStore(
             composed: true,
             runId: childInput.runId ?? `${runId}:integrate-run`,
             flags: { ...input.flags, ...childInput.flags },
-            wizardFlags: { ...input.wizardFlags, ...childInput.wizardFlags },
-            wizardFlagPayloads: {
-              ...input.wizardFlagPayloads,
-              ...childInput.wizardFlagPayloads,
-            },
+            overrides: mergeGiven(input.overrides, childInput.overrides),
+            wizardFlags: mergeGiven(input.wizardFlags, childInput.wizardFlags),
+            wizardFlagPayloads: mergeGiven(
+              input.wizardFlagPayloads,
+              childInput.wizardFlagPayloads,
+            ),
           },
           options,
           store,
@@ -419,16 +439,37 @@ async function runProgramWithStore(
     artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
 
     const flags = { ...DEFAULT_FLAGS, ...input.flags };
-    const wizardFlags = { ...input.wizardFlags };
-    const wizardFlagPayloads = { ...input.wizardFlagPayloads };
+    let flagSnapshot: WizardFlagSnapshot = {
+      flags: { ...input.wizardFlags },
+      payloads: { ...input.wizardFlagPayloads },
+    };
+    if (!input.wizardFlags && options.featureFlags) {
+      try {
+        flagSnapshot = await options.featureFlags();
+      } catch (error) {
+        if (signal.aborted) return cancelled();
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+      if (signal.aborted) return cancelled();
+    }
+    const wizardFlags = { ...flagSnapshot.flags };
+    const wizardFlagPayloads = { ...flagSnapshot.payloads };
     const switchboard = {
       program: programId,
       composed: input.composed ?? false,
       flags: wizardFlags,
       flagPayloads: wizardFlagPayloads,
+      cliHarness: input.overrides?.harness,
+      cliSequence: input.overrides?.sequence,
+      cliModel: input.overrides?.model,
     };
     const binding = input.binding ?? resolveProgramBinding(switchboard);
-    if (!input.binding) captureSwitchboardDecision(switchboard, binding);
+    if (!input.binding) {
+      analytics.setTag('sequence', binding.sequence);
+      analytics.setTag('harness', binding.harness);
+      captureSwitchboardDecision(switchboard, binding);
+    }
+    store.setBinding(binding);
     const wizardMetadata = {
       ...input.wizardMetadata,
       SEQUENCE: binding.sequence,
@@ -497,4 +538,9 @@ async function runProgramWithStore(
   } finally {
     fileWatchers.stop();
   }
+}
+
+/** A composed child inherits the parent's value; absent on both sides stays absent. */
+function mergeGiven<T extends object>(parent?: T, child?: T): T | undefined {
+  return parent || child ? ({ ...parent, ...child } as T) : undefined;
 }

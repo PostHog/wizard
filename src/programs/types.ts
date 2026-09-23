@@ -29,3 +29,4 @@ export type {
   ProgramDataProgress,
   ProgramDataWriter,
 } from './program-store';
+export type { ProgramOverrides, WizardFlagSnapshot } from './run-program';
