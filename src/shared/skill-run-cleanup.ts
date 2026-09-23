@@ -1,7 +1,7 @@
 import { lstatSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { logToFile } from '@utils/debug';
-import { registerCleanup } from '@utils/wizard-abort';
+import { registerCleanup } from '@utils/cleanup-registry';
 
 export type RunSkillCleanup = (() => void) & { commit: () => void };
 const registeredSkillCleanups = new Set<RunSkillCleanup>();
