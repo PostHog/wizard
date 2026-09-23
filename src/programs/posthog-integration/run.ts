@@ -27,6 +27,8 @@ const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 const WAREHOUSE_LINK_LIMIT = 3;
+/** Sources the seeded step collects credentials for; the rest become outro links. */
+const WAREHOUSE_SEED_LIMIT = 3;
 
 type TagValue = string | boolean | number | null | undefined;
 
@@ -101,14 +103,19 @@ function buildWarehouseNextSteps(
   projectId: number | string,
   completedSeededTypes: readonly string[],
 ): { heading: string; items: string[] } | undefined {
-  if (completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)) return undefined;
-  if (sources.length === 0) return undefined;
+  // A completed step only connected the first WAREHOUSE_SEED_LIMIT sources.
+  const remainingSources = completedSeededTypes.includes(
+    WAREHOUSE_SEED_TASK_TYPE,
+  )
+    ? sources.slice(WAREHOUSE_SEED_LIMIT)
+    : sources;
+  if (remainingSources.length === 0) return undefined;
 
-  const listed = sources.slice(0, WAREHOUSE_LINK_LIMIT);
+  const listed = remainingSources.slice(0, WAREHOUSE_LINK_LIMIT);
   const items = listed.map(
     (s) => `Connect ${s.label}: ${warehouseSourceUrl(host, projectId, s.kind)}`,
   );
-  const remaining = sources.length - listed.length;
+  const remaining = remainingSources.length - listed.length;
   if (remaining > 0)
     items.push(`And ${remaining} more we found in this project.`);
   items.push('Connect them all at once with: npx @posthog/wizard warehouse');
@@ -134,17 +141,21 @@ export function resolvePosthogIntegrationSeedTasks(
   if (shouldDisableAsk(input.flags)) return [];
   const sources = input.warehouseSources;
   if (sources.length === 0) return [];
+  const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);
+  const deferred = sources.length - offered.length;
   if (input.mayReportScanResults) {
     capture('orchestrator warehouse task queued', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
+      // The detection totals stay above; this is what the step was given.
+      warehouse_offered_count: offered.length,
     });
   }
   return [
     {
       type: WAREHOUSE_SEED_TASK_TYPE,
       inputs: {
-        sources: sources.map((s) => ({
+        sources: offered.map((s) => ({
           kind: s.kind,
           label: s.label,
           mode: s.mode,
@@ -155,9 +166,14 @@ export function resolvePosthogIntegrationSeedTasks(
         title: 'Connect your data sources',
         body: [
           'We detected some warehouse sources we can connect to enrich your PostHog data. Answer now, and we connect them at the end of the run, after your code changes. We will ask you for the credentials at that point, and beep when we do.',
+          ...(deferred > 0
+            ? [
+                `We found ${deferred} more we can connect. Those are listed with a link each at the end, so this step stays short.`,
+              ]
+            : []),
           "You can select [Skip] if you'd like to do this later in PostHog.",
         ],
-        items: sources.map((s) => s.label),
+        items: offered.map((s) => s.label),
         docsLabel: 'Learn more about warehouse sources',
         docsUrl: WAREHOUSE_SOURCES_DOCS_URL,
         prompt: 'Connect these during setup?',

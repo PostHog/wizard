@@ -13,7 +13,8 @@
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  *
  * The agent reports and asks, it never renders, never reads a session, never
- * exits the process and never rejects. A decided failure comes back in
+ * exits the process, never sends the process's terminal analytics and never
+ * rejects. A decided failure comes back in
  * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
  * agent did not decide (a refused mint, an SDK crash) comes back as
  * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep

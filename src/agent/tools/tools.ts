@@ -61,7 +61,7 @@ export async function downloadSkill(
   installDir: string,
   { skillsRoot, triage }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
-  let step: 'download' | 'extract' = 'download';
+  let step: 'download' | 'extract' | 'scan' = 'download';
   let receipt: SkillInstallReceipt | undefined;
 
   try {
@@ -72,6 +72,11 @@ export async function downloadSkill(
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
     // must not skip it.
+    //
+    // The scan is its own step: it runs the YARA-X WASM engine, and an engine
+    // that fails to load throws from here. Left as `extract` that lands on the
+    // event as an unzip failure, which the pure-JS unzip cannot produce.
+    step = 'scan';
     const isProjectSkill =
       path.resolve(path.dirname(receipt.skillDir)) ===
       path.resolve(installDir, '.claude', 'skills');
