@@ -396,6 +396,9 @@ async function runProgram(
     );
   }
   if (programResult.outcome !== RunOutcome.Success) {
+    if (programResult.failure?.authErrorDetail) {
+      ui.showAuthError(programResult.failure.authErrorDetail);
+    }
     await abort(programResult.failure ?? {});
   }
 }

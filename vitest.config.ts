@@ -44,7 +44,6 @@ const HARNESS_TESTS = [
 const EXCLUDE = [
   '**/node_modules/**',
   '**/dist/**',
-  '**/e2e-tests/**',
   '**/*.no-jest.*',
   '**/*.d.ts',
 ];
