@@ -19,6 +19,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import {
+  ASK_MAX_QUESTIONS_PER_CALL,
   AUDIT_ADD_CHECKS_DESCRIPTION,
   AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
   AUDIT_RESOLVE_CHECKS_DESCRIPTION,
@@ -445,7 +446,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
             }),
           ),
         }),
-        { minItems: 1, maxItems: 8 },
+        { minItems: 1, maxItems: ASK_MAX_QUESTIONS_PER_CALL },
       ),
       subject: Type.Optional(
         Type.String({ description: WIZARD_ASK_SUBJECT_DESCRIPTION }),
