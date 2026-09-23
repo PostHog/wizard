@@ -267,7 +267,7 @@ When creating your personal API key, grant it the wizard's base scope set:
 ```
 user:read project:read organization:read llm_gateway:read query:read
 dashboard:write insight:write notebook:write event_definition:write
-health_issue:read wizard_session:read wizard_session:write
+health_issue:read wizard_session:read wizard_session:write wizard_run:write
 ```
 
 The source of truth is `WIZARD_OAUTH_SCOPES` in `src/shared/constants.ts`, which
@@ -277,7 +277,16 @@ Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
 `integration:read` and `external_data_source:read` /
 `external_data_source:write`.
 
+Local executions also synchronize tasks and terminal status to WizardRun.
+Cloud executions require an explicit `POSTHOG_WIZARD_RUN_ID` assignment and
+leave terminal status to their worker. See [WizardRun synchronization](docs/local-dev.md#wizardrun-synchronization)
+for limits, shutdown behavior, migration compatibility, and deployment checks.
+
 ### OAuth app scope ceiling
+
+Both the interactive and cloud Wizard OAuth apps must allow `wizard_run:write`
+in every deployed region. Existing tokens need renewed authorization; refresh
+does not add the grant. Run synchronization needs no read scope.
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
@@ -310,7 +319,7 @@ every scope in `WIZARD_OAUTH_SCOPES`:
 
 ```
 python manage.py seed_oauth_app_scopes --client-id <id> --dry-run \
-  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
+  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,wizard_run:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
 ```
 
 then re-run without `--dry-run`. Keep `@default` in the list — dropping it

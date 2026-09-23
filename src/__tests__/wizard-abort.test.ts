@@ -3,6 +3,7 @@ import {
   wizardAbort,
   WizardError,
   registerCleanup,
+  registerShutdown,
   clearCleanup,
   runCleanups,
 } from '@utils/wizard-abort';
@@ -47,6 +48,28 @@ describe('wizardAbort', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  it.each([false, true])(
+    'awaits stream shutdown before exit, distinguishing cancellation from failure (%s)',
+    async (failed) => {
+      let release!: () => void;
+      const shutdown = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+      registerShutdown(shutdown);
+      const result = wizardAbort(
+        failed ? { error: new Error('failure') } : undefined,
+      );
+      const assertion = expect(result).rejects.toThrow('process.exit called');
+      expect(shutdown).toHaveBeenCalledWith(failed ? 'failed' : 'cancelled');
+      expect(process.exit).not.toHaveBeenCalled();
+      release();
+      await assertion;
+    },
+  );
 
   it('calls analytics.shutdown, getUI().outroError, and process.exit in order', async () => {
     const callOrder: string[] = [];

@@ -7,7 +7,10 @@ import {
 } from '@shared/auth-session-state';
 import type { WizardSession, Credentials } from '@lib/wizard-session';
 
-vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('@utils/oauth', async (original) => ({
+  ...(await original<typeof import('@utils/oauth')>()),
+  refreshAccessToken: vi.fn(),
+}));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },

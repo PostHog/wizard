@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
@@ -1692,7 +1693,15 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   ...Object.values(WIZARD_TOOL_NAMES),
 ];
 
-type TaskEntry = { content: string; status: string; activeForm?: string };
+type TaskEntry = {
+  id?: string;
+  source?: string;
+  content: string;
+  status: string;
+  activeForm?: string;
+};
+
+const taskSources = new WeakMap<Map<string, TaskEntry>, string>();
 
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
@@ -1717,7 +1726,14 @@ function handleTaskCreate(block: ToolUseBlock, store: TaskStore): void {
   if (!input?.subject) return;
   // Key by tool_use_id for now — the rekey to the SDK-assigned taskId happens
   // when the matching tool_result arrives.
+  let source = taskSources.get(store.tasks);
+  if (!source) {
+    source = randomUUID();
+    taskSources.set(store.tasks, source);
+  }
   store.tasks.set(block.id, {
+    id: randomUUID(),
+    source,
     content: input.subject,
     status: 'pending',
     activeForm: input.activeForm,
@@ -1776,6 +1792,8 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
       });
     }
     store.tasks.set(input.taskId, {
+      id: existing.id,
+      source: existing.source,
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
       activeForm: input.activeForm ?? existing.activeForm,

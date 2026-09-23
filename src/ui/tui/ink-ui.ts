@@ -239,7 +239,13 @@ export class InkUI implements WizardUI {
   }
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     this.store.syncTodos(todos);
   }

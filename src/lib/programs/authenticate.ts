@@ -13,7 +13,8 @@
 import type { Credentials, WizardSession } from '@lib/wizard-session';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { refreshAccessToken } from '@utils/oauth';
+import { refreshAccessToken, missingOAuthScopes } from '@utils/oauth';
+import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { OAuthError } from '@utils/oauth-errors';
 import { markGrantRevoked } from '@shared/auth-session-state';
 import { analytics, groupsFromUser } from '@utils/analytics';
@@ -88,26 +89,37 @@ const DEAD_GRANT_CODES = new Set(['invalid_grant', 'invalid_client']);
 // Best-effort pre-run refresh: no refresh token or a failed grant keeps the existing token.
 export async function refreshAccessTokenIfNeeded(
   session: WizardSession,
+  force = false,
+  signal?: AbortSignal,
 ): Promise<void> {
   const credentials = session.credentials;
   if (!credentials?.refreshToken) return;
 
   // No expiry means we cannot tell how much life is left, so leave it alone —
   // refreshing every run would spend a rotation for nothing.
-  if (credentials.expiresAt === undefined) return;
-  if (credentials.expiresAt - Date.now() >= REFRESH_WHEN_REMAINING_MS) return;
+  if (
+    !force &&
+    (credentials.expiresAt === undefined ||
+      credentials.expiresAt - Date.now() >= REFRESH_WHEN_REMAINING_MS)
+  )
+    return;
 
   try {
     const token = await refreshAccessToken(
       credentials.refreshToken,
       session.baseUrl,
       credentials.oauthClientId,
+      ...(signal ? [signal] : []),
     );
     // Replaced, not mutated: readers hold this object, and a new one keeps the
     // store and the (possibly shallow-copied) session explicitly in step.
     const refreshed: Credentials = {
       ...credentials,
       accessToken: token.access_token,
+      missingScopes: missingOAuthScopes(
+        [...WIZARD_OAUTH_SCOPES, ...(credentials.missingScopes ?? [])],
+        token.scope,
+      ),
       // Rotation: keep the returned refresh token or the old one stops working.
       refreshToken: token.refresh_token ?? credentials.refreshToken,
       expiresAt: Date.now() + token.expires_in * 1000,

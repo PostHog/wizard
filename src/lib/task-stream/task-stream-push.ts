@@ -35,6 +35,7 @@ import {
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
+import type { WizardRunSync, RunOutcome } from './wizard-run-sync';
 import { logToFile } from '@utils/debug';
 import { sanitizeErrorDetail } from '@shared/errors';
 
@@ -47,6 +48,7 @@ const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
   [TaskStatus.Pending]: StreamTaskStatus.Pending,
   [TaskStatus.InProgress]: StreamTaskStatus.InProgress,
   [TaskStatus.Completed]: StreamTaskStatus.Completed,
+  [TaskStatus.Failed]: StreamTaskStatus.Failed,
   // The stream has no skipped state; skipped is terminal, so report it resolved.
   [TaskStatus.Skipped]: StreamTaskStatus.Completed,
 };
@@ -112,6 +114,7 @@ function buildPendingInput(
 
 export interface TaskStreamPushOptions {
   store: WizardStore;
+  runSync?: WizardRunSync;
   programId: string;
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
@@ -131,6 +134,8 @@ export class TaskStreamPush {
   private readonly eventPlanWatcher: EventPlanWatcher | null;
   private readonly auditChecks: (() => unknown) | null;
 
+  private readonly runSync?: WizardRunSync;
+  private shutdownPromise?: Promise<void>;
   private enabled: boolean;
   private created = false;
   private lastPushedPhase: RunPhase | null = null;
@@ -144,6 +149,7 @@ export class TaskStreamPush {
 
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
+    this.runSync = opts.runSync;
     this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
@@ -188,14 +194,28 @@ export class TaskStreamPush {
     }
   }
 
-  /**
-   * Cancel pending debounce, flush one final push if the current
-   * phase is terminal, and resolve. Never throws. Bounded by
-   * `timeoutMs` — if a destination hangs, this returns anyway.
-   */
-  async shutdown(
-    timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+  // Finalize execution while the legacy session continues through the outro.
+  async finishRun(
+    outcome: RunOutcome,
+    timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
+    await this.runSync?.shutdown(outcome, timeoutMs);
+  }
+
+  shutdown(
+    timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+    outcome: RunOutcome = this.store.session.runPhase === RunPhase.Completed
+      ? 'completed'
+      : 'failed',
+  ): Promise<void> {
+    this.shutdownPromise ??= Promise.all([
+      this.runSync?.shutdown(outcome, timeoutMs),
+      this.shutdownLegacy(timeoutMs),
+    ]).then(() => undefined);
+    return this.shutdownPromise;
+  }
+
+  private async shutdownLegacy(timeoutMs: number): Promise<void> {
     this.shuttingDown = true;
     this.eventPlanWatcher?.refresh();
     if (this.debounceTimer) {
@@ -211,10 +231,17 @@ export class TaskStreamPush {
 
     const flush = this.flush();
     if (timeoutMs <= 0) return;
-    await Promise.race([
-      flush,
-      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        flush,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -229,6 +256,7 @@ export class TaskStreamPush {
 
   private onStoreChange(): void {
     if (!this.enabled || this.shuttingDown) return;
+    this.runSync?.capture(this.store.tasks);
     const phase = this.store.session.runPhase;
     if (phase === RunPhase.Idle) return;
 

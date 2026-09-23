@@ -33,6 +33,7 @@ describe('isBlockedAgentEnvKey', () => {
     // dir where that path typically sits.
     expect(isBlockedAgentEnvKey('POSTHOG_HANDOFF_OUTPUT_PATH')).toBe(true);
     expect(isBlockedAgentEnvKey('POSTHOG_TASK_RUN_ID')).toBe(true);
+    expect(isBlockedAgentEnvKey('POSTHOG_WIZARD_RUN_ID')).toBe(true);
     expect(isBlockedAgentEnvKey('POSTHOG_TASK_ID')).toBe(true);
   });
 

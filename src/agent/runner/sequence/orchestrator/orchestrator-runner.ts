@@ -135,8 +135,9 @@ function toTodoStatus(status: TaskStatus): string {
     case TaskStatus.Running:
       return 'in_progress';
     case TaskStatus.Done:
-    case TaskStatus.Failed:
       return 'completed';
+    case TaskStatus.Failed:
+      return 'failed';
     case TaskStatus.Skipped:
       return 'skipped';
     default:
@@ -852,6 +853,8 @@ async function executeOrchestrator(
       tasks: displayOrder(store.list(), (t) =>
         registry.runnerSeededTypes.includes(t.type),
       ).map((t) => ({
+        id: `${runId}:${t.id}`,
+        source: runId,
         content: labelFor(t),
         status: toTodoStatus(t.status),
         activeForm: labelFor(t),

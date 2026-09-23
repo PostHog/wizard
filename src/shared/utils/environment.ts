@@ -30,7 +30,7 @@ export function isNonInteractiveEnvironment(): boolean {
  * so every question would stall for the bridge timeout instead of failing fast
  * with an actionable error. See `shouldDisableAsk`.
  */
-const NEVER_FROM_ENV = ['e2eAsk'];
+const NEVER_FROM_ENV = ['e2eAsk', 'runId'];
 
 /**
  * Session args from the `POSTHOG_WIZARD_*` environment variables.

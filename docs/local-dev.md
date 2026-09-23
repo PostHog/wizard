@@ -175,3 +175,95 @@ reads the resolved targets.
 
 The three service flags have no yargs default. An absent flag is `undefined`
 and inherits the umbrella setting; an explicit `false` overrides it.
+
+## WizardRun synchronization
+
+An authenticated interactive execution creates one local WizardRun when the
+agent starts. Creation uses the selected top-level `ProgramConfig.id`, the
+resolved API host and project, the target folder's basename as its display name,
+and the package version. Program IDs must exist in the backend registry and
+support local folders; a rejected configuration disables run synchronization
+without selecting a different program. The analytics `run_id`, session
+`session_id`, and cloud analytics `task_run_id` remain separate identities.
+
+The shared task publisher sends ordered, immutable full snapshots to
+`PUT /api/projects/{project_id}/wizard/runs/{run_id}/tasks/`. Only task names
+and statuses are sent; PostHog owns all timestamps. Native task IDs are scoped
+to their agent execution, and names are frozen at first observation. Duplicate
+subjects receive stable numeric suffixes, including when names are shortened to
+255 characters. The snapshot represents the shared task panel (orchestrator
+queue tasks for orchestrated runs), not the session stream's extra audit-area
+rollups. Completed tasks from earlier composed agents remain in that panel;
+omitted tasks from the same agent disappear. An intentional empty task list
+clears the snapshot. Unavailable state does not clear it.
+
+Snapshots support at most 100 tasks. Oversized lists, blank names, duplicate
+identities, and unexpected statuses stop task synchronization with a sanitized
+file-log diagnostic; no partial list is sent. `pending` maps to `created`,
+`in_progress` to `running`, and `skipped` to `completed`. Completed and failed
+states retain their meaning. Cancellation preserves unfinished task states.
+Identical snapshots are skipped; distinct transitions are queued before the
+legacy session publisher's debounce, so a brief running state is retained.
+
+At execution completion, the CLI drains run tasks and sends one local terminal
+status: `completed`, `failed`, or `cancelled`. The existing signal and abort
+paths share this shutdown, including Ink Ctrl-C, SIGINT and handled SIGTERM. The
+two-second shutdown budget reserves its last quarter for finalization; requests
+and retry timers are aborted when their budget expires. Individual requests time
+out after five seconds. Task and terminal writes use at most three attempts for
+network/server failures and at most one rate-limit retry, with `Retry-After`
+capped at 60 seconds outside shutdown. Exhausted task delivery stops later task
+writes but still permits local finalization. SIGKILL cannot flush.
+Synchronization failure does not change the installation result.
+
+Local creation includes a fresh UUID idempotency key for each execution. **POST
+retries are disabled** until an integration check against the deployed backend
+confirms that two identical local creation requests return the same ID. The
+backend store currently applies supplied keys to local creation, while the
+serializer help text describes cloud creation. No run ID is persisted for reuse.
+
+### Cloud assignment and deployment requirements
+
+`POSTHOG_WIZARD_RUN_ID` is the explicit UUID assignment for a WizardRun-backed
+cloud execution. The strict CLI parser accepts it as the hidden `--run-id`
+option. The authenticated launcher's API host and project are fixed for that
+execution. Invalid assignments stop synchronization; they never trigger a local
+POST or session fallback. Assigned cloud executions only publish tasks: the
+worker owns terminal status after artifact publication. The assignment is not
+written to project files or passed to nested agent environments.
+
+Headless invocations without an assignment remain on the legacy WizardSession
+transport. `POSTHOG_TASK_RUN_ID` is an analytics compatibility alias and is
+**never** interpreted as a WizardRun assignment. Headless mode alone cannot
+create a local run. Both modes continue independent session synchronization and
+file output. `--no-telemetry` disables both remote transports; synthetic `--ci`
+uses local output only.
+
+The coordinated PostHog worker change is still required in
+`products/wizard/backend/logic/workers/service.py`: add
+`"POSTHOG_WIZARD_RUN_ID": str(request.run_id)` to `_build_sandbox_config`,
+retaining `POSTHOG_API_URL`, `POSTHOG_PROJECT_ID`, `POSTHOG_WIZARD_API_KEY`,
+`POSTHOG_TASK_RUN_ID`, and `POSTHOG_HANDOFF_OUTPUT_PATH`. Update
+`products/wizard/backend/tests/runs/test_cloud_worker.py`, whose environment
+test currently asserts that `POSTHOG_WIZARD_RUN_ID` is absent. This handoff is a
+coordinated prerequisite, not an input the current worker already supplies. A
+WizardRun launcher must always provide it; absence denotes legacy mode.
+
+The interactive and cloud Wizard OAuth apps must allow `wizard_run:write` in
+each deployed region. The CLI requests this write scope without requesting
+`wizard_run:read`. Existing tokens require renewed authorization to gain a new
+grant; refresh does not widen permissions. Known missing grants suppress writes,
+refreshable expiry uses the existing OAuth refresh path, and permanent 401/403
+responses stop further run writes. Personal/project API keys cannot substitute
+for a user's Wizard OAuth token on this transport. Session publishing remains
+independent when run publishing is disabled.
+
+For deployment validation, run a supported program in a synthetic workspace
+using the configured OAuth app. Check one local run, task transitions and server
+timestamps, task removal, intentional clear, and all three terminal outcomes.
+Repeat the same creation payload/key to verify local idempotency. After
+deploying the worker handoff, check that cloud tasks attach to the pre-created
+ID and the worker finalizes after artifact publication. Use an authenticated
+browser for the Wizard page/SSE, or a read-scoped token for task GET; general
+run GET/list/SSE do not accept OAuth. Keep real credentials, paths, and customer
+tasks out of validation artifacts.
