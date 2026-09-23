@@ -50,7 +50,6 @@ const ARCH_TESTS = ['src/__tests__/architecture/**/*.{ts,tsx}'];
 const EXCLUDE = [
   '**/node_modules/**',
   '**/dist/**',
-  '**/e2e-tests/**',
   '**/*.no-jest.*',
   '**/*.d.ts',
 ];

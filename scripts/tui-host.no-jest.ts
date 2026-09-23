@@ -57,8 +57,8 @@ import {
   createE2eResultWriter,
   readReportFile,
 } from '@e2e-harness/e2e-result';
-import { readPersonalApiKey } from '@e2e-harness/live-e2e-checks';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
+import { readPersonalApiKey } from '@e2e-harness/surface-e2e';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -184,9 +184,7 @@ function runAppBuild(root: string): boolean {
 }
 
 async function main() {
-  const apiKey = readPersonalApiKey(process.env, (file) =>
-    fs.readFileSync(file, 'utf8'),
-  );
+  const apiKey = readPersonalApiKey(process.env);
   const projectId = process.env.PROJECT_ID!;
   // Which program to drive — defaults to the integration flow. Set PROGRAM to
   // an id (e.g. `self-driving`) to host a different one.
