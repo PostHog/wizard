@@ -11,7 +11,7 @@ import {
   FOLLOW_UP_EXIT_SENTINEL,
   TAILORED_ROLES,
 } from '@tui/services/mcp-role-prompts';
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import {
   degradedProfile,
   type EventVolume,

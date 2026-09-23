@@ -2,7 +2,7 @@ import type { Arguments } from 'yargs';
 import { LoggingUI } from '@headless';
 import { headlessOption, isHeadless } from '../../headless-mode';
 import { Program } from '@programs';
-import { VERSION } from '@shared/version';
+import { VERSION } from '@shared/config/version';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
 import { cliTuiHost } from '../../tui-host';

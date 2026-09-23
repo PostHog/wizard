@@ -3,7 +3,7 @@
  */
 
 import { Box, Text } from 'ink';
-import type { PlannedEvent } from '../store';
+import type { PlannedEvent } from '../state/store';
 
 interface EventPlanViewerProps {
   events: PlannedEvent[];

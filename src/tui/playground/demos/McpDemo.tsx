@@ -5,7 +5,7 @@
  * a short install delay, and a successful result.
  */
 
-import { WizardStore } from '../../store';
+import { WizardStore } from '../../state/store';
 import { McpScreen } from '../../screens/McpScreen';
 import type { McpInstaller, McpClientInfo } from '../../services/mcp-installer';
 import { McpClientStatus } from '../../add-mcp-server-to-clients/results';

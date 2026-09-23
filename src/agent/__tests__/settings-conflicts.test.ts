@@ -10,9 +10,9 @@ import {
   checkAllSettingsConflicts,
   managedSettingsPath,
   classifySettingsConflicts,
-} from '@shared/claude-settings';
-import type { SettingsConflict } from '@shared/claude-settings';
-import { buildAuthErrorContext } from '@agent/agent-interface';
+} from '@shared/claude/claude-settings';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
+import { buildAuthErrorContext } from '@agent/sdk/agent-interface';
 
 const OVERRIDE = JSON.stringify({ apiKeyHelper: 'echo sk-x' });
 const ENV_OVERRIDE = JSON.stringify({

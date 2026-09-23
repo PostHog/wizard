@@ -6,7 +6,7 @@
  */
 import { RUN_SURFACE } from '@env';
 import { logToFile } from '@utils/debug';
-import type { Sequence } from '@shared/constants';
+import type { Sequence } from '@shared/config/constants';
 import type { ProgramId } from '../types';
 import {
   ORCHESTRATOR_HARNESS_ROUTE,

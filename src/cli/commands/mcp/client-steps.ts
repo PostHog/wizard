@@ -1,4 +1,4 @@
-import type { Integration } from '@shared/constants';
+import type { Integration } from '@shared/config/constants';
 import type { CloudRegion } from '@utils/types';
 import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';

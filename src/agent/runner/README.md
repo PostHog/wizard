@@ -42,11 +42,11 @@ Five layers, each with its own job. Nothing crosses layers unless it has to.
 **The entry point** (`index.ts`) is the front door:
 `runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
 takes resolved execution data and an invocation snapshot (`shared/types.ts`),
-reports through `onProgress` and asks through `interaction` (`../progress.ts`),
+reports through `onProgress` and asks through `interaction` (`../progress/progress.ts`),
 and returns decided outcomes and caught run-body crashes as results. It never
-renders, reads a session or exits. `src/programs/run-program.ts` resolves the
-binding from caller data. The legacy `src/cli/runners/run-program-agent.ts` owns
-session gates and maps progress back onto `getUI()`.
+renders, reads a session or exits. `src/programs/run/run-program.ts` resolves
+the binding from caller data. The legacy `src/cli/runners/run-program-agent.ts`
+owns session gates and maps progress back onto `getUI()`.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, caller-supplied inference auth and the scan-triage classifier. Whether

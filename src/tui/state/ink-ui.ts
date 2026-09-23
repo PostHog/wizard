@@ -1,0 +1,292 @@
+/**
+ * InkUI — Ink-backed implementation of the CLI's WizardUI.
+ *
+ * Translates business logic calls into store setter calls.
+ * No direct session mutation. No imperative screen transitions.
+ * The router derives the active screen from session state.
+ */
+
+import type { WizardStore } from './store.js';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ApiUser, Credentials } from '@shared/posthog/api';
+import type {
+  AskAnswers,
+  PendingQuestion,
+  TaskNotice,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@agent/types';
+import type { OutroData } from '@shared/run/outro';
+import { RunPhase } from '@shared/run/run-state';
+import { OutroKind } from '@shared/run/outro';
+import type { InteractionUi, ProgressUi } from '@programs/types';
+
+// Strip ANSI escape codes (chalk formatting) from strings
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '');
+}
+
+/** Implements the CLI's WizardUI; the CLI checks that where it installs one. */
+export class InkUI implements ProgressUi, InteractionUi {
+  constructor(private store: WizardStore) {}
+
+  intro(message: string): void {
+    this.store.pushStatus(message);
+  }
+
+  outro(message: string): void {
+    this.store.pushStatus(stripAnsi(message));
+
+    // Outro data is pushed by agent-runner via setOutroData() above. If it
+    // wasn't (e.g. CI path where outro is called directly with just a
+    // message), fall back to a minimal success record so the screen still
+    // renders something useful.
+    const existing = this.store.session.outroData;
+    if (!existing) {
+      this.store.setOutroData({
+        kind: OutroKind.Success,
+        message: stripAnsi(message),
+      });
+    }
+
+    // Signal that the main work is done — router resolves to outro
+    if (this.store.session.runPhase === RunPhase.Running) {
+      this.store.setRunPhase(RunPhase.Completed);
+    }
+  }
+
+  outroError(data: OutroData): void {
+    this.store.setOutroData(data);
+    // Advance router past the run step so the outro screen renders
+    if (this.store.session.runPhase !== RunPhase.Error) {
+      this.store.setRunPhase(RunPhase.Error);
+    }
+  }
+
+  waitForOutroDismissed(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.store.session.outroDismissed) {
+        resolve();
+        return;
+      }
+      const unsub = this.store.subscribe(() => {
+        if (this.store.session.outroDismissed) {
+          unsub();
+          resolve();
+        }
+      });
+    });
+  }
+
+  setCredentials(credentials: Credentials): void {
+    this.store.setCredentials(credentials);
+  }
+
+  setAccessToken(credentials: Credentials): void {
+    this.store.setAccessToken(credentials);
+  }
+
+  setRoleAtOrganization(role: string | null): void {
+    this.store.setRoleAtOrganization(role);
+  }
+
+  setApiUser(user: ApiUser | null): void {
+    this.store.setApiUser(user);
+  }
+
+  waitForAiOptIn(): Promise<void> {
+    // Resolved immediately when no gate is registered (requiresAi: false,
+    // no auth step, or CI). Otherwise parks until _checkGates sees the
+    // org's approval flip to true — e.g. via [R]etry on the kill screen.
+    return this.store.getGate('ai-opt-in');
+  }
+
+  waitForGate(stepId: string): Promise<void> {
+    return this.store.getGate(stepId);
+  }
+
+  getFrameworkContext(key: string): unknown {
+    return this.store.session.frameworkContext[key];
+  }
+
+  setDetectedFramework(label: string): void {
+    this.store.setDetectedFramework(label);
+  }
+
+  onEnterScreen(screen: string, fn: () => void): void {
+    this.store.onEnterScreen(
+      screen as Parameters<WizardStore['onEnterScreen']>[0],
+      fn,
+    );
+  }
+
+  setLoginUrl(url: string | null): void {
+    this.store.setLoginUrl(url);
+  }
+
+  setAuthorizeUrl(url: string | null): void {
+    this.store.setAuthorizeUrl(url);
+  }
+
+  showBlockingOutage(result: WizardReadinessResult): Promise<void> {
+    // In the TUI, the HealthCheckScreen handles outage display.
+    // This is only called from agent-runner for the CI fallback path.
+    this.store.setReadinessResult(result);
+    return Promise.resolve();
+  }
+
+  setReadinessWarnings(result: WizardReadinessResult): void {
+    this.store.setReadinessResult(result);
+  }
+
+  showPortConflict(processInfo: {
+    command: string;
+    pid: string;
+    port: number;
+    user: string;
+  }): Promise<void> {
+    return this.store.showPortConflict(processInfo);
+  }
+
+  waitForManualAuthCode(): Promise<string> {
+    return this.store.waitForManualAuthCode();
+  }
+
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    return this.store.showTaskNotice(notice);
+  }
+
+  cancelTaskNotice(): void {
+    // Same path as pressing Skip: closes the overlay and resolves the pending
+    // showTaskNotice promise with false.
+    this.store.resolveTaskNotice(false);
+  }
+
+  showSettingsOverride(
+    conflicts: SettingsConflict[],
+    backupAndFix: () => boolean,
+  ): Promise<void> {
+    return this.store.showSettingsOverride(conflicts, backupAndFix);
+  }
+
+  showAuthError(detail?: AuthErrorDetail): void {
+    this.store.showAuthError(detail);
+  }
+
+  showSessionTimeout(): void {
+    this.store.showSessionTimeout();
+  }
+
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+    return this.store.requestQuestion(question);
+  }
+
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
+  }
+
+  startRun(): void {
+    this.store.setRunPhase(RunPhase.Running);
+  }
+
+  cancel(message: string): void {
+    this.store.pushStatus(message);
+  }
+
+  log = {
+    info: (message: string): void => {
+      this.store.pushStatus(message);
+    },
+    warn: (message: string): void => {
+      this.store.pushStatus(message);
+    },
+    error: (message: string): void => {
+      this.store.pushStatus(message);
+    },
+    success: (message: string): void => {
+      this.store.pushStatus(message);
+    },
+    step: (message: string): void => {
+      this.store.pushStatus(message);
+    },
+  };
+
+  note(message: string): void {
+    this.store.pushStatus(message);
+  }
+
+  spinner(): SpinnerHandle {
+    return {
+      start: (message?: string) => {
+        if (message) this.store.pushStatus(message);
+      },
+      stop: (message?: string) => {
+        if (message) this.store.pushStatus(message);
+      },
+      message: (msg?: string) => {
+        if (msg) this.store.pushStatus(msg);
+      },
+    };
+  }
+
+  pushStatus(message: string): void {
+    this.store.pushStatus(message);
+  }
+
+  syncTodos(
+    todos: Array<{ content: string; status: string; activeForm?: string }>,
+  ): void {
+    this.store.syncTodos(todos);
+  }
+
+  setEventPlan(events: Array<{ name: string; description: string }>): void {
+    this.store.setEventPlan(events);
+  }
+
+  setDashboardUrl(url: string): void {
+    this.store.setDashboardUrl(url);
+  }
+
+  setStage(stage: string): void {
+    this.store.setCurrentStage(stage);
+  }
+
+  setNotebookUrl(url: string): void {
+    this.store.setNotebookUrl(url);
+  }
+
+  setHandoffText(text: string): void {
+    this.store.setHandoffText(text);
+  }
+
+  addTokenUsage(delta: TokenUsageDelta): void {
+    this.store.addTokenUsage(delta);
+  }
+
+  setFinalTokenCostUsd(costUsd: number): void {
+    this.store.setFinalTokenCostUsd(costUsd);
+  }
+
+  setOutroData(data: OutroData): void {
+    // Merge in URLs the agent emitted via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]`
+    // markers. These land on the live store during the run; agent-runner's
+    // `session` snapshot misses them (setKey forks the reference). The live
+    // store wins over the `data` payload so a real emission always beats any
+    // fallback the program's buildOutroData may have computed from the stale
+    // snapshot (e.g. events-audit defaults dashboardUrl to `${cloudUrl}/dashboard`).
+    const live = this.store.session;
+    this.store.setOutroData({
+      ...data,
+      dashboardUrl: live.dashboardUrl ?? data.dashboardUrl ?? undefined,
+      notebookUrl: live.notebookUrl ?? data.notebookUrl ?? undefined,
+    });
+  }
+
+  setFrameworkContext(key: string, value: unknown): void {
+    this.store.setFrameworkContext(key, value);
+  }
+}

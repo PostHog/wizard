@@ -2,8 +2,8 @@
   <img alt="posthoglogo" src="https://user-images.githubusercontent.com/65415371/205059737-c8a4f836-4889-4654-902e-f302b187b6a0.png">
 </p>
 
-
-> have any feedback, please drop an email to **[wizard@posthog.com](mailto:wizard@posthog.com)**.
+> have any feedback, please drop an email to
+> **[wizard@posthog.com](mailto:wizard@posthog.com)**.
 
 <h1>PostHog wizard ✨</h1>
 
@@ -19,22 +19,36 @@ To use the wizard, you can run it directly using:
 npx @posthog/wizard@latest
 ```
 
-Currently the wizard can be used for over 16+ frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
-support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
+Currently the wizard can be used for over 16+ frameworks for frontend, backend,
+and mobile applications. If you have other integrations you would like the
+wizard to support, please open a
+[GitHub issue](https://github.com/posthog/wizard/issues)!
 
-Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
+Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn
+more.
 
 ## Privacy & data usage
 
-The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's AI gateway, to read your project's source files and integrate PostHog. A few things worth knowing up front:
+The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's
+AI gateway, to read your project's source files and integrate PostHog. A few
+things worth knowing up front:
 
-- **Source files** are sent to the selected model provider as part of the agent's context.
-- **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
-- **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
-- **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI and signup runs bypass this interactive gate.
-- **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
+- **Source files** are sent to the selected model provider as part of the
+  agent's context.
+- **`.env*` files and secrets** stay on your machine. The wizard's security
+  scanner blocks anything it identifies as a secret from being read by the
+  agent.
+- **Telemetry** (run metadata — phase, task list, planned events) is sent to
+  PostHog by default. Pass `--no-telemetry` (or set
+  `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+- **AI opt-in**: for existing organizations in interactive runs, the wizard
+  checks `is_ai_data_processing_approved` and waits for approval before agent
+  work. CI and signup runs bypass this interactive gate.
+- **Prefer your own AI?** The wizard's integration knowledge ships as a
+  context-mill skill you can download and run inside your own agent.
 
-The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
+The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut
+on the auth screen surface the same information in-terminal.
 
 ## MCP Commands
 
@@ -51,33 +65,43 @@ npx @posthog/wizard@latest mcp remove
 
 ## Wizard programs
 
-The wizard's commands are grouped into **programs** — self-contained agentic jobs that install, audit, or wire up a specific piece of PostHog. They're powered by skills from the [context mill](https://github.com/PostHog/context-mill).
+The wizard's commands are grouped into **programs** — self-contained agentic
+jobs that install, audit, or wire up a specific piece of PostHog. They're
+powered by skills from the
+[context mill](https://github.com/PostHog/context-mill).
 
 ### PostHog integration (default)
 
-Running the wizard with no arguments installs PostHog into your project. It detects your framework, wires up initialization, instruments a starter set of events, and walks you through a first dashboard:
+Running the wizard with no arguments installs PostHog into your project. It
+detects your framework, wires up initialization, instruments a starter set of
+events, and walks you through a first dashboard:
 
 ```bash
 npx @posthog/wizard@latest
 ```
 
-Powered by the `posthog-integration` program. Most other programs below build on it (they declare `requires: ['posthog-integration']`) and will offer to run it first if PostHog isn't already set up.
+Powered by the `posthog-integration` program. Most other programs below build on
+it (they declare `requires: ['posthog-integration']`) and will offer to run it
+first if PostHog isn't already set up.
 
 ### Self-driving
 
-Autonomously sets up PostHog self-driving end-to-end. It connects GitHub, enables Session Replay and Error Tracking, wires up signal sources, and configures a Signals scout troop that watches your project for you.
+Autonomously sets up PostHog self-driving end-to-end. It connects GitHub,
+enables Session Replay and Error Tracking, wires up signal sources, and
+configures a Signals scout troop that watches your project for you.
 
 ```bash
 npx @posthog/wizard@latest self-driving
 ```
 
-If PostHog isn't already installed, the wizard runs the default integration first (composed run) before starting the self-driving setup.
+If PostHog isn't already installed, the wizard runs the default integration
+first (composed run) before starting the self-driving setup.
 
 ### Audit
 
 Audit an existing PostHog integration for correctness and best practices. The
-`audit` command is a **family**. With no subcommand it runs the **events**
-audit (the default); pass a subcommand to run a specific one:
+`audit` command is a **family**. With no subcommand it runs the **events** audit
+(the default); pass a subcommand to run a specific one:
 
 ```bash
 # Runs the events audit (the default) — no subcommand needed
@@ -96,12 +120,12 @@ npx @posthog/wizard@latest audit web-analytics    # web analytics setup
 Most audit subcommands resolve at runtime from the published skill registry, so
 new audits appear without a wizard release (`web-analytics` is wizard-native).
 
-> **`audit <subcommand>` chooses an audit area — it does not take a skill name.**
-> The audit subcommands above *are* context-mill skills promoted to commands (via
-> a `cli: role: command` block); [`wizard skill <skill-name>`](#run-a-single-skill)
-> runs a skill that hasn't been promoted. Same machinery, two surfaces.
-> (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
-> a subcommand.")
+> **`audit <subcommand>` chooses an audit area — it does not take a skill
+> name.** The audit subcommands above _are_ context-mill skills promoted to
+> commands (via a `cli: role: command` block);
+> [`wizard skill <skill-name>`](#run-a-single-skill) runs a skill that hasn't
+> been promoted. Same machinery, two surfaces. (`wizard audit --help` still
+> labels the positional `[skill]` — read it as "pick a subcommand.")
 
 ### Revenue Analytics
 
@@ -129,7 +153,8 @@ OAuth sources open the PostHog app's new-source flow in your browser.
 
 ### Upload source maps
 
-Upload JavaScript source maps to PostHog error tracking so stack traces are symbolicated back to your original code:
+Upload JavaScript source maps to PostHog error tracking so stack traces are
+symbolicated back to your original code:
 
 ```bash
 npx @posthog/wizard@latest upload-source-maps
@@ -149,36 +174,35 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
 file is the source of truth; this table just mirrors it for readability.
-`team-wizard-docs` is the default reviewer; the team-owned programs below
-route review to their owning team instead.
+`team-wizard-docs` is the default reviewer; the team-owned programs below route
+review to their owning team instead.
 
-| Path | Owning team |
-|---|---|
-| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
-| `src/agent/` | `@PostHog/team-wizard-docs` |
-| `src/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
-| `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
-| `src/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-| `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+| Path                                                | Owning team                       |
+| --------------------------------------------------- | --------------------------------- |
+| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs`       |
+| `src/agent/`                                        | `@PostHog/team-wizard-docs`       |
+| `src/programs/posthog-integration/`                 | `@PostHog/team-wizard-docs`       |
+| `src/programs/error-tracking-upload-source-maps/`   | `@PostHog/team-error-tracking`    |
+| `src/programs/mcp-analytics/`                       | `@PostHog/team-mcp-analytics`     |
+| `src/programs/revenue-analytics/`                   | `@PostHog/team-web-analytics`     |
+| `src/programs/self-driving/`                        | `@PostHog/team-self-driving`      |
+| `src/programs/warehouse-source/`                    | `@PostHog/team-warehouse-sources` |
+| `src/programs/web-analytics-doctor/`                | `@PostHog/team-web-analytics`     |
 
-Ownership is by directory. Programs not listed above
-(`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
-`shared`, `slack`) fall through the default and are owned by
-`team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
-not a merge gate.
+Ownership is by directory. Programs not listed above (`agent-skill`, `audit`,
+`events-audit`, `mcp`, `migration`, `posthog-doctor`, `shared`, `slack`) fall
+through the default and are owned by `team-wizard-docs`. Today CODEOWNERS only
+auto-requests review — approval is not a merge gate.
 
 ## Headless signup + install (agents / CI)
 
-> ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
-> This flow works in development builds only.
+> ⚠️ `--ci` is **not currently supported in published builds** (see
+> [CI Mode](#ci-mode)). This flow works in development builds only.
 
-For a fully non-interactive first-run (no existing PostHog account, no TTY,
-no browser), combine `--ci --signup --email`. The wizard provisions a new
-account, uses the returned personal API key to run the normal CI install,
-and wires PostHog into the project at `--install-dir`:
+For a fully non-interactive first-run (no existing PostHog account, no TTY, no
+browser), combine `--ci --signup --email`. The wizard provisions a new account,
+uses the returned personal API key to run the normal CI install, and wires
+PostHog into the project at `--install-dir`:
 
 ```bash
 npx @posthog/wizard@latest --ci --signup \
@@ -204,38 +228,37 @@ npx @posthog/wizard@latest provision --email user@example.com --region eu --json
 ```
 
 Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
-`projectId`, `accountId`, `accessToken`, `refreshToken`, and
-`personalApiKey` if present). Failure exits 1; in `--json` mode the error
-is emitted to stderr as `{"error":"...","code":"..."}`, with `code` set to
-`email_exists` when the address is already registered.
+`projectId`, `accountId`, `accessToken`, `refreshToken`, and `personalApiKey` if
+present). Failure exits 1; in `--json` mode the error is emitted to stderr as
+`{"error":"...","code":"..."}`, with `code` set to `email_exists` when the
+address is already registered.
 
-> ⚠️ **Output contains live credentials.** Pipe it into a secrets store —
-> do not let it be captured by shared CI logs. Mask the step output or
-> redirect stdout to a file your job reads and discards.
+> ⚠️ **Output contains live credentials.** Pipe it into a secrets store — do not
+> let it be captured by shared CI logs. Mask the step output or redirect stdout
+> to a file your job reads and discards.
 
 # Options
 
 The following CLI arguments are available:
 
-| Option            | Description                                                      | Type    | Default | Choices                                              | Environment Variable           |
-| ----------------- | ---------------------------------------------------------------- | ------- | ------- | ---------------------------------------------------- | ------------------------------ |
-| `--help`          | Show help                                                        | boolean |         |                                                      |                                |
-| `--version`       | Show version number                                              | boolean |         |                                                      |                                |
-| `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
-| `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
-| `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
-| `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
-| `--no-telemetry`  | Disable wizard run-state telemetry                               | boolean | `false` |                                                      | `POSTHOG_WIZARD_NO_TELEMETRY`  |
-
+| Option           | Description                                           | Type    | Default | Choices | Environment Variable          |
+| ---------------- | ----------------------------------------------------- | ------- | ------- | ------- | ----------------------------- |
+| `--help`         | Show help                                             | boolean |         |         |                               |
+| `--version`      | Show version number                                   | boolean |         |         |                               |
+| `--debug`        | Enable verbose logging                                | boolean | `false` |         | `POSTHOG_WIZARD_DEBUG`        |
+| `--signup`       | Create a new PostHog account during setup             | boolean | `false` |         | `POSTHOG_WIZARD_SIGNUP`       |
+| `--install-dir`  | Directory to install PostHog in                       | string  |         |         | `POSTHOG_WIZARD_INSTALL_DIR`  |
+| `--ci`           | Enable CI mode for non-interactive execution          | boolean | `false` |         | `POSTHOG_WIZARD_CI`           |
+| `--api-key`      | PostHog personal API key (phx_xxx) for authentication | string  |         |         | `POSTHOG_WIZARD_API_KEY`      |
+| `--no-telemetry` | Disable wizard run-state telemetry                    | boolean | `false` |         | `POSTHOG_WIZARD_NO_TELEMETRY` |
 
 # CI Mode
 
 **CI mode is available only in development/test builds.** Published builds
 reject `--ci`; use an interactive terminal for `npx @posthog/wizard@latest`.
 
-Local CI runs require a PostHog personal API key **and a separate gateway
-token file**, plus the target project ID. See
+Local CI runs require a PostHog personal API key **and a separate gateway token
+file**, plus the target project ID. See
 [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs)
 for setup and the CI secret names. With both secrets configured:
 
@@ -257,8 +280,10 @@ The CLI args override environment variables in CI mode.
 
 ### Required Flags for CI Mode
 
-- `--api-key`: Personal API key (`phx_xxx`) from your [PostHog settings](https://app.posthog.com/settings/user-api-keys)
-- `--install-dir`: Directory to install PostHog in (e.g., `.` for current directory)
+- `--api-key`: Personal API key (`phx_xxx`) from your
+  [PostHog settings](https://app.posthog.com/settings/user-api-keys)
+- `--install-dir`: Directory to install PostHog in (e.g., `.` for current
+  directory)
 
 ### Required API Key Scopes
 
@@ -270,17 +295,17 @@ dashboard:write insight:write notebook:write event_definition:write
 health_issue:read wizard_session:read wizard_session:write
 ```
 
-The source of truth is `WIZARD_OAUTH_SCOPES` in `src/shared/constants.ts`, which
-documents why each scope is needed — if this block drifts, trust the code.
-Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
-`src/programs/oauth/program-scopes.ts`); the default integration flow adds
-`integration:read` and `external_data_source:read` /
-`external_data_source:write`.
+The source of truth is `WIZARD_OAUTH_SCOPES` in
+`src/shared/config/constants.ts`, which documents why each scope is needed — if
+this block drifts, trust the code. Some programs request more on top
+(`PROGRAM_SCOPE_ADDITIONS` in `src/programs/oauth/program-scopes.ts`); the
+default integration flow adds `integration:read` and `external_data_source:read`
+/ `external_data_source:write`.
 
 ### OAuth app scope ceiling
 
-The wizard's OAuth app on the PostHog side caps the scopes its tokens may
-carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
+The wizard's OAuth app on the PostHog side caps the scopes its tokens may carry
+(`OAuthApplication.scopes`). Any scope requested in this repo (see
 `src/programs/oauth/program-scopes.ts`) must be grantable under that ceiling, or
 `/authorize` drops it and the call that needs it 403s.
 
@@ -288,14 +313,14 @@ carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
 ceiling.** The consent screen lets the user deselect any scope the app doesn't
 mark required (`OAuthApplication.required_scopes`), and out-of-ceiling scopes
 are clamped silently (`clamp_scopes_to_ceiling`) — neither path errors;
-`/oauth/token` just returns a smaller `scope`. So never assume the token
-carries what was requested: the token response's `scope` field is the truth.
-The wizard diffs granted vs requested at login (`missingOAuthScopes` in
-`src/shared/utils/oauth.ts`), warns the user which permissions are missing, and emits
-`wizard: oauth grant narrowed` so narrowed runs are countable in analytics.
-The diff also rides on the session (`credentials.missingScopes`), so when a
-run does fail on a scope-gated step, the error names the missing permission
-and the fix instead of the generic report-a-bug line.
+`/oauth/token` just returns a smaller `scope`. So never assume the token carries
+what was requested: the token response's `scope` field is the truth. The wizard
+diffs granted vs requested at login (`missingOAuthScopes` in
+`src/shared/utils/oauth.ts`), warns the user which permissions are missing, and
+emits `wizard: oauth grant narrowed` so narrowed runs are countable in
+analytics. The diff also rides on the session (`credentials.missingScopes`), so
+when a run does fail on a scope-gated step, the error names the missing
+permission and the fix instead of the generic report-a-bug line.
 
 **To make scopes impossible to deselect, list them explicitly in the app's
 `scopes`.** `required_scopes` is not a separate field — it is derived
@@ -305,8 +330,8 @@ consent POST 400s with `invalid_scope` if the grant misses one), while scopes
 covered only by `@default` stay deselectable and `optional_scopes` are
 declinable extras. That is why `llm_gateway:read` and `wizard_session:*` are
 already un-deselectable today, and everything else is not. To pin the base set
-the wizard cannot run without, seed each region's app with `@default` plus
-every scope in `WIZARD_OAUTH_SCOPES`:
+the wizard cannot run without, seed each region's app with `@default` plus every
+scope in `WIZARD_OAUTH_SCOPES`:
 
 ```
 python manage.py seed_oauth_app_scopes --client-id <id> --dry-run \
@@ -314,10 +339,10 @@ python manage.py seed_oauth_app_scopes --client-id <id> --dry-run \
 ```
 
 then re-run without `--dry-run`. Keep `@default` in the list — dropping it
-narrows the ceiling to only the explicit entries and strips the
-program-specific additions. The wizard has no client-side lever for any of
-this; the login diff and prompt-threaded degrade above handle a narrowed
-grant, but only pinning prevents one.
+narrows the ceiling to only the explicit entries and strips the program-specific
+additions. The wizard has no client-side lever for any of this; the login diff
+and prompt-threaded degrade above handle a narrowed grant, but only pinning
+prevents one.
 
 **The live wizard apps use the `@default` sentinel, so most net-new scopes need
 no ceiling edit.** The prod US app's `scopes` is:
@@ -362,18 +387,18 @@ used to silently add permissions.
 The CLI was overhauled to consolidate commands into a smaller, extensible
 surface. If you used an older command, here's where it went:
 
-| Old command | New command | What changed |
-|---|---|---|
-| `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
-| `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
-| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands |
-| `wizard audit-3000` | *removed* | Retired |
-| `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
-| `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
+| Old command                   | New command                 | What changed                                           |
+| ----------------------------- | --------------------------- | ------------------------------------------------------ |
+| `wizard integrate`            | `wizard` (default flow)     | Command removed; the default flow runs the integration |
+| `wizard events-audit`         | `wizard audit events`       | Now an `audit`-family subcommand                       |
+| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands  |
+| `wizard audit-3000`           | _removed_                   | Retired                                                |
+| `wizard revenue`              | `wizard revenue-analytics`  | Renamed (old `revenue` removed)                        |
+| `wizard upload-sourcemaps`    | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias   |
 
-> **Commands vs. programs:** `integrate` was the *command*; the program behind it
-> is `posthog-integration`, which still exists and now powers the default flow.
-> Other commands depend on it via `requires: ['posthog-integration']`. The
+> **Commands vs. programs:** `integrate` was the _command_; the program behind
+> it is `posthog-integration`, which still exists and now powers the default
+> flow. Other commands depend on it via `requires: ['posthog-integration']`. The
 > program id is internal — it was never a command you typed.
 
 # Steal this code
@@ -401,8 +426,8 @@ and set up the general flow of the application.
 ## Analytics
 
 Did you know you can capture PostHog events even for smaller, supporting
-products like a command line tool? `src/shared/utils/analytics.ts` is a great example
-of how to do it.
+products like a command line tool? `src/shared/utils/analytics.ts` is a great
+example of how to do it.
 
 This file wraps `posthog-node` with some convenience functions to set up an
 analytics session and log events. We can see the usage and outcomes of this
@@ -414,16 +439,16 @@ When the user authenticates, the wizard also streams live run state — current
 phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
 so the PostHog web app can render real-time progress. Updates are debounced
 (250ms) with phase changes flushed immediately; failures fall back silently to
-the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
-set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or set
+`POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
 
 ## Leave rules behind
 
 Supporting agent sessions after we leave is important. There are plenty of ways
 to break or misconfigure PostHog, so guarding against this is key.
 
-`src/shared/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
-rules files and store them in the project's `.cursor/rules` directory.
+`src/shared/utils/rules/add-editor-rules.ts` demonstrates how to dynamically
+construct rules files and store them in the project's `.cursor/rules` directory.
 
 ## Prompts and LLM interactions
 
@@ -438,10 +463,10 @@ _If_ they are well prompted.
 chaotic process. Every wizard session gets the same prompt, tailored to the
 specific files in the project.
 
-These prompts are channeled using `src/shared/utils/query.ts` to an LLM interface we
-host. This gives us more control: we can be certain of the model version and
-provider which interpret the prompts and modify the files. This way, we can find
-the right tools for the job and again, apply them consistently.
+These prompts are channeled using `src/shared/utils/query.ts` to an LLM
+interface we host. This gives us more control: we can be certain of the model
+version and provider which interpret the prompts and modify the files. This way,
+we can find the right tools for the job and again, apply them consistently.
 
 This also allows us to pick up the bill on behalf of our customers.
 
@@ -450,17 +475,16 @@ users of the wizard, no training delays or other ambiguity.
 
 ## Keep secrets out of the LLM
 
-The wizard somtimes needs to move a secret. The agent
-orchestrates that journey, but the raw value should _never_ enter the LLM
-conversation, where it would be sent to the model provider, written to
-transcripts, and captured in logs.
+The wizard somtimes needs to move a secret. The agent orchestrates that journey,
+but the raw value should _never_ enter the LLM conversation, where it would be
+sent to the model provider, written to transcripts, and captured in logs.
 
-`src/shared/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
-session-scoped, in-memory vault: a tool that handles a secret calls `put()` to
-store the raw value and hands the agent an opaque `secret:<uuid>` reference
-instead. The agent passes that ref between tools as if it were the value; the
-host resolves it back to the real secret only at the last moment, inside the
-process, when it writes the file.
+`src/shared/run/secret-vault.ts` is a small, reusable pattern for exactly this.
+It's a session-scoped, in-memory vault: a tool that handles a secret calls
+`put()` to store the raw value and hands the agent an opaque `secret:<uuid>`
+reference instead. The agent passes that ref between tools as if it were the
+value; the host resolves it back to the real secret only at the last moment,
+inside the process, when it writes the file.
 
 Two tools in `src/agent/tools/tools.ts` form the ends of that pipe:
 
@@ -476,30 +500,38 @@ drive the work end to end, but the only thing it ever sees is an opaque handle.
 
 ## Build system
 
-Built with [tsdown](https://tsdown.dev/) (Rolldown). `pnpm build` bundles `bin.ts` into ESM chunks in `dist/`, inlining all local source and keeping npm dependencies external.
+Built with [tsdown](https://tsdown.dev/) (Rolldown). `pnpm build` bundles
+`bin.ts` into ESM chunks in `dist/`, inlining all local source and keeping npm
+dependencies external.
 
 ### Environment variables
 
-**Build-time (locked).** `NODE_ENV` is replaced with `"production"` at compile time. It cannot be overridden at runtime. All URLs, OAuth client IDs, and dev-mode code paths resolve to their production values unconditionally.
+**Build-time (locked).** `NODE_ENV` is replaced with `"production"` at compile
+time. It cannot be overridden at runtime. All URLs, OAuth client IDs, and
+dev-mode code paths resolve to their production values unconditionally.
 
-To add a new build-time constant, add it to `env` in `tsdown.config.ts` and export it from `src/env.ts`.
+To add a new build-time constant, add it to `env` in `tsdown.config.ts` and
+export it from `src/env.ts`.
 
-**Runtime (allowlisted).** Runtime env reads go through `runtimeEnv()` in `src/env.ts`, which only accepts keys in the `RuntimeEnvKey` union:
+**Runtime (allowlisted).** Runtime env reads go through `runtimeEnv()` in
+`src/env.ts`, which only accepts keys in the `RuntimeEnvKey` union:
 
-| Variable | Purpose |
-|---|---|
-| `POSTHOG_WIZARD_BENCHMARK_CONFIG` | Path to benchmark config file |
-| `POSTHOG_WIZARD_BENCHMARK_FILE` | Output path for benchmark results |
-| `POSTHOG_WIZARD_LOG_DIR` | Log directory override |
-| `POSTHOG_WIZARD_DEBUG` / `DEBUG` | Enable debug output |
-| `MCP_URL` | Override MCP server URL |
-| `POSTHOG_API_KEY` | API key for MCP subprocess auth |
-| `TERM`, `TERM_PROGRAM`, `CI`, etc. | Terminal/platform detection |
-| `APPDATA`, `XDG_CONFIG_HOME` | Platform path resolution |
+| Variable                           | Purpose                           |
+| ---------------------------------- | --------------------------------- |
+| `POSTHOG_WIZARD_BENCHMARK_CONFIG`  | Path to benchmark config file     |
+| `POSTHOG_WIZARD_BENCHMARK_FILE`    | Output path for benchmark results |
+| `POSTHOG_WIZARD_LOG_DIR`           | Log directory override            |
+| `POSTHOG_WIZARD_DEBUG` / `DEBUG`   | Enable debug output               |
+| `MCP_URL`                          | Override MCP server URL           |
+| `POSTHOG_API_KEY`                  | API key for MCP subprocess auth   |
+| `TERM`, `TERM_PROGRAM`, `CI`, etc. | Terminal/platform detection       |
+| `APPDATA`, `XDG_CONFIG_HOME`       | Platform path resolution          |
 
 To add a new runtime env var, add its key to `RuntimeEnvKey` in `src/env.ts`.
 
-**Direct `process.env` access** is only used for subprocess environment writes (e.g. `agent-interface.ts` setting `ANTHROPIC_BASE_URL`), vendored code, and tests.
+**Direct `process.env` access** is only used for subprocess environment writes
+(e.g. `agent-interface.ts` setting `ANTHROPIC_BASE_URL`), vendored code, and
+tests.
 
 ### Import aliases
 
@@ -508,20 +540,21 @@ outside a layer imports only its public entries; `pnpm typecheck` builds each
 layer against the others' declarations and rejects anything deeper. Tests may
 use the deep aliases.
 
-| Alias | Maps to |
-|---|---|
-| `@env` | `src/env.ts` |
-| `@shared/*`, `@utils/*` | `src/shared/*`, `src/shared/utils/*`; shared has no barrel |
-| `@agent`, `@agent/types` | `src/agent/index.ts` (runtime), `src/agent/types.ts` (types) |
-| `@programs`, `@programs/types` | `src/programs/index.ts`, `src/programs/types.ts` |
-| `@tui`, `@tui/types` | `src/tui/index.ts`, `src/tui/types.ts`; imported by the CLI only |
+| Alias                          | Maps to                                                                    |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| `@env`                         | `src/env.ts`                                                               |
+| `@shared/*`, `@utils/*`        | `src/shared/*`, `src/shared/utils/*`; shared has no barrel                 |
+| `@agent`, `@agent/types`       | `src/agent/index.ts` (runtime), `src/agent/types.ts` (types)               |
+| `@programs`, `@programs/types` | `src/programs/index.ts`, `src/programs/types.ts`                           |
+| `@tui`, `@tui/types`           | `src/tui/index.ts`, `src/tui/types.ts`; imported by the CLI only           |
 | `@headless`, `@headless/types` | `src/headless/index.ts`, `src/headless/types.ts`; imported by the CLI only |
-| `@cli/*` | `src/cli/*`; imported by `bin.ts` |
+| `@cli/*`                       | `src/cli/*`; imported by `bin.ts`                                          |
 
 ## Running locally
 
 For `--ci`, smoke tests, and full headless runs, configure both the personal API
-key and gateway token file first: [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+key and gateway token file first:
+[local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 Interactive runs mint their gateway token after authentication.
 
 ### Quick test without linking
@@ -536,7 +569,8 @@ pnpm try --install-dir=[a path]
 pnpm run dev
 ```
 
-This builds, links globally, and watches for changes. Leave it running - any `.ts` file changes will auto-rebuild. Then from any project:
+This builds, links globally, and watches for changes. Leave it running - any
+`.ts` file changes will auto-rebuild. Then from any project:
 
 ```bash
 wizard --integration=nextjs
@@ -547,8 +581,8 @@ wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
 wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
 ```
 
-See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
-`--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
+See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog. `--local-mcp`
+selects the MCP server; `--local-context-mill` selects the skills server.
 
 ### Testing
 
@@ -573,8 +607,8 @@ You can hand the wizard to an AI agent and have it drive the real flow itself �
 deciding each screen and snapshotting the TUI to see what happened. The agent
 drives through the `wizard-ci` MCP tools (`open_app` / `read_state` /
 `perform_action` / `render_screen` / `run_agent`), which are registered in this
-repo's `.mcp.json` and bound in every session here — approve `wizard-ci` the first
-time you're prompted. The how-to is the `exploring-the-wizard` skill
+repo's `.mcp.json` and bound in every session here — approve `wizard-ci` the
+first time you're prompted. The how-to is the `exploring-the-wizard` skill
 (`.claude/skills/exploring-the-wizard/SKILL.md`), which an agent discovers
 automatically.
 
@@ -582,12 +616,12 @@ Example prompt — explore against
 [open-saas](https://github.com/wasp-lang/open-saas):
 
 > Explore the PostHog wizard against open-saas, following the
-> `exploring-the-wizard` skill. Reuse my phx key file path, gateway token file path, and project id,
-> asking only for missing inputs. Launch the MCP server with
-> `WIZARD_CI_GATEWAY_TOKEN_FILE` set to the gateway token file path;
-> then clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp`
-> copy. Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding
-> each screen:
+> `exploring-the-wizard` skill. Reuse my phx key file path, gateway token file
+> path, and project id, asking only for missing inputs. Launch the MCP server
+> with `WIZARD_CI_GATEWAY_TOKEN_FILE` set to the gateway token file path; then
+> clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp` copy.
+> Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding each
+> screen:
 >
 > 1. `open_app` on the `/tmp` copy, then `read_state` to see the screen and the
 >    actions legal right now.
@@ -614,23 +648,24 @@ To make your version of a tool usable with a one-line `npx` command:
 
 # Health checks
 
-`src/shared/health-checks/` checks skills download origins before the wizard runs.
-The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
+`src/shared/health-checks/` checks skills download origins before the wizard
+runs. The entry point is `evaluateWizardReadiness()`, which only blocks on skill
+downloads:
 
-| Decision            | Meaning                                                         |
-| ------------------- | --------------------------------------------------------------- |
-| `yes`               | Skills are reachable — proceed without outage warnings.         |
-| `no`                | Neither skills origin is reachable — do not run.                |
+| Decision | Meaning                                                 |
+| -------- | ------------------------------------------------------- |
+| `yes`    | Skills are reachable — proceed without outage warnings. |
+| `no`     | Neither skills origin is reachable — do not run.        |
 
 ### Module layout
 
-| File | Responsibility |
-| --- | --- |
-| `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
+| File           | Responsibility                                                          |
+| -------------- | ----------------------------------------------------------------------- |
+| `types.ts`     | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.)    |
 | `endpoints.ts` | Direct gateway (`/readyz`) and skills origin (`skill-menu.json`) checks |
 | `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
-| `index.ts` | Barrel re-export |
-| `testme.md` | Test running instructions and endpoint reference |
+| `index.ts`     | Barrel re-export                                                        |
+| `testme.md`    | Test running instructions and endpoint reference                        |
 
 ## What blocks a run
 
@@ -652,29 +687,35 @@ The same policy applies during signup. Third-party status pages are not queried.
 After minting a token, `gateway-session.ts` checks `/readyz` on the returned
 gateway URL and reports an unavailable gateway through the existing error path.
 
-`skillsOrigin` is one entry covering two origins: skills are published to
-GitHub Releases and an AWS mirror under the same filenames, and downloads fail
-over between them (`src/shared/fetch-retry.ts`). Both are probed in parallel, so
-the key only reports **Down** when neither origin answers — a GitHub Releases
-outage on its own doesn't block a run, including a 403 or 404, which is as
-often about the origin (expired asset redirect, blocked region, a publish that
-reached one origin and not the other) as about the asset.
+`skillsOrigin` is one entry covering two origins: skills are published to GitHub
+Releases and an AWS mirror under the same filenames, and downloads fail over
+between them (`src/shared/posthog/fetch-retry.ts`). Both are probed in parallel,
+so the key only reports **Down** when neither origin answers — a GitHub Releases
+outage on its own doesn't block a run, including a 403 or 404, which is as often
+about the origin (expired asset redirect, blocked region, a publish that reached
+one origin and not the other) as about the asset.
 
 ## Smoke test helper (`scripts/smoke-test-ci.sh`)
 
-This repo includes a helper script to run a full end‑to‑end smoke test of the wizard packaged in a tarball against a real app from [`posthog/wizard-workbench`](https://github.com/PostHog/wizard-workbench). This will catch certain packaging issues that might not be caught by other tests.
+This repo includes a helper script to run a full end‑to‑end smoke test of the
+wizard packaged in a tarball against a real app from
+[`posthog/wizard-workbench`](https://github.com/PostHog/wizard-workbench). This
+will catch certain packaging issues that might not be caught by other tests.
 
 **Prerequisites**
 
 - Point to a `wizard-workbench` checkout either by:
   - Setting `WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench`, or
-  - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
-- Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
+  - Cloning `wizard-workbench` next to this repo (so it lives at
+    `../wizard-workbench`).
+- Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in
+  `../wizard-workbench/.env`.
 - Set `WIZARD_CI_GATEWAY_TOKEN_FILE` to an absolute path containing the separate
-  AI gateway token. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+  AI gateway token. See
+  [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 - Set `POSTHOG_WIZARD_PROJECT_ID` to the intended test project and
-  `POSTHOG_WIZARD_REGION` to `us` or `eu` (CI uses `us`). The helper also accepts
-  `POSTHOG_PROJECT_ID` and `POSTHOG_REGION` as fallback names.
+  `POSTHOG_WIZARD_REGION` to `us` or `eu` (CI uses `us`). The helper also
+  accepts `POSTHOG_PROJECT_ID` and `POSTHOG_REGION` as fallback names.
 
 **Usage**
 
@@ -704,8 +745,10 @@ The script will:
 - Copy the selected app into a temp directory
 - Install dependencies for the app
 - Install the packed wizard tarball into an isolated temp project
-- Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks
+- Run `wizard` in `--ci` mode against the copied app and perform basic
+  post‑install checks
 
 ## Contributing
 
-Start with [AGENTS.md](AGENTS.md) for the development skills and execution policy.
+Start with [AGENTS.md](AGENTS.md) for the development skills and execution
+policy.

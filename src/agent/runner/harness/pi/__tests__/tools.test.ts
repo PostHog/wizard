@@ -12,7 +12,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   CANCELLED_SENTINEL,
   type WizardAskBridge,
-} from '@agent/wizard-ask-bridge';
+} from '@agent/progress/wizard-ask-bridge';
 import { createWizardPiTools } from '../tools';
 import { evaluateToolCall } from '../security';
 import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';

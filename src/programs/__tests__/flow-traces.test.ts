@@ -10,25 +10,25 @@
  * change and belongs in its own PR; when it lands, re-record and add an
  * assertion that no trace visits `run` twice.
  */
-import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@tui/store';
-import { InkUI } from '@tui/ink-ui';
-import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { HostResolution } from '@shared/host-resolution';
+import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@tui/state/store';
+import { InkUI } from '@tui/state/ink-ui';
+import { Integration } from '@shared/config/constants';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { analytics } from '@utils/analytics';
 import {
   PROGRAM_REGISTRY,
   getProgramConfig,
   type ProgramId,
-} from '../program-registry';
+} from '../registry/program-registry';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '../self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '../error-tracking/detect-agentic';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '../error-tracking-upload-source-maps/detect';
 import { rawProgramFlow } from '@tui/flows/index';
-import { buildSession } from '@tui/session';
-import { OutroKind } from '@shared/outro';
-import type { WizardSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
+import { OutroKind } from '@shared/run/outro';
+import type { WizardSession } from '@tui/state/session';
 import { setUI } from '@cli/ui';
 
 vi.mock('@utils/analytics', () => ({

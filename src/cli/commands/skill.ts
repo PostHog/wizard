@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
 
-import { getSkillsBaseUrl } from '@shared/constants';
-import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
+import { getSkillsBaseUrl } from '@shared/config/constants';
+import { fetchSkillMenu, type CliEntry } from '@shared/skills/skill-menu';
 import { analytics } from '@utils/analytics';
 
 import { runSkillMode } from './basic-integration/skill';

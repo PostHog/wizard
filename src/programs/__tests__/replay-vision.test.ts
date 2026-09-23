@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import {
   replayVisionConfig,
   REPLAY_VISION_SUPPORTED,

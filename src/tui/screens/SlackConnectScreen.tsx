@@ -26,15 +26,15 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '../store';
-import { Colors, Icons } from '../styles';
+import type { WizardStore } from '../state/store';
+import { Colors, Icons } from '../app/styles';
 import { PickerMenu, LoadingBox } from '../primitives/index';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 import { getSlackAppCard } from '../services/mcp-role-prompts';
-import { fetchSlackConnected } from '@shared/api';
+import { fetchSlackConnected } from '@shared/posthog/api';
 import { Program } from '@programs';
 import { getOrAskForProjectData } from '@programs';
-import { tuiAuthHost } from '../auth-host';
+import { tuiAuthHost } from '../state/auth-host';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { openTrackedLink, withUtm } from '@utils/links';

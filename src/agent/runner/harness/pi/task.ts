@@ -23,19 +23,19 @@ import {
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import {
   allowsPostHogMcp,
   queueTools,
   renderToolInventory,
-} from '../../../agent-prompt-loader';
-import { AgentErrorType } from '../../../agent-interface';
-import { REMARK_INSTRUCTION } from '../../../signals';
-import { AgentOutputSignals } from '../../../output-signals';
+} from '../../../prompt/agent-prompt-loader';
+import { AgentErrorType } from '../../../sdk/agent-interface';
+import { REMARK_INSTRUCTION } from '../../../progress/signals';
+import { AgentOutputSignals } from '../../../progress/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import type { GatewayAuth } from '@shared/gateway-auth';
+import type { GatewayAuth } from '@shared/gateway/gateway-auth';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -51,7 +51,7 @@ import {
   lastStatusLine,
   withMode,
 } from './index';
-import { createAioCapture } from '../../../aio-capture';
+import { createAioCapture } from '../../../sdk/aio-capture';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -279,7 +279,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
     });
-    const { prewarmYaraScanner } = await import('../../../yara-hooks');
+    const { prewarmYaraScanner } = await import('../../../security/yara-hooks');
     void prewarmYaraScanner();
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never

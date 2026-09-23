@@ -10,11 +10,11 @@ vi.mock('@utils/provisioning', () => ({
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
-vi.mock('@tui/session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tui/session')>()),
+vi.mock('@tui/state/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tui/state/session')>()),
   buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
-vi.mock('@tui/start-tui', () => ({
+vi.mock('@tui/app/start-tui', () => ({
   startTUI: () => ({
     unmount: vi.fn(),
     store: {
@@ -52,7 +52,7 @@ vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   setDebugSink: vi.fn(),
 }));
-vi.mock('@programs/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('@programs/frameworks/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
 vi.mock('@programs/detection', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),

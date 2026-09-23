@@ -16,11 +16,11 @@
 import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
-import { startTUI } from '@tui/start-tui';
-import { VERSION } from '@shared/version';
+import { startTUI } from '@tui/app/start-tui';
+import { VERSION } from '@shared/config/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
-import type { Harness, Sequence } from '@shared/constants';
-import { initLocalDev } from '@shared/local-dev';
+import type { Harness, Sequence } from '@shared/config/constants';
+import { initLocalDev } from '@shared/config/local-dev';
 import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { advanceStep } from '@cli/runners/run-wizard';
@@ -32,19 +32,19 @@ import {
   createFileDestination,
 } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
-import { getOrAskForProjectData } from '@programs/project-data';
+import { getOrAskForProjectData } from '@programs/host/project-data';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import type { Integration } from '@shared/constants';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import type { Integration } from '@shared/config/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking/detect-agentic';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
 } from '@programs/error-tracking-upload-source-maps/index';
-import { ScreenId, Overlay } from '@tui/router';
+import { ScreenId, Overlay } from '@tui/app/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
@@ -58,7 +58,7 @@ import {
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
-import { buildSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);

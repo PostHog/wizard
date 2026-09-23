@@ -1,6 +1,6 @@
 import { buildSelfDrivingPrompt } from '@programs/self-driving/prompt';
-import type { PromptContext } from '@agent/agent-runner';
-import { HostResolution } from '@shared/host-resolution';
+import type { PromptContext } from '@agent/runner';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 
 const ctx: PromptContext = {

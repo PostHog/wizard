@@ -5,7 +5,7 @@ import {
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { HARNESS_OPTIONS } from '@agent/runner/switchboard/harness';
 import { PROGRAM_BINDINGS, resolveProgramBinding } from '@programs';
 import { PROGRAM_REGISTRY } from '@programs';

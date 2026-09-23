@@ -3,8 +3,8 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
-} from '@shared/file-watcher';
-import { coerceAuditChecks, type AuditCheck } from '@shared/audit-ledger';
+} from '@utils/file-watcher';
+import { coerceAuditChecks, type AuditCheck } from '@shared/run/audit-ledger';
 import { logToFile } from '@utils/debug';
 
 const MAX_LEDGER_FILE_BYTES = 256 * 1024;

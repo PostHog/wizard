@@ -15,7 +15,7 @@ import { ProgressList } from '@tui/primitives/ProgressList';
 import { ManagedSettingsScreen } from '@tui/screens/ManagedSettingsScreen';
 import { SettingsOverrideScreen } from '@tui/screens/SettingsOverrideScreen';
 import { WizardAskScreen } from '@tui/screens/WizardAskScreen';
-import type { SettingsConflict } from '@shared/claude-settings';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
 
 function fakeStore(session: Record<string, unknown>): any {
   return {

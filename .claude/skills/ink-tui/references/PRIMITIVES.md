@@ -2,34 +2,34 @@
 
 Use [primitives/index.ts](../../../../src/tui/primitives/index.ts) for public
 exports and each source file for its current props. Shared styling lives in
-[styles.ts](../../../../src/tui/styles.ts).
+[styles.ts](../../../../src/tui/app/styles.ts).
 
 ## Choose an existing component
 
-| Need                    | Component and behavior                                                                                                                                                 |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App shell               | [ScreenContainer](../../../../src/tui/primitives/ScreenContainer.tsx): title, screen transitions, hints, token HUD, viewport guard, and error boundary              |
-| Small-terminal notice   | [ViewportTooSmall](../../../../src/tui/primitives/ViewportTooSmall.tsx): minimum dimensions and wrapping for the shared guard                                       |
-| Tabs and status         | [TabContainer](../../../../src/tui/primitives/TabContainer.tsx): local active tab, arrow navigation, optional expandable status                                     |
-| Single/multiple choice  | [PickerMenu](../../../../src/tui/primitives/PickerMenu.tsx): columns, paging, filtering, and confirm-button interaction                                             |
-| Categorized choices     | [GroupedPickerMenu](../../../../src/tui/primitives/GroupedPickerMenu.tsx): category headers, scrolling, and multi-select                                            |
-| Multi-select submission | [ConfirmButton](../../../../src/tui/primitives/ConfirmButton.tsx): bordered submit row with focus and optional count                                                |
-| Continue/cancel         | [ConfirmationInput](../../../../src/tui/primitives/ConfirmationInput.tsx): text choices, left/right focus, enter activates, escape cancels                          |
-| Prompt heading          | [PromptLabel](../../../../src/tui/primitives/PromptLabel.tsx)                                                                                                       |
-| Task progress           | [ProgressList](../../../../src/tui/primitives/ProgressList.tsx): active labels, completion count, and skipped-task handling                                         |
-| Loading state           | [LoadingBox](../../../../src/tui/primitives/LoadingBox.tsx)                                                                                                         |
-| Planned events          | [EventPlanViewer](../../../../src/tui/primitives/EventPlanViewer.tsx)                                                                                               |
-| Two panes               | [SplitView](../../../../src/tui/primitives/SplitView.tsx): equal-width panes with a gap                                                                             |
-| Aligned content         | [CardLayout](../../../../src/tui/primitives/CardLayout.tsx): horizontal/vertical alignment                                                                          |
-| Divider                 | [Divider](../../../../src/tui/primitives/Divider.tsx): measures width on mount                                                                                      |
-| Modal layout            | [ModalOverlay](../../../../src/tui/primitives/ModalOverlay.tsx): presentation for interrupt screens                                                                 |
+| Need                    | Component and behavior                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App shell               | [ScreenContainer](../../../../src/tui/primitives/ScreenContainer.tsx): title, screen transitions, hints, token HUD, viewport guard, and error boundary           |
+| Small-terminal notice   | [ViewportTooSmall](../../../../src/tui/primitives/ViewportTooSmall.tsx): minimum dimensions and wrapping for the shared guard                                    |
+| Tabs and status         | [TabContainer](../../../../src/tui/primitives/TabContainer.tsx): local active tab, arrow navigation, optional expandable status                                  |
+| Single/multiple choice  | [PickerMenu](../../../../src/tui/primitives/PickerMenu.tsx): columns, paging, filtering, and confirm-button interaction                                          |
+| Categorized choices     | [GroupedPickerMenu](../../../../src/tui/primitives/GroupedPickerMenu.tsx): category headers, scrolling, and multi-select                                         |
+| Multi-select submission | [ConfirmButton](../../../../src/tui/primitives/ConfirmButton.tsx): bordered submit row with focus and optional count                                             |
+| Continue/cancel         | [ConfirmationInput](../../../../src/tui/primitives/ConfirmationInput.tsx): text choices, left/right focus, enter activates, escape cancels                       |
+| Prompt heading          | [PromptLabel](../../../../src/tui/primitives/PromptLabel.tsx)                                                                                                    |
+| Task progress           | [ProgressList](../../../../src/tui/primitives/ProgressList.tsx): active labels, completion count, and skipped-task handling                                      |
+| Loading state           | [LoadingBox](../../../../src/tui/primitives/LoadingBox.tsx)                                                                                                      |
+| Planned events          | [EventPlanViewer](../../../../src/tui/primitives/EventPlanViewer.tsx)                                                                                            |
+| Two panes               | [SplitView](../../../../src/tui/primitives/SplitView.tsx): equal-width panes with a gap                                                                          |
+| Aligned content         | [CardLayout](../../../../src/tui/primitives/CardLayout.tsx): horizontal/vertical alignment                                                                       |
+| Divider                 | [Divider](../../../../src/tui/primitives/Divider.tsx): measures width on mount                                                                                   |
+| Modal layout            | [ModalOverlay](../../../../src/tui/primitives/ModalOverlay.tsx): presentation for interrupt screens                                                              |
 | Terminal links          | [LinkText](../../../../src/tui/primitives/LinkText.tsx) and [link helpers](../../../../src/tui/primitives/link-helpers.ts)                                       |
-| Log tail                | [LogViewer](../../../../src/tui/primitives/LogViewer.tsx): bounded tail reads and throttled file watching                                                           |
-| HN feed                 | [HNViewer](../../../../src/tui/primitives/HNViewer.tsx): fetches stories and handles its navigation                                                                 |
+| Log tail                | [LogViewer](../../../../src/tui/primitives/LogViewer.tsx): bounded tail reads and throttled file watching                                                        |
+| HN feed                 | [HNViewer](../../../../src/tui/primitives/HNViewer.tsx): fetches stories and handles its navigation                                                              |
 | Progressive content     | [ContentSequencer](../../../../src/tui/primitives/ContentSequencer.tsx): renders blocks from [content-types.ts](../../../../src/tui/primitives/content-types.ts) |
-| Screen transition       | [DissolveTransition](../../../../src/tui/primitives/DissolveTransition.tsx): shared wipe animation                                                                  |
-| Shared hints            | [KeyboardHintsBar](../../../../src/tui/primitives/KeyboardHintsBar.tsx): renders registered bindings                                                                |
-| Render failure          | [ScreenErrorBoundary](../../../../src/tui/primitives/ScreenErrorBoundary.tsx)                                                                                       |
+| Screen transition       | [DissolveTransition](../../../../src/tui/primitives/DissolveTransition.tsx): shared wipe animation                                                               |
+| Shared hints            | [KeyboardHintsBar](../../../../src/tui/primitives/KeyboardHintsBar.tsx): renders registered bindings                                                             |
+| Render failure          | [ScreenErrorBoundary](../../../../src/tui/primitives/ScreenErrorBoundary.tsx)                                                                                    |
 
 The directory also contains internal block renderers and layout helpers. Prefer
 the public exports for composition; read the implementation before depending on

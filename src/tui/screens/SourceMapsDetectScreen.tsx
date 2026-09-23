@@ -9,10 +9,10 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { LoadingBox, PickerMenu } from '../primitives/index';
-import { Colors, Icons } from '../styles';
-import { InkUI } from '../ink-ui';
+import { Colors, Icons } from '../app/styles';
+import { InkUI } from '../state/ink-ui';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,

@@ -14,7 +14,7 @@
 
 import { Text } from 'ink';
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 import {
   splitSentences,
   sentenceEndChars,

@@ -5,8 +5,8 @@
  * No detection, no setup, no MCP.
  */
 
-import type { FlowStep } from '../flow';
-import { RunPhase } from '@shared/run-state';
+import type { FlowStep } from './flow';
+import { RunPhase } from '@shared/run/run-state';
 import { HEALTH_CHECK_STEP } from './health-check';
 
 export const AGENT_SKILL_FLOW: FlowStep[] = [

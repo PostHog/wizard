@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { PROGRAM_REGISTRY } from '@programs';
-import * as constants from '@shared/constants';
+import * as constants from '@shared/config/constants';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
@@ -14,7 +14,7 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { resolveProgramBinding as resolveBinding } from '@programs';
 import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
 import { areSeededTasksEnabled, resolveStageOverrides } from '..';

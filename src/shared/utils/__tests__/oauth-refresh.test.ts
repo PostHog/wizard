@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { refreshAccessToken } from '@utils/oauth';
-import { POSTHOG_PROXY_CLIENT_ID } from '@shared/constants';
+import { POSTHOG_PROXY_CLIENT_ID } from '@shared/config/constants';
 
 vi.mock('axios');
 // No base-URL override resolves to prod routing (kills IS_DEV's implicit localhost).

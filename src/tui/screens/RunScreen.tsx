@@ -8,7 +8,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import {
   TabContainer,
   SplitView,
@@ -26,7 +26,7 @@ import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
 import { getProgramContentBlocks, getProgramTips } from '../decks/registry';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
-import { ADDITIONAL_FEATURE_LABELS } from '@shared/constants';
+import { ADDITIONAL_FEATURE_LABELS } from '@shared/config/constants';
 
 interface RunScreenProps {
   store: WizardStore;

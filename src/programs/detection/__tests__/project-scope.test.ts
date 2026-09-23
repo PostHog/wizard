@@ -9,16 +9,16 @@ import {
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-} from '@shared/constants';
-import { authenticate } from '@programs/authenticate';
-import type { ProgramCiHost } from '@programs/host-capabilities';
+} from '@shared/config/constants';
+import { authenticate } from '@programs/host/authenticate';
+import type { ProgramCiHost } from '@programs/host/host-capabilities';
 import { testAuthHost } from '../../../../test/program-host';
 import { analytics } from '@utils/analytics';
-import { buildSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
-vi.mock('@programs/authenticate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@programs/authenticate')>()),
+vi.mock('@programs/host/authenticate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/host/authenticate')>()),
   authenticate: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@programs/detection/agentic', async (importOriginal) => ({

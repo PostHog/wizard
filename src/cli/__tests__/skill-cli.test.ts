@@ -4,13 +4,15 @@ vi.mock('../commands/basic-integration/skill', () => ({
   runSkillMode: vi.fn(),
 }));
 
-vi.mock('@shared/skill-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/skill-menu')>();
+vi.mock('@shared/skills/skill-menu', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@shared/skills/skill-menu')
+  >();
   return { ...actual, fetchSkillMenu: vi.fn() };
 });
 
 import { runSkillMode } from '../commands/basic-integration/skill';
-import { fetchSkillMenu } from '@shared/skill-menu';
+import { fetchSkillMenu } from '@shared/skills/skill-menu';
 import { analytics } from '@utils/analytics';
 import { skillCommand } from '../commands/skill';
 import { parseCommand } from '../../__tests__/helpers/parse-command.no-jest';

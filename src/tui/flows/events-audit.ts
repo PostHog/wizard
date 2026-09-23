@@ -8,9 +8,9 @@
  *     logic) instead of the integration intro.
  */
 
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import { needsFrameworkSetup } from '@programs';
-import { RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run/run-state';
 import { HEALTH_CHECK_STEP } from './health-check';
 
 export const EVENTS_AUDIT_FLOW: FlowStep[] = [

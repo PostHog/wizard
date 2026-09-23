@@ -11,10 +11,10 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index';
-import { Icons } from '../styles';
-import type { SettingsConflict } from '@shared/claude-settings';
+import { Icons } from '../app/styles';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
 import { analytics } from '@utils/analytics';
 
 function sourceLabel(source: SettingsConflict['source']): string {

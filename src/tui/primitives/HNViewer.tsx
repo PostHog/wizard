@@ -7,7 +7,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 import { useKeyBindings } from '../hooks/useKeyBindings';
 
 const HN_API = 'https://hacker-news.firebaseio.com/v0';

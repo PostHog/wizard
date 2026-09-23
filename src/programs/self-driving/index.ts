@@ -1,5 +1,5 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
+import type { ProgramConfig } from '../run/program-step';
+import type { ProgramRun } from '../run/program-run';
 import { createSkillProgram } from '../agent-skill/index.js';
 import {
   SELF_DRIVING_ABORT_CASES,

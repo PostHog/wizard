@@ -1,8 +1,10 @@
-import { createTriageLLMProvider } from '@agent/triage-provider';
+import { createTriageLLMProvider } from '@agent/security/triage-provider';
 import { prepareRun } from '../shared/bootstrap';
 import type { RunConfig, RunInput } from '../shared/types';
 
-vi.mock('@agent/triage-provider', () => ({ createTriageLLMProvider: vi.fn() }));
+vi.mock('@agent/security/triage-provider', () => ({
+  createTriageLLMProvider: vi.fn(),
+}));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
 const auth = {

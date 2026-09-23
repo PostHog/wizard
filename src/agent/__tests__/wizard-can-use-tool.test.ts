@@ -1,4 +1,4 @@
-import { wizardCanUseTool } from '@agent/agent-interface';
+import { wizardCanUseTool } from '@agent/sdk/agent-interface';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {

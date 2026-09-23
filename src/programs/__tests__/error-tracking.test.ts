@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ProgramRun } from '@programs/program-run';
-import type { ProgramRunHost } from '@programs/host-capabilities';
-import { Integration } from '@shared/constants';
+import type { ProgramRun } from '@programs/run/program-run';
+import type { ProgramRunHost } from '@programs/host/host-capabilities';
+import { Integration } from '@shared/config/constants';
 import type { AgenticDetectionReport } from '@programs/detection/agentic';
 import { detectFramework } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
@@ -21,8 +21,8 @@ import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstal
 import { analytics } from '@utils/analytics';
 import { testProgramCiHost } from '../../../test/program-host';
 import { ERROR_TRACKING_FLOW } from '@tui/flows/error-tracking';
-import { buildSession } from '@tui/session';
-import type { WizardSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
+import type { WizardSession } from '@tui/state/session';
 
 vi.mock('@programs/detection/index', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/detection/index')>()),

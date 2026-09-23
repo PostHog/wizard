@@ -6,8 +6,8 @@
  * both in-CLI source creation and deep-link emission per detected source.
  */
 
-import type { FlowStep } from '../flow';
-import { RunPhase } from '@shared/run-state';
+import type { FlowStep } from './flow';
+import { RunPhase } from '@shared/run/run-state';
 
 export const WAREHOUSE_SOURCE_FLOW: FlowStep[] = [
   {

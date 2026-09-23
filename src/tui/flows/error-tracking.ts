@@ -1,4 +1,4 @@
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import { AGENT_SKILL_FLOW } from './agent-skill';
 
 /**

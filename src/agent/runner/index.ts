@@ -22,7 +22,7 @@
  * behavior on top of this call for every existing caller.
  */
 
-import { Sequence } from '@shared/constants';
+import { Sequence } from '@shared/config/constants';
 import { RunOutcome } from './shared/types';
 export { RunOutcome } from './shared/types';
 import { classifyRunFailure } from '@shared/errors';
@@ -36,8 +36,8 @@ import type {
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
 import { getSequence } from './switchboard';
-import { flushScanReport } from '../yara-hooks';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { flushScanReport } from '../security/yara-hooks';
+import { captureRunSkillCleanup } from '@shared/skills/skill-run-cleanup';
 import { hostAborted } from './shared/errors';
 
 export type {
@@ -62,7 +62,7 @@ export type {
   AgentInteraction,
   AgentProgress,
   ProgressEmitter,
-} from '../progress';
+} from '../progress/progress';
 export { shouldDisableAsk } from './shared/bootstrap';
 export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';

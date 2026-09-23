@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { HostResolution } from '@shared/host-resolution';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import { resolveSelfDrivingRun } from '../run.js';
 
 describe('self-driving data-only run recipe', () => {

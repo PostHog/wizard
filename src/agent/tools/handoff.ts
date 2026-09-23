@@ -4,7 +4,7 @@
  * It leaves the tool as a `handoff` progress event; the host projects it.
  */
 
-import type { ProgressEmitter } from '../progress';
+import type { ProgressEmitter } from '../progress/progress';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { runtimeEnv } from '@env';

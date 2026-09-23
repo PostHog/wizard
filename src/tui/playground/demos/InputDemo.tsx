@@ -5,7 +5,7 @@
 import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { PickerMenu, ConfirmationInput } from '../../primitives/index';
-import { Colors } from '../../styles';
+import { Colors } from '../../app/styles';
 
 enum DemoStep {
   Single = 'single',

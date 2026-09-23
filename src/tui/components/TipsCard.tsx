@@ -5,10 +5,10 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '../store';
-import { Colors, Icons } from '../styles';
-import { DiscoveredFeature } from '@shared/scan-consent';
-import { AdditionalFeature } from '@shared/constants';
+import type { WizardStore } from '../state/store';
+import { Colors, Icons } from '../app/styles';
+import { DiscoveredFeature } from '@shared/run/scan-consent';
+import { AdditionalFeature } from '@shared/config/constants';
 
 /** A discrete tip shown in the TipsCard during the agent run. */
 export interface Tip {

@@ -2,8 +2,8 @@ import axios from 'axios';
 import { performOAuthFlow, type OAuthFlowHost } from '@utils/oauth';
 
 // Port 0: the OS picks a free callback port, so parallel runs never collide.
-vi.mock('@shared/constants', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/constants')>()),
+vi.mock('@shared/config/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/config/constants')>()),
   OAUTH_PORTS: [0],
 }));
 vi.mock('axios');

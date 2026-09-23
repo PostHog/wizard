@@ -11,19 +11,22 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
-import { Integration } from '@shared/constants';
+import type { WizardStore } from '../state/store';
+import { Integration } from '@shared/config/constants';
 import { getCommandPath, getLaunchablePrograms } from '@programs';
 import { PickerMenu, LoadingBox, type PickerOption } from '../primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { KeyMatch, useKeyBindings } from '../hooks/useKeyBindings';
-import { Icons } from '../styles';
+import { Icons } from '../app/styles';
 import { analytics } from '@utils/analytics';
 import { PRIVACY_PANEL_LABEL } from '../components/PrivacyPanel';
-import type { IntroMenuView } from '../posthog-integration-intro';
-import { introHeadline, introMenuOptions } from '../posthog-integration-intro';
-import { ScanConsent } from '@shared/scan-consent';
+import type { IntroMenuView } from '../flows/posthog-integration-intro';
+import {
+  introHeadline,
+  introMenuOptions,
+} from '../flows/posthog-integration-intro';
+import { ScanConsent } from '@shared/run/scan-consent';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The

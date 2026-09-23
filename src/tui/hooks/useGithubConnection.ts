@@ -9,11 +9,11 @@
 
 import { useEffect } from 'react';
 
-import type { WizardStore } from '../store';
-import { fetchGithubConnected } from '@shared/api';
+import type { WizardStore } from '../state/store';
+import { fetchGithubConnected } from '@shared/posthog/api';
 import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '../session';
+import type { WizardSession } from '../state/session';
 
 const POLL_INTERVAL_MS = 3000;
 

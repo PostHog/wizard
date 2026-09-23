@@ -18,11 +18,11 @@
  * the driver issues the final commit directly instead.
  */
 
-import type { WizardStore } from '@tui/store';
-import type { ScreenName } from '@tui/router';
+import type { WizardStore } from '@tui/state/store';
+import type { ScreenName } from '@tui/app/router';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
 import type { PendingQuestion } from '@agent/types';
-import type { RunPhase } from '@shared/run-state';
+import type { RunPhase } from '@shared/run/run-state';
 
 /** A setup question projected for the harness (no `detect` fn, no closures). */
 export interface SetupQuestionView {

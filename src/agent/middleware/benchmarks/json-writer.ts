@@ -6,9 +6,9 @@
  */
 
 import fs from 'fs';
-import type { ProgressEmitter } from '../../progress';
+import type { ProgressEmitter } from '../../progress/progress';
 import { logToFile } from '@utils/debug';
-import { AgentSignals } from '../../agent-interface';
+import { AgentSignals } from '../../sdk/agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';

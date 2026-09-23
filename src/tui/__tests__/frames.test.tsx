@@ -40,11 +40,11 @@ vi.mock('@utils/debug', async (actual) => ({
   logToFile: vi.fn(),
   debug: vi.fn(),
 }));
-vi.mock('@programs/project-data', async (actual) => ({
+vi.mock('@programs/host/project-data', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   getOrAskForProjectData: vi.fn(pending),
 }));
-vi.mock('@shared/api', async (actual) => ({
+vi.mock('@shared/posthog/api', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   fetchUserData: vi.fn(pending),
   fetchSlackConnected: vi.fn(pending),
@@ -54,7 +54,7 @@ vi.mock('@agent/tools', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   downloadSkill: vi.fn(pending),
 }));
-vi.mock('@shared/skill-menu', async (actual) => ({
+vi.mock('@shared/skills/skill-menu', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   fetchSkillMenu: vi.fn(pending),
 }));
@@ -100,13 +100,13 @@ vi.mock('@programs/posthog-doctor/fetch', () => ({
   ]),
 }));
 
-import { WizardStore, TaskStatus, type ScreenName } from '@tui/store';
-import { InkUI } from '@tui/ink-ui';
-import { ScreenId, Overlay } from '@tui/router';
-import { createServices, type ScreenServices } from '@tui/screen-registry';
-import { HostResolution } from '@shared/host-resolution';
-import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { WizardStore, TaskStatus, type ScreenName } from '@tui/state/store';
+import { InkUI } from '@tui/state/ink-ui';
+import { ScreenId, Overlay } from '@tui/app/router';
+import { createServices, type ScreenServices } from '@tui/app/screen-registry';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { Integration } from '@shared/config/constants';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { FrameworkConfig } from '@programs/types';
 import { Program, type ProgramId } from '@programs';
 import {
@@ -124,9 +124,9 @@ import {
   screenShell,
   type TerminalSize,
 } from './helpers/render-screen.no-jest';
-import { buildSession } from '@tui/session';
-import { OutroKind } from '@shared/outro';
-import { RunPhase, McpOutcome } from '@shared/run-state';
+import { buildSession } from '@tui/state/session';
+import { OutroKind } from '@shared/run/outro';
+import { RunPhase, McpOutcome } from '@shared/run/run-state';
 import { setUI } from '@cli/ui';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the

@@ -7,10 +7,10 @@
 
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { logToFile } from '@utils/debug';
-import { OutroKind } from '@shared/outro';
-import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/run/outro';
+import { RunPhase } from '@shared/run/run-state';
 
 interface Props {
   store: WizardStore;

@@ -42,9 +42,9 @@ import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { Program } from '@programs';
-import { Colors, Icons } from '../styles';
+import { Colors, Icons } from '../app/styles';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 import {
   ContentSequencer,
@@ -69,7 +69,7 @@ import {
   isKnownCloudHost,
   type ProjectDataProfile,
 } from '../services/mcp-project-profile';
-import type { Integration } from '@shared/constants';
+import type { Integration } from '@shared/config/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {

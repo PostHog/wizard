@@ -7,7 +7,7 @@
  * screen sequence is derived alongside every other program.
  */
 
-import type { ProgramConfig } from '../program-step';
+import type { ProgramConfig } from '../run/program-step';
 
 export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',

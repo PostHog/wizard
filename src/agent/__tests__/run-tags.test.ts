@@ -1,5 +1,5 @@
-import { buildRunTags } from '@agent/agent-interface';
-import { CallType } from '@shared/constants';
+import { buildRunTags } from '@agent/sdk/agent-interface';
+import { CallType } from '@shared/config/constants';
 
 describe('buildRunTags', () => {
   it('carries the run identifiers as gateway trace tags', () => {

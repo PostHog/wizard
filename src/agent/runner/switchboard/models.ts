@@ -7,7 +7,7 @@ import {
   GPT5_6_TERRA_MODEL,
   HAIKU_TRIAGE_MODEL,
   Harness,
-} from '@shared/constants';
+} from '@shared/config/constants';
 
 /** Reasoning effort, mapped by each harness to its provider transport. */
 const THINKING_LEVELS = [

@@ -19,8 +19,8 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '../store';
-import { Colors, Icons } from '../styles';
+import type { WizardStore } from '../state/store';
+import { Colors, Icons } from '../app/styles';
 import { PickerMenu, LoadingBox } from '../primitives/index';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 import {
@@ -31,7 +31,7 @@ import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { getIntegrationAuthorizeUrl } from '@utils/urls';
 import { GITHUB_REQUIRED_BODY, GITHUB_REQUIRED_MESSAGE } from '@programs';
-import { OutroKind } from '@shared/outro';
+import { OutroKind } from '@shared/run/outro';
 
 interface SelfDrivingGitHubScreenProps {
   store: WizardStore;

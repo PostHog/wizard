@@ -7,8 +7,8 @@
  * needs credentials.
  */
 
-import type { FlowStep } from '../flow';
-import { RunPhase } from '@shared/run-state';
+import type { FlowStep } from './flow';
+import { RunPhase } from '@shared/run/run-state';
 import { isSourceMapsProjectSelected } from '@programs';
 
 export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_FLOW: FlowStep[] = [

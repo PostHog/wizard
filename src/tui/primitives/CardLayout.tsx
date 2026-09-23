@@ -4,7 +4,7 @@
 
 import { Box } from 'ink';
 import type { ReactNode } from 'react';
-import { HAlign, VAlign } from '../styles';
+import { HAlign, VAlign } from '../app/styles';
 
 interface CardLayoutProps {
   hAlign?: HAlign;

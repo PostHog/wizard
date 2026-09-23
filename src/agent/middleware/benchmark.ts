@@ -7,7 +7,7 @@
  *   pipeline.finalize(resultMessage, durationMs);
  */
 
-import type { ProgressEmitter, SpinnerHandle } from '../progress';
+import type { ProgressEmitter, SpinnerHandle } from '../progress/progress';
 import { logToFile, getLogFilePath, configureLogFile } from '@utils/debug';
 import { MiddlewarePipeline } from './pipeline';
 import { PhaseDetector } from './phase-detector';
@@ -15,7 +15,7 @@ import { loadBenchmarkConfig } from './config';
 import { createPluginsFromConfig } from './benchmarks';
 import type { BenchmarkConfig } from './config';
 import type { WizardRunOptions } from '@utils/types';
-import { AgentSignals } from '../agent-interface';
+import { AgentSignals } from '../sdk/agent-interface';
 
 // ── Types ──────────────────────────────────────────────────────────────
 

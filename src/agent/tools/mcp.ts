@@ -19,16 +19,19 @@ import {
   AUDIT_CHECKS_FILE,
   type AuditCheck,
   type AuditStatus,
-} from '@shared/audit-ledger';
-import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
+} from '@shared/run/audit-ledger';
+import {
+  type WizardAskBridge,
+  isFullyCancelled,
+} from '../progress/wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from './handoff';
-import { createSecretVault, type SecretVault } from '@shared/secret-vault';
-import type { ProgressEmitter } from '../progress';
+import { createSecretVault, type SecretVault } from '@shared/run/secret-vault';
+import type { ProgressEmitter } from '../progress/progress';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
@@ -68,7 +71,7 @@ import {
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from './tools';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skills/skill-menu';
 
 const auditCheckSchema = z.object({
   id: z.string().min(1),

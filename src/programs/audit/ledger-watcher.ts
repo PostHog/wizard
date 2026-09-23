@@ -7,8 +7,8 @@
 import type {
   FileWatcherHandle,
   FileWatcherOptions,
-} from '@shared/file-watcher';
-import type { AuditCheck } from '@shared/audit-ledger';
+} from '@utils/file-watcher';
+import type { AuditCheck } from '@shared/run/audit-ledger';
 import { watchAuditLedger } from './watch-ledger.js';
 
 export function startAuditLedgerWatcher(

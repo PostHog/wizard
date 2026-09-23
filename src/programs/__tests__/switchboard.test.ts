@@ -21,7 +21,7 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import {
   PROGRAM_BINDINGS,
   resolveProgramBinding as resolveBinding,

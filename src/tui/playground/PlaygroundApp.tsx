@@ -6,7 +6,7 @@
  */
 
 import { ScreenContainer, TabContainer } from '../primitives/index';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { WelcomeDemo } from './demos/WelcomeDemo.js';
 import { LayoutDemo } from './demos/LayoutDemo.js';
 import { InputDemo } from './demos/InputDemo.js';

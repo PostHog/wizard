@@ -3,7 +3,7 @@
  * the same `postAuthGateSteps` walk that runner/shared/bootstrap.ts awaits.
  */
 import { PROGRAM_REGISTRY } from '@programs';
-import { postAuthGateSteps } from '../flow';
+import { postAuthGateSteps } from '../flows/flow';
 import { rawProgramFlow } from '../flows/index';
 
 describe('post-auth gate ids per program', () => {

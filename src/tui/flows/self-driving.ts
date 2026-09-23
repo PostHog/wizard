@@ -14,8 +14,8 @@
  * gates on the GitHub App connection the run cannot proceed without. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
-import type { FlowStep } from '../flow';
-import { RunPhase } from '@shared/run-state';
+import type { FlowStep } from './flow';
+import { RunPhase } from '@shared/run/run-state';
 import { HEALTH_CHECK_STEP } from './health-check';
 import { integrationRunStep } from './posthog-integration';
 import { isPostHogPresent } from '@programs';

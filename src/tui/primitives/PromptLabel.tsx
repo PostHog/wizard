@@ -6,7 +6,7 @@
  */
 
 import { Box, Text } from 'ink';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 
 interface PromptLabelProps {
   message?: string;

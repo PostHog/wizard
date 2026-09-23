@@ -1,10 +1,10 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import type { AdditionalFeature } from '@shared/constants';
+import type { ProgramConfig } from '../run/program-step';
+import type { ProgramRun } from '../run/program-run';
+import type { AdditionalFeature } from '@shared/config/constants';
 import { OutroKind } from '@agent';
 import { isUsingTypeScript } from '@utils/package-json';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { resolveEventsAuditRunDefinition } from '../resolve-run-definition';
+import { resolveEventsAuditRunDefinition } from '../run/resolve-run-definition';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../audit/types';
 import { seedAuditLedger } from '../audit/seed';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';

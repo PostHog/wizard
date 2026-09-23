@@ -2,7 +2,7 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
-} from '@shared/file-watcher';
+} from '@utils/file-watcher';
 
 export type PlannedEvent = { name: string; description: string };
 

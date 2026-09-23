@@ -24,8 +24,8 @@ import path from 'path';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import type { E2eDecisionReport } from './e2e-profile.js';
-import { OutroKind } from '@shared/outro';
-import type { WizardSession } from '@tui/session';
+import { OutroKind } from '@shared/run/outro';
+import type { WizardSession } from '@tui/state/session';
 
 /** One `wizard_ask` batch the run was shown. */
 export interface E2eAskRecord {

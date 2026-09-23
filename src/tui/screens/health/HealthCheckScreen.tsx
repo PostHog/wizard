@@ -9,13 +9,13 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store';
+import type { WizardStore } from '../../state/store';
 import {
   ConfirmationInput,
   LoadingBox,
   ModalOverlay,
 } from '../../primitives/index';
-import { Colors, Icons } from '../../styles';
+import { Colors, Icons } from '../../app/styles';
 import { ServiceHealthList } from '../../components/ServiceHealthList';
 import {
   getBlockingServiceKeys,
@@ -24,8 +24,8 @@ import {
 import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { ErrorCodes } from '@shared/errors';
 import { downloadSkill } from '@programs';
-import { fetchSkillMenu } from '@shared/skill-menu';
-import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
+import { fetchSkillMenu } from '@shared/skills/skill-menu';
+import { GITHUB_SKILLS_BASE_URL } from '@shared/config/constants';
 import { useDismissOnAnyKey } from '../../hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {

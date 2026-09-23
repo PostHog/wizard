@@ -3,8 +3,8 @@
  * the flows are the whole program.
  */
 
-import { McpOutcome } from '@shared/run-state';
-import type { FlowStep } from '../flow';
+import { McpOutcome } from '@shared/run/run-state';
+import type { FlowStep } from './flow';
 
 /**
  * Order: install → Slack → tutorial. Slack runs before the tutorial

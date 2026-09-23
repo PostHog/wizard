@@ -9,10 +9,10 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@shared/claude-settings';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { ApiUser, Credentials } from '@shared/api';
-import type { OutroData } from '@shared/outro';
+import type { ApiUser, Credentials } from '@shared/posthog/api';
+import type { OutroData } from '@shared/run/outro';
 import type { InteractionUi, ProgressUi } from '@programs/types';
 
 export interface WizardUI extends ProgressUi, InteractionUi {

@@ -1,39 +1,42 @@
 /** Public type entry for the programs surface. */
-export type { ProgramId, SubcommandProgram } from './program-registry';
+export type { ProgramId, SubcommandProgram } from './registry/program-registry';
 export type {
   ProgramConfig,
   ProgramRunStep,
   ProgramReadyContext,
-} from './program-step';
-export type { ProgramCompletionContext } from './program-run';
-export type { FrameworkConfig, SetupQuestion } from './framework-config';
+} from './run/program-step';
+export type { ProgramCompletionContext } from './run/program-run';
+export type {
+  FrameworkConfig,
+  SetupQuestion,
+} from './frameworks/framework-config';
 export type {
   HostFailure,
   ProgramCiHost,
   ProgramRunHost,
-} from './host-capabilities';
-export type { AuthHost } from './authenticate';
-export type { InteractionUi, ProgressUi } from './host-ui';
-export type { ProjectDataHost } from './project-data';
+} from './host/host-capabilities';
+export type { AuthHost } from './host/authenticate';
+export type { InteractionUi, ProgressUi } from './host/host-ui';
+export type { ProjectDataHost } from './host/project-data';
 export type {
   ProgramInput,
   ProgramOptions,
   ProgramRunOutcome,
   ProgramWorkflowConnector,
-} from './run-program';
+} from './run/run-program';
 export type {
   ProgramInvocationData,
   ProgramProgress,
   ProgramStoreProjection,
   SettledProgramRun,
-} from './program-store';
+} from './run/program-store';
 export type {
   ProgramBinding,
   ProgramSwitchboardCtx,
   ProgramSwitchboardTrace,
-} from './binding';
-export type { ProgramRun } from './program-run';
-export type { ProgramLaunchArgs, ProgramSession } from './program-session';
+} from './registry/binding';
+export type { ProgramRun } from './run/program-run';
+export type { ProgramLaunchArgs, ProgramSession } from './run/program-session';
 export type { AuditCheck, AuditStatus } from './audit/types';
 export type {
   DetectedProject,

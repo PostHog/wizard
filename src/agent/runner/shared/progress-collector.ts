@@ -9,12 +9,12 @@
  */
 
 import { logToFile } from '@utils/debug';
-import { appendStatus } from '@shared/status-history';
+import { appendStatus } from '@shared/run/status-history';
 import type {
   AgentProgress,
   ProgressEmitter,
   SpinnerHandle,
-} from '../../progress';
+} from '../../progress/progress';
 import type { RunSnapshot } from './types';
 
 export interface ProgressCollector {

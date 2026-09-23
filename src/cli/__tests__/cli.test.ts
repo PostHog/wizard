@@ -42,8 +42,8 @@ vi.mock('@programs/task-stream', () => ({
       ? null
       : { name: 'file', path: '/tmp/task-stream.jsonl' },
 }));
-vi.mock('@tui/store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tui/store')>()),
+vi.mock('@tui/state/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tui/state/store')>()),
   WizardStore: class {
     session: unknown;
     setRunPhase = vi.fn();
@@ -55,14 +55,14 @@ vi.mock('@tui/store', async (importOriginal) => ({
 vi.mock('semver', () => ({ satisfies: () => true }));
 // importOriginal keeps real exports (e.g. RunPhase) while overriding
 // buildSession — vitest throws on access to exports a partial mock omits.
-vi.mock('@tui/session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tui/session')>()),
+vi.mock('@tui/state/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tui/state/session')>()),
   buildSession: mockBuildSessionCli,
 }));
 vi.mock('@utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
-vi.mock('@tui/start-tui', () => ({
+vi.mock('@tui/app/start-tui', () => ({
   startTUI: () => ({
     unmount: vi.fn(),
     store: {
@@ -101,7 +101,7 @@ vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   setDebugSink: vi.fn(),
 }));
-vi.mock('@programs/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('@programs/frameworks/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
 vi.mock('@programs/detection', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
@@ -286,7 +286,7 @@ describe('CLI argument parsing', () => {
     // from a buildSession arg — so assert the URL the run would actually fetch.
     async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
       const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
-        '@shared/constants'
+        '@shared/config/constants'
       );
       return { actual: getSkillsBaseUrl(), local: LOCAL_SKILLS_BASE_URL };
     }

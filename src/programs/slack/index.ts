@@ -6,7 +6,7 @@
  * happens in the browser, so a wizard login adds nothing for the user.
  */
 
-import type { ProgramConfig } from '../program-step';
+import type { ProgramConfig } from '../run/program-step';
 
 export const slackConnectConfig: ProgramConfig = {
   id: 'slack',

@@ -15,10 +15,10 @@
  */
 export type * from './types';
 export { runAgent, RunOutcome } from './runner';
-export { AgentSignals } from './agent-interface';
-export { OutroKind } from './progress';
+export { AgentSignals } from './sdk/agent-interface';
+export { OutroKind } from './progress/progress';
 export { WIZARD_TOOL_NAMES } from './tools';
-export { DEFAULT_AGENT_BINDING } from './default-binding';
+export { DEFAULT_AGENT_BINDING } from './runner/switchboard/default-binding';
 export { resolveHarness } from './runner/switchboard';
 
 /**
@@ -27,7 +27,7 @@ export { resolveHarness } from './runner/switchboard';
  * program registry. The final agent entry keeps only resolved-run behavior.
  */
 export { resolveBinding, shouldDisableAsk } from './runner';
-export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
+export { LONGER_ASK_TIMEOUT_MS } from './progress/wizard-ask-bridge';
 
 /**
  * Leaves in B2. Programs own credentials and the legacy adapter dies.
@@ -42,16 +42,16 @@ export {
   buildRunTags,
   initializeAgent,
   runAgent as executeAgent,
-} from './agent-interface';
-export { flushScanReport } from './yara-hooks';
+} from './sdk/agent-interface';
+export { flushScanReport } from './security/yara-hooks';
 export { downloadSkill } from './tools';
 
 /** Streams one suggested MCP prompt; hosts reach it through `@programs`, loaded on first call. */
 export async function* runMcpPromptViaSdk(
   args: Parameters<
-    typeof import('./mcp-prompt-streaming').runMcpPromptViaSdk
+    typeof import('./sdk/mcp-prompt-streaming').runMcpPromptViaSdk
   >[0],
 ): AsyncIterable<import('./types').AgentChunk> {
-  const streaming = await import('./mcp-prompt-streaming');
+  const streaming = await import('./sdk/mcp-prompt-streaming');
   yield* streaming.runMcpPromptViaSdk(args);
 }

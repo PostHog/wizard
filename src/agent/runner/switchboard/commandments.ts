@@ -9,8 +9,8 @@
  * an import cycle.
  */
 
-import { Harness, Sequence } from '@shared/constants';
-import { WIZARD_COMMANDMENTS } from '../../commandments';
+import { Harness, Sequence } from '@shared/config/constants';
+import { WIZARD_COMMANDMENTS } from '../../prompt/commandments';
 import { piRuntimeNotes, type RuntimeCaps } from '../harness/pi/runtime-notes';
 
 // ── Sequence axis ───────────────────────────────────────────────────────

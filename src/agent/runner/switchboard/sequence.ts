@@ -3,7 +3,7 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence } from '@shared/constants';
+import { Sequence } from '@shared/config/constants';
 import { logToFile } from '@utils/debug';
 import { getHarness, resolveHarness } from './harness';
 import type { SequenceResult, SequenceContext } from '../shared/types';

@@ -2,11 +2,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { zipSync } from 'fflate';
-import { scanInstalledSkill } from '@agent/yara-hooks';
+import { scanInstalledSkill } from '@agent/security/yara-hooks';
 import { downloadSkill } from '@agent/tools/tools';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@agent/yara-hooks', () => ({ scanInstalledSkill: vi.fn() }));
+vi.mock('@agent/security/yara-hooks', () => ({ scanInstalledSkill: vi.fn() }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));

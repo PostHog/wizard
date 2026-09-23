@@ -12,7 +12,7 @@
  * resolved sequence calls for — shared notes always, mode notes by sequence, and
  * capability notes only when the task actually holds that tool.
  */
-import { Sequence } from '@shared/constants';
+import { Sequence } from '@shared/config/constants';
 
 const HEADER = [
   '## This runtime',

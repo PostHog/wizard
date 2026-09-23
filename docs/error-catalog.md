@@ -10,9 +10,9 @@ classify failures without parsing human-readable messages.
 - **Source of truth for metadata (group, retry advice, description):**
   [`src/shared/errors/catalog.ts`](../src/shared/errors/catalog.ts)
 - **Consumers:** `wizardAbort()`
-  ([`src/shared/utils/wizard-abort.ts`](../src/shared/utils/wizard-abort.ts)), the task stream
-  ([`src/programs/task-stream/`](../src/programs/task-stream/)), and non-interactive hosts
-  reading stderr.
+  ([`src/shared/utils/wizard-abort.ts`](../src/shared/utils/wizard-abort.ts)),
+  the task stream ([`src/programs/task-stream/`](../src/programs/task-stream/)),
+  and non-interactive hosts reading stderr.
 
 ## Stability contract
 
@@ -107,8 +107,8 @@ screen, debug log) keep the full detail.
 | `PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT`        | agent    | orchestrator plan violates sink coverage invariant                                                                                                                                                           | no           |
 | `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)                                                                                                                                | no           |
 | `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                                                                                                                                                          | yes          |
-| `PHW_GATEWAY_MINT_REFUSED`                      | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown | no |
-| `PHW_GATEWAY_MINT_FAILED`                       | gateway  | the gateway-token mint could not be reached or answered unusably | yes |
+| `PHW_GATEWAY_MINT_REFUSED`                     | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown                                                                                    | no           |
+| `PHW_GATEWAY_MINT_FAILED`                      | gateway  | the gateway-token mint could not be reached or answered unusably                                                                                                                                             | yes          |
 
 Retry advice is guidance for automated hosts (sandbox re-run policies), not a
 guarantee.
@@ -117,8 +117,8 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/programs/detect-map.ts`](../src/programs/detect-map.ts)) maps `kind`
-→ code, and the whole object — `kind` included — rides along as
+([`src/programs/detection/detect-map.ts`](../src/programs/detection/detect-map.ts))
+maps `kind` → code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 
 `DETECT_CODES` is keyed on `DetectErrorKind`, a union assembled from the

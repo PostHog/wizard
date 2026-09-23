@@ -6,6 +6,18 @@ answerer, and returns a result. It never reads a session, a store or a UI. For
 the callable program host and development CI runner, see the
 [non-interactive developer interfaces](../../docs/developer-interfaces.md).
 
+## Layout
+
+| Folder        | Holds                                                    |
+| ------------- | -------------------------------------------------------- |
+| `security/`   | what the agent may run or read, and the scanner          |
+| `prompt/`     | what the agent is told                                   |
+| `progress/`   | what the agent reports and asks back                     |
+| `sdk/`        | Claude SDK wrappers, streaming, capture and stored login |
+| `runner/`     | entry, sequences, harnesses and the switchboard          |
+| `tools/`      | the wizard tools the agent calls                         |
+| `middleware/` | benchmark and phase pipeline                             |
+
 ## Signatures
 
 Import runtime values from `@agent` and types from `@agent/types`. Nothing
@@ -133,5 +145,5 @@ caller ── RunConfig + RunInput ──▶ runAgent
 
 `runner/` holds the dispatcher, sequences, harnesses and the switchboard.
 `tools/` holds the wizard tools shared by both harnesses. `middleware/` holds
-the benchmark pipeline. `progress.ts` defines the event and interaction
-contracts; `yara-hooks.ts` scans what the run installs.
+the benchmark pipeline. `progress/progress.ts` defines the event and interaction
+contracts; `security/yara-hooks.ts` scans what the run installs.

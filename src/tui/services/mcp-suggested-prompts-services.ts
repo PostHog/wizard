@@ -11,10 +11,10 @@
  */
 
 import { getOrAskForProjectData } from '@programs';
-import { tuiAuthHost } from '../auth-host';
+import { tuiAuthHost } from '../state/auth-host';
 import { Program, createPosthogInferenceAuthProvider } from '@programs';
-import type { WizardStore } from '../store';
-import type { ApiUser, Credentials } from '@shared/api';
+import type { WizardStore } from '../state/store';
+import type { ApiUser, Credentials } from '@shared/posthog/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,

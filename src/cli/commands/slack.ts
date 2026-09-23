@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
 import { LoggingUI } from '@headless';
 import { Program } from '@programs';
-import { VERSION } from '@shared/version';
+import { VERSION } from '@shared/config/version';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 import type { Command } from './command';

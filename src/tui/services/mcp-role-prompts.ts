@@ -19,7 +19,7 @@
  *   3. Unknown role → DEFAULT_KIT.
  */
 
-import type { Integration } from '@shared/constants';
+import type { Integration } from '@shared/config/constants';
 import type {
   ProductPresence,
   ProjectDataProfile,

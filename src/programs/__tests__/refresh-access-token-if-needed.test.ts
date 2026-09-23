@@ -1,12 +1,12 @@
-import { refreshAccessTokenIfNeeded } from '../authenticate';
+import { refreshAccessTokenIfNeeded } from '../host/authenticate';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
 import {
   isGrantRevoked,
   resetAuthSessionState,
-} from '@shared/auth-session-state';
-import type { WizardSession } from '@tui/session';
-import type { Credentials } from '@shared/api';
+} from '@shared/gateway/auth-session-state';
+import type { WizardSession } from '@tui/state/session';
+import type { Credentials } from '@shared/posthog/api';
 
 vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));

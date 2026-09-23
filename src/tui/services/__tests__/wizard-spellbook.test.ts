@@ -1,19 +1,19 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { Integration } from '@shared/constants';
-import type { ProgramConfig } from '@programs/program-step';
+import { Integration } from '@shared/config/constants';
+import type { ProgramConfig } from '@programs/run/program-step';
 import { writeWizardSpellbook } from '../wizard-spellbook';
 import { downloadSkill } from '@agent/tools/tools';
-import { fetchSkillMenu } from '@shared/skill-menu';
-import { buildSession } from '@tui/session';
+import { fetchSkillMenu } from '@shared/skills/skill-menu';
+import { buildSession } from '@tui/state/session';
 
 vi.mock('@agent/tools/tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/tools/tools')>()),
   downloadSkill: vi.fn(),
 }));
-vi.mock('@shared/skill-menu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/skill-menu')>()),
+vi.mock('@shared/skills/skill-menu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/skills/skill-menu')>()),
   fetchSkillMenu: vi.fn(),
 }));
 

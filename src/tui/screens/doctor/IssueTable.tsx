@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useStdoutDimensions } from '../../hooks/useStdoutDimensions';
-import { Colors, Icons } from '../../styles';
+import { Colors, Icons } from '../../app/styles';
 import { getKindMeta } from '@programs';
 import type { HealthIssue, HealthIssueSeverity } from '@programs/types';
 

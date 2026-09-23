@@ -4,14 +4,14 @@ import { execSync } from 'node:child_process';
 import axios from 'axios';
 import { logToFile } from './debug';
 import { z } from 'zod';
-import type { SpinnerHandle } from '@shared/spinner';
+import type { SpinnerHandle } from '@shared/run/spinner';
 import {
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { getOAuthUrl, resolveBaseUrl } from './urls';
 import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';

@@ -1,7 +1,7 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
-import { Harness, Sequence } from '@shared/constants';
-import { DEFAULT_AGENT_BINDING } from '../../default-binding';
+import { Harness, Sequence } from '@shared/config/constants';
+import { DEFAULT_AGENT_BINDING } from './default-binding';
 import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';

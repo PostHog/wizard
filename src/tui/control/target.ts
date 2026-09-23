@@ -1,5 +1,5 @@
 import type { ControlTarget } from '@shared/control/types';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '../state/store.js';
 import { actionsFor } from './actions.js';
 import { settersFor } from './setters.js';
 import { projectState, runInFlight } from './state.js';

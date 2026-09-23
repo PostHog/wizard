@@ -4,10 +4,10 @@ import {
   preinstallPostHogCliOnce,
   resetPostHogCliPreinstallForTests,
 } from '@programs/shared/posthog-cli-preinstall';
-import { installOrUpdatePostHogCli } from '@shared/posthog-cli-install';
+import { installOrUpdatePostHogCli } from '@shared/posthog/posthog-cli-install';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@shared/posthog-cli-install', () => ({
+vi.mock('@shared/posthog/posthog-cli-install', () => ({
   installOrUpdatePostHogCli: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({

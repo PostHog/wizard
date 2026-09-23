@@ -4,7 +4,7 @@ import {
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from '@shared/audit-ledger';
+} from '@shared/run/audit-ledger';
 
 // The ledger contract lives in `@lib/audit-ledger`; re-exported so the audit
 // views and the ledger watcher keep their import path.

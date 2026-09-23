@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectFramework } from '@programs/detection/framework';
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { ANDROID_AGENT_CONFIG } from '../../frameworks/android/android-wizard-agent';
 import { KMP_AGENT_CONFIG } from '../../frameworks/kmp/kmp-wizard-agent';
 import { ELIXIR_AGENT_CONFIG } from '../../frameworks/elixir/elixir-wizard-agent';

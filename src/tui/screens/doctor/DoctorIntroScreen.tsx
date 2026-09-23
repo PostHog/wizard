@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store';
+import type { WizardStore } from '../../state/store';
 import { PickerMenu } from '../../primitives/index';
-import { Colors, Icons } from '../../styles';
+import { Colors, Icons } from '../../app/styles';
 
 interface DoctorIntroScreenProps {
   store: WizardStore;

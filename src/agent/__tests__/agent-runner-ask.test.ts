@@ -1,5 +1,5 @@
-import { shouldDisableAsk } from '@agent/agent-runner';
-import { buildSession } from '@tui/session';
+import { shouldDisableAsk } from '@agent/runner';
+import { buildSession } from '@tui/state/session';
 
 describe('shouldDisableAsk', () => {
   it('enables wizard_ask in interactive runs by default', () => {

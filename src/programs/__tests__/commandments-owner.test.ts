@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getProgramCommandments } from '@programs';
 import { assembleCommandments } from '@agent/runner/switchboard/commandments';
-import { Harness, Sequence } from '@shared/constants';
+import { Harness, Sequence } from '@shared/config/constants';
 
 describe('program commandment selection', () => {
   it('selects program text before the agent assembles the prompt', () => {

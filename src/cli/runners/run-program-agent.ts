@@ -45,7 +45,7 @@ import {
   checkAllSettingsConflicts,
   classifySettingsConflicts,
   restoreClaudeSettings,
-} from '@shared/claude-settings';
+} from '@shared/claude/claude-settings';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
@@ -60,9 +60,9 @@ import {
   getSkillsBaseUrl,
   Sequence,
   type Integration,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import type { ProgramConfig } from '@programs/types';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { captureRunSkillCleanup } from '@shared/skills/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { WizardSession } from '@tui/types';
 import { getUI } from '../ui';

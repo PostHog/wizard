@@ -1,4 +1,4 @@
-import { VERSION } from '@shared/version';
+import { VERSION } from '@shared/config/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
 import { runProgramAgent } from './run-program-agent';
 import {
@@ -13,17 +13,17 @@ import type {
   TaskStreamPush as TaskStreamPushClass,
 } from '@programs/types';
 import type { FlowStep } from '@tui/types';
-import type { Harness, Sequence } from '@shared/constants';
+import type { Harness, Sequence } from '@shared/config/constants';
 import type { TuiHandle } from '@tui/types';
 import type { WizardStore } from '@tui/types';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
-import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { checkLocalServices, getLocalDev } from '@shared/config/local-dev';
+import { captureRunSkillCleanup } from '@shared/skills/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
-import { OutroKind } from '@shared/outro';
+import { OutroKind } from '@shared/run/outro';
 import type { WizardSession } from '@tui/types';
 import { cliTuiHost } from '../tui-host';
 import { registerCleanup, runCleanups } from '@utils/cleanup-registry';
@@ -110,7 +110,7 @@ export function runWizard(
 
       const { startTUI } = await (await import('@tui')).loadStartTui();
       const { buildSession } = await import('@tui');
-      const { RunPhase } = await import('@shared/run-state');
+      const { RunPhase } = await import('@shared/run/run-state');
       const { loadTaskStream } = await import('@programs');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await loadTaskStream();

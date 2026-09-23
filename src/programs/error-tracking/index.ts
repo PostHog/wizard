@@ -1,19 +1,19 @@
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { detectFramework } from '../detection/index';
 import {
   scopeInstallDirToProject,
   type ProjectScopeSession,
 } from '../detection/project-scope';
 import type { FrameworkDetectionState } from '../detection/context';
-import { FRAMEWORK_REGISTRY } from '../registry';
-import type { ProgramRun } from '../program-run';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import type { ProgramRun } from '../run/program-run';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
 } from './detect-agentic';
-import type { ProgramConfig } from '../program-step';
-import type { ProgramCiHost, ProgramRunHost } from '../host-capabilities';
+import type { ProgramConfig } from '../run/program-step';
+import type { ProgramCiHost, ProgramRunHost } from '../host/host-capabilities';
 import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes } from '@shared/errors';
@@ -21,7 +21,7 @@ import {
   ERROR_TRACKING_DOCS_URL,
   ERROR_TRACKING_REPORT_FILE,
   resolveErrorTrackingRunDefinition,
-} from '../resolve-run-definition';
+} from '../run/resolve-run-definition';
 
 /**
  * Frameworks whose symbol upload shells out to a machine-global `posthog-cli`

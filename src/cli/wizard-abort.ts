@@ -17,8 +17,8 @@ import {
   sanitizeErrorDetail,
 } from '@shared/errors';
 import { runCleanups } from '@utils/cleanup-registry';
-import { OutroKind } from '@shared/outro';
-import type { OutroData } from '@shared/outro';
+import { OutroKind } from '@shared/run/outro';
+import type { OutroData } from '@shared/run/outro';
 
 export {
   registerCleanup,

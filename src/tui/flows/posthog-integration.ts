@@ -6,9 +6,9 @@
  * definitions — no hardcoded per-flow logic in the store.
  */
 
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import { needsFrameworkSetup } from '@programs';
-import { RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run/run-state';
 import { HEALTH_CHECK_STEP } from './health-check';
 
 export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [

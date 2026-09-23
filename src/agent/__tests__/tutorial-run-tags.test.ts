@@ -7,8 +7,8 @@
  * tests pin the tags so that can't silently return.
  */
 
-import { buildTutorialRunTags } from '@agent/mcp-prompt-streaming';
-import { buildAgentEnv } from '@agent/agent-interface';
+import { buildTutorialRunTags } from '@agent/sdk/mcp-prompt-streaming';
+import { buildAgentEnv } from '@agent/sdk/agent-interface';
 import { analytics } from '@utils/analytics';
 
 describe('buildTutorialRunTags', () => {

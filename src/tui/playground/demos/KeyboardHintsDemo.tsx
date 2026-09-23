@@ -14,7 +14,7 @@ import {
   GroupedPickerMenu,
   ConfirmationInput,
 } from '../../primitives/index';
-import { Colors } from '../../styles';
+import { Colors } from '../../app/styles';
 
 enum DemoStep {
   SingleSelect = 'single',

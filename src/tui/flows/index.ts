@@ -1,5 +1,5 @@
 import { getProgramConfig, type ProgramId } from '@programs';
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import { withAiOptInGate } from './ai-opt-in-gate';
 import { AGENT_SKILL_FLOW } from './agent-skill';
 import { AI_OBSERVABILITY_FLOW } from './ai-observability';

@@ -1,6 +1,6 @@
 import { createProgressCollector } from '../runner/shared/progress-collector';
-import { MAX_STATUS_MESSAGES } from '@shared/status-history';
-import { OutroKind } from '@shared/outro';
+import { MAX_STATUS_MESSAGES } from '@shared/run/status-history';
+import { OutroKind } from '@shared/run/outro';
 
 it('retains a bounded FIFO of statuses and drops consecutive duplicates', () => {
   const observer = vi.fn();

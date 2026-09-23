@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '../../store';
+import type { WizardStore } from '../../state/store';
 import {
   TabContainer,
   SplitView,

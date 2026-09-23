@@ -1,6 +1,6 @@
 import { createUiReducer } from '@programs';
-import { InkUI } from '@tui/ink-ui';
-import { WizardStore } from '@tui/store';
+import { InkUI } from '@tui/state/ink-ui';
+import { WizardStore } from '@tui/state/store';
 import { tuiSnapshotSignature } from '../tui-snapshot-signature';
 
 it('captures status-only host progress through the real TUI store', () => {

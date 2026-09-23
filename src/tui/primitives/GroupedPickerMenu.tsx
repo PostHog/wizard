@@ -17,7 +17,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useMemo } from 'react';
-import { Icons, Colors } from '../styles';
+import { Icons, Colors } from '../app/styles';
 import { PromptLabel } from './PromptLabel.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions';

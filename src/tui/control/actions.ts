@@ -9,10 +9,10 @@ import {
   VARIANT_DISPLAY_NAME,
 } from '@programs';
 import type { AskAnswers } from '@agent/types';
-import type { Integration } from '@shared/constants';
-import { OutroKind } from '@shared/outro';
-import { McpOutcome } from '@shared/run-state';
-import { ScanConsent } from '@shared/scan-consent';
+import type { Integration } from '@shared/config/constants';
+import { OutroKind } from '@shared/run/outro';
+import { McpOutcome } from '@shared/run/run-state';
+import { ScanConsent } from '@shared/run/scan-consent';
 import {
   BadParamError,
   optionalBoolean,
@@ -23,9 +23,9 @@ import {
   requireString,
 } from '@shared/control/params';
 import type { ControlAction } from '@shared/control/types';
-import { Overlay } from '../router.js';
-import { ScreenId } from '../screen-sequences.js';
-import type { WizardStore } from '../store.js';
+import { Overlay } from '../app/router.js';
+import { ScreenId } from '../flows/screen-sequences.js';
+import type { WizardStore } from '../state/store.js';
 
 /** An action before it is bound to a store. */
 type ActionDef = Omit<ControlAction, 'apply'> & {

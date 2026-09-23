@@ -1,5 +1,5 @@
 import type { Arguments } from 'yargs';
-import { POSTHOG_DOCS_URL } from '@shared/constants';
+import { POSTHOG_DOCS_URL } from '@shared/config/constants';
 import { runWizard, runWizardCI } from '../../runners';
 import { createSkillProgram } from '@programs';
 

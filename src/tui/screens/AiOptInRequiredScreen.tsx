@@ -16,12 +16,15 @@
 import opn from 'opn';
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { useKeyBindings } from '../hooks/useKeyBindings';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 import { useSkillEntry } from './SkillSourceInfo';
-import { fetchUserData } from '@shared/api';
-import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@shared/constants';
+import { fetchUserData } from '@shared/posthog/api';
+import {
+  CONTEXT_MILL_RELEASES_URL,
+  POSTHOG_APP_URL,
+} from '@shared/config/constants';
 import { analytics } from '@utils/analytics';
 import { LoadingBox } from '../primitives/index';
 

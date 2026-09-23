@@ -1,14 +1,14 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
-import { WizardStore } from '../store';
+import { WizardStore } from '../state/store';
 import {
   MintFailureScreen,
   type MintFailureServices,
 } from '../screens/MintFailureScreen';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
-import { HostResolution } from '@shared/host-resolution';
-import { ScreenId } from '../router';
-import { OutroKind } from '@shared/outro';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { ScreenId } from '../app/router';
+import { OutroKind } from '@shared/run/outro';
 
 vi.mock('ink', () =>
   vi.importActual('../../../node_modules/ink/build/index.js'),

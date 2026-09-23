@@ -31,11 +31,11 @@
 // read as `undefined` at module init. Keep this type-only and reference
 // program IDs by their string-literal value below — TypeScript still
 // catches renames via the `Partial<Record<ProgramId, ...>>` keying.
-import type { ProgramId } from '../program-registry';
+import type { ProgramId } from '../registry/program-registry';
 import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
-} from '@shared/constants';
+} from '@shared/config/constants';
 
 /**
  * Extra scopes the MCP tutorial needs on top of `WIZARD_OAUTH_SCOPES`.

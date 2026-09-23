@@ -33,7 +33,7 @@ See
 
 ### Task metadata
 
-Read [AgentPrompt and its parser](../../agent-prompt-loader.ts) for the current
+Read [AgentPrompt and its parser](../../prompt/agent-prompt-loader.ts) for the current
 frontmatter contract rather than copying an old manifest example:
 
 - `type`, `flow`, and `label` identify the task and its UI label.

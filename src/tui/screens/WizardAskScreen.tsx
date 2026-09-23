@@ -9,14 +9,14 @@
 import { Box, Text, useInput } from 'ink';
 import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import {
   LinkText,
   ModalOverlay,
   PickerMenu,
   extractUrls,
 } from '../primitives/index';
-import { Colors, Icons } from '../styles';
+import { Colors, Icons } from '../app/styles';
 import { copyToClipboard, openInBrowser } from '@utils/clipboard';
 import { useKeyBindings } from '../hooks/useKeyBindings';
 import type { AskAnswers, AskQuestion } from '@agent/types';

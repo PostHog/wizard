@@ -7,14 +7,14 @@
  */
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import type { ProgramRunHost } from '@programs/host-capabilities';
+import type { ProgramRunHost } from '@programs/host/host-capabilities';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/package-json';
-import { HostResolution } from '@shared/host-resolution';
-import { Integration } from '@shared/constants';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { Integration } from '@shared/config/constants';
 import { uploadEnvironmentVariablesStep } from '@programs/posthog-integration/upload-environment-variables';
-import { buildSession } from '@tui/session';
-import type { WizardSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
+import type { WizardSession } from '@tui/state/session';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {

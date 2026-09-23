@@ -1,11 +1,11 @@
 import { Analytics, groupsFromUser, sessionProperties } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
-import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@shared/constants';
-import { VERSION } from '@shared/version';
-import type { ApiUser } from '@shared/api';
-import { buildSession } from '@tui/session';
-import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
+import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@shared/config/constants';
+import { VERSION } from '@shared/config/version';
+import type { ApiUser } from '@shared/posthog/api';
+import { buildSession } from '@tui/state/session';
+import { DiscoveredFeature, ScanConsent } from '@shared/run/scan-consent';
 
 vi.mock('posthog-node');
 vi.mock('uuid');

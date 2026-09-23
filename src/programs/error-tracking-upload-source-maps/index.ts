@@ -1,6 +1,6 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import type { ProgramRunHost } from '../host-capabilities';
+import type { ProgramConfig } from '../run/program-step';
+import type { ProgramRun } from '../run/program-run';
+import type { ProgramRunHost } from '../host/host-capabilities';
 import { OutroKind } from '@agent';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
@@ -11,7 +11,7 @@ import {
   resolveSourceMapsRunDefinition,
   SOURCE_MAPS_DOCS_URL,
   SOURCE_MAPS_REPORT_FILE,
-} from '../resolve-run-definition';
+} from '../run/resolve-run-definition';
 import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 
 /**

@@ -2,8 +2,8 @@ import { render } from 'ink-testing-library';
 import type { ReactNode } from 'react';
 import { vi } from 'vitest';
 import { ScreenContainer } from '@tui/primitives/ScreenContainer';
-import { createScreens, type ScreenServices } from '@tui/screen-registry';
-import type { WizardStore } from '@tui/store';
+import { createScreens, type ScreenServices } from '@tui/app/screen-registry';
+import type { WizardStore } from '@tui/state/store';
 
 export interface TerminalSize {
   columns: number;

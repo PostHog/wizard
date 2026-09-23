@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 
 const FEEDBACK = 'Feedback: wizard@posthog.com ';
 const FEEDBACK_SHORT = ' wizard@posthog.com ';

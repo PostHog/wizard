@@ -12,20 +12,20 @@ import type {
   TaskNotice,
   TokenUsageDelta,
 } from '@agent/types';
-import type { ApiUser } from '@shared/api';
-import { HostResolution } from '@shared/host-resolution';
+import type { ApiUser } from '@shared/posthog/api';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import {
   backupAndFixClaudeSettings,
   type SettingsConflict,
-} from '@shared/claude-settings';
+} from '@shared/claude/claude-settings';
 import {
   WizardReadiness,
   type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
-import { AdditionalFeature, type Integration } from '@shared/constants';
-import { OutroKind } from '@shared/outro';
-import { McpOutcome, RunPhase, TaskStatus } from '@shared/run-state';
-import { DiscoveredFeature } from '@shared/scan-consent';
+import { AdditionalFeature, type Integration } from '@shared/config/constants';
+import { OutroKind } from '@shared/run/outro';
+import { McpOutcome, RunPhase, TaskStatus } from '@shared/run/run-state';
+import { DiscoveredFeature } from '@shared/run/scan-consent';
 import {
   BadParamError,
   MissingParamError,
@@ -40,8 +40,8 @@ import {
   requireString,
 } from '@shared/control/params';
 import type { ControlSetter } from '@shared/control/types';
-import { Overlay } from '../router.js';
-import type { WizardStore } from '../store.js';
+import { Overlay } from '../app/router.js';
+import type { WizardStore } from '../state/store.js';
 
 /** A setter before it is bound to a store. */
 type SetterDef = Omit<ControlSetter, 'apply'> & {

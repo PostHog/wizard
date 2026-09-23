@@ -22,7 +22,7 @@ import type {
   TaskStreamUpdate,
   StreamEvent,
 } from '../types';
-import type { Credentials } from '@shared/api';
+import type { Credentials } from '@shared/posthog/api';
 import { logToFile } from '@utils/debug';
 
 export interface PostHogDestinationOptions {

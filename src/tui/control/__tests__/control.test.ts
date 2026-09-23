@@ -1,7 +1,7 @@
-import { WizardStore } from '../../store';
-import { buildSession } from '../../session';
-import { Overlay } from '../../router';
-import { ScreenId } from '../../screen-sequences';
+import { WizardStore } from '../../state/store';
+import { buildSession } from '../../state/session';
+import { Overlay } from '../../app/router';
+import { ScreenId } from '../../flows/screen-sequences';
 import {
   actionsFor,
   NO_ACTION_SCREENS,
@@ -11,16 +11,16 @@ import {
   settersFor,
   wizardStoreControlTarget,
 } from '../index';
-import { OutroKind } from '@shared/outro';
-import { RunPhase, TaskStatus } from '@shared/run-state';
+import { OutroKind } from '@shared/run/outro';
+import { RunPhase, TaskStatus } from '@shared/run/run-state';
 import { BadParamError, MissingParamError } from '@shared/control/params';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), setTag: vi.fn(), capture: vi.fn() },
   sessionProperties: () => ({}),
 }));
-vi.mock('@shared/claude-settings', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/claude-settings')>()),
+vi.mock('@shared/claude/claude-settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/claude/claude-settings')>()),
   backupAndFixClaudeSettings: vi.fn(() => true),
 }));
 

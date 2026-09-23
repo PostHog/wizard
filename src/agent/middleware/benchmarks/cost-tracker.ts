@@ -1,5 +1,5 @@
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
-import { computeTokenCostUsd } from '@shared/token-pricing';
+import { computeTokenCostUsd } from '@shared/pricing/token-pricing';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';
 

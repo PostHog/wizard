@@ -1,14 +1,14 @@
 import { Box, Text } from 'ink';
 import { useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { PickerMenu } from '../primitives/index';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
   MINT_FAILURE_CONTACT,
-} from '../mint-failure';
+} from '../state/mint-failure';
 import type { WizardSpellbook } from '../services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
 

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { AgentSignals } from '@agent/signals';
+import { AgentSignals } from '@agent/progress/signals';
 import { lastStatusLine } from '..';
 
 const S = AgentSignals.STATUS; // '[STATUS]'

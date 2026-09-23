@@ -8,8 +8,10 @@ vi.mock('@cli/runners', () => ({
   runWizardCI: mockRunWizardCI,
 }));
 
-vi.mock('@shared/skill-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/skill-menu')>();
+vi.mock('@shared/skills/skill-menu', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@shared/skills/skill-menu')
+  >();
   return {
     ...actual,
     fetchSkillMenu: vi.fn(),
@@ -31,7 +33,7 @@ import {
   pickerChildrenToShow,
 } from '../commands/dispatch-family';
 import type { Command } from '../commands/command';
-import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
+import { fetchSkillMenu, type CliEntry } from '@shared/skills/skill-menu';
 import { auditConfig } from '@programs/audit/index';
 import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
 import { parseCommand } from '../../__tests__/helpers/parse-command.no-jest';

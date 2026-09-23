@@ -12,7 +12,7 @@ import {
   PickerMenu,
   GroupedPickerMenu,
 } from '../../primitives/index';
-import { Colors, Icons } from '../../styles';
+import { Colors, Icons } from '../../app/styles';
 import { LONG_OPTIONS } from './InputDemo.js';
 
 enum DemoStep {

@@ -9,19 +9,22 @@
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
-import type { AdditionalFeature } from '@shared/constants';
+import type { AdditionalFeature } from '@shared/config/constants';
 import type { CloudRegion } from '@utils/types';
-import type { Credentials } from '@shared/api';
-import type { OutroData, TaskNotice } from '../../progress';
-import type { PromptContext } from '../../agent-prompt';
+import type { Credentials } from '@shared/posthog/api';
+import type { OutroData, TaskNotice } from '../../progress/progress';
+import type { PromptContext } from '../../prompt/agent-prompt';
 import type { PackageManagerDetector } from '@utils/package-manager';
-import type { ApiProject, ApiUser } from '@shared/api';
-import type { Harness, Integration, Sequence } from '@shared/constants';
+import type { ApiProject, ApiUser } from '@shared/posthog/api';
+import type { Harness, Integration, Sequence } from '@shared/config/constants';
 import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
-import type { AgentInteraction, ProgressEmitter } from '../../progress';
+import type {
+  AgentInteraction,
+  ProgressEmitter,
+} from '../../progress/progress';
 import type { EffortLevel } from '../switchboard/models';
-import type { GatewayAuth } from '@shared/gateway-auth';
+import type { GatewayAuth } from '@shared/gateway/gateway-auth';
 
 export type { PromptContext, Credentials };
 
@@ -287,7 +290,7 @@ export interface TokenUsageTotals {
 
 /** What the agent reported, accumulated independently of any observer. */
 export interface RunSnapshot {
-  tasks: import('../../progress').TaskSnapshot[];
+  tasks: import('../../progress/progress').TaskSnapshot[];
   statusMessages: string[];
   stage?: string;
   usage: TokenUsageTotals;
@@ -325,7 +328,7 @@ export interface RunAgentOptions {
   /** Cancels this run, including its active harness operation. */
   signal?: AbortSignal;
   /** Receives every progress event in emission order. Never awaited. */
-  onProgress?: (event: import('../../progress').AgentProgress) => void;
+  onProgress?: (event: import('../../progress/progress').AgentProgress) => void;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
   interaction?: AgentInteraction;
 }

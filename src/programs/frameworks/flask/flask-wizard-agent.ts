@@ -1,9 +1,9 @@
 /* Flask wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '../../framework-config';
-import { PYTHON_PACKAGE_INSTALLATION } from '../../framework-config';
+import type { FrameworkConfig } from '../framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../framework-config';
 import { detectPythonPackageManagers } from '../../detection/package-manager';
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as path from 'node:path';
 import {

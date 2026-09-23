@@ -11,11 +11,11 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { LoadingBox, PickerMenu } from '../primitives/index';
-import { Colors, Icons } from '../styles';
-import { InkUI } from '../ink-ui';
-import { Integration } from '@shared/constants';
+import { Colors, Icons } from '../app/styles';
+import { InkUI } from '../state/ink-ui';
+import { Integration } from '@shared/config/constants';
 import {
   FRAMEWORK_REGISTRY,
   SELF_DRIVING_INTEGRATE_PATH_KEY,

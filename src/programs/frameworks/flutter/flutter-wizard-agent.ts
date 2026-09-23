@@ -1,7 +1,7 @@
 /* Flutter wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '../../framework-config';
-import { Integration } from '@shared/constants';
+import type { FrameworkConfig } from '../framework-config';
+import { Integration } from '@shared/config/constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pubPackageManager } from '../../detection/package-manager';

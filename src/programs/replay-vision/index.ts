@@ -1,17 +1,17 @@
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { detectFramework, gatherFrameworkContext } from '../detection/index';
 import {
   scopeInstallDirToProject,
   type ProjectScopeSession,
 } from '../detection/project-scope';
 import type { FrameworkDetectionState } from '../detection/context';
-import type { ProgramCiHost } from '../host-capabilities';
-import { FRAMEWORK_REGISTRY } from '../registry';
+import type { ProgramCiHost } from '../host/host-capabilities';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { createSkillProgram } from '../agent-skill/index';
 import { REPLAY_VISION_OPTIONS } from './run.js';
 export { REPLAY_VISION_ABORT_CASES } from './run.js';
 import { detectPostHogIntegration } from '../posthog-integration/detect';
-import type { ProgramConfig, ProgramReadyContext } from '../program-step';
+import type { ProgramConfig, ProgramReadyContext } from '../run/program-step';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes } from '@shared/errors';
 

@@ -9,13 +9,17 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
-import { HostResolution } from '@shared/host-resolution';
+import {
+  Harness,
+  Sequence,
+  DEFAULT_AGENT_MODEL,
+} from '@shared/config/constants';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import { ErrorCodes } from '@shared/errors';
-import { AGENT_ERROR_CODE } from '@agent/error-map';
-import { AgentErrorType } from '@agent/signals';
+import { AGENT_ERROR_CODE } from '@agent/sdk/error-map';
+import { AgentErrorType } from '@agent/progress/signals';
 import type { AgentFailure } from '@agent/runner/shared/types';
-import type { AgentProgress } from '@agent/progress';
+import type { AgentProgress } from '@agent/progress/progress';
 import type {
   AgentHarness,
   BackendRunInputs,
@@ -32,8 +36,8 @@ vi.mock('@cli/ui', () => ({
 }));
 vi.mock('@utils/debug');
 vi.mock('@utils/terminal-bell');
-vi.mock('@agent/yara-hooks', async (original) => ({
-  ...(await original<typeof import('@agent/yara-hooks')>()),
+vi.mock('@agent/security/yara-hooks', async (original) => ({
+  ...(await original<typeof import('@agent/security/yara-hooks')>()),
   flushScanReport: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({
@@ -163,8 +167,10 @@ vi.mock('@agent/runner/switchboard/harness', () => {
   };
 });
 
-vi.mock('@agent/agent-prompt-loader', async (original) => {
-  const actual = await original<typeof import('@agent/agent-prompt-loader')>();
+vi.mock('@agent/prompt/agent-prompt-loader', async (original) => {
+  const actual = await original<
+    typeof import('@agent/prompt/agent-prompt-loader')
+  >();
   return {
     ...actual,
     loadAgentRegistry: vi.fn(() =>
@@ -188,8 +194,8 @@ vi.mock('@agent/agent-prompt-loader', async (original) => {
     ),
   };
 });
-vi.mock('@shared/skill-menu', async (original) => ({
-  ...(await original<typeof import('@shared/skill-menu')>()),
+vi.mock('@shared/skills/skill-menu', async (original) => ({
+  ...(await original<typeof import('@shared/skills/skill-menu')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
 }));
 
@@ -197,9 +203,9 @@ import { runAgent, RunOutcome } from '@agent/runner';
 import type { RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
-import { flushScanReport } from '@agent/yara-hooks';
+import { flushScanReport } from '@agent/security/yara-hooks';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
-import { OutroKind } from '@shared/outro';
+import { OutroKind } from '@shared/run/outro';
 import type { AskAnswers, PendingQuestion } from '@agent/types';
 
 let tmp: string;

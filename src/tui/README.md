@@ -7,6 +7,17 @@ the agent's questions from the user, shows the OAuth login, and projects run
 progress. It reaches programs through `@programs`, takes agent types only, and
 never looks up a global UI or exits on anyone else's behalf.
 
+## Layout
+
+| Folder                                               | Holds                                                    |
+| ---------------------------------------------------- | -------------------------------------------------------- |
+| `app/`                                               | launch, router, screen registry, terminal and styles     |
+| `state/`                                             | the store, the session projection and the Ink UI adapter |
+| `flows/`                                             | the flow contract and one flow per program               |
+| `screens/, components/, primitives/, hooks/, decks/` | what renders                                             |
+| `control/`                                           | the control adapter                                      |
+| `services/, add-mcp-server-to-clients/`              | TUI-side effects and MCP installers                      |
+
 ## Signatures
 
 ```ts
@@ -56,12 +67,13 @@ cli ── startTUI(version, program, host) ──▶ WizardStore ◀── InkU
                    control/ ── actions · setters · state ──▶ headless control server
 ```
 
-- `flow.ts` defines `FlowStep` (screen, show, isComplete, gate, onInit) and the
-  helpers that project a flow for the router and the runners. `flows/` holds one
-  module per program, registered in `PROGRAM_FLOWS`; product checks a flow needs
-  (`needsFrameworkSetup`, `isPostHogPresent`, …) come from `@programs`.
-- `session.ts` owns `WizardSession` and `buildSession`.
-- `auth-host.ts` builds the login host screens use from the store, aborting
-  through the host's `abort`.
+- `flows/flow.ts` defines `FlowStep` (screen, show, isComplete, gate, onInit)
+  and the helpers that project a flow for the router and the runners. `flows/`
+  holds one module per program, registered in `PROGRAM_FLOWS`; product checks a
+  flow needs (`needsFrameworkSetup`, `isPostHogPresent`, …) come from
+  `@programs`.
+- `state/session.ts` owns `WizardSession` and `buildSession`.
+- `state/auth-host.ts` builds the login host screens use from the store,
+  aborting through the host's `abort`.
 - `control/` is partial control (per-screen actions) and full control (every
   store setter) for the control server.

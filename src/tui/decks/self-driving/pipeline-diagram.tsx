@@ -7,7 +7,7 @@
  */
 
 import { Text } from 'ink';
-import { Colors } from '../../styles';
+import { Colors } from '../../app/styles';
 import type { ContentBlock } from '../../primitives/content-types';
 
 export const PIPELINE_BLOCK: ContentBlock = {

@@ -11,7 +11,7 @@
  * render the OutroScreen.
  */
 
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import {
   evaluateWizardReadiness,
   WizardReadiness,

@@ -1,5 +1,5 @@
 import type { AbortCase } from '@agent/types';
-import type { ProgramRun } from '../program-run';
+import type { ProgramRun } from '../run/program-run';
 
 export const MIGRATION_REPORT_FILE = 'migration-report.md';
 

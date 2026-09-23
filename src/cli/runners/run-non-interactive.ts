@@ -2,12 +2,12 @@ import {
   POSTHOG_DOCS_URL,
   type Harness,
   type Sequence,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import {
   checkLocalServices,
   getLocalDev,
   POSTHOG_LOCAL_URL,
-} from '@shared/local-dev';
+} from '@shared/config/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { LoggingUI } from '@headless';
 import type {
@@ -25,10 +25,10 @@ import {
   classifyRunFailure,
   emitWizardError,
 } from '@shared/errors';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { captureRunSkillCleanup } from '@shared/skills/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
-import type { OutroData } from '@shared/outro';
-import type { RunPhase as RunPhaseT } from '@shared/run-state';
+import type { OutroData } from '@shared/run/outro';
+import type { RunPhase as RunPhaseT } from '@shared/run/run-state';
 import { getAuditChecks, detectErrorCode, createUiReducer } from '@programs';
 import { getUI, setUI } from '../ui';
 
@@ -116,8 +116,8 @@ export function runNonInteractive(
   void (async () => {
     const path = await import('path');
     const { buildSession } = await import('@tui');
-    const { RunPhase } = await import('@shared/run-state');
-    const { OutroKind } = await import('@shared/outro');
+    const { RunPhase } = await import('@shared/run/run-state');
+    const { OutroKind } = await import('@shared/run/outro');
     const { readEnvironment } = await import('@utils/environment');
     const { readApiKeyFromEnv } = await import('@utils/env-api-key');
     const { configureLogFileFromEnvironment, logToFile } = await import(
@@ -447,7 +447,7 @@ async function serveControl(
   const { createControlHooks } = await import('../control-hooks');
   const { controlMode } = await import('../control-flags');
   const { runProgramAgent } = await import('./run-program-agent');
-  const { VERSION } = await import('@shared/version');
+  const { VERSION } = await import('@shared/config/version');
   const { logToFile } = await import('@utils/debug');
 
   // The parent answers the agent's questions over the socket, so the ask

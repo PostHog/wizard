@@ -10,7 +10,7 @@ import {
   NO_DEFAULT_LIMIT,
   PRICE_PER_PR_USD,
   PRICING_LONG,
-} from '@shared/self-driving-pricing';
+} from '@shared/pricing/self-driving-pricing';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 export const REPORT_FILE = 'posthog-self-driving-report.md';

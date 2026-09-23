@@ -1,8 +1,8 @@
 /* Laravel wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '../../framework-config';
+import type { FrameworkConfig } from '../framework-config';
 import { composerPackageManager } from '../../detection/package-manager';
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { boundedGlob } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

@@ -16,11 +16,11 @@ import {
   POSTHOG_US_CLIENT_ID,
   WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { resolveBaseUrl } from './urls';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
-import type { HostResolution } from '@shared/host-resolution';
+import type { HostResolution } from '@shared/posthog/host-resolution';
 
 const API_VERSION = '0.1d';
 

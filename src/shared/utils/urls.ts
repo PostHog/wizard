@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { IS_DEV, WIZARD_USER_AGENT } from '@shared/constants';
+import { IS_DEV, WIZARD_USER_AGENT } from '@shared/config/constants';
 import type { CloudRegion } from './types';
 
 /**

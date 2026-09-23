@@ -8,7 +8,7 @@
  * needs the CLI.
  */
 
-import { installOrUpdatePostHogCli } from '@shared/posthog-cli-install';
+import { installOrUpdatePostHogCli } from '@shared/posthog/posthog-cli-install';
 import { analytics } from '@utils/analytics';
 
 let attempted = false;

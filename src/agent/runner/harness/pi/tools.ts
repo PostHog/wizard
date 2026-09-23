@@ -52,25 +52,25 @@ import {
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from '../../../tools/tools';
-import { fetchSkillMenu } from '@shared/skill-menu';
+import { fetchSkillMenu } from '@shared/skills/skill-menu';
 import type { LLMProvider } from '@posthog/warlock';
-import type { ProgressEmitter } from '../../../progress';
+import type { ProgressEmitter } from '../../../progress/progress';
 import {
   isFullyCancelled,
   type WizardAskBridge,
-} from '../../../wizard-ask-bridge';
+} from '../../../progress/wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from '../../../tools/handoff';
-import { createSecretVault } from '@shared/secret-vault';
+import { createSecretVault } from '@shared/run/secret-vault';
 import {
   AUDIT_CHECKS_FILE,
   type AuditCheck,
   type AuditStatus,
-} from '@shared/audit-ledger';
+} from '@shared/run/audit-ledger';
 import { makeMutex } from '@utils/atomic-ledger';
 import { withMode } from './index';
 import {

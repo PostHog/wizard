@@ -1,6 +1,6 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import { resolveWarehouseSourceRunDefinition } from '../resolve-run-definition';
+import type { ProgramConfig } from '../run/program-step';
+import type { ProgramRun } from '../run/program-run';
+import { resolveWarehouseSourceRunDefinition } from '../run/resolve-run-definition';
 import { detectWarehousePrerequisites } from './detect.js';
 import { getDetectedWarehouseSources } from './detect.js';
 

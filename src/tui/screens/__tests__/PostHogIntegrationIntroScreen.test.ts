@@ -7,7 +7,7 @@
  */
 
 import { sharingOptions } from '@tui/screens/PostHogIntegrationIntroScreen';
-import { introMenuOptions } from '@tui/posthog-integration-intro';
+import { introMenuOptions } from '@tui/flows/posthog-integration-intro';
 
 // IntroScreenLayout renders a centered menu in a 24-column box. A row with an
 // icon spends four columns before the label: focus marker, gap, glyph, gap.

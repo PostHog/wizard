@@ -19,7 +19,7 @@ import {
   type EnvKeyDefinition,
   type EnvKeyLocations,
 } from '@utils/env-scan';
-import { scanInstalledSkill } from '../yara-hooks';
+import { scanInstalledSkill } from '../security/yara-hooks';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
@@ -27,18 +27,18 @@ import {
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from '@shared/audit-ledger';
-import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
-import type { SecretVault } from '@shared/secret-vault';
-import { fetchWithRetry } from '@shared/fetch-retry';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+} from '@shared/run/audit-ledger';
+import { CANCELLED_SENTINEL } from '../progress/wizard-ask-bridge';
+import type { SecretVault } from '@shared/run/secret-vault';
+import { fetchWithRetry } from '@shared/posthog/fetch-retry';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skills/skill-menu';
 import {
   downloadSkillPayload,
   extractSkillPayload,
   type SkillInstallReceipt,
-} from '@shared/skill-download';
+} from '@shared/skills/skill-download';
 
-export type { SkillBundle } from '@shared/skill-download';
+export type { SkillBundle } from '@shared/skills/skill-download';
 
 /** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
 export interface SkillInstallOptions {
@@ -113,8 +113,8 @@ export async function downloadSkill(
  * - `download-failed`: found the skill but download/extract failed;
  *   `message` has the underlying error.
  */
-export type { InstallSkillResult } from '@shared/skill-install';
-import type { InstallSkillResult } from '@shared/skill-install';
+export type { InstallSkillResult } from '@shared/skills/skill-install';
+import type { InstallSkillResult } from '@shared/skills/skill-install';
 
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,

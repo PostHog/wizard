@@ -45,6 +45,9 @@ Each domain has a dedicated boundary:
 - **CLI** → argv, runners and composition roots in `src/cli/`, imported only by
   `bin.ts`; see [src/cli/README.md](src/cli/README.md)
 
+A layer's root holds only its public face: `index.ts`, `types.ts`, the README
+and `tsconfig.layer.json`. Every other file lives in a folder named for one job.
+
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
 

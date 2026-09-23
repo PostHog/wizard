@@ -8,7 +8,7 @@
 
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { Icons, Colors } from '../styles';
+import { Icons, Colors } from '../app/styles';
 import { PromptLabel } from './PromptLabel.js';
 import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 
