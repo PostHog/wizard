@@ -1,4 +1,5 @@
 /** Public runtime entry for the programs surface. */
+import { snapshotProgramInput } from './snapshot-program-input';
 export type * from './types';
 export { PROGRAM_BINDINGS, resolveProgramBinding } from './binding';
 export { getProgramCommandments } from './commandments';
@@ -24,8 +25,10 @@ export async function runProgram(
   input: import('./run-program').ProgramInput,
   options?: import('./run-program').ProgramOptions,
 ): Promise<import('./run-program').ProgramRunOutcome> {
+  // Copy before the load, so host writes while it loads cannot reach the run.
+  const snapshot = snapshotProgramInput(input);
   const entry = await import('./run-program');
-  return entry.runProgram(programId, input, options);
+  return entry.runProgram(programId, snapshot, options);
 }
 /** Keep the readiness and settings checks out of CLI startup until a host runs them. */
 export async function preflight(

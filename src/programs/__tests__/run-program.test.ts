@@ -6,10 +6,13 @@ import { EVENT_PLAN_FILE, Harness, Sequence } from '@shared/constants';
 import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
+import type { OutroData, SeedTaskEntry } from '@agent/types';
 import type { FrameworkConfig } from '../framework-config';
+import type { DetectedSource } from '../warehouse-sources/types';
 import type { ResolvedProgramCredentials } from '../credentials';
 import type { ProgramProgress } from '../program-store';
 import type {
+  ProgramInput,
   ProgramWorkflowConnector,
   ProgramWorkflowDecision,
   ProgramWorkflowRequest,
@@ -26,6 +29,7 @@ import {
 import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
+import { runProgram as runProgramDirect } from '../run-program';
 import { analytics } from '@utils/analytics';
 import { refreshAccessToken } from '@utils/oauth-token';
 import { DiscoveredFeature } from '@shared/scan-consent';
@@ -117,6 +121,47 @@ const credentials: ResolvedProgramCredentials = {
     organization: { is_ai_data_processing_approved: true },
   } as ApiUser,
 };
+
+/** A framework whose prompt and outro changes read the framework context. */
+const integrationFrameworkConfig = (): FrameworkConfig =>
+  ({
+    metadata: { name: 'Next.js', integration: 'nextjs', docsUrl: 'docs' },
+    detection: { usesPackageJson: false, getVersion: () => '15' },
+    analytics: { getTags: () => ({}) },
+    prompts: {
+      projectTypeDetection: 'app',
+      getAdditionalContextLines: (context: Record<string, unknown>) =>
+        context.router ? [`Router: ${String(context.router)}`] : [],
+    },
+    environment: { uploadToHosting: false, getEnvVars: () => ({}) },
+    ui: {
+      successMessage: 'Done',
+      estimatedDurationMinutes: 5,
+      getOutroChanges: (context: Record<string, unknown>) =>
+        context.router
+          ? [`Configured the ${String(context.router)} router`]
+          : [],
+    },
+  } as unknown as FrameworkConfig);
+
+/** Integration host effects without a live notebook getter. */
+const integrationEffects = () => ({
+  readPackageJson: vi.fn().mockResolvedValue(null),
+  hasDeclaredDependency: vi.fn().mockReturnValue(true),
+  warn: vi.fn(),
+  setTag: vi.fn(),
+  capture: vi.fn(),
+  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
+  requestDeepLink: vi.fn().mockResolvedValue(null),
+  openDashboardDeepLink: vi.fn(),
+});
+
+const warehouseSource = (kind: string): DetectedSource => ({
+  kind,
+  label: kind,
+  mode: 'in-cli',
+  matchedSignal: `dependency: ${kind.toLowerCase()}`,
+});
 
 describe('runProgram', () => {
   beforeEach(() => {
@@ -650,7 +695,7 @@ describe('runProgram', () => {
       overrides: { harness: Harness.pi },
     });
 
-    expect(vi.mocked(runAgent).mock.calls[0][0].binding).toBe(binding);
+    expect(vi.mocked(runAgent).mock.calls[0][0].binding).toEqual(binding);
     expect(captureSwitchboardDecision).not.toHaveBeenCalled();
     expect(setTag).not.toHaveBeenCalledWith('harness', expect.anything());
     expect(result.data.binding).toEqual(binding);
@@ -1174,39 +1219,17 @@ describe('runProgram', () => {
       outcome: RunOutcome.Success,
       snapshot,
     });
-    const frameworkConfig = {
-      metadata: { name: 'Next.js', integration: 'nextjs', docsUrl: 'docs' },
-      detection: { usesPackageJson: false, getVersion: () => '15' },
-      analytics: { getTags: () => ({}) },
-      prompts: { projectTypeDetection: 'app' },
-      environment: { uploadToHosting: false, getEnvVars: () => ({}) },
-      ui: {
-        successMessage: 'Done',
-        estimatedDurationMinutes: 5,
-        getOutroChanges: () => [],
-      },
-    } as unknown as FrameworkConfig;
-    const effects = {
-      readPackageJson: vi.fn().mockResolvedValue(null),
-      hasDeclaredDependency: vi.fn().mockReturnValue(true),
-      warn: vi.fn(),
-      setTag: vi.fn(),
-      capture: vi.fn(),
-      uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
-      requestDeepLink: vi.fn().mockResolvedValue(null),
-      openDashboardDeepLink: vi.fn(),
-    };
 
     const result = await runProgram(
       'posthog-integration',
       {
         installDir: '/project',
         credentials,
-        frameworkConfig,
+        frameworkConfig: integrationFrameworkConfig(),
         frameworkContext: {},
         flags: { ci: true },
       },
-      { integrationEffects: effects },
+      { integrationEffects: integrationEffects() },
     );
 
     expect(result.outcome).toBe('success');
@@ -1214,6 +1237,177 @@ describe('runProgram', () => {
     expect(config.run.integrationLabel).toBe('nextjs');
     expect(config.hooks?.buildOutroData).toBeTypeOf('function');
     expect(config.seedTasks?.()).toEqual([]);
+  });
+
+  it('the outro reads the notebook URL emitted during the run', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'posthog-integration',
+      strategy: 'integration',
+    });
+    let outro: OutroData | undefined;
+    vi.mocked(runAgent).mockImplementation((config, input, options) => {
+      options?.onProgress?.({
+        kind: 'url',
+        which: 'notebook',
+        url: 'https://us.posthog.com/notebook/7',
+      });
+      outro = config.hooks?.buildOutroData?.(input.credentials);
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    const result = await runProgram(
+      'posthog-integration',
+      {
+        installDir: '/project',
+        credentials,
+        frameworkConfig: integrationFrameworkConfig(),
+        flags: { ci: true },
+      },
+      { integrationEffects: integrationEffects() },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(outro).toMatchObject({
+      notebookUrl: 'https://us.posthog.com/notebook/7',
+      handoffPrompt: expect.stringContaining(
+        'https://us.posthog.com/notebook/7',
+      ),
+    });
+  });
+
+  it('keeps the host’s own notebook getter ahead of the run’s URL', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'posthog-integration',
+      strategy: 'integration',
+    });
+    let outro: OutroData | undefined;
+    vi.mocked(runAgent).mockImplementation((config, input, options) => {
+      options?.onProgress?.({
+        kind: 'url',
+        which: 'notebook',
+        url: 'https://us.posthog.com/notebook/7',
+      });
+      outro = config.hooks?.buildOutroData?.(input.credentials);
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    await runProgram(
+      'posthog-integration',
+      {
+        installDir: '/project',
+        credentials,
+        frameworkConfig: integrationFrameworkConfig(),
+        flags: { ci: true },
+      },
+      {
+        integrationEffects: {
+          ...integrationEffects(),
+          getNotebookUrl: () => 'https://us.posthog.com/notebook/host',
+        },
+      },
+    );
+
+    expect(outro?.notebookUrl).toBe('https://us.posthog.com/notebook/host');
+  });
+
+  it.each([
+    ['the lazy entry', runProgram],
+    ['run-program', runProgramDirect],
+  ])(
+    'a host mutation after the call does not reach run resolution, through %s',
+    async (_entry, callProgram) => {
+      vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+        id: 'posthog-integration',
+        strategy: 'integration',
+      });
+      let prompt: string | undefined;
+      let seeded: SeedTaskEntry[] | undefined;
+      let outro: OutroData | undefined;
+      let nextSteps: { heading: string; items: string[] } | undefined;
+      vi.mocked(runAgent).mockImplementation((config, input) => {
+        prompt = config.run.customPrompt?.(credentials.posthog);
+        seeded = config.seedTasks?.();
+        outro = config.hooks?.buildOutroData?.(input.credentials);
+        nextSteps = config.hooks?.buildOutroNextSteps?.(input.credentials, []);
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+      const frameworkContext = { router: 'app' };
+      const warehouseSources = [warehouseSource('Stripe')];
+      const flags = { ci: false };
+      const host: NonNullable<ProgramInput['host']> = { region: 'us' };
+
+      const pending = callProgram(
+        'posthog-integration',
+        {
+          installDir: '/project',
+          frameworkConfig: integrationFrameworkConfig(),
+          frameworkContext,
+          warehouseSources,
+          flags,
+          host,
+        },
+        {
+          credentials: { resolve: () => Promise.resolve(credentials) },
+          integrationEffects: integrationEffects(),
+        },
+      );
+      frameworkContext.router = 'pages';
+      warehouseSources.push(warehouseSource('Postgres'));
+      flags.ci = true;
+      host.region = 'eu';
+      const result = await pending;
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(prompt).toContain('Router: app');
+      expect(outro?.changes).toEqual(['Configured the app router']);
+      expect(seeded).toMatchObject([
+        { type: 'warehouse', inputs: { sources: [{ kind: 'Stripe' }] } },
+      ]);
+      expect(nextSteps?.items[0]).toContain('Connect Stripe');
+      expect(nextSteps?.items.join('\n')).not.toContain('Postgres');
+      const [, runInput] = vi.mocked(runAgent).mock.calls[0];
+      expect(runInput.flags.ci).toBe(false);
+      expect(runInput.host.region).toBe('us');
+      expect(result.data.detection.frameworkContext).toEqual({ router: 'app' });
+    },
+  );
+
+  it('copies a composed child’s input when the connector hands it over', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
+    const childContext = { router: 'app' };
+    const child: ProgramInput = {
+      installDir: '/project/app',
+      frameworkConfig: integrationFrameworkConfig(),
+      frameworkContext: childContext,
+    };
+    const prompts: string[] = [];
+    vi.mocked(runAgent).mockImplementation((config) => {
+      // The host keeps writing the object it handed over.
+      childContext.router = 'pages';
+      if (config.programId === 'posthog-integration') {
+        prompts.push(config.run.customPrompt?.(credentials.posthog) ?? '');
+      }
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+    const workflow: ProgramWorkflowConnector = {
+      step: (request) =>
+        Promise.resolve(
+          request.kind === 'child-run'
+            ? { kind: 'child-run', input: child }
+            : { kind: 'confirm', confirmed: true },
+        ),
+    };
+
+    const result = await runProgram(
+      'self-driving',
+      { installDir: '/project', credentials },
+      { workflow, integrationEffects: integrationEffects() },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(prompts).toEqual([expect.stringContaining('Router: app')]);
   });
 
   it('composes an integration run before self-driving with one attributed ledger', async () => {
@@ -1686,6 +1880,43 @@ describe('runProgram', () => {
     expect(result.data.detection.frameworkContext).toEqual({
       detected: true,
       selectedProject: 'apps/web',
+    });
+  });
+
+  it('copies the post-auth patch the connector answers with', async () => {
+    const patch = { selection: { project: 'apps/web' } };
+    vi.mocked(getRuntimeProgramConfig).mockReturnValue({
+      id: 'error-tracking-upload-source-maps',
+      strategy: 'resolved',
+      // runProgram hands resolve the whole input, patched framework context included.
+      resolve: (input) => ({
+        ...run,
+        customPrompt: () =>
+          JSON.stringify((input as ProgramInput).frameworkContext),
+      }),
+      postAuthGates: ['detect'],
+    });
+    let prompt: string | undefined;
+    vi.mocked(runAgent).mockImplementation((config) => {
+      // The host keeps writing the object it answered with.
+      patch.selection.project = 'apps/api';
+      prompt = config.run.customPrompt?.(credentials.posthog);
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    await runProgram(
+      'error-tracking-upload-source-maps',
+      { installDir: '/project', credentials },
+      {
+        workflow: {
+          step: () =>
+            Promise.resolve({ kind: 'post-auth', frameworkContext: patch }),
+        },
+      },
+    );
+
+    expect(JSON.parse(prompt ?? 'null')).toEqual({
+      selection: { project: 'apps/web' },
     });
   });
 

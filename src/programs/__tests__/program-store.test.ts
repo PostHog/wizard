@@ -597,3 +597,40 @@ it('records a snapshot that cannot be copied as a diagnostic and does not emit i
   ]);
   expect(store.readData().composition.completedRuns).toEqual(['integrate-run']);
 });
+
+it('reads the running run’s live URLs as a copy, and nothing between runs', () => {
+  const store = new ProgramStore();
+  expect(store.activeRunSnapshot()).toBeNull();
+
+  const run = store.beginRun({ runId: 'run-1' });
+  run.onProgress({
+    kind: 'url',
+    which: 'notebook',
+    url: 'https://us.posthog.com/notebook/7',
+  });
+  run.onProgress({ kind: 'status', message: 'Uploading the report' });
+  const active = store.activeRunSnapshot();
+  expect(active).toMatchObject({
+    notebookUrl: 'https://us.posthog.com/notebook/7',
+    statusMessages: ['Uploading the report'],
+  });
+
+  active?.statusMessages.push('outside write');
+  expect(store.activeRunSnapshot()?.statusMessages).toEqual([
+    'Uploading the report',
+  ]);
+
+  run.finish(
+    success({
+      tasks: [],
+      statusMessages: [],
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      },
+    }),
+  );
+  expect(store.activeRunSnapshot()).toBeNull();
+});
