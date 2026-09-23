@@ -1,0 +1,100 @@
+/**
+ * Mount an Ink picker over a command's `children` and dispatch the
+ * selected child's handler.
+ *
+ * Used as the `interactiveDefault` for family parents like
+ * `wizard audit` — when the user invokes the parent without a leaf, this
+ * shows a TUI menu instead of yargs's `demandCommand(1)` help dump.
+ *
+ * The picker opens when a family surfaces more than one option; the `default`
+ * flag controls which one is pre-highlighted. When a family surfaces a single
+ * option (today `audit` → `events`), `familyCommandFactory` runs it directly
+ * instead, so the user lands on its intro screen rather than a one-item menu.
+ *
+ * Single-option commands aren't families — they should be flat
+ * commands wired with `skillCommandFactory` / `nativeCommandFactory`
+ * directly, not run through this module.
+ */
+
+import type { Arguments } from 'yargs';
+
+import { renderFamilyPicker } from '@tui/family-picker';
+import { commandKeys, type Command } from '../command';
+
+function describe(child: Command): string {
+  // Strip positional syntax (`search <query>` → `search`) for the picker label.
+  return commandKeys(child.name)[0] ?? '';
+}
+
+/**
+ * Reorder children so the `default`-marked entry is first, while
+ * preserving the relative order of the rest. The picker's initial
+ * focus is index 0, so this is what makes "press Enter on
+ * `wizard audit`" run the default leaf (today `audit events`).
+ *
+ * Exported for testability — the ordering logic stays pure and
+ * inspectable without mounting Ink.
+ */
+export function orderFamilyChildren(children: readonly Command[]): Command[] {
+  const selectable = children.filter((c) => c.handler || c.children?.length);
+  const defaults = selectable.filter((c) => c.default);
+  const rest = selectable.filter((c) => !c.default);
+  return [...defaults, ...rest];
+}
+
+/**
+ * Render the picker over a family's children. Resolves once the user has
+ * selected a child; dispatching the child's handler is the caller's
+ * responsibility.
+ */
+export function chooseFamilyChild(
+  parentLabel: string,
+  children: readonly Command[],
+): Promise<Command | null> {
+  const ordered = orderFamilyChildren(children);
+  if (ordered.length === 0) return Promise.resolve(null);
+
+  return renderFamilyPicker(
+    parentLabel,
+    ordered.map((child) => ({
+      label: describe(child),
+      value: child,
+      hint: child.description,
+    })),
+  );
+}
+
+/**
+ * Returns an `interactiveDefault` handler for a family parent's no-leaf
+ * invocation. Always opens the picker; the `default`-marked child is
+ * shown first (pre-highlighted), so a single Enter keystroke runs it.
+ *
+ * Discovery + consent in one extra keystroke vs. auto-running silently.
+ *
+ * Wire onto a family parent:
+ *   export const auditCommand: Command = {
+ *     name: 'audit',
+ *     description: '...',
+ *     children: [...],
+ *     interactiveDefault: createFamilyPickerDefault('audit', auditChildren),
+ *   };
+ */
+export function createFamilyPickerDefault(
+  parentLabel: string,
+  children: readonly Command[],
+  chooser: (
+    label: string,
+    children: readonly Command[],
+  ) => Promise<Command | null> = chooseFamilyChild,
+): (argv: Arguments) => Promise<void> {
+  return async (argv) => {
+    const chosen = await chooser(parentLabel, children);
+    if (!chosen) return;
+    // We forward the PARENT's parsed argv straight to the chosen child. The
+    // child's own option defaults and `check` validator do NOT run on this
+    // path — they only run when the leaf is invoked directly
+    // (`wizard audit events`). Harmless while leaves declare neither, but if a
+    // leaf ever grows a `check` or a defaulted option, this path will skip it.
+    await Promise.resolve(chosen.handler?.(argv));
+  };
+}

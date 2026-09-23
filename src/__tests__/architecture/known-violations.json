@@ -36,8 +36,6 @@
     "src/headless/renderers/headless-ui.ts -> src/tui/store.ts",
     "src/shared/utils/wizard-abort.ts -> src/headless/renderers/logging-ui.ts",
     "src/shared/utils/wizard-abort.ts -> src/ui/index.ts",
-    "src/tui/family-picker.tsx -> src/cli/commands/command.ts",
-    "src/tui/services/wizard-spellbook.ts -> src/programs/program-step.ts",
     "src/ui/index.ts -> src/headless/renderers/logging-ui.ts"
   ]
 }

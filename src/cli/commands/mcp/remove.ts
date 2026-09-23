@@ -55,8 +55,6 @@ function runMcpRemove(argv: Arguments): void {
 /** No exit code on an empty result: nothing to remove is the requested end state. */
 async function runHeadlessRemove(local?: boolean): Promise<void> {
   setUI(new LoggingUI());
-  const { removeMCPServerFromClientsStep } = await import(
-    '@tui/add-mcp-server-to-clients/index'
-  );
+  const { removeMCPServerFromClientsStep } = await import('./client-steps');
   await removeMCPServerFromClientsStep({ local });
 }
