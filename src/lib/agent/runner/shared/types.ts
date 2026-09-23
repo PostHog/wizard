@@ -9,16 +9,12 @@
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
-import type {
-  AdditionalFeature,
-  CloudRegion,
-  Credentials,
-  OutroData,
-  TaskNotice,
-  WizardSession,
-} from '@lib/wizard-session';
+import type { AdditionalFeature } from '@lib/constants';
+import type { CloudRegion } from '@utils/types';
+import type { Credentials } from '@lib/api';
+import type { OutroData, TaskNotice } from '@lib/agent/progress';
 import type { PromptContext } from '@lib/agent/agent-prompt';
-import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import type { PackageManagerDetector } from '@utils/package-manager';
 import type { ApiProject, ApiUser } from '@lib/api';
 import type { Harness, Integration, Sequence } from '@lib/constants';
 import type { ErrorCode } from '@lib/errors';
@@ -42,17 +38,14 @@ export interface AbortCase {
 }
 
 /**
- * Unified agent run configuration.
+ * What varies between agent runs: the prompt, the skill, the tools, the copy.
  *
- * Every program provides one of these — either as a static object
- * or via a function that builds one from the session. The runner
- * assembles the final prompt from `prompt` + `skillId`.
- *
- * The three session-taking hooks at the end are the caller's: the agent never
- * calls them. `run-agent-legacy.ts` binds them and hands the agent
- * `RunConfig.hooks` instead.
+ * Every program provides one of these as `RunConfig.run`. The runner assembles
+ * the final prompt from `customPrompt` + `skillId`. Programs extend it with
+ * their session-taking completion hooks in `src/lib/programs/program-run.ts`;
+ * the caller binds those and hands the agent `RunConfig.hooks` instead.
  */
-export interface ProgramRun {
+export interface AgentRunDefinition {
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
@@ -72,33 +65,6 @@ export interface ProgramRun {
   additionalFeatureQueue?: readonly AdditionalFeature[];
   /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];
-  /** Runs after agent completes, before outro (e.g. env var upload). */
-  postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
-  /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
-  buildOutroData?: (
-    session: WizardSession,
-    credentials: Credentials,
-  ) => WizardSession['outroData'];
-  /**
-   * Outro bullets for a sequence that composes its own outro data.
-   *
-   * `buildOutroData` is the linear sequence's seam: it hands the program the
-   * whole outro. The orchestrated sequence cannot, because its message is the
-   * drain's result — how many steps ran, what was skipped, which conflict the
-   * review step left. So a program with next steps to offer had nowhere to put
-   * them there, and the integration's data-source links were built and then
-   * dropped on every orchestrated run. This hook keeps the message with the
-   * sequence and the bullets with the program.
-   *
-   * `completedSeededTypes` names the runner-seeded task types that finished
-   * successfully, so a program can leave out a step its own seeded task
-   * already did — the sequence stays ignorant of what any type means.
-   */
-  buildOutroNextSteps?: (
-    session: WizardSession,
-    credentials: Credentials,
-    completedSeededTypes: readonly string[],
-  ) => { heading: string; items: string[] } | undefined;
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
    * always returns a "batch your questions" error regardless of the cap.
@@ -183,8 +149,8 @@ export interface ResolvedBinding {
 export interface RunConfig {
   /** Program id: gateway spend pin, analytics label, commandments axis. */
   programId: string;
-  /** The program's run definition. Its session-taking hooks are the caller's, see `hooks`. */
-  run: ProgramRun;
+  /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
+  run: AgentRunDefinition;
   /** A composed sub-run leaves the terminal outro to its host. */
   composed: boolean;
   /** Run-level sequence, harness and model. */
@@ -319,6 +285,8 @@ export interface RunSnapshot {
   finalCostUsd?: number;
   dashboardUrl?: string;
   notebookUrl?: string;
+  /** The handoff document the agent published, when it did. */
+  handoffText?: string;
 }
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */

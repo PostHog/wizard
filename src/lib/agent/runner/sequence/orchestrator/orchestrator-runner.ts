@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type TaskNotice } from '@lib/wizard-session';
+import { OutroKind, type TaskNotice } from '@lib/agent/progress';
 import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@lib/constants';
 import {
   installSkillById,
@@ -33,8 +33,7 @@ import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { WizardError } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes, WizardError } from '@lib/errors';
 import type { AgentInteraction } from '@lib/agent/progress';
 import type {
   AgentFailure,

@@ -35,8 +35,6 @@ import type {
 import { logToFile } from '@utils/debug';
 import { readFileHead } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
-import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
 import {
   highestSeverityMatch,
@@ -45,22 +43,18 @@ import {
 } from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
-// TODO(wizard#594): invert this dependency.
-// L2 infra (yara-hooks) imports product-specific filename constants from
-// individual programs. The leaf `constants.ts` modules break the *import*
-// cycle but don't fix the *layering* concern: this file knowing about
-// `events-audit`, `posthog-integration`, and `audit` violates "product
-// knowledge never enters infrastructure code." Proper fix is inverted —
-// programs declare their own doc paths, the hooks read from a generic
-// registry. For now: every new program emitting a PII-shaped report has
-// to be added here. Land that cleanup before adding a fourth entry.
+// TODO(wizard#594): invert this dependency. The document names are shared
+// constants now, so nothing here imports a program, but this file still knows
+// which programs write PII-shaped reports: every new one has to be added.
+// Proper fix is inverted — programs declare their own doc paths and the hooks
+// read a generic registry. Land that before adding a fourth entry.
 import {
-  SETUP_REPORT_FILE as EVENTS_AUDIT_REPORT_FILE,
+  EVENTS_AUDIT_REPORT_FILE,
   EVENT_INVENTORY_FILE,
   EVENT_INVENTORY_PART_PATTERN,
-} from '@lib/programs/events-audit/constants';
-import { AUDIT_REPORT_FILE } from '@lib/programs/audit/types';
-import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
+  EVENT_PLAN_FILE,
+} from '@lib/constants';
+import { AUDIT_REPORT_FILE } from '@lib/audit-ledger';
 
 // ─── Warlock module accessor ─────────────────────────────────────
 // Warlock is ESM-only and lazily inits its WASM engine + compiles rules on the
@@ -429,18 +423,23 @@ export function captureScanReport(): void {
  * which is what makes this whole function idempotent — a second call from
  * another termination path (e.g. finally after an abort already flushed) finds
  * scanCount === 0 and every step no-ops.
+ *
+ * Returns the user-facing report line when a report was written; the caller
+ * decides where it goes (the runner emits it as progress).
  */
-export function flushScanReport(
-  session: Pick<WizardSession, 'yaraReport'>,
-): void {
-  if (session.yaraReport) {
+export function flushScanReport(options: {
+  yaraReport: boolean;
+}): string | undefined {
+  let line: string | undefined;
+  if (options.yaraReport) {
     const reportPath = writeScanReport();
     if (reportPath) {
       const summary = formatScanReport();
-      getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+      line = `YARA scan report: ${reportPath}${summary ?? ''}`;
     }
   }
   captureScanReport();
+  return line;
 }
 
 // ─── Wizard-documentation allowlist ───────────────────────────────

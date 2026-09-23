@@ -28,7 +28,7 @@ import {
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from '../programs/audit/types';
+} from '../audit-ledger';
 import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
 import type { SecretVault } from '../secret-vault';
 import { fetchWithRetry, type RetryOpts } from '../fetch-retry';

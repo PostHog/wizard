@@ -44,7 +44,7 @@ export type {
   AgentFailure,
   BootstrapResult,
   Credentials,
-  ProgramRun,
+  AgentRunDefinition,
   PromptContext,
   ResolvedBinding,
   RunAgentOptions,
@@ -125,6 +125,7 @@ export async function runAgent(
       snapshot: collector.snapshot(),
     };
   } finally {
-    flushScanReport({ yaraReport: input.flags.yaraReport });
+    const report = flushScanReport({ yaraReport: input.flags.yaraReport });
+    if (report) log(report);
   }
 }

@@ -37,3 +37,11 @@ it('isolates nested completion data from a mutating observer', () => {
     nextSteps: { heading: 'Next', items: ['Keep the report'] },
   });
 });
+
+it('keeps the published handoff text in the snapshot', () => {
+  const collector = createProgressCollector();
+  expect(collector.snapshot().handoffText).toBeUndefined();
+  collector.emit({ kind: 'handoff', text: '# Report' });
+  collector.emit({ kind: 'handoff', text: '# Report, revised' });
+  expect(collector.snapshot().handoffText).toBe('# Report, revised');
+});

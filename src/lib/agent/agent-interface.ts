@@ -25,12 +25,9 @@ import {
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
   AWS_SKILLS_BASE_URL,
-} from '@lib/constants';
-import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '@lib/wizard-session';
-import { WizardError } from '@utils/wizard-abort';
+} from '@lib/constants';
 import type { AgentFailure } from './runner/shared/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
@@ -51,14 +48,14 @@ import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
 import { classifyToolToStage } from './agent-phase';
-import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import type { PackageManagerDetector } from '@utils/package-manager';
 import {
   AgentSignals,
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
 } from './signals';
-import { classifyAuthFailure } from '@lib/errors';
+import { classifyAuthFailure, WizardError } from '@lib/errors';
 import { isGrantRevoked } from '@lib/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
@@ -232,9 +229,7 @@ export type AgentConfig = {
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
    */
-  getPendingQuestion?: () =>
-    | import('@lib/wizard-session').PendingQuestion
-    | null;
+  getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
    * Orchestrator queue context. Present only when the `wizard-orchestrator`
    * flag routes the run here; threaded into wizard-tools so the orchestrator
@@ -338,9 +333,7 @@ type AgentRunConfig = {
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
    */
-  getPendingQuestion?: () =>
-    | import('@lib/wizard-session').PendingQuestion
-    | null;
+  getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
    * The orchestrator owns the TUI task panel (it renders its queue), so its
    * runs suppress the agent's own TaskCreate/TaskUpdate rendering. Set from
@@ -651,6 +644,7 @@ export async function initializeAgent(
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
       triageProvider,
+      emit: config.emit,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -736,12 +730,12 @@ export async function runAgent(
     abortCases?: readonly AbortCaseMatcher[];
     /**
      * Emit a `wizard: step` event on each agent task transition. Threaded from
-     * `ProgramRun.trackStepProgress`; defaults off for every other caller.
+     * `AgentRunDefinition.trackStepProgress`; defaults off for every other caller.
      */
     emitStepEvents?: boolean;
     /**
      * Maps an agent-authored step label to a stable `step_key`. Threaded from
-     * `ProgramRun.resolveStepKey`; absent for programs that don't define one.
+     * `AgentRunDefinition.resolveStepKey`; absent for programs that don't define one.
      */
     resolveStepKey?: (stepName: string | undefined) => string | undefined;
     /** Request the end-of-run reflection remark. Defaults to true. */
@@ -1819,7 +1813,7 @@ function handleSDKMessage(
   // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
   suppressTaskRender = false,
   // Opt-in per-step analytics, threaded from runAgent's `emitStepEvents`
-  // (ProgramRun.trackStepProgress). Off for every program that doesn't opt in.
+  // (AgentRunDefinition.trackStepProgress). Off for every program that doesn't opt in.
   emitStepEvents = false,
   // Program-supplied label -> stable key mapping for the same events.
   resolveStepKey?: (stepName: string | undefined) => string | undefined,

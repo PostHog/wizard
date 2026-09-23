@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { WIZARD_USER_AGENT } from './constants';
+import type { HostResolution } from './host-resolution';
 
 /**
  * User payload from `/api/users/@me/`. Schema typed for the fields the
@@ -16,6 +17,30 @@ import { WIZARD_USER_AGENT } from './constants';
  * Keep `distinct_id` required — analytics depends on it. Everything
  * else added here is nullish so partial responses don't fail parsing.
  */
+/** What a login (or a CI api key) resolves to: the wizard's access to one project. */
+export interface Credentials {
+  accessToken: string;
+  /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
+  refreshToken?: string;
+  /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
+  expiresAt?: number;
+  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
+  oauthClientId?: string;
+  projectApiKey: string;
+  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
+  host: HostResolution;
+  projectId: number;
+  /**
+   * Requested OAuth scopes the grant came back without — deselected on the
+   * consent screen or clamped by the app's ceiling. Read when a run fails so
+   * the error can name the missing permission and the fix (re-run and grant
+   * it during the OAuth flow) instead of the generic report-a-bug line.
+   * Empty/absent on CI api-key runs, where there is no scope request to diff
+   * against.
+   */
+  missingScopes?: readonly string[];
+}
+
 export const ApiUserSchema = z
   .object({
     // Identifiers

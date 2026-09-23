@@ -8,7 +8,7 @@
 export {
   runAgent,
   shouldDisableAsk,
-  type ProgramRun,
+  type AgentRunDefinition,
   type BootstrapResult,
   type AbortCase,
   type PromptContext,

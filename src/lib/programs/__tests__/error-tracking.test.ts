@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ProgramRun } from '@lib/agent/runner/shared/types';
+import type { ProgramRun } from '@lib/programs/program-run';
 import { Integration } from '@lib/constants';
 import type { AgenticDetectionReport } from '@lib/detection/agentic';
 import { detectFramework } from '@lib/detection/index';

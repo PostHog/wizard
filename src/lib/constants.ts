@@ -105,6 +105,33 @@ export enum Integration {
   javascriptNode = 'javascript_node',
 }
 
+/** Additional features the agent can integrate after the main setup */
+export enum AdditionalFeature {
+  LLM = 'llm',
+}
+
+/** Human-readable labels for additional features (used in TUI progress) */
+export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
+  [AdditionalFeature.LLM]: 'AI observability',
+};
+
+/** Agent prompts for each additional feature, injected via the stop hook */
+export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
+  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+};
+
+// ── Documents the wizard's programs write into the user's project ────
+// Named here so the scanner's documentation allowlist can list them without
+// importing a program; each program re-exports its own.
+/** The events-audit report. */
+export const EVENTS_AUDIT_REPORT_FILE = 'posthog-events-audit-report.md';
+export const EVENT_INVENTORY_FILE = '.posthog-events-inventory.json';
+/** Per-part filename pattern emitted by events-audit subagents (e.g. `.posthog-events-inventory.part-3.json`). */
+export const EVENT_INVENTORY_PART_PATTERN =
+  /^\.posthog-events-inventory\.part-\d+\.json$/;
+/** The integration program's event plan. */
+export const EVENT_PLAN_FILE = '.posthog-events.json';
+
 export interface Args {
   debug: boolean;
   integration: Integration;

@@ -31,6 +31,81 @@ module.exports = {
   ],
   overrides: [
     {
+      // The agent surface. It takes resolved data in, reports through
+      // progress events and asks through an injected answerer, so nothing
+      // here may import a UI, the session, detection, the CLI or a program.
+      // Only direct static imports are checked. Program types stay importable
+      // until B1 moves PROGRAM_BINDINGS to programs. Today's paths; A2b
+      // collapses them to src/agent/**.
+      files: [
+        'src/lib/agent/**/*.ts',
+        'src/lib/middleware/**/*.ts',
+        'src/lib/wizard-tools/**/*.ts',
+        'src/lib/gateway-session.ts',
+        'src/lib/safe-tools.ts',
+        'src/lib/wizard-ask-bridge.ts',
+        'src/lib/yara-hooks.ts',
+        'src/lib/yara-policy.ts',
+      ],
+      excludedFiles: ['**/__tests__/**'],
+      rules: {
+        '@typescript-eslint/no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              {
+                name: '@utils/wizard-abort',
+                importNames: ['wizardAbort'],
+                message:
+                  'The agent never exits the process: return a failure in RunResult.',
+              },
+            ],
+            patterns: [
+              {
+                group: [
+                  '@ui',
+                  '@ui/**',
+                  '**/ui',
+                  '**/ui/**',
+                  '@lib/wizard-session',
+                  '**/wizard-session',
+                  '@lib/detection',
+                  '@lib/detection/**',
+                  '**/detection',
+                  '**/detection/**',
+                  '@lib/registry',
+                  '**/lib/registry',
+                  '@lib/runners',
+                  '@lib/runners/**',
+                  '**/runners',
+                  '**/runners/**',
+                  '**/commands/**',
+                  '@steps',
+                  '@steps/**',
+                  '**/steps',
+                  '**/steps/**',
+                  '@frameworks/**',
+                  '**/frameworks/**',
+                  '@utils/setup-utils',
+                  '**/setup-utils',
+                  '@utils/oauth',
+                  '**/utils/oauth',
+                ],
+                message:
+                  'The agent reports through progress events and asks through AgentInteraction; it takes everything else through RunConfig and RunInput.',
+              },
+              {
+                group: ['@lib/programs/**', '**/programs/**'],
+                allowTypeImports: true,
+                message:
+                  'The agent takes program data through RunConfig. Types only, until B1 moves PROGRAM_BINDINGS to programs.',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: [
         '*.test.js',
         '*.test.ts',

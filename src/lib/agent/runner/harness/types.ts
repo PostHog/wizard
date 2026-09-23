@@ -19,7 +19,7 @@
  * the run's result.
  */
 
-import type { AdditionalFeature } from '@lib/wizard-session';
+import type { AdditionalFeature } from '@lib/constants';
 import type { Harness } from '@lib/constants';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';

@@ -131,6 +131,15 @@ vi.mock('@lib/agent/runner/switchboard/harness', () => {
         },
       });
       await askIfRequested(inputs);
+      // A real harness feeds the benchmark middleware every SDK message.
+      inputs.middleware?.onMessage({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+      });
+      inputs.middleware?.finalize(
+        { type: 'result', modelUsage: {}, num_turns: 1 },
+        10,
+      );
       if (harnessState.throws) throw harnessState.throws;
       spinner.stop('Done');
       return harnessState.result as never;
@@ -443,6 +452,7 @@ describe('runAgent standalone', () => {
       });
       vi.mocked(flushScanReport).mockImplementationOnce(() => {
         order.push('scan-flush');
+        return undefined;
       });
       const result = await runAgent(
         config({
@@ -684,4 +694,82 @@ describe('runAgent standalone', () => {
     // What was reported before the crash survives in the snapshot.
     expect(result.snapshot.statusMessages).toContain('Installing the SDK');
   });
+
+  it('sends benchmark output to onProgress when benchmarking', async () => {
+    const benchmarkPath = path.join(tmp, 'benchmark.json');
+    const configPath = path.join(tmp, '.benchmark-config.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ output: { benchmarkPath, logEnabled: false } }),
+    );
+    vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_CONFIG', configPath);
+    vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_FILE', benchmarkPath);
+    vi.stubEnv('POSTHOG_WIZARD_LOG_DIR', tmp);
+    const runInput = input();
+    runInput.flags.benchmark = true;
+    const events: AgentProgress[] = [];
+    try {
+      const result = await runAgent(config(), runInput, {
+        onProgress: (e) => events.push(e),
+      });
+
+      expect(result.outcome).toBe('success');
+      const logs = events.flatMap((e) => (e.kind === 'log' ? [e.message] : []));
+      expect(logs).toContainEqual(
+        expect.stringContaining(
+          `Benchmark data will be written to: ${benchmarkPath}`,
+        ),
+      );
+      expect(logs).toContainEqual(
+        expect.stringContaining(`Results written to ${benchmarkPath}`),
+      );
+      expect(fs.existsSync(benchmarkPath)).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each<[string, () => void, string]>([
+    ['completes', () => undefined, 'success'],
+    [
+      'aborts',
+      () => {
+        harnessState.result = {
+          error: AgentErrorType.ABORT,
+          message: 'No Stripe found',
+        };
+      },
+      'aborted',
+    ],
+    [
+      'crashes',
+      () => {
+        harnessState.throws = new Error('SDK exploded');
+      },
+      'crashed',
+    ],
+  ])(
+    'sends the scan summary to onProgress when the run %s',
+    async (_ending, arrange, outcome) => {
+      const summary =
+        'YARA scan report: /tmp/yara.json\n— YARA Scanner Summary —';
+      vi.mocked(flushScanReport).mockReturnValueOnce(summary);
+      arrange();
+      const runInput = input();
+      runInput.flags.yaraReport = true;
+      const events: AgentProgress[] = [];
+
+      const result = await runAgent(config(), runInput, {
+        onProgress: (e) => events.push(e),
+      });
+
+      expect(result.outcome).toBe(outcome);
+      expect(flushScanReport).toHaveBeenCalledWith({ yaraReport: true });
+      expect(events).toContainEqual({
+        kind: 'log',
+        level: 'info',
+        message: summary,
+      });
+    },
+  );
 });

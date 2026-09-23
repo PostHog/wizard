@@ -1,7 +1,7 @@
 /**
  * The linear pipeline. Single execution path for all non-orchestrator programs,
  * both skill-based (revenue analytics) and framework-based (core integration).
- * The `ProgramRun` controls what varies between them; `RunConfig`
+ * The `AgentRunDefinition` controls what varies between them; `RunConfig`
  * carries the program-level static metadata (tool allow/disallow lists, etc.).
  *
  * Reports through `emit`, asks through `interaction`, and returns a decided
@@ -10,12 +10,11 @@
  * arguments, so the caller's exit sequence is unchanged.
  */
 
-import { OutroKind, type OutroData } from '@lib/wizard-session';
+import { OutroKind, type OutroData } from '@lib/agent/progress';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
-import { WizardError } from '../../../../utils/wizard-abort';
-import { ErrorCodes, AGENT_ERROR_CODE } from '@lib/errors';
+import { AGENT_ERROR_CODE, ErrorCodes, WizardError } from '@lib/errors';
 import { analytics } from '../../../../utils/analytics';
 import { formatYaraAbortMessage } from '../../../yara-hooks';
 import { installSkillById } from '../../../wizard-tools';
@@ -76,7 +75,7 @@ export async function runLinearProgram({
       });
 
   const middleware = input.flags.benchmark
-    ? createBenchmarkPipeline(spinner, runOptions(input))
+    ? createBenchmarkPipeline(emit, spinner, runOptions(input))
     : undefined;
 
   // 7. Build prompt

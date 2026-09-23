@@ -9,8 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { WizardError } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes, WizardError } from '@lib/errors';
 import type { HostResolution } from '@lib/host-resolution';
 import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
 import { ServiceHealthStatus } from '@lib/health-checks/types';

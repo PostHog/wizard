@@ -11,43 +11,46 @@
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from './local-dev';
-import type { Harness, Integration, Sequence } from './constants';
+import {
+  AdditionalFeature,
+  ADDITIONAL_FEATURE_LABELS,
+  ADDITIONAL_FEATURE_PROMPTS,
+  type Harness,
+  type Integration,
+  type Sequence,
+} from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
-import type { ApiUser, ApiProject } from './api';
-import type { HostResolution } from './host-resolution';
+import type { ApiUser, ApiProject, Credentials } from './api';
+import type { CloudRegion } from '@utils/types';
+import {
+  OutroKind,
+  type AskAnswers,
+  type AskQuestion,
+  type OutroData,
+  type PendingQuestion,
+  type TaskNotice,
+} from './agent/progress';
 
-export interface Credentials {
-  accessToken: string;
-  /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
-  refreshToken?: string;
-  /** Epoch ms when `accessToken` expires — drives the pre-run refresh. */
-  expiresAt?: number;
-  /** Minting OAuth client when it differs from the default login app (provisioning signups). */
-  oauthClientId?: string;
-  projectApiKey: string;
-  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
-  host: HostResolution;
-  projectId: number;
-  /**
-   * Requested OAuth scopes the grant came back without — deselected on the
-   * consent screen or clamped by the app's ceiling. Read when a run fails so
-   * the error can name the missing permission and the fix (re-run and grant
-   * it during the OAuth flow) instead of the generic report-a-bug line.
-   * Empty/absent on CI api-key runs, where there is no scope request to diff
-   * against.
-   */
-  missingScopes?: readonly string[];
-}
+// These shapes moved to their owners; re-exported so every session reader
+// keeps its import path. `Credentials` sits with the API types, the
+// additional-feature enum with the other program enums in `./constants`, and
+// the outro, question and task-notice shapes are the agent's contract.
+export type { Credentials, CloudRegion };
+export {
+  AdditionalFeature,
+  ADDITIONAL_FEATURE_LABELS,
+  ADDITIONAL_FEATURE_PROMPTS,
+};
+export { OutroKind };
+export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
-
-export type CloudRegion = 'us' | 'eu';
 
 /** Lifecycle phase of the main work (agent run, MCP install, etc.) */
 export enum RunPhase {
@@ -74,141 +77,12 @@ export enum ScanConsent {
   Declined = 'declined',
 }
 
-/** Additional features the agent can integrate after the main setup */
-export enum AdditionalFeature {
-  LLM = 'llm',
-}
-
-/** Human-readable labels for additional features (used in TUI progress) */
-export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'AI observability',
-};
-
-/** Agent prompts for each additional feature, injected via the stop hook */
-export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
-};
-
 /** Outcome of the MCP server installation step */
 export enum McpOutcome {
   NoClients = 'no_clients',
   Skipped = 'skipped',
   Installed = 'installed',
   Failed = 'failed',
-}
-
-/** Outcome kind for the outro screen */
-export enum OutroKind {
-  Success = 'success',
-  Error = 'error',
-  Cancel = 'cancel',
-}
-
-export interface OutroData {
-  kind: OutroKind;
-  /** Main headline (green check for Success, red X for Error, etc.) */
-  message?: string;
-  /** Free-form body text shown under the headline. Use \n for paragraph breaks. */
-  body?: string;
-  /** Success-only: bulleted list of "what the agent did" */
-  changes?: string[];
-  /**
-   * Success-only: a prominent, labeled link to where the user should go
-   * next (e.g. an inbox the program just configured). Rendered right under
-   * the headline and shown verbatim — no UTM tagging — so the URL stays
-   * clean and copy-pasteable. Set per-program in buildOutroData.
-   */
-  primaryLink?: { label: string; url: string };
-  /**
-   * Success-only: a short "what to do next" checklist with its own heading,
-   * rendered as a bulleted list. Distinct from `changes`, which recaps what
-   * the agent already did.
-   */
-  nextSteps?: { heading: string; items: string[] };
-  docsUrl?: string;
-  continueUrl?: string;
-  /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
-  reportFile?: string;
-  /** Stable machine-readable error code from the error catalog (@lib/errors). */
-  errorCode?: import('@lib/errors').ErrorCode;
-  /** Structured context for the error code; safe for telemetry payloads. */
-  errorDetail?: Record<string, unknown>;
-  /** PostHog dashboard URL the program created on the user's behalf. */
-  dashboardUrl?: string;
-  /** PostHog notebook URL the program uploaded the report to. */
-  notebookUrl?: string;
-  /**
-   * Copy-paste prompt the operator hands to their coding agent to finish the
-   * job (work the report's checklist). Printed to the terminal's main buffer on
-   * exit (see getExitLine in start-tui.ts) — the TUI's alternate screen is wiped
-   * on exit, so the scrollback line is where it survives and can be
-   * triple-click-selected. Set per-program in buildOutroData.
-   */
-  handoffPrompt?: string;
-}
-
-/** A single question rendered by the WizardAsk overlay. */
-export interface AskQuestion {
-  /** Key for the response map */
-  id: string;
-  prompt: string;
-  /** text = single-line free input; single/multi = picker */
-  kind: 'single' | 'multi' | 'text';
-  /** Required for `single` and `multi`. Ignored for `text`. */
-  options?: { label: string; value: string; description?: string }[];
-  /** Defaults to true */
-  required?: boolean;
-  /**
-   * Only meaningful for kind='text'. When true, the wizard-tools `wizard_ask`
-   * tool stores the user's answer in the session secret vault and returns
-   * `{ secretRef }` to the agent instead of the plain string — so the value
-   * never enters the LLM conversation. The TUI masks the input as it is typed
-   * (see `shouldMaskAnswer`). See `secret-vault.ts`.
-   */
-  sensitive?: boolean;
-}
-
-/**
- * Copy for a modal shown before an optional step runs, so the user can decline
- * it. The program that owns the step supplies the words; the runner and the
- * screen only carry them.
- */
-export interface TaskNotice {
-  title: string;
-  /** Paragraphs, in order. */
-  body: string[];
-  /** Optional highlighted list, e.g. what was detected. */
-  items?: string[];
-  docsLabel?: string;
-  docsUrl?: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  prompt: string;
-}
-
-/** Map of question id → answer (string for single/text, string[] for multi). */
-export type AskAnswers = Record<string, string | string[]>;
-
-/** A pending wizard_ask request held by the store. */
-export interface PendingQuestion {
-  id: string;
-  questions: AskQuestion[];
-  /**
-   * UTC ISO 8601 timestamp of when the ask was created. Published on the
-   * task stream as `pending_input.asked_at` so the web app can age the
-   * prompt; stable across pushes for the lifetime of one ask.
-   */
-  askedAt?: string;
-  /** Skill id of the caller. Set by the wizard from session.skillId. */
-  source: string;
-  /**
-   * When true, the ask overlay renders standalone URLs in prompt text as
-   * OSC 8 hyperlinks and copies a lone URL to the clipboard. Opt-in per
-   * program (set from `ProgramRun.richLinks` via the ask bridge); defaults
-   * to false so existing flows render prompts exactly as before. See
-   * `LinkText` / `link-helpers`.
-   */
-  richLinks?: boolean;
 }
 
 /**

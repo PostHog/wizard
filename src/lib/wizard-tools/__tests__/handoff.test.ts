@@ -11,34 +11,35 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getUI, setUI } from '@ui';
-import type { WizardUI } from '@ui/wizard-ui';
+import type { AgentProgress } from '@lib/agent/progress';
 import { MAX_HANDOFF_TEXT_CHARS, publishHandoff } from '../handoff';
+
+// The tool runs inside the agent, which has no UI; the handoff is a progress
+// event the host projects however it likes.
+vi.mock('@ui', () => ({
+  getUI: () => {
+    throw new Error('agent code reached the UI');
+  },
+}));
 
 describe('publishHandoff', () => {
   const captured: string[] = [];
-  let previousUI: WizardUI;
+  const emit = (event: AgentProgress) => {
+    if (event.kind === 'handoff') captured.push(event.text);
+  };
   let temporaryDirectory: string;
   let ambientOutputPath: string | undefined;
 
   beforeEach(() => {
     captured.length = 0;
-    previousUI = getUI();
     temporaryDirectory = mkdtempSync(join(tmpdir(), 'wizard-handoff-'));
     // Save the ambient value so a developer running these tests with the var
     // exported doesn't have their environment silently clobbered.
     ambientOutputPath = process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
     delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
-    setUI({
-      ...previousUI,
-      setHandoffText: (text: string) => {
-        captured.push(text);
-      },
-    } as WizardUI);
   });
 
   afterEach(() => {
-    setUI(previousUI);
     rmSync(temporaryDirectory, { recursive: true, force: true });
     if (ambientOutputPath === undefined) {
       delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
@@ -47,15 +48,15 @@ describe('publishHandoff', () => {
     }
   });
 
-  it('publishes the content through the UI seam', () => {
-    const result = publishHandoff('# Setup report\n\nAll done.');
+  it('publishes the content as a handoff progress event', () => {
+    const result = publishHandoff('# Setup report\n\nAll done.', emit);
     expect(result.ok).toBe(true);
     expect(captured).toEqual(['# Setup report\n\nAll done.']);
   });
 
   it('rejects blank content instead of publishing', () => {
     for (const bad of ['', '   \n']) {
-      const result = publishHandoff(bad);
+      const result = publishHandoff(bad, emit);
       expect(result.ok).toBe(false);
       expect(result.message).toContain('complete report markdown');
     }
@@ -66,7 +67,7 @@ describe('publishHandoff', () => {
     const outputPath = join(temporaryDirectory, 'handoff.md');
     process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
     const oversized = 'x'.repeat(MAX_HANDOFF_TEXT_CHARS + 10);
-    const result = publishHandoff(oversized);
+    const result = publishHandoff(oversized, emit);
 
     expect(result.ok).toBe(true);
     expect(captured[0]).toHaveLength(MAX_HANDOFF_TEXT_CHARS);
@@ -80,7 +81,7 @@ describe('publishHandoff', () => {
     const outputPath = join(temporaryDirectory, 'handoff.md');
     process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
 
-    const result = publishHandoff('# Setup report\n\nAll done.');
+    const result = publishHandoff('# Setup report\n\nAll done.', emit);
 
     expect(result.ok).toBe(true);
     expect(readFileSync(outputPath, 'utf8')).toBe(
@@ -91,7 +92,7 @@ describe('publishHandoff', () => {
   it('continues publishing when the host-provided output path cannot be written', () => {
     process.env.POSTHOG_HANDOFF_OUTPUT_PATH = temporaryDirectory;
 
-    const result = publishHandoff('# Setup report\n\nAll done.');
+    const result = publishHandoff('# Setup report\n\nAll done.', emit);
 
     expect(result.ok).toBe(true);
     expect(captured).toEqual(['# Setup report\n\nAll done.']);
@@ -103,7 +104,7 @@ describe('publishHandoff', () => {
       const outputPath = join(temporaryDirectory, 'handoff.md');
       process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
 
-      publishHandoff('# Setup report\n\nAll done.');
+      publishHandoff('# Setup report\n\nAll done.', emit);
 
       expect(statSync(outputPath).mode & 0o777).toBe(0o600);
     });
@@ -114,7 +115,7 @@ describe('publishHandoff', () => {
       chmodSync(outputPath, 0o644); // umask may already restrict; be explicit
       process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
 
-      publishHandoff('# Setup report\n\nAll done.');
+      publishHandoff('# Setup report\n\nAll done.', emit);
 
       expect(readFileSync(outputPath, 'utf8')).toBe(
         '# Setup report\n\nAll done.',
@@ -129,7 +130,7 @@ describe('publishHandoff', () => {
       symlinkSync(victim, outputPath);
       process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
 
-      const result = publishHandoff('# Malicious report');
+      const result = publishHandoff('# Malicious report', emit);
 
       // The user-facing handoff still succeeds (fail-open)…
       expect(result.ok).toBe(true);
@@ -148,7 +149,7 @@ describe('publishHandoff', () => {
     it('refuses a relative output path and stays fail-open', () => {
       process.env.POSTHOG_HANDOFF_OUTPUT_PATH = 'handoff.md';
 
-      const result = publishHandoff('# Setup report\n\nAll done.');
+      const result = publishHandoff('# Setup report\n\nAll done.', emit);
 
       expect(result.ok).toBe(true);
       expect(captured).toEqual(['# Setup report\n\nAll done.']);
@@ -159,7 +160,7 @@ describe('publishHandoff', () => {
       const outputPath = join(temporaryDirectory, 'handoff.md');
       process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
 
-      publishHandoff('# Setup report\n\nAll done.');
+      publishHandoff('# Setup report\n\nAll done.', emit);
 
       expect(readdirSync(temporaryDirectory)).toEqual(['handoff.md']);
     });
@@ -169,7 +170,7 @@ describe('publishHandoff', () => {
       writeFileSync(outputPath, '# Previous run\n\nStale content.', 'utf8');
       process.env.POSTHOG_HANDOFF_OUTPUT_PATH = outputPath;
 
-      publishHandoff('# Current run\n\nFresh content.');
+      publishHandoff('# Current run\n\nFresh content.', emit);
 
       expect(readFileSync(outputPath, 'utf8')).toBe(
         '# Current run\n\nFresh content.',

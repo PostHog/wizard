@@ -23,12 +23,12 @@ import {
   RunOutcome,
   resolveBinding,
   TASK_OUTCOMES_KEY,
-  type ProgramRun,
   type RunConfig,
   type RunInput,
   type SwitchboardCtx,
 } from '@lib/agent/runner';
 import type { ProgramBinding } from '@lib/agent/runner/switchboard';
+import type { ProgramRun } from './program-run';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   backupAndFixClaudeSettings,
@@ -57,10 +57,7 @@ import {
 } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import {
-  authenticate,
-  refreshAccessTokenIfNeeded,
-} from '@lib/agent/runner/shared/authenticate';
+import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
 
@@ -203,7 +200,10 @@ async function runProgram(
   // Cleanup coverage for the abort/cancel path: `wizardAbort` runs the
   // registered cleanups, and the agent's own `finally` covers completion.
   // flushScanReport is idempotent, so the overlap is a harmless no-op.
-  registerCleanup(() => flushScanReport({ yaraReport: session.yaraReport }));
+  registerCleanup(() => {
+    const report = flushScanReport({ yaraReport: session.yaraReport });
+    if (report) ui.log.info(report);
+  });
 
   // Linear settings restoration fires on entry to the outro screen, so it
   // is registered before the run can reach that screen. Same owner, same

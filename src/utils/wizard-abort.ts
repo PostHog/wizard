@@ -3,7 +3,7 @@
  *
  * Sequence: cleanup -> error capture (optional) -> analytics shutdown -> outro -> process.exit
  *
- * WizardError is a data carrier passed to wizardAbort() for analytics context, never thrown.
+ * WizardError (from `@lib/errors`) is a data carrier passed to wizardAbort() for analytics context, never thrown.
  * The legacy abort() in setup-utils.ts delegates here.
  */
 import { analytics } from './analytics';
@@ -12,21 +12,10 @@ import { getUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@lib/errors';
-import { emitWizardError, sanitizeErrorDetail } from '@lib/errors';
+import { WizardError, emitWizardError, sanitizeErrorDetail } from '@lib/errors';
 
-export class WizardError extends Error {
-  readonly code?: ErrorCode;
-
-  constructor(
-    message: string,
-    public readonly context?: Record<string, unknown>,
-    code?: ErrorCode,
-  ) {
-    super(message);
-    this.name = 'WizardError';
-    this.code = code;
-  }
-}
+// Still importable from here; the class lives with the error codes.
+export { WizardError };
 
 interface WizardAbortOptions {
   message?: string;

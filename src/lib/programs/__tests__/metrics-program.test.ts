@@ -1,7 +1,7 @@
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { getProgramConfig, Program } from '@lib/programs/program-registry';
 import { metricsConfig } from '@lib/programs/metrics/index';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 
 import { metricsCommand } from '../../../commands/metrics';
 
