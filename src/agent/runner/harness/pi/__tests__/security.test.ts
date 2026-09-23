@@ -643,6 +643,24 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
     );
   });
 
+  test('an allowed scoped rm is not captured as a denied bash command', async () => {
+    vi.mocked(analytics.wizardCapture).mockClear();
+    expect(await rmBlocked('rm -f .posthog-audit-checks.json')).toBe(false);
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'bash denied',
+      expect.anything(),
+    );
+  });
+
+  test('a scoped rm still obeys a program that disallows Bash', async () => {
+    const decision = await evaluateToolCall(
+      'bash',
+      { command: 'rm plan.json' },
+      { workingDirectory: ROOT, disallowedTools: ['Bash'] },
+    );
+    expect(decision.block).toBe(true);
+  });
+
   test('normalizes a relative workingDirectory', async () => {
     const relRoot = path.relative(process.cwd(), path.resolve('/project'));
     expect(

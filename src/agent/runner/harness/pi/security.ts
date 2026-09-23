@@ -369,19 +369,31 @@ export async function evaluateToolCall(
 ): Promise<GateDecision> {
   try {
     const policy = toClaudePolicyCall(toolName, input);
-    const decision = wizardCanUseTool(policy.name, policy.input, {
-      disallowedTools: ctx.disallowedTools,
-      wizardAskPending: ctx.getWizardAskPending?.() ?? false,
-    });
     // The allowlist is a pi-only restriction; the anthropic arm runs bash
     // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
     // project files through to that same scan so pi matches that behavior.
+    // Decided before `wizardCanUseTool`, which logs and captures every
+    // allowlist deny, so an rm that runs is never recorded as denied.
     const allowedLikeAnthropic =
       toolName === 'bash' &&
       isScopedFileRemoval(str(input.command), ctx.workingDirectory);
 
-    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
-      return { block: true, reason: decision.message };
+    if (allowedLikeAnthropic) {
+      if (ctx.disallowedTools?.includes(policy.name)) {
+        return {
+          block: true,
+          reason: `Tool ${policy.name} is disabled for this program.`,
+        };
+      }
+      logToFile(`Allowing scoped file removal: ${str(input.command)}`);
+    } else {
+      const decision = wizardCanUseTool(policy.name, policy.input, {
+        disallowedTools: ctx.disallowedTools,
+        wizardAskPending: ctx.getWizardAskPending?.() ?? false,
+      });
+      if (decision.behavior === 'deny') {
+        return { block: true, reason: decision.message };
+      }
     }
 
     const yaraReason = await preExecutionYaraBlock(
