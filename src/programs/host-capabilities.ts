@@ -10,6 +10,8 @@ export type ProgramCiHost = {
     warn(message: string): void;
   };
   onProgress(event: AgentProgress): void;
+  /** Ends the run with a coded failure; the host's abort path never returns. */
+  abort(failure?: HostFailure): Promise<never>;
 };
 
 /** Live UI effects a legacy program may need after its run definition resolves. */

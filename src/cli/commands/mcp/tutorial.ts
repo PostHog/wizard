@@ -6,6 +6,7 @@ import { VERSION } from '@shared/version';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 import type { Command } from '../command';
+import { cliTuiHost } from '@cli/tui-host';
 
 export const mcpTutorialCommand: Command = {
   name: 'tutorial',
@@ -29,7 +30,7 @@ function runMcpTutorial(argv: Arguments): void {
     try {
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@tui/session');
-      const tui = startTUI(VERSION, Program.McpTutorial);
+      const tui = startTUI(VERSION, Program.McpTutorial, cliTuiHost());
       tui.store.session = buildSession({
         debug,
         localMcp,

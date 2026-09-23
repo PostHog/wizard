@@ -86,6 +86,7 @@ describe('scopeInstallDirToProject', () => {
     },
     log: { info: vi.fn(), warn: vi.fn() },
     onProgress: vi.fn(),
+    abort: vi.fn(),
   };
   const scan = vi.mocked(detectProjectsWithAgent);
   const FLAG_ON = {

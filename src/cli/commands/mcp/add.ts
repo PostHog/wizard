@@ -6,6 +6,7 @@ import { Program } from '@programs';
 import { VERSION } from '@shared/version';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
+import { cliTuiHost } from '@cli/tui-host';
 
 export const mcpAddCommand: Command = {
   name: 'add',
@@ -52,7 +53,7 @@ function runMcpAdd(argv: Arguments): void {
     try {
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@tui/session');
-      const tui = startTUI(VERSION, Program.McpAdd);
+      const tui = startTUI(VERSION, Program.McpAdd, cliTuiHost());
       tui.store.session = buildSession({
         debug,
         localMcp,

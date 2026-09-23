@@ -28,6 +28,7 @@ import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@tui/session';
+import { cliTuiHost } from '@cli/tui-host';
 
 const WIZARD_VERSION = VERSION;
 
@@ -131,7 +132,7 @@ export function runWizard(
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any, cliTuiHost());
       const activeTui = tui;
 
       const session = buildSession({

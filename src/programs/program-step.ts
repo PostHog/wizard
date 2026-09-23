@@ -7,7 +7,11 @@ import type { FrameworkConfig } from '@programs/framework-config';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';
-import type { ProgramCiHost, ProgramRunHost } from './host-capabilities.js';
+import type {
+  HostFailure,
+  ProgramCiHost,
+  ProgramRunHost,
+} from './host-capabilities.js';
 
 /**
  * Context passed to onReady callbacks — fires after bin.ts has assigned
@@ -16,6 +20,8 @@ import type { ProgramCiHost, ProgramRunHost } from './host-capabilities.js';
  */
 export interface ProgramReadyContext {
   readonly session: ProgramSession;
+  /** Ends the run with a coded failure; the host's abort path never returns. */
+  readonly abort: (failure?: HostFailure) => Promise<never>;
   readonly setFrameworkContext: (key: string, value: unknown) => void;
 
   // Detection-specific methods — used by core-integration's detect step

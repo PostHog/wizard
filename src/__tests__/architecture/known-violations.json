@@ -1,6 +1,5 @@
 {
   "violations": [
-    "src/env.ts -> src/cli/headless-mode.ts",
     "src/headless/renderers/headless-ui.ts -> src/tui/store.ts",
     "src/shared/utils/wizard-abort.ts -> src/headless/renderers/logging-ui.ts",
     "src/shared/utils/wizard-abort.ts -> src/ui/index.ts",

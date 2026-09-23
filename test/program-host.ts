@@ -27,6 +27,7 @@ export function testProgramCiHost(): ProgramCiHost {
       warn: () => undefined,
     },
     onProgress: () => undefined,
+    abort: () => Promise.reject(new Error('aborted')),
   };
 }
 

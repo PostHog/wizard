@@ -10,7 +10,7 @@ import { render } from 'ink';
 import { createElement } from 'react';
 import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
-import { setUI } from '@ui/index';
+import type { HostFailure } from '@programs/types';
 import { App } from './App.js';
 import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
@@ -19,9 +19,18 @@ import { getExitLine } from './exit-line.js';
 
 export { releaseTerminal };
 
+/** What the CLI hands the TUI when it starts it. */
+export interface TuiHost {
+  /** Installs the TUI's UI as the current UI, before the first frame renders. */
+  onUi?: (ui: InkUI) => void;
+  /** Ends the run: the CLI's abort path. */
+  abort?: (failure?: HostFailure) => Promise<never>;
+}
+
 export function startTUI(
   version: string,
   program: ProgramId = Program.PostHogIntegration,
+  host: TuiHost = {},
 ): {
   unmount: () => void;
   store: WizardStore;
@@ -32,8 +41,10 @@ export function startTUI(
   const store = new WizardStore(program);
   store.version = version;
 
+  if (host.abort) store.abort = host.abort;
+
   const inkUI = new InkUI(store);
-  setUI(inkUI);
+  host.onUi?.(inkUI);
 
   const { unmount: inkUnmount, waitUntilExit } = render(
     createElement(App, { store }),

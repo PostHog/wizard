@@ -72,7 +72,11 @@ describe('mcp add handler', () => {
   test('starts the TUI with the McpAdd program id', async () => {
     mcpAddCommand.handler!(makeArgv());
     await flush();
-    expect(mockStartTUIMcp).toHaveBeenCalledWith(expect.any(String), 'mcp-add');
+    expect(mockStartTUIMcp).toHaveBeenCalledWith(
+      expect.any(String),
+      'mcp-add',
+      expect.objectContaining({ abort: expect.any(Function) }),
+    );
   });
 
   test('passes --local through as localMcp', async () => {
@@ -137,6 +141,7 @@ describe('mcp remove handler', () => {
     expect(mockStartTUIMcp).toHaveBeenCalledWith(
       expect.any(String),
       'mcp-remove',
+      expect.objectContaining({ abort: expect.any(Function) }),
     );
   });
 

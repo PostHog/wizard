@@ -6,6 +6,7 @@ import { VERSION } from '@shared/version';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 import type { Command } from './command';
+import { cliTuiHost } from '@cli/tui-host';
 
 export const slackCommand: Command = {
   name: 'slack',
@@ -29,7 +30,7 @@ function runSlackConnect(argv: Arguments): void {
     try {
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@tui/session');
-      const tui = startTUI(VERSION, Program.SlackConnect);
+      const tui = startTUI(VERSION, Program.SlackConnect, cliTuiHost());
       tui.store.session = buildSession({
         debug,
         baseUrl: argv.baseUrl as string | undefined,

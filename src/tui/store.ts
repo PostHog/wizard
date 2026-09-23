@@ -36,7 +36,7 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type { ProgramReadyContext } from '@programs/types';
+import type { HostFailure, ProgramReadyContext } from '@programs/types';
 import type { StoreInitContext } from './flow.js';
 import { getProgramConfig, reportWarehouseSourcesDetected } from '@programs';
 import { getProgramFlow, rawProgramFlow } from './flows/index.js';
@@ -166,6 +166,10 @@ export class WizardStore {
 
   version = '';
 
+  /** Ends the run; the CLI installs its abort path when it starts the TUI. */
+  abort: (failure?: HostFailure) => Promise<never> = () =>
+    Promise.reject(new Error('The TUI was started without an abort host.'));
+
   /** Navigation router — resolves active screen from session state. */
   readonly router: WizardRouter;
 
@@ -258,6 +262,7 @@ export class WizardStore {
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
+      abort: (failure) => this.abort(failure),
     };
     await config.onReady?.(ctx);
   }

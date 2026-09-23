@@ -11,7 +11,11 @@ import {
 import type { CloudRegion } from '@utils/types';
 import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
-import type { ProgramConfig, TaskStreamPush } from '@programs/types';
+import type {
+  HostFailure,
+  ProgramConfig,
+  TaskStreamPush,
+} from '@programs/types';
 import type { InferenceAuthProvider } from '@agent/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
@@ -282,6 +286,7 @@ export function runNonInteractive(
           auth: cliAuthHost(),
           log: ui.log,
           onProgress: createUiReducer(ui),
+          abort: (failure) => wizardAbort(failure),
         });
       } else {
         const readyCtx = {
@@ -310,6 +315,7 @@ export function runNonInteractive(
           setPosthogSdkDetected: (detected: boolean) => {
             session.posthogSdkDetected = detected;
           },
+          abort: (failure?: HostFailure) => wizardAbort(failure),
         };
         await config.onReady?.(readyCtx);
 

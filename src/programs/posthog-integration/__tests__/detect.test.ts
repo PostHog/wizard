@@ -52,6 +52,7 @@ function cleanup(dir: string): void {
 function makeCtx(session: WizardSession): ProgramReadyContext {
   return {
     session,
+    abort: vi.fn(),
     setFrameworkContext: (key, value) => {
       session.frameworkContext[key] = value;
     },

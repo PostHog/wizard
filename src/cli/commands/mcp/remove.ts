@@ -6,6 +6,7 @@ import { Program } from '@programs';
 import { VERSION } from '@shared/version';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
+import { cliTuiHost } from '@cli/tui-host';
 
 export const mcpRemoveCommand: Command = {
   name: 'remove',
@@ -37,7 +38,7 @@ function runMcpRemove(argv: Arguments): void {
     try {
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@tui/session');
-      const tui = startTUI(VERSION, Program.McpRemove);
+      const tui = startTUI(VERSION, Program.McpRemove, cliTuiHost());
       tui.store.session = buildSession({
         debug,
         localMcp,

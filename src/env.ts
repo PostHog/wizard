@@ -15,7 +15,11 @@
  * this module instead.
  */
 
-import { HEADLESS_FLAG } from '@cli/headless-mode';
+/**
+ * The experimental headless flag's name. Deliberately ugly and undocumented;
+ * this is the one place it is spelled out (`@cli/headless-mode` declares it).
+ */
+export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
 
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.

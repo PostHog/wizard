@@ -19,7 +19,6 @@ import type {
   ProgramReadyContext,
 } from '@programs/program-step';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 
 /**
@@ -63,16 +62,17 @@ type ReplayVisionCiSession = ProjectScopeSession &
 
 async function abortUnsupportedPlatform(
   integration: Integration,
+  abort: ProgramCiHost['abort'],
 ): Promise<void> {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
   // This is a clean, intentional exit, not a crash. Count it with a normal
   // event keyed on the platform so aborts roll up into one series. Do not hand
-  // `wizardAbort` an `error` — that forwards to captureException and mints a
+  // the abort an `error` — that forwards to captureException and mints a
   // new error-tracking issue per install location and per platform.
   analytics.wizardCapture('replay-vision unsupported platform', {
     integration,
   });
-  await wizardAbort({
+  await abort({
     code: ErrorCodes.DetectUnsupportedPlatform,
     message:
       `Session replay isn't available for ${name} projects, and Replay ` +
@@ -107,7 +107,9 @@ async function abortUnsupportedPlatform(
 const detectBeforeFlow = async (ctx: ProgramReadyContext) => {
   const integration = await detectFramework(ctx.session.installDir);
   if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
-    await abortUnsupportedPlatform(integration);
+    await abortUnsupportedPlatform(integration, (failure) =>
+      ctx.abort(failure),
+    );
     return;
   }
   await detectPostHogIntegration(ctx);
@@ -148,14 +150,16 @@ export const replayVisionConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
+      await host.abort({
         code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
       return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
+      await abortUnsupportedPlatform(integration, (failure) =>
+        host.abort(failure),
+      );
       return;
     }
     session.integration = integration;
