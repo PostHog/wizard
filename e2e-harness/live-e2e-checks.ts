@@ -1,29 +1,55 @@
-export type LiveE2eResult = {
-  runPhase?: string;
-  abort?: string | null;
-  screenPath?: string[];
-  skillsComplete?: boolean;
-  hasPosthogDep?: boolean;
-  envFile?: string | null;
-  tasks?: Array<{ label: string; status: string }>;
-};
+import type { E2eResultPayload } from './e2e-result.js';
+import { RunPhase } from '@shared/run-state';
+
+export type LiveE2eResult = Partial<
+  Pick<
+    E2eResultPayload,
+    | 'runPhase'
+    | 'abort'
+    | 'screenPath'
+    | 'skillsComplete'
+    | 'hasPosthogDep'
+    | 'envFile'
+    | 'tasks'
+  >
+>;
 
 export type CapturedFrame = { name: string; text: string };
 
+function readTrimmedFile(
+  file: string | undefined,
+  readFile: (file: string) => string,
+): string {
+  if (!file?.trim()) return '';
+  try {
+    return readFile(file.trim()).trim();
+  } catch {
+    return '';
+  }
+}
+
+/** Resolve the same personal key for preflight and the real TUI host. */
+export function readPersonalApiKey(
+  env: NodeJS.ProcessEnv,
+  readFile: (file: string) => string,
+): string {
+  return (
+    env.POSTHOG_PERSONAL_API_KEY?.trim() ||
+    readTrimmedFile(env.POSTHOG_KEY_FILE, readFile)
+  );
+}
+
 export function credentialFailures(
   env: NodeJS.ProcessEnv,
-  hasReadableContent: (file: string) => boolean,
+  readFile: (file: string) => string,
 ): string[] {
   const failures: string[] = [];
-  const key = env.POSTHOG_PERSONAL_API_KEY?.trim();
-  const keyFile = env.POSTHOG_KEY_FILE?.trim();
-  if (!key && (!keyFile || !hasReadableContent(keyFile))) {
+  if (!readPersonalApiKey(env, readFile)) {
     failures.push(
       'Set POSTHOG_PERSONAL_API_KEY or POSTHOG_KEY_FILE to a readable PostHog personal key.',
     );
   }
-  const gatewayFile = env.WIZARD_CI_GATEWAY_TOKEN_FILE?.trim();
-  if (!gatewayFile || !hasReadableContent(gatewayFile)) {
+  if (!readTrimmedFile(env.WIZARD_CI_GATEWAY_TOKEN_FILE, readFile)) {
     failures.push(
       'Set WIZARD_CI_GATEWAY_TOKEN_FILE to a readable, already-issued gateway token file.',
     );
@@ -44,7 +70,7 @@ export function integrationFailures(
   if (!result) return ['The TUI host did not write a structured result.'];
 
   const failures: string[] = [];
-  if (result.runPhase !== 'completed') {
+  if (result.runPhase !== RunPhase.Completed) {
     failures.push(
       `Agent run did not complete (phase: ${result.runPhase ?? 'missing'}).`,
     );
