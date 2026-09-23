@@ -1,8 +1,7 @@
-import type {
-  WizardSession,
-  DiscoveredFeature,
-  TaskNotice,
-} from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
+import type { DiscoveredFeature } from '@shared/scan-consent';
+import type { TaskNotice } from '@agent/types';
+import type { ProgramSession } from './program-session';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
@@ -40,7 +39,7 @@ export interface StoreInitContext {
  * project. Use for async pre-program work like prerequisite detection.
  */
 export interface ProgramReadyContext {
-  readonly session: WizardSession;
+  readonly session: ProgramSession;
   readonly setFrameworkContext: (key: string, value: unknown) => void;
 
   // Detection-specific methods — used by core-integration's detect step
@@ -84,7 +83,7 @@ export interface ProgramStep {
    * gather framework context for the chosen project. The session it receives is
    * the run's own, so writes don't leak into later runs.
    */
-  onRunPrep?: (session: WizardSession) => Promise<void>;
+  onRunPrep?: (session: ProgramSession) => Promise<void>;
 
   /**
    * For a run step: the working directory its agent runs in, resolved from the
@@ -92,7 +91,7 @@ export interface ProgramStep {
    * sub-app, not the repo root). The runner scopes a derived session to this
    * dir for that run only. Defaults to `session.installDir`.
    */
-  targetDir?: (session: WizardSession) => string;
+  targetDir?: (session: ProgramSession) => string;
 
   /**
    * Whether this step should be visible in the current program.
@@ -239,14 +238,14 @@ export interface ProgramConfig {
   /** Agent run config. Static object or async function for dynamic config. */
   run?:
     | ProgramRun
-    | ((session: WizardSession, host: ProgramRunHost) => Promise<ProgramRun>);
+    | ((session: ProgramSession, host: ProgramRunHost) => Promise<ProgramRun>);
   /**
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
    * onReady hooks. Use for headless prerequisite work (e.g. framework
    * detection) that the TUI performs via step onReady callbacks.
    */
-  ciPreRun?: (session: WizardSession, host: ProgramCiHost) => Promise<void>;
+  ciPreRun?: (session: ProgramSession, host: ProgramCiHost) => Promise<void>;
   /**
    * Tasks the orchestrator queues itself, before the planner runs, from what
    * the wizard detected. Their types are marked `runnerSeeded: true` in the
@@ -254,7 +253,7 @@ export interface ProgramConfig {
    * decided here, in code, not by a model that could invent it or forget it.
    * Return an empty list to queue none.
    */
-  seedTasks?: (session: WizardSession) => Array<{
+  seedTasks?: (session: ProgramSession) => Array<{
     type: string;
     label?: string;
     inputs?: Record<string, unknown>;
