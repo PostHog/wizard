@@ -305,8 +305,6 @@ export function runWizard(
       await activeStream.shutdown(2000);
       if (signalled) return;
       exitInProgress = true;
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
       if (runFailed) {
         runCleanups();
         await analytics.shutdown('error');
