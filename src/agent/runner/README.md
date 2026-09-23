@@ -23,9 +23,9 @@ retained for very simple tasks and legacy support. The Anthropic Agent SDK is a
 supported legacy fallback, deprecated as the default, retained for major Pi
 vulnerabilities or gaps in support for new Anthropic models.
 
-Existing `DEFAULT_BINDING` remains Anthropic + linear; explicit program bindings
-and flags determine actual behavior. Both harnesses implement `run` and
-`runTask`. Composed sub-runs are clamped to linear, and linear-only
+`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear; explicit
+program bindings and flags determine actual behavior. Both harnesses implement
+`run` and `runTask`. Composed sub-runs are clamped to linear, and linear-only
 post-run/outro hooks do not automatically transfer to an orchestrated flow.
 
 New models require Wizard capabilities **and** mint model/effort allowlists,
@@ -44,24 +44,29 @@ Five layers, each with its own job. Nothing crosses layers unless it has to.
 takes resolved execution data and an invocation snapshot (`shared/types.ts`),
 reports through `onProgress` and asks through `interaction` (`../progress.ts`),
 and returns decided outcomes and caught run-body crashes as results. It never
-renders, reads a session or exits. `src/programs/run-program.ts` resolves the
-binding from caller data. The legacy `src/lib/runners/run-program-agent.ts` owns
-session gates and maps progress back onto `getUI()`.
+renders, reads a session or exits. `src/programs/run-program.ts` resolves
+credentials through a host provider, awaits the host's gates, loads flags and
+resolves the binding from caller data. The legacy
+`src/lib/runners/run-program-agent.ts` supplies those capabilities from the
+session and maps progress back onto `getUI()`.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, caller-supplied inference auth and the scan-triage classifier. Whether
 the run turns out to be linear or orchestrator, anthropic or pi, the setup is
 the same.
 
-**The switchboard** (`switchboard/`) contains the sequence, harness and model
-resolution helpers. The program layer turns its program ID, validated flag route
-and CLI overrides into a resolved binding before calling `runAgent`. Agent code
-uses that binding to select a sequence and harness; it does not read the program
-registry or parse feature flags.
+**The switchboard** (`switchboard/`) holds the sequence and harness registries
+and the harness and model resolution helper, `resolveHarness` (CLI > flag >
+program config > default). The program layer owns the sequence precedence
+(`resolveProgramBinding`) and turns its program ID, validated flag route and CLI
+overrides into a resolved binding before calling `runAgent`; `harnessRunsTasks`
+tells it which harnesses the orchestrator can drive. Agent code uses that
+binding to select a sequence and harness; it does not read the program registry
+or parse feature flags.
 
-**Sequences** (`sequence/`) are LLM query shapes. Once the switchboard has
-picked one, that sequence takes over the run and owns _how the LLM's work is
-shaped_. See `sequence/README.md`.
+**Sequences** (`sequence/`) are LLM query shapes. Once the binding has picked
+one, that sequence takes over the run and owns _how the LLM's work is shaped_.
+See `sequence/README.md`.
 
 - **linear** — one long conversation with the model, start to finish.
 - **orchestrator** — many focused conversations coordinated by a task queue,
@@ -149,7 +154,9 @@ work.
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes on a best-effort basis as the run ends. `runAgent`
+5. The scan report flushes once, on a best-effort basis: as the run ends, or
+   earlier when a process drain runs the cleanups, unless `RunConfig.scanReport`
+   defers it to the host run. Its line arrives as `log` progress. `runAgent`
    resolves a `RunResult` with an outcome and progress snapshot. A non-success
    result carries a code and message; a caught error remains attached.
 6. The caller applies it. The legacy runner sends a decided failure to

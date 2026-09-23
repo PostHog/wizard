@@ -1,7 +1,7 @@
 /** Resolve program run copy and prompts from data the host already prepared. */
 
 import type { AgentRunDefinition } from '@agent/types';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent';
+import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
 import { POSTHOG_DOCS_URL, type AdditionalFeature } from '@shared/constants';
 import type { SkillProgramOptions } from './agent-skill/index.js';
 import { SPINNER_MESSAGE } from '@programs/framework-config';

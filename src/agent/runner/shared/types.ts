@@ -5,8 +5,8 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. `src/lib/runners/run-program-agent.ts` is the caller
- * that rebuilds today's session-driven behavior on top of this contract.
+ * hands over plain data. Programs' `runProgram` is the caller that builds it
+ * for every host.
  */
 
 import type { AdditionalFeature } from '@shared/constants';
@@ -22,6 +22,7 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { GatewayAuth } from '@shared/gateway-auth';
+import type { TranscriptTail } from './transcript-tail';
 
 export type { PromptContext, Credentials };
 
@@ -57,6 +58,12 @@ export interface AgentRunDefinition {
   skillId?: string;
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
+  /** Replaces the assembled project prompt. */
+  prompt?: (ctx: PromptContext) => string;
+  /** Keep a 256 KiB `snapshot.transcriptTail` and report each step as `activity` (linear, Anthropic). */
+  collectTranscript?: boolean;
+  /** Ask for the end-of-run reflection remark. Defaults to true. */
+  requestRemark?: boolean;
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
   /** Package manager detector. Defaults to detectNodePackageManagers. */
@@ -185,6 +192,8 @@ export interface RunConfig {
   seedTasks?: () => SeedTaskEntry[];
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
+  /** `defer` leaves this run's scans to the host run's report; the default flushes it. */
+  scanReport?: 'flush' | 'defer';
 }
 
 /** Invocation flags the agent reads. */
@@ -297,6 +306,8 @@ export interface RunSnapshot {
   notebookUrl?: string;
   /** The handoff document the agent published, when it did. */
   handoffText?: string;
+  /** Collected when the run definition sets `collectTranscript`. */
+  transcriptTail?: string;
 }
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */
@@ -339,4 +350,6 @@ export interface SequenceContext {
   boot: BootstrapResult;
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
+  /** Present when the run definition sets `collectTranscript`. */
+  transcript?: TranscriptTail;
 }

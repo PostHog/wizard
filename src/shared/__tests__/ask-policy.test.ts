@@ -1,21 +1,21 @@
-import { shouldDisableAsk } from '@agent/agent-runner';
+import { isAskDisabled } from '@shared/ask-policy';
 import { buildSession } from '@lib/wizard-session';
 
-describe('shouldDisableAsk', () => {
+describe('isAskDisabled', () => {
   it('enables wizard_ask in interactive runs by default', () => {
-    expect(shouldDisableAsk({ ci: false, signup: false, e2eAsk: false })).toBe(
+    expect(isAskDisabled({ ci: false, signup: false, e2eAsk: false })).toBe(
       false,
     );
   });
 
   it('auto-disables when running in CI mode', () => {
-    expect(shouldDisableAsk({ ci: true, signup: false, e2eAsk: false })).toBe(
+    expect(isAskDisabled({ ci: true, signup: false, e2eAsk: false })).toBe(
       true,
     );
   });
 
   it('auto-disables during the signup flow (which is non-interactive at the prompt layer)', () => {
-    expect(shouldDisableAsk({ ci: false, signup: true, e2eAsk: false })).toBe(
+    expect(isAskDisabled({ ci: false, signup: true, e2eAsk: false })).toBe(
       true,
     );
   });
@@ -35,14 +35,14 @@ describe('shouldDisableAsk', () => {
   ])(
     'ci=$ci signup=$signup e2eAsk=$e2eAsk → disabled=$disabled',
     ({ ci, signup, e2eAsk, disabled }) => {
-      expect(shouldDisableAsk({ ci, signup, e2eAsk })).toBe(disabled);
+      expect(isAskDisabled({ ci, signup, e2eAsk })).toBe(disabled);
     },
   );
 
   it('leaves a plain --ci session disabled — buildSession defaults e2eAsk to false', () => {
     const session = buildSession({ installDir: '/tmp/ask-policy', ci: true });
     expect(session.e2eAsk).toBe(false);
-    expect(shouldDisableAsk(session)).toBe(true);
+    expect(isAskDisabled(session)).toBe(true);
   });
 
   it('re-enables the bridge when the harness asks for it', () => {
@@ -51,6 +51,6 @@ describe('shouldDisableAsk', () => {
       ci: true,
       e2eAsk: true,
     });
-    expect(shouldDisableAsk(session)).toBe(false);
+    expect(isAskDisabled(session)).toBe(false);
   });
 });

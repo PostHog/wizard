@@ -10,7 +10,7 @@
 
 import { readEnvironment } from '@utils/environment';
 import { buildSession } from '@lib/wizard-session';
-import { shouldDisableAsk } from '@agent/agent-runner';
+import { isAskDisabled } from '@shared/ask-policy';
 
 /** Every var this file sets, cleared between cases. */
 const TOUCHED = [
@@ -61,6 +61,6 @@ describe('readEnvironment', () => {
       ...readEnvironment(),
     });
     expect(session.e2eAsk).toBe(false);
-    expect(shouldDisableAsk(session)).toBe(true);
+    expect(isAskDisabled(session)).toBe(true);
   });
 });

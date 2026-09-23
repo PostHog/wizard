@@ -71,8 +71,10 @@ async function main(): Promise<void> {
     },
     {
       integrationEffects: effects,
-      onProgress: ({ event }) => {
-        const line = formatProgress(event);
+      onProgress: (progress) => {
+        // Program-data snapshots carry state, not a line to print.
+        if (progress.kind !== 'run') return;
+        const line = formatProgress(progress.event);
         if (line) console.log(line);
       },
     },

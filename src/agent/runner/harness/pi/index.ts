@@ -630,6 +630,7 @@ export const piBackend: AgentHarness = {
 
         // Best-effort remark ask — a failed turn never fails a successful run.
         if (
+          config.requestRemark !== false &&
           !security.state.criticalViolation &&
           !terminal &&
           !inputs.signal?.aborted

@@ -98,6 +98,7 @@ export const anthropicBackend: AgentHarness = {
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
+        requestRemark: config.requestRemark,
         triageProvider: boot.triageProvider,
         signal: inputs.signal,
       },

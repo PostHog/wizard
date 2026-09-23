@@ -107,9 +107,50 @@ it('keeps initialization and execution progress visible during detection', async
   ]);
 });
 
+import { flushScanReport } from '@agent/yara-hooks';
+import type { AgentProgress } from '@agent/types';
+
+// Every test below goes through the real runAgent pipeline: no analytics
+// client, no gateway mint and no scan-report write may leave the process.
+vi.mock('@utils/analytics');
+vi.mock('@programs/credentials', () => ({
+  createPosthogInferenceAuthProvider: vi.fn(() => ({
+    resolve: () =>
+      Promise.resolve({
+        gatewayUrl: 'https://gateway.test',
+        token: 'phe_test',
+        refreshAtMs: Infinity,
+      }),
+  })),
+}));
+vi.mock('@agent/yara-hooks', async (original) => ({
+  ...(await original<typeof import('@agent/yara-hooks')>()),
+  flushScanReport: vi.fn(),
+}));
+
+const cancelled = {
+  kind: 'abort',
+  classification: AgentErrorType.ABORT,
+  message: 'Agent run cancelled',
+} as const;
+
+/** Each attempt's deadline, fired by the test instead of the clock. */
+function fakeDeadlines(): AbortController[] {
+  const deadlines: AbortController[] = [];
+  vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+    const deadline = new AbortController();
+    deadlines.push(deadline);
+    return deadline.signal;
+  });
+  return deadlines;
+}
+
+afterEach(() => vi.restoreAllMocks());
+
 it('keeps both detection attempts on the host progress sink and the session provider', async () => {
   ui.setStage.mockClear();
   ui.pushStatus.mockClear();
+  const deadlines = fakeDeadlines();
   vi.mocked(initializeAgent).mockImplementation((config) => {
     config.emit?.({ kind: 'status', message: 'Initializing' });
     return Promise.resolve({ emit: config.emit } as Awaited<
@@ -119,10 +160,8 @@ it('keeps both detection attempts on the host progress sink and the session prov
   vi.mocked(executeAgent)
     .mockImplementationOnce((config) => {
       config.emit?.({ kind: 'stage', stage: 'First scan' });
-      return Promise.resolve({
-        kind: 'failure',
-        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
-      });
+      deadlines.at(-1)?.abort();
+      return Promise.resolve(cancelled);
     })
     .mockImplementationOnce(
       (config, _prompt, _options, _spinner, _messages, middleware) => {
@@ -155,10 +194,13 @@ it('keeps both detection attempts on the host progress sink and the session prov
     .mock.calls.map(([config]) => config);
   expect(configs).toHaveLength(2);
   for (const config of configs) {
-    expect(config.emit).toBe(onProgress);
     expect(config.inferenceAuth).toBe(inferenceAuth);
   }
-  expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+  expect(
+    onProgress.mock.calls
+      .map(([event]) => event as AgentProgress)
+      .filter((event) => event.kind === 'status' || event.kind === 'stage'),
+  ).toEqual([
     { kind: 'status', message: 'Initializing' },
     { kind: 'stage', stage: 'First scan' },
     { kind: 'status', message: 'Initializing' },
@@ -173,13 +215,14 @@ it.each([
   ['the session provider', true],
   ['a provider built from the credentials', false],
 ])('hands both detection attempts %s', async (_label, supplied) => {
+  const deadlines = fakeDeadlines();
   vi.mocked(initializeAgent).mockResolvedValue(
     {} as Awaited<ReturnType<typeof initializeAgent>>,
   );
   vi.mocked(executeAgent)
-    .mockResolvedValueOnce({
-      kind: 'failure',
-      classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+    .mockImplementationOnce(() => {
+      deadlines.at(-1)?.abort();
+      return Promise.resolve(cancelled);
     })
     .mockImplementationOnce(
       (_config, _prompt, _options, _spinner, _messages, middleware) => {
@@ -209,6 +252,110 @@ it.each([
   expect(second).toBe(first);
   if (supplied) expect(first).toBe(inferenceAuth);
   else expect(first).not.toBe(inferenceAuth);
+});
+
+it('sends each agent step to onEvent and the host only the progress it saw before', async () => {
+  const delta = {
+    inputTokens: 5,
+    outputTokens: 2,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    cacheCreation5m: 0,
+    cacheCreation1h: 0,
+  };
+  vi.mocked(initializeAgent).mockImplementation((config) =>
+    Promise.resolve({ emit: config.emit } as Awaited<
+      ReturnType<typeof initializeAgent>
+    >),
+  );
+  vi.mocked(executeAgent).mockImplementation(
+    (config, _prompt, _options, _spinner, _messages, middleware) => {
+      config.emit?.({ kind: 'usage', delta });
+      config.emit?.({ kind: 'stage', stage: 'codebase-scan' });
+      config.emit?.({
+        kind: 'tasks',
+        tasks: [{ content: 'Scan', status: 'in_progress' }],
+      });
+      config.emit?.({ kind: 'url', which: 'dashboard', url: 'https://d/1' });
+      config.emit?.({ kind: 'status', message: 'Scanning' });
+      config.emit?.({ kind: 'log', level: 'info', message: 'Info line' });
+      config.emit?.({ kind: 'log', level: 'warn', message: 'Warn line' });
+      config.emit?.({ kind: 'log', level: 'error', message: 'Error line' });
+      middleware?.onMessage({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Reading the root manifest.' },
+            {
+              type: 'tool_use',
+              name: 'Read',
+              input: { file_path: 'package.json' },
+            },
+          ],
+        },
+      });
+      config.emit?.({ kind: 'finalCost', usd: 0.01 });
+      middleware?.onMessage({
+        type: 'result',
+        result: '{"path":".","targetId":"node","framework":"Node.js"}',
+      });
+      return Promise.resolve({ kind: 'success' });
+    },
+  );
+  const events: AgentProgress[] = [];
+  const lines: string[] = [];
+
+  const report = await detectProjectsWithAgent(detectionSession(), {
+    programId: 'posthog-integration',
+    targets: [{ id: 'node', name: 'Node.js' }],
+    onEvent: (line) => lines.push(line),
+    onProgress: (event) => events.push(event),
+  });
+
+  expect(report.projects[0].targetId).toBe('node');
+  expect(lines).toEqual(['Reading the root manifest.', 'Read package.json']);
+  expect(
+    events.map((event) =>
+      event.kind === 'log' ? `log:${event.level}` : event.kind,
+    ),
+  ).toEqual([
+    'usage',
+    'stage',
+    'tasks',
+    'url',
+    'status',
+    'log:warn',
+    'log:error',
+    'activity',
+    'activity',
+    'finalCost',
+  ]);
+  expect(ui.pushStatus).not.toHaveBeenCalledWith('Scanning');
+});
+
+it('leaves the scan report to the program run', async () => {
+  vi.mocked(initializeAgent).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof initializeAgent>>,
+  );
+  vi.mocked(executeAgent).mockImplementation(
+    (_config, _prompt, _options, _spinner, _messages, middleware) => {
+      middleware?.onMessage({
+        type: 'result',
+        result: '{"path":".","targetId":"node","framework":"Node.js"}',
+      });
+      return Promise.resolve({ kind: 'success' });
+    },
+  );
+
+  await detectProjectsWithAgent(
+    { ...detectionSession(), yaraReport: true },
+    {
+      programId: 'posthog-integration',
+      targets: [{ id: 'node', name: 'Node.js' }],
+    },
+  );
+
+  expect(flushScanReport).not.toHaveBeenCalled();
 });
 
 it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
@@ -265,7 +412,7 @@ it('preserves the original error from a decided failure', async () => {
   ).rejects.toBe(original);
 });
 
-it('rejects classified agent failures', async () => {
+it('rejects classified agent failures without retrying', async () => {
   vi.mocked(initializeAgent).mockResolvedValue(
     {} as Awaited<ReturnType<typeof initializeAgent>>,
   );
@@ -281,4 +428,5 @@ it('rejects classified agent failures', async () => {
       targets: [{ id: 'node', name: 'Node.js' }],
     }),
   ).rejects.toThrow('Agent API unavailable');
+  expect(vi.mocked(executeAgent)).toHaveBeenCalledOnce();
 });

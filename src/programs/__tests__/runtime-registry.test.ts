@@ -1,4 +1,5 @@
 import { PROGRAM_REGISTRY } from '../program-registry';
+import { postAuthGateSteps } from '../program-step';
 import {
   RUNTIME_PROGRAM_REGISTRY,
   getRuntimeProgramConfig,
@@ -58,4 +59,24 @@ it('declares one callable execution strategy for every runtime program', () => {
     else expect('resolve' in program).toBe(false);
   }
   expect(getRuntimeProgramConfig('agent-skill')?.strategy).toBe('resolved');
+});
+
+it('declares the post-auth gates and composed runs the TUI steps carry', () => {
+  for (const legacy of PROGRAM_REGISTRY) {
+    const runtime = getRuntimeProgramConfig(legacy.id);
+    expect(runtime?.postAuthGates ?? []).toEqual(
+      postAuthGateSteps(legacy.steps).map((step) => step.id),
+    );
+    expect(runtime?.composedRuns ?? []).toEqual(
+      legacy.steps
+        .filter((step) => step.runProgramId)
+        .map((step) => ({ stepId: step.id, runProgramId: step.runProgramId })),
+    );
+    for (const composed of runtime?.composedRuns ?? []) {
+      expect(getRuntimeProgramConfig(composed.runProgramId)).toBeDefined();
+    }
+  }
+  expect(getRuntimeProgramConfig('self-driving')?.composedRuns).toEqual([
+    { stepId: 'integrate-run', runProgramId: 'posthog-integration' },
+  ]);
 });

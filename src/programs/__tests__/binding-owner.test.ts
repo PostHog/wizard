@@ -6,7 +6,7 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
-import { HARNESS_OPTIONS } from '@agent/runner/switchboard/harness';
+import { HARNESS_RUNS_TASKS } from '@agent/runner/switchboard/resolve-harness';
 import { PROGRAM_BINDINGS, resolveProgramBinding } from '@programs';
 import { PROGRAM_REGISTRY } from '@programs';
 
@@ -84,12 +84,7 @@ describe('program binding owner', () => {
   });
 
   it('clamps a flag route without runTask while preserving the dev CLI hard-error route', () => {
-    const original = HARNESS_OPTIONS[Harness.anthropic];
-    if (!original) throw new Error('Anthropic harness is not registered');
-    HARNESS_OPTIONS[Harness.anthropic] = {
-      ...original,
-      runTask: undefined,
-    };
+    HARNESS_RUNS_TASKS[Harness.anthropic] = false;
     const input = {
       program: 'self-driving',
       flags: { [WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY]: 'true' },
@@ -118,7 +113,7 @@ describe('program binding owner', () => {
       ).toBe(Sequence.orchestrator);
       expect(cliTrace).toMatchObject({ sequence: 'cli' });
     } finally {
-      HARNESS_OPTIONS[Harness.anthropic] = original;
+      HARNESS_RUNS_TASKS[Harness.anthropic] = true;
     }
   });
 });

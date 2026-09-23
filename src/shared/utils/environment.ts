@@ -28,7 +28,7 @@ export function isNonInteractiveEnvironment(): boolean {
  * `e2eAsk` re-wires the `wizard_ask` bridge in an otherwise non-interactive
  * run. Only the e2e TUI host may set it: a real `--ci` run has nobody to answer,
  * so every question would stall for the bridge timeout instead of failing fast
- * with an actionable error. See `shouldDisableAsk`.
+ * with an actionable error. See `isAskDisabled`.
  */
 const NEVER_FROM_ENV = ['e2eAsk'];
 

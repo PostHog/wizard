@@ -25,8 +25,9 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 - `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill,
   tools, copy), the resolved `binding` (sequence, harness, model and task-role
   routes), supplied program commandments and stage policy, the skills origin,
-  flag snapshot, trace tags, tool allow and deny lists, seed tasks and bound
-  completion `hooks`.
+  flag snapshot, trace tags, tool allow and deny lists, seed tasks, bound
+  completion `hooks` and `scanReport` (`defer` leaves the scan report to the
+  host run).
 - `RunInput`: install directory, resolved PostHog credentials, required
   `inferenceAuth`, project and user payloads, skill id, detected integration,
   `flags` (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`,
@@ -43,11 +44,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   `Crashed` requires one. A failed result need not have an attached `Error`.
   Every result carries a `snapshot` of what the run reported: tasks, status
   lines, stage, token usage totals, final cost, dashboard and notebook URLs,
-  handoff text. It may also carry `skillId`.
+  handoff text, and the transcript tail when the run definition sets
+  `collectTranscript`. It may also carry `skillId`.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
-  `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
-  copies, never live objects.
+  `usage`, `finalCost`, `authError`, `handoff`, `completion`, and `activity`
+  (one line per step, only from a run that collects its transcript). Payloads
+  are copies, never live objects.
 - `AgentInteraction`: every member optional. `ask(question, { signal })`
   resolves with answers, and `taskNotice(notice, { signal })` resolves with
   whether to keep an optional task. Each request has its own signal, which
@@ -71,12 +74,10 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   `setup wizard finished` event. The host sends it from the outcome: `Success`
   is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
-Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
-generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
-`initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`,
-`AgentErrorType`, `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`,
-`OutroKind`, `flushScanReport`, and `runMcpPromptViaSdk`, which loads the
-streaming module on first call.
+Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers,
+`resolveHarness` and `harnessRunsTasks`, which programs resolve a binding with,
+`AgentSignals`, `WIZARD_TOOL_NAMES`, `OutroKind`, `downloadSkill`, and
+`runMcpPromptViaSdk`, which loads the streaming module on first call.
 
 Minimal invocation:
 

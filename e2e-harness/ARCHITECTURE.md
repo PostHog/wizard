@@ -137,7 +137,7 @@ Two decision points ask a person to act, and the harness stands in for them.
 
 `wizard_ask` overlay. A `ci` session normally has no ask bridge at all. The host
 sets `session.e2eAsk` from `E2E_ASK=true`, which keeps the bridge wired (see
-`shouldDisableAsk`). In the fixed route, the profile answers every question:
+`isAskDisabled`). In the fixed route, the profile answers every question:
 `askAnswers` routes a question to a value, else the first option, else the
 `'e2e'` sentinel. Route credentials with `${ENV_VAR}` values, never literals.
 

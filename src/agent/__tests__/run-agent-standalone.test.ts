@@ -167,6 +167,15 @@ vi.mock('@agent/runner/switchboard/harness', () => {
         },
       });
       await askIfRequested(inputs);
+      // A real harness feeds the benchmark middleware every SDK message.
+      inputs.middleware?.onMessage({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+      });
+      inputs.middleware?.finalize(
+        { type: 'result', modelUsage: {}, num_turns: 1 },
+        10,
+      );
       if (harnessState.throws) throw harnessState.throws;
       spinner.stop('Done');
       return harnessState.result;
@@ -182,16 +191,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
         runTask: harnessState.taskCapability ? fake.runTask : undefined,
       };
     },
-    resolveHarness: (ctx: { cliHarness?: Harness }) => ({
-      harness: ctx.cliHarness ?? Harness.pi,
-      model: DEFAULT_AGENT_MODEL,
-    }),
-    resolveRoleHarness: (binding: RunConfig['binding'], role: string) =>
-      binding.roleBindings?.[role] ?? {
-        harness: binding.harness,
-        model: binding.model,
-        thinkingLevel: binding.thinkingLevel,
-      },
   };
 });
 
@@ -226,10 +225,11 @@ vi.mock('@shared/skill-menu', async (original) => ({
 }));
 
 import { runAgent, RunOutcome } from '@agent/runner';
-import type { RunConfig, RunInput } from '@agent/runner';
+import type { RunAgentOptions, RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
 
 let tmp: string;
@@ -870,6 +870,45 @@ describe('runAgent standalone', () => {
     expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 
+  it('a process drain during a run writes the scan report once, through progress', async () => {
+    clearCleanup();
+    harnessState.waitForAbort = true;
+    vi.mocked(flushScanReport).mockReturnValueOnce(
+      'YARA scan report: /tmp/scan.json',
+    );
+    const controller = new AbortController();
+    const events: AgentProgress[] = [];
+    const running = runAgent(
+      config(),
+      input({ flags: { ...input().flags, yaraReport: true } }),
+      {
+        signal: controller.signal,
+        onProgress: (event) => events.push(event),
+      },
+    );
+    await vi.waitFor(() => expect(harnessState.lastInputs).toBeTruthy());
+
+    runCleanups();
+
+    expect(flushScanReport).toHaveBeenCalledExactlyOnceWith({
+      yaraReport: true,
+    });
+    expect(events).toContainEqual({
+      kind: 'log',
+      level: 'info',
+      message: 'YARA scan report: /tmp/scan.json',
+    });
+    controller.abort();
+    expect((await running).outcome).toBe(RunOutcome.Aborted);
+    expect(flushScanReport).toHaveBeenCalledTimes(1);
+    expect(
+      events.filter(
+        (event) =>
+          event.kind === 'log' && event.message.startsWith('YARA scan report'),
+      ),
+    ).toHaveLength(1);
+  });
+
   it('runs to a complete result with no options at all', async () => {
     const result = await runAgent(config(), input());
 
@@ -982,6 +1021,106 @@ describe('runAgent standalone', () => {
       events.some((e) => e.kind === 'lifecycle' && e.phase === 'completed'),
     ).toBe(false);
     expect(analytics.shutdown).not.toHaveBeenCalled();
+  });
+
+  it('collectTranscript fills snapshot.transcriptTail; run.prompt replaces the assembled prompt', async () => {
+    const events: AgentProgress[] = [];
+    const long = 'x'.repeat(150);
+    harnessState.run = ({ middleware }) => {
+      middleware?.onMessage({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: '  Globbing every manifest.  ' },
+            {
+              type: 'tool_use',
+              name: 'Glob',
+              input: { pattern: '**/{package.json}' },
+            },
+            {
+              type: 'tool_use',
+              name: 'Read',
+              input: { file_path: 'apps/web/package.json' },
+            },
+            { type: 'tool_use', name: 'TaskList', input: {} },
+            { type: 'text', text: long },
+          ],
+        },
+      });
+      middleware?.onMessage({ type: 'result', result: '{"path":"."}' });
+      return Promise.resolve({ kind: 'success' });
+    };
+
+    const result = await runAgent(
+      config({
+        run: {
+          ...config().run,
+          prompt: () => 'Scan the repo only.',
+          collectTranscript: true,
+        },
+      }),
+      input(),
+      { onProgress: (event) => events.push(event) },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect((harnessState.lastInputs as BackendRunInputs).prompt).toBe(
+      'Scan the repo only.',
+    );
+    expect(result.snapshot.transcriptTail).toBe(
+      `  Globbing every manifest.  \n${long}\n{"path":"."}`,
+    );
+    expect(events.filter((event) => event.kind === 'activity')).toEqual([
+      { kind: 'activity', line: 'Globbing every manifest.' },
+      { kind: 'activity', line: 'Glob **/{package.json}' },
+      { kind: 'activity', line: 'Read apps/web/package.json' },
+      { kind: 'activity', line: 'TaskList' },
+      { kind: 'activity', line: `${'x'.repeat(100)}…` },
+    ]);
+  });
+
+  it('keeps only the newest 256 KiB of a collected transcript', async () => {
+    const chunk = 'y'.repeat(100 * 1024);
+    harnessState.run = ({ middleware }) => {
+      for (const text of ['oldest', chunk, chunk, chunk]) {
+        middleware?.onMessage({
+          type: 'assistant',
+          message: { content: [{ type: 'text', text }] },
+        });
+      }
+      return Promise.resolve({ kind: 'success' });
+    };
+
+    const result = await runAgent(
+      config({ run: { ...config().run, collectTranscript: true } }),
+      input(),
+    );
+
+    expect(result.snapshot.transcriptTail).toBe(`${chunk}\n${chunk}\n`);
+  });
+
+  it('reports no activity and keeps no transcript unless the run asks', async () => {
+    const events: AgentProgress[] = [];
+    let middleware: BackendRunInputs['middleware'];
+    harnessState.run = (inputs) => {
+      middleware = inputs.middleware;
+      return Promise.resolve({ kind: 'success' });
+    };
+
+    const result = await runAgent(config(), input(), {
+      onProgress: (event) => events.push(event),
+    });
+
+    expect(middleware).toBeUndefined();
+    expect(result.snapshot.transcriptTail).toBeUndefined();
+    expect(events.some((event) => event.kind === 'activity')).toBe(false);
+  });
+
+  it('leaves a deferred scan report to the host run', async () => {
+    const result = await runAgent(config({ scanReport: 'defer' }), input());
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(flushScanReport).not.toHaveBeenCalled();
   });
 
   it('finishes when the observer throws on every event', async () => {
@@ -1184,4 +1323,115 @@ describe('runAgent standalone', () => {
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(fs.existsSync(skillDir)).toBe(true);
   });
+
+  it('sends benchmark output to onProgress when benchmarking', async () => {
+    const benchmarkPath = path.join(tmp, 'benchmark.json');
+    const configPath = path.join(tmp, '.benchmark-config.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ output: { benchmarkPath, logEnabled: false } }),
+    );
+    vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_CONFIG', configPath);
+    vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_FILE', benchmarkPath);
+    vi.stubEnv('POSTHOG_WIZARD_LOG_DIR', tmp);
+    const runInput = input();
+    runInput.flags.benchmark = true;
+    const events: AgentProgress[] = [];
+    try {
+      const result = await runAgent(config(), runInput, {
+        onProgress: (e) => events.push(e),
+      });
+
+      expect(result.outcome).toBe('success');
+      const logs = events.flatMap((e) => (e.kind === 'log' ? [e.message] : []));
+      expect(logs).toContainEqual(
+        expect.stringContaining(
+          `Benchmark data will be written to: ${benchmarkPath}`,
+        ),
+      );
+      expect(logs).toContainEqual(
+        expect.stringContaining(`Results written to ${benchmarkPath}`),
+      );
+      expect(fs.existsSync(benchmarkPath)).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each<
+    [string, (host: AbortController) => Partial<RunAgentOptions>, string]
+  >([
+    ['completes', () => ({}), 'success'],
+    [
+      'stops itself',
+      () => {
+        harnessState.result = {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'No Stripe found',
+        };
+        return {};
+      },
+      'failed',
+    ],
+    [
+      'crashes',
+      () => {
+        harnessState.throws = new Error('SDK exploded');
+        return {};
+      },
+      'crashed',
+    ],
+    [
+      'is cancelled mid-run',
+      (host) => {
+        harnessState.askQuestions = [
+          { id: 'q1', prompt: 'Continue?', kind: 'text' },
+        ];
+        return {
+          interaction: {
+            ask: () => {
+              host.abort();
+              return new Promise<AskAnswers>(() => undefined);
+            },
+          },
+        };
+      },
+      'aborted',
+    ],
+    [
+      'is cancelled before it starts',
+      (host) => {
+        host.abort();
+        return {};
+      },
+      'aborted',
+    ],
+  ])(
+    'sends the scan summary to onProgress when the run %s',
+    async (_ending, arrange, outcome) => {
+      const summary =
+        'YARA scan report: /tmp/yara.json\n— YARA Scanner Summary —';
+      vi.mocked(flushScanReport).mockReturnValueOnce(summary);
+      const host = new AbortController();
+      const options = arrange(host);
+      const runInput = input();
+      runInput.flags.yaraReport = true;
+      const events: AgentProgress[] = [];
+
+      const result = await runAgent(config(), runInput, {
+        ...options,
+        signal: host.signal,
+        onProgress: (e) => events.push(e),
+      });
+
+      expect(result.outcome).toBe(outcome);
+      expect(flushScanReport).toHaveBeenCalledWith({ yaraReport: true });
+      expect(events).toContainEqual({
+        kind: 'log',
+        level: 'info',
+        message: summary,
+      });
+    },
+  );
 });

@@ -2,7 +2,7 @@ import { piBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
 import { Harness, Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
-import { AgentErrorType } from '@agent/signals';
+import { AgentErrorType, REMARK_INSTRUCTION } from '@agent/signals';
 
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
@@ -203,5 +203,28 @@ it.each(['linear', 'task'] as const)(
       message: 'Agent run cancelled',
     });
     expect(agentSession.abort).toHaveBeenCalledOnce();
+  },
+);
+
+it.each([
+  [undefined, true],
+  [false, false],
+])(
+  'asks the pi linear session for a remark when requestRemark is %s',
+  async (requestRemark, asked) => {
+    agentSession.prompt = vi.fn().mockResolvedValue(undefined);
+    const base = inputs(new AbortController().signal);
+
+    await piBackend.run({
+      ...base,
+      config: { ...base.config, run: { ...base.config.run, requestRemark } },
+    });
+
+    expect(agentSession.prompt.mock.calls[0]).toEqual(['Do the work']);
+    expect(
+      agentSession.prompt.mock.calls.some(
+        ([text]) => text === REMARK_INSTRUCTION,
+      ),
+    ).toBe(asked);
   },
 );

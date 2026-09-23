@@ -22,7 +22,6 @@ import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
-import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -101,6 +100,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
+      // Covers installs before runProgram registers its own, such as the outage skill.
       registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@ui/tui/start-tui');
@@ -212,11 +212,10 @@ export function runWizard(
         config = getProgramConfig(active);
       }
 
-      // After the switch loop, not before: the stream bakes its program id,
-      // session id, and event-plan path in at construction, so a stream built
-      // for the launch program would report the whole run under a program the
-      // user left on the intro screen. Nothing before this point produces a
-      // task to push.
+      // After the switch loop, not before: the stream bakes its program id and
+      // session id in at construction, so a stream built for the launch program
+      // would report the whole run under a program the user left on the intro
+      // screen. Nothing before this point produces a task to push.
       // Consent gates the push, not the dump: `--no-telemetry` still logs.
       const fileDestination = createFileDestination(options.taskStreamLog);
       const destinations = [
@@ -235,9 +234,6 @@ export function runWizard(
         store: activeTui.store,
         programId: config.streamWorkflowId ?? config.id,
         destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(activeTui.store.session)
           : undefined,

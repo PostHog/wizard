@@ -6,6 +6,7 @@ interface HeadlessRunStore {
   ): void;
   setHandoffText(text: string): void;
   setFrameworkContext(key: string, value: unknown): void;
+  setEventPlan(events: Array<{ name: string; description: string }>): void;
   session: { frameworkContext: Record<string, unknown> };
 }
 
@@ -35,6 +36,10 @@ export class HeadlessUI extends LoggingUI {
 
   setFrameworkContext(key: string, value: unknown): void {
     this.store.setFrameworkContext(key, value);
+  }
+
+  setEventPlan(events: Array<{ name: string; description: string }>): void {
+    this.store.setEventPlan(events);
   }
 
   getFrameworkContext(key: string): unknown {

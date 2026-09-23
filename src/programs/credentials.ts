@@ -6,14 +6,18 @@ import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 export type ResolvedProgramCredentials = {
   posthog: Credentials;
-  inferenceAuth: InferenceAuthProvider;
+  /** When absent, runProgram mints first-party gateway auth from the refreshed login. */
+  inferenceAuth?: InferenceAuthProvider;
   project: ApiProject | null;
   apiUser: ApiUser | null;
 };
 
-/** Hosts authenticate once per scope and may return refreshed credentials. */
+/** Hosts authenticate once per scope; the signal aborts with the invocation. */
 export type CredentialsProvider = {
-  resolve(programId: string): Promise<ResolvedProgramCredentials>;
+  resolve(
+    programId: string,
+    context: { signal: AbortSignal },
+  ): Promise<ResolvedProgramCredentials>;
 };
 
 /**

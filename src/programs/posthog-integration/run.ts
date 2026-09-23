@@ -5,7 +5,8 @@ import type {
   RunHooks,
   SeedTaskEntry,
 } from '@agent/types';
-import { AgentSignals, shouldDisableAsk } from '@agent';
+import { AgentSignals } from '@agent';
+import { isAskDisabled } from '@shared/ask-policy';
 import type { Credentials } from '@shared/api';
 import type { HostResolution } from '@shared/host-resolution';
 import type { FrameworkConfig } from '@programs/framework-config';
@@ -130,7 +131,7 @@ function warehouseReportInstruction(
   return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
 }
 
-/** The deterministic warehouse task decision is shared with the legacy adapter. */
+/** The warehouse task decision, shared by the session-driven config and runProgram's resolver. */
 export function resolvePosthogIntegrationSeedTasks(
   input: Pick<
     PosthogIntegrationRunInput,
@@ -138,7 +139,7 @@ export function resolvePosthogIntegrationSeedTasks(
   >,
   capture: PosthogIntegrationRunEffects['capture'],
 ): SeedTaskEntry[] {
-  if (shouldDisableAsk(input.flags)) return [];
+  if (isAskDisabled(input.flags)) return [];
   const sources = input.warehouseSources;
   if (sources.length === 0) return [];
   const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);

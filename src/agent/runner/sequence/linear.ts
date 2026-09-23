@@ -19,13 +19,15 @@ import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage } from '@agent/yara-hooks';
 import { installSkillById } from '@agent/tools';
-import { assemblePrompt } from '../../agent-prompt';
+import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, hostAborted, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
-import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
+import { runOptions } from '../shared/bootstrap';
+import { isAskDisabled } from '@shared/ask-policy';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
+import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
 
 export async function runLinearProgram(
@@ -46,7 +48,15 @@ export async function runLinearProgram(
 
 /** The host's `signal` decides the outcome; `runSignal` also ends with the run. */
 async function executeLinear(
-  { config, input, boot, emit, interaction, signal }: SequenceContext,
+  {
+    config,
+    input,
+    boot,
+    emit,
+    interaction,
+    signal,
+    transcript,
+  }: SequenceContext,
   runSignal: AbortSignal,
 ): Promise<SequenceResult> {
   if (signal?.aborted) return hostAborted();
@@ -84,7 +94,7 @@ async function executeLinear(
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+    isAskDisabled(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const ask = askDisabled
     ? undefined
     : createAskBridge(interaction, {
@@ -94,12 +104,15 @@ async function executeLinear(
         signal: runSignal,
       });
 
-  const middleware = input.flags.benchmark
-    ? createBenchmarkPipeline(emit, spinner, runOptions(input))
-    : undefined;
+  const middleware = withTranscript(
+    input.flags.benchmark
+      ? createBenchmarkPipeline(emit, spinner, runOptions(input))
+      : undefined,
+    transcript,
+  );
 
   // 7. Build prompt
-  const prompt = assemblePrompt(run, {
+  const promptContext: PromptContext = {
     projectId,
     projectApiKey,
     host,
@@ -113,7 +126,10 @@ async function executeLinear(
           surveys: project.surveys_opt_in ?? null,
         }
       : null,
-  });
+  };
+  const prompt = run.prompt
+    ? run.prompt(promptContext)
+    : assemblePrompt(run, promptContext);
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
   if (signal?.aborted) return hostAborted();
 
