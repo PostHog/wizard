@@ -38,10 +38,7 @@ export function startAuditLedgerWatcher(
   );
 }
 
-/**
- * The wizard seeds the ledger, so it removes it too. The skills' own `rm`
- * step is up to the agent, and a skipped one leaves the file in the project.
- */
+/** The wizard seeded the ledger, so it removes it, agent `rm` step or not. */
 export function removeAuditLedger(installDir: string, file: string): void {
   const target = path.join(installDir, file);
   try {
