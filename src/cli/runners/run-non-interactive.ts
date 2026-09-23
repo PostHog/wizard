@@ -249,7 +249,8 @@ export function runNonInteractive(
         enabled: destinations.length > 0,
       });
       taskStream.attach();
-      headlessStore.setRunPhase(RunPhase.Running);
+      // A controlled store stays idle until POST /runs; the idle-gated routes read this phase.
+      if (!options.controlSocket) headlessStore.setRunPhase(RunPhase.Running);
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
       }
