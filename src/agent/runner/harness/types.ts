@@ -15,8 +15,7 @@
  * rather than silently downgrading.
  *
  * A harness reports through `emit` and never reaches for a UI. It returns an
- * error classification, or a decided `failure` the sequence must return as
- * the run's result.
+ * tagged success, abort, or failure data for the sequence to decide.
  */
 
 import type { AdditionalFeature } from '@shared/constants';
@@ -48,11 +47,12 @@ export interface RunMiddleware {
  * re-derives run context.
  */
 export interface BackendRunInputs {
-  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
+  /** Host cancellation for the whole agent run. */
+  signal?: AbortSignal;
   /** The fully assembled prompt. */
   prompt: string;
   /** Installed framework-skill path, when the program installs one. */
@@ -70,15 +70,24 @@ export interface BackendRunInputs {
 }
 
 /**
- * What a runner reports back: an error classification, or nothing on success.
- * `failure` is a fully decided abort the harness already reported to the host
- * (the 401 auth screen); the sequence returns it as the run's result.
+ * A harness reports one terminal outcome. A decided failure already has the
+ * caller-visible code and message; the caller alone presents it.
  */
-export type AgentResult = {
-  error?: AgentErrorType;
-  message?: string;
-  failure?: AgentFailure;
-};
+export type AgentResult =
+  | { kind: 'success' }
+  | {
+      kind: 'abort';
+      classification: AgentErrorType.ABORT;
+      message?: string;
+      error?: Error;
+    }
+  | {
+      kind: 'failure';
+      classification: Exclude<AgentErrorType, AgentErrorType.ABORT>;
+      message?: string;
+      error?: Error;
+    }
+  | { kind: 'decided_failure'; failure: AgentFailure };
 
 /**
  * One orchestrator-mode unit of work — the seed plan, or one drained task.
@@ -88,11 +97,12 @@ export type AgentResult = {
  * them from the program-level config the linear pipeline assembles once.
  */
 export interface TaskRunInputs {
-  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
+  /** Host cancellation shared by every task in this run. */
+  signal?: AbortSignal;
   /** The fully assembled per-task or seed prompt. */
   prompt: string;
   spinner: SpinnerHandle;

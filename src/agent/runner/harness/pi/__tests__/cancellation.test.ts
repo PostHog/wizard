@@ -14,6 +14,7 @@ describe('Pi host cancellation', () => {
 
     controller.abort();
     controller.abort();
+    await Promise.resolve();
     expect(abort).toHaveBeenCalledTimes(1);
     let settled = false;
     const settling = binding.settle().then(() => {
@@ -35,5 +36,21 @@ describe('Pi host cancellation', () => {
 
     await binding.settle();
     expect(abort).toHaveBeenCalledTimes(1);
+  });
+  it('contains a synchronous abort throw and a diagnostic callback throw', async () => {
+    const controller = new AbortController();
+    const binding = bindPiCancellation(
+      controller.signal,
+      {
+        abort: () => {
+          throw new Error('abort failed');
+        },
+      },
+      () => {
+        throw new Error('log failed');
+      },
+    );
+    expect(() => controller.abort()).not.toThrow();
+    await expect(binding.settle()).resolves.toBeUndefined();
   });
 });

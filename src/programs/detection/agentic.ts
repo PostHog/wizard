@@ -450,18 +450,17 @@ export async function detectProjectsWithAgent(
     middleware,
   );
 
-  if (result.failure) {
+  if (result.kind !== 'success') {
+    if (result.kind === 'decided_failure') {
+      throw (
+        result.failure.error ??
+        new WizardError(result.failure.message, undefined, result.failure.code)
+      );
+    }
     throw (
-      result.failure.error ??
-      new WizardError(
-        result.failure.message ?? 'Agent detection failed',
-        undefined,
-        result.failure.code,
-      )
+      result.error ??
+      new Error(result.message || `Agent error: ${result.classification}`)
     );
-  }
-  if (result.error) {
-    throw new Error(result.message || `Agent error: ${result.error}`);
   }
 
   // Transcript first, final message last — its verdicts win path conflicts.

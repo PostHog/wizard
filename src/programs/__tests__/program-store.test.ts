@@ -3,6 +3,7 @@ import { OutroKind } from '@agent/progress';
 import type { RunResult } from '@agent/types';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import { Integration } from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
 import { ProgramStore, type ProgramProgress } from '../program-store';
 
 function success(snapshot: RunResult['snapshot'], skillId?: string): RunResult {
@@ -139,7 +140,7 @@ it('reconciles from final agent results and retains run registration order', () 
   );
   const secondResult: RunResult = {
     outcome: RunOutcome.Aborted,
-    failure: { message: 'Cancelled by user' },
+    failure: { code: ErrorCodes.AgentAbort, message: 'Cancelled by user' },
     snapshot: {
       tasks: [],
       statusMessages: [],
@@ -223,7 +224,11 @@ it('keeps crash errors detached without losing their type or metadata', () => {
   };
   const result: RunResult = {
     outcome: RunOutcome.Crashed,
-    failure: { error },
+    failure: {
+      code: ErrorCodes.InternalUnhandled,
+      message: error.message,
+      error,
+    },
     snapshot,
   };
   run.finish(result);
@@ -259,7 +264,11 @@ it.each(['metadata', 'cause'] as const)(
     }
     const result: RunResult = {
       outcome: RunOutcome.Crashed,
-      failure: { error },
+      failure: {
+        code: ErrorCodes.InternalUnhandled,
+        message: error.message,
+        error,
+      },
       snapshot: {
         tasks: [],
         statusMessages: ['original'],

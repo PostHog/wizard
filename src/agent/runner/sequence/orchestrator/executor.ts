@@ -10,7 +10,7 @@
  * injected: the real one spins up a fresh agent, the tests use a fake.
  */
 import { analytics } from '@utils/analytics';
-import type { AgentFailure } from '../../shared/types';
+import { RunOutcome, type AgentFailure } from '../../shared/types';
 import { logToFile } from '@utils/debug';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
@@ -41,7 +41,12 @@ export type RunTask = (task: QueuedTask) => Promise<void>;
  * the harness used to exit the process.
  */
 export class RunTaskFatal extends Error {
-  constructor(public readonly failure: AgentFailure) {
+  constructor(
+    public readonly failure: AgentFailure,
+    public readonly outcome:
+      | RunOutcome.Aborted
+      | RunOutcome.Failed = RunOutcome.Failed,
+  ) {
     super(failure.message ?? 'agent run failed');
     this.name = 'RunTaskFatal';
   }
@@ -51,6 +56,8 @@ export interface DrainOptions {
   /** Backstop against a pathological always-one-more-pending loop. */
   maxStarts: number;
   signal?: AbortSignal;
+  /** Stop sibling sessions on the first fatal result before joining them. */
+  onFatal?: () => void;
 }
 
 export const DEFAULT_DRAIN_OPTIONS: DrainOptions = {
@@ -129,7 +136,21 @@ export async function drainQueue(
         if (++starts > opts.maxStarts) break;
         const p = runOne(store, runTask, task, opts.signal)
           .catch((error: unknown) => {
-            failure ??= { error };
+            if (!failure) {
+              failure = { error };
+              try {
+                opts.onFatal?.();
+              } catch (abortError) {
+                try {
+                  logToFile(
+                    '[executor] fatal cancellation failed:',
+                    abortError,
+                  );
+                } catch {
+                  // Reporting cancellation failure cannot replace the fatal.
+                }
+              }
+            }
           })
           .finally(() => running.delete(task.id));
         running.set(task.id, p);
@@ -141,4 +162,5 @@ export async function drainQueue(
     // No queue or skill cleanup may run while a sibling still uses them.
     await Promise.allSettled(running.values());
   }
+  if (failure) throw failure.error;
 }
