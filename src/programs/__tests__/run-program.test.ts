@@ -386,6 +386,42 @@ describe('runProgram', () => {
     }
   });
 
+  it('watches the audit ledger a host lays over a program without one', async () => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-audit-overlay-'),
+    );
+    const checks = [
+      { id: 'events', area: 'Events', label: 'Events', status: 'pass' },
+    ];
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'agent-skill',
+      strategy: 'resolved',
+      resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+    });
+    vi.mocked(runAgent).mockImplementation(() => {
+      fs.writeFileSync(
+        path.join(installDir, AUDIT_CHECKS_FILE),
+        JSON.stringify(checks),
+      );
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      const result = await runProgram('agent-skill', {
+        installDir,
+        credentials,
+        run,
+        auditLedgerFile: AUDIT_CHECKS_FILE,
+      });
+
+      expect(result.data.detection.frameworkContext.auditChecks).toEqual(
+        checks,
+      );
+    } finally {
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  });
+
   it('returns the current integration event plan and stops its watcher on settlement', async () => {
     const installDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'wizard-plan-host-'),

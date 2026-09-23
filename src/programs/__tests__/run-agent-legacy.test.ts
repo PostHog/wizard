@@ -15,6 +15,13 @@ import type { ApiUser } from '@shared/api';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
+import * as ledgerWatch from '../audit/watch-ledger';
+import * as eventPlanWatch from '../posthog-integration/watch-event-plan';
+import { auditConfig } from '../audit/index';
+import { AUDIT_SEED_CHECKS } from '../audit/seed';
+import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../audit/types';
+import { EVENT_PLAN_FILE } from '../posthog-integration/constants';
+import { agentSkillConfig } from '../program-registry';
 import { startTUI } from '@ui/tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
@@ -979,6 +986,102 @@ describe('host wiring over runProgram', () => {
     expect(runAgent).toHaveBeenCalledOnce();
     expect(prompts[0]).toContain('apps/web');
     expect(prompts[0]).toContain('Next.js');
+  });
+
+  describe('program files', () => {
+    let installDir: string;
+    let watchLedger: ReturnType<typeof vi.spyOn>;
+    let watchEventPlan: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-files-'));
+      watchLedger = vi.spyOn(ledgerWatch, 'watchAuditLedger');
+      const EventPlanWatcher = eventPlanWatch.ProgramEventPlanWatcher;
+      watchEventPlan = vi
+        .spyOn(eventPlanWatch, 'ProgramEventPlanWatcher')
+        .mockImplementation(function (
+          ...args: ConstructorParameters<typeof EventPlanWatcher>
+        ) {
+          return new EventPlanWatcher(...args);
+        });
+    });
+    afterEach(() => {
+      watchLedger.mockRestore();
+      watchEventPlan.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    });
+    const auditChecksSent = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.filter(([key]) => key === AUDIT_CHECKS_KEY);
+
+    it('an audit run starts one ledger watcher, and the host still receives the seeded checks', async () => {
+      const setFrameworkContext = vi.spyOn(getUI(), 'setFrameworkContext');
+      const resolved = [{ ...AUDIT_SEED_CHECKS[0], status: 'pass' }];
+      let sentBeforeRun: unknown[][] = [];
+      vi.mocked(runAgent).mockImplementationOnce((...args) => {
+        sentBeforeRun = auditChecksSent(setFrameworkContext);
+        fs.writeFileSync(
+          path.join(installDir, AUDIT_CHECKS_FILE),
+          JSON.stringify(resolved),
+        );
+        return finishRun(...args);
+      });
+
+      await runProgramAgent(auditConfig, { ...session(), installDir });
+
+      expect(watchLedger).toHaveBeenCalledOnce();
+      // The seed reaches the screen before the agent starts; each value once.
+      expect(sentBeforeRun).toEqual([[AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS]]);
+      expect(auditChecksSent(setFrameworkContext)).toEqual([
+        [AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS],
+        [AUDIT_CHECKS_KEY, resolved],
+      ]);
+    });
+
+    it('an integration run starts one event-plan watcher, and the host still receives the plan', async () => {
+      const setEventPlan = vi.spyOn(getUI(), 'setEventPlan');
+      vi.mocked(runAgent).mockImplementationOnce((...args) => {
+        fs.writeFileSync(
+          path.join(installDir, EVENT_PLAN_FILE),
+          JSON.stringify([{ event_name: 'checkout_started' }]),
+        );
+        return finishRun(...args);
+      });
+
+      await runProgramAgent(program('posthog-integration'), {
+        ...session(),
+        installDir,
+      });
+
+      expect(watchEventPlan).toHaveBeenCalledOnce();
+      expect(setEventPlan).toHaveBeenCalledExactlyOnceWith([
+        { name: 'checkout_started', description: '' },
+      ]);
+    });
+
+    it('an audit-family skill run keeps its ledger watched through runProgram', async () => {
+      const setFrameworkContext = vi.spyOn(getUI(), 'setFrameworkContext');
+      const checks = [
+        { id: 'events', area: 'Events', label: 'Events', status: 'pass' },
+      ];
+      vi.mocked(runAgent).mockImplementationOnce((...args) => {
+        fs.writeFileSync(
+          path.join(installDir, AUDIT_CHECKS_FILE),
+          JSON.stringify(checks),
+        );
+        return finishRun(...args);
+      });
+
+      // What `wizard audit events` dispatches: the generic skill program with
+      // the family's ledger laid over it.
+      await runProgramAgent(
+        { ...agentSkillConfig, auditLedgerFile: AUDIT_CHECKS_FILE },
+        { ...session(), installDir, skillId: 'audit-events' },
+      );
+
+      expect(watchLedger).toHaveBeenCalledOnce();
+      expect(auditChecksSent(setFrameworkContext)).toEqual([
+        [AUDIT_CHECKS_KEY, checks],
+      ]);
+    });
   });
 
   const hostFailure = new Error('host capability failed');

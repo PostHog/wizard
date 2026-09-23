@@ -259,9 +259,6 @@ async function main() {
       store,
       programId,
       destinations: [streamLog],
-      eventPlanPath: programConfig.eventPlanFile
-        ? join(store.session.installDir, programConfig.eventPlanFile)
-        : undefined,
       auditChecks: programConfig.auditLedgerFile
         ? () => getAuditChecks(store.session)
         : undefined,

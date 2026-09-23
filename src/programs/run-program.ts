@@ -92,6 +92,8 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   allowedTools?: RunConfig['allowedTools'];
   disallowedTools?: RunConfig['disallowedTools'];
   agentFlow?: string;
+  /** A ledger the host lays over a generic program, such as an audit-family skill. */
+  auditLedgerFile?: string;
   frameworkConfig?: FrameworkConfig;
   frameworkContext?: Record<string, unknown>;
   warehouseSources?: readonly DetectedSource[];
@@ -502,7 +504,10 @@ async function runProgramWithStore(
   }
 
   const fileWatchers = startProgramFileWatchers(
-    program,
+    {
+      ...program,
+      auditLedgerFile: input.auditLedgerFile ?? program.auditLedgerFile,
+    },
     input.installDir,
     store,
   );

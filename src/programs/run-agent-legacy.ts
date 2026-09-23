@@ -7,7 +7,8 @@
  * session, and supplies the session's login as the credentials provider, the
  * TUI's AI opt-in and post-auth gates as awaited capabilities, the feature-flag
  * loader, and `getUI()` as the answerer. It maps every progress event back
- * onto `getUI()` one call per event and mirrors program data onto the session,
+ * onto `getUI()` one call per event and mirrors program data, including the
+ * event plan and audit checks runProgram watches, onto the session and the UI,
  * then applies the result — `wizardAbort` with the outcome's terminal status
  * for a decided failure, the terminal analytics event for a finished top-level
  * run.
@@ -16,6 +17,7 @@
  * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
  */
 
+import { isDeepStrictEqual } from 'node:util';
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI, type WizardUI } from '@ui';
@@ -33,7 +35,7 @@ import type { ProgramRun } from './program-run';
 import { restoreClaudeSettings } from '@shared/claude-settings';
 import { preflight, type ProgramPreflightHost } from './preflight';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
-import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
+import { wizardAbort } from '@utils/wizard-abort';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
@@ -41,7 +43,7 @@ import type { ProgramConfig } from './program-step';
 import { authenticate } from './authenticate';
 import { getDetectedWarehouseSources } from './warehouse-source/detect';
 import { mayReportScanResults } from '@shared/scan-consent';
-import { startAuditLedgerWatcher } from './audit/ledger-watcher';
+import { AUDIT_CHECKS_KEY } from './audit/types';
 import {
   commitRegisteredRunSkillCleanups,
   registerRunSkillCleanup,
@@ -67,13 +69,6 @@ export async function runProgramAgent(
   // wizardAbort and TUI signal handlers drain this registry on interruption.
   const cleanupInstalledSkills = registerRunSkillCleanup(session.installDir);
 
-  // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
-  // and a watcher started later would ignore that write as pre-existing.
-  const ledger = programConfig.auditLedgerFile
-    ? startAuditLedgerWatcher(session.installDir, programConfig.auditLedgerFile)
-    : null;
-  if (ledger) registerCleanup(() => ledger.stop());
-
   try {
     const runDef =
       typeof programConfig.run === 'function'
@@ -97,8 +92,6 @@ export async function runProgramAgent(
       logToFile('[agent-runner] failed-run skill cleanup error:', cleanupError);
     }
     throw error;
-  } finally {
-    ledger?.stop();
   }
 }
 
@@ -197,6 +190,7 @@ async function runLegacyStep(
       allowedTools: programConfig.allowedTools,
       disallowedTools: programConfig.disallowedTools,
       agentFlow: programConfig.agentFlow,
+      auditLedgerFile: programConfig.auditLedgerFile,
       aiSdkStampReported: session.aiSdkStampReported,
       discoveredFeatures: session.discoveredFeatures,
       warehouseSources: getDetectedWarehouseSources(session),
@@ -315,6 +309,9 @@ function projectProgramData(
   restoreSettings: () => void,
 ): (data: ProgramInvocationData) => void {
   let outroRestoreRegistered = false;
+  // Snapshots are copies, so forward by value; the store starts with no plan.
+  let eventPlan: ProgramInvocationData['eventPlan'] = [];
+  let auditChecks: unknown;
   return (data) => {
     const current = session.credentials;
     if (
@@ -338,6 +335,15 @@ function projectProgramData(
     if (data.binding?.sequence === Sequence.linear && !outroRestoreRegistered) {
       outroRestoreRegistered = true;
       ui.onEnterScreen('outro', restoreSettings);
+    }
+    if (!isDeepStrictEqual(data.eventPlan, eventPlan)) {
+      eventPlan = data.eventPlan;
+      ui.setEventPlan(eventPlan);
+    }
+    const checks = data.detection.frameworkContext[AUDIT_CHECKS_KEY];
+    if (checks !== undefined && !isDeepStrictEqual(checks, auditChecks)) {
+      auditChecks = checks;
+      ui.setFrameworkContext(AUDIT_CHECKS_KEY, checks);
     }
   };
 }
