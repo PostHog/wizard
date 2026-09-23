@@ -4,7 +4,7 @@ import {
   type AuditCheck,
 } from '@lib/programs/audit/types';
 import { relativeToInstallDir } from '@utils/paths';
-import { countNoun } from './count-noun.js';
+import { countNoun } from '@utils/count-noun';
 
 interface AuditChecksOutroSectionProps {
   checks: AuditCheck[];

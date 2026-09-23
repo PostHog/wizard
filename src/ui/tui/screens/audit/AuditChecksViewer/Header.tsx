@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
+import { countNoun } from '@utils/count-noun';
 import type { ViewerLayout } from './layout.js';
-import { countNoun } from '../count-noun.js';
 
 interface HeaderProps {
   layout: ViewerLayout;
