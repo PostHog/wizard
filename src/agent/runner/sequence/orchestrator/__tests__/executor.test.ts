@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { ErrorCodes } from '@shared/errors';
 import {
   QueueStore,
   TaskStatus,
@@ -85,7 +86,10 @@ describe('drainQueue', () => {
   });
 
   it('waits for live siblings after a fatal error and starts no dependents', async () => {
-    const fatal = new RunTaskFatal({ message: 'Authentication failed' });
+    const fatal = new RunTaskFatal({
+      code: ErrorCodes.AgentOrchestratorTasksFailed,
+      message: 'Authentication failed',
+    });
     let release!: () => void;
     const blocked = new Promise<void>((resolve) => {
       release = resolve;
@@ -117,7 +121,10 @@ describe('drainQueue', () => {
   it('preserves a fatal failure when a sibling completes in the same turn', async () => {
     q.enqueue({ type: 'success' });
     q.enqueue({ type: 'fatal' });
-    const fatal = new RunTaskFatal({ message: 'Authentication failed' });
+    const fatal = new RunTaskFatal({
+      code: ErrorCodes.AgentOrchestratorTasksFailed,
+      message: 'Authentication failed',
+    });
     await expect(
       drainQueue(q, (task) => {
         if (task.type === 'fatal') return Promise.reject(fatal);
@@ -125,6 +132,51 @@ describe('drainQueue', () => {
         return Promise.resolve();
       }),
     ).rejects.toBe(fatal);
+  });
+
+  it('cancels and joins an active sibling while retaining the first fatal', async () => {
+    const controller = new AbortController();
+    const fatal = new RunTaskFatal({
+      code: ErrorCodes.AgentOrchestratorTasksFailed,
+      message: 'First failure',
+    });
+    const later = new RunTaskFatal({
+      code: ErrorCodes.AgentOrchestratorTasksFailed,
+      message: 'Abort noise',
+    });
+    const a = q.enqueue({ type: 'fatal' });
+    q.enqueue({ type: 'asking' });
+    const queued = q.enqueue({ type: 'queued', dependsOn: [a.id] });
+    const started: string[] = [];
+    let siblingSettled = false;
+    const result = drainQueue(
+      q,
+      async (task) => {
+        started.push(task.type);
+        if (task.type === 'fatal') throw fatal;
+        await new Promise<void>((resolve) =>
+          controller.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          }),
+        );
+        siblingSettled = true;
+        throw later;
+      },
+      {
+        maxStarts: 50,
+        signal: controller.signal,
+        onFatal: () => {
+          controller.abort();
+          throw new Error('Cancellation cleanup failed');
+        },
+      },
+    ).catch((error: unknown) => error);
+
+    expect(await result).toBe(fatal);
+    expect(controller.signal.aborted).toBe(true);
+    expect(siblingSettled).toBe(true);
+    expect(started).toEqual(['fatal', 'asking']);
+    expect(q.get(queued.id)?.status).toBe(TaskStatus.Pending);
   });
 
   it('runs a single task to done and drains', async () => {

@@ -12,7 +12,7 @@ import type {
 } from '@agent/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import type { Integration } from '@shared/constants';
-import { ErrorCodes } from '@shared/errors';
+import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { logToFile } from '@utils/debug';
 import type { FrameworkConfig } from './framework-config';
@@ -194,7 +194,10 @@ async function runProgramWithStore(
   const artifacts: ProgramRunOutcome['artifacts'] = {};
   const runId = input.runId ?? randomUUID();
 
-  const fail = (message: string): ProgramRunOutcome => ({
+  const fail = (
+    message: string,
+    code: ErrorCode = ErrorCodes.InternalUnhandled,
+  ): ProgramRunOutcome => ({
     programId,
     outcome: RunOutcome.Failed,
     runResults: store.results(),
@@ -202,10 +205,15 @@ async function runProgramWithStore(
     progress: store.read(),
     settledRuns: store.settledRuns(),
     artifacts,
-    failure: { message },
+    failure: { code, message },
   });
+  // A thrown error keeps the code it was decided with.
+  const failFrom = (error: unknown): ProgramRunOutcome => {
+    const failure = classifyRunFailure(error);
+    return fail(failure.message, failure.code);
+  };
   const abort = (message: string): ProgramRunOutcome => ({
-    ...fail(message),
+    ...fail(message, ErrorCodes.AgentAbort),
     outcome: RunOutcome.Aborted,
   });
   const cancelled = (): ProgramRunOutcome => ({
@@ -215,7 +223,8 @@ async function runProgramWithStore(
 
   if (options.signal?.aborted) return cancelled();
 
-  if (!program) return fail(`Unknown program: ${programId}`);
+  if (!program)
+    return fail(`Unknown program: ${programId}`, ErrorCodes.CliBadArgs);
 
   if (input.integration !== undefined || input.typescript !== undefined) {
     store.setDetection({
@@ -233,7 +242,7 @@ async function runProgramWithStore(
     try {
       credentials = await options.credentials.resolve(programId);
     } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
+      return failFrom(error);
     }
   }
   if (credentials) {
@@ -265,11 +274,21 @@ async function runProgramWithStore(
       settledRuns: store.settledRuns(),
       programData: result.data,
       artifacts,
-      ...('failure' in result ? { failure: result.failure } : {}),
+      ...('failure' in result
+        ? {
+            failure: {
+              code: ErrorCodes.InternalUnhandled,
+              ...result.failure,
+            },
+          }
+        : {}),
     };
   }
   if (!credentials)
-    return fail(`Credentials are required to run ${programId}.`);
+    return fail(
+      `Credentials are required to run ${programId}.`,
+      ErrorCodes.ArgsMissingApiKey,
+    );
   if (options.signal?.aborted) return cancelled();
 
   if (
@@ -283,12 +302,13 @@ async function runProgramWithStore(
     if (!options.awaitAiApproval) {
       return fail(
         'AI processing approval is required before this program can run.',
+        ErrorCodes.CliInteractiveRequired,
       );
     }
     try {
       approval.granted = await options.awaitAiApproval({ programId });
     } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
+      return failFrom(error);
     }
     if (!approval.granted) return abort('AI processing approval declined.');
   }
@@ -346,7 +366,7 @@ async function runProgramWithStore(
         return abort('GitHub connection was not confirmed.');
       }
     } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
+      return failFrom(error);
     }
   }
 
@@ -385,7 +405,7 @@ async function runProgramWithStore(
         hooks ??= resolved.hooks;
         seedTasks ??= () => resolved.seedTasks;
       } catch (error) {
-        return fail(error instanceof Error ? error.message : String(error));
+        return failFrom(error);
       }
     } else if (!run && programId === 'self-driving') {
       const resolved = resolveSelfDrivingRun({
@@ -402,6 +422,7 @@ async function runProgramWithStore(
     if (!run) {
       return fail(
         `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
+        ErrorCodes.CliInteractiveRequired,
       );
     }
     if (options.signal?.aborted) return cancelled();
