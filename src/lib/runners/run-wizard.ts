@@ -13,7 +13,8 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { runCleanups } from '@utils/wizard-abort';
+import { registerCleanup, runCleanups } from '@utils/wizard-abort';
+import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
@@ -83,6 +84,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
+      registerCleanup(captureRunSkillCleanup(installDir));
 
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');

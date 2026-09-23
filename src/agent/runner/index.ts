@@ -37,6 +37,7 @@ import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
+import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 
 export type {
   AbortCase,
@@ -80,6 +81,14 @@ export async function runAgent(
   const { emit } = collector;
   const log = (message: string) =>
     emit({ kind: 'log', level: 'info', message });
+  let cleanupInstalledSkills: (() => void) | undefined;
+  const cleanFailedRun = () => {
+    try {
+      cleanupInstalledSkills?.();
+    } catch (error) {
+      logToFile('[agent-runner] failed-run skill cleanup error:', error);
+    }
+  };
 
   // Flush the warlock scan report once, at this single seam, on every
   // termination path and for every harness (linear, orchestrator, or future).
@@ -87,6 +96,8 @@ export async function runAgent(
   // flushes from its own cleanup path sees a harmless no-op. No harness has to
   // know reporting exists.
   try {
+    // Capture before preparation so pre-harness failures also clean new skills.
+    cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     const boot = await prepareRun(config, input);
     if (config.binding.sequence === Sequence.orchestrator) {
       log('Task-queue orchestrator enabled.');
@@ -102,6 +113,7 @@ export async function runAgent(
       emit,
       interaction: options.interaction,
     });
+    if (result.outcome !== RunOutcome.Success) cleanFailedRun();
     return {
       ...result,
       skillId: input.skillId,
@@ -112,6 +124,7 @@ export async function runAgent(
     // every ending of a run is a result the caller reads the same way.
     const failure = classifyRunFailure(error);
     logToFile('[agent-runner] run crashed:', error);
+    cleanFailedRun();
     return {
       outcome: RunOutcome.Crashed,
       skillId: input.skillId,

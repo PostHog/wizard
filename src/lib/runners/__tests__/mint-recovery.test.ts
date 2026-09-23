@@ -9,6 +9,10 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ScreenId } from '@ui/tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
+import { clearCleanup } from '@utils/wizard-abort';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 vi.mock('@programs/run-agent-legacy', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
@@ -40,8 +44,49 @@ vi.mock('@programs/task-stream/destinations/posthog', () => ({
 }));
 
 afterEach(() => {
+  clearCleanup();
   vi.restoreAllMocks();
   vi.clearAllMocks();
+});
+
+it('cleans only new marked skills if TUI setup fails before the agent starts', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-tui-cleanup-'),
+  );
+  const skillsDir = path.join(installDir, '.claude', 'skills');
+  const makeSkill = (id: string, marked: boolean) => {
+    const dir = path.join(skillsDir, id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
+    if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+  };
+  makeSkill('preexisting', true);
+  const store = new WizardStore();
+  setUI(new InkUI(store));
+  vi.spyOn(store, 'runReadyHooks').mockImplementation(() => {
+    makeSkill('installed-before-agent', true);
+    makeSkill('user-owned-before-agent', false);
+    return Promise.reject(new Error('TUI setup failed'));
+  });
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  try {
+    runWizard(posthogIntegrationConfig, { installDir, telemetry: false });
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+    expect(fs.readdirSync(skillsDir).sort()).toEqual([
+      'preexisting',
+      'user-owned-before-agent',
+    ]);
+    expect(runProgramAgent).not.toHaveBeenCalled();
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
 });
 
 it.each(['continue', 'exit'] as const)(

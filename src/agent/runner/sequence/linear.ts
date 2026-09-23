@@ -206,7 +206,7 @@ export async function runLinearProgram({
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      message: formatYaraAbortMessage(),
+      message: agentResult.message ?? formatYaraAbortMessage(),
       error: new WizardError(
         'YARA scanner terminated session',
         {

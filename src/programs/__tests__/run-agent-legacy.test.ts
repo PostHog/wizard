@@ -3,13 +3,21 @@ import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
+import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
-import { wizardAbort } from '@utils/wizard-abort';
+import {
+  clearCleanup,
+  registerCleanup,
+  wizardAbort,
+} from '@utils/wizard-abort';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type { ProgramConfig } from '../program-step';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -62,11 +70,14 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
-vi.mock('@utils/wizard-abort', async (original) => ({
-  ...(await original<typeof import('@utils/wizard-abort')>()),
-  registerCleanup: vi.fn(),
-  wizardAbort: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('@utils/wizard-abort', async (original) => {
+  const actual = await original<typeof import('@utils/wizard-abort')>();
+  return {
+    ...actual,
+    registerCleanup: vi.fn(actual.registerCleanup),
+    wizardAbort: vi.fn().mockResolvedValue(undefined),
+  };
+});
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
 }));
@@ -107,6 +118,7 @@ const session = () => ({
 let logSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  clearCleanup();
   vi.clearAllMocks();
   vi.mocked(authenticate).mockImplementation((sess) => {
     sess.credentials = session().credentials;
@@ -128,7 +140,10 @@ beforeEach(() => {
     return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
   });
 });
-afterEach(() => logSpy.mockRestore());
+afterEach(() => {
+  clearCleanup();
+  logSpy.mockRestore();
+});
 
 it.each([
   ['metrics', Harness.pi, Sequence.orchestrator],
@@ -168,6 +183,37 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
+it('cleans new Wizard skills when non-interactive startup crashes before the agent', async () => {
+  const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-crash-'));
+  const skillDir = path.join(
+    installDir,
+    '.claude',
+    'skills',
+    'startup-install',
+  );
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  vi.mocked(checkLocalServices).mockImplementationOnce(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.reject(new Error('startup crashed'));
+  });
+  try {
+    runNonInteractive(
+      program(),
+      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+      'ci',
+    );
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+    expect(fs.existsSync(skillDir)).toBe(false);
+    expect(runAgent).not.toHaveBeenCalled();
+  } finally {
+    exit.mockRestore();
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
 it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
   'passes a %s result to the existing abort handler',
   async (outcome) => {
@@ -191,6 +237,107 @@ it('rethrows the original crash for the outer runner', async () => {
   expect(wizardAbort).not.toHaveBeenCalled();
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
+
+it('registers cleanup before the agent starts so a signal removes only new marked skills', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-run-cleanup-'),
+  );
+  const skillsDir = path.join(installDir, '.claude', 'skills');
+  const makeSkill = (id: string, marked: boolean) => {
+    const dir = path.join(skillsDir, id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
+    if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+  };
+  try {
+    makeSkill('preexisting', true);
+    vi.mocked(runAgent).mockImplementationOnce(() => {
+      makeSkill('installed-this-run', true);
+      makeSkill('user-owned-this-run', false);
+      // runWizard's SIGINT/SIGTERM handler calls the registered cleanups.
+      for (const [cleanup] of vi.mocked(registerCleanup).mock.calls) cleanup();
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    await runProgramAgent(program(), { ...session(), installDir });
+
+    expect(fs.readdirSync(skillsDir).sort()).toEqual([
+      'preexisting',
+      'user-owned-this-run',
+    ]);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it('cleans a marked install when program setup throws before the functional runner', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-setup-cleanup-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'setup-install');
+  const setupFailure = new Error('program setup failed');
+  const failingProgram = program();
+  failingProgram.run = () => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    throw setupFailure;
+  };
+  try {
+    await expect(
+      runProgramAgent(failingProgram, { ...session(), installDir }),
+    ).rejects.toBe(setupFailure);
+    expect(fs.existsSync(skillDir)).toBe(false);
+    expect(runAgent).not.toHaveBeenCalled();
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it.each([
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+] as const)(
+  'cleans new Wizard skills on non-interactive %s before the agent starts',
+  async (signal, exitCode) => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-ci-signal-'),
+    );
+    const skillsDir = path.join(installDir, '.claude', 'skills');
+    const makeSkill = (id: string, marked: boolean) => {
+      const dir = path.join(skillsDir, id);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
+      if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+    };
+    makeSkill('preexisting', true);
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    const signalProgram = program();
+    signalProgram.ciPreRun = () => {
+      makeSkill('installed-before-agent', true);
+      makeSkill('user-owned-before-agent', false);
+      process.emit(signal);
+      return Promise.resolve();
+    };
+    try {
+      runNonInteractive(
+        signalProgram,
+        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+        'ci',
+      );
+      await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+      expect(exit).toHaveBeenCalledWith(exitCode);
+      expect(fs.readdirSync(skillsDir).sort()).toEqual([
+        'preexisting',
+        'user-owned-before-agent',
+      ]);
+    } finally {
+      exit.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  },
+);
 
 it.each([
   [Harness.pi, Sequence.linear],
