@@ -1,6 +1,5 @@
 // Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
-import { getUI } from '@ui';
 import { Harness } from '@lib/constants';
 import {
   initializeAgent,
@@ -9,7 +8,8 @@ import {
 import { createAioCapture } from '@lib/agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
-import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
+import { runOptions } from '@lib/agent/runner/shared/bootstrap';
+import { createEmitLog } from '@lib/agent/runner/shared/progress-collector';
 import type {
   AgentResult,
   AgentHarness,
@@ -22,30 +22,32 @@ export const anthropicBackend: AgentHarness = {
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const {
-      session,
-      config,
-      programConfig,
+      config: runConfig,
+      input,
       boot,
+      emit,
       prompt,
       spinner,
       askBridge,
       middleware,
       model,
     } = inputs;
+    const config = runConfig.run;
     const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata } = boot;
     const { accessToken, host, projectApiKey } = credentials;
+    const log = createEmitLog(emit);
 
     const capture = createAioCapture({
-      enabled: session.captureAio,
+      enabled: input.flags.captureAio,
       projectApiKey,
       apiHost: host.apiHost,
       runTags: wizardMetadata,
     });
 
-    getUI().log.step('Initializing Claude agent...');
+    log.step('Initializing Claude agent...');
     const agent = await initializeAgent(
       {
-        workingDirectory: session.installDir,
+        workingDirectory: input.installDir,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
         host,
@@ -58,23 +60,24 @@ export const anthropicBackend: AgentHarness = {
         programId: boot.programId,
         integrationLabel: config.integrationLabel,
         askBridge,
+        getPendingQuestion: askBridge?.getPendingQuestion,
         askMaxQuestions: config.maxQuestions,
-        allowedTools: programConfig.allowedTools,
-        disallowedTools: programConfig.disallowedTools,
-        getPendingQuestion: () => session.pendingQuestion,
+        allowedTools: runConfig.allowedTools,
+        disallowedTools: runConfig.disallowedTools,
         modelOverride: model,
         capture,
+        emit,
       },
-      sessionToOptions(session),
+      runOptions(input),
     );
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
+    log.step(`Verbose logs: ${getLogFilePath()}`);
+    log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
 
     return executeAgent(
       agent,
       prompt,
-      sessionToOptions(session),
+      runOptions(input),
       spinner,
       {
         estimatedDurationMinutes: config.estimatedDurationMinutes,
@@ -94,9 +97,10 @@ export const anthropicBackend: AgentHarness = {
 
   async runTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const {
-      session,
-      programConfig,
+      config,
+      input,
       boot,
+      emit,
       prompt,
       spinner,
       model,
@@ -111,10 +115,10 @@ export const anthropicBackend: AgentHarness = {
       requestRemark,
       analyticsProperties,
     } = inputs;
-    const options = sessionToOptions(session);
+    const options = runOptions(input);
 
     const capture = createAioCapture({
-      enabled: session.captureAio,
+      enabled: input.flags.captureAio,
       projectApiKey: boot.credentials.projectApiKey,
       apiHost: boot.credentials.host.apiHost,
       runTags: boot.wizardMetadata,
@@ -125,7 +129,7 @@ export const anthropicBackend: AgentHarness = {
     // enqueue_task attribute to the right agent when tasks run in parallel.
     const agent = await initializeAgent(
       {
-        workingDirectory: session.installDir,
+        workingDirectory: input.installDir,
         posthogMcpUrl: boot.credentials.host.mcpUrl,
         posthogApiKey: boot.credentials.accessToken,
         host: boot.credentials.host,
@@ -134,12 +138,14 @@ export const anthropicBackend: AgentHarness = {
         programId: boot.programId,
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
-        integrationLabel: programConfig.id,
+        integrationLabel: config.programId,
         // Only a task allowed to ask carries a bridge, so the Write/Edit pause
         // that rides on a pending question stays inside that task's agent.
         askBridge,
+        getPendingQuestion: askBridge?.getPendingQuestion,
         orchestrator,
         capture,
+        emit,
       },
       options,
     );

@@ -13,23 +13,27 @@
  * per drained task. A harness without orchestrator support omits the method;
  * `orchestrator-runner.ts` checks for it at the call site and fails loudly
  * rather than silently downgrading.
+ *
+ * A harness reports through `emit` and never reaches for a UI. It returns an
+ * error classification, or a decided `failure` the sequence must return as
+ * the run's result.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
 import type { AdditionalFeature } from '@lib/wizard-session';
 import type { Harness } from '@lib/constants';
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';
+import type { ProgressEmitter, SpinnerHandle } from '@lib/agent/progress';
 import type { OrchestratorToolsContext } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
 import type {
   EffortLevel,
   ThinkingLevel,
 } from '@lib/agent/runner/switchboard/models';
 import type {
-  ProgramRun,
+  AgentFailure,
   BootstrapResult,
+  RunConfig,
+  RunInput,
 } from '@lib/agent/runner/shared/types';
 
 /** The benchmark/telemetry hook threaded through a run, if enabled. */
@@ -40,14 +44,14 @@ export interface RunMiddleware {
 
 /**
  * Everything a runner needs to run one program. Assembled by `linear.ts` from
- * the bootstrap result and the program config; the runner consumes it and never
+ * the prepared run and the run config; the runner consumes it and never
  * re-derives run context.
  */
 export interface BackendRunInputs {
-  session: WizardSession;
-  config: ProgramRun;
-  programConfig: ProgramConfig;
+  config: RunConfig;
+  input: RunInput;
   boot: BootstrapResult;
+  emit: ProgressEmitter;
   /** The fully assembled prompt. */
   prompt: string;
   /** Installed framework-skill path, when the program installs one. */
@@ -56,7 +60,7 @@ export interface BackendRunInputs {
   spinner: SpinnerHandle;
   /** Interactive question bridge; undefined in CI/headless (ask disabled). */
   askBridge?: WizardAskBridge;
-  /** Benchmark middleware, when `session.benchmark` is set. */
+  /** Benchmark middleware, when `--benchmark` is set. */
   middleware?: RunMiddleware;
   /** Gateway model id resolved from the (runner, model) pair. */
   model: string;
@@ -64,8 +68,16 @@ export interface BackendRunInputs {
   thinkingLevel?: EffortLevel;
 }
 
-/** What a runner reports back: an error classification, or nothing on success. */
-export type AgentResult = { error?: AgentErrorType; message?: string };
+/**
+ * What a runner reports back: an error classification, or nothing on success.
+ * `failure` is a fully decided abort the harness already reported to the host
+ * (the 401 auth screen); the sequence returns it as the run's result.
+ */
+export type AgentResult = {
+  error?: AgentErrorType;
+  message?: string;
+  failure?: AgentFailure;
+};
 
 /**
  * One orchestrator-mode unit of work — the seed plan, or one drained task.
@@ -75,9 +87,10 @@ export type AgentResult = { error?: AgentErrorType; message?: string };
  * them from the program-level config the linear pipeline assembles once.
  */
 export interface TaskRunInputs {
-  session: WizardSession;
-  programConfig: ProgramConfig;
+  config: RunConfig;
+  input: RunInput;
   boot: BootstrapResult;
+  emit: ProgressEmitter;
   /** The fully assembled per-task or seed prompt. */
   prompt: string;
   spinner: SpinnerHandle;

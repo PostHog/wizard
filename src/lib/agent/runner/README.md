@@ -39,13 +39,18 @@ for the coordinated change checklist.
 
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
-**The entry point** (`index.ts`) is the front door. It receives a program config
-and a session, and orchestrates the run at the highest level.
+**The entry point** (`index.ts`) is the front door:
+`runAgent(config, input, {onProgress?, interaction?}) → RunResult`. It takes
+resolved execution data and an invocation snapshot (`shared/types.ts`), reports
+through `onProgress` and asks through `interaction` (`../progress.ts`), and
+returns every ending as a result. It never renders, reads a session or exits.
+The gates, OAuth, flags and binding lookup that used to run here live in
+`src/lib/programs/run-agent-legacy.ts`, which also maps progress back onto
+`getUI()` for today's runners.
 
-**Bootstrap** (`shared/bootstrap.ts`) is the on-ramp. Every run starts with the
-same setup work — health checks, settings conflicts, OAuth, PostHog feature flag
-fetch, MCP URL, AI opt-in gate. Whether the run turns out to be linear or
-orchestrator, anthropic or pi, the setup is the same.
+**Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
+targets, the gateway mint and the scan-triage classifier. Whether the run turns
+out to be linear or orchestrator, anthropic or pi, the setup is the same.
 
 **The switchboard** (`switchboard/`) is the router. Given a program id + the
 fetched flags + any CLI overrides, it returns a `ProgramBinding` — which query
@@ -72,8 +77,7 @@ gateway.
 
 ## How they connect
 
-- Bootstrap prepares shared services, including triage selected for the resolved
-  harness.
+- Prepare mints the gateway token and builds triage for the resolved harness.
 - The switchboard knows which sequences and harnesses exist (via its two
   registries), but not what they do.
 - A sequence knows how to shape a conversation, but delegates the actual model
@@ -84,12 +88,13 @@ Each layer is replaceable.
 
 ## Flow
 
-1. Program picked → session built.
-2. Bootstrap runs (shared setup, fetches PostHog flags).
-3. Switchboard resolves a `ProgramBinding { sequence, harness, model }`.
-4. Analytics tags the run with its bindings.
-5. Sequence takes over — shapes the LLM's work into one conversation (linear) or
-   many (orchestrator).
-6. Harness drives each conversation through its SDK, using the bound model, on
+1. The caller runs its gates, authenticates, fetches PostHog flags and resolves
+   a `ProgramBinding { sequence, harness, model }`; analytics tags the run.
+2. `runAgent(config, input, options)` prepares (mint, triage).
+3. Sequence takes over — shapes the LLM's work into one conversation (linear) or
+   many (orchestrator), reporting through `onProgress`.
+4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-7. Cleanup runs (scan report, settings restore, outro).
+5. The scan report flushes; `runAgent` returns a `RunResult`.
+6. The caller applies it: a decided failure goes to `wizardAbort`, a crash is
+   rethrown for the runner's own handling.

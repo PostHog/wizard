@@ -12,9 +12,7 @@ import {
   resolveFlagSequence,
 } from './flags';
 import { getHarness, resolveHarness } from './harness';
-import type { WizardSession } from '@lib/wizard-session';
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun, BootstrapResult } from '../shared/types';
+import type { SequenceResult, SequenceContext } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
 import {
@@ -29,26 +27,18 @@ import {
 
 export interface SequenceRunner {
   readonly name: Sequence;
-  run(
-    session: WizardSession,
-    config: ProgramRun,
-    programConfig: ProgramConfig,
-    boot: BootstrapResult,
-    /** Composed sub-run (integration inside self-driving); linear-only. */
-    composed: boolean,
-  ): Promise<void>;
+  /** Run one program to a decided result. Unexpected errors propagate. */
+  run(ctx: SequenceContext): Promise<SequenceResult>;
 }
 
 export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {
   [Sequence.linear]: {
     name: Sequence.linear,
-    run: (session, config, programConfig, boot, composed) =>
-      runLinearProgram(session, config, programConfig, boot, composed),
+    run: (ctx) => runLinearProgram(ctx),
   },
   [Sequence.orchestrator]: {
     name: Sequence.orchestrator,
-    run: (session, config, programConfig, boot, _composed) =>
-      runOrchestrator(session, config, programConfig, boot),
+    run: (ctx) => runOrchestrator(ctx),
   },
 };
 

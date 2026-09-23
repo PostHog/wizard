@@ -9,6 +9,7 @@ import {
 } from '@lib/agent/runner/sequence/orchestrator/queue';
 import {
   drainQueue,
+  RunTaskFatal,
   type RunTask,
 } from '@lib/agent/runner/sequence/orchestrator/executor';
 
@@ -38,6 +39,49 @@ describe('drainQueue', () => {
     q.complete(task.id, HANDOFF);
     return Promise.resolve();
   };
+
+  it('waits for live siblings after a fatal error and starts no dependents', async () => {
+    const fatal = new RunTaskFatal({ message: 'Authentication failed' });
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    q.enqueue({ type: 'fatal' });
+    const sibling = q.enqueue({ type: 'sibling' });
+    q.enqueue({ type: 'dependent', dependsOn: [sibling.id] });
+    const started: string[] = [];
+    const drain = drainQueue(q, async (task) => {
+      started.push(task.type);
+      if (task.type === 'fatal') throw fatal;
+      await blocked;
+      q.complete(task.id, HANDOFF);
+    });
+    let settled = false;
+    const result = drain.catch((error: unknown) => {
+      settled = true;
+      return error;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
+    expect(started).toEqual(['fatal', 'sibling']);
+    release();
+    expect(await result).toBe(fatal);
+    expect(q.get(sibling.id)?.status).toBe(TaskStatus.Done);
+    expect(started).toEqual(['fatal', 'sibling']);
+  });
+
+  it('preserves a fatal failure when a sibling completes in the same turn', async () => {
+    q.enqueue({ type: 'success' });
+    q.enqueue({ type: 'fatal' });
+    const fatal = new RunTaskFatal({ message: 'Authentication failed' });
+    await expect(
+      drainQueue(q, (task) => {
+        if (task.type === 'fatal') return Promise.reject(fatal);
+        q.complete(task.id, HANDOFF);
+        return Promise.resolve();
+      }),
+    ).rejects.toBe(fatal);
+  });
 
   it('runs a single task to done and drains', async () => {
     const a = q.enqueue({ type: 'install' });

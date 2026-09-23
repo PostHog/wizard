@@ -32,7 +32,8 @@ import {
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
+import { getUI, type SpinnerHandle } from '@ui';
+import { createUiReducer } from '@ui/agent-progress';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -382,6 +383,7 @@ export async function detectProjectsWithAgent(
         : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
     const agent = await initializeAgent(
       {
+        emit: createUiReducer(getUI()),
         workingDirectory: cwd,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,

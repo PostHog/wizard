@@ -27,7 +27,7 @@ import type { Harness, Sequence } from '@lib/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@lib/local-dev';
 import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
-import { runAgent } from '@lib/agent/agent-runner';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
 import { getAuditChecks } from '@lib/programs/audit/types';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
@@ -334,13 +334,13 @@ async function main() {
           await step.run(await runSessionFor(step));
           store.completeRunStep(step.id);
         } else if (step.screenId === 'run') {
-          await runAgent(programConfig, await runSessionFor(step));
+          await runProgramAgent(programConfig, await runSessionFor(step));
         } else if (step.isComplete) {
           await store.waitUntil(step.isComplete);
         }
       }
     } else {
-      await runAgent(programConfig, store.session);
+      await runProgramAgent(programConfig, store.session);
     }
   };
 

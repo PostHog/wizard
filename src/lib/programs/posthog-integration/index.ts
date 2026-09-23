@@ -1,5 +1,6 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
-import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
+import type { ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
 import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
@@ -24,7 +25,7 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@lib/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
-import { shouldDisableAsk } from '@lib/agent/runner/shared/bootstrap';
+import { shouldDisableAsk } from '@lib/agent/agent-runner';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
@@ -535,7 +536,7 @@ export const integrationRunStep: ProgramStep = {
   // composed: runs inside the host program (self-driving), so skip the
   // integration's terminal outro + analytics shutdown of the shared client.
   run: (session) =>
-    runAgent(posthogIntegrationConfig, session, { composed: true }),
+    runProgramAgent(posthogIntegrationConfig, session, { composed: true }),
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

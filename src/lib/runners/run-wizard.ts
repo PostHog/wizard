@@ -1,6 +1,6 @@
 import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
-import { runAgent } from '@lib/agent/agent-runner';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getAuditChecks } from '@lib/programs/audit/types';
@@ -60,7 +60,7 @@ async function advanceStep(
     await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runAgent(config, await prepareRunSession(step, store.session));
+    await runProgramAgent(config, await prepareRunSession(step, store.session));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -262,7 +262,7 @@ export function runWizard(
         });
       } else {
         try {
-          await runAgent(config, activeTui.store.session);
+          await runProgramAgent(config, activeTui.store.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.

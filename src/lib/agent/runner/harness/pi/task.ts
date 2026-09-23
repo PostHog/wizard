@@ -16,7 +16,6 @@
  * Loaded lazily from `index.ts` (typebox/ESM constraint, same as tools.ts).
  */
 
-import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import {
@@ -166,9 +165,10 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
 
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   const {
-    session,
-    programConfig,
+    config,
+    input,
     boot,
+    emit,
     prompt,
     spinner,
     model: modelId,
@@ -187,7 +187,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   if (spinnerMessage) spinner.start(spinnerMessage);
 
   const capture = createAioCapture({
-    enabled: session.captureAio,
+    enabled: input.flags.captureAio,
     projectApiKey: boot.credentials.projectApiKey,
     apiHost: boot.credentials.host.apiHost,
     runTags: boot.wizardMetadata,
@@ -319,10 +319,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const orchestratorTools = allowedOrchestratorTools(disallowedTools);
 
     const resourceLoader = new DefaultResourceLoader({
-      cwd: session.installDir,
+      cwd: input.installDir,
       agentDir: getAgentDir(),
       systemPrompt: assembleCommandments({
-        program: programConfig.id,
+        program: config.programId,
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
         caps: { bash: codingTools.has('bash'), posthogMcp },
@@ -339,7 +339,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // The task's coding tools, gated by its allow list. Reads and searches run
     // in parallel; mutating tools stay sequential. Bash subprocesses get the
     // scrubbed env, same as the linear run.
-    const dir = session.installDir;
+    const dir = input.installDir;
     const codingToolFactories = {
       read: () => withMode(createReadToolDefinition(dir), 'parallel'),
       edit: () => withMode(createEditToolDefinition(dir), 'sequential'),
@@ -436,10 +436,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           const assistant = extractText(event.message).trim();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
-            applyOutroMarkers(assistant);
+            applyOutroMarkers(assistant, emit);
             const statusText = lastStatusLine(assistant);
             if (statusText) {
-              getUI().pushStatus(statusText);
+              emit({ kind: 'status', message: statusText });
               spinner.message(statusText);
             }
             for (const line of assistant.split('\n')) signals.push(line);

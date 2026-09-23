@@ -53,13 +53,27 @@ export interface AskResponse {
 export interface WizardAskBridge {
   /** Open the WizardAsk overlay and resolve with the user's answers. */
   request(req: WizardAskRequest): Promise<AskResponse>;
+  /** An unresolved question keeps file mutations paused across concurrent requests. */
+  getPendingQuestion: () => PendingQuestion | null;
 }
 
 export interface WizardAskBridgeOptions {
   /** Returns the active skill id, used as the analytics `source` on the request. */
   getSource: () => string;
-  /** Opens the overlay and resolves once the user submits or cancels. */
-  showQuestion: (question: PendingQuestion) => Promise<AskAnswers>;
+  /**
+   * Opens the overlay and resolves once the user submits or cancels. `signal`
+   * is this question's own: it aborts when the timeout wins the race, and the
+   * host dismisses this question's overlay. Without that the host keeps its
+   * pending-question state, and every later `wizard_ask` in the run fails with
+   * "another request is pending" — one unanswered prompt would block
+   * credential collection for all remaining sources. The host's abort
+   * handling must not throw: the bridge cannot catch an abort listener's
+   * error, and Node rethrows it as an uncaught exception.
+   */
+  showQuestion: (
+    question: PendingQuestion,
+    context: { signal: AbortSignal },
+  ) => Promise<AskAnswers>;
   /**
    * Per-question timeout in milliseconds. When the user takes longer than
    * this to answer, every unanswered field resolves with the
@@ -72,14 +86,6 @@ export interface WizardAskBridgeOptions {
    * Propagated onto every {@link PendingQuestion} this bridge creates.
    */
   richLinks?: boolean;
-  /**
-   * Dismiss the host's in-flight question overlay. Called when the timeout
-   * wins the race: without it the host keeps its pending-question state, and
-   * every later `wizard_ask` in the run fails with "another request is
-   * pending" — one unanswered prompt would block credential collection for
-   * all remaining sources.
-   */
-  cancelQuestion?: () => void;
 }
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
@@ -114,8 +120,13 @@ export function createWizardAskBridge(
   opts: WizardAskBridgeOptions,
 ): WizardAskBridge {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_ASK_TIMEOUT_MS;
+  const pendingQuestions = new Map<string, PendingQuestion>();
 
   return {
+    getPendingQuestion: () => {
+      for (const pending of pendingQuestions.values()) return pending;
+      return null;
+    },
     async request({ questions, subject }) {
       const pending: PendingQuestion = {
         id: randomUUID(),
@@ -124,26 +135,29 @@ export function createWizardAskBridge(
         richLinks: opts.richLinks ?? false,
         askedAt: new Date().toISOString(),
       };
+      pendingQuestions.set(pending.id, pending);
 
       const startedAt = Date.now();
+      const controller = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
       let timedOut = false;
 
       // Race the user against the timeout. Whichever fires first wins. On
-      // timeout we also cancel the host's overlay: resolving our side alone
-      // would leave the host's pending-question state set, and the next
-      // wizard_ask would be rejected as a duplicate request.
+      // timeout we also abort this question's signal so the host dismisses its
+      // overlay: resolving our side alone would leave the host's
+      // pending-question state set, and the next wizard_ask would be rejected
+      // as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
           timedOut = true;
-          opts.cancelQuestion?.();
+          controller.abort();
           resolve(buildCancelledAnswers(questions));
         }, timeoutMs);
       });
 
       try {
         const answers = await Promise.race([
-          opts.showQuestion(pending),
+          opts.showQuestion(pending, { signal: controller.signal }),
           timeoutPromise,
         ]);
         const durationMs = Date.now() - startedAt;
@@ -168,6 +182,7 @@ export function createWizardAskBridge(
         return { answers, timedOut };
       } finally {
         if (timer) clearTimeout(timer);
+        pendingQuestions.delete(pending.id);
       }
     },
   };

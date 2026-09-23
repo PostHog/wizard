@@ -11,17 +11,15 @@ import type { TaskNotice } from '@lib/wizard-session';
 
 // Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
 // factory would otherwise read these before they exist.
-const { showTaskNotice, cancelTaskNotice, wizardCapture, captureException } =
-  vi.hoisted(() => ({
-    showTaskNotice: vi.fn<(notice: TaskNotice) => Promise<boolean>>(),
-    cancelTaskNotice: vi.fn(),
-    wizardCapture: vi.fn(),
-    captureException: vi.fn(),
-  }));
-
-vi.mock('@ui', () => ({
-  getUI: () => ({ showTaskNotice, cancelTaskNotice }),
+const { showTaskNotice, wizardCapture, captureException } = vi.hoisted(() => ({
+  showTaskNotice:
+    vi.fn<
+      (notice: TaskNotice, context: { signal: AbortSignal }) => Promise<boolean>
+    >(),
+  wizardCapture: vi.fn(),
+  captureException: vi.fn(),
 }));
+
 vi.mock('@utils/analytics', () => ({
   analytics: {
     wizardCapture,
@@ -38,6 +36,16 @@ import {
   TASK_NOTICE_TIMEOUT_MS,
 } from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
 
+/** The answerer under test, standing where `getUI()` used to. */
+const interaction = { taskNotice: showTaskNotice };
+
+/** The signal the offer handed the host with its one notice. */
+const noticeSignal = (): AbortSignal => {
+  const call = showTaskNotice.mock.calls[0];
+  if (!call) throw new Error('No notice was shown');
+  return call[1].signal;
+};
+
 const NOTICE: TaskNotice = {
   title: 'Connect your data sources',
   body: ['We found some sources.'],
@@ -49,7 +57,6 @@ const NOTICE: TaskNotice = {
 
 const resetMocks = () => {
   showTaskNotice.mockReset();
-  cancelTaskNotice.mockReset();
   wizardCapture.mockReset();
   captureException.mockReset();
 };
@@ -67,12 +74,12 @@ describe('task notice timeout', () => {
       // Nobody presses anything.
       showTaskNotice.mockReturnValue(new Promise<boolean>(() => undefined));
 
-      const promise = offerSeededTask(NOTICE, 1000);
+      const promise = offerSeededTask(NOTICE, { timeoutMs: 1000, interaction });
       vi.advanceTimersByTime(1000);
 
       await expect(promise).resolves.toEqual({ keep: false, timedOut: true });
       // Without this the modal stays on screen over the rest of the run.
-      expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+      expect(noticeSignal().aborted).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -83,13 +90,16 @@ describe('task notice timeout', () => {
     try {
       showTaskNotice.mockResolvedValue(true);
 
-      const result = await offerSeededTask(NOTICE, 1000);
+      const result = await offerSeededTask(NOTICE, {
+        timeoutMs: 1000,
+        interaction,
+      });
 
       expect(result).toEqual({ keep: true, timedOut: false });
       vi.advanceTimersByTime(5000);
       // The timer must not fire after an answer — it would close a modal that
       // is no longer there and stamp a second outcome on the step.
-      expect(cancelTaskNotice).not.toHaveBeenCalled();
+      expect(noticeSignal().aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -102,11 +112,13 @@ describe('task notice timeout', () => {
 
       // Both decline, but only one of them means "the user was not there" —
       // the run reports them differently, and now skips them differently too.
-      await expect(offerSeededTask(NOTICE, 1000)).resolves.toEqual({
+      await expect(
+        offerSeededTask(NOTICE, { timeoutMs: 1000, interaction }),
+      ).resolves.toEqual({
         keep: false,
         timedOut: false,
       });
-      expect(cancelTaskNotice).not.toHaveBeenCalled();
+      expect(noticeSignal().aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -164,7 +176,9 @@ describe('askSeededConsent', () => {
   it('records an acceptance', async () => {
     showTaskNotice.mockResolvedValue(true);
 
-    await expect(askSeededConsent('warehouse', NOTICE, 1000)).resolves.toEqual({
+    await expect(
+      askSeededConsent('warehouse', NOTICE, { timeoutMs: 1000, interaction }),
+    ).resolves.toEqual({
       keep: true,
       timedOut: false,
       errored: false,
@@ -174,7 +188,9 @@ describe('askSeededConsent', () => {
   it('records an explicit decline', async () => {
     showTaskNotice.mockResolvedValue(false);
 
-    await expect(askSeededConsent('warehouse', NOTICE, 1000)).resolves.toEqual({
+    await expect(
+      askSeededConsent('warehouse', NOTICE, { timeoutMs: 1000, interaction }),
+    ).resolves.toEqual({
       keep: false,
       timedOut: false,
       errored: false,
@@ -186,7 +202,10 @@ describe('askSeededConsent', () => {
     try {
       showTaskNotice.mockReturnValue(new Promise<boolean>(() => undefined));
 
-      const promise = askSeededConsent('warehouse', NOTICE, 1000);
+      const promise = askSeededConsent('warehouse', NOTICE, {
+        timeoutMs: 1000,
+        interaction,
+      });
       vi.advanceTimersByTime(1000);
 
       await expect(promise).resolves.toEqual({
@@ -202,7 +221,10 @@ describe('askSeededConsent', () => {
   it('reports the answer on one event per offer', async () => {
     showTaskNotice.mockResolvedValue(true);
 
-    await askSeededConsent('warehouse', NOTICE, 1000);
+    await askSeededConsent('warehouse', NOTICE, {
+      timeoutMs: 1000,
+      interaction,
+    });
 
     expect(wizardCapture).toHaveBeenCalledTimes(1);
     expect(wizardCapture).toHaveBeenCalledWith(
@@ -216,7 +238,9 @@ describe('askSeededConsent', () => {
     // that could not be put to the user must never be read as a yes.
     showTaskNotice.mockRejectedValue(new Error('UI blew up'));
 
-    await expect(askSeededConsent('warehouse', NOTICE, 1000)).resolves.toEqual({
+    await expect(
+      askSeededConsent('warehouse', NOTICE, { timeoutMs: 1000, interaction }),
+    ).resolves.toEqual({
       keep: false,
       timedOut: false,
       errored: true,
@@ -247,7 +271,12 @@ describe('offering notices from the seed loop', () => {
     const answers: { keep: boolean; timedOut: boolean; errored: boolean }[] =
       [];
     for (const entry of entries) {
-      answers.push(await askSeededConsent(entry.type, NOTICE, 60_000));
+      answers.push(
+        await askSeededConsent(entry.type, NOTICE, {
+          timeoutMs: 60_000,
+          interaction,
+        }),
+      );
     }
     return answers;
   };

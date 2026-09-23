@@ -13,7 +13,6 @@ import {
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { RESUME_INSTRUCTION } from '@lib/agent/signals';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
 import { Sequence } from '@lib/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -25,11 +24,6 @@ import {
 // Mock dependencies
 vi.mock('../../utils/analytics');
 vi.mock('../../utils/debug');
-// wizardAbort exits the process; the 401 tests below need it to just reject.
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
-  wizardAbort: vi.fn(),
-}));
 
 // Mock the SDK module
 const mockQuery = vi.fn();
@@ -739,6 +733,10 @@ describe('subprocess gateway credentials', () => {
 
 describe('gateway re-mint on 401', () => {
   const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+  // Where the run reports the auth screen; stands where getUI() used to.
+  const emit = vi.fn();
+  const authErrors = () =>
+    emit.mock.calls.filter(([e]) => e.kind === 'authError');
   const options: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
@@ -766,6 +764,7 @@ describe('gateway re-mint on 401', () => {
     triageProvider: () => Promise.resolve('false_positive'),
     gatewayAuth,
     refreshGatewayAuth,
+    emit,
   });
   const run = (cfg: ReturnType<typeof config>) =>
     runAgent(cfg, 'test prompt', options, spinner as unknown as SpinnerHandle, {
@@ -822,7 +821,7 @@ describe('gateway re-mint on 401', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUIInstance.spinner.mockReturnValue(spinner);
-    vi.mocked(wizardAbort).mockRejectedValue(new Error('wizardAbort: exit'));
+    emit.mockReset();
   });
 
   it('mints once and resumes the session when an aged bearer is rejected', async () => {
@@ -838,7 +837,7 @@ describe('gateway re-mint on 401', () => {
 
     expect(result).toEqual({});
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(wizardAbort).not.toHaveBeenCalled();
+    expect(authErrors()).toHaveLength(0);
     expect(mockQuery).toHaveBeenCalledTimes(2);
     const [first, second] = mockQuery.mock.calls.map((c) => c[0]);
     expect(first.options.resume).toBeUndefined();
@@ -877,11 +876,12 @@ describe('gateway re-mint on 401', () => {
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(mockQuery).toHaveBeenCalledTimes(2);
-    expect(mockUIInstance.showAuthError).toHaveBeenCalledTimes(1);
-    expect(wizardAbort).toHaveBeenCalledTimes(1);
-    // In production wizardAbort exits; the mocked rejection surfaces as the
-    // run's API error.
-    expect(result.error).toBe('WIZARD_API_ERROR');
+    expect(authErrors()).toHaveLength(1);
+    // The auth screen is reported, and the decided failure goes back to the
+    // caller, which owns the exit.
+    expect(result.error).toBeUndefined();
+    expect(result.failure?.message).toBe('Authentication failed (401)');
+    expect(result.failure?.code).toBeDefined();
   });
 
   it('judges a failed resumed session on its own error, not the old 401', async () => {
@@ -918,7 +918,7 @@ describe('gateway re-mint on 401', () => {
     expect(result.error).toBe('WIZARD_API_ERROR');
     expect(result.message).toContain('500');
     expect(result.message).not.toContain('401');
-    expect(mockUIInstance.showAuthError).not.toHaveBeenCalled();
+    expect(authErrors()).toHaveLength(0);
   });
 
   it('does not re-mint when a fresh bearer is rejected', async () => {
@@ -932,9 +932,8 @@ describe('gateway re-mint on 401', () => {
     // A fresh token the gateway rejects is a bad credential, not age.
     expect(refresh).not.toHaveBeenCalled();
     expect(mockQuery).toHaveBeenCalledTimes(1);
-    expect(mockUIInstance.showAuthError).toHaveBeenCalledTimes(1);
-    expect(wizardAbort).toHaveBeenCalledTimes(1);
-    expect(result.error).toBe('WIZARD_API_ERROR');
+    expect(authErrors()).toHaveLength(1);
+    expect(result.failure?.message).toBe('Authentication failed (401)');
   });
 });
 

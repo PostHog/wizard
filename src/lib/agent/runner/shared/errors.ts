@@ -4,14 +4,19 @@
 
 import type { InstallSkillResult } from '@lib/wizard-tools';
 import { skillErrorCode } from '@lib/errors';
-import { wizardAbort, WizardError } from '@utils/wizard-abort';
+import { WizardError } from '@utils/wizard-abort';
+import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
 
-export async function abortOnInstallFailure(
+export const failed = (failure: AgentFailure): SequenceResult => ({
+  outcome: RunOutcome.Failed,
+  failure,
+});
+
+/** The failure a skill install error decides. The caller reports and exits. */
+export function installFailure(
   integrationLabel: string,
-  result: InstallSkillResult,
-): Promise<void> {
-  if (result.kind === 'ok') return;
-
+  result: Exclude<InstallSkillResult, { kind: 'ok' }>,
+): AgentFailure {
   const code = skillErrorCode(result) ?? undefined;
 
   const message = (() => {
@@ -25,7 +30,7 @@ export async function abortOnInstallFailure(
     }
   })();
 
-  await wizardAbort({
+  return {
     message,
     code,
     error: new WizardError(
@@ -40,5 +45,5 @@ export async function abortOnInstallFailure(
       },
       code,
     ),
-  });
+  };
 }

@@ -10,6 +10,7 @@
  * injected: the real one spins up a fresh agent, the tests use a fake.
  */
 import { analytics } from '@utils/analytics';
+import type { AgentFailure } from '../../shared/types';
 import { logToFile } from '@utils/debug';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
@@ -33,6 +34,19 @@ export type TaskResolver = (
  *  (via the task agent calling complete_task). */
 export type RunTask = (task: QueuedTask) => Promise<void>;
 
+/**
+ * Thrown by a `RunTask` when its harness returned a decided failure that ends
+ * the whole run (a 401 the auth screen already reported), not just the task.
+ * `drainQueue` lets it through so the sequence can return the failure where
+ * the harness used to exit the process.
+ */
+export class RunTaskFatal extends Error {
+  constructor(public readonly failure: AgentFailure) {
+    super(failure.message ?? 'agent run failed');
+    this.name = 'RunTaskFatal';
+  }
+}
+
 export interface DrainOptions {
   /** Backstop against a pathological always-one-more-pending loop. */
   maxStarts: number;
@@ -51,6 +65,7 @@ async function runOne(
   try {
     await runTask(task);
   } catch (error) {
+    if (error instanceof RunTaskFatal) throw error;
     // The task threw rather than reporting. The outcome check below handles
     // the queue; the exception itself should never be silent.
     logToFile(`[executor] runTask threw for ${task.type}:`, error);
@@ -97,19 +112,25 @@ export async function drainQueue(
 ): Promise<void> {
   const running = new Map<string, Promise<void>>();
   let starts = 0;
+  let failure: { error: unknown } | undefined;
 
-  for (;;) {
-    for (const task of store.nextRunnable()) {
-      if (++starts > opts.maxStarts) break;
-      // runOne marks the task running synchronously, so the next
-      // nextRunnable() call no longer offers it.
-      const p = runOne(store, runTask, task).finally(() =>
-        running.delete(task.id),
-      );
-      running.set(task.id, p);
+  try {
+    for (;;) {
+      if (failure) throw failure.error;
+      for (const task of store.nextRunnable()) {
+        if (++starts > opts.maxStarts) break;
+        const p = runOne(store, runTask, task)
+          .catch((error: unknown) => {
+            failure ??= { error };
+          })
+          .finally(() => running.delete(task.id));
+        running.set(task.id, p);
+      }
+      if (running.size === 0) break;
+      await Promise.race(running.values());
     }
-    if (running.size === 0) break;
-    // Wake on the first finish; it may have unblocked dependents or requeued.
-    await Promise.race(running.values());
+  } finally {
+    // No queue or skill cleanup may run while a sibling still uses them.
+    await Promise.allSettled(running.values());
   }
 }
