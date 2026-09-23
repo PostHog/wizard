@@ -60,7 +60,7 @@ import {
   refreshAccessTokenIfNeeded,
 } from '@programs/authenticate';
 import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
-import { startAuditLedgerWatcher } from '@programs/audit/ledger-watcher';
+import { watchAuditLedger } from '@programs/audit/watch-ledger';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 
@@ -84,7 +84,7 @@ export async function runProgramAgent(
   // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
   // and a watcher started later would ignore that write as pre-existing.
   const ledger = programConfig.auditLedgerFile
-    ? startAuditLedgerWatcher(
+    ? watchAuditLedger(
         session.installDir,
         programConfig.auditLedgerFile,
         (checks) => getUI().setFrameworkContext(AUDIT_CHECKS_KEY, checks),
@@ -362,7 +362,6 @@ async function runProgram(
         programConfig.id === 'self-driving'
           ? {
               githubConnected: session.githubConnected === true,
-              handoffConfirmed: session.selfDrivingHandoffConfirmed,
             }
           : undefined,
     },

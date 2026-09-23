@@ -21,6 +21,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
+import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
+import { AUDIT_CHECKS_KEY } from '../audit/types';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -263,16 +265,55 @@ it('reads completion data when each hook runs, after late URL updates', async ()
 
 it('passes actual self-driving GitHub gate state to the callable host', async () => {
   const notConnected = session();
-  notConnected.githubConnected = false;
+  expect(notConnected.githubConnected).toBeNull();
   await runProgramAgent(program('self-driving'), notConnected);
+  expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({
+    message: 'GitHub connection was not confirmed.',
+  });
   expect(runAgent).not.toHaveBeenCalled();
 
+  vi.mocked(wizardAbort).mockClear();
   const connected = session();
   connected.githubConnected = true;
-  connected.selfDrivingHandoffConfirmed = true;
   await runProgramAgent(program('self-driving'), connected);
   expect(runAgent).toHaveBeenCalledOnce();
+  expect(wizardAbort).not.toHaveBeenCalled();
 });
+
+it('projects an audit ledger update through the legacy runner UI bridge', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-audit-bridge-'),
+  );
+  const currentSession = session();
+  currentSession.installDir = installDir;
+  const config = program('audit');
+  config.auditLedgerFile = AUDIT_CHECKS_FILE;
+  const ui = new LoggingUI();
+  const setFrameworkContext = vi.spyOn(ui, 'setFrameworkContext');
+  setUI(ui);
+  const checks = [{ id: 'new', area: 'Events', label: 'new', status: 'pass' }];
+  vi.mocked(runAgent).mockImplementationOnce(async () => {
+    fs.writeFileSync(
+      path.join(installDir, AUDIT_CHECKS_FILE),
+      JSON.stringify(checks),
+    );
+    await vi.waitFor(
+      () =>
+        expect(setFrameworkContext).toHaveBeenCalledWith(
+          AUDIT_CHECKS_KEY,
+          checks,
+        ),
+      { timeout: 7000 },
+    );
+    return { outcome: RunOutcome.Success, snapshot };
+  });
+  try {
+    await runProgramAgent(config, currentSession);
+    expect(setFrameworkContext).toHaveBeenCalledWith(AUDIT_CHECKS_KEY, checks);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+}, 8000);
 
 it('passes a session-scoped CI bearer to a composed child run', async () => {
   const inferenceAuth = {
