@@ -10,11 +10,7 @@ import { LoggingUI } from '@ui/logging-ui';
 import { setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
-import {
-  clearCleanup,
-  registerCleanup,
-  wizardAbort,
-} from '@utils/wizard-abort';
+import { clearCleanup, runCleanups, wizardAbort } from '@utils/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -75,7 +71,6 @@ vi.mock('@utils/wizard-abort', async (original) => {
   const actual = await original<typeof import('@utils/wizard-abort')>();
   return {
     ...actual,
-    registerCleanup: vi.fn(actual.registerCleanup),
     wizardAbort: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -316,7 +311,7 @@ it('registers cleanup before the agent starts so a signal removes only new marke
       makeSkill('installed-this-run', true);
       makeSkill('user-owned-this-run', false);
       // runWizard's SIGINT/SIGTERM handler calls the registered cleanups.
-      for (const [cleanup] of vi.mocked(registerCleanup).mock.calls) cleanup();
+      runCleanups();
       return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
     });
 
@@ -343,7 +338,7 @@ it('disarms registered skill cleanup after a successful standalone program run',
   });
   try {
     await runProgramAgent(program(), { ...session(), installDir });
-    for (const [cleanup] of vi.mocked(registerCleanup).mock.calls) cleanup();
+    runCleanups();
     expect(fs.existsSync(skillDir)).toBe(true);
   } finally {
     fs.rmSync(installDir, { recursive: true, force: true });
