@@ -44,6 +44,7 @@ import {
   type PosthogIntegrationRunEffects,
 } from './posthog-integration/run';
 import { resolveSelfDrivingRun } from './self-driving/run';
+import { snapshotProgramInput } from './snapshot-program-input';
 import {
   ProgramStore,
   type ProgramInvocationData,
@@ -65,6 +66,7 @@ export type WizardFlagSnapshot = {
   payloads: Record<string, unknown>;
 };
 
+/** Copied when runProgram receives it; functions stay by reference. */
 export interface ProgramInput extends ProgramRunDefinitionInput {
   installDir: string;
   /** Run-scoped credentials, or provide options.credentials instead. */
@@ -150,6 +152,7 @@ export interface ProgramOptions {
   mcp?: NoAgentMcpPort;
   workflow?: ProgramWorkflowConnector;
   noAgentWorkflow?: NoAgentProgramOptions['workflow'];
+  /** Without getNotebookUrl, the outro reads the notebook URL the run emitted. */
   integrationEffects?: PosthogIntegrationRunEffects;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
   awaitAiApproval?: (context: {
@@ -194,9 +197,10 @@ const DEFAULT_FLAGS: RunInput['flags'] = {
 /** Run a registered program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
-  input: ProgramInput,
+  hostInput: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
+  const input = snapshotProgramInput(hostInput);
   const store = new ProgramStore(
     { aiSdkStampReported: input.aiSdkStampReported },
     { onData: options.onProgress },
@@ -402,7 +406,7 @@ async function runProgramWithStore(
         },
         signal,
       );
-      const patch = decision.frameworkContext ?? {};
+      const patch = structuredClone(decision.frameworkContext ?? {});
       for (const [key, value] of Object.entries(patch)) {
         store.setFrameworkContext(key, value);
       }
@@ -430,22 +434,23 @@ async function runProgramWithStore(
     };
     try {
       for (const composed of program.composedRuns ?? []) {
-        // A null answer means the host ran the child itself.
-        const childInput = workflow
-          ? (
-              await askWorkflow(
-                workflow,
-                {
-                  kind: 'child-run',
-                  programId,
-                  stepId: composed.stepId,
-                  runProgramId: composed.runProgramId,
-                  installDir: input.installDir,
-                },
-                signal,
-              )
-            ).input
-          : composition.integration;
+        // A prepared child was copied with this input. A connector's answer is
+        // copied as it arrives; null means the host ran the child itself.
+        let childInput = composition.integration;
+        if (workflow) {
+          const { input: answered } = await askWorkflow(
+            workflow,
+            {
+              kind: 'child-run',
+              programId,
+              stepId: composed.stepId,
+              runProgramId: composed.runProgramId,
+              installDir: input.installDir,
+            },
+            signal,
+          );
+          childInput = answered ? snapshotProgramInput(answered) : undefined;
+        }
         if (!childInput) continue;
         store.setComposition({ parentProgramId: programId });
         invocation.captureSkills(childInput.installDir);
@@ -513,7 +518,8 @@ async function runProgramWithStore(
     let hooks: RunHooks | undefined = input.hooks;
     let seedTasks = input.seedTasks;
     if (!run && program.strategy === 'integration') {
-      if (!input.frameworkConfig || !options.integrationEffects) {
+      const effects = options.integrationEffects;
+      if (!input.frameworkConfig || !effects) {
         return fail(
           'PostHog integration requires prepared framework configuration and host effects.',
         );
@@ -530,7 +536,14 @@ async function runProgramWithStore(
             flags: { ...DEFAULT_FLAGS, ...input.flags },
             mayReportScanResults: input.mayReportScanResults ?? false,
           },
-          options.integrationEffects,
+          {
+            ...effects,
+            // The outro is built before runAgent returns, so it reads the URL
+            // this run emitted, unless the host has its own live getter.
+            getNotebookUrl:
+              effects.getNotebookUrl ??
+              (() => store.activeRunSnapshot()?.notebookUrl),
+          },
         );
         run = resolved.run;
         hooks ??= resolved.hooks;

@@ -380,6 +380,19 @@ export class ProgramStore {
     };
   }
 
+  /**
+   * A copy of the latest unfinished run's progress so far, such as the URLs it
+   * emitted, for completion hooks that run before the agent returns. Null
+   * between runs.
+   */
+  activeRunSnapshot(): RunResult['snapshot'] | null {
+    for (let index = this.runs.length - 1; index >= 0; index--) {
+      const run = this.runs[index];
+      if (run.state.phase !== 'finished') return structuredClone(run.snapshot);
+    }
+    return null;
+  }
+
   settledRuns(): SettledProgramRun[] {
     return this.settled.map((run) => ({
       runId: run.runId,
