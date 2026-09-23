@@ -69,7 +69,7 @@ export {
   AUDIT_SEVERITY_STYLE,
   getAuditChecks,
 } from './audit/types';
-export { startAuditLedgerWatcher } from './audit/ledger-watcher';
+export { watchAuditLedger } from './audit/watch-ledger';
 export { auditConfig } from './audit/index';
 export { createSkillProgram } from './agent-skill/index';
 export { aiObservabilityConfig } from './ai-observability/index';

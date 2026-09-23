@@ -9,7 +9,7 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ScreenId } from '@tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
-import { clearCleanup } from '@utils/wizard-abort';
+import { clearCleanup, runCleanups } from '@utils/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -85,6 +85,122 @@ it('cleans only new marked skills if TUI setup fails before the agent starts', a
     ]);
     expect(runProgramAgent).not.toHaveBeenCalled();
   } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it('removes a run skill when SIGTERM arrives before the completion screen exits', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-tui-complete-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'completed');
+  const store = new WizardStore();
+  setUI(new InkUI(store));
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  let dismiss!: () => void;
+  const completionWait = vi.spyOn(store, 'waitUntil').mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        dismiss = resolve;
+      }),
+  );
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  vi.mocked(runProgramAgent).mockImplementation(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve();
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  try {
+    runWizard(posthogIntegrationConfig, { installDir, telemetry: false });
+    await vi.waitFor(() => expect(completionWait).toHaveBeenCalled());
+
+    process.emit('SIGTERM');
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(130));
+    expect(fs.existsSync(skillDir)).toBe(false);
+
+    dismiss();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(exit).not.toHaveBeenCalledWith(0);
+  } finally {
+    exit.mockRestore();
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it('removes a run skill when the completion wait fails after the agent succeeds', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-tui-late-failure-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'unfinished');
+  const store = new WizardStore();
+  setUI(new InkUI(store));
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  vi.spyOn(store, 'waitUntil').mockRejectedValue(
+    new Error('completion wait failed'),
+  );
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  vi.mocked(runProgramAgent).mockImplementation(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve();
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  try {
+    runWizard(posthogIntegrationConfig, { installDir, telemetry: false });
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+    expect(runProgramAgent).toHaveBeenCalledOnce();
+    expect(fs.existsSync(skillDir)).toBe(false);
+  } finally {
+    exit.mockRestore();
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it('keeps a run skill after the completion screen and stream finish successfully', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-tui-success-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'completed');
+  const store = new WizardStore();
+  setUI(new InkUI(store));
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  vi.spyOn(store, 'waitUntil').mockResolvedValue(undefined);
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  vi.mocked(runProgramAgent).mockImplementation(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve();
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  try {
+    runWizard(posthogIntegrationConfig, { installDir, telemetry: false });
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    runCleanups();
+    expect(fs.existsSync(skillDir)).toBe(true);
+  } finally {
+    exit.mockRestore();
     fs.rmSync(installDir, { recursive: true, force: true });
   }
 });

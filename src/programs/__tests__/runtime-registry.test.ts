@@ -41,3 +41,21 @@ it('exposes every registered program and its callable agent policy', () => {
 it('returns no config for an unknown program', () => {
   expect(getRuntimeProgramConfig('no-such-program')).toBeUndefined();
 });
+
+it('declares one callable execution strategy for every runtime program', () => {
+  for (const program of RUNTIME_PROGRAM_REGISTRY) {
+    expect([
+      'no-agent',
+      'static',
+      'resolved',
+      'integration',
+      'self-driving',
+    ]).toContain(program.strategy);
+    if (program.strategy === 'static') expect(program.run).toBeDefined();
+    else expect('run' in program).toBe(false);
+    if (program.strategy === 'resolved')
+      expect(program.resolve).toBeTypeOf('function');
+    else expect('resolve' in program).toBe(false);
+  }
+  expect(getRuntimeProgramConfig('agent-skill')?.strategy).toBe('resolved');
+});

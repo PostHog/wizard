@@ -590,3 +590,17 @@ describe('programs entry modules', () => {
     ).toBe(null);
   });
 });
+
+describe('migration matrix', () => {
+  it('lets legacy code use the programs entry', () => {
+    expect(ruleFor('src/lib/wizard-session.ts', 'src/programs/index.ts')).toBe(
+      null,
+    );
+  });
+
+  it('keeps agent code out of legacy session state', () => {
+    expect(
+      ruleFor('src/agent/runner/index.ts', 'src/lib/wizard-session.ts'),
+    ).toBe('matrix:agent->legacy');
+  });
+});

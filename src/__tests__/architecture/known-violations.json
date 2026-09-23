@@ -19,7 +19,6 @@
     "src/cli/runners/run-non-interactive.ts -> src/programs/detect-map.ts",
     "src/cli/runners/run-non-interactive.ts -> src/programs/task-stream/index.ts",
     "src/cli/runners/run-non-interactive.ts -> src/programs/task-stream/task-stream-push.ts",
-    "src/cli/runners/run-program-agent.ts -> src/programs/audit/ledger-watcher.ts",
     "src/cli/runners/run-program-agent.ts -> src/programs/audit/types.ts",
     "src/cli/runners/run-program-agent.ts -> src/programs/authenticate.ts",
     "src/cli/runners/run-program-agent.ts -> src/programs/posthog-integration/detect.ts",
@@ -33,7 +32,6 @@
     "src/cli/runners/run-wizard.ts -> src/programs/task-stream/index.ts",
     "src/cli/runners/run-wizard.ts -> src/programs/task-stream/task-stream-push.ts",
     "src/env.ts -> src/cli/headless-mode.ts",
-    "src/headless/renderers/headless-ui.ts -> src/tui/store.ts",
     "src/shared/utils/wizard-abort.ts -> src/headless/renderers/logging-ui.ts",
     "src/shared/utils/wizard-abort.ts -> src/ui/index.ts",
     "src/ui/index.ts -> src/headless/renderers/logging-ui.ts"
