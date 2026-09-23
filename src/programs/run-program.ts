@@ -100,7 +100,10 @@ export interface ProgramOptions {
   integrationEffects?: PosthogIntegrationRunEffects;
   compositionWorkflow?: ProgramWorkflowConnector;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
-  awaitAiApproval?: (context: { programId: string }) => Promise<boolean>;
+  awaitAiApproval?: (context: {
+    programId: string;
+    signal: AbortSignal;
+  }) => Promise<boolean>;
   signal?: AbortSignal;
 }
 
@@ -119,6 +122,9 @@ export interface ProgramRunOutcome {
   artifacts: { reportFile?: string };
   failure?: RunResult['failure'];
 }
+
+/** Handed to host capabilities when the caller supplied no signal. */
+const NEVER_ABORTED = new AbortController().signal;
 
 const DEFAULT_FLAGS: RunInput['flags'] = {
   ci: false,
@@ -182,6 +188,7 @@ async function runProgramWithStore(
   const program = getRuntimeProgramConfig(programId);
   const artifacts: ProgramRunOutcome['artifacts'] = {};
   const runId = input.runId ?? randomUUID();
+  const signal = options.signal ?? NEVER_ABORTED;
 
   const fail = (message: string): ProgramRunOutcome => ({
     programId,
@@ -203,7 +210,7 @@ async function runProgramWithStore(
     failure: { code: ErrorCodes.AgentAbort, message: 'Run cancelled by host.' },
   });
 
-  if (options.signal?.aborted) return cancelled();
+  if (signal.aborted) return cancelled();
 
   if (!program) return fail(`Unknown program: ${programId}`);
 
@@ -221,13 +228,13 @@ async function runProgramWithStore(
   let credentials = input.credentials;
   if (!credentials && options.credentials) {
     try {
-      credentials = await options.credentials.resolve(programId);
+      credentials = await options.credentials.resolve(programId, { signal });
     } catch (error) {
-      if (options.signal?.aborted) return cancelled();
+      if (signal.aborted) return cancelled();
       return fail(error instanceof Error ? error.message : String(error));
     }
   }
-  if (options.signal?.aborted) return cancelled();
+  if (signal.aborted) return cancelled();
   if (credentials) {
     store.setAuthenticated({
       credentials: credentials.posthog,
@@ -245,7 +252,7 @@ async function runProgramWithStore(
       },
       { mcp: options.mcp, workflow: options.workflow, signal: options.signal },
     );
-    if (options.signal?.aborted) return cancelled();
+    if (signal.aborted) return cancelled();
     return {
       programId,
       outcome:
@@ -270,7 +277,7 @@ async function runProgramWithStore(
   }
   if (!credentials)
     return fail(`Credentials are required to run ${programId}.`);
-  if (options.signal?.aborted) return cancelled();
+  if (signal.aborted) return cancelled();
 
   if (
     program.requiresAi !== false &&
@@ -286,10 +293,12 @@ async function runProgramWithStore(
       );
     }
     try {
-      approval.granted = await options.awaitAiApproval({ programId });
+      approval.granted = await options.awaitAiApproval({ programId, signal });
     } catch (error) {
+      if (signal.aborted) return cancelled();
       return fail(error instanceof Error ? error.message : String(error));
     }
+    if (signal.aborted) return cancelled();
     if (!approval.granted) return abort('AI processing approval declined.');
   }
 
@@ -406,7 +415,7 @@ async function runProgramWithStore(
         `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
       );
     }
-    if (options.signal?.aborted) return cancelled();
+    if (signal.aborted) return cancelled();
     artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
 
     const flags = { ...DEFAULT_FLAGS, ...input.flags };

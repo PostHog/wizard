@@ -11,9 +11,12 @@ export type ResolvedProgramCredentials = {
   apiUser: ApiUser | null;
 };
 
-/** Hosts authenticate once per scope and may return refreshed credentials. */
+/** Hosts authenticate once per scope; the signal aborts with the invocation. */
 export type CredentialsProvider = {
-  resolve(programId: string): Promise<ResolvedProgramCredentials>;
+  resolve(
+    programId: string,
+    context: { signal: AbortSignal },
+  ): Promise<ResolvedProgramCredentials>;
 };
 
 /**

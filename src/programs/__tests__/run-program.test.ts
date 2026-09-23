@@ -469,7 +469,9 @@ describe('runProgram', () => {
     );
 
     expect(result.outcome).toBe('success');
-    expect(resolve).toHaveBeenCalledExactlyOnceWith('metrics');
+    expect(resolve).toHaveBeenCalledExactlyOnceWith('metrics', {
+      signal: expect.objectContaining({ aborted: false }),
+    });
     expect(vi.mocked(runAgent).mock.calls[0][1].credentials).toBe(
       credentials.posthog,
     );
@@ -524,6 +526,7 @@ describe('runProgram', () => {
     expect(result.outcome).toBe('success');
     expect(awaitAiApproval).toHaveBeenCalledExactlyOnceWith({
       programId: 'metrics',
+      signal: expect.objectContaining({ aborted: false }),
     });
     expect(runAgent).toHaveBeenCalledTimes(1);
   });
@@ -546,6 +549,70 @@ describe('runProgram', () => {
     });
     expect(awaitAiApproval).toHaveBeenCalledExactlyOnceWith({
       programId: 'metrics',
+      signal: expect.objectContaining({ aborted: false }),
+    });
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it('passes the invocation signal to the provider and to the AI approval wait', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const controller = new AbortController();
+    const resolve = vi
+      .fn()
+      .mockResolvedValue({ ...credentials, apiUser: null });
+    const awaitAiApproval = vi.fn().mockResolvedValue(true);
+
+    const result = await runProgram(
+      'metrics',
+      { installDir: '/project' },
+      {
+        credentials: { resolve },
+        awaitAiApproval,
+        signal: controller.signal,
+      },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(resolve).toHaveBeenCalledExactlyOnceWith('metrics', {
+      signal: controller.signal,
+    });
+    expect(awaitAiApproval).toHaveBeenCalledExactlyOnceWith({
+      programId: 'metrics',
+      signal: controller.signal,
+    });
+  });
+
+  it('a host abort while approval is pending returns Aborted', async () => {
+    const controller = new AbortController();
+    const awaitAiApproval = vi.fn(
+      () =>
+        new Promise<boolean>((_resolve, reject) => {
+          controller.signal.addEventListener('abort', () =>
+            reject(new Error('approval screen closed')),
+          );
+        }),
+    );
+
+    const pending = runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        credentials: { ...credentials, apiUser: null },
+      },
+      { awaitAiApproval, signal: controller.signal },
+    );
+    await vi.waitFor(() => expect(awaitAiApproval).toHaveBeenCalledOnce());
+    controller.abort();
+
+    expect(await pending).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: {
+        code: ErrorCodes.AgentAbort,
+        message: 'Run cancelled by host.',
+      },
     });
     expect(runAgent).not.toHaveBeenCalled();
   });
