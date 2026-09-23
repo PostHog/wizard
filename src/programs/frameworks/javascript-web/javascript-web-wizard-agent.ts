@@ -5,7 +5,7 @@ import { Integration } from '@shared/constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hasDeclaredDependency } from '@utils/package-json';
-import { tryGetPackageJson } from '@utils/setup-utils';
+import { tryGetPackageJson } from '@utils/package-json';
 import {
   FRAMEWORK_PACKAGES,
   detectJsPackageManager,

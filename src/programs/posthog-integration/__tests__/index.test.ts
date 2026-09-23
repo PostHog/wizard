@@ -10,7 +10,7 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import type { ProgramRunHost } from '@programs/host-capabilities';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
-import { isUsingTypeScript } from '@utils/setup-utils';
+import { isUsingTypeScript } from '@utils/package-json';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { uploadEnvironmentVariablesStep } from '@programs/posthog-integration/upload-environment-variables';
@@ -27,7 +27,8 @@ vi.mock('@programs/posthog-integration/upload-environment-variables', () => ({
   uploadEnvironmentVariablesStep: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
 }));
 
-vi.mock('@utils/setup-utils', () => ({
+vi.mock('@utils/package-json', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/package-json')>()),
   isUsingTypeScript: vi.fn(),
   tryGetPackageJson: vi.fn().mockResolvedValue(null),
 }));

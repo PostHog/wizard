@@ -2,7 +2,7 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { AdditionalFeature } from '@shared/constants';
 import { OutroKind } from '@agent';
-import { isUsingTypeScript } from '@utils/setup-utils';
+import { isUsingTypeScript } from '@utils/package-json';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { resolveEventsAuditRunDefinition } from '@programs/resolve-run-definition';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';

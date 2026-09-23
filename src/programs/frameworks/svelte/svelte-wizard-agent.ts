@@ -7,7 +7,7 @@ import {
   hasDeclaredDependency,
   type PackageJson,
 } from '@utils/package-json';
-import { tryGetPackageJson } from '@utils/setup-utils';
+import { tryGetPackageJson } from '@utils/package-json';
 
 type SvelteKitContext = Record<string, unknown>;
 

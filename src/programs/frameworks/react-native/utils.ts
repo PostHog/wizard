@@ -1,5 +1,5 @@
 import { createVersionBucket } from '@utils/semver';
-import { tryGetPackageJson } from '@utils/setup-utils';
+import { tryGetPackageJson } from '@utils/package-json';
 import { hasDeclaredDependency } from '@utils/package-json';
 import type { WizardRunOptions } from '@utils/types';
 

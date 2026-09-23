@@ -1,10 +1,8 @@
 import * as childProcess from 'node:child_process';
-import * as fs from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 
 import { withProgress } from './telemetry';
 import { logToFile } from './debug';
-import type { PackageJson } from './package-json';
 import type { CloudRegion, WizardRunOptions } from './types';
 import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@shared/constants';
 import {
@@ -140,38 +138,9 @@ export function detectOrgAndProject(email: string): {
 }
 
 /**
- * Try to get package.json, returning null if it doesn't exist.
- * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
- */
-export async function tryGetPackageJson({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson | null> {
-  try {
-    const packageJsonFileContents = await fs.promises.readFile(
-      join(installDir, 'package.json'),
-      'utf8',
-    );
-    return JSON.parse(packageJsonFileContents) as PackageJson;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Detect and return the package manager. Pure — no prompts.
  * Falls back to first detected or npm if ambiguous.
  */
-
-export function isUsingTypeScript({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): boolean {
-  try {
-    fs.accessSync(join(installDir, 'tsconfig.json'));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Get project data for the wizard via OAuth or CI API key.

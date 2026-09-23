@@ -1,7 +1,7 @@
 /* Generic Node.js language wizard using posthog-agent with PostHog MCP */
 import type { FrameworkConfig } from '@programs/framework-config';
 import { Integration } from '@shared/constants';
-import { tryGetPackageJson } from '@utils/setup-utils';
+import { tryGetPackageJson } from '@utils/package-json';
 import { detectNodePackageManagers } from '@programs/detection/package-manager';
 
 type JavaScriptNodeContext = Record<string, unknown>;

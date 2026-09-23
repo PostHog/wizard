@@ -1,5 +1,5 @@
 import { major } from 'semver';
-import { tryGetPackageJson } from '@utils/setup-utils';
+import { tryGetPackageJson } from '@utils/package-json';
 import type { WizardRunOptions } from '@utils/types';
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import { getDeclaredVersion } from '@utils/package-json';

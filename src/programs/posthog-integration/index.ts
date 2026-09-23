@@ -9,7 +9,7 @@ import { mayReportScanResults } from '@shared/scan-consent';
 import type { Integration } from '@shared/constants';
 import { RunPhase } from '@shared/run-state';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
+import { tryGetPackageJson, isUsingTypeScript } from '@utils/package-json';
 import { hasDeclaredDependency } from '@utils/package-json';
 import { analytics } from '@utils/analytics';
 import {
