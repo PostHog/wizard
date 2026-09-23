@@ -143,5 +143,7 @@ the host to present.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
 5. The scan report flushes; `runAgent` returns a `RunResult`.
-6. The caller applies it: a decided failure goes to `wizardAbort`, a crash is
-   rethrown for the runner's own handling.
+6. The caller applies it: a decided failure goes to `wizardAbort` with the
+   terminal status its outcome names, a crash is rethrown for the runner's own
+   handling, and a non-composed success sends the terminal success analytics.
+   The agent sends no terminal analytics.

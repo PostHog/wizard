@@ -161,20 +161,18 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
-function terminalResult(result: AgentResult):
-  | {
-      outcome: RunOutcome.Aborted | RunOutcome.Failed;
-      failure: AgentFailure;
-    }
-  | undefined {
+function terminalResult(
+  result: AgentResult,
+): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
   switch (result.kind) {
     case 'success':
       return undefined;
     case 'decided_failure':
       return { outcome: RunOutcome.Failed, failure: result.failure };
     case 'abort':
+      // Callers return first on the run's signal, so this abort is the agent's own.
       return {
-        outcome: RunOutcome.Aborted,
+        outcome: RunOutcome.Failed,
         failure: {
           code: AGENT_ERROR_CODE[result.classification],
           message: result.message ?? 'Agent aborted',
@@ -301,7 +299,6 @@ export async function offerSeededTask(
       controller.abort();
     };
     signal?.addEventListener('abort', cancelForAbort, { once: true });
-    if (signal?.aborted) cancelForAbort();
   });
   try {
     const keep = await Promise.race([
@@ -484,6 +481,25 @@ export function describeDrainFailure(verdict: {
     );
   }
   return parts.join(', so ');
+}
+
+/** One `orchestrator task blocked` event per pending task, best effort once the outcome is decided. */
+function reportBlockedTasks(
+  tasks: readonly QueuedTask[],
+  failedTypes: readonly string[],
+): void {
+  for (const task of tasks) {
+    if (task.status !== TaskStatus.Pending) continue;
+    try {
+      analytics.wizardCapture('orchestrator task blocked', {
+        type: task.type,
+        optional: task.optional === true,
+        failed_types: failedTypes.join(',') || 'none',
+      });
+    } catch {
+      // Reporting must not replace the run result.
+    }
+  }
 }
 
 /** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
@@ -1208,15 +1224,20 @@ async function executeOrchestrator(
         if (signal?.aborted) return;
         if (error instanceof RunTaskFatal) throw error;
         const failure = classifyRunFailure(error);
-        throw new RunTaskFatal({
-          code: failure.code,
-          message: failure.message,
-          error: error instanceof Error ? error : undefined,
-        });
+        throw new RunTaskFatal(
+          {
+            code: failure.code,
+            message: failure.message,
+            error: error instanceof Error ? error : undefined,
+          },
+          RunOutcome.Failed,
+          task.type,
+        );
       }
       if (signal?.aborted) return;
       const terminal = terminalResult(taskResult);
-      if (terminal) throw new RunTaskFatal(terminal.failure, terminal.outcome);
+      if (terminal)
+        throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1300,7 +1321,15 @@ async function executeOrchestrator(
     }
   }
 
-  if (fatal) return { outcome: fatal.outcome, failure: fatal.failure };
+  if (fatal) {
+    // The steps the fatal task stopped still get their terminal event.
+    const stoppedBy = drainVerdict(store.list()).requiredFailedTypes;
+    if (fatal.taskType && !stoppedBy.includes(fatal.taskType)) {
+      stoppedBy.push(fatal.taskType);
+    }
+    reportBlockedTasks(store.list(), stoppedBy);
+    return { outcome: fatal.outcome, failure: fatal.failure };
+  }
   if (signal?.aborted) return cancelledRun();
 
   renderQueue();
@@ -1345,14 +1374,7 @@ async function executeOrchestrator(
   // drops out of the funnel. The queue itself is left alone, because the run
   // cache is already wiped by here and writing to it would recreate the folder
   // the cleanup just removed.
-  for (const task of store.list()) {
-    if (task.status !== TaskStatus.Pending) continue;
-    analytics.wizardCapture('orchestrator task blocked', {
-      type: task.type,
-      optional: task.optional === true,
-      failed_types: verdict.requiredFailedTypes.join(',') || 'none',
-    });
-  }
+  reportBlockedTasks(store.list(), verdict.requiredFailedTypes);
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
     const failedTypes = verdict.requiredFailedTypes.join(', ');
     const whatFailed = describeDrainFailure(verdict);

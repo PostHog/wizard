@@ -163,7 +163,6 @@ export function createWizardAskBridge(
           controller.abort();
         };
         opts.signal?.addEventListener('abort', cancelForAbort, { once: true });
-        if (opts.signal?.aborted) cancelForAbort();
       });
 
       try {

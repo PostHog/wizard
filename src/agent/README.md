@@ -47,7 +47,12 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 - Errors: the agent does not exit the process and returns decided failures. A
   caught coded error becomes `Failed`. An uncoded throw becomes `Crashed` with
   the error attached. A gateway 401 returns an auth failure. The host decides
-  whether to show auth UI.
+  whether to show auth UI. `Aborted` means the host's signal cancelled the run;
+  an agent that stops itself with `[ABORT]` returns `Failed` with its abort
+  code.
+- Analytics shutdown is host-owned: the agent never sends the terminal
+  `setup wizard finished` event. The host sends it from the outcome: `Success`
+  is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
 Other runtime exports: `resolveBinding`, `shouldDisableAsk`, `initializeAgent`,
 `executeAgent`, `buildRunTags`, `AgentSignals`,

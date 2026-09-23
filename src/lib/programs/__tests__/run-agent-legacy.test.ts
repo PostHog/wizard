@@ -44,6 +44,7 @@ vi.mock('@utils/analytics', () => ({
     build: 'test',
     runId: 'run-1',
     wizardCapture: vi.fn(),
+    captureException: vi.fn(),
     setTag: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
     getWizardFlagPayloads: vi.fn().mockReturnValue({}),
@@ -201,9 +202,12 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
-  'passes a %s result to the existing abort handler',
-  async (outcome) => {
+it.each([
+  [RunOutcome.Aborted, 'cancelled'],
+  [RunOutcome.Failed, 'error'],
+] as const)(
+  'passes a %s result to the existing abort handler as %s',
+  async (outcome, status) => {
     const failure = {
       code: ErrorCodes.AgentApiError,
       message: 'Failed',
@@ -211,8 +215,59 @@ it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
     };
     vi.mocked(runAgent).mockResolvedValue({ outcome, failure, snapshot });
     await runProgramAgent(program(), session());
-    expect(wizardAbort).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({ ...failure, status });
     expect(analytics.shutdown).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  [
+    RunOutcome.Failed,
+    'error',
+    { code: ErrorCodes.AgentMcpMissing, message: 'Could not access MCP' },
+  ],
+  [
+    RunOutcome.Aborted,
+    'cancelled',
+    { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  ],
+] as const)(
+  'labels a %s run %s from its outcome when no Error came back',
+  async (outcome, status, failure) => {
+    const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
+      '@utils/wizard-abort',
+    );
+    vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome,
+      failure: { ...failure },
+      snapshot,
+    });
+    try {
+      await runProgramAgent(program(), session());
+    } finally {
+      exit.mockRestore();
+      stderr.mockRestore();
+    }
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith(status);
+    if (status === 'error') {
+      // Error tracking still sees the failure, as its code and message.
+      expect(analytics.captureException).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          message: failure.message,
+          code: failure.code,
+        }),
+        { error_code: failure.code },
+      );
+    } else {
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    }
   },
 );
 
