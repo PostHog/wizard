@@ -1,5 +1,5 @@
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@cli/runners';
 import type { NonInteractiveMode } from '@cli/runners';
 import { provisionNewAccount } from '@utils/provisioning';

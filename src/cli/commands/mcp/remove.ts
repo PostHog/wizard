@@ -1,5 +1,5 @@
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import { headlessOption, isHeadless } from '@cli/headless-mode';
 import { Program } from '@programs';
 import { VERSION } from '@shared/version';
@@ -36,8 +36,8 @@ function runMcpRemove(argv: Arguments): void {
     }
 
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@tui/session');
+      const { startTUI } = await (await import('@tui')).loadStartTui();
+      const { buildSession } = await import('@tui');
       const tui = startTUI(VERSION, Program.McpRemove, cliTuiHost());
       tui.store.session = buildSession({
         debug,

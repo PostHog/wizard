@@ -83,7 +83,11 @@ export default defineConfig({
       { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
+      { find: /^@tui$/, replacement: r('src/tui/index.ts') },
+      { find: /^@tui\/types$/, replacement: r('src/tui/types.ts') },
       { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
+      { find: /^@headless$/, replacement: r('src/headless/index.ts') },
+      { find: /^@headless\/types$/, replacement: r('src/headless/types.ts') },
       { find: /^@headless\/(.*)$/, replacement: `${r('src/headless')}/$1` },
       { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },

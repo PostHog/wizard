@@ -27,15 +27,18 @@ export interface TuiHost {
   abort?: (failure?: HostFailure) => Promise<never>;
 }
 
+/** A started TUI: its store, how to tear it down, and the intro gate. */
+export interface TuiHandle {
+  unmount: () => void;
+  store: WizardStore;
+  waitForSetup: () => Promise<void>;
+}
+
 export function startTUI(
   version: string,
   program: ProgramId = Program.PostHogIntegration,
   host: TuiHost = {},
-): {
-  unmount: () => void;
-  store: WizardStore;
-  waitForSetup: () => Promise<void>;
-} {
+): TuiHandle {
   enterDarkTerminal();
 
   const store = new WizardStore(program);

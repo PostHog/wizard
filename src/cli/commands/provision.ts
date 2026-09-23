@@ -1,5 +1,5 @@
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import type { ProvisioningResult } from '@utils/provisioning';
 import type { Command } from './command';
 import { getUI, setUI } from '@cli/ui';

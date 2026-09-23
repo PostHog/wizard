@@ -1,5 +1,5 @@
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import { Program } from '@programs';
 import { VERSION } from '@shared/version';
 import { ErrorCodes } from '@shared/errors';
@@ -28,8 +28,8 @@ function runSlackConnect(argv: Arguments): void {
     const debug = argv.debug as boolean | undefined;
 
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@tui/session');
+      const { startTUI } = await (await import('@tui')).loadStartTui();
+      const { buildSession } = await import('@tui');
       const tui = startTUI(VERSION, Program.SlackConnect, cliTuiHost());
       tui.store.session = buildSession({
         debug,

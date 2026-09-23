@@ -64,7 +64,7 @@ import {
 import type { ProgramConfig } from '@programs/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from '@tui/types';
 import { getUI } from '@cli/ui';
 import { registerCleanup } from '@utils/cleanup-registry';
 import { wizardAbort } from '@cli/wizard-abort';
@@ -198,8 +198,8 @@ async function runProgram(
   // needs credentials to scan and writes its choice to frameworkContext that
   // the run prompt reads. Generic: await every gated step between auth and run.
   // The program's TUI flow names its post-auth gates; loaded here, not at startup.
-  const { postAuthGateSteps } = await import('@tui/flow');
-  const { rawProgramFlow } = await import('@tui/flows/index');
+  const { postAuthGateSteps } = await import('@tui');
+  const { rawProgramFlow } = await import('@tui');
   for (const step of postAuthGateSteps(rawProgramFlow(programConfig.id))) {
     logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
     await getUI().waitForGate(step.id);
@@ -407,7 +407,7 @@ async function runHealthGate(
   programConfig: ProgramConfig,
   abort: HostAbort,
 ): Promise<void> {
-  const { rawProgramFlow } = await import('@tui/flows/index');
+  const { rawProgramFlow } = await import('@tui');
   const hasHealthCheckScreen = rawProgramFlow(programConfig.id).some(
     (s) => s.screenId === 'health-check',
   );

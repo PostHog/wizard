@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import { analytics } from '@utils/analytics';
 import {
   CLI_STEERING_TARGETS,

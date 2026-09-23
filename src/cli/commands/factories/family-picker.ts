@@ -54,7 +54,9 @@ export async function chooseFamilyChild(
   if (ordered.length === 0) return null;
 
   // Ink loads with the picker, not with the CLI.
-  const { renderFamilyPicker } = await import('@tui/family-picker');
+  const { renderFamilyPicker } = await (
+    await import('@tui')
+  ).loadFamilyPicker();
   return renderFamilyPicker(
     parentLabel,
     ordered.map((child) => ({

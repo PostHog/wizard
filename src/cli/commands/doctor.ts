@@ -1,4 +1,4 @@
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';

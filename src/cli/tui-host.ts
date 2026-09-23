@@ -1,4 +1,4 @@
-import type { TuiHost } from '@tui/start-tui';
+import type { TuiHost } from '@tui/types';
 import { setUI } from '@cli/ui';
 import { wizardAbort } from '@cli/wizard-abort';
 

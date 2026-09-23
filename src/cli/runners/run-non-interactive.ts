@@ -9,7 +9,7 @@ import {
   POSTHOG_LOCAL_URL,
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import type {
   HostFailure,
   ProgramConfig,
@@ -18,7 +18,7 @@ import type {
 import type { InferenceAuthProvider } from '@agent/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '@tui/types';
 import { join } from 'node:path';
 import {
   ErrorCodes,
@@ -115,7 +115,7 @@ export function runNonInteractive(
 
   void (async () => {
     const path = await import('path');
-    const { buildSession } = await import('@tui/session');
+    const { buildSession } = await import('@tui');
     const { RunPhase } = await import('@shared/run-state');
     const { OutroKind } = await import('@shared/outro');
     const { readEnvironment } = await import('@utils/environment');
@@ -210,8 +210,8 @@ export function runNonInteractive(
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
     {
-      const { WizardStore } = await import('@tui/store');
-      const { HeadlessUI } = await import('@headless/renderers/headless-ui');
+      const { WizardStore } = await import('@tui');
+      const { HeadlessUI } = await import('@headless');
       const { loadTaskStream } = await import('@programs');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await loadTaskStream();
@@ -439,9 +439,11 @@ async function serveControl(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): Promise<void> {
-  const { attachControlServer } = await import('@headless/control');
-  const { wizardStoreControlTarget } = await import('@tui/control/index');
-  const { InkUI } = await import('@tui/ink-ui');
+  const { attachControlServer } = await (
+    await import('@headless')
+  ).loadControl();
+  const { wizardStoreControlTarget } = await import('@tui');
+  const { InkUI } = await import('@tui');
   const { createControlHooks } = await import('@cli/control-hooks');
   const { controlMode } = await import('@cli/control-flags');
   const { runProgramAgent } = await import('./run-program-agent');
