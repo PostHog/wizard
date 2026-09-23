@@ -314,6 +314,7 @@ it('owns authentication, detection, and composition data independently of progre
     composition: { parentProgramId: null, completedRuns: [] },
     eventPlan: [],
     binding: null,
+    aiSdkStampReported: false,
   });
 
   const credentials = {

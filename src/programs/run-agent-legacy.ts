@@ -53,6 +53,8 @@ import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
+import { getDetectedWarehouseSources } from './warehouse-source/detect';
+import { mayReportScanResults } from '@shared/scan-consent';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
 import {
   commitRegisteredRunSkillCleanups,
@@ -332,6 +334,11 @@ async function runLegacyStep(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       agentFlow: config.agentFlow,
+      // The stamp already ran above, so runProgram finds it latched.
+      aiSdkStampReported: session.aiSdkStampReported,
+      discoveredFeatures: session.discoveredFeatures,
+      warehouseSources: getDetectedWarehouseSources(session),
+      mayReportScanResults: mayReportScanResults(session),
       // The TUI step flow has already required the GitHub connection before
       // reaching this run screen; tell the callable host that gate passed.
       composition:

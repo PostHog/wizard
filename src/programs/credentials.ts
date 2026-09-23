@@ -6,7 +6,8 @@ import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 export type ResolvedProgramCredentials = {
   posthog: Credentials;
-  inferenceAuth: InferenceAuthProvider;
+  /** When absent, runProgram mints first-party gateway auth from the refreshed login. */
+  inferenceAuth?: InferenceAuthProvider;
   project: ApiProject | null;
   apiUser: ApiUser | null;
 };

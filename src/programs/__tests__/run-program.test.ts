@@ -22,7 +22,10 @@ import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
 import { analytics } from '@utils/analytics';
+import { refreshAccessToken } from '@utils/oauth-token';
+import { DiscoveredFeature } from '@shared/scan-consent';
 import { captureSwitchboardDecision } from '../binding-telemetry';
+import { gatewayAuth } from '../gateway-session';
 
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
@@ -49,6 +52,21 @@ vi.mock('../binding-telemetry', async (importOriginal) => {
 vi.mock('../runtime-registry', () => ({
   getRuntimeProgramConfig: vi.fn(),
 }));
+vi.mock('@utils/analytics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/analytics')>()),
+  analytics: {
+    runId: 'analytics-run-id',
+    build: 'test',
+    setTag: vi.fn(),
+    wizardCapture: vi.fn(),
+    captureException: vi.fn(),
+    identifyUser: vi.fn(),
+    setGroups: vi.fn(),
+    groupIdentify: vi.fn(),
+  },
+}));
+vi.mock('@utils/oauth-token', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('../gateway-session', () => ({ gatewayAuth: vi.fn() }));
 
 const run = {
   integrationLabel: 'metrics',
@@ -468,49 +486,45 @@ describe('runProgram', () => {
       outcome: RunOutcome.Success,
       snapshot,
     });
-    const setTag = vi.spyOn(analytics, 'setTag');
+    const setTag = vi.mocked(analytics.setTag);
     const observed: ProgramProgress[] = [];
 
-    try {
-      const result = await runProgram(
-        'metrics',
-        {
-          installDir: '/project',
-          credentials,
-          overrides: { harness: Harness.anthropic, sequence: Sequence.linear },
-        },
-        { onProgress: (progress) => observed.push(progress) },
-      );
+    const result = await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        credentials,
+        overrides: { harness: Harness.anthropic, sequence: Sequence.linear },
+      },
+      { onProgress: (progress) => observed.push(progress) },
+    );
 
-      expect(result.outcome).toBe(RunOutcome.Success);
-      const binding = vi.mocked(runAgent).mock.calls[0][0].binding;
-      expect(binding).toMatchObject({
-        sequence: Sequence.linear,
-        harness: Harness.anthropic,
-      });
-      expect(captureSwitchboardDecision).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          program: 'metrics',
-          cliHarness: Harness.anthropic,
-          cliSequence: Sequence.linear,
-        }),
-        binding,
-      );
-      expect(setTag).toHaveBeenCalledWith('sequence', Sequence.linear);
-      expect(setTag).toHaveBeenCalledWith('harness', Harness.anthropic);
-      expect(
-        setTag.mock.calls.filter(
-          ([key]) => key === 'sequence' || key === 'harness',
-        ),
-      ).toHaveLength(2);
-      expect(observed).toContainEqual({
-        kind: 'program',
-        data: expect.objectContaining({ binding }),
-      });
-      expect(result.data.binding).toEqual(binding);
-    } finally {
-      setTag.mockRestore();
-    }
+    expect(result.outcome).toBe(RunOutcome.Success);
+    const binding = vi.mocked(runAgent).mock.calls[0][0].binding;
+    expect(binding).toMatchObject({
+      sequence: Sequence.linear,
+      harness: Harness.anthropic,
+    });
+    expect(captureSwitchboardDecision).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        program: 'metrics',
+        cliHarness: Harness.anthropic,
+        cliSequence: Sequence.linear,
+      }),
+      binding,
+    );
+    expect(setTag).toHaveBeenCalledWith('sequence', Sequence.linear);
+    expect(setTag).toHaveBeenCalledWith('harness', Harness.anthropic);
+    expect(
+      setTag.mock.calls.filter(
+        ([key]) => key === 'sequence' || key === 'harness',
+      ),
+    ).toHaveLength(2);
+    expect(observed).toContainEqual({
+      kind: 'program',
+      data: expect.objectContaining({ binding }),
+    });
+    expect(result.data.binding).toEqual(binding);
   });
 
   it('uses a host-resolved binding without capturing the decision again', async () => {
@@ -518,28 +532,24 @@ describe('runProgram', () => {
       outcome: RunOutcome.Success,
       snapshot,
     });
-    const setTag = vi.spyOn(analytics, 'setTag');
+    const setTag = vi.mocked(analytics.setTag);
     const binding = {
       sequence: Sequence.linear,
       harness: Harness.anthropic,
       model: 'claude-test',
     };
 
-    try {
-      const result = await runProgram('metrics', {
-        installDir: '/project',
-        credentials,
-        binding,
-        overrides: { harness: Harness.pi },
-      });
+    const result = await runProgram('metrics', {
+      installDir: '/project',
+      credentials,
+      binding,
+      overrides: { harness: Harness.pi },
+    });
 
-      expect(vi.mocked(runAgent).mock.calls[0][0].binding).toBe(binding);
-      expect(captureSwitchboardDecision).not.toHaveBeenCalled();
-      expect(setTag).not.toHaveBeenCalledWith('harness', expect.anything());
-      expect(result.data.binding).toEqual(binding);
-    } finally {
-      setTag.mockRestore();
-    }
+    expect(vi.mocked(runAgent).mock.calls[0][0].binding).toBe(binding);
+    expect(captureSwitchboardDecision).not.toHaveBeenCalled();
+    expect(setTag).not.toHaveBeenCalledWith('harness', expect.anything());
+    expect(result.data.binding).toEqual(binding);
   });
 
   it('flags load after credentials resolve and AI approval', async () => {
@@ -1093,6 +1103,135 @@ describe('runProgram', () => {
       ['posthog-integration', Harness.anthropic, { 'wizard-test-flag': 'on' }],
       ['self-driving', Harness.anthropic, { 'wizard-test-flag': 'on' }],
     ]);
+  });
+
+  it('a provider is resolved once, then stamped, and refreshed before the agent starts', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    vi.mocked(refreshAccessToken).mockResolvedValueOnce({
+      access_token: 'pha_refreshed',
+      refresh_token: 'phr_rotated',
+      expires_in: 3600,
+      token_type: 'Bearer',
+      scope: 'project:read',
+    });
+    const aging = {
+      ...credentials.posthog,
+      accessToken: 'pha_aging',
+      refreshToken: 'phr_aging',
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    const apiUser = {
+      distinct_id: 'user-1',
+      organization: { id: 'org-1', is_ai_data_processing_approved: true },
+    } as ApiUser;
+    const resolve = vi
+      .fn()
+      .mockResolvedValue({ posthog: aging, project: null, apiUser });
+    const observed: ProgramProgress[] = [];
+
+    const result = await runProgram(
+      'self-driving',
+      {
+        installDir: '/project',
+        host: { baseUrl: 'https://posthog.example' },
+        mayReportScanResults: true,
+        discoveredFeatures: [DiscoveredFeature.LLM],
+        composition: {
+          integration: {
+            installDir: '/project/app',
+            run: { ...run, integrationLabel: 'nextjs' },
+          },
+          handoffConfirmed: true,
+          githubConnected: true,
+        },
+      },
+      {
+        credentials: { resolve },
+        onProgress: (progress) => observed.push(progress),
+      },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(resolve).toHaveBeenCalledOnce();
+    expect(analytics.identifyUser).toHaveBeenCalledWith(apiUser);
+    expect(analytics.groupIdentify).toHaveBeenCalledExactlyOnceWith(
+      'organization',
+      'org-1',
+      { wizard_ai_sdk_detected: true },
+    );
+    expect(refreshAccessToken).toHaveBeenCalledExactlyOnceWith(
+      'phr_aging',
+      'https://posthog.example',
+      undefined,
+    );
+    expect(
+      vi
+        .mocked(runAgent)
+        .mock.calls.map(([config, input]) => [
+          config.programId,
+          input.credentials.accessToken,
+        ]),
+    ).toEqual([
+      ['posthog-integration', 'pha_refreshed'],
+      ['self-driving', 'pha_refreshed'],
+    ]);
+    expect(observed).toContainEqual({
+      kind: 'program',
+      data: expect.objectContaining({
+        credentials: expect.objectContaining({
+          accessToken: 'pha_refreshed',
+          refreshToken: 'phr_rotated',
+        }),
+      }),
+    });
+    expect(result.data.aiSdkStampReported).toBe(true);
+
+    await vi.mocked(runAgent).mock.calls[1][1].inferenceAuth.resolve();
+    expect(gatewayAuth).toHaveBeenCalledExactlyOnceWith(
+      aging.host,
+      'pha_refreshed',
+      'self-driving',
+    );
+  });
+
+  it('leaves a stamp the host already reported and a fresh token alone', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const fresh = {
+      ...credentials,
+      posthog: {
+        ...credentials.posthog,
+        refreshToken: 'phr_fresh',
+        expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+      },
+      apiUser: {
+        organization: { id: 'org-1', is_ai_data_processing_approved: true },
+      } as ApiUser,
+    };
+
+    const result = await runProgram('metrics', {
+      installDir: '/project',
+      credentials: fresh,
+      aiSdkStampReported: true,
+      mayReportScanResults: true,
+      discoveredFeatures: [DiscoveredFeature.LLM],
+    });
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    const [, input] = vi.mocked(runAgent).mock.calls[0];
+    expect(input.credentials).toEqual(fresh.posthog);
+    expect(input.inferenceAuth).toBe(credentials.inferenceAuth);
+    expect(result.data.aiSdkStampReported).toBe(true);
   });
 
   it('stops the composed run when the child fails', async () => {

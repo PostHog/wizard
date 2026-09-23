@@ -14,14 +14,18 @@ import { getSkillsBaseUrl } from '@shared/constants';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
-import { analytics } from '@utils/analytics';
+import type { DiscoveredFeature } from '@shared/scan-consent';
+import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { FrameworkConfig } from './framework-config';
 import type { DetectedSource } from './warehouse-sources/types';
-import type {
-  CredentialsProvider,
-  ResolvedProgramCredentials,
+import {
+  createPosthogInferenceAuthProvider,
+  type CredentialsProvider,
+  type ResolvedProgramCredentials,
 } from './credentials';
+import { refreshCredentialsIfNeeded } from './token-refresh';
+import { stampAiSdkDetected } from './posthog-integration/ai-sdk-stamp';
 import { getRuntimeProgramConfig } from './runtime-registry';
 import { startProgramFileWatchers } from './program-file-watchers';
 import { resolveProgramBinding } from './binding';
@@ -92,6 +96,9 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   warehouseSources?: readonly DetectedSource[];
   detectedTools?: readonly DetectedSource[];
   mayReportScanResults?: boolean;
+  discoveredFeatures?: readonly DiscoveredFeature[];
+  /** The host already considered the AI SDK stamp for this login. */
+  aiSdkStampReported?: boolean;
   /** Prepared child integration and gate decisions for a composed run. */
   composition?: {
     integration?: ProgramInput;
@@ -162,7 +169,10 @@ export async function runProgram(
   input: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
-  const store = new ProgramStore({}, { onData: options.onProgress });
+  const store = new ProgramStore(
+    { aiSdkStampReported: input.aiSdkStampReported },
+    { onData: options.onProgress },
+  );
   const installDirs = new Set([
     input.installDir,
     ...(input.composition?.integration
@@ -260,6 +270,20 @@ async function runProgramWithStore(
       apiProject: credentials.project,
       apiUser: credentials.apiUser,
     });
+    // Identify before flags are evaluated, so flags can target the user.
+    if (credentials.apiUser) analytics.identifyUser(credentials.apiUser);
+    analytics.setGroups(
+      groupsFromUser(credentials.apiUser, credentials.posthog.host.apiHost),
+    );
+    if (!store.readData().aiSdkStampReported) {
+      store.setAiSdkStampReported();
+      stampAiSdkDetected({
+        apiUser: credentials.apiUser,
+        discoveredFeatures: input.discoveredFeatures ?? [],
+        warehouseSources: input.warehouseSources ?? [],
+        mayReportScanResults: input.mayReportScanResults ?? false,
+      });
+    }
   }
   if (program.strategy === 'no-agent') {
     const result = await runNoAgentProgram(
@@ -335,6 +359,7 @@ async function runProgramWithStore(
             composed: true,
             runId: childInput.runId ?? `${runId}:integrate-run`,
             flags: { ...input.flags, ...childInput.flags },
+            host: mergeGiven(input.host, childInput.host),
             overrides: mergeGiven(input.overrides, childInput.overrides),
             wizardFlags: mergeGiven(input.wizardFlags, childInput.wizardFlags),
             wizardFlagPayloads: mergeGiven(
@@ -349,6 +374,13 @@ async function runProgramWithStore(
         );
         if (childResult.outcome !== RunOutcome.Success) {
           return { ...childResult, programId };
+        }
+        // The child ran on this login, so a token it refreshed carries over.
+        if (!childInput.credentials && childResult.data.credentials) {
+          credentials = {
+            ...credentials,
+            posthog: childResult.data.credentials,
+          };
         }
         store.markProgramCompleted('integrate-run');
         if (options.compositionWorkflow) {
@@ -470,6 +502,24 @@ async function runProgramWithStore(
       captureSwitchboardDecision(switchboard, binding);
     }
     store.setBinding(binding);
+
+    // The agent can't swap tokens mid-run, so freshness is measured after every
+    // park above, right before the agent mints.
+    const posthog = await refreshCredentialsIfNeeded(credentials.posthog, {
+      baseUrl: input.host?.baseUrl,
+    });
+    if (posthog !== credentials.posthog) {
+      credentials = { ...credentials, posthog };
+      store.setAuthenticated({
+        credentials: posthog,
+        apiProject: credentials.project,
+        apiUser: credentials.apiUser,
+      });
+    }
+    if (signal.aborted) return cancelled();
+    const inferenceAuth =
+      credentials.inferenceAuth ??
+      createPosthogInferenceAuthProvider(posthog, programId);
     const wizardMetadata = {
       ...input.wizardMetadata,
       SEQUENCE: binding.sequence,
@@ -502,8 +552,8 @@ async function runProgramWithStore(
       },
       {
         installDir: input.installDir,
-        credentials: credentials.posthog,
-        inferenceAuth: credentials.inferenceAuth,
+        credentials: posthog,
+        inferenceAuth,
         project: credentials.project,
         apiUser: credentials.apiUser,
         skillId: input.skillId ?? run.skillId ?? run.integrationLabel,

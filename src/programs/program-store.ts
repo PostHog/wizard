@@ -67,12 +67,18 @@ export type ProgramInvocationData = {
   };
   /** The route of the latest agent run; null until one resolves. */
   binding: ResolvedBinding | null;
+  /** Latched once the organization's AI SDK stamp was considered for this login. */
+  aiSdkStampReported: boolean;
 };
 
 export type ProgramInvocationDataInit = Partial<
   Pick<
     ProgramInvocationData,
-    'credentials' | 'apiProject' | 'apiUser' | 'eventPlan'
+    | 'credentials'
+    | 'apiProject'
+    | 'apiUser'
+    | 'eventPlan'
+    | 'aiSdkStampReported'
   >
 > & {
   detection?: Partial<ProgramInvocationData['detection']>;
@@ -249,6 +255,7 @@ export class ProgramStore {
         completedRuns: initial.composition?.completedRuns ?? [],
       },
       binding: null,
+      aiSdkStampReported: initial.aiSdkStampReported ?? false,
     });
   }
 
@@ -305,6 +312,12 @@ export class ProgramStore {
 
   setBinding(binding: ResolvedBinding): void {
     this.data.binding = structuredClone(binding);
+    this.emitData();
+  }
+
+  setAiSdkStampReported(): void {
+    if (this.data.aiSdkStampReported) return;
+    this.data.aiSdkStampReported = true;
     this.emitData();
   }
 
