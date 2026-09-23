@@ -58,8 +58,10 @@ import {
   QueueStore,
   QUEUE_DIR_NAME,
   SkipReason,
+  TASK_OUTCOMES_KEY,
   TaskStatus,
   type QueuedTask,
+  type TaskOutcome,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
 import { RunMetrics } from './run-metrics';
@@ -456,6 +458,21 @@ export function displayOrder(
     .map((entry) => entry.task);
 }
 
+/**
+ * The run's excluded task types: CI gates plus the program's flag mapping.
+ * Exported so a test can pin the flag→exclusion hookup against the real
+ * program config — the registry and seed note both read this one list.
+ */
+export function effectiveExcludedTaskTypes(
+  programConfig: ProgramConfig,
+  flags: Record<string, string>,
+): string[] {
+  return [
+    ...ciExcludedTaskTypes(),
+    ...(programConfig.excludedTaskTypes?.(flags) ?? []),
+  ];
+}
+
 export async function runOrchestrator(
   session: WizardSession,
   config: ProgramRun,
@@ -479,7 +496,7 @@ export async function runOrchestrator(
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = programConfig.agentFlow ?? programConfig.id;
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: ciExcludedTaskTypes(),
+    exclude: effectiveExcludedTaskTypes(programConfig, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
       programConfig.id,
@@ -729,6 +746,8 @@ export async function runOrchestrator(
     // — a single planner edge is enough to pull the task back to the front of
     // the drain and put its prompt in front of the code work again.
     runnerSeededTypes: registry.runnerSeededTypes,
+    // Optionality comes from the task's frontmatter, never from the enqueue call.
+    optionalTypes: registry.optionalTypes,
     currentTaskId,
   });
 
@@ -858,7 +877,15 @@ export async function runOrchestrator(
     session,
     programConfig,
     boot,
-    prompt: assembleSeedPrompt(promptContext, seedPrompt.body, store.list()),
+    // The exclusion note names `registry.excludedTypes` — the excluded types
+    // this flow actually had — so the planner never hears about work that was
+    // never available, and overlapping exclusion sources cannot double-list.
+    prompt: assembleSeedPrompt(
+      promptContext,
+      seedPrompt.body,
+      store.list(),
+      registry.excludedTypes,
+    ),
     spinner,
     model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,
@@ -1106,6 +1133,12 @@ export async function runOrchestrator(
   try {
     await drainQueue(store, runTask);
   } finally {
+    // The queue file is wiped below; the e2e harness reads outcomes from here.
+    session.frameworkContext[TASK_OUTCOMES_KEY] = store.list().map((t) => ({
+      type: t.type,
+      status: t.status,
+      optional: t.optional === true,
+    })) satisfies TaskOutcome[];
     try {
       if (referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(
