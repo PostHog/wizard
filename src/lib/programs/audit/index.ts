@@ -15,6 +15,10 @@ import {
   AUDIT_REPORT_FILE,
 } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
+import { notebookUploadSkipInstruction } from './notebook-scope.js';
+
+const AUDIT_PROMPT =
+  'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
 const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
@@ -42,8 +46,7 @@ const baseConfig = createSkillProgram({
   id: 'audit',
   description: 'Audit and improve your PostHog setup',
   integrationLabel: 'audit',
-  customPrompt:
-    'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.',
+  customPrompt: AUDIT_PROMPT,
   successMessage:
     'Audit complete! You can view the audit report at ./posthog-audit-report.md',
   reportFile: AUDIT_REPORT_FILE,
@@ -68,6 +71,12 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
 
   return {
     ...baseRun,
+    // Skip the notebook upload when the login grant omitted `notebook:write`,
+    // rather than letting the agent hit a permission error on the final step.
+    customPrompt: (ctx) =>
+      [AUDIT_PROMPT, notebookUploadSkipInstruction(ctx.missingScopes)]
+        .filter(Boolean)
+        .join('\n\n'),
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
