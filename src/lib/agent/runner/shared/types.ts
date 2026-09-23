@@ -2,11 +2,7 @@
  * Shared types for the runner pipeline.
  */
 
-import type {
-  Credentials,
-  AdditionalFeature,
-  WizardSession,
-} from '@lib/wizard-session';
+import type { Credentials, WizardSession } from '@lib/wizard-session';
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import type { ApiProject } from '@lib/api';
@@ -50,7 +46,6 @@ export interface ProgramRun {
   reportFile: string;
   docsUrl: string;
   errorMessage?: string;
-  additionalFeatureQueue?: readonly AdditionalFeature[];
   /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];
   /** Runs after agent completes, before outro (e.g. env var upload). */

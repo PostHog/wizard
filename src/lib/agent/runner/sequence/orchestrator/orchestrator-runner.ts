@@ -893,7 +893,6 @@ export async function runOrchestrator(
     orchestrator: orchestratorCtx(),
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
-    additionalFeatureQueue: [],
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
@@ -1099,7 +1098,6 @@ export async function runOrchestrator(
         orchestrator: orchestratorCtx(task.id),
         spinnerMessage: '',
         successMessage: '',
-        additionalFeatureQueue: [],
         requestRemark: false,
         analyticsProperties: {
           task_type: task.type,

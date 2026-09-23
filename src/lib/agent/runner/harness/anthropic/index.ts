@@ -82,7 +82,6 @@ export const anthropicBackend: AgentHarness = {
         successMessage: config.successMessage,
         errorMessage:
           config.errorMessage ?? `${config.integrationLabel} failed`,
-        additionalFeatureQueue: config.additionalFeatureQueue ?? [],
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
@@ -107,7 +106,6 @@ export const anthropicBackend: AgentHarness = {
       spinnerMessage,
       successMessage,
       errorMessage,
-      additionalFeatureQueue,
       requestRemark,
       analyticsProperties,
     } = inputs;
@@ -153,7 +151,6 @@ export const anthropicBackend: AgentHarness = {
         spinnerMessage,
         successMessage,
         errorMessage,
-        additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
       },

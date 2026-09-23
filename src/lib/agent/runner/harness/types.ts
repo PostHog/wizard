@@ -16,7 +16,6 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import type { AdditionalFeature } from '@lib/wizard-session';
 import type { Harness } from '@lib/constants';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { SpinnerHandle } from '@ui';
@@ -101,7 +100,6 @@ export interface TaskRunInputs {
   spinnerMessage: string;
   successMessage: string;
   errorMessage?: string;
-  additionalFeatureQueue: readonly AdditionalFeature[];
   /** Whether to request the end-of-run reflection remark (fired once, on the last task). */
   requestRemark: boolean;
   /** Per-call analytics properties merged into `agent completed` / `agent aborted` events. */

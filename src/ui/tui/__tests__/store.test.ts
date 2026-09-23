@@ -8,7 +8,7 @@ import {
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
-import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
+import { OutroKind, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
@@ -515,23 +515,6 @@ describe('WizardStore', () => {
       expect(wizardCaptureMock).toHaveBeenCalledWith('auth complete', {
         project_id: 42,
       });
-    });
-
-    it('enableFeature fires feature enabled event', () => {
-      const store = createStore();
-      store.enableFeature(AdditionalFeature.LLM);
-      expect(wizardCaptureMock).toHaveBeenCalledWith('feature enabled', {
-        feature: AdditionalFeature.LLM,
-      });
-    });
-
-    it('enableFeature tags additional_feature_kinds with the joined queue', () => {
-      const store = createStore();
-      store.enableFeature(AdditionalFeature.LLM);
-      expect(analytics.setTag).toHaveBeenCalledWith(
-        'additional_feature_kinds',
-        'llm',
-      );
     });
 
     it('setRunPhase tags run_phase', () => {

@@ -74,21 +74,6 @@ export enum ScanConsent {
   Declined = 'declined',
 }
 
-/** Additional features the agent can integrate after the main setup */
-export enum AdditionalFeature {
-  LLM = 'llm',
-}
-
-/** Human-readable labels for additional features (used in TUI progress) */
-export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'AI observability',
-};
-
-/** Agent prompts for each additional feature, injected via the stop hook */
-export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
-};
-
 /** Outcome of the MCP server installation step */
 export enum McpOutcome {
   NoClients = 'no_clients',
@@ -354,7 +339,6 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
 
   // ScreenId completion
   mcpComplete: boolean;
@@ -452,9 +436,6 @@ export interface WizardSession {
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
-  // Additional features queue (drained via stop hook after main integration)
-  additionalFeatureQueue: AdditionalFeature[];
-
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
   skillId: string | null;
@@ -538,7 +519,6 @@ export function buildSession(args: {
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
@@ -573,7 +553,6 @@ export function buildSession(args: {
     mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
-    additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
     frameworkConfig: null,
