@@ -340,7 +340,9 @@ async function runLegacyStep(
           : undefined,
     },
     {
-      onProgress: ({ event }) => reduceUi(event),
+      onProgress: (progress) => {
+        if (progress.kind === 'run') reduceUi(progress.event);
+      },
       interaction: uiInteraction(ui),
       awaitAiApproval: async () => {
         await ui.waitForAiOptIn();

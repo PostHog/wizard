@@ -4,7 +4,11 @@ import type { RunResult } from '@agent/types';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import { Integration } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
-import { ProgramStore, type ProgramProgress } from '../program-store';
+import {
+  ProgramStore,
+  type ProgramDataProgress,
+  type ProgramProgress,
+} from '../program-store';
 
 function success(snapshot: RunResult['snapshot'], skillId?: string): RunResult {
   return { outcome: RunOutcome.Success, snapshot, skillId };
@@ -464,4 +468,122 @@ it('records only settled agent results in finish order, separate from progress',
   ]);
   expect(() => first.finish(firstResult)).toThrow('already finished');
   expect(store.settledRuns()).toHaveLength(2);
+});
+
+it('emits a program-data snapshot after each write, and each snapshot is a copy', () => {
+  const observed: ProgramDataProgress[] = [];
+  const store = new ProgramStore(
+    {},
+    { onData: (progress) => observed.push(progress) },
+  );
+  const credentials = {
+    accessToken: 'test-access-token',
+    projectApiKey: 'test-project-key',
+    projectId: 42,
+    host: { region: 'us', apiHost: 'https://example.test' },
+  } as Credentials;
+
+  store.setAuthenticated({ credentials, apiProject: null, apiUser: null });
+  store.setDetection({ integration: Integration.nextjs, complete: true });
+  store.setFrameworkContext('selectedProject', { paths: ['apps/web'] });
+  store.setEventPlan([{ name: 'signup', description: 'Account created' }]);
+  store.setComposition({ parentProgramId: 'self-driving' });
+  store.markProgramCompleted('integrate-run');
+
+  expect(observed.map((progress) => progress.kind)).toEqual([
+    'program',
+    'program',
+    'program',
+    'program',
+    'program',
+    'program',
+  ]);
+  expect(observed[0].data).toMatchObject({
+    credentials: { accessToken: 'test-access-token' },
+    detection: { integration: null, complete: false },
+  });
+  expect(observed[1].data.detection).toMatchObject({
+    integration: Integration.nextjs,
+    complete: true,
+    frameworkContext: {},
+  });
+  expect(observed[2].data.detection.frameworkContext).toEqual({
+    selectedProject: { paths: ['apps/web'] },
+  });
+  expect(observed[3].data.eventPlan).toEqual([
+    { name: 'signup', description: 'Account created' },
+  ]);
+  expect(observed[4].data.composition).toEqual({
+    parentProgramId: 'self-driving',
+    completedRuns: [],
+  });
+  expect(observed[5].data).toEqual(store.readData());
+
+  observed[5].data.eventPlan[0].name = 'changed by observer';
+  observed[5].data.composition.completedRuns.push('changed by observer');
+  expect(store.readData().eventPlan).toEqual([
+    { name: 'signup', description: 'Account created' },
+  ]);
+  expect(store.readData().composition.completedRuns).toEqual(['integrate-run']);
+  expect(observed[3].data.eventPlan[0].name).toBe('signup');
+});
+
+it('emits no snapshot for a completion already recorded', () => {
+  const onData = vi.fn();
+  const store = new ProgramStore(
+    { composition: { completedRuns: ['integrate-run'] } },
+    { onData },
+  );
+
+  store.markProgramCompleted('integrate-run');
+
+  expect(onData).not.toHaveBeenCalled();
+});
+
+it('records a throwing or rejecting data observer as a diagnostic and keeps the write', async () => {
+  const onData = vi
+    .fn()
+    .mockImplementationOnce(() => {
+      throw new Error('observer threw');
+    })
+    .mockImplementationOnce(() => Promise.reject(new Error('delivery failed')));
+  const store = new ProgramStore({}, { onData });
+
+  store.setDetection({ typescript: true });
+  store.markProgramCompleted('integrate-run');
+
+  expect(store.readData()).toMatchObject({
+    detection: { typescript: true },
+    composition: { completedRuns: ['integrate-run'] },
+  });
+  await vi.waitFor(() => {
+    expect(store.read().diagnostics).toEqual([
+      { eventKind: 'data', message: 'observer threw' },
+      { eventKind: 'data', message: 'delivery failed' },
+    ]);
+  });
+});
+
+it('records a snapshot that cannot be copied as a diagnostic and does not emit it', () => {
+  const onData = vi.fn();
+  const store = new ProgramStore({}, { onData });
+  const clone = structuredClone;
+  vi.stubGlobal(
+    'structuredClone',
+    vi.fn(clone).mockImplementationOnce(() => {
+      throw new DOMException('could not be cloned', 'DataCloneError');
+    }),
+  );
+
+  try {
+    store.markProgramCompleted('integrate-run');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+
+  expect(onData).not.toHaveBeenCalled();
+  expect(store.read().diagnostics).toEqual([
+    { eventKind: 'data', message: 'could not be cloned' },
+  ]);
+  expect(store.readData().composition.completedRuns).toEqual(['integrate-run']);
 });

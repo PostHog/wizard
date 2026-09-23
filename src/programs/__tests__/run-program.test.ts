@@ -8,6 +8,7 @@ import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { FrameworkConfig } from '../framework-config';
 import type { ResolvedProgramCredentials } from '../credentials';
+import type { ProgramProgress } from '../program-store';
 import { ErrorCodes } from '@shared/errors';
 import {
   getRuntimeProgramConfig,
@@ -90,7 +91,7 @@ describe('runProgram', () => {
   });
 
   it('calls a static program with explicit inputs and returns attributed progress and final results', async () => {
-    const observed: unknown[] = [];
+    const observed: ProgramProgress[] = [];
     vi.mocked(runAgent).mockImplementation((_config, _input, options) => {
       options?.onProgress?.({ kind: 'status', message: 'Metrics configured' });
       return Promise.resolve({
@@ -122,12 +123,17 @@ describe('runProgram', () => {
     expect(input.installDir).toBe('/project');
     expect(input.credentials.projectId).toBe(42);
     expect(input.inferenceAuth).toBe(credentials.inferenceAuth);
-    expect(observed).toEqual([
+    expect(observed.filter((progress) => progress.kind === 'run')).toEqual([
       {
+        kind: 'run',
         runId: 'run-1',
         event: { kind: 'status', message: 'Metrics configured' },
       },
     ]);
+    expect(observed[0]).toMatchObject({
+      kind: 'program',
+      data: { credentials: { projectId: 42 } },
+    });
     expect(outcome).toMatchObject({
       programId: 'metrics',
       outcome: 'success',
@@ -831,7 +837,7 @@ describe('runProgram', () => {
         },
       });
     });
-    const observed: unknown[] = [];
+    const observed: ProgramProgress[] = [];
 
     const result = await runProgram(
       'self-driving',
@@ -858,10 +864,15 @@ describe('runProgram', () => {
     expect(vi.mocked(runAgent).mock.calls[0][1].installDir).toBe(
       '/project/app',
     );
-    expect(observed).toMatchObject([
-      { runId: 'parent:integrate-run', stepId: 'integrate-run' },
-      { runId: 'parent' },
+    expect(
+      observed.filter((progress) => progress.kind === 'run'),
+    ).toMatchObject([
+      { kind: 'run', runId: 'parent:integrate-run', stepId: 'integrate-run' },
+      { kind: 'run', runId: 'parent' },
     ]);
+    expect(
+      observed.filter((progress) => progress.kind === 'program').at(-1),
+    ).toEqual({ kind: 'program', data: result.data });
     expect(result.runResults.map((item) => item.skillId)).toEqual([
       'posthog-integration',
       'self-driving',

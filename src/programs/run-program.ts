@@ -143,7 +143,7 @@ export async function runProgram(
   input: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
-  const store = new ProgramStore();
+  const store = new ProgramStore({}, { onData: options.onProgress });
   const installDirs = new Set([
     input.installDir,
     ...(input.composition?.integration

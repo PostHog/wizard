@@ -24,3 +24,8 @@ export type {
   ProgramSwitchboardCtx,
   ProgramSwitchboardTrace,
 } from './binding';
+export type {
+  ProgramRunProgress,
+  ProgramDataProgress,
+  ProgramDataWriter,
+} from './program-store';
