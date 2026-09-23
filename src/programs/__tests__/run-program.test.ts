@@ -9,7 +9,14 @@ import type { ApiUser } from '@shared/api';
 import type { FrameworkConfig } from '../framework-config';
 import type { ResolvedProgramCredentials } from '../credentials';
 import { ErrorCodes } from '@shared/errors';
-import { getRuntimeProgramConfig } from '../runtime-registry';
+import {
+  getRuntimeProgramConfig,
+  type RuntimeProgramConfig,
+} from '../runtime-registry';
+import {
+  resolveAgentSkillRunDefinition,
+  resolveProgramRunDefinition,
+} from '../resolve-run-definition';
 import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
@@ -42,6 +49,11 @@ const run = {
   docsUrl: 'https://posthog.com/docs/metrics',
 };
 
+const composedRuntimeConfig = (id: string): RuntimeProgramConfig =>
+  id === 'self-driving'
+    ? { id, strategy: 'self-driving' }
+    : { id, strategy: 'integration' };
+
 const snapshot = {
   tasks: [],
   statusMessages: ['Metrics configured'],
@@ -72,6 +84,7 @@ describe('runProgram', () => {
     vi.clearAllMocks();
     vi.mocked(getRuntimeProgramConfig).mockReturnValue({
       id: 'metrics',
+      strategy: 'static',
       run,
     });
   });
@@ -156,6 +169,8 @@ describe('runProgram', () => {
   it('resolves a dynamic program from explicit input without a TUI session', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'events-audit',
+      strategy: 'resolved',
+      resolve: (input) => resolveProgramRunDefinition('events-audit', input),
     });
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
@@ -181,6 +196,34 @@ describe('runProgram', () => {
     );
   });
 
+  it('runs a generic agent skill from an explicit skill ID without a TUI session', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'agent-skill',
+      strategy: 'resolved',
+      resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+      allowedTools: ['Agent'],
+    });
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      skillId: 'autocapture',
+      snapshot,
+    });
+
+    const result = await runProgram('agent-skill', {
+      installDir: '/project',
+      credentials,
+      skillId: 'autocapture',
+    });
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(vi.mocked(runAgent).mock.calls[0][0].run).toMatchObject({
+      skillId: 'autocapture',
+      integrationLabel: 'autocapture',
+      reportFile: 'posthog-autocapture-report.md',
+    });
+    expect(vi.mocked(runAgent).mock.calls[0][1].skillId).toBe('autocapture');
+  });
+
   it('seeds and observes this audit run’s ledger, then releases its watcher', async () => {
     const installDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'wizard-audit-host-'),
@@ -198,6 +241,8 @@ describe('runProgram', () => {
     fs.writeFileSync(ledgerFile, JSON.stringify(stale));
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'audit',
+      strategy: 'resolved',
+      resolve: (input) => resolveProgramRunDefinition('audit', input),
       auditLedgerFile: AUDIT_CHECKS_FILE,
       auditSeedChecks: seed,
     });
@@ -252,6 +297,7 @@ describe('runProgram', () => {
     fs.writeFileSync(planFile, JSON.stringify([{ event_name: 'stale' }]));
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'posthog-integration',
+      strategy: 'integration',
       eventPlanFile: EVENT_PLAN_FILE,
     });
     const stop = vi.spyOn(ProgramEventPlanWatcher.prototype, 'stop');
@@ -287,6 +333,7 @@ describe('runProgram', () => {
     );
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'posthog-integration',
+      strategy: 'integration',
       eventPlanFile: EVENT_PLAN_FILE,
     });
     const stop = vi.spyOn(ProgramEventPlanWatcher.prototype, 'stop');
@@ -310,6 +357,7 @@ describe('runProgram', () => {
   it('runs a no-agent program through a host capability without credentials', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'mcp-add',
+      strategy: 'no-agent',
       requiresAi: false,
     });
     const mcp = {
@@ -332,6 +380,72 @@ describe('runProgram', () => {
       runResults: [],
     });
     expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it('aborts a no-agent workflow when the host cancels during the callback', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'mcp-tutorial',
+      strategy: 'no-agent',
+      requiresAi: false,
+    });
+    const controller = new AbortController();
+    let complete!: (value: { outcome: 'success' }) => void;
+    const workflow = vi.fn(
+      () =>
+        new Promise<{ outcome: 'success' }>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const pending = runProgram(
+      'mcp-tutorial',
+      { installDir: '/project' },
+      { workflow, signal: controller.signal },
+    );
+
+    await vi.waitFor(() => expect(workflow).toHaveBeenCalledOnce());
+    expect(workflow).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal }),
+    );
+    controller.abort();
+    complete({ outcome: 'success' });
+
+    expect(await pending).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { code: ErrorCodes.AgentAbort },
+    });
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it('does not start a no-agent workflow after cancellation during credential resolution', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'mcp-tutorial',
+      strategy: 'no-agent',
+      requiresAi: false,
+    });
+    const controller = new AbortController();
+    let complete!: (value: ResolvedProgramCredentials) => void;
+    const resolve = vi.fn(
+      () =>
+        new Promise<ResolvedProgramCredentials>((done) => {
+          complete = done;
+        }),
+    );
+    const workflow = vi.fn().mockResolvedValue({ outcome: 'success' });
+    const pending = runProgram(
+      'mcp-tutorial',
+      { installDir: '/project' },
+      { credentials: { resolve }, workflow, signal: controller.signal },
+    );
+
+    await vi.waitFor(() => expect(resolve).toHaveBeenCalledOnce());
+    controller.abort();
+    complete(credentials);
+
+    expect(await pending).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { code: ErrorCodes.AgentAbort },
+    });
+    expect(workflow).not.toHaveBeenCalled();
   });
 
   it('resolves credentials once through the caller provider', async () => {
@@ -414,6 +528,28 @@ describe('runProgram', () => {
     expect(runAgent).toHaveBeenCalledTimes(1);
   });
 
+  it('aborts before agent startup when host AI approval is declined', async () => {
+    const awaitAiApproval = vi.fn().mockResolvedValue(false);
+
+    const result = await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        credentials: { ...credentials, apiUser: null },
+      },
+      { awaitAiApproval },
+    );
+
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { message: 'AI processing approval declined.' },
+    });
+    expect(awaitAiApproval).toHaveBeenCalledExactlyOnceWith({
+      programId: 'metrics',
+    });
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
   it('preserves a host-prepared run policy for legacy and custom adapters', async () => {
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
@@ -458,9 +594,47 @@ describe('runProgram', () => {
     expect(runAgent).not.toHaveBeenCalled();
   });
 
+  it('forwards a live host signal to the agent and retains its aborted result', async () => {
+    const controller = new AbortController();
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    vi.mocked(runAgent).mockImplementation((_config, _input, options) => {
+      expect(options?.signal).toBe(controller.signal);
+      return new Promise((resolve) => {
+        options?.signal?.addEventListener('abort', () => {
+          resolve({
+            outcome: RunOutcome.Aborted,
+            failure: { code: ErrorCodes.AgentAbort, message: 'Host cancelled' },
+            snapshot,
+          });
+        });
+        started();
+      });
+    });
+
+    const pending = runProgram(
+      'metrics',
+      { installDir: '/project', credentials },
+      { signal: controller.signal },
+    );
+    await entered;
+    controller.abort();
+    const result = await pending;
+
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { code: ErrorCodes.AgentAbort },
+      settledRuns: [{ result: { outcome: RunOutcome.Aborted } }],
+    });
+    expect(result.data.composition.completedRuns).not.toContain('metrics');
+  });
+
   it('resolves self-driving with explicit detected tools and passes completion hooks', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'self-driving',
+      strategy: 'self-driving',
     });
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
@@ -491,6 +665,7 @@ describe('runProgram', () => {
   it('requires a confirmed GitHub connection before self-driving starts', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'self-driving',
+      strategy: 'self-driving',
     });
 
     const result = await runProgram('self-driving', {
@@ -508,6 +683,7 @@ describe('runProgram', () => {
   it('requires prepared framework data and host effects for callable integration', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'posthog-integration',
+      strategy: 'integration',
     });
 
     const result = await runProgram('posthog-integration', {
@@ -525,6 +701,7 @@ describe('runProgram', () => {
   it('passes the integration recipe, hooks, and seeded tasks to the agent', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'posthog-integration',
+      strategy: 'integration',
     });
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
@@ -573,9 +750,9 @@ describe('runProgram', () => {
   });
 
   it('composes an integration run before self-driving with one attributed ledger', async () => {
-    vi.mocked(getRuntimeProgramConfig).mockImplementation((id) => ({
-      id,
-    }));
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
     vi.mocked(runAgent).mockImplementation((config, _input, options) => {
       options?.onProgress?.({ kind: 'status', message: config.programId });
       return Promise.resolve({
@@ -630,9 +807,9 @@ describe('runProgram', () => {
   });
 
   it('stops the composed run when the child fails', async () => {
-    vi.mocked(getRuntimeProgramConfig).mockImplementation((id) => ({
-      id,
-    }));
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Failed,
       failure: {
@@ -662,10 +839,43 @@ describe('runProgram', () => {
     expect(runAgent).toHaveBeenCalledTimes(1);
   });
 
+  it('requires handoff confirmation after a successful composed integration', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+
+    const result = await runProgram('self-driving', {
+      installDir: '/project',
+      credentials,
+      composition: {
+        integration: {
+          installDir: '/project/app',
+          run: { ...run, integrationLabel: 'nextjs' },
+        },
+        githubConnected: true,
+      },
+    });
+
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Aborted,
+      failure: { message: 'Self-driving handoff was not confirmed.' },
+      settledRuns: [
+        { stepId: 'integrate-run', result: { outcome: RunOutcome.Success } },
+      ],
+    });
+    expect(
+      vi.mocked(runAgent).mock.calls.map(([config]) => config.programId),
+    ).toEqual(['posthog-integration']);
+  });
+
   it('turns a rejected composition gate into a decided failure', async () => {
-    vi.mocked(getRuntimeProgramConfig).mockImplementation((id) => ({
-      id,
-    }));
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
       snapshot,
@@ -708,7 +918,9 @@ describe('runProgram', () => {
     const newSkill = path.join(skillRoot, 'during-run');
     fs.mkdirSync(oldSkill, { recursive: true });
     fs.writeFileSync(path.join(oldSkill, '.posthog-wizard'), '');
-    vi.mocked(getRuntimeProgramConfig).mockImplementation((id) => ({ id }));
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
     vi.mocked(runAgent).mockImplementation(() => {
       fs.mkdirSync(newSkill);
       fs.writeFileSync(path.join(newSkill, '.posthog-wizard'), '');

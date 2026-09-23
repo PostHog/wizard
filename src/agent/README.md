@@ -44,6 +44,8 @@ if (result.outcome !== RunOutcome.Success) {
 
 `src/agent/__tests__/run-agent-standalone.test.ts` runs this with no UI, no store and no registry.
 
+Pass an `AbortController` signal in the options and call `controller.abort()` to cancel an active run. The result then has `RunOutcome.Aborted`.
+
 ## Intent
 
 Programs call the agent to do the work a skill describes. The TUI and the headless runner observe the run through `onProgress` and answer it through `interaction`; today `src/programs/run-agent-legacy.ts` does both on top of the session.

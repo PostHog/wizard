@@ -1,7 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadCiInferenceAuthProvider } from '../ci-inference-auth';
+import {
+  createLazyCiInferenceAuthProvider,
+  loadCiInferenceAuthProvider,
+} from '../ci-inference-auth';
 
 describe('CI inference credentials', () => {
   let directory: string;
@@ -47,5 +50,21 @@ describe('CI inference credentials', () => {
     expect(() => loadCiInferenceAuthProvider(42, 'us')).toThrow(
       'trusted gateway origin',
     );
+  });
+
+  it('defers the one-use token file until first resolve and reuses its bearer', async () => {
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', '');
+    const provider = createLazyCiInferenceAuthProvider(42, 'us');
+    await expect(provider.resolve()).rejects.toThrow(
+      'WIZARD_CI_GATEWAY_TOKEN_FILE is required',
+    );
+
+    const tokenFile = join(directory, 'gateway-token');
+    writeFileSync(tokenFile, 'fixed-bearer');
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
+    expect(await provider.resolve()).toMatchObject({ token: 'fixed-bearer' });
+    expect(process.env.WIZARD_CI_GATEWAY_TOKEN_FILE).toBeUndefined();
+    rmSync(tokenFile);
+    expect(await provider.resolve()).toMatchObject({ token: 'fixed-bearer' });
   });
 });
