@@ -12,7 +12,11 @@
 import type { AdditionalFeature } from '@shared/config/constants';
 import type { CloudRegion } from '@utils/types';
 import type { Credentials } from '@shared/posthog/api';
-import type { OutroData, TaskNotice } from '../../progress/progress';
+import type {
+  AuthErrorDetail,
+  OutroData,
+  TaskNotice,
+} from '../../progress/progress';
 import type { PromptContext } from '../../prompt/agent-prompt';
 import type { PackageManagerDetector } from '@utils/package-manager';
 import type { ApiProject, ApiUser } from '@shared/posthog/api';
@@ -264,13 +268,14 @@ export interface BootstrapResult {
  * messages stay exactly what they were.
  */
 export interface AgentFailure {
-  message?: string;
+  message: string;
   /** Structured error data. Renders via `outroError` instead of `outro`. */
   outroData?: OutroData;
   error?: Error;
   exitCode?: number;
-  code?: ErrorCode;
+  code: ErrorCode;
   detail?: Record<string, unknown>;
+  authErrorDetail?: AuthErrorDetail;
 }
 
 export enum RunOutcome {
@@ -328,7 +333,9 @@ export interface RunAgentOptions {
   /** Cancels this run, including its active harness operation. */
   signal?: AbortSignal;
   /** Receives every progress event in emission order. Never awaited. */
-  onProgress?: (event: import('../../progress/progress').AgentProgress) => void;
+  onProgress?: (
+    event: import('../../progress/progress').AgentProgress,
+  ) => unknown;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
   interaction?: AgentInteraction;
 }

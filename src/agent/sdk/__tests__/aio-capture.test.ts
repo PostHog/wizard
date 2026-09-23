@@ -388,11 +388,39 @@ describe('createAioCapture', () => {
         type: 'agent_end',
         willRetry: false,
       });
+      capture.finishPiRun(false);
       await flushMicrotasks();
 
       const traceBody = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(traceBody.event).toBe('$ai_trace');
       expect(traceBody.properties.$ai_span_name).toBe('posthog-integration');
+    });
+
+    it('marks a failed Pi final turn and trace as errors', async () => {
+      const capture = createAioCapture(BASE_ARGS);
+      capture.captureFromPiMessageEndEvent({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-5',
+          content: [],
+          stopReason: 'error',
+          errorMessage: '429 rate limited',
+        },
+      });
+      capture.finishPiRun(true);
+      await flushMicrotasks();
+      const bodies = fetchMock.mock.calls.map((call) =>
+        JSON.parse(call[1].body),
+      );
+      expect(
+        bodies.find((body) => body.event === '$ai_generation').properties
+          .$ai_is_error,
+      ).toBe(true);
+      expect(
+        bodies.find((body) => body.event === '$ai_trace').properties
+          .$ai_is_error,
+      ).toBe(true);
     });
 
     it('does not emit $ai_trace on pi agent_end with willRetry=true', async () => {

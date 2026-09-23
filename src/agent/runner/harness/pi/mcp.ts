@@ -11,11 +11,37 @@ import { VERSION } from '@shared/config/version';
 import { logToFile } from '@utils/debug';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
+let mcpTokenOwners = 0;
+let activeMcpToken: string | undefined;
+let previousMcpToken: string | undefined;
+
+function acquireMcpToken(token: string): () => void {
+  if (mcpTokenOwners > 0 && activeMcpToken !== token) {
+    throw new Error('PostHog MCP token is already owned by another active run');
+  }
+  if (mcpTokenOwners === 0) {
+    previousMcpToken = process.env[MCP_TOKEN_ENV];
+    activeMcpToken = token;
+    process.env[MCP_TOKEN_ENV] = token;
+  }
+  mcpTokenOwners += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    mcpTokenOwners -= 1;
+    if (mcpTokenOwners > 0) return;
+    if (previousMcpToken === undefined) delete process.env[MCP_TOKEN_ENV];
+    else process.env[MCP_TOKEN_ENV] = previousMcpToken;
+    activeMcpToken = undefined;
+    previousMcpToken = undefined;
+  };
+}
 
 export interface PostHogMcpSetup {
   /** pi ExtensionFactory to add to the resource loader's `extensionFactories`. */
   extensionFactory: (pi: unknown) => void;
-  /** Drop the token env var. Call after the run. */
+  /** Release this setup's token ownership. Call after the run. */
   cleanup: () => void;
 }
 
@@ -55,37 +81,39 @@ export async function setupPostHogMcp(opts: {
   const { mcpUrl, accessToken, userAgent } = opts;
 
   // By env NAME: the token stays in this process, off disk, and never reaches pi's env-scrubbed tool subprocesses.
-  process.env[MCP_TOKEN_ENV] = accessToken;
+  const cleanup = acquireMcpToken(accessToken);
 
-  // The adapter ships raw TypeScript; loading through jiti is its documented requirement.
-  const jiti = createJiti(import.meta.url);
-  const mod = await jiti.import<{
-    createMcpAdapter: (options: unknown) => PostHogMcpSetup['extensionFactory'];
-  }>('pi-mcp-adapter');
-  const extensionFactory = mod.createMcpAdapter({
-    config: {
-      mcpServers: {
-        posthog: {
-          url: mcpUrl,
-          auth: 'bearer',
-          bearerTokenEnv: MCP_TOKEN_ENV,
-          headers: { 'User-Agent': userAgent },
-          // Connect at extension load — direct tools register without a session_start.
-          lifecycle: 'eager',
-          // Register only `exec`: `directTools: true` also mints a `posthog_get_<name>` tool per MCP resource, whose sentence-length names overflow Anthropic's 128-char tool-name limit and 400 the whole request.
-          directTools: ['exec'],
-          exposeResources: false,
+  try {
+    // The adapter ships raw TypeScript; loading through jiti is its documented requirement.
+    const jiti = createJiti(import.meta.url);
+    const mod = await jiti.import<{
+      createMcpAdapter: (
+        options: unknown,
+      ) => PostHogMcpSetup['extensionFactory'];
+    }>('pi-mcp-adapter');
+    const extensionFactory = mod.createMcpAdapter({
+      config: {
+        mcpServers: {
+          posthog: {
+            url: mcpUrl,
+            auth: 'bearer',
+            bearerTokenEnv: MCP_TOKEN_ENV,
+            headers: { 'User-Agent': userAgent },
+            // Connect at extension load — direct tools register without a session_start.
+            lifecycle: 'eager',
+            // Register only `exec`: `directTools: true` also mints a `posthog_get_<name>` tool per MCP resource, whose sentence-length names overflow Anthropic's 128-char tool-name limit and 400 the whole request.
+            directTools: ['exec'],
+            exposeResources: false,
+          },
         },
+        // Disable the proxy `mcp` tool (its search indirection pollutes context); the adapter re-enables it only if no direct tools resolve.
+        settings: { disableProxyTool: true, toolPrefix: 'posthog' },
       },
-      // Disable the proxy `mcp` tool (its search indirection pollutes context); the adapter re-enables it only if no direct tools resolve.
-      settings: { disableProxyTool: true, toolPrefix: 'posthog' },
-    },
-  });
-  logToFile(`[pi-mcp] adapter loaded; posthog MCP at ${mcpUrl}`);
-
-  const cleanup = (): void => {
-    delete process.env[MCP_TOKEN_ENV];
-  };
-
-  return { extensionFactory, cleanup };
+    });
+    logToFile(`[pi-mcp] adapter loaded; posthog MCP at ${mcpUrl}`);
+    return { extensionFactory, cleanup };
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 }

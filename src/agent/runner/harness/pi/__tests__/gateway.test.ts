@@ -126,6 +126,15 @@ describe('isGatewayAuthRejection', () => {
       }),
     ).toBe(false);
   });
+
+  it('lets structured non-401 status override quoted 401 prose', () => {
+    expect(
+      isGatewayAuthRejection({
+        errorMessage: 'Earlier log: API error 401',
+        diagnostics: [{ error: { code: 403 } }],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('withGatewayRemint', () => {
@@ -179,6 +188,76 @@ describe('withGatewayRemint', () => {
     });
     return { wrapped, registry, refreshAuth, prompts };
   }
+
+  it.each([
+    [
+      {
+        stopReason: 'error',
+        errorMessage: 'bad request',
+        diagnostics: [{ error: { code: 400 } }],
+      },
+      'WIZARD_API_ERROR',
+    ],
+    [
+      {
+        stopReason: 'error',
+        errorMessage: 'rate limited',
+        diagnostics: [{ error: { code: 429 } }],
+      },
+      'WIZARD_RATE_LIMIT',
+    ],
+    [
+      {
+        stopReason: 'error',
+        errorMessage: 'service unavailable',
+        diagnostics: [{ error: { code: 503 } }],
+      },
+      'WIZARD_API_ERROR',
+    ],
+    [{ stopReason: 'aborted', errorMessage: 'cancelled' }, 'WIZARD_ABORT'],
+  ])('exposes a terminal provider turn %j', async (turn, classification) => {
+    const { wrapped } = harness(gatewayAuth('phe_fresh', Date.now() + HOUR), [
+      turn,
+    ]);
+    await wrapped.prompt('do it');
+    expect(wrapped.terminalFailure()).toMatchObject({
+      classification,
+      message: turn.errorMessage,
+    });
+  });
+
+  it('uses the final turn after remint and recovery', async () => {
+    const { wrapped } = harness(gatewayAuth('phe_old', Date.now() - 1), [
+      rejected,
+      fine,
+    ]);
+    await wrapped.prompt('do it');
+    expect(wrapped.terminalFailure()).toBeUndefined();
+  });
+
+  it('uses rate-limit prose when diagnostics have no HTTP status', async () => {
+    const { wrapped } = harness(gatewayAuth('phe_fresh', Date.now() + HOUR), [
+      {
+        stopReason: 'error',
+        errorMessage: '429 rate limit',
+        diagnostics: [{ error: { code: 'UNKNOWN' } }],
+      },
+    ]);
+    await wrapped.prompt('do it');
+    expect(wrapped.terminalFailure()?.classification).toBe('WIZARD_RATE_LIMIT');
+  });
+
+  it('recognizes a name-only authentication error as an auth failure', async () => {
+    const { wrapped } = harness(gatewayAuth('phe_fresh', Date.now() + HOUR), [
+      {
+        stopReason: 'error',
+        errorMessage: 'rejected',
+        diagnostics: [{ error: { name: 'AuthenticationError' } }],
+      },
+    ]);
+    await wrapped.prompt('do it');
+    expect(wrapped.terminalFailure()?.status).toBe(401);
+  });
 
   it('re-mints once and continues when a turn ends on a 401 from an aged bearer', async () => {
     const { wrapped, registry, refreshAuth, prompts } = harness(

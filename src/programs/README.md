@@ -92,11 +92,12 @@ handoff. An AI program whose organization lacks AI-processing approval needs
 Decided pre-run failures, such as an unknown program or missing credentials,
 return `failed` with `failure.message`. An agent crash appears as `crashed`.
 Non-success agent outcomes carry the agent's `failure`, including any attached
-`Error`. `failure.error` is optional, as are its code and message. Read the
-outcome to decide how the run ended, and use the attached error for diagnostics
-or an upstream rethrow. The host owns logging and user-facing error messages.
-External host capabilities and failures outside the agent's run-body catch can
-still reject, so callers should also handle a rejected promise.
+`Error`. Every failure carries a code and a message; `failure.error` is
+optional. Read the outcome to decide how the run ended, and use the attached
+error for diagnostics or an upstream rethrow. The host owns logging and
+user-facing error messages. External host capabilities and failures outside the
+agent's run-body catch can still reject, so callers should also handle a
+rejected promise.
 
 `options.signal` accepts an `AbortSignal`. A signal aborted before the run
 starts returns `aborted` with an agent-abort failure code. During an agent run,
