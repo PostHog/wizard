@@ -86,10 +86,11 @@ consent.
 
 When `composition.integration` is supplied, its agent runs before the handoff
 and GitHub confirmations, then the self-driving agent runs. A declined later
-confirmation returns `aborted` without rolling back integration edits. Hosts
-that need both decisions before any project write must establish them before
-calling `runProgram`; `compositionWorkflow` takes precedence over boolean
-decisions and is queried at those later checkpoints.
+confirmation returns `aborted`. Ordinary project edits remain, but newly
+installed Wizard skills are removed. Hosts that need both decisions before any
+project write must establish them before calling `runProgram`;
+`compositionWorkflow` takes precedence over boolean decisions and is queried at
+those later checkpoints.
 
 ## Outcomes and progress
 

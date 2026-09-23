@@ -8,13 +8,14 @@ import { checkLocalServices } from '@shared/local-dev';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
-import { setUI } from '@ui';
+import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { clearCleanup, runCleanups, wizardAbort } from '@utils/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
 import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
@@ -269,6 +270,7 @@ it('passes actual self-driving GitHub gate state to the callable host', async ()
   expect(notConnected.githubConnected).toBeNull();
   await runProgramAgent(program('self-driving'), notConnected);
   expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({
+    code: ErrorCodes.AgentAbort,
     message: 'GitHub connection was not confirmed.',
   });
   expect(runAgent).not.toHaveBeenCalled();
@@ -409,7 +411,11 @@ it('cleans new Wizard skills when non-interactive startup crashes before the age
 it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
   'passes a %s result to the existing abort handler',
   async (outcome) => {
-    const failure = { message: 'Failed', exitCode: 2 };
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Failed',
+      exitCode: 2,
+    };
     vi.mocked(runAgent).mockResolvedValue({ outcome, failure, snapshot });
     await runProgramAgent(program(), session());
     expect(wizardAbort).toHaveBeenCalledExactlyOnceWith(failure);
@@ -417,11 +423,34 @@ it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
   },
 );
 
+it('shows the auth guidance from a decided 401 before the error outro', async () => {
+  const detail = { hasSettingsConflict: false, logFilePath: '/tmp/wizard.log' };
+  const show = vi.spyOn(getUI(), 'showAuthError');
+  vi.mocked(runAgent).mockResolvedValue({
+    outcome: RunOutcome.Failed,
+    failure: {
+      code: ErrorCodes.AuthInvalidOrExpired,
+      message: 'Authentication failed (401)',
+      authErrorDetail: detail,
+    },
+    snapshot,
+  });
+  await runProgramAgent(program(), session());
+  expect(show).toHaveBeenCalledExactlyOnceWith(detail);
+  expect(wizardAbort).toHaveBeenCalledWith(
+    expect.objectContaining({ authErrorDetail: detail }),
+  );
+});
+
 it('rethrows the original crash for the outer runner', async () => {
   const error = new Error('mint refused');
   const result: RunResult = {
     outcome: RunOutcome.Crashed,
-    failure: { error },
+    failure: {
+      code: ErrorCodes.InternalUnhandled,
+      message: error.message,
+      error,
+    },
     snapshot,
   };
   vi.mocked(runAgent).mockResolvedValue(result);

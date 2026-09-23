@@ -41,9 +41,9 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   (`AgentFailure`: required code and message, optional outro data, `Error`, exit
   code, detail, and authentication detail). `failure.error` may be attached;
   `Crashed` requires one. A failed result need not have an attached `Error`.
-  Every result carries `skillId` and a `snapshot` of what the run reported:
-  tasks, status lines, stage, token usage totals, final cost, dashboard and
-  notebook URLs, handoff text.
+  Every result carries a `snapshot` of what the run reported: tasks, status
+  lines, stage, token usage totals, final cost, dashboard and notebook URLs,
+  handoff text. It may also carry `skillId`.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
   `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
@@ -112,11 +112,11 @@ then call the same `runProgram` host.
 
 Without `onProgress` the run completes and its snapshot still comes back in the
 result. Without `interaction` the agent installs no ask bridge: `wizard_ask`
-returns its "not available" error and optional task notices are declined, which
-is what a `--ci` run does. A throwing observer is logged and the run continues.
-Progress callbacks are not awaited. Throws and rejections from returned
-thenables are logged; observers must handle errors from detached work they
-start.
+returns its "not available" error and optional task notices are declined. Plain
+`--ci` runs also disable the ask bridge and decline notices. A throwing observer
+is logged and the run continues. Progress callbacks are not awaited. Throws and
+rejections from returned thenables are logged; observers must handle errors from
+detached work they start.
 
 ## Architecture
 
