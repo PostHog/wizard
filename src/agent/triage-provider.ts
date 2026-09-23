@@ -7,14 +7,8 @@
 
 import { Harness } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import {
-  buildGatewayModel,
-  gatewayApiFor,
-} from '@agent/runner/harness/pi/gateway';
-import {
-  modelCapabilities,
-  triageModelFor,
-} from '@agent/runner/switchboard/models';
+import { buildGatewayModel, gatewayApiFor } from './runner/harness/pi/gateway';
+import { modelCapabilities, triageModelFor } from './runner/switchboard/models';
 import type { LLMProvider } from '@posthog/warlock';
 
 const TRIAGE_MAX_TOKENS = 16_384;

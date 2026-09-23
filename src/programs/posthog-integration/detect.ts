@@ -9,29 +9,29 @@
  * extracted here so the `integrate` subcommand can reuse it.
  */
 
-import type { ProgramReadyContext } from '@programs/program-step';
+import type { ProgramReadyContext } from '../program-step';
 import {
   DiscoveredFeature,
   mayReportScanResults,
   ScanConsent,
 } from '@shared/scan-consent';
 import type { ApiUser } from '@shared/api';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '../registry';
 import {
   detectFramework,
   discoverFeatures,
   gatherFrameworkContext,
   checkFrameworkVersion,
-} from '@programs/detection/index';
+} from '../detection/index';
 import { analytics } from '@utils/analytics';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
-import { AI_SOURCE_KINDS } from '@programs/warehouse-sources/registry';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { detectWarehouseSources } from '../warehouse-sources/detect';
+import { AI_SOURCE_KINDS } from '../warehouse-sources/registry';
+import type { DetectedSource } from '../warehouse-sources/types';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
-} from '@programs/warehouse-source/detect';
-import { findPackageJsons } from '@programs/shared/package-scanning';
+} from '../warehouse-source/detect';
+import { findPackageJsons } from '../shared/package-scanning';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,

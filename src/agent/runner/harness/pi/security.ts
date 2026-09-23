@@ -20,7 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
-import { wizardCanUseTool } from '@agent/agent-interface';
+import { wizardCanUseTool } from '../../../agent-interface';
 import {
   createRepeatBlockTracker,
   isWizardDocumentationPath,
@@ -28,12 +28,12 @@ import {
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-} from '@agent/yara-hooks';
+} from '../../../yara-hooks';
 import {
   publishBlockingMatch,
   scanVerdict,
   type ScanContext,
-} from '@agent/yara-policy';
+} from '../../../yara-policy';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 

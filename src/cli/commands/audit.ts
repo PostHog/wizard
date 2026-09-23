@@ -1,4 +1,4 @@
-import { headlessOption, regionOption } from '@cli/headless-mode';
+import { headlessOption, regionOption } from '../headless-mode';
 
 import type { Command } from './command';
 import { familyCommandFactory } from './factories/family-command-factory';

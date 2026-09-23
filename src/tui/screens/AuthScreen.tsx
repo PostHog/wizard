@@ -12,17 +12,14 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { LoadingBox } from '@tui/primitives/index';
-import { MAX_WIDTH } from '@tui/primitives/ScreenContainer';
-import {
-  PrivacyPanel,
-  PRIVACY_PANEL_LABEL,
-} from '@tui/components/PrivacyPanel';
-import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
-import { useKeyBindings, type KeyBinding } from '@tui/hooks/useKeyBindings';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import { Colors, Icons } from '@tui/styles';
+import type { WizardStore } from '../store';
+import { LoadingBox } from '../primitives/index';
+import { MAX_WIDTH } from '../primitives/ScreenContainer';
+import { PrivacyPanel, PRIVACY_PANEL_LABEL } from '../components/PrivacyPanel';
+import { IntroScreenLayout } from './IntroScreenLayout';
+import { useKeyBindings, type KeyBinding } from '../hooks/useKeyBindings';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
+import { Colors, Icons } from '../styles';
 import { copyToClipboard } from '@utils/clipboard';
 
 interface AuthScreenProps {

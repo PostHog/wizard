@@ -10,7 +10,7 @@
  */
 
 import { Harness, Sequence } from '@shared/constants';
-import { WIZARD_COMMANDMENTS } from '@agent/commandments';
+import { WIZARD_COMMANDMENTS } from '../../commandments';
 import { piRuntimeNotes, type RuntimeCaps } from '../harness/pi/runtime-notes';
 
 // ── Sequence axis ───────────────────────────────────────────────────────

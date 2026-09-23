@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
 
 export const posthogDoctorConfig: ProgramConfig = {

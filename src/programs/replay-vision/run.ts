@@ -1,5 +1,5 @@
 import type { AbortCase } from '@agent/types';
-import type { SkillProgramOptions } from '@programs/agent-skill/run-definition';
+import type { SkillProgramOptions } from '../agent-skill/run-definition';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 

@@ -33,21 +33,21 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { WizardStore } from '@tui/store';
-import { McpSuggestedPromptsScreen } from '@tui/screens/McpSuggestedPromptsScreen';
-import { Colors } from '@tui/styles';
+import type { WizardStore } from '../../store';
+import { McpSuggestedPromptsScreen } from '../../screens/McpSuggestedPromptsScreen';
+import { Colors } from '../../styles';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
-import { TAILORED_ROLES } from '@tui/services/mcp-role-prompts';
+import { TAILORED_ROLES } from '../../services/mcp-role-prompts';
 import {
   assembleProfile,
   type ProjectDataProfile,
-} from '@tui/services/mcp-project-profile';
-import { seededProfile } from '@tui/services/mcp-seed-events';
+} from '../../services/mcp-project-profile';
+import { seededProfile } from '../../services/mcp-seed-events';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,
-} from '@tui/services/mcp-suggested-prompts-services';
+} from '../../services/mcp-suggested-prompts-services';
 import { McpOutcome } from '@shared/run-state';
 
 // One Integration per framework family so cycling exercises every

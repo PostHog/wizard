@@ -4,4 +4,4 @@
  * revenue narrative grows its own diagrams or talking points.
  */
 
-export { getContentBlocks } from '@tui/decks/agent-skill/index';
+export { getContentBlocks } from '../agent-skill/index';

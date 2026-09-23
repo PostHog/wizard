@@ -5,11 +5,11 @@
  */
 
 import { Text } from 'ink';
-import { Colors } from '@tui/styles';
-import type { WizardStore } from '@tui/store';
-import { TextRevealMode } from '@tui/primitives/TextBlock';
-import type { ContentBlock } from '@tui/primitives/content-types';
-import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';
+import { Colors } from '../../styles';
+import type { WizardStore } from '../../store';
+import { TextRevealMode } from '../../primitives/TextBlock';
+import type { ContentBlock } from '../../primitives/content-types';
+import { StatusPeekTrigger } from '../../components/StatusPeekTrigger';
 import { POSTHOG_DATA_FLOW } from './data-flow.js';
 import { PRODUCT_SUITE_BLOCK } from './product-suite.js';
 import { LINE_CHART_BLOCK } from './line-chart.js';

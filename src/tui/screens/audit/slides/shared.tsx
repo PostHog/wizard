@@ -1,6 +1,6 @@
 import { Box } from 'ink';
 import type { ReactNode } from 'react';
-import { Colors } from '@tui/styles';
+import { Colors } from '../../../styles';
 
 /** Slide shape consumed by `AuditAreaPane`. One per `AuditCheck.area` value. */
 export interface AreaSlide {

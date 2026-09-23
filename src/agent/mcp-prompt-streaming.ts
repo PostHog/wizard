@@ -13,12 +13,12 @@
  */
 
 import type { Credentials } from '@shared/api';
-import type { InferenceAuthProvider } from '@agent/types';
+import type { InferenceAuthProvider } from './types';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import { buildAgentEnv, buildRunTags } from '@agent/agent-interface';
+import { buildAgentEnv, buildRunTags } from './agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
-import { createIsolatedAgentConfigDir } from '@agent/stored-login';
+import { createIsolatedAgentConfigDir } from './stored-login';
 import { analytics } from '@utils/analytics';
 
 /**

@@ -12,11 +12,11 @@ import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
  */
 
 import { Text } from 'ink';
-import { Colors } from '@tui/styles';
-import type { WizardStore } from '@tui/store';
-import { TextRevealMode } from '@tui/primitives/TextBlock';
-import type { ContentBlock } from '@tui/primitives/content-types';
-import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';
+import { Colors } from '../../styles';
+import type { WizardStore } from '../../store';
+import { TextRevealMode } from '../../primitives/TextBlock';
+import type { ContentBlock } from '../../primitives/content-types';
+import { StatusPeekTrigger } from '../../components/StatusPeekTrigger';
 import { PIPELINE_BLOCK } from './pipeline-diagram.js';
 
 const CLEAR: ContentBlock = { type: 'clear', pause: 2000 };

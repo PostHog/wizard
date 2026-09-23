@@ -11,15 +11,15 @@
  */
 
 import { getOrAskForProjectData } from '@programs';
-import { tuiAuthHost } from '@tui/auth-host';
+import { tuiAuthHost } from '../auth-host';
 import { Program, createPosthogInferenceAuthProvider } from '@programs';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import type { ApiUser, Credentials } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,
-} from '@tui/services/mcp-project-profile';
-import { seedDemoEvents as runSeed } from '@tui/services/mcp-seed-events';
+} from './mcp-project-profile';
+import { seedDemoEvents as runSeed } from './mcp-seed-events';
 
 // The streamed event shape is the agent's; re-exported so the screen and the
 // playground keep their import path.

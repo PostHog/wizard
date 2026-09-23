@@ -10,9 +10,9 @@ import {
   findTarget,
   installOrUpdatePostHogCli,
   installSteeringSnippet,
-} from '@cli/install-cli-steering';
+} from '../../install-cli-steering';
 import type { Command } from '../command';
-import { getUI, setUI } from '@cli/ui';
+import { getUI, setUI } from '../../ui';
 
 export const cliAddCommand: Command = {
   name: 'add',

@@ -9,8 +9,8 @@
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
 import type { AbortCase } from '@agent/types';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { detectWarehouseSources } from '../warehouse-sources/detect';
+import type { DetectedSource } from '../warehouse-sources/types';
 
 /** Structured detection errors rendered by the intro screen. */
 export type WarehouseDetectError =

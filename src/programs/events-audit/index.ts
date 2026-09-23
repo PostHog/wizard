@@ -1,12 +1,12 @@
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 import type { AdditionalFeature } from '@shared/constants';
 import { OutroKind } from '@agent';
 import { isUsingTypeScript } from '@utils/package-json';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { resolveEventsAuditRunDefinition } from '@programs/resolve-run-definition';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@programs/audit/types';
-import { seedAuditLedger } from '@programs/audit/seed';
+import { resolveEventsAuditRunDefinition } from '../resolve-run-definition';
+import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../audit/types';
+import { seedAuditLedger } from '../audit/seed';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
 // SETUP_REPORT_FILE is also re-exported for backward compat with existing

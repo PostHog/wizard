@@ -10,7 +10,7 @@ import {
 } from '@tui';
 import { ALL_FEATURE_VALUES } from '@tui';
 import { McpClientStatus, namesWithStatus } from '@tui';
-import { getUI } from '@cli/ui';
+import { getUI } from '../../ui';
 
 /** Per-client outcome, so a scripted caller can turn a failure into an exit code. */
 export interface McpStepOutcome {

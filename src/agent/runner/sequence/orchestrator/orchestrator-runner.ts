@@ -22,16 +22,16 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type TaskNotice } from '@agent/progress';
+import { OutroKind, type TaskNotice } from '../../../progress';
 import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
-import { installSkillById } from '@agent/tools';
+import { installSkillById } from '../../../tools';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { ErrorCodes, WizardError } from '@shared/errors';
-import type { AgentInteraction } from '@agent/progress';
+import type { AgentInteraction } from '../../../progress';
 import type {
   AgentFailure,
   SequenceResult,
@@ -62,7 +62,7 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
+import { LONGER_ASK_TIMEOUT_MS } from '../../../wizard-ask-bridge';
 import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
@@ -75,7 +75,7 @@ import {
   ASK_TOOL,
   type AgentPrompt,
   type OrchestratorPromptContext,
-} from '@agent/agent-prompt-loader';
+} from '../../../agent-prompt-loader';
 
 /** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
 const isDocPage = (name: string): boolean =>

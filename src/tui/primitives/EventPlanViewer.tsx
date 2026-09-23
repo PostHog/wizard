@@ -3,7 +3,7 @@
  */
 
 import { Box, Text } from 'ink';
-import type { PlannedEvent } from '@tui/store';
+import type { PlannedEvent } from '../store';
 
 interface EventPlanViewerProps {
   events: PlannedEvent[];

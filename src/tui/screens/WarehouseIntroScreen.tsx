@@ -12,8 +12,8 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { PickerMenu } from '@tui/primitives/index';
+import type { WizardStore } from '../store';
+import { PickerMenu } from '../primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { getDetectedWarehouseSources } from '@programs';
 import type { WarehouseDetectError } from '@programs/types';

@@ -1,17 +1,8 @@
-import { DefaultMCPClient } from '@tui/add-mcp-server-to-clients/MCPClient';
-import {
-  DefaultMCPClientConfig,
-  buildMCPUrl,
-} from '@tui/add-mcp-server-to-clients/defaults';
-import {
-  PluginCapable,
-  PluginInstallResult,
-} from '@tui/add-mcp-server-to-clients/plugin-client';
-import {
-  redactSecrets,
-  type InstallResult,
-} from '@tui/add-mcp-server-to-clients/results';
-import { LoginCapable } from '@tui/add-mcp-server-to-clients/login-client';
+import { DefaultMCPClient } from '../MCPClient';
+import { DefaultMCPClientConfig, buildMCPUrl } from '../defaults';
+import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import { redactSecrets, type InstallResult } from '../results';
+import { LoginCapable } from '../login-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '@utils/analytics';

@@ -9,16 +9,16 @@
 import { Box, Text, useInput } from 'ink';
 import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import {
   LinkText,
   ModalOverlay,
   PickerMenu,
   extractUrls,
-} from '@tui/primitives/index';
-import { Colors, Icons } from '@tui/styles';
+} from '../primitives/index';
+import { Colors, Icons } from '../styles';
 import { copyToClipboard, openInBrowser } from '@utils/clipboard';
-import { useKeyBindings } from '@tui/hooks/useKeyBindings';
+import { useKeyBindings } from '../hooks/useKeyBindings';
 import type { AskAnswers, AskQuestion } from '@agent/types';
 
 interface WizardAskScreenProps {

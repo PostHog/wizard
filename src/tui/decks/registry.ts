@@ -1,7 +1,7 @@
 import type { ProgramId } from '@programs/types';
-import type { WizardStore } from '@tui/store';
-import type { ContentBlock } from '@tui/primitives/content-types';
-import type { Tip } from '@tui/components/TipsCard';
+import type { WizardStore } from '../store';
+import type { ContentBlock } from '../primitives/content-types';
+import type { Tip } from '../components/TipsCard';
 import { getContentBlocks as agentSkillBlocks } from './agent-skill/index.js';
 import { getContentBlocks as errorTrackingBlocks } from './error-tracking/index.js';
 import { getTips as errorTrackingTips } from './error-tracking/tips.js';

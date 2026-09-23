@@ -8,14 +8,14 @@
 
 import { Box, Text } from 'ink';
 import { useState, useMemo, type ReactNode } from 'react';
-import { Colors, Icons } from '@tui/styles';
+import { Colors, Icons } from '../styles';
 import {
   useKeyBindings,
   KeyMatch,
   type KeyBinding,
-} from '@tui/hooks/useKeyBindings';
-import type { WizardStore } from '@tui/store';
-import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@tui/constants';
+} from '../hooks/useKeyBindings';
+import type { WizardStore } from '../store';
+import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../constants';
 
 // Re-exported so existing importers (e.g. LearnCard) keep their path.
 export { COLLAPSED_COUNT, EXPANDED_COUNT };

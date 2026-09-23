@@ -1,8 +1,4 @@
-import type {
-  Middleware,
-  MiddlewareContext,
-  MiddlewareStore,
-} from '@agent/middleware/types';
+import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import { computeTokenCostUsd } from '@shared/token-pricing';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';

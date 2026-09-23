@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { Colors, Icons } from '@tui/styles';
-import { LoadingBox } from '@tui/primitives/index';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+import { Colors, Icons } from '../../styles';
+import { LoadingBox } from '../../primitives/index';
+import { useStdoutDimensions } from '../../hooks/useStdoutDimensions';
 import { AUDIT_SEVERITY_STYLE } from '@programs';
 import type { AuditCheck } from '@programs/types';
 

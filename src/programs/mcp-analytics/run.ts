@@ -1,6 +1,6 @@
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import type { SkillProgramOptions } from '@programs/agent-skill/run-definition';
+import type { SkillProgramOptions } from '../agent-skill/run-definition';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 

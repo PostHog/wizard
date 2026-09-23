@@ -1,12 +1,12 @@
 import type { Arguments } from 'yargs';
 import { LoggingUI } from '@headless';
-import { headlessOption, isHeadless } from '@cli/headless-mode';
+import { headlessOption, isHeadless } from '../../headless-mode';
 import { Program } from '@programs';
 import { VERSION } from '@shared/version';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
-import { cliTuiHost } from '@cli/tui-host';
-import { setUI } from '@cli/ui';
+import { cliTuiHost } from '../../tui-host';
+import { setUI } from '../../ui';
 
 export const mcpAddCommand: Command = {
   name: 'add',

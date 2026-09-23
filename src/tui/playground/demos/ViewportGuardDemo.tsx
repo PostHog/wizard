@@ -11,7 +11,7 @@ import {
   ViewportTooSmall,
   MIN_VIEWPORT_COLUMNS,
   MIN_VIEWPORT_ROWS,
-} from '@tui/primitives/index';
+} from '../../primitives/index';
 
 const SAMPLES: Array<[number, number]> = [
   [70, 8],

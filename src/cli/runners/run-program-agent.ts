@@ -65,9 +65,9 @@ import type { ProgramConfig } from '@programs/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { WizardSession } from '@tui/types';
-import { getUI } from '@cli/ui';
+import { getUI } from '../ui';
 import { registerCleanup } from '@utils/cleanup-registry';
-import { wizardAbort } from '@cli/wizard-abort';
+import { wizardAbort } from '../wizard-abort';
 
 /** Ends a run with a decided failure. */
 type HostAbort = (failure?: HostFailure) => Promise<never>;

@@ -1,4 +1,4 @@
-import { runWizard, runWizardCI } from '@cli/runners';
+import { runWizard, runWizardCI } from '../runners';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 import { selfDrivingConfig } from '@programs';

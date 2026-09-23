@@ -1,6 +1,6 @@
-import { MCPClient } from '@tui/add-mcp-server-to-clients/MCPClient';
-import type { InstallResult } from '@tui/add-mcp-server-to-clients/results';
-import { BrowserFinishable } from '@tui/add-mcp-server-to-clients/browser-client';
+import { MCPClient } from '../MCPClient';
+import type { InstallResult } from '../results';
+import { BrowserFinishable } from '../browser-client';
 import { openTrackedLink } from '@utils/links';
 
 /**

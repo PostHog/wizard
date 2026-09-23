@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../../store';
 import {
   TabContainer,
   SplitView,
   LogViewer,
   HNViewer,
-} from '@tui/primitives/index';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+} from '../../primitives/index';
+import { useStdoutDimensions } from '../../hooks/useStdoutDimensions';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';

@@ -23,7 +23,7 @@ import {
   parseRequirementsTxt,
   parsePyprojectToml,
   parsePipfile,
-} from '@programs/detection/features';
+} from '../detection/features';
 import { SOURCE_DETECTORS } from './registry.js';
 import type { DetectedSource, SourceDetector } from './types.js';
 

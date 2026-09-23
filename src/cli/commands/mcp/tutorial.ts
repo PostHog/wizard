@@ -5,8 +5,8 @@ import { VERSION } from '@shared/version';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 import type { Command } from '../command';
-import { cliTuiHost } from '@cli/tui-host';
-import { getUI, setUI } from '@cli/ui';
+import { cliTuiHost } from '../../tui-host';
+import { getUI, setUI } from '../../ui';
 
 export const mcpTutorialCommand: Command = {
   name: 'tutorial',

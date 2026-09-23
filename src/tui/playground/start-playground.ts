@@ -4,7 +4,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore } from '@tui/store';
+import { WizardStore } from '../store';
 import { PlaygroundApp } from './PlaygroundApp.js';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';

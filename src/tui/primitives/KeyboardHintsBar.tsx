@@ -6,8 +6,8 @@
  */
 
 import { Box, Text } from 'ink';
-import { useKeyboardHintsContext } from '@tui/hooks/useKeyboardHints';
-import { Colors } from '@tui/styles';
+import { useKeyboardHintsContext } from '../hooks/useKeyboardHints';
+import { Colors } from '../styles';
 
 export const KeyboardHintsBar = () => {
   const { hints } = useKeyboardHintsContext();

@@ -14,7 +14,7 @@
  */
 
 import { totalTokenCount, type WizardStore } from './store.js';
-import { isRunFailure, MINT_FAILURE_CONTACT } from '@tui/mint-failure';
+import { isRunFailure, MINT_FAILURE_CONTACT } from './mint-failure';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
 import { OutroKind } from '@shared/outro';

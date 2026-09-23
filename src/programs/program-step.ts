@@ -1,9 +1,9 @@
 import type { DiscoveredFeature } from '@shared/scan-consent';
 import type { TaskNotice } from '@agent/types';
 import type { ProgramSession } from './program-session';
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
-import type { FrameworkConfig } from '@programs/framework-config';
+import type { FrameworkConfig } from './framework-config';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';

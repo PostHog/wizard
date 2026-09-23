@@ -13,7 +13,7 @@
  */
 
 import { Text } from 'ink';
-import { Icons, Colors } from '@tui/styles';
+import { Icons, Colors } from '../styles';
 
 interface ConfirmButtonProps {
   /** Button text. Defaults to "Confirm". */

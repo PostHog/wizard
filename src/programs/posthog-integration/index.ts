@@ -1,29 +1,23 @@
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
-import type {
-  ProgramCiHost,
-  ProgramRunHost,
-} from '@programs/host-capabilities';
-import type { FrameworkDetectionState } from '@programs/detection/context';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
+import type { ProgramCiHost, ProgramRunHost } from '../host-capabilities';
+import type { FrameworkDetectionState } from '../detection/context';
 import { mayReportScanResults } from '@shared/scan-consent';
 import type { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/package-json';
 import { hasDeclaredDependency } from '@utils/package-json';
 import { analytics } from '@utils/analytics';
-import {
-  detectFramework,
-  gatherFrameworkContext,
-} from '@programs/detection/index';
+import { detectFramework, gatherFrameworkContext } from '../detection/index';
 import {
   scopeInstallDirToProject,
   type ProjectScopeSession,
-} from '@programs/detection/project-scope';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+} from '../detection/project-scope';
+import { FRAMEWORK_REGISTRY } from '../registry';
 import { ErrorCodes } from '@shared/errors';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';
-import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
+import { getDetectedWarehouseSources } from '../warehouse-source/detect';
 import {
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,

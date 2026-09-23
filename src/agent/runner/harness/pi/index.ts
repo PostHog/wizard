@@ -22,9 +22,9 @@ import {
   WIZARD_USER_AGENT,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { AgentErrorType } from '@agent/agent-interface';
-import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
-import { AgentOutputSignals } from '@agent/output-signals';
+import { AgentErrorType } from '../../../agent-interface';
+import { AgentSignals, REMARK_INSTRUCTION } from '../../../signals';
+import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import type { GatewayAuth } from '@shared/gateway-auth';
 import {
@@ -32,16 +32,16 @@ import {
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
-import { createAioCapture } from '@agent/aio-capture';
+import { createAioCapture } from '../../../aio-capture';
 import type {
   AgentResult,
   AgentHarness,
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
-import type { BootstrapResult } from '@agent/runner/shared/types';
-import type { ProgressEmitter } from '@agent/progress';
-import { createEmitLog } from '@agent/runner/shared/progress-collector';
+import type { BootstrapResult } from '../../shared/types';
+import type { ProgressEmitter } from '../../../progress';
+import { createEmitLog } from '../../shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
@@ -324,7 +324,7 @@ export const piBackend: AgentHarness = {
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
       // path, so the first scanned call doesn't eat cold-start latency.
-      const { prewarmYaraScanner } = await import('@agent/yara-hooks');
+      const { prewarmYaraScanner } = await import('../../../yara-hooks');
       void prewarmYaraScanner();
 
       // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point

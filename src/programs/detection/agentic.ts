@@ -30,7 +30,7 @@ import type {
   InferenceAuthProvider,
   SpinnerHandle,
 } from '@agent/types';
-import { createPosthogInferenceAuthProvider } from '@programs/credentials';
+import { createPosthogInferenceAuthProvider } from '../credentials';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };

@@ -3,11 +3,8 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { execSync } from 'node:child_process';
-import {
-  DefaultMCPClient,
-  MCPServerConfig,
-} from '@tui/add-mcp-server-to-clients/MCPClient';
-import { getNativeHTTPServerConfig } from '@tui/add-mcp-server-to-clients/defaults';
+import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
+import { getNativeHTTPServerConfig } from '../defaults';
 import { runtimeEnv } from '@env';
 
 export const OpenCodeMCPConfig = z

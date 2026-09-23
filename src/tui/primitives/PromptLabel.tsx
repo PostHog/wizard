@@ -6,7 +6,7 @@
  */
 
 import { Box, Text } from 'ink';
-import { Colors } from '@tui/styles';
+import { Colors } from '../styles';
 
 interface PromptLabelProps {
   message?: string;

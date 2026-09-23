@@ -10,9 +10,9 @@ import {
   type DetectEvent,
   type DetectTarget,
 } from './agentic.js';
-import { authenticate, type AuthSession } from '@programs/authenticate';
-import type { ProgramCiHost } from '@programs/host-capabilities';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { authenticate, type AuthSession } from '../authenticate';
+import type { ProgramCiHost } from '../host-capabilities';
+import { FRAMEWORK_REGISTRY } from '../registry';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
   Integration,

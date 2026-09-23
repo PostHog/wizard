@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'fs';
-import { findPackageJsons } from '@programs/shared/package-scanning';
+import { findPackageJsons } from '../shared/package-scanning';
 
 export type WebAnalyticsDetectError =
   | {

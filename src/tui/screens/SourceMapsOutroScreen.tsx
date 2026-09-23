@@ -13,9 +13,9 @@ import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { Colors } from '@tui/styles';
-import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
+import type { WizardStore } from '../store';
+import { Colors } from '../styles';
+import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey';
 import { OutroKind } from '@shared/outro';
 
 interface SourceMapsOutroScreenProps {

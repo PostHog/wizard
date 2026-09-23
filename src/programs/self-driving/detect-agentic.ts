@@ -16,13 +16,13 @@ import type {
   AgenticDetectOptions,
   AgenticDetectionReport,
   DetectEvent,
-} from '@programs/detection/agentic';
+} from '../detection/agentic';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '@programs/detection/project-scope';
-import { gatherFrameworkContext } from '@programs/detection/index';
-import type { FrameworkDetectionState } from '@programs/detection/context';
+} from '../detection/project-scope';
+import { gatherFrameworkContext } from '../detection/index';
+import type { FrameworkDetectionState } from '../detection/context';
 import type { Integration } from '@shared/constants';
 
 export type { DetectEvent };

@@ -12,17 +12,17 @@
 import { Box, Text } from 'ink';
 import { useEffect, useMemo, useState } from 'react';
 import { buildPickerIndex, rankOptions } from './picker-filter.js';
-import { Icons, Colors } from '@tui/styles';
+import { Icons, Colors } from '../styles';
 import { PromptLabel } from './PromptLabel.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { wordWrap } from './layout-helpers.js';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
 import {
   useKeyBindings,
   KeyMatch,
   type KeyBinding,
   type KeyMatchOrChar,
-} from '@tui/hooks/useKeyBindings';
+} from '../hooks/useKeyBindings';
 
 export interface PickerOption<T> {
   label: string;

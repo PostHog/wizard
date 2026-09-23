@@ -2,7 +2,7 @@ import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
 import type { AgentRunDefinition, RunHooks } from '@agent/types';
 import { OutroKind } from '@agent';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { DetectedSource } from '../warehouse-sources/types';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';

@@ -5,8 +5,8 @@
  *   intro → (press enter) → run (tabbed demo view)
  */
 
-import { ScreenContainer, TabContainer } from '@tui/primitives/index';
-import type { WizardStore } from '@tui/store';
+import { ScreenContainer, TabContainer } from '../primitives/index';
+import type { WizardStore } from '../store';
 import { WelcomeDemo } from './demos/WelcomeDemo.js';
 import { LayoutDemo } from './demos/LayoutDemo.js';
 import { InputDemo } from './demos/InputDemo.js';

@@ -8,12 +8,12 @@
  */
 
 import { Box, Text } from 'ink';
-import { Colors } from '@tui/styles';
-import type { WizardStore } from '@tui/store';
-import { ContentSequencer, TextRevealMode } from '@tui/primitives/index';
-import type { ContentBlock } from '@tui/primitives/index';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@tui/primitives/TabContainer';
+import { Colors } from '../styles';
+import type { WizardStore } from '../store';
+import { ContentSequencer, TextRevealMode } from '../primitives/index';
+import type { ContentBlock } from '../primitives/index';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
+import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer';
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;

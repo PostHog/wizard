@@ -1,4 +1,4 @@
-import type { PickerOption } from '@tui/primitives/index';
+import type { PickerOption } from './primitives/index';
 
 export type IntroMenuView = 'default' | 'more-info' | 'commands';
 

@@ -12,8 +12,8 @@
 import {
   createWizardAskBridge,
   type WizardAskBridge,
-} from '@agent/wizard-ask-bridge';
-import type { AgentInteraction } from '@agent/progress';
+} from '../../wizard-ask-bridge';
+import type { AgentInteraction } from '../../progress';
 
 export function createAskBridge(
   interaction: AgentInteraction | undefined,

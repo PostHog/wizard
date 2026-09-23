@@ -9,14 +9,14 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../../store';
 import {
   ConfirmationInput,
   LoadingBox,
   ModalOverlay,
-} from '@tui/primitives/index';
-import { Colors, Icons } from '@tui/styles';
-import { ServiceHealthList } from '@tui/components/ServiceHealthList';
+} from '../../primitives/index';
+import { Colors, Icons } from '../../styles';
+import { ServiceHealthList } from '../../components/ServiceHealthList';
 import {
   getBlockingServiceKeys,
   SIGNUP_WIZARD_READINESS_CONFIG,
@@ -26,7 +26,7 @@ import { ErrorCodes } from '@shared/errors';
 import { downloadSkill } from '@programs';
 import { fetchSkillMenu } from '@shared/skill-menu';
 import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
-import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
+import { useDismissOnAnyKey } from '../../hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {
   store: WizardStore;

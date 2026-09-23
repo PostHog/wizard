@@ -2,11 +2,11 @@ import { LoggingUI } from '@headless';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
-import { runWizard } from '@cli/runners';
+import { runWizard } from '../runners';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 import { posthogDoctorConfig, fetchHealthIssues, getKindMeta } from '@programs';
-import { getUI, setUI } from '@cli/ui';
+import { getUI, setUI } from '../ui';
 
 export const doctorCommand: Command = {
   name: 'doctor',
@@ -50,7 +50,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
 
   try {
     const { getOrAskForProjectData } = await import('@programs');
-    const { cliAuthHost } = await import('@cli/runners/auth-host');
+    const { cliAuthHost } = await import('../runners/auth-host');
     const { host, accessToken, projectId } = await getOrAskForProjectData(
       {
         signup: false,

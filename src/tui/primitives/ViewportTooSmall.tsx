@@ -11,7 +11,7 @@
 
 import { Box, Text } from 'ink';
 import { wordWrap } from './layout-helpers.js';
-import { Colors } from '@tui/styles';
+import { Colors } from '../styles';
 
 /** Smallest terminal the wizard will render its screens into. */
 export const MIN_VIEWPORT_COLUMNS = 80;

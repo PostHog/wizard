@@ -16,14 +16,14 @@
 import opn from 'opn';
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { useKeyBindings } from '@tui/hooks/useKeyBindings';
-import { Colors } from '@tui/styles';
-import { useSkillEntry } from '@tui/screens/SkillSourceInfo';
+import type { WizardStore } from '../store';
+import { useKeyBindings } from '../hooks/useKeyBindings';
+import { Colors } from '../styles';
+import { useSkillEntry } from './SkillSourceInfo';
 import { fetchUserData } from '@shared/api';
 import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { LoadingBox } from '@tui/primitives/index';
+import { LoadingBox } from '../primitives/index';
 
 const ORG_ADMIN_LEVEL = 8;
 const SETTINGS_PATH = 'settings/organization-details';

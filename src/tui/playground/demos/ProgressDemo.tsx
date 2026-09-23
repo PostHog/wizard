@@ -5,9 +5,9 @@
 
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
-import { ProgressList, LoadingBox } from '@tui/primitives/index';
-import type { ProgressItem } from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
+import { ProgressList, LoadingBox } from '../../primitives/index';
+import type { ProgressItem } from '../../primitives/index';
+import { Colors } from '../../styles';
 
 const INITIAL_ITEMS: ProgressItem[] = [
   {

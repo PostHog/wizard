@@ -13,7 +13,7 @@
 import { randomUUID } from 'crypto';
 
 import { analytics } from '@utils/analytics';
-import type { AskAnswers, AskQuestion, PendingQuestion } from '@agent/progress';
+import type { AskAnswers, AskQuestion, PendingQuestion } from './progress';
 
 export interface WizardAskRequest {
   questions: AskQuestion[];

@@ -30,7 +30,7 @@ import { cliAuthHost } from './auth-host';
 import type { OutroData } from '@shared/outro';
 import type { RunPhase as RunPhaseT } from '@shared/run-state';
 import { getAuditChecks, detectErrorCode, createUiReducer } from '@programs';
-import { getUI, setUI } from '@cli/ui';
+import { getUI, setUI } from '../ui';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -124,7 +124,7 @@ export function runNonInteractive(
       '@utils/debug'
     );
     const { registerCleanup, runCleanups, wizardAbort, WizardError } =
-      await import('@cli/wizard-abort');
+      await import('../wizard-abort');
     runRegisteredCleanups = runCleanups;
 
     configureLogFileFromEnvironment();
@@ -444,8 +444,8 @@ async function serveControl(
   ).loadControl();
   const { wizardStoreControlTarget } = await import('@tui');
   const { InkUI } = await import('@tui');
-  const { createControlHooks } = await import('@cli/control-hooks');
-  const { controlMode } = await import('@cli/control-flags');
+  const { createControlHooks } = await import('../control-hooks');
+  const { controlMode } = await import('../control-flags');
   const { runProgramAgent } = await import('./run-program-agent');
   const { VERSION } = await import('@shared/version');
   const { logToFile } = await import('@utils/debug');

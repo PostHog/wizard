@@ -1,12 +1,12 @@
-import { createSkillProgram } from '@programs/agent-skill/index';
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
+import { createSkillProgram } from '../agent-skill/index';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import {
   AUDIT_PROGRAM_OPTIONS,
   resolveAuditRunDefinition,
-} from '@programs/resolve-run-definition';
+} from '../resolve-run-definition';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
 

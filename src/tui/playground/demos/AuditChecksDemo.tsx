@@ -5,7 +5,7 @@
  */
 
 import { Box } from 'ink';
-import { AuditChecksViewer } from '@tui/screens/audit/AuditChecksViewer/AuditChecksViewer';
+import { AuditChecksViewer } from '../../screens/audit/AuditChecksViewer/AuditChecksViewer';
 import type { AuditCheck } from '@programs/types';
 
 const MOCK_CHECKS: AuditCheck[] = [

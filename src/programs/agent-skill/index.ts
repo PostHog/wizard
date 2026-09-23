@@ -19,7 +19,7 @@
  *   })
  */
 
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import {
   skillRunDefinition,
   type SkillProgramOptions,

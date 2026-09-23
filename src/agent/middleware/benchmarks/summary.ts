@@ -1,10 +1,6 @@
-import type { ProgressEmitter, SpinnerHandle } from '@agent/progress';
-import { AgentSignals } from '@agent/agent-interface';
-import type {
-  Middleware,
-  MiddlewareContext,
-  MiddlewareStore,
-} from '@agent/middleware/types';
+import type { ProgressEmitter, SpinnerHandle } from '../../progress';
+import { AgentSignals } from '../../agent-interface';
+import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TokenData } from './token-tracker';
 import type { TurnData } from './turn-counter';
 import type { CostData } from './cost-tracker';

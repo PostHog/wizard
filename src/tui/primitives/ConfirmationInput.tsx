@@ -8,9 +8,9 @@
 
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { Icons, Colors } from '@tui/styles';
+import { Icons, Colors } from '../styles';
 import { PromptLabel } from './PromptLabel.js';
-import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
+import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 
 interface ConfirmationInputProps {
   message: string;

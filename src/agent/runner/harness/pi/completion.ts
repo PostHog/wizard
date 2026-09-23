@@ -1,4 +1,4 @@
-import { AgentErrorType } from '@agent/signals';
+import { AgentErrorType } from '../../../signals';
 
 /** Which completion guard should fail a pi run, or undefined for a clean finish. */
 export function completionFailure(args: {

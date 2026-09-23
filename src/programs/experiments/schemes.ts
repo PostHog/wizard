@@ -13,7 +13,7 @@ import {
   Sequence,
   SONNET_5_MODEL,
 } from '@shared/constants';
-import type { ProgramId } from '@programs/types';
+import type { ProgramId } from '../types';
 import { logToFile } from '@utils/debug';
 import type { EffortLevel } from '@agent/types';
 

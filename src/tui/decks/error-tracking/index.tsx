@@ -1,8 +1,8 @@
 /** Error-tracking learn-deck: the source-maps narrative, worded to also fit platforms that upload nothing. */
 
-import type { WizardStore } from '@tui/store';
-import type { ContentBlock } from '@tui/primitives/content-types';
-import { buildSourceMapsDeck } from '@tui/decks/error-tracking-upload-source-maps/index';
+import type { WizardStore } from '../../store';
+import type { ContentBlock } from '../../primitives/content-types';
+import { buildSourceMapsDeck } from '../error-tracking-upload-source-maps/index';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
   buildSourceMapsDeck(store, {

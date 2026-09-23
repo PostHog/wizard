@@ -8,12 +8,12 @@ import type {
 import { AgentSignals, shouldDisableAsk } from '@agent';
 import type { Credentials } from '@shared/api';
 import type { HostResolution } from '@shared/host-resolution';
-import type { FrameworkConfig } from '@programs/framework-config';
+import type { FrameworkConfig } from '../framework-config';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
-} from '@programs/framework-config';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+} from '../framework-config';
+import type { DetectedSource } from '../warehouse-sources/types';
 import { OutroKind } from '@agent';
 import {
   WIZARD_INTERACTION_EVENT_NAME,

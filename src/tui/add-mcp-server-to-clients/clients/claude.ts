@@ -1,7 +1,7 @@
-import { DefaultMCPClient } from '@tui/add-mcp-server-to-clients/MCPClient';
+import { DefaultMCPClient } from '../MCPClient';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClientConfig } from '@tui/add-mcp-server-to-clients/defaults';
+import { DefaultMCPClientConfig } from '../defaults';
 import { runtimeEnv } from '@env';
 import { z } from 'zod';
 

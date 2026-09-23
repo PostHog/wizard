@@ -6,10 +6,10 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { LoadingBox, PickerMenu } from '@tui/primitives/index';
-import { Colors, Icons } from '@tui/styles';
-import { InkUI } from '@tui/ink-ui';
+import type { WizardStore } from '../store';
+import { LoadingBox, PickerMenu } from '../primitives/index';
+import { Colors, Icons } from '../styles';
+import { InkUI } from '../ink-ui';
 import {
   FRAMEWORK_REGISTRY,
   detectErrorTrackingProjects,

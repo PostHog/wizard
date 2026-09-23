@@ -1,8 +1,8 @@
 /* FastAPI wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { PYTHON_PACKAGE_INSTALLATION } from '@programs/framework-config';
-import { detectPythonPackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../../framework-config';
+import { detectPythonPackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getFastAPIVersion,

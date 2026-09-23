@@ -19,7 +19,7 @@ import {
   type EnvKeyDefinition,
   type EnvKeyLocations,
 } from '@utils/env-scan';
-import { scanInstalledSkill } from '@agent/yara-hooks';
+import { scanInstalledSkill } from '../yara-hooks';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {

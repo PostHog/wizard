@@ -24,17 +24,17 @@ import {
   ProgressList,
   SplitView,
   TextRevealMode,
-} from '@tui/primitives/index';
-import type { ContentBlock, ProgressItem } from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
-import type { WizardStore } from '@tui/store';
+} from '../../primitives/index';
+import type { ContentBlock, ProgressItem } from '../../primitives/index';
+import { Colors } from '../../styles';
+import type { WizardStore } from '../../store';
 import { PROGRAM_REGISTRY } from '@programs';
-import { AUDIT_AREA_SLIDES } from '@tui/screens/audit/slides/index';
+import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index';
 import {
   getProgramContentBlocks,
   hasProgramLearnDeck,
-} from '@tui/decks/registry';
-import type { AreaSlide } from '@tui/screens/audit/slides/shared';
+} from '../../decks/registry';
+import type { AreaSlide } from '../../screens/audit/slides/shared';
 
 interface Deck {
   id: string;

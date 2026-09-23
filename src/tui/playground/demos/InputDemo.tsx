@@ -4,8 +4,8 @@
 
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { PickerMenu, ConfirmationInput } from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
+import { PickerMenu, ConfirmationInput } from '../../primitives/index';
+import { Colors } from '../../styles';
 
 enum DemoStep {
   Single = 'single',

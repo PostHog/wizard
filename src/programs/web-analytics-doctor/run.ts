@@ -1,4 +1,4 @@
-import type { SkillProgramOptions } from '@programs/agent-skill/run-definition';
+import type { SkillProgramOptions } from '../agent-skill/run-definition';
 import { WEB_ANALYTICS_ABORT_CASES } from './abort-cases.js';
 
 const REPORT_FILE = 'posthog-web-analytics-report.md';

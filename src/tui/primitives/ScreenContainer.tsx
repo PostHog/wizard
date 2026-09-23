@@ -12,18 +12,15 @@
 
 import { Box, useInput, useStdout } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { TitleBar } from '@tui/components/TitleBar';
-import {
-  TokenCostHud,
-  tokenCostHudRowCount,
-} from '@tui/components/TokenCostHud';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import { KeyboardHintsProvider } from '@tui/hooks/useKeyboardHints';
+import { TitleBar } from '../components/TitleBar';
+import { TokenCostHud, tokenCostHudRowCount } from '../components/TokenCostHud';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
+import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 
 const MIN_WIDTH = 80;
 export const MAX_WIDTH = 120;

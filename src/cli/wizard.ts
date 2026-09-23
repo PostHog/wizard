@@ -3,7 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@shared/constants';
-import { regionOption } from '@cli/headless-mode';
+import { regionOption } from './headless-mode';
 import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';

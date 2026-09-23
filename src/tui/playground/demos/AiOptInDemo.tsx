@@ -14,8 +14,8 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { WizardStore } from '@tui/store';
-import { AiOptInRequiredScreen } from '@tui/screens/AiOptInRequiredScreen';
+import { WizardStore } from '../../store';
+import { AiOptInRequiredScreen } from '../../screens/AiOptInRequiredScreen';
 import { HostResolution } from '@shared/host-resolution';
 
 type Variant = 'admin' | 'non-admin';

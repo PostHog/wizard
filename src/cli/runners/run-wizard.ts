@@ -25,9 +25,9 @@ import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@tui/types';
-import { cliTuiHost } from '@cli/tui-host';
+import { cliTuiHost } from '../tui-host';
 import { registerCleanup, runCleanups } from '@utils/cleanup-registry';
-import { getUI } from '@cli/ui';
+import { getUI } from '../ui';
 import { IS_PRODUCTION_BUILD } from '@env';
 
 const WIZARD_VERSION = VERSION;
@@ -126,7 +126,7 @@ export function runWizard(
         localPosthog: local.localPosthog && !options.baseUrl,
       });
       if (localServicesError) {
-        const { wizardAbort } = await import('@cli/wizard-abort');
+        const { wizardAbort } = await import('../wizard-abort');
         await wizardAbort({ message: localServicesError });
         return;
       }
@@ -171,8 +171,8 @@ export function runWizard(
           await import('@headless')
         ).loadControl();
         const { wizardStoreControlTarget } = await import('@tui');
-        const { createControlHooks } = await import('@cli/control-hooks');
-        const { controlMode } = await import('@cli/control-flags');
+        const { createControlHooks } = await import('../control-hooks');
+        const { controlMode } = await import('../control-flags');
         await attachControlServer(
           wizardStoreControlTarget(activeTui.store, { screens: true }),
           {

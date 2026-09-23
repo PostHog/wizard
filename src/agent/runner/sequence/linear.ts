@@ -10,15 +10,15 @@
  * arguments, so the caller's exit sequence is unchanged.
  */
 
-import { OutroKind, type OutroData } from '@agent/progress';
+import { OutroKind, type OutroData } from '../../progress';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { logToFile } from '@utils/debug';
-import { createBenchmarkPipeline } from '@agent/middleware/benchmark';
+import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import { ErrorCodes, WizardError } from '@shared/errors';
-import { AGENT_ERROR_CODE } from '@agent/error-map';
+import { AGENT_ERROR_CODE } from '../../error-map';
 import { analytics } from '@utils/analytics';
-import { formatYaraAbortMessage } from '@agent/yara-hooks';
-import { installSkillById } from '@agent/tools';
+import { formatYaraAbortMessage } from '../../yara-hooks';
+import { installSkillById } from '../../tools';
 import { assemblePrompt } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, hostAborted, installFailure } from '../shared/errors';

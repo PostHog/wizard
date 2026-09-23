@@ -1,5 +1,5 @@
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 import { createSkillProgram } from '../agent-skill/index.js';
 import {
   SELF_DRIVING_ABORT_CASES,
@@ -8,7 +8,7 @@ import {
   getSelfDrivingDetectedTools,
 } from './detect.js';
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
-import { resolveProjectDir } from '@programs/detection/agentic';
+import { resolveProjectDir } from '../detection/agentic';
 import {
   resolveSelfDrivingRun,
   SELF_DRIVING_SKILL_ID,
