@@ -32,12 +32,18 @@ Each domain has a dedicated boundary:
   `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
 - **Agent** → `src/agent/`, imported only through `@agent` (values) and
   `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
-- **Shared** → `src/shared/`, stateless library code with no upward imports;
-  see [src/shared/README.md](src/shared/README.md)
+- **Shared** → `src/shared/`, stateless library code with no upward imports; see
+  [src/shared/README.md](src/shared/README.md)
 - **Programs** → configs, detection, framework registry and task stream in
   `src/programs/`; runtime and type entries are `@programs` and
   `@programs/types`
-- **TUI** → screens, primitives and content decks in `src/tui/`
+- **TUI** → flows, screens, store and control adapter in `src/tui/`; entries are
+  `@tui` and `@tui/types`; see [src/tui/README.md](src/tui/README.md)
+- **Headless** → logging renderers and the control server in `src/headless/`;
+  entries are `@headless` and `@headless/types`; see
+  [src/headless/README.md](src/headless/README.md)
+- **CLI** → argv, runners and composition roots in `src/cli/`, imported only by
+  `bin.ts`; see [src/cli/README.md](src/cli/README.md)
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -103,8 +109,8 @@ aliases.
 
 | Subcommand                    | What it audits                                       |
 | ----------------------------- | ---------------------------------------------------- |
-| `wizard audit events`         | event capture quality + cost                        |
-| `wizard audit all`            | comprehensive audit across every area (**default**) |
+| `wizard audit events`         | event capture quality + cost                         |
+| `wizard audit all`            | comprehensive audit across every area (**default**)  |
 | `wizard audit autocapture`    | autocapture setup + cost                             |
 | `wizard audit feature-flags`  | feature flag usage + cost                            |
 | `wizard audit identify`       | `$identify` implementation                           |
@@ -126,8 +132,9 @@ confuse it with the top-level `wizard skill` command.
 ### Where the surface is defined (source of truth)
 
 - **Registration:** [`bin.ts`](bin.ts) — the `.use()` chain wires each command.
-- **Command shape:** [`src/cli/commands/command.ts`](src/cli/commands/command.ts) — the
-  `Command` interface every command implements.
+- **Command shape:**
+  [`src/cli/commands/command.ts`](src/cli/commands/command.ts) — the `Command`
+  interface every command implements.
 - **Flat native commands** (e.g. `revenue-analytics`, `upload-source-maps`) are
   built with `nativeCommandFactory`
   ([`src/cli/commands/factories/native-command-factory.ts`](src/cli/commands/factories/native-command-factory.ts)).
@@ -176,8 +183,8 @@ nonmutating lint checks, and scope formatting fixes to edited files. Do not add
 tests for prose, compiler-enforced shapes, or duplicated implementation. Keep
 new code comments to one line; put longer explanations in linked docs.
 
-Local `--ci`, smoke-test, and full headless runs require two separate secrets:
-a PostHog personal API key and an already-issued gateway token supplied through
+Local `--ci`, smoke-test, and full headless runs require two separate secrets: a
+PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
