@@ -99,8 +99,12 @@ return `failed` with `failure.message`. An agent crash appears as `crashed`.
 Handled credential-resolution, approval, and composition callback rejections
 also resolve as `failed` with a message, not the callback's original error
 class. An unexpected invocation throw, such as a duplicate composed `runId`,
-rejects the promise. Hosts should inspect the outcome and separately catch
-rejected promises.
+rejects the promise. Non-success agent outcomes carry the agent's `failure`,
+including any attached `Error`. `failure.error` is optional, as are its code and
+message. Read the outcome to decide how the run ended, and use the attached
+error for diagnostics or an upstream rethrow. The host owns logging and
+user-facing error messages. Hosts should inspect the outcome and separately
+catch rejected promises.
 
 `options.signal` accepts an `AbortSignal`. A signal aborted before the run
 starts returns `aborted` with an agent-abort failure code. Agent programs check
@@ -161,6 +165,7 @@ export async function runMetrics(
   );
 
   if (result.outcome !== 'success') {
+    if (result.failure?.error) throw result.failure.error;
     throw new Error(result.failure?.message ?? `Metrics ${result.outcome}`);
   }
   return result;

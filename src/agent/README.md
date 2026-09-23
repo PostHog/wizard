@@ -38,10 +38,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   for gateway token minting and refresh.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
-  (`AgentFailure`: message, outro data, error, exit code, error code, detail).
-  Every result carries `skillId` and a `snapshot` of what the run reported:
-  tasks, status lines, stage, token usage totals, final cost, dashboard and
-  notebook URLs, handoff text.
+  (`AgentFailure`: optional message, outro data, `Error`, exit code, error code,
+  and detail). `failure.error` may be present when the agent caught an `Error`;
+  `Crashed` requires one. A missing `Error` object does not mean the outcome
+  succeeded, and not every failed result has a code or message. Every result
+  carries `skillId` and a `snapshot` of what the run reported: tasks, status
+  lines, stage, token usage totals, final cost, dashboard and notebook URLs,
+  handoff text.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
   `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
@@ -54,9 +57,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   returns `Aborted` before execution; aborting during execution is passed to the
   active harness and returns `Aborted` with the current snapshot. It does not
   pause or resume a run.
-- Errors: the agent does not exit the process and does not throw for a decided
-  failure. An unexpected throw becomes `outcome: Crashed` with the error
-  attached. A gateway 401 emits `authError` and then fails.
+- Errors: the agent does not exit the process or throw for a decided failure. It
+  catches unexpected errors in its run body, logs them, and returns
+  `outcome: Crashed` with the caught `Error` attached (or an `Error` wrapper for
+  a non-`Error` throw). A gateway 401 emits `authError` and then fails. The host
+  decides how to present a returned failure, set an exit code, or rethrow an
+  attached error. Final scan-report flushing runs outside that catch and can
+  still reject the promise; hosts requiring a hard promise boundary catch it.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
@@ -77,9 +84,18 @@ const result = await runAgent(config, input, {
   },
 });
 if (result.outcome !== RunOutcome.Success) {
+  console.error(
+    result.failure.error ?? result.failure.message ?? `Agent ${result.outcome}`,
+  );
   process.exitCode = result.failure.exitCode ?? 1;
 }
 ```
+
+The result is the agent's termination report. Check `outcome` first and then
+read `failure`; a failed result can have no attached `Error`. If a higher layer
+uses exceptions, it can rethrow `failure.error` when present and construct an
+error from `failure.message` otherwise. Preserve the original `Error` object
+when rethrowing so its stack and cause remain available.
 
 `src/agent/__tests__/run-agent-standalone.test.ts` runs this with no UI, no
 store and no registry.

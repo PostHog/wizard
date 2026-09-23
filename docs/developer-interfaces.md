@@ -22,6 +22,9 @@ final task/status/usage snapshot. Progress is delivered in emission order.
 Synchronous observer throws are logged without failing the run; asynchronous
 observers must handle their own rejected promises. Without `interaction`,
 questions have no answer bridge and optional task notices are declined.
+Non-success results carry a `failure`; its `error` may be available when an
+`Error` was caught, while `code` and `message` are optional. The caller chooses
+how to log or present a failure.
 
 ```ts
 import { runAgent } from '@agent';
@@ -45,7 +48,10 @@ The caller prepares `config` and `input`; the agent does not authenticate the
 PostHog user or detect the project. The caller must supply
 `input.inferenceAuth`, whose `resolve()` returns gateway authentication and can
 refresh it during a long run. There is no session control protocol on this API.
-An aborted signal returns an `aborted` result; it does not pause the run.
+An aborted signal returns an `aborted` result; it does not pause the run. The
+agent catches unexpected errors in its run body and reports `crashed` with the
+caught `Error` (or an `Error` wrapper for a non-`Error` throw); the host can
+rethrow that object when it needs exception semantics.
 
 ### Inference authentication
 
@@ -66,7 +72,9 @@ callbacks for questions, approvals, progress, or program-specific effects. An
 optional `signal` requests cancellation. It returns a `ProgramRunOutcome`:
 outcome and failure, final progress, actual settled agent runs, program-specific
 data, artifacts, and invocation data (including a captured event plan). The
-latter contains credentials and should not be logged.
+latter contains credentials and should not be logged. Agent failures retain an
+attached `Error` when one exists. External host callbacks may still reject the
+promise, so callers handle those exceptions as well as returned outcomes.
 
 ```ts
 import { runProgram } from '@programs';
@@ -91,6 +99,7 @@ export async function runAudit(
     },
   );
   if (result.outcome !== 'success') {
+    if (result.failure?.error) throw result.failure.error;
     throw new Error(result.failure?.message ?? `Audit ${result.outcome}`);
   }
   return result.artifacts.reportFile;
