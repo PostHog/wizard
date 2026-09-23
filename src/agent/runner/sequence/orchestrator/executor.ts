@@ -56,6 +56,7 @@ export interface DrainOptions {
   /** Backstop against a pathological always-one-more-pending loop. */
   maxStarts: number;
   signal?: AbortSignal;
+  /** Stop sibling sessions on the first fatal result before joining them. */
   onFatal?: () => void;
 }
 
