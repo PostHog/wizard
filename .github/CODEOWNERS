@@ -8,16 +8,22 @@
 *                                                       @PostHog/team-wizard-docs
 
 # Team-owned programs
-/src/lib/programs/ai-observability/                     @PostHog/team-ai-observability
-/src/lib/programs/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
-/src/lib/programs/mcp-analytics/                        @PostHog/team-mcp-analytics
-/src/lib/programs/metrics/                              @PostHog/apm
-/src/lib/programs/posthog-integration/                  @PostHog/team-wizard-docs
-/src/lib/programs/replay-vision/                        @PostHog/team-replay
-/src/lib/programs/revenue-analytics/                    @PostHog/team-web-analytics
-/src/lib/programs/self-driving/                         @PostHog/team-self-driving
-/src/lib/programs/warehouse-source/                     @PostHog/team-warehouse-sources
-/src/lib/programs/web-analytics-doctor/                 @PostHog/team-web-analytics
+/src/programs/ai-observability/                         @PostHog/team-ai-observability
+/src/programs/error-tracking-upload-source-maps/        @PostHog/team-error-tracking
+/src/programs/mcp-analytics/                            @PostHog/team-mcp-analytics
+/src/programs/metrics/                                  @PostHog/apm
+/src/programs/posthog-integration/                      @PostHog/team-wizard-docs
+/src/programs/replay-vision/                            @PostHog/team-replay
+/src/programs/revenue-analytics/                        @PostHog/team-web-analytics
+/src/programs/self-driving/                             @PostHog/team-self-driving
+/src/programs/warehouse-source/                         @PostHog/team-warehouse-sources
+/src/programs/web-analytics-doctor/                     @PostHog/team-web-analytics
+
+# Team-owned program decks
+/src/ui/tui/decks/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
+/src/ui/tui/decks/revenue-analytics/                    @PostHog/team-web-analytics
+/src/ui/tui/decks/self-driving/                         @PostHog/team-self-driving
+/src/ui/tui/decks/warehouse-source/                     @PostHog/team-warehouse-sources
 
 # Agent runner (harness, model, and tools)
 /src/agent/                                             @PostHog/team-wizard-docs

@@ -24,8 +24,7 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     [
       'tui',
       (p) =>
-        p.startsWith('src/ui/') ||
-        p.startsWith('src/steps/') ||
+        p.startsWith('src/ui/tui/') ||
         p === 'src/commands/factories/family-picker.tsx',
     ],
     [
@@ -490,8 +489,8 @@ describe('surface classification', () => {
       'programs',
     );
     expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
-    expect(classifySurface('src/ui/index.ts')).toBe('tui');
-    expect(classifySurface('src/steps/index.ts')).toBe('tui');
+    expect(classifySurface('src/ui/index.ts')).toBe('legacy');
+    expect(classifySurface('src/steps/index.ts')).toBe('legacy');
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
     expect(classifySurface('src/agent/tools/tools.ts')).toBe('agent');
@@ -570,5 +569,19 @@ describe('programs entry modules', () => {
     expect(
       rule('src/programs/dispatch-family.ts', 'src/commands/command.ts'),
     ).toBe('matrix:programs->cli');
+  });
+});
+
+describe('migration matrix', () => {
+  it('lets legacy code use the programs entry', () => {
+    expect(ruleFor('src/lib/wizard-session.ts', 'src/programs/index.ts')).toBe(
+      null,
+    );
+  });
+
+  it('keeps agent code out of legacy session state', () => {
+    expect(
+      ruleFor('src/agent/runner/index.ts', 'src/lib/wizard-session.ts'),
+    ).toBe('matrix:agent->legacy');
   });
 });
