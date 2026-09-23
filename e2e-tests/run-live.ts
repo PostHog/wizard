@@ -9,6 +9,7 @@ import {
   type CapturedFrame,
   type LiveE2eResult,
 } from '../e2e-harness/live-e2e-checks';
+import { verifyLiveAppCommands } from '../e2e-harness/live-app-commands';
 
 type TestCase = {
   name: string;
@@ -38,17 +39,6 @@ const cases: TestCase[] = [
     prodReady: 'Ready in',
   },
 ];
-
-function hasReadableContent(file: string): boolean {
-  try {
-    return (
-      fs.statSync(file).isFile() &&
-      fs.readFileSync(file, 'utf8').trim().length > 0
-    );
-  } catch {
-    return false;
-  }
-}
 
 function stopProcess(child: ReturnType<typeof spawn>): void {
   if (!child.pid) return;
@@ -101,11 +91,12 @@ async function waitForOutput(
   args: string[],
   cwd: string,
   expected: string,
+  env: NodeJS.ProcessEnv,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn('npm', args, {
       cwd,
-      env: { ...process.env, CI: '1' },
+      env,
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -222,16 +213,10 @@ async function runCase(testCase: TestCase): Promise<void> {
         );
       }
     }
-    const build = await runCommand(
-      'npm',
-      ['run', 'build'],
-      app,
-      process.env,
-      180_000,
-    );
-    if (build.code !== 0) throw new Error(`App build failed:\n${build.output}`);
-    await waitForOutput(['run', 'dev'], app, testCase.devReady);
-    await waitForOutput(['run', testCase.prodCommand], app, testCase.prodReady);
+    await verifyLiveAppCommands(testCase, app, process.env, {
+      runCommand,
+      waitForOutput,
+    });
     console.log(`${testCase.name}: passed (${frames.length} TUI frames).`);
   } finally {
     if (process.env.E2E_KEEP_ARTIFACTS === '1') {
@@ -243,7 +228,9 @@ async function runCase(testCase: TestCase): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const failures = credentialFailures(process.env, hasReadableContent);
+  const failures = credentialFailures(process.env, (file) =>
+    fs.readFileSync(file, 'utf8'),
+  );
   if (failures.length > 0) {
     throw new Error(
       `Live e2e needs explicit credentials:\n${failures.join('\n')}`,
