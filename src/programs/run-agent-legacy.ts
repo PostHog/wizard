@@ -307,6 +307,9 @@ async function runProgram(
     throw result.failure.error;
   }
   if (result.outcome !== RunOutcome.Success) {
+    if (result.failure.authErrorDetail) {
+      ui.showAuthError(result.failure.authErrorDetail);
+    }
     await wizardAbort(result.failure);
   }
   return result.outcome === RunOutcome.Success;

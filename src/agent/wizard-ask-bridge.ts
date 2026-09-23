@@ -54,6 +54,7 @@ export interface WizardAskBridge {
 }
 
 export interface WizardAskBridgeOptions {
+  signal?: AbortSignal;
   /** Returns the active skill id, used as the analytics `source` on the request. */
   getSource: () => string;
   /** Opens the overlay and resolves once the user submits or cancels. */
@@ -120,6 +121,9 @@ export function createWizardAskBridge(
       return null;
     },
     async request({ questions, subject }) {
+      if (opts.signal?.aborted) {
+        return { answers: buildCancelledAnswers(questions), timedOut: false };
+      }
       const pending: PendingQuestion = {
         id: randomUUID(),
         questions,
@@ -132,6 +136,7 @@ export function createWizardAskBridge(
       const startedAt = Date.now();
       let timer: ReturnType<typeof setTimeout> | undefined;
       let timedOut = false;
+      let cancelForAbort: (() => void) | undefined;
 
       // Race the user against the timeout. Whichever fires first wins. On
       // timeout we also cancel the host's overlay: resolving our side alone
@@ -140,15 +145,33 @@ export function createWizardAskBridge(
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
           timedOut = true;
-          opts.cancelQuestion?.();
-          resolve(buildCancelledAnswers(questions));
+          try {
+            opts.cancelQuestion?.();
+          } catch {
+            // A host overlay failure must not leave the ask pending.
+          } finally {
+            resolve(buildCancelledAnswers(questions));
+          }
         }, timeoutMs);
+      });
+      const aborted = new Promise<AskAnswers>((resolve) => {
+        cancelForAbort = () => {
+          try {
+            opts.cancelQuestion?.();
+          } catch {
+            // A host overlay failure must not prevent the run from settling.
+          }
+          resolve(buildCancelledAnswers(questions));
+        };
+        opts.signal?.addEventListener('abort', cancelForAbort, { once: true });
+        if (opts.signal?.aborted) cancelForAbort();
       });
 
       try {
         const answers = await Promise.race([
           opts.showQuestion(pending),
           timeoutPromise,
+          aborted,
         ]);
         const durationMs = Date.now() - startedAt;
 
@@ -172,6 +195,8 @@ export function createWizardAskBridge(
         return { answers, timedOut };
       } finally {
         if (timer) clearTimeout(timer);
+        if (cancelForAbort)
+          opts.signal?.removeEventListener('abort', cancelForAbort);
         pendingQuestions.delete(pending.id);
       }
     },

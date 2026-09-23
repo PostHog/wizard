@@ -21,6 +21,7 @@ export function createAskBridge(
     getSource: () => string;
     richLinks: boolean;
     timeoutMs?: number;
+    signal?: AbortSignal;
     /** Runs before each question is shown (the orchestrator's bell and metric). */
     beforeShow?: () => void;
   },
@@ -37,5 +38,6 @@ export function createAskBridge(
     cancelQuestion: interaction?.cancelAsk,
     richLinks: options.richLinks,
     timeoutMs: options.timeoutMs,
+    signal: options.signal,
   });
 }
