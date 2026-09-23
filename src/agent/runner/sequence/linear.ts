@@ -28,14 +28,27 @@ import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { getHarness } from '../switchboard';
 
-export async function runLinearProgram({
-  config,
-  input,
-  boot,
-  emit,
-  interaction,
-  signal,
-}: SequenceContext): Promise<SequenceResult> {
+export async function runLinearProgram(
+  context: SequenceContext,
+): Promise<SequenceResult> {
+  // Aborts on the host's signal or when the run ends, so no ask outlives it.
+  const controller = new AbortController();
+  const abortFromHost = () => controller.abort();
+  context.signal?.addEventListener('abort', abortFromHost, { once: true });
+  if (context.signal?.aborted) abortFromHost();
+  try {
+    return await executeLinear(context, controller.signal);
+  } finally {
+    context.signal?.removeEventListener('abort', abortFromHost);
+    controller.abort();
+  }
+}
+
+/** The host's `signal` decides the outcome; `runSignal` also ends with the run. */
+async function executeLinear(
+  { config, input, boot, emit, interaction, signal }: SequenceContext,
+  runSignal: AbortSignal,
+): Promise<SequenceResult> {
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
@@ -80,7 +93,7 @@ export async function runLinearProgram({
         getSource: () => input.skillId ?? run.integrationLabel,
         richLinks: run.richLinks ?? false,
         timeoutMs: run.askTimeoutMs,
-        signal,
+        signal: runSignal,
       });
 
   const middleware = input.flags.benchmark
@@ -122,7 +135,7 @@ export async function runLinearProgram({
     middleware,
     model,
     thinkingLevel,
-    signal,
+    signal: runSignal,
   });
   if (signal?.aborted && agentResult.kind === 'success') return aborted();
 
@@ -165,7 +178,8 @@ export async function runLinearProgram({
       matched: matched?.message ?? null,
     });
     return {
-      outcome: RunOutcome.Aborted,
+      // An agent that stops itself failed the run; only the host's signal cancels it.
+      outcome: signal?.aborted ? RunOutcome.Aborted : RunOutcome.Failed,
       failure: {
         message: matched?.message ?? `${run.integrationLabel} aborted`,
         outroData,
@@ -295,6 +309,5 @@ export async function runLinearProgram({
 
   emit({ kind: 'lifecycle', phase: 'completed', message: run.successMessage });
 
-  await analytics.shutdown('success');
   return { outcome: RunOutcome.Success, outro: outroData };
 }

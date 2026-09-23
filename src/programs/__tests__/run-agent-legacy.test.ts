@@ -1,4 +1,5 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
+import { runWizard } from '@lib/runners/run-wizard';
 import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
@@ -6,9 +7,12 @@ import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
+import { InkUI } from '@ui/tui/ink-ui';
+import { startTUI } from '@ui/tui/start-tui';
+import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
-import { initLogFile } from '@utils/debug';
+import { initLogFile, logToFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
@@ -38,12 +42,14 @@ vi.mock('@programs/task-stream/index', () => ({
   PostHogDestination: class {},
   createFileDestination: () => null,
 }));
+vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({
   analytics: {
     build: 'test',
     runId: 'run-1',
     wizardCapture: vi.fn(),
+    captureException: vi.fn(),
     setTag: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
     getWizardFlagPayloads: vi.fn().mockReturnValue({}),
@@ -107,6 +113,21 @@ const session = () => ({
 
 let logSpy: ReturnType<typeof vi.spyOn>;
 
+/** A run that reports, shows its outro and succeeds. */
+const finishRun: typeof runAgent = (_config, _input, options) => {
+  options?.onProgress?.({ kind: 'status', message: 'Working' });
+  options?.onProgress?.({
+    kind: 'completion',
+    outro: { kind: OutroKind.Success, message: 'Done' },
+  });
+  options?.onProgress?.({
+    kind: 'lifecycle',
+    phase: 'completed',
+    message: 'Done',
+  });
+  return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(authenticate).mockImplementation((sess) => {
@@ -115,19 +136,7 @@ beforeEach(() => {
   });
   setUI(new LoggingUI());
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  vi.mocked(runAgent).mockImplementation((_config, _input, options) => {
-    options?.onProgress?.({ kind: 'status', message: 'Working' });
-    options?.onProgress?.({
-      kind: 'completion',
-      outro: { kind: OutroKind.Success, message: 'Done' },
-    });
-    options?.onProgress?.({
-      kind: 'lifecycle',
-      phase: 'completed',
-      message: 'Done',
-    });
-    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-  });
+  vi.mocked(runAgent).mockImplementation(finishRun);
 });
 afterEach(() => logSpy.mockRestore());
 
@@ -152,9 +161,34 @@ it.each([
     expect(logSpy).toHaveBeenCalledWith('◇  Working');
     expect(logSpy).toHaveBeenCalledWith('└  Done');
     expect(initLogFile).toHaveBeenCalledOnce();
-    expect(analytics.shutdown).not.toHaveBeenCalled();
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
   },
 );
+
+it('sends terminal analytics after the outro and the run, before the host goes on', async () => {
+  const order: string[] = [];
+  logSpy.mockImplementation((line) => {
+    if (line === '└  Done') order.push('outro');
+  });
+  vi.mocked(runAgent).mockImplementation(async (...args) => {
+    const result = await finishRun(...args);
+    order.push('run-returned');
+    return result;
+  });
+  vi.mocked(analytics.shutdown).mockImplementation(() => {
+    order.push('shutdown');
+    return Promise.resolve();
+  });
+  await runProgramAgent(program(), session());
+  order.push('host-continues');
+  expect(order).toEqual([
+    'outro',
+    'run-returned',
+    'shutdown',
+    'host-continues',
+  ]);
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+});
 
 it('clamps a composed program to linear and keeps host analytics alive', async () => {
   await runProgramAgent(program(), session(), { composed: true });
@@ -167,11 +201,18 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
     expect.anything(),
   );
   expect(analytics.shutdown).not.toHaveBeenCalled();
+
+  // The host program's own run, later in the same process, ends it once.
+  await runProgramAgent(program(), session());
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
-  'passes a %s result to the existing abort handler',
-  async (outcome) => {
+it.each([
+  [RunOutcome.Aborted, 'cancelled'],
+  [RunOutcome.Failed, 'error'],
+] as const)(
+  'passes a %s result to the existing abort handler as %s',
+  async (outcome, status) => {
     const failure = {
       code: ErrorCodes.AgentApiError,
       message: 'Failed',
@@ -179,8 +220,59 @@ it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
     };
     vi.mocked(runAgent).mockResolvedValue({ outcome, failure, snapshot });
     await runProgramAgent(program(), session());
-    expect(wizardAbort).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({ ...failure, status });
     expect(analytics.shutdown).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  [
+    RunOutcome.Failed,
+    'error',
+    { code: ErrorCodes.AgentMcpMissing, message: 'Could not access MCP' },
+  ],
+  [
+    RunOutcome.Aborted,
+    'cancelled',
+    { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  ],
+] as const)(
+  'labels a %s run %s from its outcome when no Error came back',
+  async (outcome, status, failure) => {
+    const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
+      '@utils/wizard-abort',
+    );
+    vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome,
+      failure: { ...failure },
+      snapshot,
+    });
+    try {
+      await runProgramAgent(program(), session());
+    } finally {
+      exit.mockRestore();
+      stderr.mockRestore();
+    }
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith(status);
+    if (status === 'error') {
+      // Error tracking still sees the failure, as its code and message.
+      expect(analytics.captureException).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          message: failure.message,
+          code: failure.code,
+        }),
+        { error_code: failure.code },
+      );
+    } else {
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    }
   },
 );
 
@@ -201,6 +293,8 @@ it('shows the auth guidance from a decided 401 before the error outro', async ()
   expect(wizardAbort).toHaveBeenCalledWith(
     expect.objectContaining({ authErrorDetail: detail }),
   );
+  // wizardAbort sends the one terminal event for a failed run.
+  expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
 it('rethrows the original crash for the outer runner', async () => {
@@ -242,6 +336,11 @@ it.each([
     );
     await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
     expect(wizardAbort).not.toHaveBeenCalled();
+    // One terminal event for the process, sent before the stream settles.
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+    expect(
+      vi.mocked(analytics.shutdown).mock.invocationCallOrder[0],
+    ).toBeLessThan(streamShutdown.mock.invocationCallOrder[0]);
     expect(runAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         binding: expect.objectContaining({ harness, sequence }),
@@ -253,3 +352,59 @@ it.each([
     expect(logSpy).toHaveBeenCalledWith('└  Done');
   },
 );
+
+it('keeps a headless run a success when its terminal analytics flush fails', async () => {
+  const flushError = new Error('flush timed out');
+  vi.mocked(analytics.shutdown).mockRejectedValueOnce(flushError);
+  runNonInteractive(
+    program(),
+    {
+      apiKey: 'phx_test',
+      projectId: '1',
+      installDir: '/tmp/adapter-test',
+      telemetry: false,
+    },
+    'headless',
+  );
+  await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+  expect(wizardAbort).not.toHaveBeenCalled();
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+  expect(logToFile).toHaveBeenCalledWith(
+    expect.stringContaining('analytics shutdown failed'),
+    flushError,
+  );
+});
+
+it('keeps a TUI run a success when its terminal analytics flush fails', async () => {
+  const flushError = new Error('flush timed out');
+  vi.mocked(analytics.shutdown).mockRejectedValueOnce(flushError);
+  const store = new WizardStore('metrics');
+  const ui = new InkUI(store);
+  setUI(ui);
+  const outroError = vi.spyOn(ui, 'outroError');
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+
+  runWizard(program(), { installDir: '/tmp/adapter-test', telemetry: false });
+  await vi.waitFor(() => expect(analytics.shutdown).toHaveBeenCalled());
+  store.setSkillsComplete(true);
+  await vi.waitFor(() => expect(exit).toHaveBeenCalled());
+
+  expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+  expect(outroError).not.toHaveBeenCalled();
+  expect(store.session.outroData?.kind).toBe(OutroKind.Success);
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+  expect(logToFile).toHaveBeenCalledWith(
+    expect.stringContaining('analytics shutdown failed'),
+    flushError,
+  );
+  exit.mockRestore();
+});

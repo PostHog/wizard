@@ -8,6 +8,7 @@ import {
   buildAuthErrorContext,
   buildAgentEnv,
   reportMcpSetup,
+  AgentErrorType,
 } from '@agent/agent-interface';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
@@ -112,6 +113,50 @@ describe('runAgent', () => {
     mockUIInstance.spinner.mockReturnValue(mockSpinner);
     // Reset log mocks
     Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
+  });
+
+  it('aborts an unfinished SDK run at its configured timeout', async () => {
+    vi.useFakeTimers();
+    let controller: AbortController | undefined;
+    let pending: Promise<unknown> | undefined;
+    try {
+      mockQuery.mockImplementation(({ options }) => {
+        controller = options.abortController;
+        return (async function* () {
+          await new Promise<void>((resolve) => {
+            if (controller?.signal.aborted) resolve();
+            else
+              controller?.signal.addEventListener('abort', () => resolve(), {
+                once: true,
+              });
+          });
+          if (controller?.signal.aborted) throw new Error('SDK query aborted');
+          yield { type: 'assistant', message: { content: [] } };
+        })();
+      });
+
+      pending = runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        { timeoutMs: 60_000 },
+      ).catch((error) => error);
+      await vi.waitFor(() => expect(controller).toBeDefined());
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(controller?.signal.aborted).toBe(true);
+      expect(await pending).toEqual({
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        message: 'Agent run timed out after 60s',
+      });
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Agent run timed out');
+    } finally {
+      controller?.abort();
+      if (pending) await pending;
+      vi.useRealTimers();
+    }
   });
 
   describe('race condition handling', () => {

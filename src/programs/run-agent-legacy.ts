@@ -7,7 +7,8 @@
  * authenticates, resolves the program's binding, builds the agent's inputs
  * from the session, maps every progress event back onto `getUI()` one call
  * per event, answers the agent's questions through `getUI()`, and applies the
- * result — `wizardAbort` for a decided failure, nothing more for success.
+ * result — `wizardAbort` with the outcome's terminal status for a decided
+ * failure, the terminal analytics event for a finished top-level run.
  *
  * This is the only file that knows about `getUI()`, the session and
  * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
@@ -277,7 +278,7 @@ async function runProgram(
     interaction: uiInteraction(ui),
   });
 
-  // The host owns process exits and rethrowing crashes.
+  // The host owns process exits, terminal analytics and rethrowing crashes.
   if (result.outcome === RunOutcome.Crashed) {
     throw result.failure.error;
   }
@@ -285,7 +286,19 @@ async function runProgram(
     if (result.failure.authErrorDetail) {
       ui.showAuthError(result.failure.authErrorDetail);
     }
-    await wizardAbort(result.failure);
+    // The terminal status follows how the run ended, not whether an Error came back.
+    await wizardAbort({
+      ...result.failure,
+      status: result.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
+    });
+  } else if (!composed) {
+    // A composed sub-run leaves the terminal event to its host program's run.
+    // The run already succeeded: a failed flush is logged, never the outcome.
+    try {
+      await analytics.shutdown('success');
+    } catch (error) {
+      logToFile('[agent-runner] analytics shutdown failed:', error);
+    }
   }
 }
 

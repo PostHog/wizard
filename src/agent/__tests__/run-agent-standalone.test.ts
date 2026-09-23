@@ -19,6 +19,7 @@ import {
 import { ErrorCodes, WizardError } from '@shared/errors';
 import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { AgentErrorType } from '@agent/signals';
+import { CANCELLED_SENTINEL, type AskResponse } from '@agent/wizard-ask-bridge';
 import type { AgentFailure } from '@agent/runner/shared/types';
 import type { AgentProgress } from '@agent/progress';
 import type {
@@ -75,6 +76,16 @@ const harnessState = vi.hoisted(() => ({
   taskThrow: undefined as Error | undefined,
   seedFailure: undefined as AgentFailure | undefined,
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
+  /** How many install tasks the seed plans. */
+  seedTasks: 1,
+  /** Scripts each drained task in place of the default install. */
+  task: undefined as
+    | ((inputs: TaskRunInputs) => Promise<AgentResult>)
+    | undefined,
+  /** Scripts the linear run in place of the default one. */
+  run: undefined as
+    | ((inputs: BackendRunInputs) => Promise<AgentResult>)
+    | undefined,
 }));
 vi.mock('@agent/runner/switchboard/harness', () => {
   const askIfRequested = async (inputs: BackendRunInputs | TaskRunInputs) => {
@@ -95,7 +106,10 @@ vi.mock('@agent/runner/switchboard/harness', () => {
       if (!currentTaskId) {
         if (harnessState.seedFailure)
           return { kind: 'decided_failure', failure: harnessState.seedFailure };
-        store.enqueue({ type: 'install' });
+        for (let i = 0; i < harnessState.seedTasks; i++)
+          store.enqueue({ type: 'install' });
+      } else if (harnessState.task) {
+        return harnessState.task(inputs);
       } else if (harnessState.taskThrow) {
         throw harnessState.taskThrow;
       } else if (harnessState.taskFailure) {
@@ -112,6 +126,7 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     },
     async run(inputs: BackendRunInputs) {
       harnessState.lastInputs = inputs;
+      if (harnessState.run) return harnessState.run(inputs);
       const { emit, spinner } = inputs;
       emit({ kind: 'log', level: 'step', message: 'Initializing agent' });
       spinner.start('Working');
@@ -257,7 +272,11 @@ beforeEach(() => {
   harnessState.throws = undefined;
   harnessState.lastInputs = undefined;
   harnessState.askQuestions = undefined;
+  harnessState.seedTasks = 1;
+  harnessState.task = undefined;
+  harnessState.run = undefined;
   vi.mocked(analytics.shutdown).mockClear();
+  vi.mocked(analytics.wizardCapture).mockClear();
   vi.mocked(initLogFile).mockClear();
   vi.mocked(flushScanReport).mockClear();
 });
@@ -315,7 +334,7 @@ describe('runAgent standalone', () => {
       const result = await running;
       expect(result.outcome).toBe(RunOutcome.Success);
       expect(result.snapshot.statusMessages).toContain('answered:{"q1":"yes"}');
-      expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+      expect(analytics.shutdown).not.toHaveBeenCalled();
       expect(flushScanReport).toHaveBeenCalledTimes(1);
     },
   );
@@ -381,8 +400,8 @@ describe('runAgent standalone', () => {
           ]);
         }
       }
-      expect(analytics.shutdown).toHaveBeenCalledTimes(2);
-      expect(analytics.shutdown).toHaveBeenCalledWith('success');
+      // Terminal analytics belong to the process, so to the host.
+      expect(analytics.shutdown).not.toHaveBeenCalled();
     },
   );
 
@@ -472,8 +491,173 @@ describe('runAgent standalone', () => {
     expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
   });
 
+  it('cancels a sibling task’s open question when another task fails the run', async () => {
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Gateway rejected the request',
+    };
+    const signals: AbortSignal[] = [];
+    const answers: AskAnswers[] = [];
+    let questionOpened!: () => void;
+    const opened = new Promise<void>((resolve) => {
+      questionOpened = resolve;
+    });
+    harnessState.seedTasks = 2;
+    let started = 0;
+    harnessState.task = async (inputs) => {
+      if (started++ === 0) {
+        if (!inputs.askBridge) throw new Error('the install task can ask');
+        const response = await inputs.askBridge.request({
+          questions: [{ id: 'q1', prompt: 'Key?', kind: 'text' }],
+        });
+        answers.push(response.answers);
+        return { kind: 'success' };
+      }
+      await opened;
+      return { kind: 'decided_failure', failure };
+    };
+    const result = await runAgent(
+      config({
+        binding: {
+          harness: Harness.pi,
+          sequence: Sequence.orchestrator,
+          model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.pi,
+        },
+      }),
+      input(),
+      {
+        interaction: {
+          // Nobody answers: only the sibling's failure can end this question.
+          ask: (_question, { signal }) => {
+            signals.push(signal);
+            questionOpened();
+            return new Promise<AskAnswers>(() => undefined);
+          },
+        },
+      },
+    );
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure).toMatchObject(failure);
+    // The question's own signal aborted, so the host dismisses its overlay,
+    // and the ask settled as cancelled, so its task joined the drain.
+    expect(signals).toHaveLength(1);
+    expect(signals[0].aborted).toBe(true);
+    expect(answers).toEqual([{ q1: CANCELLED_SENTINEL }]);
+  });
+
+  it('reports the steps a fatal task result stopped', async () => {
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Gateway rejected the request',
+    };
+    harnessState.task = ({ orchestrator }) => {
+      if (!orchestrator.currentTaskId)
+        throw new Error('a drained task has an id');
+      // A step that waits on this one, so the fatal result leaves it pending.
+      orchestrator.store.enqueue({
+        type: 'report',
+        dependsOn: [orchestrator.currentTaskId],
+      });
+      return Promise.resolve<AgentResult>({ kind: 'decided_failure', failure });
+    };
+    const result = await runAgent(
+      config({
+        binding: {
+          harness: Harness.pi,
+          sequence: Sequence.orchestrator,
+          model: DEFAULT_AGENT_MODEL,
+        },
+      }),
+      input(),
+    );
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure).toBe(failure);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator task blocked',
+      { type: 'report', optional: false, failed_types: 'install' },
+    );
+  });
+
+  it('keeps a fatal task result when reporting its blocked steps throws', async () => {
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Gateway rejected the request',
+    };
+    harnessState.task = ({ orchestrator }) => {
+      if (!orchestrator.currentTaskId)
+        throw new Error('a drained task has an id');
+      orchestrator.store.enqueue({
+        type: 'report',
+        dependsOn: [orchestrator.currentTaskId],
+      });
+      return Promise.resolve<AgentResult>({ kind: 'decided_failure', failure });
+    };
+    vi.mocked(analytics.wizardCapture).mockImplementation((event) => {
+      if (event === 'orchestrator task blocked') {
+        throw new Error('analytics down');
+      }
+    });
+    try {
+      const result = await runAgent(
+        config({
+          binding: {
+            harness: Harness.pi,
+            sequence: Sequence.orchestrator,
+            model: DEFAULT_AGENT_MODEL,
+          },
+        }),
+        input(),
+      );
+      expect(result.outcome).toBe(RunOutcome.Failed);
+      expect(result.failure).toBe(failure);
+    } finally {
+      vi.mocked(analytics.wizardCapture).mockReset();
+    }
+  });
+
+  it('cancels an open question when the linear harness ends the run', async () => {
+    const signals: AbortSignal[] = [];
+    let response: Promise<AskResponse> | undefined;
+    harnessState.run = (inputs) => {
+      // A parallel tool call is still waiting on the user when a violation
+      // ends the run.
+      if (!inputs.askBridge) throw new Error('the linear run can ask');
+      response = inputs.askBridge.request({
+        questions: [{ id: 'q1', prompt: 'Key?', kind: 'text' }],
+      });
+      return Promise.resolve<AgentResult>({
+        kind: 'failure',
+        classification: AgentErrorType.YARA_VIOLATION,
+      });
+    };
+    const result = await runAgent(config(), input(), {
+      interaction: {
+        // Nobody answers: only the run ending can close this question.
+        ask: (_question, { signal }) => {
+          signals.push(signal);
+          return new Promise<AskAnswers>(() => undefined);
+        },
+      },
+    });
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(
+      AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
+    );
+    expect(signals).toHaveLength(1);
+    expect(signals[0].aborted).toBe(true);
+    await expect(response).resolves.toEqual({
+      answers: { q1: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+  });
+
   it.each([Sequence.linear, Sequence.orchestrator])(
-    'preserves %s completion, shutdown and scan-flush ordering',
+    'preserves %s completion and scan-flush ordering and leaves the shutdown to the host',
     async (sequence) => {
       const order: string[] = [];
       vi.mocked(analytics.shutdown).mockImplementationOnce(() => {
@@ -513,7 +697,6 @@ describe('runAgent standalone', () => {
         'queue-clean',
         'completion',
         'outro',
-        'shutdown',
         'scan-flush',
       ]);
     },
@@ -542,11 +725,16 @@ describe('runAgent standalone', () => {
     });
     expect(result.failure).toBeUndefined();
 
-    // The answerer saw the question the bridge built, and its answer came back.
+    // The answerer saw the question the bridge built, with that question's own
+    // signal, and its answer came back.
     expect(ask).toHaveBeenCalledTimes(1);
-    const [question] = ask.mock.calls[0] as unknown as [PendingQuestion];
+    const [question, context] = ask.mock.calls[0] as unknown as [
+      PendingQuestion,
+      { signal: AbortSignal },
+    ];
     expect(question.questions[0].id).toBe('q1');
     expect(question.source).toBe('test-integration');
+    expect(context.signal.aborted).toBe(false);
     expect(events).toContainEqual({
       kind: 'status',
       message: 'answered:{"q1":"yes"}',
@@ -574,7 +762,7 @@ describe('runAgent standalone', () => {
       cacheReadTokens: 0,
       cacheCreationTokens: 0,
     });
-    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+    expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 
   it('runs to a complete result with no options at all', async () => {
@@ -622,7 +810,8 @@ describe('runAgent standalone', () => {
       onProgress: (e) => events.push(e),
     });
 
-    expect(result.outcome).toBe('aborted');
+    // The agent stopped itself; only the host's signal makes a run aborted.
+    expect(result.outcome).toBe(RunOutcome.Failed);
     expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
     expect(result.failure?.outroData).toMatchObject({
       kind: OutroKind.Error,
@@ -674,7 +863,7 @@ describe('runAgent standalone', () => {
     expect(result.failure).toBe(failure);
   });
 
-  it('skips the terminal outro and the shutdown for a composed sub-run', async () => {
+  it('skips the terminal outro for a composed sub-run', async () => {
     const events: AgentProgress[] = [];
 
     const result = await runAgent(config({ composed: true }), input(), {
@@ -708,6 +897,48 @@ describe('runAgent standalone', () => {
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(result.snapshot.tasks).toHaveLength(1);
   });
+
+  it.each([Sequence.linear, Sequence.orchestrator])(
+    'cancels an open question when the host aborts the %s run',
+    async (sequence) => {
+      harnessState.askQuestions = [
+        { id: 'q1', prompt: 'Continue?', kind: 'text' },
+      ];
+      const host = new AbortController();
+      const signals: AbortSignal[] = [];
+      const running = runAgent(
+        config({
+          binding: {
+            harness: Harness.pi,
+            sequence,
+            model: DEFAULT_AGENT_MODEL,
+          },
+          switchboard: {
+            program: 'test-program',
+            flags: {},
+            cliHarness: Harness.pi,
+          },
+        }),
+        input(),
+        {
+          signal: host.signal,
+          interaction: {
+            ask: (_question, { signal }) => {
+              signals.push(signal);
+              return new Promise<AskAnswers>(() => undefined);
+            },
+          },
+        },
+      );
+      await vi.waitFor(() => expect(signals).toHaveLength(1));
+      expect(signals[0].aborted).toBe(false);
+      host.abort();
+      const result = await running;
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      // The host's abort reached the open question as its own abort.
+      expect(signals[0].aborted).toBe(true);
+    },
+  );
 
   it('returns an aborted result before setup for a pre-aborted host signal', async () => {
     const controller = new AbortController();
