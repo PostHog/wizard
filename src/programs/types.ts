@@ -30,3 +30,7 @@ export type {
   ProgramDataWriter,
 } from './program-store';
 export type { ProgramOverrides, WizardFlagSnapshot } from './run-program';
+export type {
+  ProgramWorkflowRequest,
+  ProgramWorkflowDecision,
+} from './run-program';

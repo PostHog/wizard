@@ -30,6 +30,10 @@ type RuntimeProgramConfigBase = {
   auditLedgerFile?: string;
   auditSeedChecks?: readonly AuditCheck[];
   eventPlanFile?: string;
+  /** Steps a host settles after auth and before the run, asked as one post-auth request. */
+  postAuthGates?: readonly string[];
+  /** Child program runs a composed program starts before its own agent. */
+  composedRuns?: readonly { stepId: string; runProgramId: string }[];
 };
 
 export type RuntimeProgramConfig = RuntimeProgramConfigBase &
@@ -85,6 +89,7 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     resolve: (input) =>
       resolveSourceMapsRunDefinition(input.sourceMapsSelection),
     requiresAi: true,
+    postAuthGates: ['detect'],
   },
   {
     id: 'error-tracking',
@@ -129,7 +134,13 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     disallowedTools: [WIZARD_ASK],
     run: MIGRATION_RUN,
   },
-  { id: 'self-driving', strategy: 'self-driving' },
+  {
+    id: 'self-driving',
+    strategy: 'self-driving',
+    composedRuns: [
+      { stepId: 'integrate-run', runProgramId: 'posthog-integration' },
+    ],
+  },
   {
     id: 'agent-skill',
     strategy: 'resolved',

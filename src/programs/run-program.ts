@@ -107,12 +107,39 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   };
 }
 
+/** A pause at an existing host boundary; requests carry domain data only. */
+export type ProgramWorkflowRequest =
+  | {
+      kind: 'post-auth';
+      programId: string;
+      gates: readonly { id: string; data?: unknown }[];
+    }
+  | {
+      kind: 'confirm';
+      programId: string;
+      id: 'self-driving-handoff' | 'self-driving-github';
+      installDir: string;
+    }
+  | {
+      kind: 'child-run';
+      programId: string;
+      stepId: string;
+      runProgramId: string;
+      installDir: string;
+    };
+
+export type ProgramWorkflowDecision =
+  | { kind: 'post-auth'; frameworkContext?: Record<string, unknown> }
+  | { kind: 'confirm'; confirmed: boolean }
+  /** null: the host ran the child itself. */
+  | { kind: 'child-run'; input: ProgramInput | null };
+
+/** Answers composition and post-auth pauses; without one, runProgram uses prepared input. */
 export interface ProgramWorkflowConnector {
-  confirmStep(request: {
-    programId: 'self-driving';
-    stepId: 'self-driving-handoff' | 'self-driving-github';
-    installDir: string;
-  }): Promise<boolean>;
+  step(
+    request: ProgramWorkflowRequest,
+    context: { signal: AbortSignal },
+  ): Promise<ProgramWorkflowDecision>;
 }
 
 export interface ProgramOptions {
@@ -120,9 +147,9 @@ export interface ProgramOptions {
   interaction?: AgentInteraction;
   onProgress?: (progress: ProgramProgress) => void;
   mcp?: NoAgentMcpPort;
-  workflow?: NoAgentProgramOptions['workflow'];
+  workflow?: ProgramWorkflowConnector;
+  noAgentWorkflow?: NoAgentProgramOptions['workflow'];
   integrationEffects?: PosthogIntegrationRunEffects;
-  compositionWorkflow?: ProgramWorkflowConnector;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
   awaitAiApproval?: (context: {
     programId: string;
@@ -173,15 +200,14 @@ export async function runProgram(
     { aiSdkStampReported: input.aiSdkStampReported },
     { onData: options.onProgress },
   );
-  const installDirs = new Set([
-    input.installDir,
-    ...(input.composition?.integration
-      ? [input.composition.integration.installDir]
-      : []),
-  ]);
-  const cleanups = [...installDirs].map(captureRunSkillCleanup);
+  const cleanups = new Map<string, () => void>();
+  const captureSkills = (installDir: string) => {
+    if (cleanups.has(installDir)) return;
+    cleanups.set(installDir, captureRunSkillCleanup(installDir));
+  };
+  captureSkills(input.installDir);
   const cleanFailedInvocation = () => {
-    for (const cleanup of cleanups) {
+    for (const cleanup of cleanups.values()) {
       try {
         cleanup();
       } catch (error) {
@@ -190,14 +216,11 @@ export async function runProgram(
     }
   };
   try {
-    const result = await runProgramWithStore(
-      programId,
-      input,
-      options,
+    const result = await runProgramWithStore(programId, input, options, {
       store,
-      undefined,
-      { granted: false },
-    );
+      approval: { granted: false },
+      captureSkills,
+    });
     if (result.outcome !== RunOutcome.Success) cleanFailedInvocation();
     return result;
   } catch (error) {
@@ -206,14 +229,22 @@ export async function runProgram(
   }
 }
 
+/** State one runProgram call shares with the composed runs inside it. */
+type Invocation = {
+  store: ProgramStore;
+  approval: { granted: boolean };
+  /** Record a directory's skills before a run there, so a failed invocation removes only new ones. */
+  captureSkills(installDir: string): void;
+};
+
 async function runProgramWithStore(
   programId: string,
   input: ProgramInput,
   options: ProgramOptions,
-  store: ProgramStore,
+  invocation: Invocation,
   stepId?: string,
-  approval: { granted: boolean } = { granted: false },
 ): Promise<ProgramRunOutcome> {
+  const { store, approval } = invocation;
   const program = getRuntimeProgramConfig(programId);
   const artifacts: ProgramRunOutcome['artifacts'] = {};
   const runId = input.runId ?? randomUUID();
@@ -293,7 +324,11 @@ async function runProgramWithStore(
         credentials: credentials?.posthog,
         mcp: { ...input.mcp, local: input.flags?.localMcp },
       },
-      { mcp: options.mcp, workflow: options.workflow, signal: options.signal },
+      {
+        mcp: options.mcp,
+        workflow: options.noAgentWorkflow,
+        signal: options.signal,
+      },
     );
     if (signal.aborted) return cancelled();
     return {
@@ -345,19 +380,73 @@ async function runProgramWithStore(
     if (!approval.granted) return abort('AI processing approval declined.');
   }
 
-  if (programId === 'self-driving') {
+  let frameworkContext = input.frameworkContext ?? {};
+  const postAuthGates = program.postAuthGates ?? [];
+  if (postAuthGates.length > 0 && options.workflow) {
     try {
-      const composition = input.composition ?? {};
-      if (composition.integration) {
+      const decision = await askWorkflow(
+        options.workflow,
+        {
+          kind: 'post-auth',
+          programId,
+          gates: postAuthGates.map((id) => ({ id })),
+        },
+        signal,
+      );
+      const patch = decision.frameworkContext ?? {};
+      for (const [key, value] of Object.entries(patch)) {
+        store.setFrameworkContext(key, value);
+      }
+      frameworkContext = { ...frameworkContext, ...patch };
+    } catch (error) {
+      if (signal.aborted) return cancelled();
+      return fail(error instanceof Error ? error.message : String(error));
+    }
+    if (signal.aborted) return cancelled();
+  }
+
+  if (program.strategy === 'self-driving') {
+    const composition = input.composition ?? {};
+    const workflow = options.workflow;
+    const confirm = async (
+      connector: ProgramWorkflowConnector,
+      id: 'self-driving-handoff' | 'self-driving-github',
+    ): Promise<boolean> => {
+      const decision = await askWorkflow(
+        connector,
+        { kind: 'confirm', programId, id, installDir: input.installDir },
+        signal,
+      );
+      return decision.confirmed;
+    };
+    try {
+      for (const composed of program.composedRuns ?? []) {
+        // A null answer means the host ran the child itself.
+        const childInput = workflow
+          ? (
+              await askWorkflow(
+                workflow,
+                {
+                  kind: 'child-run',
+                  programId,
+                  stepId: composed.stepId,
+                  runProgramId: composed.runProgramId,
+                  installDir: input.installDir,
+                },
+                signal,
+              )
+            ).input
+          : composition.integration;
+        if (!childInput) continue;
         store.setComposition({ parentProgramId: programId });
-        const childInput = composition.integration;
+        invocation.captureSkills(childInput.installDir);
         const childResult = await runProgramWithStore(
-          'posthog-integration',
+          composed.runProgramId,
           {
             ...childInput,
             credentials: childInput.credentials ?? credentials,
             composed: true,
-            runId: childInput.runId ?? `${runId}:integrate-run`,
+            runId: childInput.runId ?? `${runId}:${composed.stepId}`,
             flags: { ...input.flags, ...childInput.flags },
             host: mergeGiven(input.host, childInput.host),
             overrides: mergeGiven(input.overrides, childInput.overrides),
@@ -368,9 +457,8 @@ async function runProgramWithStore(
             ),
           },
           options,
-          store,
-          'integrate-run',
-          approval,
+          invocation,
+          composed.stepId,
         );
         if (childResult.outcome !== RunOutcome.Success) {
           return { ...childResult, programId };
@@ -382,31 +470,24 @@ async function runProgramWithStore(
             posthog: childResult.data.credentials,
           };
         }
-        store.markProgramCompleted('integrate-run');
-        if (options.compositionWorkflow) {
-          const continueAfterHandoff =
-            await options.compositionWorkflow.confirmStep({
-              programId: 'self-driving',
-              stepId: 'self-driving-handoff',
-              installDir: input.installDir,
-            });
-          if (!continueAfterHandoff)
+        store.markProgramCompleted(composed.stepId);
+        if (workflow) {
+          if (!(await confirm(workflow, 'self-driving-handoff'))) {
             return abort('Self-driving handoff declined.');
+          }
         } else if (composition.handoffConfirmed !== true) {
           return abort('Self-driving handoff was not confirmed.');
         }
       }
-      if (options.compositionWorkflow) {
-        const githubConnected = await options.compositionWorkflow.confirmStep({
-          programId: 'self-driving',
-          stepId: 'self-driving-github',
-          installDir: input.installDir,
-        });
-        if (!githubConnected) return abort('GitHub connection declined.');
+      if (workflow) {
+        if (!(await confirm(workflow, 'self-driving-github'))) {
+          return abort('GitHub connection declined.');
+        }
       } else if (composition.githubConnected !== true) {
         return abort('GitHub connection was not confirmed.');
       }
     } catch (error) {
+      if (signal.aborted) return cancelled();
       return fail(error instanceof Error ? error.message : String(error));
     }
   }
@@ -433,7 +514,7 @@ async function runProgramWithStore(
           {
             installDir: input.installDir,
             frameworkConfig: input.frameworkConfig,
-            frameworkContext: input.frameworkContext ?? {},
+            frameworkContext,
             typescript: input.typescript ?? false,
             additionalFeatureQueue: input.additionalFeatureQueue,
             warehouseSources: input.warehouseSources ?? [],
@@ -459,7 +540,8 @@ async function runProgramWithStore(
     if (!run) {
       if (program.strategy === 'static') run = program.run;
       if (program.strategy === 'resolved') {
-        run = program.resolve(input);
+        const resolutionInput: ProgramInput = { ...input, frameworkContext };
+        run = program.resolve(resolutionInput);
       }
     }
     if (!run) {
@@ -593,4 +675,19 @@ async function runProgramWithStore(
 /** A composed child inherits the parent's value; absent on both sides stays absent. */
 function mergeGiven<T extends object>(parent?: T, child?: T): T | undefined {
   return parent || child ? ({ ...parent, ...child } as T) : undefined;
+}
+
+/** Ask the connector, and reject an answer to a different kind of request. */
+async function askWorkflow<R extends ProgramWorkflowRequest>(
+  workflow: ProgramWorkflowConnector,
+  request: R,
+  signal: AbortSignal,
+): Promise<Extract<ProgramWorkflowDecision, { kind: R['kind'] }>> {
+  const decision = await workflow.step(request, { signal });
+  if (decision.kind !== request.kind) {
+    throw new Error(
+      `Workflow connector answered ${decision.kind} to a ${request.kind} request`,
+    );
+  }
+  return decision as Extract<ProgramWorkflowDecision, { kind: R['kind'] }>;
 }
