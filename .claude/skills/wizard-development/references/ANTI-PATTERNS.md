@@ -38,7 +38,7 @@ state that a step's `show`, `isComplete`, or `gate` predicate reads. Use the
 existing overlay mechanism for a real overlay.
 
 `requires` documents a prerequisite but does not run it. Detect prerequisites
-explicitly or compose work through `ProgramStep.run`. Use store setters for
+explicitly or compose work through `ProgramConfig.runSteps`. Use store setters for
 shared session data; do not rely on another program having populated it by
 accident. Shared detection can be a function called by both `onReady` hooks.
 

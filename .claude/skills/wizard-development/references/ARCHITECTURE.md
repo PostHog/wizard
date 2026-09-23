@@ -49,7 +49,7 @@ signatures.
 | `postRun(session, credentials)`        | Linear success path, before outro                              |
 | `buildOutroData(session, credentials)` | Linear custom outro; otherwise defaults from run metadata      |
 | `agentFlow` and task skill variants    | Orchestrator flow selection and task execution                 |
-| `ProgramStep.run`                      | Explicit program composition in the outer lifecycle            |
+| `ProgramConfig.runSteps`                      | Explicit program composition in the outer lifecycle            |
 | `ProgramConfig.requires`               | Dependency metadata; it does not execute prerequisite programs |
 
 Do not migrate a linear program merely by changing its binding if it depends on

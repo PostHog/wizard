@@ -4,8 +4,8 @@
 
 | Surface                                                           | Owns                                                                          |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [WizardSession](../../../../src/lib/wizard-session.ts)            | Run configuration, decisions, credentials, and lifecycle state                |
-| [ProgramStep](../../../../src/programs/program-step.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
+| [WizardSession](../../../../src/tui/session.ts)            | Run configuration, decisions, credentials, and lifecycle state                |
+| [FlowStep](../../../../src/tui/flow.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
 | [screen-sequences.ts](../../../../src/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
 | [WizardRouter](../../../../src/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
 | [WizardStore](../../../../src/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
@@ -17,7 +17,7 @@
 entries: `id`, `show`, and `isComplete`. Completion defaults to the step's
 `gate` when no separate `isComplete` is provided. Steps without a screen are
 omitted, and the exit screen is appended. The projection applies
-[withAiOptInGate](../../../../src/programs/ai-opt-in-gate.ts) consistently
+[withAiOptInGate](../../../../src/tui/flows/ai-opt-in-gate.ts) consistently
 with store gate creation.
 
 `WizardRouter.resolve(session)` first checks the overlay stack, then returns the
@@ -32,7 +32,7 @@ from the agent execution sequence selected by the runner; see
 
 ## Gates and initialization
 
-Read `ProgramStep` before adding asynchronous work:
+Read `FlowStep` before adding asynchronous work:
 
 - `gate` supplies a blocking checkpoint, while `isComplete` determines when its
   screen is finished. Separate them when those conditions differ.

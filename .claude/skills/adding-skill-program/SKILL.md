@@ -102,9 +102,9 @@ does not preserve these behaviors automatically.
 
 ## Screens, prerequisites, and composition
 
-Reuse [AGENT_SKILL_STEPS](../../../src/programs/agent-skill/steps.ts):
+Reuse [AGENT_SKILL_FLOW](../../../src/tui/flows/agent-skill.ts):
 intro, health check, auth, run, outro, and keep-skills. Auth also applies the
-shared [AI opt-in gate](../../../src/programs/ai-opt-in-gate.ts) for agent
+shared [AI opt-in gate](../../../src/tui/flows/ai-opt-in-gate.ts) for agent
 programs. Override `screenId`, not `screen`, when adapting a step. New screens
 need an entry in [ScreenId](../../../src/tui/screen-sequences.ts), a
 component, and registration in
@@ -121,7 +121,7 @@ walks `onReady` by default; set `ciPreRun` only when it needs a different
 prerequisite strategy.
 
 `requires` currently records metadata; it does not execute or enforce prior
-programs. Compose real work through `ProgramStep.run`, with `onRunPrep` and
+programs. Compose real work through `ProgramConfig.runSteps`, with `onRunPrep` and
 `targetDir` when needed. The
 [integration run step](../../../src/programs/posthog-integration/index.ts)
 and [self-driving](../../../src/programs/self-driving/) demonstrate this.
