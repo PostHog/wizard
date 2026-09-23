@@ -19,8 +19,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ProgramConfig } from '../program-step';
+import type { WizardStore } from '@ui/tui/store';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+let headlessStore: WizardStore | undefined;
 vi.mock('@env', async (original) => ({
   ...(await original<typeof import('@env')>()),
   IS_PRODUCTION_BUILD: false,
@@ -35,6 +37,9 @@ vi.mock('@utils/environment', async (original) => ({
 }));
 vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
+    constructor(options: { store: WizardStore }) {
+      headlessStore = options.store;
+    }
     attach = vi.fn();
     shutdown = streamShutdown;
   },
@@ -114,6 +119,7 @@ const session = () => ({
 let logSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  headlessStore = undefined;
   clearCleanup();
   vi.clearAllMocks();
   vi.mocked(authenticate).mockImplementation((sess) => {
@@ -215,6 +221,13 @@ it('passes the fixed CI bearer through the callable host without agent-global ga
     );
     await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
     expect(ciPreRun).toHaveBeenCalledOnce();
+
+    expect(headlessStore?.session.inferenceAuth).toBeDefined();
+    expect(await headlessStore?.session.inferenceAuth?.resolve()).toMatchObject(
+      {
+        token: 'fixed-ci-bearer',
+      },
+    );
 
     const input = vi.mocked(runAgent).mock.calls[0]?.[1];
     expect(input).toBeDefined();

@@ -76,11 +76,17 @@ it('keeps initialization and execution progress visible during detection', async
       return Promise.resolve({});
     },
   );
-  const report = await detectProjectsWithAgent(detectionSession(), {
+  const session = detectionSession();
+  const inferenceAuth = { resolve: vi.fn() };
+  session.inferenceAuth = inferenceAuth;
+  const report = await detectProjectsWithAgent(session, {
     programId: 'posthog-integration',
     targets: [{ id: 'node', name: 'Node.js' }],
   });
   expect(report.projects[0].targetId).toBe('node');
+  expect(vi.mocked(initializeAgent).mock.calls[0][0].inferenceAuth).toBe(
+    inferenceAuth,
+  );
   expect(getUI().addTokenUsage).toHaveBeenCalledWith(delta);
   expect(ui.setStage).toHaveBeenCalledWith('Scanning');
   expect(ui.pushStatus).toHaveBeenCalledWith('Found a project');
