@@ -10,10 +10,12 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import { readdir, rm, access } from 'node:fs/promises';
+import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const WIZARD_MARKER = '.posthog-wizard';
+// A marker older than this process was written by an earlier run.
+const RUN_STARTED_AT = performance.timeOrigin;
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
@@ -54,7 +56,8 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
         const result: SkillEntry[] = [];
         for (const dir of dirs) {
           try {
-            await access(join(skillsDir, dir.name, WIZARD_MARKER));
+            const marker = await stat(join(skillsDir, dir.name, WIZARD_MARKER));
+            if (marker.mtimeMs < RUN_STARTED_AT) continue;
           } catch {
             continue;
           }
@@ -134,10 +137,13 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
             </Text>
             <Box marginTop={1} flexDirection="column" marginLeft={2}>
               <Text dimColor>.claude/</Text>
-              <Text dimColor> skills/</Text>
+              <Text dimColor>{'  '}skills/</Text>
               {skills.map((skill) => (
                 <Box key={skill.name} flexDirection="column">
-                  <Text dimColor> {skill.name}/</Text>
+                  <Text dimColor>
+                    {'    '}
+                    {skill.name}/
+                  </Text>
                   {skill.children.map((child) => (
                     <Text key={child} dimColor>
                       {'      '}
