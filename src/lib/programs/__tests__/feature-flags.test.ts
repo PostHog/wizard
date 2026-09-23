@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { buildRegistry, parseAgentPrompt } from '@agent/agent-prompt-loader';
 import { Integration } from '@shared/constants';
+import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 import { featureFlagsConfig } from '@lib/programs/feature-flags/index';
 import { FEATURE_FLAGS_PROMPTS } from '@lib/programs/feature-flags/prompts';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
@@ -30,6 +31,12 @@ describe('feature-flags program', () => {
   test('detects the framework before the intro', () => {
     const stepIds = featureFlagsConfig.steps.map((step) => step.id);
     expect(stepIds.indexOf('detect')).toBeLessThan(stepIds.indexOf('intro'));
+  });
+
+  test('requests both feature flag scopes', () => {
+    const scopes = getOAuthScopesForProgram('feature-flags');
+    expect(scopes).toContain('feature_flag:read');
+    expect(scopes).toContain('feature_flag:write');
   });
 
   test('headless pre-run sets the skill id to the detected framework', async () => {

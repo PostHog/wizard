@@ -1,6 +1,9 @@
 import { Box, Text } from 'ink';
+import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
+import { FEATURE_FLAGS_STEP_SKILL_ID } from '@lib/programs/feature-flags/prompts';
+import { LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
 import {
   SkillSourceInfo,
@@ -11,7 +14,7 @@ interface FeatureFlagsIntroScreenProps {
   store: WizardStore;
 }
 
-const FEATURE_FLAGS_STEP_SKILL_ID = 'integration-v2-feature-flags-step';
+const CANCEL_ONLY_MENU = [{ label: 'Cancel', value: 'cancel' }];
 
 export const FeatureFlagsIntroScreen = ({
   store,
@@ -87,6 +90,28 @@ export const FeatureFlagsIntroScreen = ({
     continue: () => store.completeSetup(),
   };
 
+  const selectMenuAction = (value: string) => menuActions[value]?.();
+  const isDetectingFramework = !session.detectionComplete;
+  const isFrameworkUndetected = session.integration === null;
+
+  if (isDetectingFramework || isFrameworkUndetected) {
+    return (
+      <IntroScreenLayout
+        installDir={session.installDir}
+        body={
+          isDetectingFramework
+            ? DETECTING_FRAMEWORK_BODY
+            : UNDETECTED_FRAMEWORK_BODY
+        }
+        showDetection={false}
+        programLabel={session.programLabel}
+        skillId={session.skillId}
+        menuOptions={CANCEL_ONLY_MENU}
+        onSelect={selectMenuAction}
+      />
+    );
+  }
+
   return (
     <IntroScreenLayout
       installDir={session.installDir}
@@ -95,7 +120,25 @@ export const FeatureFlagsIntroScreen = ({
       programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
-      onSelect={(value: string) => menuActions[value]?.()}
+      onSelect={selectMenuAction}
     />
   );
 };
+
+const DETECTING_FRAMEWORK_BODY: ReactNode = (
+  <Box marginY={1}>
+    <LoadingBox message="Detecting project framework..." />
+  </Box>
+);
+
+const UNDETECTED_FRAMEWORK_BODY: ReactNode = (
+  <Box flexDirection="column" alignItems="center" width={64}>
+    <Text>Could not detect your project's framework.</Text>
+    <Box marginTop={1}>
+      <Text dimColor>
+        The feature-flags program needs a supported framework. Run the wizard
+        from your app's root directory.
+      </Text>
+    </Box>
+  </Box>
+);
