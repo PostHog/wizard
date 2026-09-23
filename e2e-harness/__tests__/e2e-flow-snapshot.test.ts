@@ -16,7 +16,6 @@
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui/index';
-import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
@@ -28,6 +27,8 @@ import { WizardCiDriver } from '../wizard-ci-driver';
 import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';
 import { profileFor } from '../profiles';
 import { rawProgramFlow } from '@tui/flows/index';
+import { buildSession } from '@tui/session';
+import { RunPhase } from '@shared/run-state';
 
 /**
  * Walk a program flow offline using an e2e profile, injecting the external

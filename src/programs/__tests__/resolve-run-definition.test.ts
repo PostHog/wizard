@@ -1,11 +1,11 @@
 import { AdditionalFeature } from '@shared/constants';
 import type { PromptContext } from '@agent/types';
-import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramRunHost } from '@programs/types';
 import { testProgramRunHost } from '../../../test/program-host';
 import { warehouseSourceConfig } from '@programs/warehouse-source/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { resolveProgramRunDefinition } from '../resolve-run-definition';
+import type { WizardSession } from '@tui/session';
 
 const promptContext = {
   projectId: 42,

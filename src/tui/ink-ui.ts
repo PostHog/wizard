@@ -15,15 +15,11 @@ import type {
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { ApiUser } from '@shared/api';
-import type {
-  AskAnswers,
-  Credentials,
-  OutroData,
-  PendingQuestion,
-  TaskNotice,
-} from '@lib/wizard-session';
-import { RunPhase, OutroKind } from '@lib/wizard-session';
+import type { ApiUser, Credentials } from '@shared/api';
+import type { AskAnswers, PendingQuestion, TaskNotice } from '@agent/types';
+import type { OutroData } from '@shared/outro';
+import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
 
 // Strip ANSI escape codes (chalk formatting) from strings
 // eslint-disable-next-line no-control-regex

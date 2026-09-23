@@ -10,12 +10,11 @@
  * tree.
  */
 
-import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@programs';
 import { tuiAuthHost } from '@tui/auth-host';
 import { Program, createPosthogInferenceAuthProvider } from '@programs';
 import type { WizardStore } from '@tui/store';
-import type { ApiUser } from '@shared/api';
+import type { ApiUser, Credentials } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,

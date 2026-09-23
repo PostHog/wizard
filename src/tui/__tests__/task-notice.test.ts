@@ -3,7 +3,6 @@
  * decline a step that will stop and ask them for credentials, so the copy has
  * to reach the screen and both answers have to come back.
  */
-import type { TaskNotice } from '@lib/wizard-session';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {
@@ -16,6 +15,7 @@ vi.mock('@utils/analytics.js', () => ({
 }));
 
 import { WizardStore, Overlay } from '@tui/store';
+import type { TaskNotice } from '@agent/types';
 
 const NOTICE: TaskNotice = {
   title: 'Connect your data sources',

@@ -21,7 +21,6 @@ import {
 } from '@tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { ScanConsent } from '@lib/wizard-session';
 import { KeyMatch, useKeyBindings } from '@tui/hooks/useKeyBindings';
 import { Icons } from '@tui/styles';
 import { analytics } from '@utils/analytics';
@@ -31,6 +30,7 @@ import {
   introHeadline,
   introMenuOptions,
 } from '@tui/posthog-integration-intro';
+import { ScanConsent } from '@shared/scan-consent';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The

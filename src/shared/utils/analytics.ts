@@ -4,13 +4,17 @@ import {
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
   WIZARD_FLAG_KEYS,
+  type AdditionalFeature,
+  type Integration,
 } from '@shared/constants';
-import type { WizardSession } from '@lib/wizard-session';
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
+  type DiscoveredFeature,
+  type ScanConsent,
 } from '@shared/scan-consent';
-import type { ApiUser } from '@shared/api';
+import type { ApiUser, Credentials } from '@shared/api';
+import type { RunPhase } from '@shared/run-state';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
 import { VERSION } from '@shared/version';
@@ -35,12 +39,26 @@ function invocationProperties(): { command: string; cli_flags: string } {
   return { command, cli_flags: flags.join(',') };
 }
 
+/** The session fields the standard property bag reads. */
+export type SessionPropertiesSource = {
+  scanConsent: ScanConsent;
+  integration: Integration | null;
+  skillId: string | null;
+  detectedFrameworkLabel: string | null;
+  typescript: boolean;
+  credentials: Pick<Credentials, 'projectId'> | null;
+  discoveredFeatures: DiscoveredFeature[];
+  posthogSdkDetected: boolean;
+  additionalFeatureQueue: AdditionalFeature[];
+  runPhase: RunPhase;
+};
+
 /**
  * Extract a standard property bag from the current session.
  * Used by store-level analytics and available for ad-hoc captures.
  */
 export function sessionProperties(
-  session: WizardSession,
+  session: SessionPropertiesSource,
 ): Record<string, unknown> {
   // reportableDiscoveredFeatures() owns the consent decision; this file
   // never needs to know what `scanConsent` means, only that the result

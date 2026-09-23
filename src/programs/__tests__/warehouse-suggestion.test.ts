@@ -16,9 +16,10 @@
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { POSTHOG_INTEGRATION_FLOW } from '@tui/flows/posthog-integration';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { testProgramRunHost } from '../../../test/program-host';
+import { buildSession } from '@tui/session';
+import type { WizardSession } from '@tui/session';
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',

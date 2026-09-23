@@ -13,11 +13,6 @@
 import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui/index';
-import {
-  buildSession,
-  OutroKind,
-  type WizardSession,
-} from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { HostResolution } from '@shared/host-resolution';
@@ -32,6 +27,9 @@ import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '../self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '../error-tracking/detect-agentic';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '../error-tracking-upload-source-maps/detect';
 import { rawProgramFlow } from '@tui/flows/index';
+import { buildSession } from '@tui/session';
+import { OutroKind } from '@shared/outro';
+import type { WizardSession } from '@tui/session';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {

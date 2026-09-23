@@ -6,7 +6,7 @@
 
 import type { ProgramId } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@tui/session';
 
 /**
  * Context passed to onInit callbacks — fires when the TUI starts

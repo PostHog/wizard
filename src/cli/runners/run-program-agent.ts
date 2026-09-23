@@ -13,7 +13,6 @@
  * program receives explicit input and effects.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { createUiReducer, getUI, uiInteraction } from '@ui';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
@@ -65,6 +64,7 @@ import { startAuditLedgerWatcher } from '@programs/audit/ledger-watcher';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
+import type { WizardSession } from '@tui/session';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.

@@ -10,13 +10,7 @@
 
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { ApiUser } from '@shared/api';
-import type { Credentials, TaskNotice } from '@lib/wizard-session';
-import type {
-  AskAnswers,
-  OutroData,
-  PendingQuestion,
-} from '@lib/wizard-session';
+import type { ApiUser, Credentials } from '@shared/api';
 export { TaskStatus, isTaskStatus } from '@shared/run-state';
 
 // Progress payloads are the agent's contract; re-exported so UI code keeps its import path.
@@ -24,7 +18,11 @@ import type {
   AuthErrorDetail,
   SpinnerHandle,
   TokenUsageDelta,
+  TaskNotice,
+  AskAnswers,
+  PendingQuestion,
 } from '@agent/types';
+import type { OutroData } from '@shared/outro';
 export type { AuthErrorDetail, SpinnerHandle, TokenUsageDelta };
 
 export interface WizardUI {

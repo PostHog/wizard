@@ -451,7 +451,6 @@ it('keeps the callable program registry free of UI and session runtime imports',
       file.startsWith('src/ui/') ||
       file.startsWith('src/tui/') ||
       file.startsWith('src/headless/') ||
-      file.startsWith('src/lib/wizard-session') ||
       file.startsWith('src/cli/runners/') ||
       file.startsWith('src/cli/commands/'),
   );
@@ -464,8 +463,7 @@ it('keeps the callable runProgram closure free of UI, session, and legacy regist
       file === 'src/programs/program-registry.ts' ||
       file.startsWith('src/ui/') ||
       file.startsWith('src/tui/') ||
-      file.startsWith('src/headless/') ||
-      file.startsWith('src/lib/wizard-session'),
+      file.startsWith('src/headless/'),
   );
   expect(forbidden).toEqual([]);
 });
@@ -490,7 +488,6 @@ it.each([
       file.startsWith('src/ui/') ||
       file.startsWith('src/tui/') ||
       file.startsWith('src/headless/') ||
-      file.startsWith('src/lib/wizard-session') ||
       file.startsWith('src/programs/task-stream/'),
   );
   expect(forbidden).toEqual([]);

@@ -6,11 +6,12 @@ import type {
 } from '@programs/task-stream/types';
 import type { WizardStore, TaskItem } from '@tui/store';
 import { TaskStatus } from '@ui/wizard-ui';
-import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
+import { RunPhase } from '@shared/run-state';
+import type { PendingQuestion } from '@agent/types';
 
 type Listener = () => void;
 

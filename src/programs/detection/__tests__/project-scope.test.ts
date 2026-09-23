@@ -12,9 +12,9 @@ import {
 } from '@shared/constants';
 import { authenticate } from '@programs/authenticate';
 import type { ProgramCiHost } from '@programs/host-capabilities';
-import { buildSession } from '@lib/wizard-session';
 import { testAuthHost } from '../../../../test/program-host';
 import { analytics } from '@utils/analytics';
+import { buildSession } from '@tui/session';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
 vi.mock('@programs/authenticate', async (importOriginal) => ({

@@ -4,7 +4,7 @@ vi.mock('@utils/debug');
 import { createUiReducer, uiInteraction } from '../agent-progress';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { AgentProgress } from '@agent/progress';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@shared/outro';
 
 it('projects every progress event onto the matching UI call, in order', () => {
   const ui = new LoggingUI();

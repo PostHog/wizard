@@ -10,7 +10,6 @@ import { analytics } from './analytics';
 import { logToFile } from './debug';
 import { getUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
-import { OutroKind, type OutroData } from '@lib/wizard-session';
 import type { ErrorCode } from '@shared/errors';
 import {
   WizardError,
@@ -18,6 +17,8 @@ import {
   sanitizeErrorDetail,
 } from '@shared/errors';
 import { runCleanups } from './cleanup-registry';
+import { OutroKind } from '@shared/outro';
+import type { OutroData } from '@shared/outro';
 
 export { registerCleanup, clearCleanup, runCleanups } from './cleanup-registry';
 

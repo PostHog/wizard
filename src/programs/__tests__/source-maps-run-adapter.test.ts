@@ -1,10 +1,10 @@
 import type { PromptContext } from '@agent/types';
-import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramRun } from '@programs/program-run';
 import type { ProgramRunHost } from '@programs/host-capabilities';
 import { errorTrackingUploadSourceMapsConfig } from '@programs/error-tracking-upload-source-maps/index';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
+import type { WizardSession } from '@tui/session';
 
 const ui = {
   values: {} as Record<string, unknown>,

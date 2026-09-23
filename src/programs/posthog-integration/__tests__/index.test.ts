@@ -8,12 +8,13 @@
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import type { ProgramRunHost } from '@programs/host-capabilities';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/package-json';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { uploadEnvironmentVariablesStep } from '@programs/posthog-integration/upload-environment-variables';
+import { buildSession } from '@tui/session';
+import type { WizardSession } from '@tui/session';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {

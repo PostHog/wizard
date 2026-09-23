@@ -6,10 +6,10 @@
  * appending the exit screen). Pure leaf module — no store, no React.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
 import { PROGRAM_REGISTRY, type ProgramId } from '@programs';
 import { createProgramSequence } from './flow.js';
 import { getProgramFlow } from './flows/index.js';
+import type { WizardSession } from '@tui/session';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {

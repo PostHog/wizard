@@ -21,20 +21,6 @@ import {
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from '@ui/wizard-ui';
-import {
-  type WizardSession,
-  type OutroData,
-  type DiscoveredFeature,
-  type PendingQuestion,
-  type AskAnswers,
-  type CloudRegion,
-  AdditionalFeature,
-  McpOutcome,
-  RunPhase,
-  ScanConsent,
-  buildSession,
-  type TaskNotice,
-} from '@lib/wizard-session';
 import type { SettingsConflict } from '@shared/claude-settings';
 import {
   WizardReadiness,
@@ -55,8 +41,16 @@ import type { StoreInitContext } from './flow.js';
 import { getProgramConfig, reportWarehouseSourcesDetected } from '@programs';
 import { getProgramFlow, rawProgramFlow } from './flows/index.js';
 import { appendStatus } from '@shared/status-history';
-import { IS_DEV } from '@shared/constants';
+import { IS_DEV, AdditionalFeature } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';
+import type { WizardSession } from '@tui/session';
+import type { OutroData } from '@shared/outro';
+import type { DiscoveredFeature } from '@shared/scan-consent';
+import type { PendingQuestion, AskAnswers, TaskNotice } from '@agent/types';
+import type { CloudRegion } from '@utils/types';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { ScanConsent } from '@shared/scan-consent';
+import { buildSession } from '@tui/session';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };

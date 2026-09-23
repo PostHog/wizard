@@ -1,60 +1,16 @@
 /**
- * WizardSession — single source of truth for every decision the wizard needs.
+ * The TUI's session: a program session plus the screen state the TUI adds.
  *
- * Populated in layers:
- *   CLI args / env vars  →  populate fields directly
- *   Auto-detection       →  framework, typescript, package manager
- *   TUI screens          →  region, framework disambiguation, etc.
- *   OAuth                →  credentials
- *
- * Business logic reads from the session. Never calls a prompt.
+ * The store holds one; screens read it and change it through store setters,
+ * and the router resolves the active screen from it.
  */
 
-import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-} from '@shared/constants';
-// The leaf module, not the entry: the entry's registry imports modules that import this file.
-import {
-  buildProgramSession,
-  type ProgramLaunchArgs,
-  type ProgramSession,
-} from '@programs/program-session';
+import { buildProgramSession } from '@programs';
+import type { ProgramLaunchArgs, ProgramSession } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
-import type { Credentials } from '@shared/api';
-import type { CloudRegion } from '@utils/types';
-import type {
-  AskAnswers,
-  AskQuestion,
-  OutroData,
-  PendingQuestion,
-  TaskNotice,
-} from '@agent/types';
-// Leaf module on purpose: shared analytics imports this file, so the agent
-// entry would form a module cycle here.
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
-import { OutroKind } from '@agent/progress';
+import type { PendingQuestion, TaskNotice } from '@agent/types';
 import { McpOutcome, RunPhase } from '@shared/run-state';
-
-// These shapes moved to their owners; re-exported so every session reader
-// keeps its import path. `Credentials` sits with the API types, the
-// additional-feature enum with the other program enums in `./constants`, and
-// the outro, question and task-notice shapes are the agent's contract.
-export type { Credentials, CloudRegion };
-export {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-};
-export { OutroKind };
-export { McpOutcome, RunPhase, ScanConsent };
-export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
-
-/** Compatibility export for session readers; detection owns the shared value. */
-export { DiscoveredFeature };
 
 /** Screen state the TUI adds to a program session. */
 export interface TuiSessionState {
@@ -174,10 +130,3 @@ export function buildSession(args: ProgramLaunchArgs): WizardSession {
     pendingQuestion: null,
   };
 }
-
-/** Compatibility exports; consent rules live in shared code. */
-export {
-  mayReportScanResults,
-  reportableDiscoveredFeatures,
-  reportablePosthogSdkDetected,
-} from '@shared/scan-consent';

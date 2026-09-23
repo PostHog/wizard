@@ -55,8 +55,8 @@ vi.mock('@tui/store', async (importOriginal) => ({
 vi.mock('semver', () => ({ satisfies: () => true }));
 // importOriginal keeps real exports (e.g. RunPhase) while overriding
 // buildSession — vitest throws on access to exports a partial mock omits.
-vi.mock('@lib/wizard-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lib/wizard-session')>()),
+vi.mock('@tui/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tui/session')>()),
   buildSession: mockBuildSessionCli,
 }));
 vi.mock('@utils/provisioning', () => ({

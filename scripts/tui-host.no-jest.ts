@@ -20,7 +20,6 @@ import { startTUI } from '@tui/start-tui';
 import { VERSION } from '@shared/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
-import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import { runProgramAgent } from '@programs/run-agent-legacy';
@@ -56,6 +55,7 @@ import {
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
+import { buildSession } from '@tui/session';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);

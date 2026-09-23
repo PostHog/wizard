@@ -10,8 +10,8 @@ vi.mock('@utils/provisioning', () => ({
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
-vi.mock('@lib/wizard-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lib/wizard-session')>()),
+vi.mock('@tui/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tui/session')>()),
   buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
 vi.mock('@tui/start-tui', () => ({

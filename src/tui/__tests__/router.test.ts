@@ -1,15 +1,12 @@
-import {
-  buildSession,
-  McpOutcome,
-  OutroKind,
-  RunPhase,
-} from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@tui/router';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { PROGRAM_REGISTRY } from '@programs';
+import { buildSession } from '@tui/session';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
 
 function baseWizardSession() {
   return buildSession({});

@@ -4,8 +4,9 @@ import {
 } from '@programs/agent-skill/index';
 import { AGENT_SKILL_FLOW } from '@tui/flows/agent-skill';
 import type { ProgramRun } from '@programs/program-run';
-import { buildSession, RunPhase } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
+import { buildSession } from '@tui/session';
+import { RunPhase } from '@shared/run-state';
 
 const baseOpts: SkillProgramOptions = {
   skillId: 'error-tracking-setup',

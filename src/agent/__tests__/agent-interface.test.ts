@@ -13,13 +13,13 @@ import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
 import { scanProjectSkills } from '@agent/skill-preflight';
 import { analytics } from '@utils/analytics';
-import { Sequence } from '@shared/constants';
-import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
 import {
+  Sequence,
   AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '@lib/wizard-session';
+} from '@shared/constants';
+import type { WizardRunOptions } from '@utils/types';
+import type { SpinnerHandle } from '@ui';
 
 // Mock dependencies
 vi.mock('@utils/analytics');

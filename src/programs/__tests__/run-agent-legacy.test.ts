@@ -4,7 +4,6 @@ import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
 import { checkLocalServices } from '@shared/local-dev';
-import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import { setUI } from '@ui';
@@ -20,6 +19,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
+import { buildSession } from '@tui/session';
+import { OutroKind } from '@shared/outro';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({

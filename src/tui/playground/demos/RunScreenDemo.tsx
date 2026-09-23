@@ -22,7 +22,6 @@ import {
 } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { WizardStore, TaskStatus } from '@tui/store';
-import { DiscoveredFeature } from '@lib/wizard-session';
 import { AgentPhase } from '@shared/agent-phase';
 import {
   SplitView,
@@ -38,6 +37,7 @@ import { VisualizerTab } from '@tui/components/PhaseVisuals';
 import { getProgramContentBlocks } from '@tui/decks/registry';
 import { Colors } from '@tui/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
+import { DiscoveredFeature } from '@shared/scan-consent';
 
 const STAGE_CYCLE: AgentPhase[] = [
   AgentPhase.CodebaseScan,

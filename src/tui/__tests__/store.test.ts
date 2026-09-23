@@ -8,17 +8,18 @@ import {
   RunPhase,
   McpOutcome,
 } from '@tui/store';
-import { OutroKind, AdditionalFeature, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@tui/constants';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
 } from '@shared/health-checks/readiness';
-import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
-import { Integration } from '@shared/constants';
+import { Integration, AdditionalFeature } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { getProgramConfig } from '@programs';
+import { OutroKind } from '@shared/outro';
+import { ScanConsent } from '@shared/scan-consent';
+import { buildSession } from '@tui/session';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {

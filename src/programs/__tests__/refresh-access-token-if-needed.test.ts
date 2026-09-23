@@ -5,7 +5,8 @@ import {
   isGrantRevoked,
   resetAuthSessionState,
 } from '@shared/auth-session-state';
-import type { WizardSession, Credentials } from '@lib/wizard-session';
+import type { WizardSession } from '@tui/session';
+import type { Credentials } from '@shared/api';
 
 vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));

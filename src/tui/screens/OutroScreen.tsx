@@ -9,11 +9,11 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@tui/styles';
 import { withUtm } from '@utils/links';
 import { LinkText } from '@tui/primitives/LinkText';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
+import { OutroKind } from '@shared/outro';
 
 interface OutroScreenProps {
   store: WizardStore;

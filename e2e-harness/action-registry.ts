@@ -14,8 +14,6 @@
 
 import type { WizardStore } from '@tui/store';
 import { ScreenId, Overlay, type ScreenName } from '@tui/router';
-import { McpOutcome, OutroKind } from '@lib/wizard-session';
-import type { AskAnswers } from '@lib/wizard-session';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
@@ -24,6 +22,9 @@ import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
 } from '@programs/self-driving/detect';
+import { McpOutcome } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
+import type { AskAnswers } from '@agent/types';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {

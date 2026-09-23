@@ -8,7 +8,7 @@ import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
   MINT_FAILURE_CONTACT,
-} from '@ui/mint-failure';
+} from '@tui/mint-failure';
 import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
 

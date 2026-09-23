@@ -18,11 +18,12 @@ import {
 } from '@programs/error-tracking/index';
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { testProgramCiHost } from '../../../test/program-host';
 import { ERROR_TRACKING_FLOW } from '@tui/flows/error-tracking';
+import { buildSession } from '@tui/session';
+import type { WizardSession } from '@tui/session';
 
 vi.mock('@programs/detection/index', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/detection/index')>()),

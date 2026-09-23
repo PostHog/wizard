@@ -25,9 +25,10 @@ import {
   emitWizardError,
 } from '@shared/errors';
 import { detectErrorCode } from '@programs/detect-map';
-import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
+import type { OutroData } from '@shared/outro';
+import type { RunPhase as RunPhaseT } from '@shared/run-state';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -112,9 +113,9 @@ export function runNonInteractive(
 
   void (async () => {
     const path = await import('path');
-    const { buildSession, RunPhase, OutroKind } = await import(
-      '@lib/wizard-session'
-    );
+    const { buildSession } = await import('@tui/session');
+    const { RunPhase } = await import('@shared/run-state');
+    const { OutroKind } = await import('@shared/outro');
     const { readEnvironment } = await import('@utils/environment');
     const { readApiKeyFromEnv } = await import('@utils/env-api-key');
     const { configureLogFileFromEnvironment, logToFile } = await import(

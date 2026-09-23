@@ -24,10 +24,10 @@ import {
 } from '@programs/detection/agentic';
 import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
-import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
 import { testProgramRunHost } from '../../../test/program-host';
 import { SELF_DRIVING_FLOW } from '@tui/flows/self-driving';
+import { buildSession } from '@tui/session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));

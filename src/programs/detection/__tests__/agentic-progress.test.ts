@@ -3,10 +3,10 @@ import {
   initializeAgent,
   runAgent as executeAgent,
 } from '@agent/agent-interface';
-import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
 import { createUiReducer } from '@ui/agent-progress';
+import { buildSession } from '@tui/session';
 
 vi.mock('@utils/debug');
 vi.mock('@ui', () => ({ getUI: () => ui }));

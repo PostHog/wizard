@@ -11,18 +11,19 @@ import { rawProgramFlow } from '@tui/flows/index';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
 import { registerCleanup, runCleanups } from '@utils/wizard-abort';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
-import { isRunFailure } from '@ui/mint-failure';
+import { isRunFailure } from '@tui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
+import { OutroKind } from '@shared/outro';
+import type { WizardSession } from '@tui/session';
 
 const WIZARD_VERSION = VERSION;
 
@@ -103,7 +104,8 @@ export function runWizard(
       registerCleanup(captureRunSkillCleanup(installDir));
 
       const { startTUI } = await import('@tui/start-tui');
-      const { buildSession, RunPhase } = await import('@lib/wizard-session');
+      const { buildSession } = await import('@tui/session');
+      const { RunPhase } = await import('@shared/run-state');
       const { TaskStreamPush } = await import('@programs/task-stream/index');
       const { PostHogDestination } = await import(
         '@programs/task-stream/destinations/posthog'
