@@ -19,9 +19,6 @@ module.exports = {
     'assets/**',
     'scripts/**',
     'coverage/**',
-    // Standalone jest-based package, linted/typechecked in its own context and
-    // outside the root tsconfig the parser uses (parserOptions.project).
-    'e2e-tests/**',
   ],
   extends: [
     'eslint:recommended',
