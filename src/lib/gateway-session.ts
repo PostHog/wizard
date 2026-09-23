@@ -15,6 +15,8 @@ import type { HostResolution } from '@lib/host-resolution';
 import { checkLlmGatewayHealth } from '@lib/health-checks/endpoints';
 import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import { ISSUES_URL } from '@lib/constants';
+import { isGatewayProgramId } from '@lib/programs/gateway-program-ids';
 import type { CloudRegion } from '@utils/types';
 
 export interface GatewayAuth {
@@ -142,6 +144,20 @@ async function resolveGatewayAuth(
     throw new GatewayMintFailed(
       'this run has no program to attribute its spend to',
     );
+  }
+  if (!isGatewayProgramId(program)) {
+    // The backend answers an unregistered id with a `program_unknown` refusal
+    // whose advice is to upgrade, which cannot help. Stop here instead, before
+    // the network call, and name the id that has to be registered.
+    logToFile(
+      `[gateway] program "${program}" is not a registered program; failing the run`,
+    );
+    // No `status`: nothing was sent, so there is no HTTP status to report.
+    analytics.wizardCapture('gateway mint refused', {
+      outcome: 'program_unregistered',
+      program,
+    });
+    throw new GatewayProgramUnregistered(program);
   }
   const minted = await mintGatewayToken(host, accessToken, program);
   const health = await checkLlmGatewayHealth(minted.gatewayUrl);
@@ -275,6 +291,33 @@ export class GatewayMintFailed extends WizardError {
 }
 
 /**
+ * The run asked for a token under a program id the gateway does not mint for.
+ * Always a wizard defect — a user cannot fix it — so the message says so rather
+ * than asking for a retry or an upgrade.
+ */
+export class GatewayProgramUnregistered extends WizardError {
+  readonly program: string;
+
+  constructor(program: string) {
+    super(
+      unregisteredProgramMessage(program),
+      { program },
+      ErrorCodes.GatewayProgramUnregistered,
+    );
+    this.name = 'GatewayProgramUnregistered';
+    this.program = program;
+  }
+}
+
+function unregisteredProgramMessage(program: string): string {
+  return (
+    `PostHog does not issue gateway tokens for the wizard program "${program}". ` +
+    'This is a bug in the wizard, not something you can fix — please report it at ' +
+    `${ISSUES_URL}.`
+  );
+}
+
+/**
  * Whether a mint status means "refused this run" rather than "not available".
  * 429 the daily run limit, 403 revoked project access, 400 a login covering
  * more than one project, 401 a credential the mint does not accept, 404 an
@@ -338,7 +381,15 @@ async function readRefusal(resp: Response): Promise<MintRefusal> {
   }
 }
 
-function mintRefusalMessage(status: number, detail?: string): string {
+function mintRefusalMessage(
+  status: number,
+  program: string,
+  detail?: string,
+  outcome?: string,
+): string {
+  // The server's detail for this outcome tells the user to upgrade, which
+  // cannot register a program id. Name the defect instead.
+  if (outcome === 'program_unknown') return unregisteredProgramMessage(program);
   if (detail) return detail;
   switch (status) {
     case 429:
@@ -392,7 +443,12 @@ async function mintGatewayToken(
         });
         throw new GatewayMintRefused(
           resp.status,
-          mintRefusalMessage(resp.status, refusal.detail),
+          mintRefusalMessage(
+            resp.status,
+            program,
+            refusal.detail,
+            refusal.outcome,
+          ),
           refusal.outcome,
         );
       }

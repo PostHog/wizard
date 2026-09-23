@@ -19,6 +19,7 @@ import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@lib/version';
 import {
+  PROGRAM_REGISTRY,
   Program,
   getProgramConfig,
   type ProgramId,
@@ -202,6 +203,15 @@ async function main() {
   // an id (e.g. `self-driving`) to host a different one.
   const programId =
     (process.env.PROGRAM as ProgramId) || Program.PostHogIntegration;
+  if (!PROGRAM_REGISTRY.some((c) => c.id === programId)) {
+    throw new Error(
+      `PROGRAM="${programId}" is not a registered program. One of: ${PROGRAM_REGISTRY.map(
+        (c) => c.id,
+      )
+        .sort()
+        .join(', ')}`,
+    );
+  }
   const programConfig = getProgramConfig(programId);
 
   // This host answers wizard_ask via its e2e driver, so keep the ask bridge

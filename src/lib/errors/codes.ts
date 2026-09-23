@@ -50,6 +50,8 @@ export const ErrorCodes = {
   GatewayMintRefused: 'PHW_GATEWAY_MINT_REFUSED',
   /** The mint was unreachable, errored, or returned an unusable token. */
   GatewayMintFailed: 'PHW_GATEWAY_MINT_FAILED',
+  /** The run's program id is not one the gateway mints tokens for. */
+  GatewayProgramUnregistered: 'PHW_GATEWAY_PROGRAM_UNREGISTERED',
   SettingsUnfixableConflict: 'PHW_SETTINGS_UNFIXABLE_CONFLICT',
   InternalUnhandled: 'PHW_INTERNAL_UNHANDLED',
 } as const;
