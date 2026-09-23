@@ -1,4 +1,8 @@
-import { initializeAgent, wizardCanUseTool } from '@agent/agent-interface';
+import {
+  initializeAgent,
+  runAgent as executeAgent,
+  wizardCanUseTool,
+} from '@agent/agent-interface';
 import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
@@ -20,6 +24,7 @@ const questions = [{ id: 'q', prompt: 'Continue?', kind: 'text' as const }];
 async function initializeHarness(
   mode: 'linear' | 'task',
   askBridge: BackendRunInputs['askBridge'],
+  signal?: AbortSignal,
 ) {
   const credentials = {
     accessToken: 'test',
@@ -98,6 +103,7 @@ async function initializeHarness(
     spinner: { start: vi.fn(), stop: vi.fn(), message: vi.fn() },
     model: 'test',
     askBridge,
+    signal,
   };
   if (mode === 'linear') {
     await anthropicBackend.run(inputs);
@@ -132,6 +138,22 @@ async function initializeHarness(
 describe.each(['linear', 'task'] as const)(
   'Anthropic %s resolved program inputs',
   (mode) => {
+    it('forwards a live host cancellation signal into execution', async () => {
+      const controller = new AbortController();
+      vi.mocked(executeAgent).mockImplementation(
+        (_agent, _prompt, _options, _spinner, runOptions) =>
+          new Promise((resolve) => {
+            expect(runOptions?.signal).toBe(controller.signal);
+            controller.signal.addEventListener('abort', () => resolve({}));
+          }),
+      );
+
+      const pending = initializeHarness(mode, undefined, controller.signal);
+      await vi.waitFor(() => expect(executeAgent).toHaveBeenCalledOnce());
+      controller.abort();
+      await pending;
+    });
+
     it('forwards inference auth and program commandments into initialization', async () => {
       await initializeHarness(mode, undefined);
       const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
@@ -149,6 +171,7 @@ describe.each(['linear', 'task'] as const)(
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.mocked(executeAgent).mockReset().mockResolvedValue({});
 });
 
 describe.each(['linear', 'task'] as const)(

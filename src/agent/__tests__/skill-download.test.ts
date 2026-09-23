@@ -3,10 +3,14 @@ import os from 'os';
 import path from 'path';
 import { zipSync } from 'fflate';
 import { scanInstalledSkill } from '@agent/yara-hooks';
+import { scanProjectSkills } from '@agent/skill-preflight';
 import { downloadSkill } from '@agent/tools/tools';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@agent/yara-hooks', () => ({ scanInstalledSkill: vi.fn() }));
+vi.mock('@agent/yara-hooks', () => ({
+  scanInstalledSkill: vi.fn(),
+  SKILL_TEXT_GLOB: '**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}',
+}));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
@@ -21,8 +25,8 @@ describe('downloadSkill file ownership', () => {
   let installDir: string;
 
   beforeEach(() => {
-    installDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'wizard-skill-download-'),
+    installDir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skill-download-')),
     );
     vi.clearAllMocks();
     vi.stubGlobal(
@@ -98,5 +102,78 @@ describe('downloadSkill file ownership', () => {
       'skill installed',
       expect.objectContaining({ skill_id: entry.id }),
     );
+  });
+
+  it('reuses a complete clean install scan for the following project preflight', async () => {
+    vi.mocked(scanInstalledSkill).mockResolvedValue(null);
+
+    expect(
+      await downloadSkill(entry, installDir, { triage: undefined }),
+    ).toEqual({
+      success: true,
+    });
+    expect(await scanProjectSkills(installDir, undefined)).toEqual([]);
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(1);
+
+    const skillDir = path.join(installDir, '.claude', 'skills', entry.id);
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# changed');
+    await scanProjectSkills(installDir, undefined);
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses the install scan when the default skills root is symlinked', async () => {
+    const actualRoot = path.join(installDir, 'actual-skills');
+    fs.mkdirSync(actualRoot);
+    fs.mkdirSync(path.join(installDir, '.claude'));
+    fs.symlinkSync(
+      actualRoot,
+      path.join(installDir, '.claude', 'skills'),
+      'dir',
+    );
+    vi.mocked(scanInstalledSkill).mockResolvedValue(null);
+
+    expect(
+      await downloadSkill(entry, installDir, { triage: undefined }),
+    ).toEqual({
+      success: true,
+    });
+    expect(await scanProjectSkills(installDir, undefined)).toEqual([]);
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a rolled-back poisoned install', async () => {
+    const skillDir = path.join(installDir, '.claude', 'skills', entry.id);
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# original');
+    vi.mocked(scanInstalledSkill)
+      .mockResolvedValueOnce('Poisoned skill')
+      .mockResolvedValueOnce(null);
+
+    expect(
+      await downloadSkill(entry, installDir, { triage: undefined }),
+    ).toEqual({
+      success: false,
+      error: 'Poisoned skill',
+    });
+    await scanProjectSkills(installDir, undefined);
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(2);
+  });
+
+  it('rolls back a skill changed during its install scan', async () => {
+    const skillDir = path.join(installDir, '.claude', 'skills', entry.id);
+    vi.mocked(scanInstalledSkill).mockImplementationOnce(() => {
+      fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# changed');
+      return Promise.resolve(null);
+    });
+
+    const result = await downloadSkill(entry, installDir, {
+      triage: undefined,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: expect.stringContaining('changed during security scan'),
+    });
+    expect(fs.existsSync(skillDir)).toBe(false);
   });
 });
