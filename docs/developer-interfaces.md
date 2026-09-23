@@ -19,12 +19,12 @@ flags and host), and optional `onProgress`, `interaction`, and `signal` options.
 Import the function from `@agent` and types from `@agent/types`. It returns a
 `RunResult` with a `success`, `aborted`, `failed`, or `crashed` outcome and a
 final task/status/usage snapshot. Progress is delivered in emission order.
-Synchronous observer throws are logged without failing the run; asynchronous
-observers must handle their own rejected promises. Without `interaction`,
-questions have no answer bridge and optional task notices are declined.
-Non-success results carry a `failure`; its `error` may be available when an
-`Error` was caught, while `code` and `message` are optional. The caller chooses
-how to log or present a failure.
+Observer throws and rejections from thenables returned by `onProgress` are
+logged without failing the run. Callbacks must handle errors from detached
+asynchronous work they start. Without `interaction`, questions have no answer
+bridge and optional task notices are declined. Non-success results carry a
+`failure`; its `error` may be available when an `Error` was caught, while `code`
+and `message` are optional. The caller chooses how to log or present a failure.
 
 ```ts
 import { runAgent } from '@agent';
