@@ -34,3 +34,7 @@ export type {
   ProgramWorkflowRequest,
   ProgramWorkflowDecision,
 } from './run-program';
+export type {
+  ProgramPreflightDecision,
+  ProgramPreflightHost,
+} from './preflight';
