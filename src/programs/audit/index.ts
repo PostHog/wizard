@@ -1,8 +1,5 @@
-import {
-  AGENT_SKILL_STEPS,
-  createSkillProgram,
-} from '@programs/agent-skill/index';
-import type { ProgramStep, ProgramConfig } from '@programs/program-step';
+import { createSkillProgram } from '@programs/agent-skill/index';
+import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
@@ -12,13 +9,6 @@ import {
 } from '@programs/resolve-run-definition';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
-
-/** Audit-specific screens for the shared agent-skill pipeline. */
-const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
-  intro: 'audit-intro',
-  run: 'audit-run',
-  outro: 'audit-outro',
-};
 
 type AuditRunState = {
   installDir: string;
@@ -31,14 +21,6 @@ const seedBeforeAuditRun = (session: AuditRunState): void => {
   seedAuditLedger(session.installDir);
   session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
-
-const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
-  steps.map((step) => {
-    const override = AUDIT_SCREEN_BY_STEP[step.id];
-    return override ? { ...step, screenId: override } : step;
-  });
-
-const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
 const baseConfig = createSkillProgram(AUDIT_PROGRAM_OPTIONS);
 
@@ -79,7 +61,6 @@ const auditRun = (session: AuditRunState): Promise<ProgramRun> => {
 
 export const auditConfig: ProgramConfig = {
   ...baseConfig,
-  steps: auditSteps,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
   // Ledger tools are opt-in per program; pi matches on the short name.

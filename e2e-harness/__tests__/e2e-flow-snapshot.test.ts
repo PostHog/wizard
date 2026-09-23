@@ -27,6 +27,7 @@ import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { WizardCiDriver } from '../wizard-ci-driver';
 import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';
 import { profileFor } from '../profiles';
+import { rawProgramFlow } from '@tui/flows/index';
 
 /**
  * Walk a program flow offline using an e2e profile, injecting the external
@@ -114,7 +115,7 @@ function traceFlow(
       // run. Complete the active run step the way the runner would: a composed
       // step via completeRunStep, the main run via runPhase.
       const config = getProgramConfig(store.router.activeProgram);
-      const runStep = config.steps.find(
+      const runStep = rawProgramFlow(config.id).find(
         (s) =>
           s.screenId === 'run' &&
           (!s.show || s.show(store.session)) &&

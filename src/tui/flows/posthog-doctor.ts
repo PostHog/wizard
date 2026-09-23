@@ -1,7 +1,7 @@
-import type { ProgramStep } from '@programs/program-step';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
+import type { FlowStep } from '../flow';
+import { HEALTH_CHECK_STEP } from './health-check';
 
-export const POSTHOG_DOCTOR_PROGRAM: ProgramStep[] = [
+export const POSTHOG_DOCTOR_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',

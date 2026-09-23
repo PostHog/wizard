@@ -1,4 +1,5 @@
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
+import { AGENT_SKILL_FLOW } from '@tui/flows/agent-skill';
+import { METRICS_FLOW } from '@tui/flows/metrics';
 import { getProgramConfig, Program } from '@programs';
 import { metricsConfig } from '@programs/metrics/index';
 import type { ProgramRun } from '@programs/program-run';
@@ -23,10 +24,10 @@ describe('metrics program', () => {
   });
 
   it('uses the agent-skill steps with a metrics-specific intro', () => {
-    const [intro, ...rest] = metricsConfig.steps;
+    const [intro, ...rest] = METRICS_FLOW;
     expect(intro.id).toBe('intro');
     expect(intro.screenId).toBe('metrics-intro');
-    expect(rest).toEqual(AGENT_SKILL_STEPS.slice(1));
+    expect(rest).toEqual(AGENT_SKILL_FLOW.slice(1));
   });
 
   it('runs the metrics agent flow on the orchestrator', () => {

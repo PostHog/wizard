@@ -6,6 +6,8 @@ import { getProgramConfig } from '@programs';
 import { getAuditChecks } from '@programs/audit/types';
 import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
 import type { ProgramConfig, ProgramRunStep } from '@programs/types';
+import type { FlowStep } from '@tui/flow';
+import { rawProgramFlow } from '@tui/flows/index';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
@@ -24,7 +26,7 @@ import { cliAuthHost } from './auth-host';
 
 const WIZARD_VERSION = VERSION;
 
-type Step = ProgramConfig['steps'][number];
+type Step = FlowStep;
 
 /** The session a run step's agent runs in: scoped to the run step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
@@ -247,15 +249,14 @@ export function runWizard(
       await activeTui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
-      const shown = (s: ProgramConfig['steps'][number]) =>
-        !s.show || s.show(activeTui.store.session);
+      const shown = (s: FlowStep) => !s.show || s.show(activeTui.store.session);
 
       if (config.runSteps && Object.keys(config.runSteps).length > 0) {
         // A composed program: its step list includes a child program run
         // (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
         // Walk the list once, advancing each step to completion.
-        for (const step of config.steps) {
+        for (const step of rawProgramFlow(config.id)) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
           if (shown(step)) await advanceStep(step, activeTui.store, config);
         }

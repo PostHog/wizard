@@ -50,9 +50,10 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
+import type { ProgramReadyContext } from '@programs/types';
+import type { StoreInitContext } from './flow.js';
 import { getProgramConfig, reportWarehouseSourcesDetected } from '@programs';
-import { withAiOptInGate } from '@programs/ai-opt-in-gate';
+import { getProgramFlow, rawProgramFlow } from './flows/index.js';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';
@@ -196,16 +197,15 @@ export class WizardStore {
   }
 
   /**
-   * Scan program steps for gate predicates and create gate promises.
+   * Scan the program's flow for gate predicates and create gate promises.
    *
-   * Steps are wrapped with withAiOptInGate so the injected ai-opt-in
-   * step's gate registers here — the agent runner awaits it (via
+   * The flow includes the injected ai-opt-in step, so its gate registers here — the agent runner awaits it (via
    * WizardUI.waitForAiOptIn) before any source leaves the machine.
-   * Same wrapper screen-sequences.ts uses, so the gate and its screen
-   * can't drift apart.
+   * Same flow screen-sequences.ts uses, so the gate and its screen can't
+   * drift apart.
    */
   private _initFromProgram(program: ProgramId): void {
-    const steps = withAiOptInGate(getProgramConfig(program));
+    const steps = getProgramFlow(program);
 
     // Create gate promises from steps that define them
     for (const step of steps) {
@@ -225,13 +225,13 @@ export class WizardStore {
   }
 
   /**
-   * Run the program steps' onInit callbacks. startTUI calls this once
+   * Run the flow steps' onInit callbacks. startTUI calls this once
    * the screens are actually rendering — constructing a store alone
    * (tests, playground) must not fire init work like the health-check
    * pre-flight, whose probes belong only to flows that show its screen.
    */
   runInitHooks(): void {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const steps = rawProgramFlow(this.router.activeProgram);
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {
@@ -1000,9 +1000,7 @@ export class WizardStore {
    */
   private _programIdForScreen(screen: ScreenName): ProgramId {
     const program = this.router.activeProgram;
-    const step = getProgramConfig(program).steps.find(
-      (s) => s.screenId === screen,
-    );
+    const step = rawProgramFlow(program).find((s) => s.screenId === screen);
     return step?.reportsAsProgramId ?? program;
   }
 

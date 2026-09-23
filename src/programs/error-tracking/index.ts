@@ -7,13 +7,12 @@ import {
 import type { FrameworkDetectionState } from '@programs/detection/context';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import type { ProgramRun } from '@programs/program-run';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
 } from '@programs/error-tracking/detect-agentic';
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
+import type { ProgramConfig } from '@programs/program-step';
 import type {
   ProgramCiHost,
   ProgramRunHost,
@@ -87,28 +86,6 @@ type ErrorTrackingCiSession = ProjectScopeSession &
   };
 
 /**
- * After login, the scan lists the repo's projects and the user picks one, as in
- * the legacy upload-source-maps program. The pick sets the framework preflight
- * resolves task skills against, and the project path the run is scoped to.
- */
-const PICK_PROJECT_STEP: ProgramStep = {
-  id: 'detect',
-  label: 'Detecting projects',
-  screenId: 'error-tracking-detect',
-  isComplete: (session) => session.integration != null,
-};
-
-const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(
-  (step): ProgramStep[] => {
-    if (step.id === 'intro') {
-      return [{ ...step, screenId: 'error-tracking-intro' }];
-    }
-    if (step.id === 'auth') return [step, PICK_PROJECT_STEP];
-    return [step];
-  },
-);
-
-/**
  * `wizard error-tracking` — flat command on the orchestrator sequence.
  *
  * Makes uncaught errors reach PostHog with readable stack traces. The
@@ -139,7 +116,6 @@ export const errorTrackingConfig: ProgramConfig = {
   description: 'Set up PostHog error tracking, source-map upload included',
   id: 'error-tracking',
   agentFlow: 'error-tracking',
-  steps: ERROR_TRACKING_STEPS,
   // Scoping the run makes run-wizard walk the steps and run in the picked project.
   runSteps: {
     run: {

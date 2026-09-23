@@ -5,13 +5,14 @@ import { selfDrivingConfig } from '@programs/self-driving/index';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { WizardStore } from '@tui/store';
+import { rawProgramFlow } from '@tui/flows/index';
 
 vi.mock('../run-program-agent', () => ({
   runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 it('dispatches the declared integration child with a scoped session and records completion', async () => {
-  const step = selfDrivingConfig.steps.find(
+  const step = rawProgramFlow('self-driving').find(
     (entry) => entry.id === 'integrate-run',
   );
   expect(step).toBeDefined();

@@ -1,4 +1,4 @@
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
+import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type {
   ProgramCiHost,
@@ -7,7 +7,6 @@ import type {
 import type { FrameworkDetectionState } from '@programs/detection/context';
 import { mayReportScanResults } from '@shared/scan-consent';
 import type { Integration } from '@shared/constants';
-import { RunPhase } from '@shared/run-state';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/package-json';
 import { hasDeclaredDependency } from '@utils/package-json';
@@ -26,7 +25,6 @@ import { ErrorCodes } from '@shared/errors';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import {
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,
@@ -77,7 +75,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
-  steps: POSTHOG_INTEGRATION_PROGRAM,
   onReady: (ctx) => detectPostHogIntegration(ctx),
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
@@ -192,22 +189,4 @@ export const posthogIntegrationConfig: ProgramConfig = {
         hooks.buildOutroData?.(credentials) ?? null,
     };
   },
-};
-
-export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-
-/**
- * Self-contained run step that runs the integration agent. Other programs
- * import this and splice it into their own step list to compose the
- * integration's work as one of their run steps — self-driving sets up PostHog
- * this way before its own run. The host program supplies `show`/`onRunPrep`/
- * `targetDir`; this carries the run.
- */
-export const integrationRunStep: ProgramStep = {
-  id: 'run',
-  label: 'Integration',
-  screenId: 'run',
-  isComplete: (session) =>
-    session.runPhase === RunPhase.Completed ||
-    session.runPhase === RunPhase.Error,
 };

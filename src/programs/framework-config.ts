@@ -224,3 +224,16 @@ export function getWelcomeMessage(frameworkName: string): string {
  */
 export const SPINNER_MESSAGE =
   'Writing your PostHog setup with events, error capture and more...';
+
+/** Whether the detected framework still has setup questions the user has not answered. */
+export function needsFrameworkSetup(session: {
+  frameworkConfig: FrameworkConfig | null;
+  frameworkContext: Record<string, unknown>;
+}): boolean {
+  const config = session.frameworkConfig;
+  if (!config?.metadata.setup?.questions) return false;
+
+  return config.metadata.setup.questions.some(
+    (q: { key: string }) => !(q.key in session.frameworkContext),
+  );
+}

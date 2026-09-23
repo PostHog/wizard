@@ -36,6 +36,11 @@ import type { DetectedSource } from '@programs/warehouse-sources/types';
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';
 
+/** True once detection found PostHog already present in the project. */
+export const isPostHogPresent = (session: {
+  frameworkContext: Record<string, unknown>;
+}): boolean => session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
+
 /**
  * frameworkContext key holding the repo-relative path of the project the user
  * picked on the integration-detect screen ("." for the repo root). The

@@ -31,6 +31,7 @@ import {
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '../self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '../error-tracking/detect-agentic';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '../error-tracking-upload-source-maps/detect';
+import { rawProgramFlow } from '@tui/flows/index';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -119,7 +120,7 @@ function advance(store: WizardStore, screen: string): boolean {
     case ScreenId.Run:
     case ScreenId.AuditRun: {
       const config = getProgramConfig(store.router.activeProgram);
-      const runStep = config.steps.find(
+      const runStep = rawProgramFlow(config.id).find(
         (st) =>
           st.screenId === screen &&
           (!st.show || st.show(s)) &&

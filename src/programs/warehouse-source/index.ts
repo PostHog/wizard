@@ -1,7 +1,6 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import { resolveWarehouseSourceRunDefinition } from '@programs/resolve-run-definition';
-import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import { detectWarehousePrerequisites } from './detect.js';
 import { getDetectedWarehouseSources } from './detect.js';
 
@@ -10,7 +9,6 @@ export const warehouseSourceConfig: ProgramConfig = {
   description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
-  steps: WAREHOUSE_SOURCE_PROGRAM,
   onReady: (ctx) =>
     detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext),
   reportFile: 'posthog-warehouse-report.md',
@@ -35,7 +33,6 @@ export const warehouseSourceConfig: ProgramConfig = {
   requires: ['posthog-integration'],
 };
 
-export { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 export {
   detectWarehousePrerequisites,
   getDetectedWarehouseSources,

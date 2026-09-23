@@ -1,7 +1,6 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { SELF_DRIVING_PROGRAM } from './steps.js';
 import {
   SELF_DRIVING_ABORT_CASES,
   SELF_DRIVING_INTEGRATE_PATH_KEY,
@@ -62,7 +61,6 @@ export const selfDrivingConfig: ProgramConfig = {
     requires: ['posthog-integration'],
     abortCases: SELF_DRIVING_ABORT_CASES,
   }),
-  steps: SELF_DRIVING_PROGRAM,
   onReady: (ctx) =>
     detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
   runSteps: {
@@ -76,7 +74,6 @@ export const selfDrivingConfig: ProgramConfig = {
   run: buildRun,
 };
 
-export { SELF_DRIVING_PROGRAM } from './steps.js';
 export { SELF_DRIVING_SKILL_ID } from './run.js';
 export {
   detectSelfDrivingPrerequisites,

@@ -60,6 +60,7 @@ export {
   refreshAccessTokenIfNeeded,
 } from './authenticate';
 export { detectErrorCode } from './detect-map';
+export { needsFrameworkSetup } from './framework-config';
 export { getOrAskForProjectData } from './project-data';
 export { buildProgramSession } from './program-session';
 export {
@@ -78,6 +79,7 @@ export {
   VARIANT_DISPLAY_NAME,
   errorTrackingUploadSourceMapsConfig,
 } from './error-tracking-upload-source-maps/index';
+export { isSourceMapsProjectSelected } from './error-tracking-upload-source-maps/detect';
 export {
   ERROR_TRACKING_PROJECT_PATH_KEY,
   detectErrorTrackingProjects,
@@ -112,6 +114,7 @@ export {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
   SELF_DRIVING_INTEGRATE_PATH_KEY,
+  isPostHogPresent,
 } from './self-driving/detect';
 export { detectSelfDrivingIntegrationProjects } from './self-driving/detect-agentic';
 export { selfDrivingConfig } from './self-driving/index';

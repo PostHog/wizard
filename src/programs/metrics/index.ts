@@ -1,10 +1,5 @@
 import { METRICS_REPORT_FILE, METRICS_RUN } from './run.js';
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-
-const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
-  step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
-);
+import type { ProgramConfig } from '@programs/program-step';
 
 /**
  * `wizard metrics` — instrument the project with PostHog application metrics
@@ -25,7 +20,6 @@ export const metricsConfig: ProgramConfig = {
   // platform variant themselves. Explicit so renaming the program can't
   // silently detach the flow.
   agentFlow: 'metrics',
-  steps: METRICS_STEPS,
   reportFile: METRICS_REPORT_FILE,
   run: METRICS_RUN,
 };

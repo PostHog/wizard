@@ -13,7 +13,6 @@ import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { REPLAY_VISION_OPTIONS } from './run.js';
 export { REPLAY_VISION_ABORT_CASES } from './run.js';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
 import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
 import type {
   ProgramConfig,
@@ -139,7 +138,6 @@ const base = createSkillProgram(REPLAY_VISION_OPTIONS);
 export const replayVisionConfig: ProgramConfig = {
   ...base,
   agentFlow: 'replay-vision',
-  steps: AGENT_SKILL_STEPS,
   onReady: detectBeforeFlow,
 
   ciPreRun: async (

@@ -3,9 +3,7 @@ export type { ProgramId, SubcommandProgram } from './program-registry';
 export type {
   ProgramConfig,
   ProgramRunStep,
-  ProgramStep,
   ProgramReadyContext,
-  StoreInitContext,
 } from './program-step';
 export type { ProgramCompletionContext } from './program-run';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';

@@ -1,8 +1,8 @@
 import {
   createSkillProgram,
-  AGENT_SKILL_STEPS,
   type SkillProgramOptions,
 } from '@programs/agent-skill/index';
+import { AGENT_SKILL_FLOW } from '@tui/flows/agent-skill';
 import type { ProgramRun } from '@programs/program-run';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
@@ -26,7 +26,6 @@ describe('createSkillProgram', () => {
 
     expect(config.command).toBe('errors');
     expect(config.id).toBe('error-tracking');
-    expect(config.steps).toBe(AGENT_SKILL_STEPS);
 
     // run must be a static object — skill programs don't need dynamic resolution
     const run = config.run as ProgramRun;
@@ -49,9 +48,9 @@ describe('createSkillProgram', () => {
   });
 });
 
-describe('AGENT_SKILL_STEPS', () => {
+describe('AGENT_SKILL_FLOW', () => {
   it('is intro → health-check → auth → run → outro → skills, all with screens and working predicates', () => {
-    expect(AGENT_SKILL_STEPS.map((s) => s.id)).toEqual([
+    expect(AGENT_SKILL_FLOW.map((s) => s.id)).toEqual([
       'intro',
       'health-check',
       'auth',
@@ -61,7 +60,7 @@ describe('AGENT_SKILL_STEPS', () => {
     ]);
 
     const session = buildSession({});
-    const [intro, , auth, run, outro] = AGENT_SKILL_STEPS;
+    const [intro, , auth, run, outro] = AGENT_SKILL_FLOW;
 
     // Intro gate starts closed
     expect(intro.gate!(session)).toBe(false);

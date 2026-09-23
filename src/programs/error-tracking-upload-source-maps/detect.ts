@@ -347,6 +347,15 @@ export const SOURCE_MAPS_CONTEXT_KEYS = {
   selectedPath: 'sourceMapsSelectedPath',
 } as const;
 
+/** True once the user picked a source-maps project. */
+export function isSourceMapsProjectSelected(session: {
+  frameworkContext: Record<string, unknown>;
+}): boolean {
+  return (
+    session.frameworkContext[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant] != null
+  );
+}
+
 /**
  * Scan `session.installDir` for platform / build-system signals. Writes
  * detection results into frameworkContext via the callback — either the

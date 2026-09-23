@@ -21,7 +21,6 @@ const program: ProgramConfig = {
   id: 'example-setup',
   description: 'Set up the example integration.',
   agentFlow: 'example-flow',
-  steps: [],
 };
 
 const skill = {

@@ -27,6 +27,7 @@ import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
 import { testProgramRunHost } from '../../../test/program-host';
+import { SELF_DRIVING_FLOW } from '@tui/flows/self-driving';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
@@ -207,7 +208,7 @@ describe('selfDrivingConfig', () => {
   });
 
   it('has no keep-skills step — the setup skill is removed in postRun', () => {
-    const stepIds = selfDrivingConfig.steps.map((s) => s.id);
+    const stepIds = SELF_DRIVING_FLOW.map((s) => s.id);
     expect(stepIds).not.toContain('skills');
     expect(stepIds).toEqual([
       'intro',
@@ -530,7 +531,7 @@ describe('detectPostHogPresent', () => {
 });
 
 describe('integrate-detect step', () => {
-  const step = selfDrivingConfig.steps.find((s) => s.id === 'integrate-detect');
+  const step = SELF_DRIVING_FLOW.find((s) => s.id === 'integrate-detect');
 
   it('is incomplete while integrating and no project picked yet', () => {
     const session = buildSession({});

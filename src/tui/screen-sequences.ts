@@ -1,15 +1,15 @@
 /**
  * Screen taxonomy + per-program screen sequences.
  *
- * Owns the ScreenId enum and projects each registered program's steps
+ * Owns the ScreenId enum and projects each registered program's flow
  * into the router-shaped screen sequence (filtering headless steps and
  * appending the exit screen). Pure leaf module — no store, no React.
  */
 
 import type { WizardSession } from '@lib/wizard-session';
 import { PROGRAM_REGISTRY, type ProgramId } from '@programs';
-import { createProgramSequence } from '@programs/program-step';
-import { withAiOptInGate } from '@programs/ai-opt-in-gate';
+import { createProgramSequence } from './flow.js';
+import { getProgramFlow } from './flows/index.js';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {
@@ -76,6 +76,6 @@ export const PROGRAM_SEQUENCES: Record<ProgramId, Sequence> =
   Object.fromEntries(
     PROGRAM_REGISTRY.map((c) => [
       c.id,
-      createProgramSequence(withAiOptInGate(c)) as Sequence,
+      createProgramSequence(getProgramFlow(c.id)) as Sequence,
     ]),
   ) as Record<ProgramId, Sequence>;

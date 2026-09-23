@@ -14,21 +14,13 @@
  * gates on the GitHub App connection the run cannot proceed without. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
-import type { ProgramStep } from '@programs/program-step';
+import type { FlowStep } from '../flow';
 import { RunPhase } from '@shared/run-state';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
-import { integrationRunStep } from '@programs/posthog-integration/index';
-import { POSTHOG_PRESENT_KEY } from './detect.js';
+import { HEALTH_CHECK_STEP } from './health-check';
+import { integrationRunStep } from './posthog-integration';
+import { isPostHogPresent } from '@programs';
 
-/** True once detection found PostHog already present in the project. */
-type SelfDrivingStepContext = {
-  frameworkContext: Record<string, unknown>;
-};
-
-const postHogPresent = (session: SelfDrivingStepContext): boolean =>
-  session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
-
-export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
+export const SELF_DRIVING_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
@@ -44,10 +36,10 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     id: 'integration-check',
     label: 'Integration',
     screenId: 'self-driving-integration-check',
-    show: (session) => !postHogPresent(session) && session.integrate === null,
+    show: (session) => !isPostHogPresent(session) && session.integrate === null,
     isComplete: (session) =>
-      postHogPresent(session) || session.integrate !== null,
-    gate: (session) => postHogPresent(session) || session.integrate !== null,
+      isPostHogPresent(session) || session.integrate !== null,
+    gate: (session) => isPostHogPresent(session) || session.integrate !== null,
   },
   HEALTH_CHECK_STEP,
   {

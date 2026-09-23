@@ -1,12 +1,19 @@
-import type { ProgramStep } from '@programs/program-step';
-import { RunPhase } from '@shared/run-state';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
+/**
+ * Revenue analytics program step list.
+ *
+ * The detect step checks for PostHog + Stripe SDKs. The skill install
+ * and agent run live in the program runner (see agent-runner.ts).
+ */
 
-export const MIGRATION_PROGRAM: ProgramStep[] = [
+import type { FlowStep } from '../flow';
+import { RunPhase } from '@shared/run-state';
+import { HEALTH_CHECK_STEP } from './health-check';
+
+export const REVENUE_ANALYTICS_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
-    screenId: 'migration-intro',
+    screenId: 'revenue-intro',
     gate: (session) => session.setupConfirmed,
   },
   HEALTH_CHECK_STEP,
@@ -18,7 +25,7 @@ export const MIGRATION_PROGRAM: ProgramStep[] = [
   },
   {
     id: 'run',
-    label: 'Migration',
+    label: 'Revenue analytics',
     screenId: 'run',
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||

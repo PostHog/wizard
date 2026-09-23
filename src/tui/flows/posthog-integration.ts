@@ -6,24 +6,12 @@
  * definitions — no hardcoded per-flow logic in the store.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import type { FrameworkConfig } from '@programs/framework-config';
+import type { FlowStep } from '../flow';
+import { needsFrameworkSetup } from '@programs';
 import { RunPhase } from '@shared/run-state';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
+import { HEALTH_CHECK_STEP } from './health-check';
 
-function needsSetup(session: {
-  frameworkConfig: FrameworkConfig | null;
-  frameworkContext: Record<string, unknown>;
-}): boolean {
-  const config = session.frameworkConfig;
-  if (!config?.metadata.setup?.questions) return false;
-
-  return config.metadata.setup.questions.some(
-    (q: { key: string }) => !(q.key in session.frameworkContext),
-  );
-}
-
-export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
+export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
@@ -35,8 +23,8 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     id: 'setup',
     label: 'Setup',
     screenId: 'setup',
-    show: needsSetup,
-    isComplete: (session) => !needsSetup(session),
+    show: needsFrameworkSetup,
+    isComplete: (session) => !needsFrameworkSetup(session),
   },
   {
     id: 'auth',
@@ -77,3 +65,17 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     screenId: 'keep-skills',
   },
 ];
+
+/**
+ * The integration's run screen, for flows that compose it: self-driving
+ * splices it in as `integrate-run`. Which agent runs there, and where, is the
+ * program's `runSteps`.
+ */
+export const integrationRunStep: FlowStep = {
+  id: 'run',
+  label: 'Integration',
+  screenId: 'run',
+  isComplete: (session) =>
+    session.runPhase === RunPhase.Completed ||
+    session.runPhase === RunPhase.Error,
+};

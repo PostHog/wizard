@@ -53,7 +53,8 @@ import {
   type Integration,
 } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { postAuthGateSteps } from '@programs/program-step';
+import { postAuthGateSteps } from '@tui/flow';
+import { rawProgramFlow } from '@tui/flows/index';
 import type { ProgramConfig } from '@programs/types';
 import {
   authenticate,
@@ -182,7 +183,7 @@ async function runProgram(
   // but BEFORE the agent runs — e.g. the source-maps project picker, which
   // needs credentials to scan and writes its choice to frameworkContext that
   // the run prompt reads. Generic: await every gated step between auth and run.
-  for (const step of postAuthGateSteps(programConfig.steps)) {
+  for (const step of postAuthGateSteps(rawProgramFlow(programConfig.id))) {
     logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
     await getUI().waitForGate(step.id);
     logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
@@ -388,7 +389,7 @@ async function runHealthGate(
   session: WizardSession,
   programConfig: ProgramConfig,
 ): Promise<void> {
-  const hasHealthCheckScreen = programConfig.steps.some(
+  const hasHealthCheckScreen = rawProgramFlow(programConfig.id).some(
     (s) => s.screenId === 'health-check',
   );
   if (session.readinessResult) {

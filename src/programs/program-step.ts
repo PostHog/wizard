@@ -1,8 +1,6 @@
-import type { WizardSession } from '@lib/wizard-session';
 import type { DiscoveredFeature } from '@shared/scan-consent';
 import type { TaskNotice } from '@agent/types';
 import type { ProgramSession } from './program-session';
-import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from '@programs/framework-config';
@@ -10,28 +8,6 @@ import type { FrameworkConfig } from '@programs/framework-config';
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';
 import type { ProgramCiHost, ProgramRunHost } from './host-capabilities.js';
-
-/**
- * A program step is the primary unit of the wizard's execution model.
- *
- * It can own:
- * - a screen in the TUI (optional — some steps are headless)
- * - agent work via a program reference (optional — some steps are UI-only)
- * - completion and visibility predicates
- *
- * The PostHog integration program is one ordered list of steps.
- * Other programs (e.g. revenue analytics) register a different step list.
- */
-/**
- * Context passed to onInit callbacks — fires when the TUI starts
- * rendering, before bin.ts has assigned the real session.
- */
-export interface StoreInitContext {
-  readonly session: WizardSession;
-  readonly setReadinessResult: (result: WizardReadinessResult | null) => void;
-  readonly setFrameworkContext: (key: string, value: unknown) => void;
-  readonly emitChange: () => void;
-}
 
 /**
  * Context passed to onReady callbacks — fires after bin.ts has assigned
@@ -57,57 +33,6 @@ export interface ProgramReadyContext {
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
   readonly setPosthogSdkDetected: (detected: boolean) => void;
-}
-
-export interface ProgramStep {
-  /** Unique identifier for this step */
-  id: string;
-
-  /** Human-readable label for progress display */
-  label: string;
-
-  /**
-   * TUI screen this step owns, if any.
-   * Matches the ScreenId enum values (e.g. 'intro', 'run', 'outro').
-   */
-  screenId?: string;
-
-  /**
-   * Whether this step should be visible in the current program.
-   * If omitted, the step is always visible.
-   */
-  show?: (session: WizardSession) => boolean;
-
-  /**
-   * Exit condition for the screen. Router advances when true.
-   * Defaults to `gate` if unset.
-   */
-  isComplete?: (session: WizardSession) => boolean;
-
-  /**
-   * Define a gate if your screen needs to await user interactions.
-   * bin.ts can `await store.getGate(stepId)` to pause until the
-   * predicate becomes true.
-   */
-  gate?: (session: WizardSession) => boolean;
-
-  /**
-   * Called once when the TUI starts rendering, with the default
-   * session. Use for session-independent fire-and-forget work that
-   * should start as early as possible (e.g. health check kicked off
-   * while the user is still reading the intro screen). Never fires for
-   * a store that isn't rendering screens (tests, playground).
-   */
-  onInit?: (ctx: StoreInitContext) => void;
-
-  /**
-   * Report this step's analytics under a different program than its host, for
-   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
-   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
-   * sequences still follow the host. Matched by `screenId`, so headless steps
-   * are unaffected.
-   */
-  reportsAsProgramId?: ProgramId;
 }
 
 /**
@@ -225,8 +150,6 @@ export interface ProgramConfig {
    * agent run.
    */
   skillId?: string;
-  /** The ordered step list */
-  steps: ProgramStep[];
   /**
    * Detection before the flow: runs once after the host assigns the real
    * session, before any gate is awaited. May be sync or async.
@@ -316,49 +239,4 @@ export interface ProgramConfig {
    * `ProgramCliSurface` for semantics.
    */
   cli?: ProgramCliSurface;
-}
-
-/**
- * Project program steps into the narrower Screen shape the router consumes.
- *
- * Two things happen here:
- *   1. Headless steps (no `screenId`) are filtered out. The router walks
- *      visible screens; gate-only steps like `detect` are store concerns.
- *   2. The step is narrowed to just { id, show, isComplete } — the
- *      router has no business touching gate, onInit, or label.
- *
- * This intentional separation keeps the router focused on one question:
- * "Which screen should be rendered right now?"
- */
-/**
- * The gated steps the agent runner awaits after `auth` and before `run`, in
- * step order. Empty when a program has no auth step or runs before it.
- */
-export function postAuthGateSteps(steps: ProgramStep[]): ProgramStep[] {
-  const authIndex = steps.findIndex((s) => s.screenId === 'auth');
-  const runIndex = steps.findIndex((s) => s.screenId === 'run');
-  if (authIndex === -1 || runIndex <= authIndex) return [];
-  return steps.slice(authIndex + 1, runIndex).filter((s) => s.gate);
-}
-
-export function createProgramSequence(steps: ProgramStep[]): Array<{
-  id: string;
-  show?: (session: WizardSession) => boolean;
-  isComplete?: (session: WizardSession) => boolean;
-}> {
-  const entries = steps
-    .filter((step) => step.screenId != null)
-    .map((step) => ({
-      id: step.screenId!,
-      show: step.show,
-      // `isComplete` defaults to `gate` — for most steps they're the same
-      // predicate (e.g. intro: setupConfirmed unblocks bin.ts AND finishes
-      // the screen). Only override when the two conditions diverge.
-      isComplete: step.isComplete ?? step.gate,
-    }));
-
-  // Every program ends with the exit screen.
-  entries.push({ id: 'exit', show: undefined, isComplete: undefined });
-
-  return entries;
 }

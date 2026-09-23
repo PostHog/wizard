@@ -1,22 +1,21 @@
 /**
- * Generic agent skill step list.
+ * Warehouse-source program step list.
  *
- * Minimal flow: intro → health-check → auth → run → outro → skills.
- * No detection, no setup, no MCP.
+ * The detect step scans for warehouse-source signals. The skill install and
+ * agent run live in the program runner (see agent-runner.ts). The skill drives
+ * both in-CLI source creation and deep-link emission per detected source.
  */
 
-import type { ProgramStep } from '@programs/program-step';
+import type { FlowStep } from '../flow';
 import { RunPhase } from '@shared/run-state';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 
-export const AGENT_SKILL_STEPS: ProgramStep[] = [
+export const WAREHOUSE_SOURCE_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
-    screenId: 'agent-skill-intro',
+    screenId: 'warehouse-intro',
     gate: (session) => session.setupConfirmed,
   },
-  HEALTH_CHECK_STEP,
   {
     id: 'auth',
     label: 'Authentication',
@@ -25,7 +24,7 @@ export const AGENT_SKILL_STEPS: ProgramStep[] = [
   },
   {
     id: 'run',
-    label: 'Running',
+    label: 'Data warehouse',
     screenId: 'run',
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||

@@ -82,7 +82,6 @@ vi.mock('../posthog-integration/detect', () => ({
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
   id,
-  steps: [],
   description: 'Test',
   run: {
     integrationLabel: 'test',
