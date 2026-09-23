@@ -27,8 +27,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  // The ledger reaches the store through `AuditLedgerWatcher`, which runs for
-  // headless runs too. This screen only renders what the store holds.
+  // The runner watches the ledger in headless runs too; render the store value.
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 

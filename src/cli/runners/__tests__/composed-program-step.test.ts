@@ -33,7 +33,7 @@ it('dispatches the declared integration child with a scoped session and records 
   expect(runProgramAgent).toHaveBeenCalledWith(
     posthogIntegrationConfig,
     expect.objectContaining({ installDir: '/repo/apps/web' }),
-    { composed: true },
+    { composed: true, deferSkillCleanupCommit: true },
   );
   expect(store.session.completedRuns).toContain('integrate-run');
   expect(store.session.runPhase).toBe(RunPhase.Idle);

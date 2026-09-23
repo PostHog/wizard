@@ -13,8 +13,11 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { registerCleanup, runCleanups } from '@utils/wizard-abort';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { runCleanups } from '@utils/wizard-abort';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
@@ -69,11 +72,13 @@ export async function advanceStep(
     await runProgramAgent(
       getProgramConfig(step.runProgramId),
       await prepareRunSession(step, store),
-      { composed: true },
+      { composed: true, deferSkillCleanupCommit: true },
     );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store));
+    await runProgramAgent(config, await prepareRunSession(step, store), {
+      deferSkillCleanupCommit: true,
+    });
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -96,7 +101,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
-      registerCleanup(captureRunSkillCleanup(installDir));
+      registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
@@ -276,7 +281,9 @@ export function runWizard(
         });
       } else {
         try {
-          await runProgramAgent(config, activeTui.store.session);
+          await runProgramAgent(config, activeTui.store.session, {
+            deferSkillCleanupCommit: true,
+          });
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.
@@ -301,13 +308,19 @@ export function runWizard(
         if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
       });
+      if (signalled) return;
 
-      exitInProgress = true;
       await activeStream.shutdown(2000);
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
-      if (runFailed) await analytics.shutdown('error');
+      if (signalled) return;
+      exitInProgress = true;
+      // Keep the handlers until process.exit so a signal cannot take the
+      // default termination path before cleanup is disarmed.
+      if (runFailed) {
+        runCleanups();
+        await analytics.shutdown('error');
+      }
       activeTui.unmount();
+      if (!runFailed) commitRegisteredRunSkillCleanups();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
