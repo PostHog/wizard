@@ -13,13 +13,14 @@
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  *
  * The agent reports and asks, it never renders, never reads a session, never
- * exits the process and never rejects. A decided failure comes back in
+ * exits the process. A decided failure comes back in
  * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
  * agent did not decide (a refused mint, an SDK crash) comes back as
  * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
  * handling it the way it always did. The legacy adapter in
  * `src/lib/runners/run-program-agent.ts` rebuilds today's session-driven
- * behavior on top of this call for every existing caller.
+ * behavior on top of this call for existing program callers. Final scan-report
+ * flushing can still reject after the run body has settled.
  */
 
 import { Sequence } from '@shared/constants';
@@ -149,7 +150,7 @@ export async function runAgent(
       };
     }
     // Not a decision the agent made. Hand it back whole rather than throw, so
-    // every ending of a run is a result the caller reads the same way.
+    // run-body endings are results the caller reads the same way.
     const failure = classifyRunFailure(error);
     logToFile('[agent-runner] run crashed:', error);
     cleanFailedRun();
