@@ -14,7 +14,7 @@ import {
   getSelfDrivingDetectedTools,
 } from '@programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { WizardStore } from '@tui/store';
+import { WizardStore } from '@tui/state/store';
 import { SOURCE_DETECTORS } from '@programs/warehouse-sources/registry';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
@@ -22,12 +22,12 @@ import {
   PROJECT_MANIFESTS,
   type AgenticDetectionReport,
 } from '@programs/detection/agentic';
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import type { Mock } from 'vitest';
 import { testProgramRunHost } from '../../../test/program-host';
 import { SELF_DRIVING_FLOW } from '@tui/flows/self-driving';
-import { buildSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));

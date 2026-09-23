@@ -13,7 +13,7 @@
  * rendering (see `PendingQuestion.richLinks`). Other flows are untouched.
  */
 import { Box, Text } from 'ink';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 import {
   osc8Hyperlink,
   truncateUrlLabel,

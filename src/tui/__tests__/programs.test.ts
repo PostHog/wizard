@@ -1,8 +1,8 @@
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { PROGRAM_SEQUENCES, ScreenId } from '@tui/screen-sequences';
+import { PROGRAM_SEQUENCES, ScreenId } from '@tui/flows/screen-sequences';
 import { Program, type ProgramId } from '@programs';
-import { buildSession } from '@tui/session';
-import { McpOutcome, RunPhase } from '@shared/run-state';
+import { buildSession } from '@tui/state/session';
+import { McpOutcome, RunPhase } from '@shared/run/run-state';
 
 function getEntry(program: ProgramId, id: ScreenId) {
   const entry = PROGRAM_SEQUENCES[program].find(

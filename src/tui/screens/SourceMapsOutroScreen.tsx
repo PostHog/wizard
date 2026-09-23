@@ -13,10 +13,10 @@ import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
-import { Colors } from '../styles';
+import type { WizardStore } from '../state/store';
+import { Colors } from '../app/styles';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey';
-import { OutroKind } from '@shared/outro';
+import { OutroKind } from '@shared/run/outro';
 
 interface SourceMapsOutroScreenProps {
   store: WizardStore;

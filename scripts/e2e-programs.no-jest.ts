@@ -10,9 +10,9 @@
 import fs from 'fs';
 import path from 'path';
 import { runProgram } from '@programs';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { detectFramework } from '@programs/detection/framework';
-import type { ProgramOptions } from '@programs/run-program';
+import type { ProgramOptions } from '@programs/run/run-program';
 import {
   formatProgress,
   readE2eEnv,

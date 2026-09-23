@@ -1,4 +1,4 @@
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import { ErrorCodes } from '@shared/errors';
 import { detectFramework } from '@programs/detection/index';
 import { replayVisionConfig } from '@programs/replay-vision/index';

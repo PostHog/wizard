@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { Colors, Icons } from '../../styles';
+import { Colors, Icons } from '../../app/styles';
 import { LoadingBox } from '../../primitives/index';
 import { useStdoutDimensions } from '../../hooks/useStdoutDimensions';
 import { AUDIT_SEVERITY_STYLE } from '@programs';

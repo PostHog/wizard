@@ -25,7 +25,7 @@
  */
 
 import axios from 'axios';
-import { WIZARD_USER_AGENT } from '@shared/constants';
+import { WIZARD_USER_AGENT } from '@shared/config/constants';
 import { logToFile } from '@utils/debug';
 
 // Time-box every probe call. The scout sits on the critical path between

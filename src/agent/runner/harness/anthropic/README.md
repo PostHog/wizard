@@ -7,12 +7,12 @@ use Pi and prefer orchestration; see
 choose this harness.
 
 [index.ts](index.ts) wraps the Claude Agent SDK through
-[agent-interface.ts](../../../agent-interface.ts). Both entry points are
+[agent-interface.ts](../../../sdk/agent-interface.ts). Both entry points are
 supported: `run()` for linear conversations and `runTask()` for orchestrator
 seed/task calls. Pi also implements both entry points.
 
 The SDK subprocess uses the scoped token supplied by programs through
-[gateway-session.ts](../../../../programs/gateway-session.ts). Wizard explicitly
+[gateway-session.ts](../../../../programs/host/gateway-session.ts). Wizard explicitly
 sets the gateway URL and authentication environment and isolates stored Claude
 logins. Model selection must satisfy local routing, the SDK's supported
 transport, mint model/effort allowlists, and the gateway's required prompt
@@ -22,7 +22,7 @@ are strings.
 Security is enforced through `wizardCanUseTool`, SDK sandbox configuration, and
 warlock pre/post tool hooks. Sensitive question answers use vault references;
 write operations are also guarded while a question overlay is open. Read
-[agent-interface.ts](../../../agent-interface.ts),
-[yara-hooks.ts](../../../yara-hooks.ts), and [wizard-tools](../../../tools/) for
+[agent-interface.ts](../../../sdk/agent-interface.ts),
+[yara-hooks.ts](../../../security/yara-hooks.ts), and [wizard-tools](../../../tools/) for
 current tool registration and permission behavior rather than maintaining a
 second tool inventory here.

@@ -12,7 +12,7 @@
 import { Box, Text } from 'ink';
 import { useEffect, useMemo, useState } from 'react';
 import { buildPickerIndex, rankOptions } from './picker-filter.js';
-import { Icons, Colors } from '../styles';
+import { Icons, Colors } from '../app/styles';
 import { PromptLabel } from './PromptLabel.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { wordWrap } from './layout-helpers.js';

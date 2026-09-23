@@ -21,16 +21,20 @@ import {
 } from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { CallType, getSkillsBaseUrl, HAIKU_MODEL } from '@shared/constants';
+import {
+  CallType,
+  getSkillsBaseUrl,
+  HAIKU_MODEL,
+} from '@shared/config/constants';
 import { analytics } from '@utils/analytics';
 import type { WizardRunOptions } from '@utils/types';
-import type { Credentials } from '@shared/api';
+import type { Credentials } from '@shared/posthog/api';
 import type {
   AgentProgress,
   InferenceAuthProvider,
   SpinnerHandle,
 } from '@agent/types';
-import { createPosthogInferenceAuthProvider } from '../credentials';
+import { createPosthogInferenceAuthProvider } from '../host/credentials';
 import { WizardError } from '@shared/errors';
 
 /** A category the agent classifies each project into (id the agent returns). */

@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { LogViewer } from '../../primitives/index';
-import { Colors } from '../../styles';
+import { Colors } from '../../app/styles';
 
 const DEMO_LOG_PATH = path.join(os.tmpdir(), 'posthog-playground.log');
 

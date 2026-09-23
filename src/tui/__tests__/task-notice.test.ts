@@ -14,7 +14,7 @@ vi.mock('@utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-import { WizardStore, Overlay } from '@tui/store';
+import { WizardStore, Overlay } from '@tui/state/store';
 import type { TaskNotice } from '@agent/types';
 
 const NOTICE: TaskNotice = {

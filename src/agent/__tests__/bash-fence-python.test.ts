@@ -1,4 +1,4 @@
-import { evaluateBashCommand } from '@agent/bash-fence';
+import { evaluateBashCommand } from '@agent/security/bash-fence';
 
 /**
  * The fence and the pi runtime notes have to agree: the notes tell the agent to

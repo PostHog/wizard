@@ -31,7 +31,7 @@ import {
 import {
   __test as skillDownloadTest,
   downloadSkillPayload,
-} from '@shared/skill-download';
+} from '@shared/skills/skill-download';
 import type { AuditCheck } from '@programs/audit/types';
 
 function makeTmpDir(): string {

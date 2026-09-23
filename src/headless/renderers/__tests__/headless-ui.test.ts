@@ -4,8 +4,8 @@
 // logging-ui has finished initializing.
 import '@cli/ui';
 import { HeadlessUI } from '../headless-ui';
-import type { WizardStore } from '@tui/store';
-import { TaskStatus } from '@shared/run-state';
+import type { WizardStore } from '@tui/state/store';
+import { TaskStatus } from '@shared/run/run-state';
 
 describe('HeadlessUI', () => {
   it('forwards task updates to the store and still logs to the console', () => {

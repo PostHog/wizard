@@ -1,18 +1,18 @@
 /** Public runtime entry for the programs surface. */
 export type * from './types';
-export { PROGRAM_BINDINGS, resolveProgramBinding } from './binding';
-export { getProgramCommandments } from './commandments';
-export { captureSwitchboardDecision } from './binding-telemetry';
+export { PROGRAM_BINDINGS, resolveProgramBinding } from './registry/binding';
+export { getProgramCommandments } from './run/commandments';
+export { captureSwitchboardDecision } from './registry/binding-telemetry';
 export { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
 /** Load gateway minting only when the caller requests model auth. */
 export function createPosthogInferenceAuthProvider(
-  posthog: import('@shared/api').Credentials,
+  posthog: import('@shared/posthog/api').Credentials,
   programId: string,
 ): import('@agent/types').InferenceAuthProvider {
   return {
     resolve: async () => {
       const { createPosthogInferenceAuthProvider } = await import(
-        './credentials'
+        './host/credentials'
       );
       return createPosthogInferenceAuthProvider(posthog, programId).resolve();
     },
@@ -21,10 +21,10 @@ export function createPosthogInferenceAuthProvider(
 /** Keep agent and execution imports out of CLI startup until a program runs. */
 export async function runProgram(
   programId: string,
-  input: import('./run-program').ProgramInput,
-  options?: import('./run-program').ProgramOptions,
-): Promise<import('./run-program').ProgramRunOutcome> {
-  const entry = await import('./run-program');
+  input: import('./run/run-program').ProgramInput,
+  options?: import('./run/run-program').ProgramOptions,
+): Promise<import('./run/run-program').ProgramRunOutcome> {
+  const entry = await import('./run/run-program');
   return entry.runProgram(programId, input, options);
 }
 /** Source-map project detection runs an agent; load it when a screen asks. */
@@ -42,7 +42,7 @@ export async function detectSourceMapsProjects(
 }
 /** Agent capabilities hosts reach through programs; the prompt stream loads on first call. */
 export { downloadSkill, runMcpPromptViaSdk } from '@agent';
-export { createUiReducer, uiInteraction } from './host-ui';
+export { createUiReducer, uiInteraction } from './host/host-ui';
 /** Task streaming loads when a run starts, not at CLI startup. */
 export const loadTaskStream = () => import('./task-stream/index');
 export {
@@ -52,18 +52,18 @@ export {
   getSubcommandPrograms,
   getCommandPath,
   getLaunchablePrograms,
-} from './program-registry';
-export { agentSkillConfig } from './program-registry';
-export { FRAMEWORK_REGISTRY } from './registry';
+} from './registry/program-registry';
+export { agentSkillConfig } from './registry/program-registry';
+export { FRAMEWORK_REGISTRY } from './frameworks/registry';
 export {
   authenticate,
   bindAuthHost,
   refreshAccessTokenIfNeeded,
-} from './authenticate';
-export { detectErrorCode } from './detect-map';
-export { needsFrameworkSetup } from './framework-config';
-export { getOrAskForProjectData } from './project-data';
-export { buildProgramSession } from './program-session';
+} from './host/authenticate';
+export { detectErrorCode } from './detection/detect-map';
+export { needsFrameworkSetup } from './frameworks/framework-config';
+export { getOrAskForProjectData } from './host/project-data';
+export { buildProgramSession } from './run/program-session';
 export {
   AUDIT_CHECKS_KEY,
   AUDIT_REPORT_FILE,

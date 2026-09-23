@@ -12,7 +12,7 @@
  * on TaskStreamPush but serialised to `workflow_id` here.
  */
 
-import type { RunPhase } from '@shared/run-state';
+import type { RunPhase } from '@shared/run/run-state';
 
 export enum StreamTaskStatus {
   Pending = 'pending',

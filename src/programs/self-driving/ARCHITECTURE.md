@@ -20,18 +20,18 @@ anchors are point-in-time — the symbol names are the durable part.
 
 ### Where to look
 
-| Need                                  | Go to                                                        |
-| ------------------------------------- | ------------------------------------------------------------ |
-| The ordered steps                     | `src/programs/self-driving/prompt.ts`                        |
-| What each step _does_                 | `context-mill/context/skills/self-driving/references/*.md`   |
-| Program registration / lifecycle      | `src/programs/self-driving/index.ts`                         |
-| `wizard_ask` / `.env` tools           | `src/agent/tools/tools.ts`, `src/agent/wizard-ask-bridge.ts` |
-| OAuth scopes (+ prod ceiling)         | `src/programs/oauth/program-scopes.ts` (§3, §7)              |
-| Signals models / MCP / sync           | `posthog/products/signals/backend/…` (§5)                    |
-| Why a team gets no findings           | §6                                                           |
-| What to change for prod               | §7                                                           |
-| Local dev + reset                     | §8                                                           |
-| Proactive product enablement (step 3) | §9                                                           |
+| Need                                  | Go to                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| The ordered steps                     | `src/programs/self-driving/prompt.ts`                                 |
+| What each step _does_                 | `context-mill/context/skills/self-driving/references/*.md`            |
+| Program registration / lifecycle      | `src/programs/self-driving/index.ts`                                  |
+| `wizard_ask` / `.env` tools           | `src/agent/tools/tools.ts`, `src/agent/progress/wizard-ask-bridge.ts` |
+| OAuth scopes (+ prod ceiling)         | `src/programs/oauth/program-scopes.ts` (§3, §7)                       |
+| Signals models / MCP / sync           | `posthog/products/signals/backend/…` (§5)                             |
+| Why a team gets no findings           | §6                                                                    |
+| What to change for prod               | §7                                                                    |
+| Local dev + reset                     | §8                                                                    |
+| Proactive product enablement (step 3) | §9                                                                    |
 
 ---
 
@@ -167,10 +167,10 @@ in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
 (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram`
-(`src/agent/agent-runner.ts`) is the fixed pipeline
+(`src/agent/runner/index.ts`) is the fixed pipeline
 `init → health → settings → OAuth → skill install → agent → run → errors → postRun → outro`.
 It installs the skill by ID, resolves the MCP URL, runs the Claude Agent SDK
-`query()` (`src/agent/agent-interface.ts`) in a sandbox with the
+`query()` (`src/agent/sdk/agent-interface.ts`) in a sandbox with the
 `posthog-wizard` + `wizard-tools` MCP servers, and parses agent output:
 `[STATUS]` → UI, `[ABORT] <reason>` → terminal `AgentErrorType.ABORT` matched
 against `config.abortCases`. `PromptContext` (project/host + AI-consent
@@ -197,11 +197,11 @@ focused option — which is why a **decline option, when present, is placed
 first** (it becomes the safe default). No bridge (CI/non-interactive) → returns
 an error telling the agent to default or emit
 `[ABORT] requires-interactive-mode`. The bridge
-(`src/agent/wizard-ask-bridge.ts`) brokers into the TUI overlay;
+(`src/agent/progress/wizard-ask-bridge.ts`) brokers into the TUI overlay;
 cancelled/timed-out fields resolve to `CANCELLED_SENTINEL = '__cancelled__'`.
 
 **OAuth scopes** (`src/programs/oauth/program-scopes.ts`). Base
-`WIZARD_OAUTH_SCOPES` (`src/shared/constants.ts`) ∪
+`WIZARD_OAUTH_SCOPES` (`src/shared/config/constants.ts`) ∪
 `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**, requested via a PKCE auth-code
 flow:
 
@@ -228,7 +228,7 @@ requests none. (An _exhaustive_ ceiling — no `@default` — is possible and wo
 reject anything unlisted, but the wizard apps aren't configured that way.) See
 §7 item 1 and the README's "OAuth app scope ceiling".
 
-**Security & TUI.** YARA hooks (`src/agent/yara-hooks.ts`) scan
+**Security & TUI.** YARA hooks (`src/agent/security/yara-hooks.ts`) scan
 Bash/Write/Edit/Read content and installed skills via the `warlock` scanner
 (fail-closed; categories: prompt injection, exfiltration, destructive ops,
 supply-chain, secrets, PII); a critical match aborts the run. New rules go in
@@ -262,7 +262,7 @@ The canonical `signals-scout-*` skills do **not** live here — they're in posth
   hot-rebuilds individual skill zips but **not** the bundle. Release: a PR to
   `main` with the **`mcp-publish`** label builds and force-moves the `latest`
   GitHub release tag. The wizard resolves the skill ID at runtime against
-  `getSkillsBaseUrl(localMcp)` (`src/shared/constants.ts`):
+  `getSkillsBaseUrl(localMcp)` (`src/shared/config/constants.ts`):
   `…/releases/latest/download` (prod) or `localhost:8765` (`--local-mcp`) — so
   skill content is decoupled from the wizard npm release (and a prod wizard is
   broken until the skill is published to `latest`; §7).
@@ -359,7 +359,8 @@ source is enabled.
 > and the `[ABORT] self-driving is not available for this project` path is now
 > only a safety net for a genuine Signals-API outage.
 
-1. **UI flag `product-autonomy`** (`posthog/frontend/src/shared/constants.tsx`,
+1. **UI flag `product-autonomy`**
+   (`posthog/frontend/src/shared/config/constants.tsx`,
    `FEATURE_FLAGS.PRODUCT_AUTONOMY`). Frontend-only — gates the Inbox scene, nav
    item, and source-config loading. Off → the user can't _see_ the inbox; the
    pipeline is unaffected.

@@ -15,9 +15,9 @@
  * (plus the blank spacer `ScreenContainer` renders below either way).
  */
 import { Box, Text } from 'ink';
-import { Colors } from '../styles';
-import { totalTokenCount, type TokenUsageSnapshot } from '../store';
-import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
+import { Colors } from '../app/styles';
+import { totalTokenCount, type TokenUsageSnapshot } from '../state/store';
+import { formatTokenCount, formatCostUsd } from '@shared/pricing/token-pricing';
 
 /** Self-documents the hidden shortcut once the panel is showing. */
 const HINT_TEXT = 'Ctrl+T to hide';

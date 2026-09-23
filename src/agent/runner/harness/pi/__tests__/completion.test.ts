@@ -1,5 +1,5 @@
 import { completionFailure, runErrorType } from '../completion';
-import { AgentErrorType } from '@agent/signals';
+import { AgentErrorType } from '@agent/progress/signals';
 
 describe('completionFailure', () => {
   it('fails a no-op run (zero tool calls) as NO_PROGRESS', () => {

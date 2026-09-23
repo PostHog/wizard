@@ -3,16 +3,16 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { HostResolution } from '@shared/host-resolution';
-import { OutroKind } from '@shared/outro';
-import { RunPhase } from '@shared/run-state';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { OutroKind } from '@shared/run/outro';
+import { RunPhase } from '@shared/run/run-state';
 import type {
   ControlHooks,
   ControlMode,
   ControlSurface,
 } from '@shared/control/types';
-import { buildSession } from '@tui/session';
-import { WizardStore } from '@tui/store';
+import { buildSession } from '@tui/state/session';
+import { WizardStore } from '@tui/state/store';
 import { wizardStoreControlTarget } from '@tui/control/index';
 import { ControlClient, ControlClientError } from '../client';
 import {

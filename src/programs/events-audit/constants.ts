@@ -8,4 +8,4 @@ export {
   EVENTS_AUDIT_REPORT_FILE as SETUP_REPORT_FILE,
   EVENT_INVENTORY_FILE,
   EVENT_INVENTORY_PART_PATTERN,
-} from '@shared/constants';
+} from '@shared/config/constants';

@@ -11,7 +11,7 @@
  * - The scan bills to error-tracking.
  */
 
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import {
   resolveProjectDir,
   type AgenticDetectionContext,

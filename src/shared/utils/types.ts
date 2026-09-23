@@ -1,4 +1,4 @@
-import type { Harness, Sequence } from '@shared/constants';
+import type { Harness, Sequence } from '@shared/config/constants';
 
 export type CloudRegion = 'us' | 'eu';
 

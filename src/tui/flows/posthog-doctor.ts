@@ -1,4 +1,4 @@
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import { HEALTH_CHECK_STEP } from './health-check';
 
 export const POSTHOG_DOCTOR_FLOW: FlowStep[] = [

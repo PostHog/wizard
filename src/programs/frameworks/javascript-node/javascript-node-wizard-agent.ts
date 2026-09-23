@@ -1,6 +1,6 @@
 /* Generic Node.js language wizard using posthog-agent with PostHog MCP */
-import type { FrameworkConfig } from '../../framework-config';
-import { Integration } from '@shared/constants';
+import type { FrameworkConfig } from '../framework-config';
+import { Integration } from '@shared/config/constants';
 import { tryGetPackageJson } from '@utils/package-json';
 import { detectNodePackageManagers } from '../../detection/package-manager';
 

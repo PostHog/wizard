@@ -13,8 +13,8 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
-import { Colors } from '../styles';
+import type { WizardStore } from '../state/store';
+import { Colors } from '../app/styles';
 import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey';
 
 interface AuthErrorScreenProps {

@@ -67,7 +67,7 @@ import { uploadSourcemapsCommand } from '@cli/commands/upload-sourcemaps';
 import { errorTrackingCommand } from '@cli/commands/error-tracking';
 import { skillCommand } from '@cli/commands/skill';
 import { cliCommand } from '@cli/commands/cli';
-import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
+import { recoverOrphanedSettingsBackups } from '@shared/claude/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and

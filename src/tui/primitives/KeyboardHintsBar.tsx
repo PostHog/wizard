@@ -7,7 +7,7 @@
 
 import { Box, Text } from 'ink';
 import { useKeyboardHintsContext } from '../hooks/useKeyboardHints';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 
 export const KeyboardHintsBar = () => {
   const { hints } = useKeyboardHintsContext();

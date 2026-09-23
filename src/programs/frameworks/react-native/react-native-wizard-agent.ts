@@ -1,8 +1,8 @@
 /* React Native wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '../../framework-config';
+import type { FrameworkConfig } from '../framework-config';
 import { detectNodePackageManagers } from '../../detection/package-manager';
-import { Integration } from '@shared/constants';
+import { Integration } from '@shared/config/constants';
 import {
   getDeclaredVersion,
   getInstalledPackageVersion,

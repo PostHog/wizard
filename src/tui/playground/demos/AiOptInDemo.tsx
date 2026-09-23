@@ -14,9 +14,9 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { WizardStore } from '../../store';
+import { WizardStore } from '../../state/store';
 import { AiOptInRequiredScreen } from '../../screens/AiOptInRequiredScreen';
-import { HostResolution } from '@shared/host-resolution';
+import { HostResolution } from '@shared/posthog/host-resolution';
 
 type Variant = 'admin' | 'non-admin';
 

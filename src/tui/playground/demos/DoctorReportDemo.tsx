@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { Colors, Icons } from '../../styles';
+import { Colors, Icons } from '../../app/styles';
 import { IssueTable } from '../../screens/doctor/IssueTable';
 import type { HealthIssue } from '@programs/types';
 

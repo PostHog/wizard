@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { analytics } from '@utils/analytics';
-import { handleApiError } from '@shared/api';
-import { WIZARD_USER_AGENT } from '@shared/constants';
+import { handleApiError } from '@shared/posthog/api';
+import { WIZARD_USER_AGENT } from '@shared/config/constants';
 import { HealthIssueListResponseSchema, type HealthIssue } from './types';
 
 export async function fetchHealthIssues(

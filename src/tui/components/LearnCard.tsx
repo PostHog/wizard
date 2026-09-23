@@ -8,8 +8,8 @@
  */
 
 import { Box, Text } from 'ink';
-import { Colors } from '../styles';
-import type { WizardStore } from '../store';
+import { Colors } from '../app/styles';
+import type { WizardStore } from '../state/store';
 import { ContentSequencer, TextRevealMode } from '../primitives/index';
 import type { ContentBlock } from '../primitives/index';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions';

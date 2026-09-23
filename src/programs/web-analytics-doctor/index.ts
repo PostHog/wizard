@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '../program-step';
+import type { ProgramConfig } from '../run/program-step';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { detectWebAnalyticsPrerequisites } from './detect.js';
 import { WEB_ANALYTICS_DOCTOR_OPTIONS } from './run.js';

@@ -1,0 +1,164 @@
+import type { AgentRunDefinition } from '@agent/types';
+import { EVENT_PLAN_FILE } from '@shared/config/constants';
+import { AUDIT_CHECKS_FILE, type AuditCheck } from '@shared/run/audit-ledger';
+import { skillRunDefinition } from '../agent-skill/run-definition.js';
+import { AUDIT_SEED_CHECKS } from '../audit/seed.js';
+import { EVENTS_AUDIT_SEED_CHECKS } from '../events-audit/seed.js';
+import { AI_OBSERVABILITY_RUN } from '../ai-observability/run.js';
+import { MCP_ANALYTICS_OPTIONS } from '../mcp-analytics/run.js';
+import { METRICS_RUN } from '../metrics/run.js';
+import { MIGRATION_RUN } from '../migration/run.js';
+import { REPLAY_VISION_OPTIONS } from '../replay-vision/run.js';
+import { REVENUE_ANALYTICS_RUN } from '../revenue-analytics/run.js';
+import { WEB_ANALYTICS_DOCTOR_OPTIONS } from '../web-analytics-doctor/run.js';
+import {
+  resolveAgentSkillRunDefinition,
+  resolveAuditRunDefinition,
+  resolveErrorTrackingRunDefinition,
+  resolveEventsAuditRunDefinition,
+  resolveSourceMapsRunDefinition,
+  resolveWarehouseSourceRunDefinition,
+  type ProgramRunDefinitionInput,
+} from '../run/resolve-run-definition.js';
+
+type RuntimeProgramConfigBase = {
+  id: string;
+  agentFlow?: string;
+  requiresAi?: boolean;
+  allowedTools?: readonly string[];
+  disallowedTools?: readonly string[];
+  auditLedgerFile?: string;
+  auditSeedChecks?: readonly AuditCheck[];
+  eventPlanFile?: string;
+};
+
+export type RuntimeProgramConfig = RuntimeProgramConfigBase &
+  (
+    | { strategy: 'static'; run: AgentRunDefinition }
+    | {
+        strategy: 'resolved';
+        resolve: (
+          input: ProgramRunDefinitionInput,
+        ) => AgentRunDefinition | undefined;
+        run?: never;
+      }
+    | {
+        strategy: 'integration' | 'self-driving' | 'no-agent';
+        run?: never;
+        resolve?: never;
+      }
+  );
+
+const WIZARD_ASK = 'mcp__wizard-tools__wizard_ask';
+const AUDIT_TOOLS = [
+  'Agent',
+  'mcp__wizard-tools__audit_seed_checks',
+  'mcp__wizard-tools__audit_add_checks',
+  'mcp__wizard-tools__audit_resolve_checks',
+];
+
+export const RUNTIME_PROGRAM_REGISTRY = [
+  {
+    id: 'posthog-integration',
+    strategy: 'integration',
+    agentFlow: 'integration-v2',
+    disallowedTools: [WIZARD_ASK],
+    eventPlanFile: EVENT_PLAN_FILE,
+  },
+  {
+    id: 'revenue-analytics-setup',
+    strategy: 'static',
+    allowedTools: ['Agent'],
+    disallowedTools: [WIZARD_ASK],
+    run: REVENUE_ANALYTICS_RUN,
+  },
+  {
+    id: 'warehouse-source',
+    strategy: 'resolved',
+    resolve: (input) =>
+      resolveWarehouseSourceRunDefinition(input.warehouseSources ?? []),
+    allowedTools: ['Agent'],
+  },
+  {
+    id: 'error-tracking-upload-source-maps',
+    strategy: 'resolved',
+    resolve: (input) =>
+      resolveSourceMapsRunDefinition(input.sourceMapsSelection),
+    requiresAi: true,
+  },
+  {
+    id: 'error-tracking',
+    strategy: 'resolved',
+    resolve: resolveErrorTrackingRunDefinition,
+    agentFlow: 'error-tracking',
+  },
+  {
+    id: 'audit',
+    strategy: 'resolved',
+    resolve: resolveAuditRunDefinition,
+    allowedTools: AUDIT_TOOLS,
+    disallowedTools: [WIZARD_ASK],
+    auditLedgerFile: AUDIT_CHECKS_FILE,
+    auditSeedChecks: AUDIT_SEED_CHECKS,
+  },
+  {
+    id: 'events-audit',
+    strategy: 'resolved',
+    resolve: resolveEventsAuditRunDefinition,
+    allowedTools: AUDIT_TOOLS,
+    disallowedTools: [WIZARD_ASK],
+    auditLedgerFile: AUDIT_CHECKS_FILE,
+    auditSeedChecks: EVENTS_AUDIT_SEED_CHECKS,
+  },
+  {
+    id: 'posthog-doctor',
+    strategy: 'no-agent',
+    requiresAi: false,
+    allowedTools: ['Agent'],
+    disallowedTools: [WIZARD_ASK],
+  },
+  {
+    id: 'web-analytics-doctor',
+    strategy: 'static',
+    run: skillRunDefinition(WEB_ANALYTICS_DOCTOR_OPTIONS),
+  },
+  {
+    id: 'migration',
+    strategy: 'static',
+    allowedTools: ['Agent'],
+    disallowedTools: [WIZARD_ASK],
+    run: MIGRATION_RUN,
+  },
+  { id: 'self-driving', strategy: 'self-driving' },
+  {
+    id: 'agent-skill',
+    strategy: 'resolved',
+    resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+    allowedTools: ['Agent'],
+  },
+  { id: 'mcp-add', strategy: 'no-agent', requiresAi: false },
+  { id: 'mcp-remove', strategy: 'no-agent', requiresAi: false },
+  { id: 'mcp-tutorial', strategy: 'no-agent', requiresAi: false },
+  {
+    id: 'mcp-analytics',
+    strategy: 'static',
+    run: skillRunDefinition(MCP_ANALYTICS_OPTIONS),
+  },
+  {
+    id: 'replay-vision',
+    strategy: 'static',
+    agentFlow: 'replay-vision',
+    run: skillRunDefinition(REPLAY_VISION_OPTIONS),
+  },
+  { id: 'ai-observability', strategy: 'static', run: AI_OBSERVABILITY_RUN },
+  { id: 'metrics', strategy: 'static', agentFlow: 'metrics', run: METRICS_RUN },
+  { id: 'slack', strategy: 'no-agent' },
+] as const satisfies readonly RuntimeProgramConfig[];
+
+export type RuntimeProgramId = (typeof RUNTIME_PROGRAM_REGISTRY)[number]['id'];
+
+export function getRuntimeProgramConfig(
+  id: string,
+): RuntimeProgramConfig | undefined {
+  return RUNTIME_PROGRAM_REGISTRY.find((config) => config.id === id);
+}

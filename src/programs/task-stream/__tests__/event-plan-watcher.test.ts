@@ -12,7 +12,7 @@ import {
   normalizeEventPlan,
 } from '@programs/task-stream/event-plan-watcher';
 import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
-import type { PlannedEvent, WizardStore } from '@tui/store';
+import type { PlannedEvent, WizardStore } from '@tui/state/store';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

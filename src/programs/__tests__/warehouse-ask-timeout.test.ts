@@ -22,8 +22,8 @@ import { warehouseSourceConfig } from '@programs/warehouse-source/index';
 import {
   LONGER_ASK_TIMEOUT_MS,
   DEFAULT_ASK_TIMEOUT_MS,
-} from '@agent/wizard-ask-bridge';
-import type { WizardSession } from '@tui/session';
+} from '@agent/progress/wizard-ask-bridge';
+import type { WizardSession } from '@tui/state/session';
 
 function session(): WizardSession {
   return { installDir: '/tmp/app', frameworkContext: {} } as WizardSession;

@@ -4,4 +4,4 @@ export {
   PRICING_SHORT,
   PRICING_LONG,
   NO_DEFAULT_LIMIT,
-} from '@shared/self-driving-pricing';
+} from '@shared/pricing/self-driving-pricing';

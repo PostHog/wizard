@@ -1,8 +1,8 @@
 import { fetchLoginUrl } from '@tui/hooks/useGithubConnection';
 import { requestDeepLink } from '@utils/provisioning';
-import type { HostResolution } from '@shared/host-resolution';
-import type { WizardSession } from '@tui/session';
-import type { Credentials } from '@shared/api';
+import type { HostResolution } from '@shared/posthog/host-resolution';
+import type { WizardSession } from '@tui/state/session';
+import type { Credentials } from '@shared/posthog/api';
 
 vi.mock('@utils/provisioning', () => ({ requestDeepLink: vi.fn() }));
 

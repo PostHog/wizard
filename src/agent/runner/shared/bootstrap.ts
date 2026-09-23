@@ -8,11 +8,11 @@
  * arrives already resolved in `RunConfig` and `RunInput`.
  */
 
-import { createTriageLLMProvider } from '../../triage-provider';
+import { createTriageLLMProvider } from '../../security/triage-provider';
 import { logToFile } from '@utils/debug';
-import { CallType, IS_DEV } from '@shared/constants';
-import { VERSION } from '@shared/version';
-import { mcpUrlFor } from '@shared/host-resolution';
+import { CallType, IS_DEV } from '@shared/config/constants';
+import { VERSION } from '@shared/config/version';
+import { mcpUrlFor } from '@shared/posthog/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
 import type { BootstrapResult, RunConfig, RunFlags, RunInput } from './types';
 

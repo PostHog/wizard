@@ -87,7 +87,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
     }
     process.exit(1);
   } catch (error) {
-    const { ApiError } = await import('@shared/api');
+    const { ApiError } = await import('@shared/posthog/api');
     const message =
       error instanceof ApiError && error.statusCode === 401
         ? 'Your PostHog API key is invalid or expired.'

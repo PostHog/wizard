@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index';
-import { Icons } from '../styles';
+import { Icons } from '../app/styles';
 import { analytics } from '@utils/analytics';
 
 interface SettingsOverrideScreenProps {

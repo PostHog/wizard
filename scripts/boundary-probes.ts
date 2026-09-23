@@ -51,7 +51,7 @@ const PROBES: Probe[] = [
     layer: 'env',
     name: 'env imports shared',
     source:
-      "import { POSTHOG_DOCS_URL } from '@shared/constants';\nexport const x = POSTHOG_DOCS_URL;",
+      "import { POSTHOG_DOCS_URL } from '@shared/config/constants';\nexport const x = POSTHOG_DOCS_URL;",
     expect: 'error',
   },
   // The matrix, by alias, by path, by dynamic import and by type query.
@@ -127,14 +127,14 @@ const PROBES: Probe[] = [
     layer: 'cli',
     name: 'cli deep-imports the TUI store',
     source:
-      "import { WizardStore } from '@tui/store';\nexport const x = WizardStore;",
+      "import { WizardStore } from '@tui/state/store';\nexport const x = WizardStore;",
     expect: 'error',
   },
   {
     layer: 'agent',
     name: 'agent imports itself by alias',
     source:
-      "import { OutroKind } from '@agent/progress';\nexport const x = OutroKind;",
+      "import { OutroKind } from '@agent/progress/progress';\nexport const x = OutroKind;",
     expect: 'error',
   },
   // Types-only access.
@@ -196,7 +196,7 @@ const PROBES: Probe[] = [
     layer: 'agent',
     name: 'agent imports shared deep',
     source:
-      "import { POSTHOG_DOCS_URL } from '@shared/constants';\nexport const x = POSTHOG_DOCS_URL;",
+      "import { POSTHOG_DOCS_URL } from '@shared/config/constants';\nexport const x = POSTHOG_DOCS_URL;",
     expect: 'ok',
   },
 ];

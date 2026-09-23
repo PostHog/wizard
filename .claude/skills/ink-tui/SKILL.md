@@ -36,12 +36,12 @@ conventions rather than copying upstream component manuals.
 
 1. Create a component in [screens](../../../src/tui/screens/).
 2. Add its `ScreenId` in
-   [screen-sequences.ts](../../../src/tui/screen-sequences.ts).
+   [screen-sequences.ts](../../../src/tui/flows/screen-sequences.ts).
 3. Register the component in
-   [screen-registry.tsx](../../../src/tui/screen-registry.tsx).
+   [screen-registry.tsx](../../../src/tui/app/screen-registry.tsx).
 4. Reference it through `screenId` in the owning
-   [program's steps](../../../src/programs/), with the appropriate
-   visibility, completion, and gate predicates.
+   [program's steps](../../../src/programs/), with the appropriate visibility,
+   completion, and gate predicates.
 
 Screen sequences derive from program steps. Do not hand-maintain a second
 sequence array or add program navigation to the router. Additional state or
@@ -51,21 +51,22 @@ service wiring depends on the screen's needs; `App` remains the shared shell.
 
 CLI runners call [WizardUI](../../../src/cli/wizard-ui.ts) through
 [getUI](../../../src/cli/ui.ts); TUI code never looks the UI up. Screens use
-[WizardStore](../../../src/tui/store.ts) setters for reactive changes. The
+[WizardStore](../../../src/tui/state/store.ts) setters for reactive changes. The
 router resolves program screens from session predicates; overlays interrupt that
 resolution. Local state is appropriate for presentation details such as tab
 selection, not wizard progression.
 
 For new state, first decide whether it belongs in
-[WizardSession](../../../src/tui/session.ts) or display-only store state.
+[WizardSession](../../../src/tui/state/session.ts) or display-only store state.
 Use an explicit setter that notifies subscribers. When business logic needs the
-operation, extend `WizardUI`, [InkUI](../../../src/tui/ink-ui.ts), and
-[LoggingUI](../../../src/headless/renderers/logging-ui.ts) together. Reuse existing enums and
-union types rather than introducing competing status vocabularies.
+operation, extend `WizardUI`, [InkUI](../../../src/tui/state/ink-ui.ts), and
+[LoggingUI](../../../src/headless/renderers/logging-ui.ts) together. Reuse
+existing enums and union types rather than introducing competing status
+vocabularies.
 
 ## Reuse and check
 
-Compose existing primitives and use [styles.ts](../../../src/tui/styles.ts)
+Compose existing primitives and use [styles.ts](../../../src/tui/app/styles.ts)
 for shared colors, icons, and alignment. Export new public primitives from
 [primitives/index.ts](../../../src/tui/primitives/index.ts), add a realistic
 [playground demo](../../../src/tui/playground/demos/), and register it in

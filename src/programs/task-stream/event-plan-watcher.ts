@@ -1,4 +1,4 @@
-import type { FileWatcherOptions } from '@shared/file-watcher';
+import type { FileWatcherOptions } from '@utils/file-watcher';
 import {
   ProgramEventPlanWatcher,
   normalizeEventPlan,

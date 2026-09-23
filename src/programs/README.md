@@ -7,6 +7,18 @@ passes any main agent run and composed child runs to
 UI store. This is a repository-local TypeScript interface; the npm package does
 not currently export it as a public library API.
 
+## Layout
+
+| Folder         | Holds                                                               |
+| -------------- | ------------------------------------------------------------------- |
+| `run/`         | one program invocation: store, session, steps and the callable host |
+| `host/`        | what a host supplies: login, credentials, project data, gateway, UI |
+| `registry/`    | program configs, runtime registry and routes                        |
+| `frameworks/`  | framework configs and their registry                                |
+| `detection/`   | project, framework and platform detection                           |
+| `task-stream/` | the run projection published to the web                             |
+| `<program>/`   | one folder per program                                              |
+
 ## Signature
 
 Import the runtime function from `@programs` and types from `@programs/types`:
@@ -59,11 +71,12 @@ host ── program id + input + capabilities ──▶ runProgram
 | Composition                                                | `composition.integration` can supply a prepared child integration for `self-driving`; `compositionWorkflow` can confirm the handoff and GitHub steps. Boolean decisions in `composition` are also accepted.                                                                                                 |
 | Host capabilities                                          | `interaction` answers agent questions; `onProgress` observes events. `signal` requests cancellation. `mcp` and `workflow` serve programs without an agent. `integrationEffects` supplies the integration recipe's host effects. `awaitAiApproval` resolves the AI-processing approval gate when needed.     |
 
-The exact shapes are in [`ProgramInput` and `ProgramOptions`](run-program.ts).
+The exact shapes are in
+[`ProgramInput` and `ProgramOptions`](run/run-program.ts).
 `ProgramOptions['credentials']` and `ProgramInput['credentials']` expose the
 provider and resolved-credential types to callers; their underlying named types
-live in [`credentials.ts`](credentials.ts). Do not log the outcome's `data`: it
-includes PostHog credentials.
+live in [`host/credentials.ts`](host/credentials.ts). Do not log the outcome's
+`data`: it includes PostHog credentials.
 
 For first-party inference auth, use
 [`createPosthogInferenceAuthProvider`](../../docs/developer-interfaces.md#inference-authentication)

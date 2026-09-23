@@ -6,18 +6,18 @@ import {
   WIZARD_FLAG_KEYS,
   type AdditionalFeature,
   type Integration,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
   type DiscoveredFeature,
   type ScanConsent,
-} from '@shared/scan-consent';
-import type { ApiUser, Credentials } from '@shared/api';
-import type { RunPhase } from '@shared/run-state';
+} from '@shared/run/scan-consent';
+import type { ApiUser, Credentials } from '@shared/posthog/api';
+import type { RunPhase } from '@shared/run/run-state';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
-import { VERSION } from '@shared/version';
+import { VERSION } from '@shared/config/version';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 

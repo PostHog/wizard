@@ -6,19 +6,19 @@ import type {
   SeedTaskEntry,
 } from '@agent/types';
 import { AgentSignals, shouldDisableAsk } from '@agent';
-import type { Credentials } from '@shared/api';
-import type { HostResolution } from '@shared/host-resolution';
-import type { FrameworkConfig } from '../framework-config';
+import type { Credentials } from '@shared/posthog/api';
+import type { HostResolution } from '@shared/posthog/host-resolution';
+import type { FrameworkConfig } from '../frameworks/framework-config';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
-} from '../framework-config';
+} from '../frameworks/framework-config';
 import type { DetectedSource } from '../warehouse-sources/types';
 import { OutroKind } from '@agent';
 import {
   WIZARD_INTERACTION_EVENT_NAME,
   type Integration,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { withUtm } from '@utils/links';
 import { buildCodingAgentPrompt } from './handoff.js';
 

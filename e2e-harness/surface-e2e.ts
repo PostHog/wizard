@@ -15,9 +15,9 @@ import {
   type ApiProject,
   type ApiUser,
   type Credentials,
-} from '@shared/api';
-import { createCiGatewayAuth } from '@shared/ci-gateway-auth';
-import { HostResolution } from '@shared/host-resolution';
+} from '@shared/posthog/api';
+import { createCiGatewayAuth } from '@shared/gateway/ci-gateway-auth';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import type { AgentProgress, InferenceAuthProvider } from '@agent/types';
 
 export type E2eEnv = {

@@ -19,7 +19,7 @@ vi.mock('@utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-import { WizardStore } from '@tui/store';
+import { WizardStore } from '@tui/state/store';
 import {
   askEscapeHint,
   handleAskKey,

@@ -5,8 +5,8 @@
  * and agent run live in the program runner (see agent-runner.ts).
  */
 
-import type { FlowStep } from '../flow';
-import { RunPhase } from '@shared/run-state';
+import type { FlowStep } from './flow';
+import { RunPhase } from '@shared/run/run-state';
 import { HEALTH_CHECK_STEP } from './health-check';
 
 export const REVENUE_ANALYTICS_FLOW: FlowStep[] = [

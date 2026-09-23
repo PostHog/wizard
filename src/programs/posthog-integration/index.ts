@@ -1,9 +1,9 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import type { ProgramCiHost, ProgramRunHost } from '../host-capabilities';
+import type { ProgramConfig } from '../run/program-step';
+import type { ProgramRun } from '../run/program-run';
+import type { ProgramCiHost, ProgramRunHost } from '../host/host-capabilities';
 import type { FrameworkDetectionState } from '../detection/context';
-import { mayReportScanResults } from '@shared/scan-consent';
-import type { Integration } from '@shared/constants';
+import { mayReportScanResults } from '@shared/run/scan-consent';
+import type { Integration } from '@shared/config/constants';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/package-json';
 import { hasDeclaredDependency } from '@utils/package-json';
@@ -13,7 +13,7 @@ import {
   scopeInstallDirToProject,
   type ProjectScopeSession,
 } from '../detection/project-scope';
-import { FRAMEWORK_REGISTRY } from '../registry';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { ErrorCodes } from '@shared/errors';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';

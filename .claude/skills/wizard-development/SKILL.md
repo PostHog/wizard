@@ -17,24 +17,24 @@ Ask who owns the concern and what they should need to understand to change it.
 Product knowledge belongs behind typed configuration boundaries; runner and UI
 infrastructure should consume those boundaries.
 
-| Concern                                               | Owner                                                                                                                                                                           |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Framework detection, context, env conventions         | [FrameworkConfig](../../../src/programs/framework-config.ts) and [framework configs](../../../src/programs/frameworks/)                                                                       |
-| Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                         |
-| Programs, steps, prerequisites and outcomes           | [programs](../../../src/programs/)                                                                                                                                          |
-| Sequence, harness, model and effort selection         | [program bindings](../../../src/programs/binding.ts) and [agent clamps](../../../src/agent/runner/switchboard/)                                                               |
-| Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/agent-interface.ts), [YARA hooks](../../../src/agent/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
-| Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                   |
-| Token admission and budgets                           | [PostHog mint endpoint](https://github.com/PostHog/posthog/blob/master/posthog/llm/wizard_gateway_token.py) and [ai-gateway](https://github.com/PostHog/ai-gateway)             |
-| Screen resolution and rendering                       | [TUI](../../../src/tui/) through [WizardUI](../../../src/cli/wizard-ui.ts)                                                                                                    |
+| Concern                                               | Owner                                                                                                                                                                                  |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework detection, context, env conventions         | [FrameworkConfig](../../../src/programs/frameworks/framework-config.ts) and [framework configs](../../../src/programs/frameworks/)                                                     |
+| Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                                |
+| Programs, steps, prerequisites and outcomes           | [programs](../../../src/programs/)                                                                                                                                                     |
+| Sequence, harness, model and effort selection         | [program bindings](../../../src/programs/registry/binding.ts) and [agent clamps](../../../src/agent/runner/switchboard/)                                                               |
+| Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/sdk/agent-interface.ts), [YARA hooks](../../../src/agent/security/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
+| Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                          |
+| Token admission and budgets                           | [PostHog mint endpoint](https://github.com/PostHog/posthog/blob/master/posthog/llm/wizard_gateway_token.py) and [ai-gateway](https://github.com/PostHog/ai-gateway)                    |
+| Screen resolution and rendering                       | [TUI](../../../src/tui/) through [WizardUI](../../../src/cli/wizard-ui.ts)                                                                                                             |
 
 ## Execution policy and model admission
 
 - **Pi is the default choice for new work.** Harness choice and model provider
   are separate: Pi supports gateway-backed Anthropic and OpenAI transports.
 - **Prefer orchestration.** A seed agent plans work, then task agents execute
-  focused conversations. Start from
-  [metrics](../../../src/programs/metrics/) and its context-mill flow.
+  focused conversations. Start from [metrics](../../../src/programs/metrics/)
+  and its context-mill flow.
 - **Linear is for very simple tasks and legacy support.** Composed program
   sub-runs are also structurally clamped to linear; orchestration cannot nest
   through that seam.
@@ -43,18 +43,18 @@ infrastructure should consume those boundaries.
   new Anthropic models.
 
 Existing routing has not all migrated:
-[DEFAULT_AGENT_BINDING](../../../src/agent/default-binding.ts) selects Pi + linear
-for standalone runs; programs apply their own binding and flag overrides. Set new
-bindings explicitly. Migrating an existing program requires checking its flow,
-tasks, and lifecycle hooks; changing the default constant alone is insufficient.
-Both harnesses implement `run` and `runTask`.
+[DEFAULT_AGENT_BINDING](../../../src/agent/runner/switchboard/default-binding.ts)
+selects Pi + linear for standalone runs; programs apply their own binding and
+flag overrides. Set new bindings explicitly. Migrating an existing program
+requires checking its flow, tasks, and lifecycle hooks; changing the default
+constant alone is insufficient. Both harnesses implement `run` and `runTask`.
 
 Adding a model or effort is a cross-repository change:
 
 1. Define the Wizard model ID and capabilities in
-   [constants](../../../src/shared/constants.ts) and
-   [models](../../../src/agent/runner/switchboard/models.ts); select it
-   through the switchboard or supported context-mill stage metadata.
+   [constants](../../../src/shared/config/constants.ts) and
+   [models](../../../src/agent/runner/switchboard/models.ts); select it through
+   the switchboard or supported context-mill stage metadata.
 2. Check the PostHog mint's `WIZARD_MODEL_ALLOWLIST` and allowed efforts. The
    token's policy is enforced by the gateway; a local constant or CLI override
    cannot authorize a model.
@@ -109,11 +109,11 @@ than assuming every rejection terminates the run. New scanner rules belong in
 warlock; changes to how a match is handled belong in Wizard.
 
 User-provided secrets should travel through
-[secret-vault](../../../src/shared/secret-vault.ts) references. Tool
+[secret-vault](../../../src/shared/run/secret-vault.ts) references. Tool
 implementations resolve values host-side where they are used; they must not
 return the raw value to the model. Inspect the
-[wizard-tools](../../../src/agent/tools/) implementations and the Pi
-adapter when extending this shared tool surface.
+[wizard-tools](../../../src/agent/tools/) implementations and the Pi adapter
+when extending this shared tool surface.
 
 ## Verification and maintenance
 

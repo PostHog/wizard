@@ -7,7 +7,7 @@ import {
   WEB_ANALYTICS_ABORT_CASES,
 } from '@programs/web-analytics-doctor/index';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
-import { buildSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wa-detect-'));

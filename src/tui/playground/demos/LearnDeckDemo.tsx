@@ -23,8 +23,8 @@ import {
   TextRevealMode,
 } from '../../primitives/index';
 import type { ContentBlock, ProgressItem } from '../../primitives/index';
-import { Colors } from '../../styles';
-import type { WizardStore } from '../../store';
+import { Colors } from '../../app/styles';
+import type { WizardStore } from '../../state/store';
 import { PROGRAM_REGISTRY } from '@programs';
 import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index';
 import { getProgramContentBlocks } from '../../decks/registry';

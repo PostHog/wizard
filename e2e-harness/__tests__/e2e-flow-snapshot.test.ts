@@ -13,21 +13,21 @@
  * Update goldens with `jest -u` after an intentional flow change.
  */
 
-import { WizardStore } from '@tui/store';
-import { InkUI } from '@tui/ink-ui';
-import { Integration } from '@shared/constants';
-import { HostResolution } from '@shared/host-resolution';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { WizardStore } from '@tui/state/store';
+import { InkUI } from '@tui/state/ink-ui';
+import { Integration } from '@shared/config/constants';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
-import { ScreenId } from '@tui/router';
+import { ScreenId } from '@tui/app/router';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { WizardCiDriver } from '../wizard-ci-driver';
 import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';
 import { profileFor } from '../profiles';
 import { rawProgramFlow } from '@tui/flows/index';
-import { buildSession } from '@tui/session';
-import { RunPhase } from '@shared/run-state';
+import { buildSession } from '@tui/state/session';
+import { RunPhase } from '@shared/run/run-state';
 import { setUI } from '@cli/ui';
 
 /**

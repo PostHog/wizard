@@ -9,8 +9,8 @@
  */
 
 import { readEnvironment } from '@utils/environment';
-import { shouldDisableAsk } from '@agent/agent-runner';
-import { buildSession } from '@tui/session';
+import { shouldDisableAsk } from '@agent/runner';
+import { buildSession } from '@tui/state/session';
 
 /** Every var this file sets, cleared between cases. */
 const TOUCHED = [

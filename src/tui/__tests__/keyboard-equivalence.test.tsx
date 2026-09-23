@@ -16,11 +16,11 @@ import {
   RunPhase,
   McpOutcome,
   type ProgramId,
-} from '../store';
-import { InkUI } from '../ink-ui';
-import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { HostResolution } from '@shared/host-resolution';
+} from '../state/store';
+import { InkUI } from '../state/ink-ui';
+import { Integration } from '@shared/config/constants';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
@@ -29,11 +29,11 @@ import {
   createScreens,
   createServices,
   type ScreenServices,
-} from '../screen-registry';
+} from '../app/screen-registry';
 import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
-import { buildSession } from '@tui/session';
-import { OutroKind } from '@shared/outro';
-import type { WizardSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
+import { OutroKind } from '@shared/run/outro';
+import type { WizardSession } from '@tui/state/session';
 import { setUI } from '@cli/ui';
 
 vi.mock('ink', () =>
@@ -59,8 +59,8 @@ vi.mock('@utils/clipboard', async (importOriginal) => ({
   openInBrowser: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('opn', () => ({ default: vi.fn() }));
-vi.mock('@shared/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/api')>()),
+vi.mock('@shared/posthog/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/posthog/api')>()),
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
   // This test compares the handoff commit, not the following GitHub screen's
   // polling effect. A real request can settle between the keyboard and action
@@ -68,12 +68,12 @@ vi.mock('@shared/api', async (importOriginal) => ({
   fetchGithubConnected: vi.fn(() => new Promise(() => undefined)),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@shared/skill-menu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/skill-menu')>()),
+vi.mock('@shared/skills/skill-menu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/skills/skill-menu')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@programs/project-data', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@programs/project-data')>()),
+vi.mock('@programs/host/project-data', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/host/project-data')>()),
   getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)),
 }));
 

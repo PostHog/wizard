@@ -5,7 +5,7 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import type { HarnessExperiment, SequenceExperiment } from './schemes';
 
 export const ORCHESTRATOR_SEQUENCE_ROUTE: SequenceExperiment = {

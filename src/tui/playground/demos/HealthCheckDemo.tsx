@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { LoadingBox, ModalOverlay } from '../../primitives/index';
-import { Icons } from '../../styles';
+import { Icons } from '../../app/styles';
 import { ServiceHealthList } from '../../components/ServiceHealthList';
 import { getBlockingServiceKeys } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';

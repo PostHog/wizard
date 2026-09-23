@@ -1,5 +1,5 @@
-import type { ProgressEmitter, SpinnerHandle } from '../../progress';
-import { AgentSignals } from '../../agent-interface';
+import type { ProgressEmitter, SpinnerHandle } from '../../progress/progress';
+import { AgentSignals } from '../../sdk/agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TokenData } from './token-tracker';
 import type { TurnData } from './turn-counter';

@@ -12,7 +12,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import { Overlay } from '@tui/router';
+import { Overlay } from '@tui/app/router';
 import {
   E2eRunRecorder,
   abortReasonFrom,
@@ -23,10 +23,10 @@ import {
 } from '../e2e-result';
 import { DEFAULT_E2E_PROFILE, decideE2eAction } from '../e2e-profile';
 import type { CiState } from '../wizard-ci-driver';
-import { OutroKind } from '@shared/outro';
-import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/run/outro';
+import { RunPhase } from '@shared/run/run-state';
 import type { AskQuestion } from '@agent/types';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from '@tui/state/session';
 
 const SECRET = 'sk_live_do_not_leak_9f2b';
 

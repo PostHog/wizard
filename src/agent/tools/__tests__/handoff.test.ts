@@ -11,7 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentProgress } from '@agent/progress';
+import type { AgentProgress } from '@agent/progress/progress';
 import { MAX_HANDOFF_TEXT_CHARS, publishHandoff } from '../handoff';
 
 // The tool runs inside the agent, which has no UI; the handoff is a progress

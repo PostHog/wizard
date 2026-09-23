@@ -21,7 +21,7 @@ export type {
   RunResult,
   SeedTaskEntry,
 } from './runner';
-export type { GatewayAuth } from '@shared/gateway-auth';
+export type { GatewayAuth } from '@shared/gateway/gateway-auth';
 export type {
   AgentInteraction,
   AgentProgress,
@@ -33,7 +33,7 @@ export type {
   SpinnerHandle,
   TaskNotice,
   TokenUsageDelta,
-} from './progress';
+} from './progress/progress';
 
 /** Generic switchboard input types retained for the B2 compatibility export. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
@@ -43,4 +43,4 @@ export type { EffortLevel } from './runner/switchboard/models';
 export type { InstallSkillResult } from './tools';
 
 /** Leaves in C2 with runMcpPromptViaSdk. */
-export type { AgentChunk } from './mcp-prompt-streaming';
+export type { AgentChunk } from './sdk/mcp-prompt-streaming';

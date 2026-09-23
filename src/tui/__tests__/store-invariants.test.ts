@@ -13,21 +13,21 @@ import {
   RunPhase,
   McpOutcome,
   type ScreenName,
-} from '@tui/store';
-import { EXPANDED_COUNT } from '@tui/constants';
-import { PROGRAM_SEQUENCES } from '@tui/screen-sequences';
+} from '@tui/state/store';
+import { EXPANDED_COUNT } from '@tui/app/constants';
+import { PROGRAM_SEQUENCES } from '@tui/flows/screen-sequences';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { HostResolution } from '@shared/host-resolution';
-import { Integration, AdditionalFeature } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { Integration, AdditionalFeature } from '@shared/config/constants';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@programs';
-import type { SettingsConflict } from '@shared/claude-settings';
-import { buildSession } from '@tui/session';
-import { DiscoveredFeature } from '@shared/scan-consent';
-import { OutroKind } from '@shared/outro';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
+import { buildSession } from '@tui/state/session';
+import { DiscoveredFeature } from '@shared/run/scan-consent';
+import { OutroKind } from '@shared/run/outro';
 import type { AskAnswers, PendingQuestion, TaskNotice } from '@agent/types';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from '@tui/state/session';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {

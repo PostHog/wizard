@@ -10,7 +10,7 @@ import {
   type TaskStreamUpdate,
 } from '@programs/task-stream/types';
 import { WIZARD_TASK_STREAM_FILE } from '@utils/paths';
-import { RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run/run-state';
 
 const payload = (over: Partial<TaskStreamUpdate> = {}): TaskStreamUpdate => ({
   session_id: 'audit-audit-2026-01-01T00:00:00Z',

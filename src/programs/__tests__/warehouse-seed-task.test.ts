@@ -16,7 +16,7 @@ vi.mock('@utils/analytics', () => ({
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from '@tui/state/session';
 
 const POSTGRES: DetectedSource = {
   kind: 'Postgres',

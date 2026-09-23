@@ -12,8 +12,8 @@
  * actions speak only in store setters and generic params.
  */
 
-import type { WizardStore } from '@tui/store';
-import { ScreenId, Overlay, type ScreenName } from '@tui/router';
+import type { WizardStore } from '@tui/state/store';
+import { ScreenId, Overlay, type ScreenName } from '@tui/app/router';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
@@ -22,8 +22,8 @@ import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
 } from '@programs/self-driving/detect';
-import { McpOutcome } from '@shared/run-state';
-import { OutroKind } from '@shared/outro';
+import { McpOutcome } from '@shared/run/run-state';
+import { OutroKind } from '@shared/run/outro';
 import type { AskAnswers } from '@agent/types';
 
 /** One commit action legal on a given screen. */

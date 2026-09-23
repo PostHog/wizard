@@ -21,8 +21,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { WizardStore, TaskStatus } from '../../store';
-import { AgentPhase } from '@shared/agent-phase';
+import { WizardStore, TaskStatus } from '../../state/store';
+import { AgentPhase } from '@shared/run/agent-phase';
 import {
   SplitView,
   ProgressList,
@@ -35,9 +35,9 @@ import { LearnCard } from '../../components/LearnCard';
 import { TipsCard } from '../../components/TipsCard';
 import { VisualizerTab } from '../../components/PhaseVisuals';
 import { getProgramContentBlocks } from '../../decks/registry';
-import { Colors } from '../../styles';
+import { Colors } from '../../app/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
-import { DiscoveredFeature } from '@shared/scan-consent';
+import { DiscoveredFeature } from '@shared/run/scan-consent';
 
 const STAGE_CYCLE: AgentPhase[] = [
   AgentPhase.CodebaseScan,

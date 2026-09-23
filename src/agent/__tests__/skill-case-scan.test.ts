@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { scan } from '@posthog/warlock';
-import { scanInstalledSkill } from '../yara-hooks';
+import { scanInstalledSkill } from '../security/yara-hooks';
 
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({

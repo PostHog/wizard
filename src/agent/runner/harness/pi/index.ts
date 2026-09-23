@@ -20,19 +20,19 @@ import {
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { analytics } from '@utils/analytics';
-import { AgentErrorType } from '../../../agent-interface';
-import { AgentSignals, REMARK_INSTRUCTION } from '../../../signals';
-import { AgentOutputSignals } from '../../../output-signals';
+import { AgentErrorType } from '../../../sdk/agent-interface';
+import { AgentSignals, REMARK_INSTRUCTION } from '../../../progress/signals';
+import { AgentOutputSignals } from '../../../progress/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
-import type { GatewayAuth } from '@shared/gateway-auth';
+import type { GatewayAuth } from '@shared/gateway/gateway-auth';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
-import { createAioCapture } from '../../../aio-capture';
+import { createAioCapture } from '../../../sdk/aio-capture';
 import type {
   AgentResult,
   AgentHarness,
@@ -40,7 +40,7 @@ import type {
   TaskRunInputs,
 } from '../types';
 import type { BootstrapResult } from '../../shared/types';
-import type { ProgressEmitter } from '../../../progress';
+import type { ProgressEmitter } from '../../../progress/progress';
 import { createEmitLog } from '../../shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
@@ -335,7 +335,9 @@ export const piBackend: AgentHarness = {
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
       // path, so the first scanned call doesn't eat cold-start latency.
-      const { prewarmYaraScanner } = await import('../../../yara-hooks');
+      const { prewarmYaraScanner } = await import(
+        '../../../security/yara-hooks'
+      );
       void prewarmYaraScanner();
 
       // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point

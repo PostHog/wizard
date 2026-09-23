@@ -10,14 +10,14 @@ import {
   type DetectEvent,
   type DetectTarget,
 } from './agentic.js';
-import { authenticate, type AuthSession } from '../authenticate';
-import type { ProgramCiHost } from '../host-capabilities';
-import { FRAMEWORK_REGISTRY } from '../registry';
+import { authenticate, type AuthSession } from '../host/authenticate';
+import type { ProgramCiHost } from '../host/host-capabilities';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 

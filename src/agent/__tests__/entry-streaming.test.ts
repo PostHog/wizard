@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs';
 import { runMcpPromptViaSdk } from '@agent';
 import type { AgentChunk } from '@agent/types';
-import { HostResolution } from '@shared/host-resolution';
+import { HostResolution } from '@shared/posthog/host-resolution';
 
 const { query } = vi.hoisted(() => ({
   query:

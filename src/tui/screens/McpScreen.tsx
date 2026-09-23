@@ -14,13 +14,13 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
-import { type WizardStore, McpOutcome } from '../store';
+import { type WizardStore, McpOutcome } from '../state/store';
 import {
   ConfirmationInput,
   GroupedPickerMenu,
   PickerMenu,
 } from '../primitives/index';
-import { Colors, Icons } from '../styles';
+import { Colors, Icons } from '../app/styles';
 import type {
   McpInstaller,
   McpClientInfo,

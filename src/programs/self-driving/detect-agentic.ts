@@ -23,7 +23,7 @@ import {
 } from '../detection/project-scope';
 import { gatherFrameworkContext } from '../detection/index';
 import type { FrameworkDetectionState } from '../detection/context';
-import type { Integration } from '@shared/constants';
+import type { Integration } from '@shared/config/constants';
 
 export type { DetectEvent };
 

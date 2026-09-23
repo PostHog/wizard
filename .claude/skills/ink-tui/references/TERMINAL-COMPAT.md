@@ -2,13 +2,13 @@
 
 ## Startup and exit
 
-[startTUI](../../../../src/tui/start-tui.ts) creates the store, installs
+[startTUI](../../../../src/tui/app/start-tui.ts) creates the store, installs
 `InkUI`, renders the app, and starts program initialization.
-[terminal.ts](../../../../src/tui/terminal.ts) owns the alternate screen
+[terminal.ts](../../../../src/tui/app/terminal.ts) owns the alternate screen
 buffer and black background shared with the playground. Reuse this lifecycle.
 
 Cleanup unmounts Ink, restores the terminal, and prints the
-[exit line](../../../../src/tui/exit-line.ts). Ink teardown on Ctrl+C is
+[exit line](../../../../src/tui/app/exit-line.ts). Ink teardown on Ctrl+C is
 followed by analytics shutdown and process exit so background handles do not
 leave a process running without its interface.
 
@@ -49,6 +49,7 @@ fallback, such as
 [MCP TUI availability](../../../../src/cli/commands/mcp/tui-availability.ts).
 
 Do not add an automatic default-answer or Inquirer fallback in a screen.
-Noninteractive behavior belongs in [LoggingUI](../../../../src/headless/renderers/logging-ui.ts)
-and the command/runner contract, including explicit handling of interactions
-that cannot be answered.
+Noninteractive behavior belongs in
+[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) and the
+command/runner contract, including explicit handling of interactions that cannot
+be answered.

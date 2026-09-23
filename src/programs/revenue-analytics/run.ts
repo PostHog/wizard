@@ -1,4 +1,4 @@
-import type { ProgramRun } from '../program-run';
+import type { ProgramRun } from '../run/program-run';
 import { REVENUE_ABORT_CASES } from './abort-cases.js';
 export const REVENUE_ANALYTICS_RUN: ProgramRun = {
   skillId: 'revenue-analytics-setup',

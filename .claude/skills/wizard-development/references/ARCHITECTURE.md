@@ -11,19 +11,20 @@ description:
 [run-wizard.ts](../../../../src/cli/runners/run-wizard.ts) owns the program's
 interactive lifecycle: create the session and TUI, assign the session, run
 readiness hooks, and traverse steps and gates.
-[store.ts](../../../../src/tui/store.ts) runs `onInit` when the TUI starts;
-`onReady` runs after the real session is assigned. Keep session-dependent
-detection in `onReady`. Noninteractive execution has its own lifecycle in
+[store.ts](../../../../src/tui/state/store.ts) runs `onInit` when the TUI
+starts; `onReady` runs after the real session is assigned. Keep
+session-dependent detection in `onReady`. Noninteractive execution has its own
+lifecycle in
 [run-non-interactive.ts](../../../../src/cli/runners/run-non-interactive.ts).
 
-[runner/index.ts](../../../../src/agent/runner/index.ts) resolves a
-program's `run` definition, calls shared bootstrap, selects a binding,
-dispatches the sequence, and flushes the scanner report on cleanup. The old
-[agent-runner.ts](../../../../src/agent/agent-runner.ts) is a compatibility
+[runner/index.ts](../../../../src/agent/runner/index.ts) resolves a program's
+`run` definition, calls shared bootstrap, selects a binding, dispatches the
+sequence, and flushes the scanner report on cleanup. The old
+[agent-runner.ts](../../../../src/agent/runner/index.ts) is a compatibility
 export.
 
-| Layer           | Source and responsibility                                                                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Layer           | Source and responsibility                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Bootstrap       | [shared/bootstrap.ts](../../../../src/agent/runner/shared/bootstrap.ts): shared health/settings/auth/flag and MCP setup                                                    |
 | Switchboard     | [switchboard/index.ts](../../../../src/agent/runner/switchboard/index.ts): resolve sequence, harness, model and effort override                                            |
 | Linear sequence | [sequence/linear.ts](../../../../src/agent/runner/sequence/linear.ts): one conversation, skill/prompt assembly, post-run hooks and outro                                   |
@@ -49,7 +50,7 @@ signatures.
 | `postRun(session, credentials)`        | Linear success path, before outro                              |
 | `buildOutroData(session, credentials)` | Linear custom outro; otherwise defaults from run metadata      |
 | `agentFlow` and task skill variants    | Orchestrator flow selection and task execution                 |
-| `ProgramConfig.runSteps`                      | Explicit program composition in the outer lifecycle            |
+| `ProgramConfig.runSteps`               | Explicit program composition in the outer lifecycle            |
 | `ProgramConfig.requires`               | Dependency metadata; it does not execute prerequisite programs |
 
 Do not migrate a linear program merely by changing its binding if it depends on
@@ -60,11 +61,12 @@ example. Native command modules still need registration in
 
 ## Switchboard contract
 
-`resolveProgramBinding(ctx)` in [programs](../../../../src/programs/binding.ts)
-is the routing seam. It receives the program, flag snapshot/payloads,
-composition state and development overrides, returning a resolved binding and
-stamping a trace of the selected precedence rungs. The agent receives this
-binding and any pre-resolved task-role routes as data.
+`resolveProgramBinding(ctx)` in
+[programs](../../../../src/programs/registry/binding.ts) is the routing seam. It
+receives the program, flag snapshot/payloads, composition state and development
+overrides, returning a resolved binding and stamping a trace of the selected
+precedence rungs. The agent receives this binding and any pre-resolved task-role
+routes as data.
 
 - Harness/model: development CLI override, declared flag route, per-program
   binding, default.
@@ -74,25 +76,23 @@ binding and any pre-resolved task-role routes as data.
 [Harness](../../../../src/agent/runner/switchboard/harness.ts) and
 [sequence](../../../../src/agent/runner/switchboard/sequence.ts) contain the
 generic precedence and clamp chains over caller-supplied policy. Published
-builds omit CLI overrides. `RUN_SURFACE` can disable
-harness experiments; static bindings and harness capabilities also affect
-resolution. Composed sub-runs remain linear even when a CLI override requests
-orchestration.
+builds omit CLI overrides. `RUN_SURFACE` can disable harness experiments; static
+bindings and harness capabilities also affect resolution. Composed sub-runs
+remain linear even when a CLI override requests orchestration.
 
 Effort resolves in two stages: the binding supplies an override, then
-[modelCapabilities](../../../../src/agent/runner/switchboard/models.ts)
-applies capabilities and defaults. All selected models and efforts must also be
-admitted by the minted token and gateway. Local routing cannot bypass that
-external policy; see the
+[modelCapabilities](../../../../src/agent/runner/switchboard/models.ts) applies
+capabilities and defaults. All selected models and efforts must also be admitted
+by the minted token and gateway. Local routing cannot bypass that external
+policy; see the
 [model admission checklist](../SKILL.md#execution-policy-and-model-admission).
 
-Program flags belong in
-[experiments](../../../../src/programs/experiments/).
+Program flags belong in [experiments](../../../../src/programs/experiments/).
 Experiments declare their program scope; malformed payloads yield no experiment
 route. Reuse the
-[switchboard tests](../../../../src/programs/__tests__/switchboard.test.ts)
-and experiment tests to check full bindings and isolation of unrelated programs.
-Do not add a second flag-reading path inside a harness or sequence.
+[switchboard tests](../../../../src/programs/__tests__/switchboard.test.ts) and
+experiment tests to check full bindings and isolation of unrelated programs. Do
+not add a second flag-reading path inside a harness or sequence.
 
 ## Security boundaries
 
@@ -101,18 +101,18 @@ Wizard's local tool boundary separately restricts operations on the user's
 project. Local commandments provide model guidance; they are not an enforcement
 mechanism.
 
-- [agent-interface.ts](../../../../src/agent/agent-interface.ts) configures
+- [agent-interface.ts](../../../../src/agent/sdk/agent-interface.ts) configures
   the Anthropic SDK's tool permissions, sandbox, and gateway transport.
-- [yara-hooks.ts](../../../../src/agent/yara-hooks.ts) adapts warlock scans to SDK
-  tool hooks.
+- [yara-hooks.ts](../../../../src/agent/security/yara-hooks.ts) adapts warlock
+  scans to SDK tool hooks.
 - [Pi security](../../../../src/agent/runner/harness/pi/security.ts) adapts
   shared permissions and scanning to Pi tool-call/result events, including
   blocking, violation latching, and tool-call limits.
 - [Pi harness](../../../../src/agent/runner/harness/pi/) explicitly supplies
   tools, scrubs shell environments, and disables project-controlled
   extensions/context loading.
-- [triage-provider.ts](../../../../src/agent/triage-provider.ts) supplies
-  gateway-backed classification for scanner findings.
+- [triage-provider.ts](../../../../src/agent/security/triage-provider.ts)
+  supplies gateway-backed classification for scanner findings.
 
 Scanner rules live in [warlock](https://github.com/PostHog/warlock); Wizard owns
 how its returned categories, severities, and actions affect execution. Scanner
@@ -121,41 +121,42 @@ terminates the run. Check each adapter's state machine when changing rejection
 handling. Preserve useful rejection diagnostics without logging secret content.
 
 Both SDK paths use a scoped gateway token minted through
-[gateway-session.ts](../../../../src/agent/gateway-session.ts), not the user's raw
-OAuth credential as a model API key. Rejection and refresh behavior belong at
-that seam; do not restore a legacy-gateway fallback to bypass admission.
+[gateway-session.ts](../../../../src/agent/gateway-session.ts), not the user's
+raw OAuth credential as a model API key. Rejection and refresh behavior belong
+at that seam; do not restore a legacy-gateway fallback to bypass admission.
 
 ### Secret vault: keeping values out of the model
 
-[secret-vault.ts](../../../../src/shared/secret-vault.ts) stores user-provided
-values in memory and returns opaque references. Sensitive `wizard_ask` answers
-become `secret:<uuid>` refs; `set_env_values` resolves the ref host-side when
-writing. Follow [wizard-tools](../../../../src/agent/tools/) and the Pi
-adapters when adding a secret-consuming tool. Return references and metadata to
-the agent, never the raw value. References are session-scoped, not durable
-credentials.
+[secret-vault.ts](../../../../src/shared/run/secret-vault.ts) stores
+user-provided values in memory and returns opaque references. Sensitive
+`wizard_ask` answers become `secret:<uuid>` refs; `set_env_values` resolves the
+ref host-side when writing. Follow [wizard-tools](../../../../src/agent/tools/)
+and the Pi adapters when adding a secret-consuming tool. Return references and
+metadata to the agent, never the raw value. References are session-scoped, not
+durable credentials.
 
 ## UI state and agent output
 
-CLI runners use [WizardUI](../../../../src/cli/wizard-ui.ts) through
-`getUI()`; programs and the TUI take hosts as arguments. [InkUI](../../../../src/tui/ink-ui.ts) updates the TUI store;
-[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) is available for noninteractive
-callers that select it. A missing TTY does not automatically mean an arbitrary
-caller uses LoggingUI; snapshot CI drives Ink in a PTY. `requestQuestion` and
-task notices are supported interactions, not console prompts to invent in
-business logic.
+CLI runners use [WizardUI](../../../../src/cli/wizard-ui.ts) through `getUI()`;
+programs and the TUI take hosts as arguments.
+[InkUI](../../../../src/tui/state/ink-ui.ts) updates the TUI store;
+[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) is available for
+noninteractive callers that select it. A missing TTY does not automatically mean
+an arbitrary caller uses LoggingUI; snapshot CI drives Ink in a PTY.
+`requestQuestion` and task notices are supported interactions, not console
+prompts to invent in business logic.
 
 Harness adapters translate SDK messages, status markers, task updates and tool
 activity into WizardUI calls. Anthropic message processing lives in
-[agent-interface.ts](../../../../src/agent/agent-interface.ts); Pi uses its
+[agent-interface.ts](../../../../src/agent/sdk/agent-interface.ts); Pi uses its
 own session event handlers. Orchestrated tasks also have queue and handoff
 state. Do not assume all harness output passes through `handleSDKMessage`.
 
 Session changes go through explicit store setters. They emit updates,
 re-evaluate gates, detect transitions, and refresh rendering. The
-[router](../../../../src/tui/router.ts) resolves overlays first, then the
+[router](../../../../src/tui/app/router.ts) resolves overlays first, then the
 first visible incomplete screen from
-[screen-sequences.ts](../../../../src/tui/screen-sequences.ts). Those
+[screen-sequences.ts](../../../../src/tui/flows/screen-sequences.ts). Those
 sequences are projected from registered program steps. Change the
 state/predicate that represents progress rather than adding imperative
 navigation.

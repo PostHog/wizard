@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { discoverFeatures } from '@programs/detection/features';
-import { DiscoveredFeature } from '@shared/scan-consent';
+import { DiscoveredFeature } from '@shared/run/scan-consent';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'features-detect-'));

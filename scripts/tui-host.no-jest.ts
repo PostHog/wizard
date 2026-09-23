@@ -16,35 +16,35 @@
 import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
-import { startTUI } from '@tui/start-tui';
-import { rawProgramFlow } from '@tui/flows/index';
-import { advanceStep } from '@cli/runners/run-wizard';
-import { cliAuthHost } from '@cli/runners/auth-host';
-import { VERSION } from '@shared/version';
+import { startTUI } from '@tui/app/start-tui';
+import { VERSION } from '@shared/config/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
-import type { Harness, Sequence } from '@shared/constants';
-import { initLocalDev } from '@shared/local-dev';
+import type { Harness, Sequence } from '@shared/config/constants';
+import { initLocalDev } from '@shared/config/local-dev';
 import { createLazyCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import { runProgramAgent } from '@cli/runners/run-program-agent';
+import { advanceStep } from '@cli/runners/run-wizard';
+import { cliAuthHost } from '@cli/runners/auth-host';
+import { cliTuiHost } from '@cli/tui-host';
+import { rawProgramFlow } from '@tui/flows/index';
 import {
   TaskStreamPush,
   createFileDestination,
 } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
-import { authenticate } from '@programs/authenticate';
-import { getOrAskForProjectData } from '@programs/project-data';
+import { getOrAskForProjectData } from '@programs/host/project-data';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import type { Integration } from '@shared/constants';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import type { Integration } from '@shared/config/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking/detect-agentic';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
 } from '@programs/error-tracking-upload-source-maps/index';
-import { ScreenId, Overlay } from '@tui/router';
+import { ScreenId, Overlay } from '@tui/app/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
@@ -59,7 +59,7 @@ import {
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
-import { buildSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
 import { readPersonalApiKey } from '@e2e-harness/surface-e2e';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -211,7 +211,8 @@ async function main() {
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
   });
 
-  const { store } = startTUI(VERSION, programId);
+  // The same host the CLI hands the TUI: its UI becomes current, aborts end the run.
+  const { store } = startTUI(VERSION, programId, cliTuiHost());
   store.session = buildSession({
     installDir: process.env.APP_DIR!,
     ci: true,
@@ -297,11 +298,10 @@ async function main() {
     await store.getGate('integration-check');
     await store.getGate('health-check');
 
-    // Mirror run-wizard's composed walk for programs whose steps splice in
-    // their own run steps (self-driving: detect → integrate → handoff → run),
-    // or scope their own run to a picked project (error-tracking).
-    // `authenticate` here resolves the phx key, not OAuth, since the session is
-    // built with ci + apiKey.
+    // run-wizard's composed walk, for programs whose flow composes a child run
+    // (self-driving: detect → integrate → handoff → run) or scopes its own run
+    // to a picked project (error-tracking). `authenticate` resolves the phx
+    // key, not OAuth, since the session is built with ci + apiKey.
     if (
       programConfig.runSteps &&
       Object.keys(programConfig.runSteps).length > 0

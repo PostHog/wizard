@@ -1,14 +1,14 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store';
+import type { WizardStore } from '../../state/store';
 import { LoadingBox, PickerMenu } from '../../primitives/index';
-import { Colors, Icons } from '../../styles';
-import { ApiError } from '@shared/api';
-import { POSTHOG_DOCS_URL } from '@shared/constants';
+import { Colors, Icons } from '../../app/styles';
+import { ApiError } from '@shared/posthog/api';
+import { POSTHOG_DOCS_URL } from '@shared/config/constants';
 import { IssueTable, SEVERITY_LABEL, SEVERITY_ORDER } from './IssueTable.js';
 import { fetchHealthIssues } from '@programs';
 import type { HealthIssue } from '@programs/types';
-import { OutroKind } from '@shared/outro';
+import { OutroKind } from '@shared/run/outro';
 
 interface DoctorReportScreenProps {
   store: WizardStore;

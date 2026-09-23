@@ -1,13 +1,13 @@
 import { piBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
-import { Harness, Sequence } from '@shared/constants';
-import { HostResolution } from '@shared/host-resolution';
-import { AgentErrorType } from '@agent/signals';
+import { Harness, Sequence } from '@shared/config/constants';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { AgentErrorType } from '@agent/progress/signals';
 
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
-vi.mock('@agent/yara-hooks', () => ({ prewarmYaraScanner: vi.fn() }));
-vi.mock('@agent/aio-capture', () => ({
+vi.mock('@agent/security/yara-hooks', () => ({ prewarmYaraScanner: vi.fn() }));
+vi.mock('@agent/sdk/aio-capture', () => ({
   createAioCapture: () => ({
     captureFromPiMessageEndEvent: vi.fn(),
     setInitialPrompt: vi.fn(),

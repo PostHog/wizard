@@ -9,9 +9,9 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { PickerMenu } from '../primitives/index';
-import { Colors } from '../styles';
+import { Colors } from '../app/styles';
 import { SETUP_REPORT_FILE, SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs';
 
 interface SelfDrivingHandoffScreenProps {

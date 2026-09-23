@@ -12,14 +12,14 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { LoadingBox } from '../primitives/index';
 import { MAX_WIDTH } from '../primitives/ScreenContainer';
 import { PrivacyPanel, PRIVACY_PANEL_LABEL } from '../components/PrivacyPanel';
 import { IntroScreenLayout } from './IntroScreenLayout';
 import { useKeyBindings, type KeyBinding } from '../hooks/useKeyBindings';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
-import { Colors, Icons } from '../styles';
+import { Colors, Icons } from '../app/styles';
 import { copyToClipboard } from '@utils/clipboard';
 
 interface AuthScreenProps {

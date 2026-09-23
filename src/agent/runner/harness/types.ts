@@ -18,11 +18,11 @@
  * tagged success, abort, or failure data for the sequence to decide.
  */
 
-import type { AdditionalFeature } from '@shared/constants';
-import type { Harness } from '@shared/constants';
-import type { WizardAskBridge } from '../../wizard-ask-bridge';
-import type { AgentErrorType } from '../../agent-interface';
-import type { ProgressEmitter, SpinnerHandle } from '../../progress';
+import type { AdditionalFeature } from '@shared/config/constants';
+import type { Harness } from '@shared/config/constants';
+import type { WizardAskBridge } from '../../progress/wizard-ask-bridge';
+import type { AgentErrorType } from '../../sdk/agent-interface';
+import type { ProgressEmitter, SpinnerHandle } from '../../progress/progress';
 import type { OrchestratorToolsContext } from '../sequence/orchestrator/queue-tools';
 import type { EffortLevel, ThinkingLevel } from '../switchboard/models';
 import type {

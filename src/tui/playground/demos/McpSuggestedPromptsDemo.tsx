@@ -33,11 +33,11 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { WizardStore } from '../../store';
+import type { WizardStore } from '../../state/store';
 import { McpSuggestedPromptsScreen } from '../../screens/McpSuggestedPromptsScreen';
-import { Colors } from '../../styles';
-import { Integration } from '@shared/constants';
-import { HostResolution } from '@shared/host-resolution';
+import { Colors } from '../../app/styles';
+import { Integration } from '@shared/config/constants';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import { TAILORED_ROLES } from '../../services/mcp-role-prompts';
 import {
   assembleProfile,
@@ -48,7 +48,7 @@ import type {
   AgentChunk,
   McpSuggestedPromptsServices,
 } from '../../services/mcp-suggested-prompts-services';
-import { McpOutcome } from '@shared/run-state';
+import { McpOutcome } from '@shared/run/run-state';
 
 // One Integration per framework family so cycling exercises every
 // override bucket in mcp-role-prompts.ts.

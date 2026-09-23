@@ -2,12 +2,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { zipSync } from 'fflate';
-import { scanInstalledSkill } from '@agent/yara-hooks';
-import { scanProjectSkills } from '@agent/skill-preflight';
+import { scanInstalledSkill } from '@agent/security/yara-hooks';
+import { scanProjectSkills } from '@agent/security/skill-preflight';
 import { downloadSkill } from '@agent/tools/tools';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@agent/yara-hooks', () => ({
+vi.mock('@agent/security/yara-hooks', () => ({
   scanInstalledSkill: vi.fn(),
   SKILL_TEXT_GLOB: '**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}',
 }));

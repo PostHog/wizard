@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentProgress } from '@agent/progress';
+import type { AgentProgress } from '@agent/progress/progress';
 
 // The benchmark pipeline runs inside the agent, which has no UI. Reaching one
 // is the defect this file guards against.

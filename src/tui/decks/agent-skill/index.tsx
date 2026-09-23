@@ -5,7 +5,7 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '../../store';
+import type { WizardStore } from '../../state/store';
 import { TextRevealMode } from '../../primitives/TextBlock';
 import type { ContentBlock } from '../../primitives/content-types';
 

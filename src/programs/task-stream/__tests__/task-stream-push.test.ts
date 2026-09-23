@@ -4,12 +4,12 @@ import type {
   TaskStreamDestination,
   TaskStreamUpdate,
 } from '@programs/task-stream/types';
-import type { WizardStore, TaskItem } from '@tui/store';
+import type { WizardStore, TaskItem } from '@tui/state/store';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
-import { RunPhase, TaskStatus } from '@shared/run-state';
+import { RunPhase, TaskStatus } from '@shared/run/run-state';
 import type { PendingQuestion } from '@agent/types';
 
 type Listener = () => void;

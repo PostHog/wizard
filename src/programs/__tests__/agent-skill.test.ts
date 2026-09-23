@@ -3,10 +3,10 @@ import {
   type SkillProgramOptions,
 } from '@programs/agent-skill/index';
 import { AGENT_SKILL_FLOW } from '@tui/flows/agent-skill';
-import type { ProgramRun } from '@programs/program-run';
-import { HostResolution } from '@shared/host-resolution';
-import { buildSession } from '@tui/session';
-import { RunPhase } from '@shared/run-state';
+import type { ProgramRun } from '@programs/run/program-run';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import { buildSession } from '@tui/state/session';
+import { RunPhase } from '@shared/run/run-state';
 
 const baseOpts: SkillProgramOptions = {
   skillId: 'error-tracking-setup',

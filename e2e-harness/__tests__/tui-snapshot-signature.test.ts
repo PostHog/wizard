@@ -1,6 +1,6 @@
 import { createUiReducer } from '@programs';
-import { InkUI } from '@tui/ink-ui';
-import { WizardStore } from '@tui/store';
+import { InkUI } from '@tui/state/ink-ui';
+import { WizardStore } from '@tui/state/store';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { tuiSnapshotSignature } from '../tui-snapshot-signature';
 

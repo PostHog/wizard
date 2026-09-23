@@ -16,7 +16,7 @@
  * latest state once the current one settles.
  */
 
-import { RunPhase, TaskStatus } from '@shared/run-state';
+import { RunPhase, TaskStatus } from '@shared/run/run-state';
 import { OutroKind } from '@agent';
 import type { OutroData, PendingQuestion } from '@agent/types';
 import {

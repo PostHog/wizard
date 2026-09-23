@@ -1,4 +1,4 @@
-import type { ProgramRun } from '../program-run';
+import type { ProgramRun } from '../run/program-run';
 
 export const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
 export const METRICS_RUN: ProgramRun = {

@@ -11,7 +11,7 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { PickerMenu } from '../primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { POSTHOG_SDKS, STRIPE_SDKS } from '@programs';

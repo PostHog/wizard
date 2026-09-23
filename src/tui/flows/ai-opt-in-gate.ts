@@ -31,9 +31,9 @@
  *     already treats `ci || signup` as one non-interactive mode.
  */
 
-import type { ApiUser } from '@shared/api';
+import type { ApiUser } from '@shared/posthog/api';
 import type { ProgramConfig } from '@programs/types';
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 
 /** Step id — also the ScreenId.AiOptIn enum value in screen-sequences. */
 export const AI_OPT_IN_STEP_ID = 'ai-opt-in';

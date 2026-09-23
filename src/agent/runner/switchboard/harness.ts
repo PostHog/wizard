@@ -3,7 +3,7 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Harness } from '@shared/constants';
+import { Harness } from '@shared/config/constants';
 import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';

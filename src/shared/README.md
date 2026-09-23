@@ -5,6 +5,20 @@ types, error codes, fetch retry, the skill menu, Claude settings handling, the
 secret vault, health checks and the utilities under `utils/`. Nothing here
 depends on the agent, the programs, the TUI or the CLI.
 
+## Layout
+
+| Folder                            | Holds                                               |
+| --------------------------------- | --------------------------------------------------- |
+| `config/`                         | constants, version and local-dev targets            |
+| `posthog/`                        | the PostHog API, host resolution and CLI install    |
+| `gateway/`                        | gateway bearers and auth session state              |
+| `claude/`                         | Claude Code settings and agent env isolation        |
+| `skills/`                         | skill download, install, menu and cleanup           |
+| `pricing/`                        | token and self-driving pricing                      |
+| `run/`                            | run state, outro, spinner, consent and secret vault |
+| `control/`                        | the control protocol                                |
+| `errors/, health-checks/, utils/` | errors, service health and utilities                |
+
 ## Signatures
 
 Import by path: `@shared/<module>` for the singles and `@utils/<module>` for
@@ -52,9 +66,9 @@ debug('resolving host', host); // rendered and handed to the sink
 setDebugSink(restore);
 ```
 
-`src/cli/ui.ts` installs the current UI's info log as the debug sink at load,
-so `debug()` follows `setUI()` without shared code knowing a UI exists. Until
-the UI module loads, lines go to stdout.
+`src/cli/ui.ts` installs the current UI's info log as the debug sink at load, so
+`debug()` follows `setUI()` without shared code knowing a UI exists. Until the
+UI module loads, lines go to stdout.
 
 ## Intent
 
@@ -65,9 +79,9 @@ dependency, and would otherwise be copied.
 
 ## Architecture
 
-Shared imports `src/env.ts` and itself, and the compiler holds it there:
-its layer project (`tsconfig.layer.json`) maps no other layer, so an import of
-the agent, programs or a surface does not compile. Other layers import shared
+Shared imports `src/env.ts` and itself, and the compiler holds it there: its
+layer project (`tsconfig.layer.json`) maps no other layer, so an import of the
+agent, programs or a surface does not compile. Other layers import shared
 modules deep through `@shared/*` and `@utils/*`; there is no barrel.
 `utils/analytics.ts` reads the session through a structural type, and scan
 consent, the outro contract, the control protocol and cleanup registration live

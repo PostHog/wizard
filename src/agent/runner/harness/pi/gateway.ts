@@ -10,12 +10,12 @@ import {
   buildWizardPropertiesBlob,
   isPastRefresh,
   type GatewayAuth,
-} from '@shared/gateway-auth';
+} from '@shared/gateway/gateway-auth';
 import {
   modelCapabilities,
   type ThinkingLevel,
 } from '../../switchboard/models';
-import { AgentErrorType } from '../../../signals';
+import { AgentErrorType } from '../../../progress/signals';
 
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';

@@ -2,20 +2,20 @@ import {
   initializeAgent,
   runAgent as executeAgent,
   wizardCanUseTool,
-} from '@agent/agent-interface';
+} from '@agent/sdk/agent-interface';
 import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
-import { Harness, Sequence } from '@shared/constants';
-import { AgentErrorType } from '@agent/signals';
-import { HostResolution } from '@shared/host-resolution';
+import { Harness, Sequence } from '@shared/config/constants';
+import { AgentErrorType } from '@agent/progress/signals';
+import { HostResolution } from '@shared/posthog/host-resolution';
 import type { AskAnswers } from '@agent/types';
 
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
-vi.mock('@agent/aio-capture', () => ({ createAioCapture: vi.fn() }));
-vi.mock('@agent/agent-interface', async (original) => ({
-  ...(await original<typeof import('@agent/agent-interface')>()),
+vi.mock('@agent/sdk/aio-capture', () => ({ createAioCapture: vi.fn() }));
+vi.mock('@agent/sdk/agent-interface', async (original) => ({
+  ...(await original<typeof import('@agent/sdk/agent-interface')>()),
   initializeAgent: vi.fn().mockResolvedValue({}),
   runAgent: vi.fn().mockResolvedValue({ kind: 'success' }),
 }));

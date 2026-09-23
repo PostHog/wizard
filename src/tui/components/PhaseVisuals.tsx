@@ -10,9 +10,9 @@
 
 import { Box, Text, measureElement, type DOMElement } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store';
+import type { WizardStore } from '../state/store';
 import { useTick } from '../hooks/useTick';
-import { AgentPhase } from '@shared/agent-phase';
+import { AgentPhase } from '@shared/run/agent-phase';
 import { MATRIX_FADE } from './visualizer/panel';
 import { VISUALIZER_PALETTE } from './visualizer/palette';
 import { MatrixRain } from './visualizer/MatrixRain';

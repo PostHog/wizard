@@ -1,5 +1,5 @@
 import { resolveSkillEntry } from '@tui/screens/SkillSourceInfo';
-import type { SkillEntry } from '@shared/skill-menu';
+import type { SkillEntry } from '@shared/skills/skill-menu';
 
 const entry = (id: string): SkillEntry =>
   ({ id, downloadUrl: `https://example.com/${id}.tar.gz` } as SkillEntry);

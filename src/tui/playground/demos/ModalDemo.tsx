@@ -6,7 +6,7 @@
 
 import { Box, Text } from 'ink';
 import { ModalOverlay } from '../../primitives/index';
-import { Icons } from '../../styles';
+import { Icons } from '../../app/styles';
 
 export const ModalDemo = () => {
   return (

@@ -4,11 +4,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { debug } from '@utils/debug';
-import { cliSpawnOptions } from '@shared/posthog-cli-install';
+import { cliSpawnOptions } from '@shared/posthog/posthog-cli-install';
 export {
   installOrUpdatePostHogCli,
   type CliInstallResult,
-} from '@shared/posthog-cli-install';
+} from '@shared/posthog/posthog-cli-install';
 
 /**
  * A coding agent whose global instructions file the PostHog CLI steering

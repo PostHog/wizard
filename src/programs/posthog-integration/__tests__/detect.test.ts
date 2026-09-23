@@ -37,9 +37,9 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import type { ProgramReadyContext } from '@programs/types';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { buildSession } from '@tui/session';
-import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
-import type { WizardSession } from '@tui/session';
+import { buildSession } from '@tui/state/session';
+import { DiscoveredFeature, ScanConsent } from '@shared/run/scan-consent';
+import type { WizardSession } from '@tui/state/session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-reporting-'));

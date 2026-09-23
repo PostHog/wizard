@@ -8,7 +8,7 @@
 
 import { join } from 'path';
 import { readProjectFile } from '@utils/bounded-fs';
-import { DiscoveredFeature } from '@shared/scan-consent';
+import { DiscoveredFeature } from '@shared/run/scan-consent';
 
 const STRIPE_PACKAGES = new Set(['stripe', '@stripe/stripe-js']);
 

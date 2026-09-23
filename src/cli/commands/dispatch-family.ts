@@ -1,11 +1,11 @@
 import type { Arguments } from 'yargs';
 
-import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
+import { AUDIT_CHECKS_FILE } from '@shared/run/audit-ledger';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { getProgramConfig } from '@programs';
 import type { ProgramConfig } from '@programs/types';
-import { getSkillsBaseUrl } from '@shared/constants';
-import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
+import { getSkillsBaseUrl } from '@shared/config/constants';
+import { fetchSkillMenu, type CliEntry } from '@shared/skills/skill-menu';
 import { analytics } from '@utils/analytics';
 
 import { dispatchProgram } from './factories/shared';

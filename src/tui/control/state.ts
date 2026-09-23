@@ -1,9 +1,9 @@
 import { sanitizeErrorDetail } from '@shared/errors';
 import { redactContext } from '@shared/control/redact';
 import type { ControlState } from '@shared/control/types';
-import { RunPhase } from '@shared/run-state';
-import type { WizardSession } from '../session.js';
-import type { WizardStore } from '../store.js';
+import { RunPhase } from '@shared/run/run-state';
+import type { WizardSession } from '../state/session.js';
+import type { WizardStore } from '../state/store.js';
 
 /** The session fields a parent may read; everything else stays in the process. */
 export const CONTROL_SESSION_KEYS = [

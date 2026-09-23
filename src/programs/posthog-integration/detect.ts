@@ -9,14 +9,14 @@
  * extracted here so the `integrate` subcommand can reuse it.
  */
 
-import type { ProgramReadyContext } from '../program-step';
+import type { ProgramReadyContext } from '../run/program-step';
 import {
   DiscoveredFeature,
   mayReportScanResults,
   ScanConsent,
-} from '@shared/scan-consent';
-import type { ApiUser } from '@shared/api';
-import { FRAMEWORK_REGISTRY } from '../registry';
+} from '@shared/run/scan-consent';
+import type { ApiUser } from '@shared/posthog/api';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import {
   detectFramework,
   discoverFeatures,

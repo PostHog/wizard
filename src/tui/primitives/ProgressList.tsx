@@ -5,7 +5,7 @@
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { Colors, Icons } from '../styles';
+import { Colors, Icons } from '../app/styles';
 import { LoadingBox } from './LoadingBox.js';
 
 export interface ProgressItem {

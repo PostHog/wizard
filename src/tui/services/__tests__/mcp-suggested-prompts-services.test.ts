@@ -1,8 +1,8 @@
 import { runMcpPromptViaSdk } from '@agent';
 import { createPosthogInferenceAuthProvider } from '@programs';
-import { HostResolution } from '@shared/host-resolution';
-import type { Credentials } from '@shared/api';
-import { WizardStore } from '@tui/store';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import type { Credentials } from '@shared/posthog/api';
+import { WizardStore } from '@tui/state/store';
 import { createMcpSuggestedPromptsServices } from '../mcp-suggested-prompts-services';
 
 vi.mock('@agent', async (original) => ({

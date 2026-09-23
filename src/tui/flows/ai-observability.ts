@@ -1,4 +1,4 @@
-import type { FlowStep } from '../flow';
+import type { FlowStep } from './flow';
 import { AGENT_SKILL_FLOW } from './agent-skill';
 
 /** The agent-skill flow with the `ai-observability` intro screen. */

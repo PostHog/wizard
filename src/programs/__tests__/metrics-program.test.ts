@@ -2,7 +2,7 @@ import { AGENT_SKILL_FLOW } from '@tui/flows/agent-skill';
 import { METRICS_FLOW } from '@tui/flows/metrics';
 import { getProgramConfig, Program } from '@programs';
 import { metricsConfig } from '@programs/metrics/index';
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramRun } from '@programs/run/program-run';
 
 import { metricsCommand } from '@cli/commands/metrics';
 

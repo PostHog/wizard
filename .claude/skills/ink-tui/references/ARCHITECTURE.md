@@ -2,14 +2,14 @@
 
 ## Ownership
 
-| Surface                                                           | Owns                                                                          |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [WizardSession](../../../../src/tui/session.ts)            | Run configuration, decisions, credentials, and lifecycle state                |
-| [FlowStep](../../../../src/tui/flow.ts)       | Screens, visibility/completion predicates, gates, and initialization hooks    |
-| [screen-sequences.ts](../../../../src/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
-| [WizardRouter](../../../../src/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
-| [WizardStore](../../../../src/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
-| [WizardUI](../../../../src/cli/wizard-ui.ts)                       | Typed operations available to business logic                                  |
+| Surface                                                              | Owns                                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [WizardSession](../../../../src/tui/state/session.ts)                | Run configuration, decisions, credentials, and lifecycle state                |
+| [FlowStep](../../../../src/tui/flows/flow.ts)                        | Screens, visibility/completion predicates, gates, and initialization hooks    |
+| [screen-sequences.ts](../../../../src/tui/flows/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
+| [WizardRouter](../../../../src/tui/app/router.ts)                    | Resolution and the `Overlay` stack                                            |
+| [WizardStore](../../../../src/tui/state/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
+| [WizardUI](../../../../src/cli/wizard-ui.ts)                         | Typed operations available to business logic                                  |
 
 ## Program screens
 
@@ -17,13 +17,13 @@
 entries: `id`, `show`, and `isComplete`. Completion defaults to the step's
 `gate` when no separate `isComplete` is provided. Steps without a screen are
 omitted, and the exit screen is appended. The projection applies
-[withAiOptInGate](../../../../src/tui/flows/ai-opt-in-gate.ts) consistently
-with store gate creation.
+[withAiOptInGate](../../../../src/tui/flows/ai-opt-in-gate.ts) consistently with
+store gate creation.
 
 `WizardRouter.resolve(session)` first checks the overlay stack, then returns the
 first visible, incomplete screen. It also handles the failed-authentication
 outro case. Follow this method and the
-[router tests](../../../../src/tui/__tests__/router.test.ts) for exact
+[router tests](../../../../src/tui/app/__tests__/router.test.ts) for exact
 behavior; there is no program cursor or `next()` API.
 
 The screen sequence is a presentation projection of the program. It is distinct
@@ -40,13 +40,13 @@ Read `FlowStep` before adding asynchronous work:
   assigned. Reserve it for work independent of that session.
 - `onReady` runs after the real session is assigned and is awaited in order.
 
-[The store](../../../../src/tui/store.ts) derives gate promises from the
+[The store](../../../../src/tui/state/store.ts) derives gate promises from the
 program. `getGate(stepId)` resolves once: a predicate becoming false later does
 not close it again. A missing gate returns a resolved promise.
 `waitUntil(predicate)` evaluates live state at the await point; use that
 distinction when a decision can change after startup.
 
-[startTUI](../../../../src/tui/start-tui.ts) invokes `runInitHooks` after
+[startTUI](../../../../src/tui/app/start-tui.ts) invokes `runInitHooks` after
 rendering starts. Merely constructing a store for a test or playground does not
 start those effects.
 
@@ -62,9 +62,9 @@ separate store atoms. Reuse the existing setters (`pushStatus`, `syncTodos`,
 `setEventPlan`) for those updates. Do not mutate session fields behind the store
 after attaching the session.
 
-[InkUI](../../../../src/tui/ink-ui.ts) translates `getUI()` calls into store
-operations. Business logic should use this interface rather than import the
-store; screens can use the store directly.
+[InkUI](../../../../src/tui/state/ink-ui.ts) translates `getUI()` calls into
+store operations. Business logic should use this interface rather than import
+the store; screens can use the store directly.
 
 ## Interaction requests and overlays
 
@@ -78,9 +78,9 @@ without its pending state or promise.
 Read [WizardAskScreen](../../../../src/tui/screens/WizardAskScreen.tsx),
 [TaskNoticeScreen](../../../../src/tui/screens/TaskNoticeScreen.tsx), and the
 matching store methods before changing their lifecycle.
-[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) rejects question requests,
-declines optional task notices, and leaves the manual-auth-code promise pending;
-it cannot collect terminal input.
+[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) rejects question
+requests, declines optional task notices, and leaves the manual-auth-code
+promise pending; it cannot collect terminal input.
 
 `Overlay` lives in the router; `ScreenName` is `ScreenId | Overlay`. Store
 `pushOverlay`/`popOverlay` wrappers notify subscribers and preserve transition
@@ -89,7 +89,7 @@ actual overlay values from the enum; health checks are program screens.
 
 ## Components and services
 
-[App](../../../../src/tui/App.tsx) creates the service bundle and screen
+[App](../../../../src/tui/app/App.tsx) creates the service bundle and screen
 registry, then renders
 [ScreenContainer](../../../../src/tui/primitives/ScreenContainer.tsx). The
 registry injects services where needed, such as the

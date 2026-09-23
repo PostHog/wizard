@@ -22,7 +22,7 @@ import {
   POSTHOG_ORG_AI_SETTINGS_URL,
   POSTHOG_PRIVACY_URL,
   POSTHOG_TERMS_URL,
-} from '@shared/constants';
+} from '@shared/config/constants';
 import { analytics } from '@utils/analytics';
 
 /**

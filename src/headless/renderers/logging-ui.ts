@@ -4,9 +4,9 @@
  * No prompts, no TUI, no interactivity. Just console output.
  */
 
-import type { SettingsConflict } from '@shared/claude-settings';
-import type { ApiUser, Credentials } from '@shared/api';
-import { OAUTH_TIMEOUT_MS } from '@shared/constants';
+import type { SettingsConflict } from '@shared/claude/claude-settings';
+import type { ApiUser, Credentials } from '@shared/posthog/api';
+import { OAUTH_TIMEOUT_MS } from '@shared/config/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
@@ -20,8 +20,8 @@ import type {
   AuthErrorDetail,
   TokenUsageDelta,
 } from '@agent/types';
-import type { OutroData } from '@shared/outro';
-import { TaskStatus } from '@shared/run-state';
+import type { OutroData } from '@shared/run/outro';
+import { TaskStatus } from '@shared/run/run-state';
 import type { InteractionUi, ProgressUi } from '@programs/types';
 
 /** Implements the CLI's WizardUI; the CLI checks that where it installs one. */
@@ -292,7 +292,7 @@ export class LoggingUI implements ProgressUi, InteractionUi {
     // No-op — the hidden Ctrl+T HUD is TUI-only
   }
 
-  setOutroData(_data: import('@shared/outro').OutroData): void {
+  setOutroData(_data: import('@shared/run/outro').OutroData): void {
     // No-op in CI mode
   }
 

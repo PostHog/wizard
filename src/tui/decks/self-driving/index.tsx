@@ -12,8 +12,8 @@ import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
  */
 
 import { Text } from 'ink';
-import { Colors } from '../../styles';
-import type { WizardStore } from '../../store';
+import { Colors } from '../../app/styles';
+import type { WizardStore } from '../../state/store';
 import { TextRevealMode } from '../../primitives/TextBlock';
 import type { ContentBlock } from '../../primitives/content-types';
 import { StatusPeekTrigger } from '../../components/StatusPeekTrigger';

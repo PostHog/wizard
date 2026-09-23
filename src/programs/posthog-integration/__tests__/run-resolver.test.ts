@@ -1,5 +1,5 @@
-import { HostResolution } from '@shared/host-resolution';
-import type { FrameworkConfig } from '@programs/framework-config';
+import { HostResolution } from '@shared/posthog/host-resolution';
+import type { FrameworkConfig } from '@programs/frameworks/framework-config';
 import {
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,

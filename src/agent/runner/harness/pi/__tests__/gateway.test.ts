@@ -5,7 +5,7 @@ import {
   withGatewayRemint,
   GATEWAY_PROVIDER,
 } from '../gateway';
-import type { GatewayAuth } from '@shared/gateway-auth';
+import type { GatewayAuth } from '@shared/gateway/gateway-auth';
 
 describe('buildGatewayProvider effort', () => {
   const base = {

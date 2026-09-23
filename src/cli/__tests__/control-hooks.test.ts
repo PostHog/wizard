@@ -3,11 +3,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { attachControlServer, ControlClient } from '@headless/control';
 import { wizardStoreControlTarget } from '@tui/control/index';
-import { InkUI } from '@tui/ink-ui';
-import { buildSession } from '@tui/session';
-import { WizardStore } from '@tui/store';
+import { InkUI } from '@tui/state/ink-ui';
+import { buildSession } from '@tui/state/session';
+import { WizardStore } from '@tui/state/store';
 import { ErrorCodes } from '@shared/errors';
-import { RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run/run-state';
 import { getUI, setUI } from '../ui';
 import {
   ControlledAbortError,

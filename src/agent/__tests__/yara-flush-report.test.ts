@@ -25,7 +25,7 @@ import {
   flushScanReport,
   recordExternalScan,
   resetScanReport,
-} from '@agent/yara-hooks';
+} from '@agent/security/yara-hooks';
 
 describe('flushScanReport', () => {
   beforeEach(() => {

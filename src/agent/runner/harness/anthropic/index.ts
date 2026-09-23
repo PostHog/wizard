@@ -1,12 +1,12 @@
 // Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
-import { Harness } from '@shared/constants';
-import { AgentErrorType } from '../../../signals';
+import { Harness } from '@shared/config/constants';
+import { AgentErrorType } from '../../../progress/signals';
 import {
   initializeAgent,
   runAgent as executeAgent,
-} from '../../../agent-interface';
-import { createAioCapture } from '../../../aio-capture';
+} from '../../../sdk/agent-interface';
+import { createAioCapture } from '../../../sdk/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@utils/package-manager';
 import { runOptions } from '../../shared/bootstrap';

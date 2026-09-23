@@ -1,4 +1,4 @@
-import type { RunConfig, RunInput } from '@agent/runner';
+import type { RunConfig, RunInput } from '@agent/types';
 
 const gatewayUrl = process.env.WIZARD_FAULT_GATEWAY_URL;
 const installDir = process.env.WIZARD_FAULT_INSTALL_DIR;
@@ -27,11 +27,12 @@ globalThis.fetch = (input, init) => {
   return routedFetch(input, init);
 };
 
-const { runAgent } = await import('@agent/runner');
+const { runAgent } = await import('@agent');
+const { createCiGatewayAuth } = await import('@shared/gateway/ci-gateway-auth');
 const { DEFAULT_AGENT_MODEL, Harness, Sequence } = await import(
-  '@shared/constants'
+  '@shared/config/constants'
 );
-const { HostResolution } = await import('@shared/host-resolution');
+const { HostResolution } = await import('@shared/posthog/host-resolution');
 const { analytics } = await import('@utils/analytics');
 
 // This probe has no telemetry sink and uses only synthetic local credentials.
@@ -40,6 +41,11 @@ analytics.captureException = () => {};
 analytics.wizardCapture = () => {};
 analytics.shutdown = async () => {};
 
+const gateway = createCiGatewayAuth(
+  'phe_synthetic_fault_probe',
+  228144,
+  gatewayUrl,
+);
 const chosenHarness = harness === 'pi' ? Harness.pi : Harness.anthropic;
 
 const config: RunConfig = {
@@ -73,15 +79,7 @@ const input: RunInput = {
     host: HostResolution.fromApiHost('http://127.0.0.1:1', { localMcp: true }),
     projectId: 228144,
   },
-  inferenceAuth: {
-    resolve: () =>
-      Promise.resolve({
-        gatewayUrl,
-        token: 'phe_synthetic_fault_probe',
-        teamId: 228144,
-        refreshAtMs: Date.now() + 3_600_000,
-      }),
-  },
+  inferenceAuth: { resolve: () => Promise.resolve(gateway) },
   project: null,
   apiUser: null,
   flags: {

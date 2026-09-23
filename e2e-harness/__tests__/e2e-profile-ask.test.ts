@@ -7,7 +7,7 @@
  * froze, so a workbench run can rely on it.
  */
 
-import { Overlay, ScreenId } from '@tui/router';
+import { Overlay, ScreenId } from '@tui/app/router';
 import {
   DEFAULT_E2E_PROFILE,
   E2E_ANSWER_SENTINEL,

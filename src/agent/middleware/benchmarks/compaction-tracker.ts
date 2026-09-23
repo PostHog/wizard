@@ -7,7 +7,7 @@
 
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import { logToFile } from '@utils/debug';
-import { AgentSignals } from '../../agent-interface';
+import { AgentSignals } from '../../sdk/agent-interface';
 
 export interface CompactionData {
   phaseCompactions: number;
