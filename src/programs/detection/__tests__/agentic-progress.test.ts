@@ -107,6 +107,110 @@ it('keeps initialization and execution progress visible during detection', async
   ]);
 });
 
+it('keeps both detection attempts on the host progress sink and the session provider', async () => {
+  ui.setStage.mockClear();
+  ui.pushStatus.mockClear();
+  vi.mocked(initializeAgent).mockImplementation((config) => {
+    config.emit?.({ kind: 'status', message: 'Initializing' });
+    return Promise.resolve({ emit: config.emit } as Awaited<
+      ReturnType<typeof initializeAgent>
+    >);
+  });
+  vi.mocked(executeAgent)
+    .mockImplementationOnce((config) => {
+      config.emit?.({ kind: 'stage', stage: 'First scan' });
+      return Promise.resolve({
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+      });
+    })
+    .mockImplementationOnce(
+      (config, _prompt, _options, _spinner, _messages, middleware) => {
+        config.emit?.({ kind: 'stage', stage: 'Second scan' });
+        middleware?.onMessage({
+          type: 'result',
+          result:
+            '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
+        });
+        return Promise.resolve({ kind: 'success' });
+      },
+    );
+  const session = detectionSession();
+  const inferenceAuth = { resolve: vi.fn() };
+  session.inferenceAuth = inferenceAuth;
+  const onProgress = vi.fn();
+  const onEvent = vi.fn();
+
+  const report = await detectProjectsWithAgent(session, {
+    programId: 'posthog-integration',
+    targets: [{ id: 'node', name: 'Node.js' }],
+    onProgress,
+    onEvent,
+  });
+
+  expect(report.projects[0].targetId).toBe('node');
+  expect(onEvent).toHaveBeenCalledWith('Project scan timed out; retrying...');
+  const configs = vi
+    .mocked(initializeAgent)
+    .mock.calls.map(([config]) => config);
+  expect(configs).toHaveLength(2);
+  for (const config of configs) {
+    expect(config.emit).toBe(onProgress);
+    expect(config.inferenceAuth).toBe(inferenceAuth);
+  }
+  expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'status', message: 'Initializing' },
+    { kind: 'stage', stage: 'First scan' },
+    { kind: 'status', message: 'Initializing' },
+    { kind: 'stage', stage: 'Second scan' },
+  ]);
+  // The host owns the sink, so detection itself never reaches for the UI.
+  expect(ui.setStage).not.toHaveBeenCalled();
+  expect(ui.pushStatus).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['the session provider', true],
+  ['a provider built from the credentials', false],
+])('hands both detection attempts %s', async (_label, supplied) => {
+  vi.mocked(initializeAgent).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof initializeAgent>>,
+  );
+  vi.mocked(executeAgent)
+    .mockResolvedValueOnce({
+      kind: 'failure',
+      classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+    })
+    .mockImplementationOnce(
+      (_config, _prompt, _options, _spinner, _messages, middleware) => {
+        middleware?.onMessage({
+          type: 'result',
+          result:
+            '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
+        });
+        return Promise.resolve({ kind: 'success' });
+      },
+    );
+  const session = detectionSession();
+  const inferenceAuth = { resolve: vi.fn() };
+  if (supplied) session.inferenceAuth = inferenceAuth;
+
+  const report = await detectProjectsWithAgent(session, {
+    programId: 'posthog-integration',
+    targets: [{ id: 'node', name: 'Node.js' }],
+  });
+
+  expect(report.projects[0].targetId).toBe('node');
+  const [first, second] = vi
+    .mocked(initializeAgent)
+    .mock.calls.map(([config]) => config.inferenceAuth);
+  expect(vi.mocked(initializeAgent)).toHaveBeenCalledTimes(2);
+  expect(first).toBeDefined();
+  expect(second).toBe(first);
+  if (supplied) expect(first).toBe(inferenceAuth);
+  else expect(first).not.toBe(inferenceAuth);
+});
+
 it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
   vi.mocked(initializeAgent).mockResolvedValue(
     {} as Awaited<ReturnType<typeof initializeAgent>>,

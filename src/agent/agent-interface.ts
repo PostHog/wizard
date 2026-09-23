@@ -801,6 +801,8 @@ export async function runAgent(
     analyticsProperties?: Record<string, unknown>;
     /** Host cancellation; aborts the active SDK query and unblocks its prompt stream. */
     signal?: AbortSignal;
+    /** Abort the SDK query when this run exceeds its own deadline. */
+    timeoutMs?: number;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -948,6 +950,7 @@ export async function runAgent(
     abortController.abort();
     signalDone();
   };
+  let timedOut = false;
   let abortReason: string | null = null;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
@@ -965,6 +968,16 @@ export async function runAgent(
     once: true,
   });
   if (hostSignal?.aborted) onExternalAbort();
+  const timeoutMs = config?.timeoutMs;
+  const timeoutId = timeoutMs
+    ? setTimeout(() => {
+        if (receivedSuccessResult) return;
+        timedOut = true;
+        signalDone();
+        abortController.abort();
+      }, timeoutMs)
+    : undefined;
+
   try {
     const agentConfigDir = createIsolatedAgentConfigDir();
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
@@ -1530,6 +1543,15 @@ export async function runAgent(
       };
     }
 
+    if (timedOut) {
+      spinner.stop('Agent run timed out');
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        message: `Agent run timed out after ${timeoutMs! / 1000}s`,
+      };
+    }
+
     // Check for error markers in the agent's output
     if (signals.has('MCP_MISSING')) {
       logToFile('Agent error: MCP_MISSING');
@@ -1631,6 +1653,15 @@ export async function runAgent(
       return completeWithSuccess(error as Error);
     }
 
+    if (timedOut) {
+      spinner.stop('Agent run timed out');
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        message: `Agent run timed out after ${timeoutMs! / 1000}s`,
+      };
+    }
+
     // Check if we collected an error signal before the exception was thrown.
     // Surface just the API error line(s), not the entire output.
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
@@ -1669,6 +1700,7 @@ export async function runAgent(
     throw error;
   } finally {
     hostSignal?.removeEventListener('abort', onExternalAbort);
+    if (timeoutId) clearTimeout(timeoutId);
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion. A 401 never reached
     // this block before (the process exited first), so it still does not count.
