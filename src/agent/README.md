@@ -16,7 +16,7 @@ import { runAgent, RunOutcome } from '@agent';
 import type { RunConfig, RunInput, RunResult, AgentProgress, AgentInteraction } from '@agent/types';
 
 runAgent(config: RunConfig, input: RunInput, options?: {
-  onProgress?: (event: AgentProgress) => void;
+  onProgress?: (event: AgentProgress) => unknown;
   interaction?: AgentInteraction;
   signal?: AbortSignal;
 }): Promise<RunResult>
@@ -38,13 +38,12 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   for gateway token minting and refresh.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
-  (`AgentFailure`: optional message, outro data, `Error`, exit code, error code,
-  and detail). `failure.error` may be present when the agent caught an `Error`;
-  `Crashed` requires one. A missing `Error` object does not mean the outcome
-  succeeded, and not every failed result has a code or message. Every result
-  carries `skillId` and a `snapshot` of what the run reported: tasks, status
-  lines, stage, token usage totals, final cost, dashboard and notebook URLs,
-  handoff text.
+  (`AgentFailure`: required code and message, optional outro data, `Error`, exit
+  code, detail, and authentication detail). `failure.error` may be attached;
+  `Crashed` requires one. A failed result need not have an attached `Error`.
+  Every result carries `skillId` and a `snapshot` of what the run reported:
+  tasks, status lines, stage, token usage totals, final cost, dashboard and
+  notebook URLs, handoff text.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
   `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
@@ -57,13 +56,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   returns `Aborted` before execution; aborting during execution is passed to the
   active harness and returns `Aborted` with the current snapshot. It does not
   pause or resume a run.
-- Errors: the agent does not exit the process or throw for a decided failure. It
-  catches unexpected errors in its run body, logs them, and returns
-  `outcome: Crashed` with the caught `Error` attached (or an `Error` wrapper for
-  a non-`Error` throw). A gateway 401 emits `authError` and then fails. The host
-  decides how to present a returned failure, set an exit code, or rethrow an
-  attached error. Final scan-report flushing runs outside that catch and can
-  still reject the promise; hosts requiring a hard promise boundary catch it.
+- Errors: the agent does not exit the process or throw for a decided failure. A
+  caught coded error returns `Failed`; an uncoded throw returns `Crashed`. Both
+  retain the caught `Error` (or an `Error` wrapper for a non-`Error` throw). A
+  gateway 401 returns an authentication failure with detail for the host to
+  present. The host decides how to present a returned failure, set an exit code,
+  or rethrow an attached error. Final scan-report flushing is best effort and
+  does not replace the run result.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
@@ -115,8 +114,9 @@ Without `onProgress` the run completes and its snapshot still comes back in the
 result. Without `interaction` the agent installs no ask bridge: `wizard_ask`
 returns its "not available" error and optional task notices are declined, which
 is what a `--ci` run does. A throwing observer is logged and the run continues.
-Progress callbacks are not awaited, so an asynchronous observer must handle its
-own rejected promises.
+Progress callbacks are not awaited. Throws and rejections from returned
+thenables are logged; observers must handle errors from detached work they
+start.
 
 ## Architecture
 

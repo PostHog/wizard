@@ -134,9 +134,10 @@ Calls descend on the left, results return through the middle, and a host-owned
 abort signal descends on the right. A standalone caller invokes `runAgent`
 without `runProgram`. A program may return a pre-run failure without starting
 the agent, and a caught preparation error produces `RunResult` without a
-`SequenceResult`. The orchestrator stops starting new tasks after a fatal run
-error and waits for active siblings; that error does not itself abort those
-siblings. A host signal can cancel active harness work.
+`SequenceResult`. The orchestrator stops scheduling on the first fatal task
+result, cancels active siblings and pending asks, and waits for them to settle
+before returning that failure. A host signal can also cancel active harness
+work.
 
 ## Flow
 
@@ -148,10 +149,9 @@ siblings. A host signal can cancel active harness work.
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes as the run ends. `runAgent` normally resolves a
-   `RunResult` with an outcome and progress snapshot. A non-success result
-   carries a failure whose `error` may be available when the agent caught an
-   `Error`; an error in final report flushing can still reject.
+5. The scan report flushes on a best-effort basis as the run ends. `runAgent`
+   resolves a `RunResult` with an outcome and progress snapshot. A non-success
+   result carries a code and message; a caught error remains attached.
 6. The caller applies it. The legacy runner sends a decided failure to
    `wizardAbort`; for a crash it rethrows the attached `Error` when present.
    Other hosts can log, present, or rethrow the failure as they need.

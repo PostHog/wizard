@@ -23,8 +23,8 @@ Observer throws and rejections from thenables returned by `onProgress` are
 logged without failing the run. Callbacks must handle errors from detached
 asynchronous work they start. Without `interaction`, questions have no answer
 bridge and optional task notices are declined. Non-success results carry a
-`failure`; its `error` may be available when an `Error` was caught, while `code`
-and `message` are optional. The caller chooses how to log or present a failure.
+`failure` with a code and message, and may have an attached `Error`. The caller
+chooses how to log or present a failure.
 
 ```ts
 import { runAgent } from '@agent';
@@ -49,9 +49,10 @@ PostHog user or detect the project. The caller must supply
 `input.inferenceAuth`, whose `resolve()` returns gateway authentication and can
 refresh it during a long run. There is no session control protocol on this API.
 An aborted signal returns an `aborted` result; it does not pause the run. The
-agent catches unexpected errors in its run body and reports `crashed` with the
-caught `Error` (or an `Error` wrapper for a non-`Error` throw); the host can
-rethrow that object when it needs exception semantics.
+agent returns a caught coded error as `failed` and an uncoded throw as
+`crashed`. Both retain the caught `Error` (or an `Error` wrapper for a
+non-`Error` throw), which the host can rethrow when it needs exception
+semantics.
 
 ### Inference authentication
 
