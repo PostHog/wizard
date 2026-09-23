@@ -1,5 +1,6 @@
 import { detectProjectsWithAgent } from '../agentic';
 import {
+  AgentErrorType,
   initializeAgent,
   runAgent as executeAgent,
 } from '@agent/sdk/agent-interface';
@@ -23,6 +24,22 @@ vi.mock('@agent/sdk/agent-interface', async (original) => ({
   initializeAgent: vi.fn(),
   runAgent: vi.fn(),
 }));
+
+function detectionSession() {
+  const session = buildSession({ installDir: '/tmp/detection-test' });
+  session.credentials = {
+    accessToken: 'test',
+    projectApiKey: 'phc_test',
+    projectId: 1,
+    host: HostResolution.fromApiHost('https://us.posthog.com'),
+  };
+  return session;
+}
+
+beforeEach(() => {
+  vi.mocked(initializeAgent).mockReset();
+  vi.mocked(executeAgent).mockReset();
+});
 
 it('keeps initialization and execution progress visible during detection', async () => {
   const delta = {
@@ -61,13 +78,9 @@ it('keeps initialization and execution progress visible during detection', async
       return Promise.resolve({ kind: 'success' });
     },
   );
-  const session = buildSession({ installDir: '/tmp/detection-test' });
-  session.credentials = {
-    accessToken: 'test',
-    projectApiKey: 'phc_test',
-    projectId: 1,
-    host: HostResolution.fromApiHost('https://us.posthog.com'),
-  };
+  const session = detectionSession();
+  const inferenceAuth = { resolve: vi.fn() };
+  session.inferenceAuth = inferenceAuth;
   const onProgress = vi.fn(createUiReducer(getUI()));
   const report = await detectProjectsWithAgent(session, {
     programId: 'posthog-integration',
@@ -82,6 +95,9 @@ it('keeps initialization and execution progress visible during detection', async
     'status',
     'log',
   ]);
+  expect(vi.mocked(initializeAgent).mock.calls[0][0].inferenceAuth).toBe(
+    inferenceAuth,
+  );
   expect(getUI().addTokenUsage).toHaveBeenCalledWith(delta);
   expect(ui.setStage).toHaveBeenCalledWith('Scanning');
   expect(ui.pushStatus).toHaveBeenCalledWith('Found a project');
@@ -110,18 +126,55 @@ it('stops optional detection on a data-only 401 before parsing partial JSON', as
       });
     },
   );
-  const session = buildSession({ installDir: '/tmp/detection-test' });
-  session.credentials = {
-    accessToken: 'test',
-    projectApiKey: 'phc_test',
-    projectId: 1,
-    host: HostResolution.fromApiHost('https://us.posthog.com'),
-  };
   await expect(
-    detectProjectsWithAgent(session, {
+    detectProjectsWithAgent(detectionSession(), {
       programId: 'posthog-integration',
       targets: [{ id: 'node', name: 'Node.js' }],
     }),
-  ).rejects.toThrow('Authentication failed (401)');
+  ).rejects.toMatchObject({
+    name: 'WizardError',
+    code: ErrorCodes.AuthInvalidOrExpired,
+    message: 'Authentication failed (401)',
+  });
   expect(ui.showAuthError).not.toHaveBeenCalled();
+});
+
+it('preserves the original error from a decided failure', async () => {
+  const original = new Error('Gateway bearer rejected');
+  vi.mocked(initializeAgent).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof initializeAgent>>,
+  );
+  vi.mocked(executeAgent).mockResolvedValue({
+    kind: 'decided_failure',
+    failure: {
+      code: ErrorCodes.GatewayMintRefused,
+      message: original.message,
+      error: original,
+    },
+  });
+
+  await expect(
+    detectProjectsWithAgent(detectionSession(), {
+      programId: 'posthog-integration',
+      targets: [{ id: 'node', name: 'Node.js' }],
+    }),
+  ).rejects.toBe(original);
+});
+
+it('rejects classified agent failures', async () => {
+  vi.mocked(initializeAgent).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof initializeAgent>>,
+  );
+  vi.mocked(executeAgent).mockResolvedValue({
+    kind: 'failure',
+    classification: AgentErrorType.API_ERROR,
+    message: 'Agent API unavailable',
+  });
+
+  await expect(
+    detectProjectsWithAgent(detectionSession(), {
+      programId: 'posthog-integration',
+      targets: [{ id: 'node', name: 'Node.js' }],
+    }),
+  ).rejects.toThrow('Agent API unavailable');
 });

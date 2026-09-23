@@ -1,8 +1,8 @@
 // Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
 import { Harness } from '@shared/config/constants';
+import { AgentErrorType } from '../../../progress/signals';
 import {
-  AgentErrorType,
   initializeAgent,
   runAgent as executeAgent,
 } from '../../../sdk/agent-interface';
@@ -17,12 +17,6 @@ import type {
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
-
-const hostCancelled = (): AgentResult => ({
-  kind: 'abort',
-  classification: AgentErrorType.ABORT,
-  message: 'Agent run cancelled',
-});
 
 export const anthropicBackend: AgentHarness = {
   name: Harness.anthropic,
@@ -79,7 +73,12 @@ export const anthropicBackend: AgentHarness = {
       },
       runOptions(input),
     );
-    if (inputs.signal?.aborted) return hostCancelled();
+    if (inputs.signal?.aborted)
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
     log.step(`Verbose logs: ${getLogFilePath()}`);
     log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
@@ -100,6 +99,7 @@ export const anthropicBackend: AgentHarness = {
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
         triageProvider: boot.triageProvider,
+        signal: inputs.signal,
       },
       middleware,
     );
@@ -161,7 +161,12 @@ export const anthropicBackend: AgentHarness = {
       },
       options,
     );
-    if (inputs.signal?.aborted) return hostCancelled();
+    if (inputs.signal?.aborted)
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
 
     return executeAgent(
       { ...agent, model, allowedTools, disallowedTools, signal: inputs.signal },
@@ -175,6 +180,7 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
+        signal: inputs.signal,
       },
     );
   },

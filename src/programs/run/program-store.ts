@@ -100,14 +100,31 @@ function emptySnapshot(): RunResult['snapshot'] {
 }
 
 function cloneRunResult(result: RunResult): RunResult {
-  const clone = structuredClone(result);
-  if (
-    result.outcome !== 'success' &&
-    clone.outcome !== 'success' &&
-    result.failure.error &&
-    clone.failure.error
-  ) {
-    const source = result.failure.error;
+  if (result.outcome === 'success' || !result.failure.error)
+    return structuredClone(result);
+
+  const source = result.failure.error;
+  const withoutError = (): RunResult => {
+    const clone = structuredClone({
+      ...result,
+      failure: { ...result.failure, error: undefined },
+    }) as RunResult;
+    if (clone.outcome !== 'success') clone.failure.error = source;
+    return clone;
+  };
+  const isDataCloneError = (error: unknown): boolean =>
+    error instanceof DOMException && error.name === 'DataCloneError';
+
+  let clone: RunResult;
+  try {
+    clone = structuredClone(result);
+  } catch (error) {
+    if (!isDataCloneError(error)) throw error;
+    return withoutError();
+  }
+  if (!clone.failure.error) return clone;
+
+  try {
     const target = clone.failure.error;
     const prototype = Object.getPrototypeOf(source) as object | null;
     Object.setPrototypeOf(target, prototype);
@@ -120,8 +137,11 @@ function cloneRunResult(result: RunResult): RunResult {
       }
       Object.defineProperty(target, key, descriptor);
     }
+    return clone;
+  } catch (error) {
+    if (!isDataCloneError(error)) throw error;
+    return withoutError();
   }
-  return clone;
 }
 
 function applyAgentProgress(run: RunEntry, event: AgentProgress): void {

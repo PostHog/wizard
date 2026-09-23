@@ -23,3 +23,17 @@ export function loadCiInferenceAuthProvider(
   const auth = createCiGatewayAuth(token, projectId, gatewayUrl);
   return { resolve: () => Promise.resolve(auth) };
 }
+
+/** Let a screen-only CI host start before a gateway bearer is needed. */
+export function createLazyCiInferenceAuthProvider(
+  projectId: number,
+  region: CloudRegion,
+): InferenceAuthProvider {
+  let provider: InferenceAuthProvider | undefined;
+  return {
+    resolve: async () => {
+      provider ??= loadCiInferenceAuthProvider(projectId, region);
+      return provider.resolve();
+    },
+  };
+}

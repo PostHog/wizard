@@ -13,6 +13,7 @@ export type NoAgentWorkflowRequest = {
   programId: 'mcp-tutorial' | 'slack';
   installDir: string;
   credentials?: NoAgentProgramInput['credentials'];
+  signal?: AbortSignal;
 };
 
 export type NoAgentMcpClientResult = {
@@ -36,6 +37,7 @@ export type NoAgentMcpPort = {
 
 export type NoAgentProgramOptions = {
   mcp?: NoAgentMcpPort;
+  signal?: AbortSignal;
   workflow?: (request: NoAgentWorkflowRequest) => Promise<{
     outcome: 'success' | 'aborted';
     data?: Record<string, unknown>;
@@ -111,9 +113,11 @@ async function runDoctor(
 async function runMcpAdd(
   input: NoAgentProgramInput,
   mcp: NoAgentMcpPort,
+  signal?: AbortSignal,
 ): Promise<NoAgentProgramResult> {
   try {
     const clients = await mcp.detectSupportedClients();
+    if (signal?.aborted) return { outcome: 'aborted' };
     if (clients.length === 0) {
       return {
         outcome: 'failed',
@@ -172,6 +176,7 @@ async function runMcpAdd(
       };
     return { outcome: 'success', data };
   } catch (error) {
+    if (signal?.aborted) return { outcome: 'aborted' };
     return {
       outcome: 'failed',
       failure: { message: errorMessage(error) },
@@ -182,9 +187,11 @@ async function runMcpAdd(
 async function runMcpRemove(
   input: NoAgentProgramInput,
   mcp: NoAgentMcpPort,
+  signal?: AbortSignal,
 ): Promise<NoAgentProgramResult> {
   try {
     const clients = await mcp.detectInstalledClients(input.mcp?.local ?? false);
+    if (signal?.aborted) return { outcome: 'aborted' };
     if (clients.length === 0) {
       analytics.wizardCapture('mcp no servers to remove', {
         integration: undefined,
@@ -217,6 +224,7 @@ async function runMcpRemove(
       data: { kind: 'mcp-remove', removed, unchanged, failed, attempted },
     };
   } catch (error) {
+    if (signal?.aborted) return { outcome: 'aborted' };
     return {
       outcome: 'failed',
       failure: { message: errorMessage(error) },
@@ -229,12 +237,13 @@ export async function runNoAgentProgram(
   input: NoAgentProgramInput,
   options: NoAgentProgramOptions = {},
 ): Promise<NoAgentProgramResult> {
+  if (options.signal?.aborted) return { outcome: 'aborted' };
   switch (programId) {
     case 'posthog-doctor':
       return runDoctor(input);
     case 'mcp-add':
       return options.mcp
-        ? runMcpAdd(input, options.mcp)
+        ? runMcpAdd(input, options.mcp, options.signal)
         : {
             outcome: 'failed',
             failure: {
@@ -244,7 +253,7 @@ export async function runNoAgentProgram(
           };
     case 'mcp-remove':
       return options.mcp
-        ? runMcpRemove(input, options.mcp)
+        ? runMcpRemove(input, options.mcp, options.signal)
         : {
             outcome: 'failed',
             failure: {
@@ -268,8 +277,10 @@ export async function runNoAgentProgram(
           programId,
           installDir: input.installDir,
           credentials: input.credentials,
+          ...(options.signal ? { signal: options.signal } : {}),
         });
       } catch (error) {
+        if (options.signal?.aborted) return { outcome: 'aborted' };
         return { outcome: 'failed', failure: { message: errorMessage(error) } };
       }
     default:

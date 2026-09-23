@@ -21,7 +21,7 @@ import { VERSION } from '@shared/config/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/config/constants';
 import { initLocalDev } from '@shared/config/local-dev';
-import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
+import { createLazyCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { advanceStep } from '@cli/runners/run-wizard';
 import { cliAuthHost } from '@cli/runners/auth-host';
@@ -55,6 +55,7 @@ import { profileFor, resolveE2eProfile } from '@e2e-harness/profiles';
 import {
   E2eRunRecorder,
   buildE2eResult,
+  createE2eResultWriter,
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
@@ -234,8 +235,10 @@ async function main() {
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
   });
+  // The control socket can serve detection and screen actions without model
+  // access. Read the one-use token file only when a route requests inference.
   store.setInferenceAuth(
-    loadCiInferenceAuthProvider(
+    createLazyCiInferenceAuthProvider(
       Number(projectId),
       store.session.region ?? 'us',
     ),
@@ -412,7 +415,6 @@ async function main() {
     };
     const recorder = new E2eRunRecorder();
     const screenPath: string[] = [];
-    let resultWritten = false;
     // An abort exits from inside the runner, so hook `exit` too — see writeResult.
     process.on('exit', () => writeResult());
     // Snapshot on key moments — a screen change, a task-list update, or a
@@ -586,79 +588,73 @@ async function main() {
     // integration re-writes it after keep-skills (skillsComplete). Registered
     // on `exit` too: `wizardAbort` renders the error outro and exits, and an
     // aborted run would otherwise write nothing at all.
-    const writeResult = (final = false): void => {
-      if (!process.env.E2E_RESULT_JSON || (resultWritten && !final)) return;
-      resultWritten = true;
-      const appDir = process.env.APP_DIR!;
-      // One dependency-name pattern per ecosystem manifest. A run only needs
-      // the names, so a line-level scan beats per-format parsers.
-      const MANIFESTS: Array<[string, RegExp]> = [
-        ['pubspec.yaml', /^ {2}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm],
-        ['go.mod', /^\s*([\w.\/-]+)\s+v[\w.-]+/gm],
-        ['Cargo.toml', /^([A-Za-z0-9_-]+)\s*=/gm],
-        ['pom.xml', /<artifactId>([^<]+)<\/artifactId>/g],
-        ['build.gradle', /['"]([\w.-]+:[\w.-]+)[:'"]/g],
-        ['mix.exs', /\{:([a-z_]+)\s*,/g],
-      ];
-      const deps: string[] = [];
-      try {
-        // package.json needs a real parse: a line scan would also match script
-        // names, and only the dependency blocks carry dependencies.
-        const pkg = JSON.parse(
-          fs.readFileSync(`${appDir}/package.json`, 'utf8'),
-        );
-        deps.push(
-          ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
-        );
-      } catch {
-        /* not a JS project */
-      }
-      for (const [file, pattern] of MANIFESTS) {
+    const writeResult = createE2eResultWriter(
+      process.env.E2E_RESULT_JSON,
+      () => {
+        const appDir = process.env.APP_DIR!;
+        // One dependency-name pattern per ecosystem manifest. A run only needs
+        // the names, so a line-level scan beats per-format parsers.
+        const MANIFESTS: Array<[string, RegExp]> = [
+          ['pubspec.yaml', /^ {2}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm],
+          ['go.mod', /^\s*([\w.\/-]+)\s+v[\w.-]+/gm],
+          ['Cargo.toml', /^([A-Za-z0-9_-]+)\s*=/gm],
+          ['pom.xml', /<artifactId>([^<]+)<\/artifactId>/g],
+          ['build.gradle', /['"]([\w.-]+:[\w.-]+)[:'"]/g],
+          ['mix.exs', /\{:([a-z_]+)\s*,/g],
+        ];
+        const deps: string[] = [];
         try {
-          const text = fs.readFileSync(`${appDir}/${file}`, 'utf8');
-          for (const match of text.matchAll(pattern)) deps.push(match[1]);
-        } catch {
-          /* app doesn't use this ecosystem */
-        }
-      }
-      const posthogDeps = [
-        ...new Set(deps.filter((d) => d.toLowerCase().includes('posthog'))),
-      ];
-      let envFile: string | null = null;
-      try {
-        const hit = fs
-          .readdirSync(appDir)
-          .find(
-            (f) =>
-              (f.startsWith('.env') || f.endsWith('.env')) &&
-              /posthog/i.test(fs.readFileSync(`${appDir}/${f}`, 'utf8')),
+          // package.json needs a real parse: a line scan would also match script
+          // names, and only the dependency blocks carry dependencies.
+          const pkg = JSON.parse(
+            fs.readFileSync(`${appDir}/package.json`, 'utf8'),
           );
-        envFile = hit ? `${appDir}/${hit}` : null;
-      } catch {
-        /* none */
-      }
-      fs.writeFileSync(
-        process.env.E2E_RESULT_JSON,
-        JSON.stringify(
-          buildE2eResult({
-            base: {
-              runPhase: store.session.runPhase,
-              hasPosthogDep: posthogDeps.length > 0,
-              newDeps: posthogDeps,
-              envFile,
-              screenPath,
-              skillsComplete: store.session.skillsComplete,
-            },
-            recorder,
-            session: store.session,
-            tasks: store.tasks,
-            reportFile: readReportFile(appDir, programConfig.reportFile),
-          }),
-          null,
-          2,
-        ),
-      );
-    };
+          deps.push(
+            ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
+          );
+        } catch {
+          /* not a JS project */
+        }
+        for (const [file, pattern] of MANIFESTS) {
+          try {
+            const text = fs.readFileSync(`${appDir}/${file}`, 'utf8');
+            for (const match of text.matchAll(pattern)) deps.push(match[1]);
+          } catch {
+            /* app doesn't use this ecosystem */
+          }
+        }
+        const posthogDeps = [
+          ...new Set(deps.filter((d) => d.toLowerCase().includes('posthog'))),
+        ];
+        let envFile: string | null = null;
+        try {
+          const hit = fs
+            .readdirSync(appDir)
+            .find(
+              (f) =>
+                (f.startsWith('.env') || f.endsWith('.env')) &&
+                /posthog/i.test(fs.readFileSync(`${appDir}/${f}`, 'utf8')),
+            );
+          envFile = hit ? `${appDir}/${hit}` : null;
+        } catch {
+          /* none */
+        }
+        return buildE2eResult({
+          base: {
+            runPhase: store.session.runPhase,
+            hasPosthogDep: posthogDeps.length > 0,
+            newDeps: posthogDeps,
+            envFile,
+            screenPath,
+            skillsComplete: store.session.skillsComplete,
+          },
+          recorder,
+          session: store.session,
+          tasks: store.tasks,
+          reportFile: readReportFile(appDir, programConfig.reportFile),
+        });
+      },
+    );
     const unsubResult = store.subscribe(() => {
       if (store.currentScreen === 'outro') writeResult();
     });

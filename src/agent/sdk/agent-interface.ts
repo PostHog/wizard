@@ -803,13 +803,16 @@ export async function runAgent(
      * aborted` events (e.g. the orchestrator's task type and id).
      */
     analyticsProperties?: Record<string, unknown>;
+    /** Host cancellation; aborts the active SDK query and unblocks its prompt stream. */
+    signal?: AbortSignal;
   },
   middleware?: {
     onMessage(message: any): void;
     finalize(resultMessage: any, totalDurationMs: number): any;
   },
 ): Promise<AgentResult> {
-  if (agentConfig.signal?.aborted) {
+  const hostSignal = agentConfig.signal ?? config?.signal;
+  if (hostSignal?.aborted) {
     return {
       kind: 'abort',
       classification: AgentErrorType.ABORT,
@@ -962,13 +965,12 @@ export async function runAgent(
   // A 401 on a fresh bearer: the auth screen was reported, and this is the
   // failure the caller ends the run with. The query is aborted to unwind.
   let authFailure: AgentFailure | undefined;
-  const agentConfigDir = createIsolatedAgentConfigDir();
-  agentConfig.signal?.addEventListener('abort', onExternalAbort, {
+  hostSignal?.addEventListener('abort', onExternalAbort, {
     once: true,
   });
-  if (agentConfig.signal?.aborted) onExternalAbort();
-
+  if (hostSignal?.aborted) onExternalAbort();
   try {
+    const agentConfigDir = createIsolatedAgentConfigDir();
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
@@ -1343,7 +1345,7 @@ export async function runAgent(
               agentConfig.refreshGatewayAuth &&
               !reminted &&
               isPastRefresh(agentConfig.gatewayAuth) &&
-              !agentConfig.signal?.aborted
+              !hostSignal?.aborted
             ) {
               logToFile(
                 'Agent error: 401 on an aged gateway bearer; re-minting',
@@ -1448,23 +1450,32 @@ export async function runAgent(
     };
 
     const refreshGatewayAuth = agentConfig.refreshGatewayAuth;
+    if (hostSignal?.aborted) {
+      spinner.stop('Run cancelled');
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
+    }
+    const queryResult = await runQuery();
     if (
-      (await runQuery()) === 'remint' &&
+      queryResult === 'remint' &&
       refreshGatewayAuth &&
-      !agentConfig.signal?.aborted
+      !hostSignal?.aborted
     ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
       reminted = true;
       remintRequested = false;
       abortController = new AbortController();
-      if (agentConfig.signal?.aborted) abortController.abort();
+      if (hostSignal?.aborted) abortController.abort();
       signals.forgetApiErrors();
       spinner.message('Renewing the gateway token...');
       const stale = agentConfig.gatewayAuth;
       // A refusal or failure here ends the run with its own message.
       agentConfig.gatewayAuth = await refreshGatewayAuth();
-      if (agentConfig.signal?.aborted)
+      if (hostSignal?.aborted)
         return {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
@@ -1489,8 +1500,7 @@ export async function runAgent(
     if (authFailure) {
       return { kind: 'decided_failure', failure: authFailure };
     }
-    if (agentConfig.signal?.aborted) {
-      spinner.stop('Run cancelled');
+    if (hostSignal?.aborted) {
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -1515,8 +1525,8 @@ export async function runAgent(
         message: abortReason,
       };
     }
-    if (agentConfig.signal?.aborted) {
-      spinner.stop('Run cancelled');
+    if (hostSignal?.aborted) {
+      spinner.stop('Wizard aborted');
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -1588,7 +1598,6 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone();
-
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
     // never mistaken for a success-cleanup race or a generic abort.
@@ -1609,8 +1618,8 @@ export async function runAgent(
       };
     }
 
-    if (agentConfig.signal?.aborted) {
-      spinner.stop('Run cancelled');
+    if (hostSignal?.aborted) {
+      spinner.stop('Wizard aborted');
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -1663,7 +1672,7 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    agentConfig.signal?.removeEventListener('abort', onExternalAbort);
+    hostSignal?.removeEventListener('abort', onExternalAbort);
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion. A 401 never reached
     // this block before (the process exited first), so it still does not count.

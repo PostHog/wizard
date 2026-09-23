@@ -53,6 +53,7 @@ export async function runLinearProgram({
     );
     if (signal?.aborted) return hostAborted();
     if (installResult.kind !== 'ok') {
+      if (signal?.aborted) return hostAborted();
       return failed(installFailure(run.integrationLabel, installResult));
     }
     skillPath = installResult.path;
@@ -108,6 +109,7 @@ export async function runLinearProgram({
   // bridge, error routing, outro) stays here so every harness shares it.
   const { harness, model, thinkingLevel } = config.binding;
   const agentResult = await getHarness(harness).run({
+    signal,
     config,
     input,
     boot,
@@ -119,16 +121,8 @@ export async function runLinearProgram({
     middleware,
     model,
     thinkingLevel,
-    signal,
   });
-  // A host cancellation replaces a success or the harness's own abort; a
-  // failure the run already decided is more specific and stays.
-  if (
-    signal?.aborted &&
-    (agentResult.kind === 'success' || agentResult.kind === 'abort')
-  ) {
-    return hostAborted();
-  }
+  if (signal?.aborted) return hostAborted();
 
   // 9. Error handling (full set from both harnesses)
   if (agentResult.kind === 'decided_failure') {
@@ -210,9 +204,7 @@ export async function runLinearProgram({
   if (classification === AgentErrorType.YARA_VIOLATION) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      message:
-        (agentResult.kind === 'failure' ? agentResult.message : undefined) ??
-        formatYaraAbortMessage(),
+      message: failureMessage ?? formatYaraAbortMessage(),
       error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
@@ -275,6 +267,7 @@ export async function runLinearProgram({
   // 10. Post-run hooks
   if (config.hooks?.postRun) {
     await config.hooks.postRun(credentials);
+    if (signal?.aborted) return hostAborted();
   }
   if (signal?.aborted) return hostAborted();
 

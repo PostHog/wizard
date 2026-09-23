@@ -25,7 +25,10 @@ import {
   classifyRunFailure,
   emitWizardError,
 } from '@shared/errors';
-import { captureRunSkillCleanup } from '@shared/skills/skill-run-cleanup';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skills/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { OutroData } from '@shared/run/outro';
 import type { RunPhase as RunPhaseT } from '@shared/run/run-state';
@@ -123,8 +126,9 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { registerCleanup, runCleanups, wizardAbort, WizardError } =
-      await import('../wizard-abort');
+    const { runCleanups, wizardAbort, WizardError } = await import(
+      '../wizard-abort'
+    );
     runRegisteredCleanups = runCleanups;
 
     configureLogFileFromEnvironment();
@@ -136,7 +140,7 @@ export function runNonInteractive(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
-    registerCleanup(captureRunSkillCleanup(installDir));
+    registerRunSkillCleanup(installDir);
     const onSigint = () => {
       runCleanups();
       process.exit(130);
@@ -390,8 +394,10 @@ export function runNonInteractive(
       const { runProgramAgent } = await import('./run-program-agent');
       await runProgramAgent(config, session, {
         inferenceAuth: ciInferenceAuth,
+        deferSkillCleanupCommit: true,
       });
       await settleStream(RunPhase.Completed);
+      commitRegisteredRunSkillCleanups();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

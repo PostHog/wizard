@@ -17,6 +17,7 @@ export function tuiSnapshotSignature(store: WizardStore): string {
     tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
     status: store.statusMessages,
     phase: store.session.runPhase,
+    // Include values: audit ledger updates keep the same context key.
     ctx: digest(JSON.stringify(store.session.frameworkContext)),
   });
 }

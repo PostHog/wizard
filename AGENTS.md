@@ -181,6 +181,8 @@ pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
 
+The `test:e2e:*` routes need `APP_DIR` (TUI and programs), `PROJECT_ID`, a personal key (`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`; see the End-to-end section of the [README](README.md).
+
 Choose verification for the change: check links and formatting for docs; run
 `pnpm typecheck` and focused existing tests for code. Build when bundling or
 runtime behavior changes. `pnpm test` already builds; avoid building twice. Use

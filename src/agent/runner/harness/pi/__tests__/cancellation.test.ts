@@ -3,26 +3,28 @@ import { bindPiCancellation } from '../cancellation';
 describe('Pi host cancellation', () => {
   it('aborts a live session once and waits for it to become idle', async () => {
     const controller = new AbortController();
-    let release: (() => void) | undefined;
+    let finishAbort!: () => void;
     const abort = vi.fn(
       () =>
         new Promise<void>((resolve) => {
-          release = resolve;
+          finishAbort = resolve;
         }),
     );
     const binding = bindPiCancellation(controller.signal, { abort });
-    expect(() => controller.abort()).not.toThrow();
+
+    controller.abort();
     controller.abort();
     await Promise.resolve();
-    expect(abort).toHaveBeenCalledOnce();
+    expect(abort).toHaveBeenCalledTimes(1);
     let settled = false;
-    const waiting = binding.settle().then(() => {
+    const settling = binding.settle().then(() => {
       settled = true;
     });
-    await Promise.resolve();
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(settled).toBe(false);
-    release?.();
-    await waiting;
+
+    finishAbort();
+    await settling;
     expect(settled).toBe(true);
   });
 
@@ -35,7 +37,6 @@ describe('Pi host cancellation', () => {
     await binding.settle();
     expect(abort).toHaveBeenCalledTimes(1);
   });
-
   it('contains a synchronous abort throw and a diagnostic callback throw', async () => {
     const controller = new AbortController();
     const binding = bindPiCancellation(

@@ -17,6 +17,8 @@
     "vitest.config.ts",
     "spec/**/*",
     "src/**/*",
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx",
     "test/**/*",
     "e2e-harness/**/*",
     // Harness and maintenance scripts run with tsx; typechecking keeps them in step.

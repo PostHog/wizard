@@ -138,10 +138,11 @@ describe('runAgent', () => {
       );
 
       const running = runAgent(
-        { ...defaultAgentConfig, signal: host.signal },
+        defaultAgentConfig,
         'test prompt',
         defaultOptions,
         mockSpinner as unknown as SpinnerHandle,
+        { signal: host.signal },
       );
       await vi.waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1));
       host.abort();
@@ -151,7 +152,7 @@ describe('runAgent', () => {
         classification: 'WIZARD_ABORT',
       });
       expect(sdkAbort?.aborted).toBe(true);
-      expect(mockSpinner.stop).toHaveBeenCalledWith('Run cancelled');
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Wizard aborted');
     });
 
     it('returns a failure for an SDK error result without an API marker', async () => {

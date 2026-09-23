@@ -17,6 +17,15 @@ const promptContext = {
 } as unknown as PromptContext;
 
 describe('data-only program run definitions', () => {
+  it('resolves a generic agent skill only from an explicit skill ID', () => {
+    expect(resolveProgramRunDefinition('agent-skill', {})).toBeUndefined();
+    expect(
+      resolveProgramRunDefinition('agent-skill', { skillId: 'autocapture' }),
+    ).toMatchObject({
+      skillId: 'autocapture',
+      reportFile: 'posthog-autocapture-report.md',
+    });
+  });
   it('resolves events-audit from explicit TypeScript and feature inputs', () => {
     const run = resolveProgramRunDefinition('events-audit', {
       typescript: true,

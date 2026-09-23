@@ -42,11 +42,11 @@ Five layers, each with its own job. Nothing crosses layers unless it has to.
 **The entry point** (`index.ts`) is the front door:
 `runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
 takes resolved execution data and an invocation snapshot (`shared/types.ts`),
-reports through `onProgress` and asks through `interaction`
-(`../progress/progress.ts`), and returns every ending as a result. It never
-renders, reads a session or exits. `src/programs/run/run-program.ts` resolves
-the binding from caller data. The legacy `src/cli/runners/run-program-agent.ts`
-owns session gates and maps progress back onto `getUI()`.
+reports through `onProgress` and asks through `interaction` (`../progress/progress.ts`),
+and returns decided outcomes and caught run-body crashes as results. It never
+renders, reads a session or exits. `src/programs/run/run-program.ts` resolves the
+binding from caller data. The legacy `src/cli/runners/run-program-agent.ts` owns
+session gates and maps progress back onto `getUI()`.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, caller-supplied inference auth and the scan-triage classifier. Whether
@@ -134,10 +134,10 @@ Calls descend on the left, results return through the middle, and a host-owned
 abort signal descends on the right. A standalone caller invokes `runAgent`
 without `runProgram`. A program may return a pre-run failure without starting
 the agent, and a caught preparation error produces `RunResult` without a
-`SequenceResult`. On the first fatal task result, the orchestrator's
-`drainQueue` stops scheduling, cancels active work and pending asks, joins the
-siblings, then preserves that failure for the host to present. A host signal can
-cancel active harness work.
+`SequenceResult`. The orchestrator stops scheduling on the first fatal task
+result, cancels active siblings and pending asks, and waits for them to settle
+before returning that failure. A host signal can also cancel active harness
+work.
 
 ## Flow
 
@@ -149,11 +149,9 @@ cancel active harness work.
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes as the run ends. `runAgent` resolves a `RunResult`
-   with an outcome and progress snapshot. A non-success result carries a failure
-   with a code and a message, whose `error` is available when the agent caught
-   an `Error`. Report flushing and failed-run skill cleanup are best effort and
-   never replace the outcome.
+5. The scan report flushes on a best-effort basis as the run ends. `runAgent`
+   resolves a `RunResult` with an outcome and progress snapshot. A non-success
+   result carries a code and message; a caught error remains attached.
 6. The caller applies it. The legacy runner sends a decided failure to
    `wizardAbort`; for a crash it rethrows the attached `Error` when present.
    Other hosts can log, present, or rethrow the failure as they need.

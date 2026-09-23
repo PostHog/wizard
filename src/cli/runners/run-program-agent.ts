@@ -24,12 +24,12 @@ import {
   captureSwitchboardDecision,
   areSeededTasksEnabled,
   resolveStageOverrides,
+  watchAuditLedger,
   type ProgramSwitchboardCtx,
   FRAMEWORK_REGISTRY,
   authenticate,
   refreshAccessTokenIfNeeded,
   maybeStampAiSdkDetected,
-  startAuditLedgerWatcher,
   AUDIT_CHECKS_KEY,
   createUiReducer,
   uiInteraction,
@@ -62,7 +62,10 @@ import {
   type Integration,
 } from '@shared/config/constants';
 import type { ProgramConfig } from '@programs/types';
-import { captureRunSkillCleanup } from '@shared/skills/skill-run-cleanup';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skills/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { WizardSession } from '@tui/types';
 import { getUI } from '../ui';
@@ -84,6 +87,7 @@ export async function runProgramAgent(
     inferenceAuth?: InferenceAuthProvider;
     /** How a decided failure ends the run; a controlled run fails its request instead of exiting. */
     abort?: HostAbort;
+    deferSkillCleanupCommit?: boolean;
   } = {},
 ): Promise<void> {
   const abort = options.abort ?? ((failure) => wizardAbort(failure));
@@ -92,13 +96,12 @@ export async function runProgramAgent(
   }
 
   // wizardAbort and TUI signal handlers drain this registry on interruption.
-  const cleanupInstalledSkills = captureRunSkillCleanup(session.installDir);
-  registerCleanup(cleanupInstalledSkills);
+  const cleanupInstalledSkills = registerRunSkillCleanup(session.installDir);
 
   // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
   // and a watcher started later would ignore that write as pre-existing.
   const ledger = programConfig.auditLedgerFile
-    ? startAuditLedgerWatcher(
+    ? watchAuditLedger(
         session.installDir,
         programConfig.auditLedgerFile,
         (checks) => getUI().setFrameworkContext(AUDIT_CHECKS_KEY, checks),
@@ -120,7 +123,7 @@ export async function runProgramAgent(
         ? await programConfig.run(session, runHost)
         : programConfig.run;
 
-    await runProgram(
+    const succeeded = await runProgram(
       session,
       runDef,
       programConfig,
@@ -128,6 +131,9 @@ export async function runProgramAgent(
       options.inferenceAuth,
       abort,
     );
+    if (succeeded && !options.deferSkillCleanupCommit) {
+      commitRegisteredRunSkillCleanups();
+    }
   } catch (error) {
     try {
       cleanupInstalledSkills();
@@ -151,7 +157,7 @@ async function runProgram(
   composed: boolean,
   inferenceAuth: InferenceAuthProvider | undefined,
   abort: HostAbort,
-): Promise<void> {
+): Promise<boolean> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = run.skillId ?? run.integrationLabel;
@@ -374,7 +380,6 @@ async function runProgram(
         programConfig.id === 'self-driving'
           ? {
               githubConnected: session.githubConnected === true,
-              handoffConfirmed: session.selfDrivingHandoffConfirmed,
             }
           : undefined,
     },
@@ -401,6 +406,7 @@ async function runProgram(
     }
     await abort(programResult.failure ?? {});
   }
+  return programResult.outcome === RunOutcome.Success;
 }
 
 // ── Gates ─────────────────────────────────────────────────────────────

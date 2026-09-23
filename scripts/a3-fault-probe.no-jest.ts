@@ -1,5 +1,4 @@
 import type { RunConfig, RunInput } from '@agent/types';
-import type { Harness as HarnessName } from '@shared/config/constants';
 
 const gatewayUrl = process.env.WIZARD_FAULT_GATEWAY_URL;
 const installDir = process.env.WIZARD_FAULT_INSTALL_DIR;
@@ -30,7 +29,7 @@ globalThis.fetch = (input, init) => {
 
 const { runAgent } = await import('@agent');
 const { createCiGatewayAuth } = await import('@shared/gateway/ci-gateway-auth');
-const { DEFAULT_AGENT_MODEL, Sequence } = await import(
+const { DEFAULT_AGENT_MODEL, Harness, Sequence } = await import(
   '@shared/config/constants'
 );
 const { HostResolution } = await import('@shared/posthog/host-resolution');
@@ -47,6 +46,7 @@ const gateway = createCiGatewayAuth(
   228144,
   gatewayUrl,
 );
+const chosenHarness = harness === 'pi' ? Harness.pi : Harness.anthropic;
 
 const config: RunConfig = {
   programId: 'fault-probe',
@@ -62,7 +62,7 @@ const config: RunConfig = {
   composed: false,
   binding: {
     sequence: Sequence.linear,
-    harness: harness as HarnessName,
+    harness: chosenHarness,
     model: DEFAULT_AGENT_MODEL,
   },
   skillsBaseUrl: 'http://127.0.0.1:1',

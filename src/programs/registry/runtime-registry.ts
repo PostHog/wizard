@@ -11,18 +11,43 @@ import { MIGRATION_RUN } from '../migration/run.js';
 import { REPLAY_VISION_OPTIONS } from '../replay-vision/run.js';
 import { REVENUE_ANALYTICS_RUN } from '../revenue-analytics/run.js';
 import { WEB_ANALYTICS_DOCTOR_OPTIONS } from '../web-analytics-doctor/run.js';
+import {
+  resolveAgentSkillRunDefinition,
+  resolveAuditRunDefinition,
+  resolveErrorTrackingRunDefinition,
+  resolveEventsAuditRunDefinition,
+  resolveSourceMapsRunDefinition,
+  resolveWarehouseSourceRunDefinition,
+  type ProgramRunDefinitionInput,
+} from '../run/resolve-run-definition.js';
 
-export type RuntimeProgramConfig = {
+type RuntimeProgramConfigBase = {
   id: string;
   agentFlow?: string;
   requiresAi?: boolean;
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
-  run?: AgentRunDefinition;
   auditLedgerFile?: string;
   auditSeedChecks?: readonly AuditCheck[];
   eventPlanFile?: string;
 };
+
+export type RuntimeProgramConfig = RuntimeProgramConfigBase &
+  (
+    | { strategy: 'static'; run: AgentRunDefinition }
+    | {
+        strategy: 'resolved';
+        resolve: (
+          input: ProgramRunDefinitionInput,
+        ) => AgentRunDefinition | undefined;
+        run?: never;
+      }
+    | {
+        strategy: 'integration' | 'self-driving' | 'no-agent';
+        run?: never;
+        resolve?: never;
+      }
+  );
 
 const WIZARD_ASK = 'mcp__wizard-tools__wizard_ask';
 const AUDIT_TOOLS = [
@@ -35,21 +60,42 @@ const AUDIT_TOOLS = [
 export const RUNTIME_PROGRAM_REGISTRY = [
   {
     id: 'posthog-integration',
+    strategy: 'integration',
     agentFlow: 'integration-v2',
     disallowedTools: [WIZARD_ASK],
     eventPlanFile: EVENT_PLAN_FILE,
   },
   {
     id: 'revenue-analytics-setup',
+    strategy: 'static',
     allowedTools: ['Agent'],
     disallowedTools: [WIZARD_ASK],
     run: REVENUE_ANALYTICS_RUN,
   },
-  { id: 'warehouse-source', allowedTools: ['Agent'] },
-  { id: 'error-tracking-upload-source-maps', requiresAi: true },
-  { id: 'error-tracking', agentFlow: 'error-tracking' },
+  {
+    id: 'warehouse-source',
+    strategy: 'resolved',
+    resolve: (input) =>
+      resolveWarehouseSourceRunDefinition(input.warehouseSources ?? []),
+    allowedTools: ['Agent'],
+  },
+  {
+    id: 'error-tracking-upload-source-maps',
+    strategy: 'resolved',
+    resolve: (input) =>
+      resolveSourceMapsRunDefinition(input.sourceMapsSelection),
+    requiresAi: true,
+  },
+  {
+    id: 'error-tracking',
+    strategy: 'resolved',
+    resolve: resolveErrorTrackingRunDefinition,
+    agentFlow: 'error-tracking',
+  },
   {
     id: 'audit',
+    strategy: 'resolved',
+    resolve: resolveAuditRunDefinition,
     allowedTools: AUDIT_TOOLS,
     disallowedTools: [WIZARD_ASK],
     auditLedgerFile: AUDIT_CHECKS_FILE,
@@ -57,6 +103,8 @@ export const RUNTIME_PROGRAM_REGISTRY = [
   },
   {
     id: 'events-audit',
+    strategy: 'resolved',
+    resolve: resolveEventsAuditRunDefinition,
     allowedTools: AUDIT_TOOLS,
     disallowedTools: [WIZARD_ASK],
     auditLedgerFile: AUDIT_CHECKS_FILE,
@@ -64,34 +112,47 @@ export const RUNTIME_PROGRAM_REGISTRY = [
   },
   {
     id: 'posthog-doctor',
+    strategy: 'no-agent',
     requiresAi: false,
     allowedTools: ['Agent'],
     disallowedTools: [WIZARD_ASK],
   },
   {
     id: 'web-analytics-doctor',
+    strategy: 'static',
     run: skillRunDefinition(WEB_ANALYTICS_DOCTOR_OPTIONS),
   },
   {
     id: 'migration',
+    strategy: 'static',
     allowedTools: ['Agent'],
     disallowedTools: [WIZARD_ASK],
     run: MIGRATION_RUN,
   },
-  { id: 'self-driving' },
-  { id: 'agent-skill', allowedTools: ['Agent'] },
-  { id: 'mcp-add', requiresAi: false },
-  { id: 'mcp-remove', requiresAi: false },
-  { id: 'mcp-tutorial', requiresAi: false },
-  { id: 'mcp-analytics', run: skillRunDefinition(MCP_ANALYTICS_OPTIONS) },
+  { id: 'self-driving', strategy: 'self-driving' },
+  {
+    id: 'agent-skill',
+    strategy: 'resolved',
+    resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+    allowedTools: ['Agent'],
+  },
+  { id: 'mcp-add', strategy: 'no-agent', requiresAi: false },
+  { id: 'mcp-remove', strategy: 'no-agent', requiresAi: false },
+  { id: 'mcp-tutorial', strategy: 'no-agent', requiresAi: false },
+  {
+    id: 'mcp-analytics',
+    strategy: 'static',
+    run: skillRunDefinition(MCP_ANALYTICS_OPTIONS),
+  },
   {
     id: 'replay-vision',
+    strategy: 'static',
     agentFlow: 'replay-vision',
     run: skillRunDefinition(REPLAY_VISION_OPTIONS),
   },
-  { id: 'ai-observability', run: AI_OBSERVABILITY_RUN },
-  { id: 'metrics', agentFlow: 'metrics', run: METRICS_RUN },
-  { id: 'slack' },
+  { id: 'ai-observability', strategy: 'static', run: AI_OBSERVABILITY_RUN },
+  { id: 'metrics', strategy: 'static', agentFlow: 'metrics', run: METRICS_RUN },
+  { id: 'slack', strategy: 'no-agent' },
 ] as const satisfies readonly RuntimeProgramConfig[];
 
 export type RuntimeProgramId = (typeof RUNTIME_PROGRAM_REGISTRY)[number]['id'];
