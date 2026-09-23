@@ -22,6 +22,7 @@ import {
   runAgent,
   RunOutcome,
   resolveBinding,
+  TASK_OUTCOMES_KEY,
   type RunConfig,
   type RunInput,
   type SwitchboardCtx,
@@ -226,6 +227,7 @@ async function runProgram(
     allowedTools: programConfig.allowedTools,
     disallowedTools: programConfig.disallowedTools,
     agentFlow: programConfig.agentFlow,
+    excludedTaskTypes: programConfig.excludedTaskTypes,
     seedTasks: programConfig.seedTasks
       ? () => programConfig.seedTasks!(session)
       : undefined,
@@ -240,6 +242,9 @@ async function runProgram(
         ? (creds, completed) =>
             run.buildOutroNextSteps!(session, creds, completed)
         : undefined,
+      recordTaskOutcomes: (outcomes) => {
+        session.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
+      },
     },
   };
   const input: RunInput = {
