@@ -329,7 +329,7 @@ exports[`flow traces per program > feature-flags (node) 1`] = `
   "events": [
     {
       "event": "screen health-check",
-      "from": "agent-skill-intro",
+      "from": "feature-flags-intro",
       "program": "feature-flags",
     },
     {
@@ -365,7 +365,7 @@ exports[`flow traces per program > feature-flags (node) 1`] = `
   ],
   "program": "feature-flags",
   "screens": [
-    "agent-skill-intro",
+    "feature-flags-intro",
     "health-check",
     "auth",
     "ai-opt-in",

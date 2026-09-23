@@ -9,6 +9,8 @@
     "src/lib/programs/error-tracking-upload-source-maps/index.ts -> src/lib/programs/error-tracking-upload-source-maps/content/index.tsx",
     "src/lib/programs/error-tracking/index.ts -> src/lib/programs/error-tracking/content/index.tsx",
     "src/lib/programs/error-tracking/index.ts -> src/lib/programs/error-tracking/content/tips.ts",
+    "src/lib/programs/feature-flags/index.ts -> src/lib/programs/feature-flags/content/index.tsx",
+    "src/lib/programs/feature-flags/index.ts -> src/lib/programs/feature-flags/content/tips.ts",
     "src/lib/programs/metrics/index.ts -> src/lib/programs/agent-skill/content/index.tsx",
     "src/lib/programs/migration/index.ts -> src/lib/programs/migration/content/index.tsx",
     "src/lib/programs/posthog-integration/index.ts -> src/lib/programs/posthog-integration/content/index.tsx",
