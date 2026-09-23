@@ -6,9 +6,15 @@ export function bindPiCancellation(
 ): { settle(): Promise<void> } {
   let abortPromise: Promise<void> | undefined;
   const onAbort = () => {
-    abortPromise ??= session.abort().catch((error: unknown) => {
-      onAbortError?.(error);
-    });
+    abortPromise ??= Promise.resolve()
+      .then(() => session.abort())
+      .catch((error: unknown) => {
+        try {
+          onAbortError?.(error);
+        } catch {
+          /* Abort diagnostics are best effort. */
+        }
+      });
   };
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();

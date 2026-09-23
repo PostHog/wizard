@@ -558,14 +558,21 @@ To run unit tests, run:
 bin/test
 ```
 
-To run E2E tests run:
+End-to-end runs are live and credentialed, and each one exercises one surface.
+Point `APP_DIR` at an app copy from
+[wizard-workbench](https://github.com/PostHog/wizard-workbench), which owns the
+fixture apps and the assertions:
 
 ```bash
-bin/test-e2e
+pnpm test:e2e:tui        # the full TUI in a PTY, frames to SNAP_OUT
+pnpm test:e2e:programs   # runProgram with no TUI or store (PROGRAM, default posthog-integration)
+pnpm test:e2e:agent      # runAgent on a local quack skill, no programs
 ```
 
-E2E tests are a bit more complicated to create and adjust due to to their mocked
-LLM calls. See the `e2e-tests/README.md` for more information.
+Each route reads `PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`,
+and `WIZARD_CI_GATEWAY_TOKEN_FILE`, and writes its result to `E2E_RESULT_JSON`
+when set. The TUI and programs routes also need `APP_DIR`. The agent route makes
+its own empty directory and passes when the agent writes `quack/quack.txt`.
 
 #### Explore with an agent
 

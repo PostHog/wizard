@@ -2,6 +2,7 @@
 
 import { Harness } from '@shared/constants';
 import {
+  AgentErrorType,
   initializeAgent,
   runAgent as executeAgent,
 } from '../../../agent-interface';
@@ -16,6 +17,12 @@ import type {
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
+
+const hostCancelled = (): AgentResult => ({
+  kind: 'abort',
+  classification: AgentErrorType.ABORT,
+  message: 'Agent run cancelled',
+});
 
 export const anthropicBackend: AgentHarness = {
   name: Harness.anthropic,
@@ -72,13 +79,13 @@ export const anthropicBackend: AgentHarness = {
       },
       runOptions(input),
     );
-    if (inputs.signal?.aborted) return {};
+    if (inputs.signal?.aborted) return hostCancelled();
     log.step(`Verbose logs: ${getLogFilePath()}`);
     log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
 
     return executeAgent(
-      agent,
+      { ...agent, signal: inputs.signal },
       prompt,
       runOptions(input),
       spinner,
@@ -93,7 +100,6 @@ export const anthropicBackend: AgentHarness = {
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
         triageProvider: boot.triageProvider,
-        signal: inputs.signal,
       },
       middleware,
     );
@@ -155,10 +161,10 @@ export const anthropicBackend: AgentHarness = {
       },
       options,
     );
-    if (inputs.signal?.aborted) return {};
+    if (inputs.signal?.aborted) return hostCancelled();
 
     return executeAgent(
-      { ...agent, model, allowedTools, disallowedTools },
+      { ...agent, model, allowedTools, disallowedTools, signal: inputs.signal },
       prompt,
       options,
       spinner,
@@ -169,7 +175,6 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
-        signal: inputs.signal,
       },
     );
   },

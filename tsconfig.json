@@ -24,11 +24,6 @@
     "types/**/*"
   ],
   "exclude": [
-    // e2e-tests is a standalone package (own package.json, own jest + ts-jest,
-    // excluded from the pnpm workspace) and typechecks itself in its own
-    // context. The root unit-test typecheck no longer carries jest types, so it
-    // must not pull e2e's jest-based config/specs into scope.
-    "e2e-tests/**/*",
     // Layer declarations the compiler enforcement builds (tsconfig.layers.json).
     ".tsbuild/**/*"
   ],

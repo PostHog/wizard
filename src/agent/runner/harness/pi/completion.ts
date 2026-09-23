@@ -21,7 +21,9 @@ export function completionFailure(args: {
  * each entry point decide the type first and hand it to the event, and keeps
  * the one rule in one place.
  */
-export function runErrorType(message: string): AgentErrorType {
+export function runErrorType(
+  message: string,
+): AgentErrorType.RATE_LIMIT | AgentErrorType.API_ERROR {
   const lower = message.toLowerCase();
   if (lower.includes('rate limit') || lower.includes('429')) {
     return AgentErrorType.RATE_LIMIT;
