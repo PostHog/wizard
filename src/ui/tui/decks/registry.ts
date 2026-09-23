@@ -14,8 +14,7 @@ import { getTips as selfDrivingTips } from './self-driving/tips.js';
 type LearnDeck = (store?: WizardStore) => ContentBlock[];
 type TipsDeck = (store?: WizardStore) => Tip[];
 
-// Only programs with a run-screen deck are listed. All other run screens use
-// the generic skill deck, matching the original ProgramConfig fallback.
+// Listed programs get this deck. Any other program gets the agent-skill deck.
 const LEARN_DECKS: Partial<Record<ProgramId, LearnDeck>> = {
   'posthog-integration': integrationBlocks,
   'revenue-analytics-setup': agentSkillBlocks,

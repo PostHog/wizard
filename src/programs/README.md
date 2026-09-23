@@ -1,21 +1,22 @@
 # Programs
 
-`runProgram` runs a registered Wizard program from caller-supplied data. The
-program owns its invocation state, resolves its run definition and binding, and
-passes any main agent run and composed child runs to
-[`runAgent`](../agent/README.md). Callers do not create a `WizardSession` or a
-UI store. This is a repository-local TypeScript interface; the npm package does
-not currently export it as a public library API.
+`runProgram` runs a registered Wizard program from data the caller supplies. It
+owns one invocation's state, resolves the run definition and binding, and passes
+each agent run to [`runAgent`](../agent/README.md). Callers don't create a
+`WizardSession` or a UI store. This is a repository-local TypeScript interface.
+The npm package doesn't export it as a public library API.
 
-## Signature
+## Signatures
 
-Import the runtime function from `@programs` and types from `@programs/types`:
+Import runtime values from `@programs` and types from `@programs/types`:
 
 ```ts
-import { runProgram } from '@programs';
+import { preflight, runProgram } from '@programs';
 import type {
   ProgramInput,
   ProgramOptions,
+  ProgramPreflightDecision,
+  ProgramPreflightHost,
   ProgramRunOutcome,
 } from '@programs/types';
 
@@ -24,122 +25,190 @@ runProgram(
   input: ProgramInput,
   options?: ProgramOptions,
 ): Promise<ProgramRunOutcome>
+
+preflight(
+  programId: string,
+  host: ProgramPreflightHost,
+): Promise<ProgramPreflightDecision>
 ```
 
-`programId` must resolve through the runtime registry. Unknown IDs return a
-failed outcome. The host supplies an absolute or relative `installDir`; report
-paths in the result are resolved against it.
+`programId` must name a program in the runtime registry. An unknown ID returns a
+failed outcome. The exact shapes are in [`run-program.ts`](run-program.ts),
+[`program-store.ts`](program-store.ts) and [`preflight.ts`](preflight.ts).
 
-## Intent and ownership
+### Exports
 
-The host authenticates, detects the project, and chooses any workflow decisions
-it needs before calling. It passes those facts as plain data. `runProgram`
-resolves the program recipe, applies the program binding and policy, owns the
-progress projection, and invokes the agent. An agent run receives resolved
-inputs and does not read the host's session.
+| Export                                                                                                                | What it's for                                                                                |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `runProgram`                                                                                                          | Run one program invocation.                                                                  |
+| `preflight`                                                                                                           | Run the readiness and settings checks before `runProgram`.                                   |
+| [`createPosthogInferenceAuthProvider`](../../docs/developer-interfaces.md#inference-authentication)                   | Mint first-party gateway auth from a PostHog login, for a host that calls `runAgent` itself. |
+| `PROGRAM_BINDINGS`, `resolveProgramBinding`, `captureSwitchboardDecision`                                             | The program routing table, its resolver and its decision analytics.                          |
+| `getProgramCommandments`, `resolveStageOverrides`, `areSeededTasksEnabled`                                            | Program policy that goes into a `RunConfig`.                                                 |
+| `PROGRAM_REGISTRY`, `Program`, `getProgramConfig`, `getSubcommandPrograms`, `getCommandPath`, `getLaunchablePrograms` | The step-based `ProgramConfig` registry that the TUI and the CLI commands use.               |
 
-```text
-host ── program id + input + capabilities ──▶ runProgram
-  │                                          │
-  │                     registry + data-only run resolver + binding
-  │                                          │
-  ◀── attributed progress ── ProgramStore ◀── runAgent
-  ◀── outcome + settled runs + final data ───┘
-```
+The type entry adds the input, option, outcome, progress, connector and
+preflight types named below. It also carries the `ProgramConfig` step types, the
+binding types, and the `ProgramCiHost` and `ProgramRunHost` capability types.
+`ProgramDataWriter` names the `ProgramStore` data setters. It's a type only, and
+no option accepts one.
 
-## Inputs and capabilities
+### Inputs
 
-| Surface                                                    | What the caller provides                                                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ProgramInput.installDir`                                  | Project directory for agent work and report paths.                                                                                                                                                                                                                                                          |
-| `ProgramInput.credentials` or `ProgramOptions.credentials` | A resolved `{ posthog, inferenceAuth, project, apiUser }` object, or a provider with `resolve(programId)` that returns one. When used, the provider is called once for the program ID. Agent programs require credentials; a few non-agent programs do not. The host owns authentication and token storage. |
-| `ProgramInput.runId`                                       | Optional stable attribution ID; generated when absent. Composed child runs receive their own IDs.                                                                                                                                                                                                           |
-| Detection data                                             | `integration`, `typescript`, `frameworkConfig`, `frameworkContext`, `warehouseSources`, `detectedTools`, `sourceMapsSelection`, and related data required by the chosen program. Dynamic recipes use these values instead of a session.                                                                     |
-| Run selection                                              | Optional `run` override, `binding`, `skillId`, `flags`, `wizardFlags`, `wizardFlagPayloads`, `wizardMetadata`, `seedTasks`, `hooks`, `allowedTools`, `disallowedTools`, `agentFlow`, and `host`. These are resolved snapshots for this invocation.                                                          |
-| Composition                                                | `composition.integration` can supply a prepared child integration for `self-driving`; `compositionWorkflow` can confirm the handoff and GitHub steps. Boolean decisions in `composition` are also accepted.                                                                                                 |
-| Host capabilities                                          | `interaction` answers agent questions; `onProgress` observes events. `signal` requests cancellation. `mcp` and `workflow` serve programs without an agent. `integrationEffects` supplies the integration recipe's host effects. `awaitAiApproval` resolves the AI-processing approval gate when needed.     |
+`ProgramInput` needs only `installDir`. Everything else is optional data for
+this invocation.
 
-The exact shapes are in [`ProgramInput` and `ProgramOptions`](run-program.ts).
-`ProgramOptions['credentials']` and `ProgramInput['credentials']` expose the
-provider and resolved-credential types to callers; their underlying named types
-live in [`credentials.ts`](credentials.ts). Do not log the outcome's `data`: it
-includes PostHog credentials.
+| Field                                                                                           | What it carries                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `installDir`                                                                                    | The project directory. Report paths resolve against it.                                                                                                                                                                                                          |
+| `credentials`                                                                                   | Resolved `{ posthog, inferenceAuth?, project, apiUser }`. It wins over `options.credentials`. Without `inferenceAuth`, `runProgram` mints first-party gateway auth from the refreshed login. The development `--ci` runner passes a fixed gateway token instead. |
+| `runId`                                                                                         | Stable attribution. Generated when absent. A composed child gets `<runId>:<stepId>` unless its own input sets one.                                                                                                                                               |
+| `overrides`                                                                                     | `{ harness?, sequence?, model? }` from launch flags such as `--harness`, `--sequence` and `--model`.                                                                                                                                                             |
+| `binding`                                                                                       | An already-resolved binding. `runProgram` then skips routing and the switchboard analytics.                                                                                                                                                                      |
+| `wizardFlags`, `wizardFlagPayloads`                                                             | An evaluated flag snapshot. When `wizardFlags` is absent, `runProgram` asks `options.featureFlags`.                                                                                                                                                              |
+| `integration`, `typescript`, `frameworkConfig`, `frameworkContext`, `frameworkDocsUrl`          | Detection results and framework data.                                                                                                                                                                                                                            |
+| `warehouseSources`, `detectedTools`, `sourceMapsSelection`, `additionalFeatureQueue`, `skillId` | Data that dynamic run definitions read instead of a session.                                                                                                                                                                                                     |
+| `run`, `hooks`, `seedTasks`, `allowedTools`, `disallowedTools`, `agentFlow`, `wizardMetadata`   | Overrides for the run definition, its completion hooks, its tools and its trace tags.                                                                                                                                                                            |
+| `auditLedgerFile`                                                                               | A ledger file for `runProgram` to watch, such as an audit-family skill's. It replaces the program's own ledger.                                                                                                                                                  |
+| `flags`, `host`, `mcp`                                                                          | Run flags (`ci`, `signup`, `debug` and the rest default to `false`), where PostHog is, and MCP client options for the MCP programs.                                                                                                                              |
+| `discoveredFeatures`, `mayReportScanResults`, `aiSdkStampReported`                              | Evidence for the organization's AI SDK stamp, and whether the host already considered it.                                                                                                                                                                        |
+| `composition`                                                                                   | For `self-driving`: a prepared child `integration` input, plus `handoffConfirmed` and `githubConnected`. A workflow connector replaces all three.                                                                                                                |
+| `composed`                                                                                      | Marks this invocation as a composed sub-run. The binding clamps it to linear, and the agent leaves the outro to its host.                                                                                                                                        |
 
-For first-party inference auth, use
-[`createPosthogInferenceAuthProvider`](../../docs/developer-interfaces.md#inference-authentication)
-with authenticated PostHog credentials and the program ID. The development
-`--ci` runner instead uses an already-issued fixed gateway token.
+`runProgram` copies the input when it receives it, so a later host write can't
+reach the run. Data fields are structured-cloned. `credentials`, `run`, `hooks`,
+`seedTasks`, `frameworkConfig` and `composition` stay by reference, because they
+can carry functions. A prepared composed child is copied the same way. Any other
+field that can't be cloned rejects the call.
 
-`posthog-integration` needs a prepared `frameworkConfig` and
-`integrationEffects` unless the caller supplies an explicit `run` override. For
-a normal source-map upload, pass a detected `sourceMapsSelection.variant`;
-without it, the fallback prompt still starts an agent before asking it to abort.
-`self-driving` can compose that integration before its own run. It requires a
-confirmed GitHub connection, supplied as `composition.githubConnected: true` or
-through `compositionWorkflow`; a composed integration also requires a confirmed
-handoff. An AI program whose organization lacks AI-processing approval needs
-`awaitAiApproval` for a normal invocation; declining aborts the program.
-`flags.ci` and `flags.signup` bypass that approval check and do not call
-`awaitAiApproval`. Hosts should use those flags only when consent has already
-been handled by their CI authorization or signup flow; the flags do not prove
-consent.
+### Options
 
-When `composition.integration` is supplied, its agent runs before the handoff
-and GitHub confirmations, then the self-driving agent runs. A declined later
-confirmation returns `aborted`. Ordinary project edits remain, but newly
-installed Wizard skills are removed. Hosts that need both decisions before any
-project write must establish them before calling `runProgram`;
-`compositionWorkflow` takes precedence over boolean decisions and is queried at
-those later checkpoints.
+Every option is optional. Each awaited capability receives the invocation's
+signal. Without `options.signal`, it gets a signal that never aborts.
 
-## Outcomes and progress
+| Option               | What `runProgram` does with it                                                                                                                                                                                        | When it's absent                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `credentials`        | Calls `resolve(programId, { signal })` once per invocation, only when `input.credentials` is absent. Composed children reuse the result.                                                                              | An agent program fails, and so does `posthog-doctor`. The other programs with no agent run. |
+| `awaitAiApproval`    | Calls it with `{ programId, signal }` when the organization hasn't approved AI data processing and neither `flags.ci` nor `flags.signup` is set. `true` proceeds, `false` aborts. One approval covers the invocation. | A program that needs approval fails.                                                        |
+| `workflow`           | Asks the host at post-auth, composition and confirmation points. See [the workflow connector](#workflow-connector).                                                                                                   | `runProgram` uses the prepared input.                                                       |
+| `interaction`        | Passes it to every agent run, composed children included.                                                                                                                                                             | The agent installs no ask bridge and declines optional task notices.                        |
+| `onProgress`         | Sends run events and program-data snapshots. See [progress](#progress).                                                                                                                                               | The outcome still carries the final projection.                                             |
+| `featureFlags`       | Calls it once per agent run whose input has no `wizardFlags`. It gets no signal.                                                                                                                                      | The run uses empty flags.                                                                   |
+| `integrationEffects` | Supplies `posthog-integration`'s host effects. Without `getNotebookUrl`, the outro reads the notebook URL the run emitted.                                                                                            | `posthog-integration` fails unless `input.run` overrides the recipe.                        |
+| `mcp`                | Serves `mcp-add` and `mcp-remove`. Its methods get no signal. `runProgram` checks the signal between calls.                                                                                                           | Those programs fail.                                                                        |
+| `noAgentWorkflow`    | Runs `mcp-tutorial` and `slack`. The request carries `signal` when `options.signal` is set.                                                                                                                           | Those programs fail as interactive-only.                                                    |
+| `deferSkillCommit`   | Leaves the skills a successful run installed armed for removal. The host commits them later with `commitRegisteredRunSkillCleanups()` from `@shared/skill-run-cleanup`.                                               | `runProgram` commits them on success.                                                       |
+| `signal`             | Cancels the invocation.                                                                                                                                                                                               | Nothing cancels it.                                                                         |
 
-`ProgramRunOutcome.outcome` is `success`, `aborted`, `failed`, or `crashed`.
-Decided pre-run failures, such as an unknown program or missing credentials,
-return `failed` with `failure.message`. An agent crash appears as `crashed`.
-Handled credential-resolution, approval, and composition callback rejections
-also resolve as `failed` with a message, not the callback's original error
-class. An unexpected invocation throw, such as a duplicate composed `runId`,
-rejects the promise. Non-success agent outcomes carry a failure code and message
-and may have an attached `Error`. Read the outcome to decide how the run ended,
-and use the attached error for diagnostics or an upstream rethrow. The host owns
-logging and user-facing error messages. Hosts should inspect the outcome and
-separately catch rejected promises.
+`ProgramOptions['credentials']` and `ProgramInput['credentials']` name the
+provider and resolved types. Their named types live in
+[`credentials.ts`](credentials.ts).
 
-`options.signal` accepts an `AbortSignal`. A signal aborted before the run
-starts returns `aborted` with an agent-abort failure code. Agent programs check
-again before startup and pass the signal to the active harness. Programs without
-an agent recheck after credential resolution and host work; an abort returns
-`aborted` even if a callback has completed. The no-agent `workflow` receives the
-signal. `compositionWorkflow.confirmStep` does not, and a rejection from it
-during an abort returns `failed`. In-flight host effects must cooperate with
-cancellation, and completed external effects are not rolled back.
+### Workflow connector
 
-The result includes:
+`ProgramWorkflowConnector.step(request, { signal })` answers a pause at a host
+boundary. Requests carry domain data only, never a screen, gate or store.
 
-- `runResults`: completed agent results in registration order.
-- `settledRuns`: actual completed agent invocations in finish order, each with
-  `runId`, optional `stepId`, and its `RunResult`. This is separate from the
-  progress projection.
-- `progress`: the final per-run task, status, stage, usage, and outcome
-  projection, plus bounded observer diagnostics.
-- `data`: invocation-owned credentials, project and user data, detection
-  context, captured event plan, and completed composition steps.
-- `programData`: program-specific data for flows without an agent, such as
+| Request                                                                  | When `runProgram` asks                                                                                                     | Decision                                                                                    |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `{ kind: 'post-auth', programId, gates }`                                | After credentials and approval, for a program with post-auth gates. `error-tracking-upload-source-maps` waits on `detect`. | `{ kind: 'post-auth', frameworkContext? }`. The patch merges into the framework context.    |
+| `{ kind: 'child-run', programId, stepId, runProgramId, installDir }`     | Before each composed child of `self-driving`.                                                                              | `{ kind: 'child-run', input }`: the child's `ProgramInput`, or `null` when the host ran it. |
+| `{ kind: 'confirm', id: 'self-driving-handoff', programId, installDir }` | After a composed child succeeds inside `runProgram`.                                                                       | `{ kind: 'confirm', confirmed }`. `false` aborts.                                           |
+| `{ kind: 'confirm', id: 'self-driving-github', programId, installDir }`  | Before the self-driving agent runs.                                                                                        | `{ kind: 'confirm', confirmed }`. `false` aborts.                                           |
+
+A decision of the wrong kind fails the run. Without a connector, `runProgram`
+skips the post-auth pause and reads `input.composition`. The child runs only
+when `composition.integration` is set. The handoff then needs
+`handoffConfirmed: true`, and the self-driving run always needs
+`githubConnected: true`.
+
+### Outcome
+
+`ProgramRunOutcome.outcome` is `success`, `aborted`, `failed` or `crashed`.
+
+- **`runResults`.** Completed agent results, in the order the runs started.
+- **`settledRuns`.** The same runs in finish order, each with `runId`, optional
+  `stepId` and its `RunResult`.
+- **`progress`.** The final per-run projection: tasks, status, stage, usage,
+  outro and outcome. It also holds up to 10 observer diagnostics.
+- **`data`.** Invocation data: credentials, project and user, detection and
+  framework context, the event plan, completed composition steps, the binding of
+  the latest agent run, and the AI SDK stamp latch.
+- **`programData`.** Program-specific data from a program with no agent, such as
   doctor issues or MCP client results.
-- `artifacts.reportFile`: the intended absolute report path once the run
-  definition resolves and the agent is about to run. Pre-run failure or abort
-  leaves it absent, and the path does not prove that a file was written. A
-  failed composed child can return its own report path.
+- **`artifacts.reportFile`.** The absolute report path, set once the run
+  definition resolves. It doesn't prove the file was written. A failed composed
+  child returns its own path.
+- **`failure`.** A code and message on a failed, crashed or aborted outcome. An
+  agent failure may carry the original `Error`. A program with no agent whose
+  workflow returns `aborted` has none.
 
-`onProgress` receives `{ runId, stepId?, event }`. The `event` is a copied
-[`AgentProgress`](../agent/README.md#signatures) value, including `tasks` and
-`status` changes. The store applies the event before calling the observer.
-Observers are not awaited; thrown or rejected observers are isolated and
-recorded as bounded diagnostics when observed. A late asynchronous rejection may
-arrive after the returned progress snapshot. Keep observers short and use
-`runId` and `stepId` to attribute composed runs. The final result remains
-available when no observer is supplied.
+Don't log `data`. It holds PostHog credentials.
+
+### Progress
+
+`ProgramProgress` is a union of two kinds:
+
+- **`{ kind: 'run', runId, stepId?, event }`.** One agent run's event. `event`
+  is a copied [`AgentProgress`](../agent/README.md#signatures) value. The store
+  applies it before the observer sees it. Composed children carry their
+  `stepId`.
+- **`{ kind: 'program', data }`.** A copied `ProgramInvocationData` snapshot,
+  sent after each store write: authentication, detection, framework context,
+  event plan, composition, binding and the stamp latch. It holds credentials
+  too.
+
+Narrow on `kind` before reading `event`. `runProgram` never awaits the observer.
+A throw or a rejection becomes a bounded diagnostic in `outcome.progress`. A
+late rejection can land after that snapshot is taken. A snapshot that can't be
+cloned is skipped and recorded as a diagnostic.
+
+### Errors and cancellation
+
+Most endings resolve. A rejected promise means the invocation itself broke.
+
+- **Failed.** An unknown program, missing credentials, missing approval
+  capability, or a missing recipe input. A rejection from `credentials`,
+  `awaitAiApproval`, `workflow` or `featureFlags` also resolves as `failed`,
+  with the error's message and code `PHW_INTERNAL_UNHANDLED`.
+- **Aborted.** A declined approval or confirmation returns `aborted` with code
+  `PHW_AGENT_ABORT`. So does the host's signal, with the message "Run cancelled
+  by host."
+- **Crashed.** An agent crash. The failure carries the original `Error`.
+- **Rejected.** A duplicate composed `runId`, a run definition that throws, or
+  input that can't be cloned.
+
+Read the outcome, and still catch a rejection. The host owns logging, exit codes
+and user-facing messages.
+
+`runProgram` checks the signal before it starts and after each awaited
+capability. An abort at any of those points returns `aborted`, even when the
+capability rejected or has already completed. Agent runs get the signal too, and
+an abort during a run returns the agent's `aborted` result. In-flight host
+effects must cooperate with cancellation. Completed external effects aren't
+rolled back.
+
+### Preflight
+
+`preflight(programId, host)` runs the readiness check, then the settings check.
+Hosts call it before `runProgram`. `runProgram` doesn't call it.
+
+- **Readiness.** Only for programs with a health-check step, and only when
+  `host.readiness` is `null`. An outage calls `host.showOutage`. It aborts only
+  when `host.interactive` is `true`. A warning calls
+  `host.setReadinessWarnings`.
+- **Settings.** A Claude settings file that redirects the agent is moved aside
+  when it can be. An unfixable one aborts a non-interactive host, and an
+  interactive host awaits `host.showSettingsOverride(conflicts, fix)`.
+
+The decision is `{ kind: 'proceed', restoreSettings }` or
+`{ kind: 'abort', failure: { code, message } }`. Call `restoreSettings()` when
+the run ends to put back a settings file preflight moved.
+
+### Example
+
+The caller implements `credentials` and `awaitAiApproval` with its own login and
+consent flow:
 
 ```ts
 import { runProgram } from '@programs';
@@ -158,7 +227,9 @@ export async function runMetrics(
       credentials,
       awaitAiApproval,
       signal,
-      onProgress: ({ runId, event }) => {
+      onProgress: (progress) => {
+        if (progress.kind !== 'run') return;
+        const { runId, event } = progress;
         if (event.kind === 'tasks') console.log(runId, event.tasks);
         if (event.kind === 'status') console.log(runId, event.message);
       },
@@ -173,19 +244,139 @@ export async function runMetrics(
 }
 ```
 
-The caller implements `credentials` and `awaitAiApproval` through its own auth
-and consent flow. No token is embedded in this example.
+A runnable reference host is
+[`scripts/e2e-programs.no-jest.ts`](../../scripts/e2e-programs.no-jest.ts), run
+by `pnpm test:e2e:programs`. It detects the framework, supplies resolved
+credentials and integration effects, and runs `posthog-integration` against the
+app in `APP_DIR`. Its environment is described in
+[`e2e-harness/surface-e2e.ts`](../../e2e-harness/surface-e2e.ts): `APP_DIR`,
+`PROJECT_ID`, a PostHog key from `POSTHOG_PERSONAL_API_KEY` or
+`POSTHOG_KEY_FILE`, and a gateway token from `WIZARD_CI_GATEWAY_TOKEN_FILE`.
+
+## Intent
+
+A host calls `runProgram` to run a program without a TUI session. The host
+decides where credentials, answers and consent come from. `runProgram` decides
+how the program runs: its recipe, policy, binding, composition and progress.
+
+Today's callers:
+
+- **The session adapter.** `src/lib/runners/run-program-agent.ts` serves the TUI
+  and the `--ci` runner. It runs `preflight`, supplies the session's login as
+  the credentials provider, answers the connector from TUI gates, and maps
+  progress back onto `getUI()`.
+- **The reference script.** `scripts/e2e-programs.no-jest.ts` passes resolved
+  credentials and `flags.ci`, with no connector and no answerer.
+
+A missing capability never hangs the run and never invents consent. A program
+that needs approval fails without `awaitAiApproval`. A run with no `interaction`
+asks no questions. A run with no `workflow` uses the prepared input. A run with
+no `onProgress` still returns its final projection in the outcome.
+
+Some programs need prepared input:
+
+- **`posthog-integration`.** It needs `frameworkConfig` and `integrationEffects`
+  unless `input.run` overrides the recipe.
+- **`error-tracking-upload-source-maps`.** Pass a detected
+  `sourceMapsSelection.variant`. Without it, the fallback prompt still starts an
+  agent, then asks it to abort.
+- **`agent-skill`.** It needs `skillId`.
+- **`self-driving`.** It needs a GitHub confirmation, and a handoff confirmation
+  when it composes the integration.
+
+`flags.ci` and `flags.signup` skip the approval check. Set them only when your
+CI authorization or signup flow already handled consent. The flags don't prove
+consent.
+
+A declined confirmation after a composed child returns `aborted`. The child's
+project edits stay, but new Wizard skills are removed. A host that needs every
+decision before any project write settles them before it calls `runProgram`.
+
+## Architecture
+
+One invocation owns one `ProgramStore`. Composed children share it, along with
+the approval and the credentials. The host observes a copy of the store through
+`onProgress` and the outcome, never the store itself.
+
+```mermaid
+%%{init: {"block": {"padding": 20}}}%%
+block-beta
+  columns 11
+  hostBand["Host: session adapter, reference script or embedder"]:11
+  hostCall["preflight, then runProgram"]:3 space:1 hostView["onProgress and the outcome"]:3 space:1 hostAnswer["provider, approval, connector, answerer"]:3
+  programsBand["runProgram: one invocation"]:11
+  pipeline["credentials, approval, post-auth, composition, watchers, flags, refresh, binding"]:3 space:1 store["ProgramStore: data and run projection"]:3 space:1 awaited["awaited capabilities, interaction passed through"]:3
+  agentBand["Agent"]:11
+  agent["runAgent, per agent run"]:3 space:1 agentProgress["AgentProgress and RunResult"]:3 space:1 agentAsk["interaction, per-request signal"]:3
+
+  hostCall -- "ProgramInput, ProgramOptions" --> pipeline
+  pipeline -- "RunConfig, RunInput" --> agent
+  agentProgress --> store
+  store -- "run events, data snapshots" --> hostView
+  agentAsk --> awaited
+  awaited --> hostAnswer
+
+  classDef band fill:#9ca3af1f,stroke:#9ca3af,stroke-width:1.5px
+  classDef contract fill:#3b82f626,stroke:#3b82f6,stroke-width:2px
+  class hostBand,programsBand,agentBand band
+  class store,agentProgress contract
+```
+
+Calls go down the left. Progress comes up the middle. Questions go up the right.
+
+`runProgram` works in this order:
+
+1. Copy the input, check the signal, and look up the program.
+2. Resolve credentials, identify the user for analytics, and stamp the AI SDK
+   evidence once per invocation.
+3. Run a program with no agent and return.
+4. Await AI approval and the post-auth pause when they apply.
+5. Run composed children, then the confirmations.
+6. Start the file watchers and seed the audit ledger.
+7. Resolve the run definition, load flags, and refresh the OAuth token when it
+   has less than 50 minutes left.
+8. Resolve the binding from `overrides` and flags, and capture the switchboard
+   decision.
+9. Call `runAgent`, record the result, and stop the watchers.
+
+`runProgram` is the only owner of the program file watchers. It watches the
+audit ledger (`.posthog-audit-checks.json`) and the event plan
+(`.posthog-events.json`) while the agent runs. A ledger that an earlier run left
+behind is ignored until this run writes it. Updates land in the store as the
+`auditChecks` framework context and the event plan.
+
+The integration outro is built before `runAgent` returns. Without a host
+`getNotebookUrl`, it reads the notebook URL the run emitted through
+`ProgramStore.activeRunSnapshot()`, the live copy of the unfinished run.
+
+Each invocation registers a skill cleanup for every directory it runs in. A
+non-success outcome, a rejection or a process drain removes the Wizard skills
+the invocation added. Skills that existed before stay.
+
+`runProgram` sends the `agent started` event and the switchboard decision. It
+doesn't send the terminal `setup wizard finished` event. The host sends it from
+the outcome.
+
+`ProgramCiHost` and `ProgramRunHost` belong to the step-based `ProgramConfig`
+path, not to `runProgram`. `ProgramCiHost` supplies logging, auth and progress
+while a CI pre-run scopes the project. `ProgramRunHost` supplies the live UI
+effects a legacy recipe reads while its run definition resolves.
+
+The programs layer imports the agent only through `@agent` and `@agent/types`.
+Its other imports come from `src/shared` and `src/env.ts`. The one exception is
+a type import in `program-step.ts`, where the step types still name the legacy
+`WizardSession`.
 
 ## Current limits
 
-The callable host does not discover credentials, choose a project, or render
-questions itself. The host supplies those data and capabilities. Some legacy
-recipes still need an explicit data-only run definition; unsupported
-combinations return a failed outcome. Existing terminal and CI callers route
-their main program runs through this host via
-`src/lib/runners/run-program-agent.ts`, which still owns session gates and UI
-translation. Agentic detection and MCP suggested-prompt streaming call the agent
-separately, with their own progress and cancellation contracts. There is no
-socket controller or step-by-step control API. For the existing process-owned CI
-runner, see the
+`runProgram` doesn't discover credentials, choose a project or render questions.
+The host supplies those through data and capabilities.
+
+The TUI walks composed steps itself, so its connector answers `child-run` with
+`null`. Agentic detection runs before `runProgram`, as its own `runAgent` call
+with a deadline per attempt. The MCP suggested-prompts screen streams through
+`runMcpPromptViaSdk`, a separate SDK path. There is no socket controller and no
+step-by-step control API.
+
+For the process-owned `--ci` runner, see the
 [non-interactive developer interfaces](../../docs/developer-interfaces.md).

@@ -118,10 +118,10 @@ export async function runAudit(
 
 The caller implements the credential and approval callbacks. Some programs
 require additional prepared inputs or host effects; the
-[program reference](../src/programs/README.md#inputs-and-capabilities) describes
-the available fields and capabilities. Host callbacks such as credential
-resolution, approval, and MCP work do not receive the signal. There is no live
-store or step-control handle.
+[program reference](../src/programs/README.md#inputs) describes the available
+fields and capabilities. Host callbacks such as credential resolution, approval,
+and MCP work do not receive the signal. There is no live store or step-control
+handle.
 
 A runnable reference host is `scripts/e2e-programs.no-jest.ts`, run by
 `pnpm test:e2e:programs`. It runs posthog-integration against the app in
