@@ -7,12 +7,12 @@ which model) and the pieces that then actually run it.
 ```
   ┌──────────────┐     ┌─────────────┐     ┌────────────────────────────┐
   │              │     │             │────▶│ sequence   (query shape)   │
-  │  programs    │────▶│ switchboard │     │   linear | orchestrator    │
+  │  programs    │────▶│ binding     │     │   linear | orchestrator    │
   │              │     │             │     └────────────────────────────┘
-  │  integration │     │  binds each │
-  │  audit       │     │  program to │     ┌────────────────────────────┐
-  │  migration   │     │  a pair     │────▶│ harness    (SDK adapter)   │
-  │  ...         │     │             │     │   anthropic | pi | ...     │
+  │  integration │     │ selects the │
+  │  audit       │     │ sequence,   │     ┌────────────────────────────┐
+  │  migration   │     │ harness and │────▶│ harness    (SDK adapter)   │
+  │  ...         │     │ model       │     │   anthropic | pi | ...     │
   └──────────────┘     └─────────────┘     └────────────────────────────┘
 ```
 
@@ -40,23 +40,24 @@ for the coordinated change checklist.
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
 **The entry point** (`index.ts`) is the front door:
-`runAgent(config, input, {onProgress?, interaction?}) → RunResult`. It takes
-resolved execution data and an invocation snapshot (`shared/types.ts`), reports
-through `onProgress` and asks through `interaction` (`../progress.ts`), and
-returns every ending as a result. It never renders, reads a session or exits.
-The gates, OAuth, flags and binding lookup that used to run here live in
-`src/cli/runners/run-program-agent.ts`, which also maps progress back onto
-`getUI()` for today's runners.
+`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
+takes resolved execution data and an invocation snapshot (`shared/types.ts`),
+reports through `onProgress` and asks through `interaction` (`../progress.ts`),
+and returns every ending as a result. It never
+renders, reads a session or exits. `src/programs/run-program.ts` resolves the
+binding from caller data. The legacy `src/cli/runners/run-program-agent.ts` owns
+session gates and maps progress back onto `getUI()`.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
-targets, the gateway mint and the scan-triage classifier. Whether the run turns
-out to be linear or orchestrator, anthropic or pi, the setup is the same.
+targets, caller-supplied inference auth and the scan-triage classifier. Whether
+the run turns out to be linear or orchestrator, anthropic or pi, the setup is
+the same.
 
-**The switchboard** (`switchboard/`) is the router. Given a program id + the
-fetched flags + any CLI overrides, it returns a `ProgramBinding` — which query
-shape (sequence), which agent SDK (harness), which model. Two independent
-middleware chains, one per axis, apply precedence rules (CLI > flag > program
-config > default). This is the only layer that makes routing decisions.
+**The switchboard** (`switchboard/`) contains the sequence, harness and model
+resolution helpers. The program layer turns its program ID, validated flag route
+and CLI overrides into a resolved binding before calling `runAgent`. Agent code
+uses that binding to select a sequence and harness; it does not read the program
+registry or parse feature flags.
 
 **Sequences** (`sequence/`) are LLM query shapes. Once the switchboard has
 picked one, that sequence takes over the run and owns _how the LLM's work is
@@ -79,13 +80,64 @@ gateway.
 
 - Programs supply inference auth; prepare resolves it and builds triage for the
   resolved harness.
-- The switchboard knows which sequences and harnesses exist (via its two
-  registries), but not what they do.
+- The program layer resolves the binding with the switchboard helpers. Agent
+  code dispatches the selected sequence and harness.
 - A sequence knows how to shape a conversation, but delegates the actual model
   call to a harness.
 - A harness adapts its SDK, gateway transport, security hooks, and tool surface.
 
 Each layer is replaceable.
+
+## Ownership map
+
+```mermaid
+%%{init: {"block": {"padding": 20}}}%%
+block-beta
+  columns 11
+  hostBand["Host: program or caller"]:11
+  runProgram["runProgram"]:3 space:1 programOutcome["ProgramRunOutcome"]:3 space:1 hostSignal["Host AbortSignal"]:3
+  space:11
+  runnerBand["Agent runner"]:11
+  runAgent["runAgent"]:3 space:1 runResult["RunResult"]:3 space:1 runnerSignal["RunAgentOptions.signal"]:3
+  space:11
+  sequenceBand["Selected sequence"]:11
+  sequence["linear | orchestrator"]:3 space:1 sequenceResult["SequenceResult"]:3 space:1 sequenceSignal["signal"]:3
+  space:11
+  harnessBand["Selected harness"]:11
+  agentHarness["AgentHarness"]:3 space:1 agentResult["AgentResult"]:3 space:1 harnessSignal["harness input signal"]:3
+  space:11
+  sdkBand["External model SDK"]:11
+  sdk["Selected SDK"]:3 space:8
+
+  runProgram --> runAgent
+  runProgram --> programOutcome
+  runAgent --> sequence
+  runAgent --> runResult
+  sequence --> agentHarness
+  agentHarness --> sdk
+  agentHarness --> agentResult
+  agentResult --> sequenceResult
+  sequenceResult --> runResult
+  runResult --> programOutcome
+  hostSignal --> runnerSignal
+  runnerSignal --> sequenceSignal
+  sequenceSignal --> harnessSignal
+  harnessSignal --> agentHarness
+
+  classDef owner fill:#9ca3af1f,stroke:#9ca3af,stroke-width:1.5px
+  classDef contract fill:#3b82f626,stroke:#3b82f6,stroke-width:2px
+  class hostBand,runnerBand,sequenceBand,harnessBand,sdkBand owner
+  class programOutcome,runResult,sequenceResult,agentResult contract
+```
+
+Calls descend on the left, results return through the middle, and a host-owned
+abort signal descends on the right. A standalone caller invokes `runAgent`
+without `runProgram`. A program may return a pre-run failure without starting
+the agent, and a caught preparation error produces `RunResult` without a
+`SequenceResult`. On the first fatal task result, the orchestrator's
+`drainQueue` stops scheduling, cancels active work and pending asks, joins the
+siblings, then preserves that failure for the host to present. A host signal can
+cancel active harness work.
 
 ## Flow
 
@@ -97,6 +149,11 @@ Each layer is replaceable.
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes; `runAgent` returns a `RunResult`.
-6. The caller applies it: a decided failure goes to `wizardAbort`, a crash is
-   rethrown for the runner's own handling.
+5. The scan report flushes as the run ends. `runAgent` resolves a `RunResult`
+   with an outcome and progress snapshot. A non-success result carries a
+   failure with a code and a message, whose `error` is available when the agent
+   caught an `Error`. Report flushing and failed-run skill cleanup are best
+   effort and never replace the outcome.
+6. The caller applies it. The legacy runner sends a decided failure to
+   `wizardAbort`; for a crash it rethrows the attached `Error` when present.
+   Other hosts can log, present, or rethrow the failure as they need.
