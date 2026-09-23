@@ -656,6 +656,121 @@ describe('runProgram', () => {
     });
   });
 
+  it('captures agent started before credentials resolve, for agent programs only', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const resolve = vi.fn().mockResolvedValue(credentials);
+    const capture = vi.mocked(analytics.wizardCapture);
+    const started = () =>
+      capture.mock.calls.flatMap(([event, properties], index) =>
+        event === 'agent started'
+          ? [{ properties, at: capture.mock.invocationCallOrder[index] }]
+          : [],
+      );
+
+    await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        run: { ...run, integrationLabel: 'custom-label', skillId: 'skill-x' },
+      },
+      { credentials: { resolve } },
+    );
+    await runProgram(
+      'replay-vision',
+      { installDir: '/project' },
+      { credentials: { resolve } },
+    );
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'mcp-add',
+      strategy: 'no-agent',
+      requiresAi: false,
+    });
+    await runProgram(
+      'mcp-add',
+      { installDir: '/project' },
+      {
+        mcp: {
+          detectSupportedClients: vi.fn().mockResolvedValue([]),
+          add: vi.fn().mockResolvedValue([]),
+          detectInstalledClients: vi.fn(),
+          remove: vi.fn(),
+        },
+      },
+    );
+
+    expect(started().map(({ properties }) => properties)).toEqual([
+      {
+        integration: 'custom-label',
+        program_id: 'metrics',
+        skill_id: 'skill-x',
+      },
+      {
+        integration: 'replay-vision',
+        program_id: 'replay-vision',
+        skill_id: null,
+      },
+    ]);
+    const [first, second] = started();
+    expect(first.at).toBeLessThan(resolve.mock.invocationCallOrder[0]);
+    expect(second.at).toBeLessThan(resolve.mock.invocationCallOrder[1]);
+  });
+
+  it('refreshes an aging token after the flags load and before the route is tagged', async () => {
+    const order: string[] = [];
+    vi.mocked(refreshAccessToken).mockImplementationOnce(() => {
+      order.push('refresh');
+      return Promise.resolve({
+        access_token: 'pha_refreshed',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        scope: 'project:read',
+      });
+    });
+    vi.mocked(runAgent).mockImplementation(() => {
+      order.push('runAgent');
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+    const featureFlags = vi.fn(() => {
+      order.push('flags');
+      return Promise.resolve({ flags: {}, payloads: {} });
+    });
+
+    await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        credentials: {
+          ...credentials,
+          posthog: {
+            ...credentials.posthog,
+            refreshToken: 'phr_aging',
+            expiresAt: Date.now() + 10 * 60 * 1000,
+          },
+        },
+      },
+      { featureFlags },
+    );
+
+    expect(order).toEqual(['flags', 'refresh', 'runAgent']);
+    const setTag = vi.mocked(analytics.setTag).mock;
+    const tagged =
+      setTag.invocationCallOrder[
+        setTag.calls.findIndex(([key]) => key === 'sequence')
+      ];
+    expect(
+      vi.mocked(refreshAccessToken).mock.invocationCallOrder[0],
+    ).toBeLessThan(tagged);
+    expect(captureSwitchboardDecision).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(captureSwitchboardDecision).mock.invocationCallOrder[0],
+    ).toBeGreaterThan(
+      vi.mocked(refreshAccessToken).mock.invocationCallOrder[0],
+    );
+  });
+
   it('prefers the input flags over the loader', async () => {
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,

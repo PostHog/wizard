@@ -25,6 +25,17 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { ErrorCodes } from '@shared/errors';
+import {
+  checkAllSettingsConflicts,
+  restoreClaudeSettings,
+} from '@shared/claude-settings';
+import { refreshAccessToken } from '@utils/oauth-token';
+import type { PromptContext } from '@agent/types';
+import { errorTrackingUploadSourceMapsConfig } from '../error-tracking-upload-source-maps/index';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '../error-tracking-upload-source-maps/detect';
+import { maybeStampAiSdkDetected } from '../posthog-integration/detect';
+import { getProgramCommandments } from '../commandments';
+import { resolveStageOverrides } from '../experiments';
 import type { ProgramConfig } from '../program-step';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -77,7 +88,6 @@ vi.mock('@agent/runner', async (original) => ({
 }));
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
-  refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
@@ -107,6 +117,21 @@ vi.mock('@utils/wizard-abort', async (original) => {
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
 }));
+vi.mock('@utils/oauth-token', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('../commandments', async (original) => {
+  const actual = await original<typeof import('../commandments')>();
+  return {
+    ...actual,
+    getProgramCommandments: vi.fn(actual.getProgramCommandments),
+  };
+});
+vi.mock('../experiments', async (original) => {
+  const actual = await original<typeof import('../experiments')>();
+  return {
+    ...actual,
+    resolveStageOverrides: vi.fn(actual.resolveStageOverrides),
+  };
+});
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
   id,
@@ -748,4 +773,234 @@ it('keeps a TUI run a success when its terminal analytics flush fails', async ()
     flushError,
   );
   exit.mockRestore();
+});
+
+describe('host wiring over runProgram', () => {
+  const unapproved = {
+    organization: { id: 'org-1', is_ai_data_processing_approved: false },
+  } as ApiUser;
+  const approved = {
+    organization: { id: 'org-1', is_ai_data_processing_approved: true },
+  } as ApiUser;
+  /** An interactive session with a login, as the TUI hands the adapter. */
+  const tuiSession = (apiUser: ApiUser) => ({
+    ...buildSession({ ci: false, installDir: '/tmp/adapter-test' }),
+    credentials: session().credentials,
+    apiUser,
+  });
+  const promptContext = {
+    projectId: 1,
+    projectApiKey: 'phc_test',
+    host: HostResolution.fromApiHost('https://us.posthog.com'),
+  } as unknown as PromptContext;
+
+  it('authenticates through the provider after preflight, awaits AI opt-in once, and awaits the post-auth gate through the connector', async () => {
+    const order: string[] = [];
+    const ui = getUI();
+    vi.mocked(checkAllSettingsConflicts).mockImplementationOnce(() => {
+      order.push('settings check');
+      return [];
+    });
+    vi.mocked(authenticate).mockImplementationOnce(() => {
+      order.push('authenticate');
+      return Promise.resolve();
+    });
+    const waitForAiOptIn = vi
+      .spyOn(ui, 'waitForAiOptIn')
+      .mockImplementation(() => {
+        order.push('waitForAiOptIn');
+        return Promise.resolve();
+      });
+    vi.spyOn(ui, 'waitForGate').mockImplementation((id) => {
+      order.push(`waitForGate:${id}`);
+      return Promise.resolve();
+    });
+    vi.mocked(analytics.getAllFlagsForWizard).mockImplementationOnce(() => {
+      order.push('getAllFlagsForWizard');
+      return Promise.resolve({});
+    });
+    vi.mocked(runAgent).mockImplementationOnce((...args) => {
+      order.push('runAgent');
+      return finishRun(...args);
+    });
+
+    await runProgramAgent(
+      errorTrackingUploadSourceMapsConfig,
+      tuiSession(unapproved),
+    );
+
+    expect(order).toEqual([
+      'settings check',
+      'authenticate',
+      'waitForAiOptIn',
+      'waitForGate:detect',
+      'getAllFlagsForWizard',
+      'runAgent',
+    ]);
+    expect(waitForAiOptIn).toHaveBeenCalledOnce();
+    expect(
+      vi
+        .mocked(analytics.wizardCapture)
+        .mock.calls.filter(([event]) => event === 'agent started'),
+    ).toEqual([
+      [
+        'agent started',
+        {
+          integration: 'error-tracking-upload-source-maps',
+          program_id: 'error-tracking-upload-source-maps',
+          skill_id: null,
+        },
+      ],
+    ]);
+  });
+
+  it('a refreshed token reaches session and UI', async () => {
+    vi.mocked(refreshAccessToken).mockResolvedValueOnce({
+      access_token: 'pha_new',
+      refresh_token: 'phr_rotated',
+      expires_in: 3600,
+      token_type: 'Bearer',
+      scope: 'project:read',
+    });
+    // authenticate is a no-op for a session that already has its login.
+    vi.mocked(authenticate).mockImplementationOnce(() => Promise.resolve());
+    const aging = {
+      ...session().credentials,
+      accessToken: 'pha_old',
+      refreshToken: 'phr_old',
+      expiresAt: Date.now() + 20 * 60 * 1000,
+      projectId: 7,
+    };
+    const refreshing = { ...session(), credentials: aging };
+    const setAccessToken = vi.spyOn(getUI(), 'setAccessToken');
+
+    await runProgramAgent(program(), refreshing);
+
+    expect(refreshing.credentials).not.toBe(aging);
+    expect(refreshing.credentials).toMatchObject({
+      accessToken: 'pha_new',
+      refreshToken: 'phr_rotated',
+      projectId: 7,
+    });
+    // The login's host keeps its class, not a structured copy.
+    expect(refreshing.credentials.host).toBe(aging.host);
+    expect(aging.accessToken).toBe('pha_old');
+    expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(
+      refreshing.credentials,
+    );
+    expect(vi.mocked(runAgent).mock.calls[0]?.[1].credentials).toMatchObject({
+      accessToken: 'pha_new',
+    });
+  });
+
+  it('builds the commandments and stage overrides once per run', async () => {
+    await runProgramAgent(program(), session());
+
+    expect(getProgramCommandments).toHaveBeenCalledExactlyOnceWith('metrics');
+    expect(resolveStageOverrides).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the organization stamp to runProgram and latches the session', async () => {
+    const unstamped = Object.assign(session(), {
+      apiUser: approved,
+      scanConsent: ScanConsent.Granted,
+      discoveredFeatures: [DiscoveredFeature.LLM],
+    });
+
+    await runProgramAgent(program(), unstamped);
+
+    expect(maybeStampAiSdkDetected).not.toHaveBeenCalled();
+    expect(analytics.groupIdentify).toHaveBeenCalledExactlyOnceWith(
+      'organization',
+      'org-1',
+      { wizard_ai_sdk_detected: true },
+    );
+    expect(unstamped.aiSdkStampReported).toBe(true);
+  });
+
+  it('registers the linear settings restore once, before the run can reach the outro', async () => {
+    const onEnterScreen = vi.spyOn(getUI(), 'onEnterScreen');
+    let registeredBeforeRun = false;
+    vi.mocked(runAgent).mockImplementationOnce((...args) => {
+      registeredBeforeRun = onEnterScreen.mock.calls.length === 1;
+      return finishRun(...args);
+    });
+
+    // A composed program is clamped to linear.
+    await runProgramAgent(program(), session(), { composed: true });
+
+    expect(registeredBeforeRun).toBe(true);
+    expect(onEnterScreen).toHaveBeenCalledExactlyOnceWith(
+      'outro',
+      expect.any(Function),
+    );
+    onEnterScreen.mock.calls[0][1]();
+    expect(restoreClaudeSettings).toHaveBeenCalledExactlyOnceWith(
+      '/tmp/adapter-test',
+    );
+
+    onEnterScreen.mockClear();
+    await runProgramAgent(program(), session());
+    expect(onEnterScreen).not.toHaveBeenCalled();
+  });
+
+  it('parks the TUI run on the post-auth gate until a project is picked, and the run reads the pick', async () => {
+    const store = new WizardStore('error-tracking-upload-source-maps');
+    setUI(new InkUI(store));
+    store.session = tuiSession(approved);
+    const prompts: string[] = [];
+    vi.mocked(runAgent).mockImplementationOnce((config, ...rest) => {
+      prompts.push(config.run.customPrompt?.(promptContext) ?? '');
+      return finishRun(config, ...rest);
+    });
+
+    const running = runProgramAgent(
+      errorTrackingUploadSourceMapsConfig,
+      store.session,
+    );
+    await vi.waitFor(() => expect(authenticate).toHaveBeenCalledOnce());
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(runAgent).not.toHaveBeenCalled();
+
+    store.setFrameworkContext(
+      SOURCE_MAPS_CONTEXT_KEYS.selectedPath,
+      'apps/web',
+    );
+    store.setFrameworkContext(
+      SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
+      'Next.js',
+    );
+    store.setFrameworkContext(
+      SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
+      'nextjs',
+    );
+    await running;
+
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(prompts[0]).toContain('apps/web');
+    expect(prompts[0]).toContain('Next.js');
+  });
+
+  const hostFailure = new Error('host capability failed');
+  it.each([
+    [
+      'a failed login',
+      () => vi.mocked(authenticate).mockRejectedValueOnce(hostFailure),
+    ],
+    [
+      'a malformed flag override',
+      () =>
+        vi
+          .mocked(analytics.getAllFlagsForWizard)
+          .mockRejectedValueOnce(hostFailure),
+    ],
+  ])('rethrows %s for the CLI root, as before', async (_name, arrange) => {
+    arrange();
+
+    await expect(runProgramAgent(program(), session())).rejects.toBe(
+      hostFailure,
+    );
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(wizardAbort).not.toHaveBeenCalled();
+  });
 });

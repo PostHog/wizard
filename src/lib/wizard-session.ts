@@ -164,9 +164,9 @@ export interface WizardSession {
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
   /**
-   * Guards `maybeStampAiSdkDetected` against running twice: it is called from
-   * both run-wizard.ts's auth step and bootstrap.ts, since either can be the
-   * first real `authenticate()` to complete depending on the program.
+   * Latched once the organization's AI SDK stamp was considered for this login:
+   * by run-wizard.ts's auth step (`maybeStampAiSdkDetected`), or by runProgram,
+   * whose latch the legacy adapter mirrors back, whichever logs in first.
    */
   aiSdkStampReported: boolean;
   integration: Integration | null;

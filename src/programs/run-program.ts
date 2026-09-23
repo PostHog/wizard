@@ -286,6 +286,14 @@ async function runProgramWithStore(
     store.setFrameworkContext(key, value);
   }
 
+  if (program.strategy !== 'no-agent') {
+    analytics.wizardCapture('agent started', {
+      integration: input.run?.integrationLabel ?? programId,
+      program_id: programId,
+      skill_id: input.run?.skillId ?? null,
+    });
+  }
+
   let credentials = input.credentials;
   if (!credentials && options.credentials) {
     try {
@@ -569,6 +577,22 @@ async function runProgramWithStore(
     }
     const wizardFlags = { ...flagSnapshot.flags };
     const wizardFlagPayloads = { ...flagSnapshot.payloads };
+
+    // The agent can't swap tokens mid-run, so freshness is measured after every
+    // park above, right before the agent mints.
+    const posthog = await refreshCredentialsIfNeeded(credentials.posthog, {
+      baseUrl: input.host?.baseUrl,
+    });
+    if (posthog !== credentials.posthog) {
+      credentials = { ...credentials, posthog };
+      store.setAuthenticated({
+        credentials: posthog,
+        apiProject: credentials.project,
+        apiUser: credentials.apiUser,
+      });
+    }
+    if (signal.aborted) return cancelled();
+
     const switchboard = {
       program: programId,
       composed: input.composed ?? false,
@@ -586,20 +610,6 @@ async function runProgramWithStore(
     }
     store.setBinding(binding);
 
-    // The agent can't swap tokens mid-run, so freshness is measured after every
-    // park above, right before the agent mints.
-    const posthog = await refreshCredentialsIfNeeded(credentials.posthog, {
-      baseUrl: input.host?.baseUrl,
-    });
-    if (posthog !== credentials.posthog) {
-      credentials = { ...credentials, posthog };
-      store.setAuthenticated({
-        credentials: posthog,
-        apiProject: credentials.project,
-        apiUser: credentials.apiUser,
-      });
-    }
-    if (signal.aborted) return cancelled();
     const inferenceAuth =
       credentials.inferenceAuth ??
       createPosthogInferenceAuthProvider(posthog, programId);

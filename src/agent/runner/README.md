@@ -45,8 +45,10 @@ takes resolved execution data and an invocation snapshot (`shared/types.ts`),
 reports through `onProgress` and asks through `interaction` (`../progress.ts`),
 and returns every ending as a result. It never renders, reads a session or
 exits. The gates, OAuth, flags and binding lookup that used to run here live in
-`src/programs/run-agent-legacy.ts`, which also maps progress back onto `getUI()`
-for today's runners.
+programs: `runProgram` resolves credentials through a host provider, awaits the
+host's gates, loads flags and resolves the binding.
+`src/programs/run-agent-legacy.ts` supplies those capabilities from the session
+and maps progress back onto `getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, the gateway mint and the scan-triage classifier. Whether the run turns

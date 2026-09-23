@@ -16,7 +16,6 @@ import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
-import { refreshCredentialsIfNeeded } from './token-refresh';
 
 export async function authenticate(
   session: WizardSession,
@@ -71,18 +70,4 @@ export async function authenticate(
   // target the individual user and not just $app_name.
   if (user) analytics.identifyUser(user);
   analytics.setGroups(groupsFromUser(user, host.apiHost));
-}
-
-// Pre-run refresh for a session; a refreshed token reaches the session and the UI.
-export async function refreshAccessTokenIfNeeded(
-  session: WizardSession,
-): Promise<void> {
-  const credentials = session.credentials;
-  if (!credentials) return;
-  const refreshed = await refreshCredentialsIfNeeded(credentials, {
-    baseUrl: session.baseUrl,
-  });
-  if (refreshed === credentials) return;
-  session.credentials = refreshed;
-  getUI().setAccessToken(refreshed);
 }
