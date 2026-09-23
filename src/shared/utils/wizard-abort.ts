@@ -17,6 +17,9 @@ import {
   emitWizardError,
   sanitizeErrorDetail,
 } from '@shared/errors';
+import { runCleanups } from './cleanup-registry';
+
+export { registerCleanup, clearCleanup, runCleanups } from './cleanup-registry';
 
 // Still importable from here; the class lives with the error codes.
 export { WizardError };
@@ -29,28 +32,6 @@ interface WizardAbortOptions {
   exitCode?: number;
   code?: ErrorCode;
   detail?: Record<string, unknown>;
-}
-
-const cleanupFns: Array<() => void> = [];
-
-export function registerCleanup(fn: () => void): void {
-  cleanupFns.push(fn);
-}
-
-export function clearCleanup(): void {
-  cleanupFns.length = 0;
-}
-
-/** Runs all registered cleanup functions and drains the array. */
-export function runCleanups(): void {
-  const fns = cleanupFns.splice(0);
-  for (const fn of fns) {
-    try {
-      fn();
-    } catch {
-      /* cleanup should not prevent exit */
-    }
-  }
 }
 
 function resolveErrorCode(

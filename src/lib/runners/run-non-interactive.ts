@@ -25,7 +25,10 @@ import {
 } from '@shared/errors';
 import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -118,8 +121,9 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { registerCleanup, runCleanups, wizardAbort, WizardError } =
-      await import('@utils/wizard-abort');
+    const { runCleanups, wizardAbort, WizardError } = await import(
+      '@utils/wizard-abort'
+    );
     runRegisteredCleanups = runCleanups;
 
     configureLogFileFromEnvironment();
@@ -131,7 +135,7 @@ export function runNonInteractive(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
-    registerCleanup(captureRunSkillCleanup(installDir));
+    registerRunSkillCleanup(installDir);
     const onSigint = () => {
       runCleanups();
       process.exit(130);
@@ -359,8 +363,11 @@ export function runNonInteractive(
       }
 
       const { runProgramAgent } = await import('@programs/run-agent-legacy');
-      await runProgramAgent(config, session);
+      await runProgramAgent(config, session, {
+        deferSkillCleanupCommit: true,
+      });
       await settleStream(RunPhase.Completed);
+      commitRegisteredRunSkillCleanups();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

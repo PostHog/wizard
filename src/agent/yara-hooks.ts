@@ -1113,7 +1113,12 @@ export async function scanInstalledSkill(
   phase: 'skill-install' | 'skill-load' = 'skill-install',
 ): Promise<string | null> {
   recordScan();
-  const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
+  const matches = await scanSkillFiles(
+    absoluteSkillDir,
+    '.',
+    llmProvider,
+    true,
+  );
   const verdict = scanVerdict(matches);
   if (!verdict) return null;
   recordMatch(
@@ -1145,6 +1150,7 @@ async function scanSkillFiles(
   cwd: string,
   skillDir: string,
   llmProvider: LLMProvider | undefined,
+  failOnUnreadableFile = false,
 ): Promise<ScanMatch[]> {
   const absoluteDir = path.resolve(cwd, skillDir);
 
@@ -1156,6 +1162,7 @@ async function scanSkillFiles(
   const files = await fg(SKILL_TEXT_GLOB, {
     cwd: absoluteDir,
     absolute: true,
+    caseSensitiveMatch: false,
   });
 
   if (files.length === 0) {
@@ -1185,6 +1192,7 @@ async function scanSkillFiles(
       }
     } catch (err) {
       logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
+      if (failOnUnreadableFile) throw err;
       continue;
     }
     if (content) {

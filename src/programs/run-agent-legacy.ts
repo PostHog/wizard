@@ -60,7 +60,10 @@ import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
 import { maybeStampAiSdkDetected } from './posthog-integration/detect';
 import { startAuditLedgerWatcher } from './audit/ledger-watcher';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
@@ -69,15 +72,17 @@ import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 export async function runProgramAgent(
   programConfig: ProgramConfig,
   session: WizardSession,
-  options: { composed?: boolean } = {},
+  options: {
+    composed?: boolean;
+    deferSkillCleanupCommit?: boolean;
+  } = {},
 ): Promise<void> {
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
 
   // wizardAbort and TUI signal handlers drain this registry on interruption.
-  const cleanupInstalledSkills = captureRunSkillCleanup(session.installDir);
-  registerCleanup(cleanupInstalledSkills);
+  const cleanupInstalledSkills = registerRunSkillCleanup(session.installDir);
 
   // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
   // and a watcher started later would ignore that write as pre-existing.
@@ -92,7 +97,15 @@ export async function runProgramAgent(
         ? await programConfig.run(session)
         : programConfig.run;
 
-    await runProgram(session, runDef, programConfig, options.composed ?? false);
+    const succeeded = await runProgram(
+      session,
+      runDef,
+      programConfig,
+      options.composed ?? false,
+    );
+    if (succeeded && !options.deferSkillCleanupCommit) {
+      commitRegisteredRunSkillCleanups();
+    }
   } catch (error) {
     try {
       cleanupInstalledSkills();
@@ -114,7 +127,7 @@ async function runProgram(
   run: ProgramRun,
   programConfig: ProgramConfig,
   composed: boolean,
-): Promise<void> {
+): Promise<boolean> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = run.skillId ?? run.integrationLabel;
@@ -296,6 +309,7 @@ async function runProgram(
   if (result.outcome !== RunOutcome.Success) {
     await wizardAbort(result.failure);
   }
+  return result.outcome === RunOutcome.Success;
 }
 
 // ── Gates ─────────────────────────────────────────────────────────────
