@@ -21,9 +21,9 @@ import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
-  detectErrorCode,
   emitWizardError,
 } from '@shared/errors';
+import { detectErrorCode } from '@lib/programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -242,9 +242,7 @@ export function runNonInteractive(
 
     try {
       if (mode === 'ci') {
-        const { configureGatewayFromCIEnvironment } = await import(
-          '@agent/gateway-session'
-        );
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',

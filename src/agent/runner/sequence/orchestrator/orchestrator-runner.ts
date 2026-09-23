@@ -24,16 +24,19 @@ import {
 import * as path from 'path';
 import { OutroKind, type TaskNotice } from '@agent/progress';
 import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
-import {
-  installSkillById,
-  fetchSkillMenu,
-  type SkillEntry,
-} from '@agent/tools';
+import { installSkillById } from '@agent/tools';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { ErrorCodes, WizardError } from '@shared/errors';
+import {
+  AGENT_ERROR_CODE,
+  classifyRunFailure,
+  ErrorCodes,
+  WizardError,
+} from '@shared/errors';
+import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '@agent/progress';
 import type {
   AgentFailure,
@@ -60,7 +63,12 @@ import {
   type QueuedTask,
   type TaskOutcome,
 } from './queue';
-import { drainQueue, RunTaskFatal, type RunTask } from './executor';
+import {
+  DEFAULT_DRAIN_OPTIONS,
+  drainQueue,
+  RunTaskFatal,
+  type RunTask,
+} from './executor';
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
@@ -155,6 +163,43 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
+function terminalResult(
+  result: AgentResult,
+): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
+  switch (result.kind) {
+    case 'success':
+      return undefined;
+    case 'decided_failure':
+      return { outcome: RunOutcome.Failed, failure: result.failure };
+    case 'abort':
+      // Callers return first on the run's signal, so this abort is the agent's own.
+      return {
+        outcome: RunOutcome.Failed,
+        failure: {
+          code: AGENT_ERROR_CODE[result.classification],
+          message: result.message ?? 'Agent aborted',
+          error: result.error,
+        },
+      };
+    case 'failure':
+      return {
+        outcome: RunOutcome.Failed,
+        failure: {
+          code: AGENT_ERROR_CODE[result.classification],
+          message: result.message ?? 'Agent failed',
+          error: result.error,
+        },
+      };
+  }
+}
+
+function cancelledRun(): SequenceResult {
+  return {
+    outcome: RunOutcome.Aborted,
+    failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  };
+}
+
 /** Every skill entry the menu knows, across categories. */
 async function fetchSkillMenuEntries(
   skillsBaseUrl: string,
@@ -210,6 +255,7 @@ export const TASK_NOTICE_TIMEOUT_MS = 5 * 60 * 1000;
 interface SeededTaskOptions {
   timeoutMs?: number;
   interaction?: AgentInteraction;
+  signal?: AbortSignal;
 }
 
 /**
@@ -222,33 +268,50 @@ interface SeededTaskOptions {
  */
 export async function offerSeededTask(
   notice: TaskNotice,
-  { timeoutMs = TASK_NOTICE_TIMEOUT_MS, interaction }: SeededTaskOptions = {},
+  {
+    timeoutMs = TASK_NOTICE_TIMEOUT_MS,
+    interaction,
+    signal,
+  }: SeededTaskOptions = {},
 ): Promise<{ keep: boolean; timedOut: boolean }> {
+  if (signal?.aborted) return { keep: false, timedOut: false };
   // No one to show the notice to: a step nobody can answer for must not run.
   // The same answer a non-interactive host gives today.
   if (!interaction?.taskNotice) return { keep: false, timedOut: false };
   const { taskNotice } = interaction;
 
+  // This notice's own signal: its timeout or the run's cancellation aborts it.
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
+  let cancelForAbort: (() => void) | undefined;
   const timeout = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true;
+      // Settle first: a host that rejects once dismissed must not win.
+      resolve(false);
       // The host dismisses this notice's overlay and settles its promise too,
       // so the losing side of the race cannot leave a modal on screen.
       controller.abort();
-      resolve(false);
     }, timeoutMs);
+  });
+  const aborted = new Promise<boolean>((resolve) => {
+    cancelForAbort = () => {
+      resolve(false);
+      controller.abort();
+    };
+    signal?.addEventListener('abort', cancelForAbort, { once: true });
   });
   try {
     const keep = await Promise.race([
       taskNotice(notice, { signal: controller.signal }),
       timeout,
+      aborted,
     ]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
+    if (cancelForAbort) signal?.removeEventListener('abort', cancelForAbort);
   }
 }
 
@@ -422,6 +485,25 @@ export function describeDrainFailure(verdict: {
   return parts.join(', so ');
 }
 
+/** One `orchestrator task blocked` event per pending task, best effort once the outcome is decided. */
+function reportBlockedTasks(
+  tasks: readonly QueuedTask[],
+  failedTypes: readonly string[],
+): void {
+  for (const task of tasks) {
+    if (task.status !== TaskStatus.Pending) continue;
+    try {
+      analytics.wizardCapture('orchestrator task blocked', {
+        type: task.type,
+        optional: task.optional === true,
+        failed_types: failedTypes.join(',') || 'none',
+      });
+    } catch {
+      // Reporting must not replace the run result.
+    }
+  }
+}
+
 /** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
 function graphDepth(
   task: QueuedTask,
@@ -484,6 +566,10 @@ export function effectiveExcludedTaskTypes(
 export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
+  const controller = new AbortController();
+  const abortFromHost = () => controller.abort();
+  context.signal?.addEventListener('abort', abortFromHost, { once: true });
+  if (context.signal?.aborted) abortFromHost();
   let cleaned = false;
   const cleanupQueue = (): void => {
     if (cleaned) return;
@@ -494,23 +580,34 @@ export async function runOrchestrator(
         force: true,
       });
     } catch (error) {
-      analytics.captureException(
-        error instanceof Error ? error : new Error(String(error)),
-        { step: 'orchestrator_cache_cleanup' },
-      );
+      try {
+        analytics.captureException(
+          error instanceof Error ? error : new Error(String(error)),
+          { step: 'orchestrator_cache_cleanup' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
     }
   };
   try {
-    return await executeOrchestrator(context, cleanupQueue);
+    return await executeOrchestrator(
+      { ...context, signal: controller.signal },
+      cleanupQueue,
+      controller,
+    );
   } finally {
+    context.signal?.removeEventListener('abort', abortFromHost);
     cleanupQueue();
   }
 }
 
 async function executeOrchestrator(
-  { config, input, boot, emit, interaction }: SequenceContext,
+  { config, input, boot, emit, interaction, signal }: SequenceContext,
   cleanupQueue: () => void,
+  controller: AbortController,
 ): Promise<SequenceResult> {
+  if (signal?.aborted) return cancelledRun();
   const runId = randomUUID();
   const { run } = config;
   const programId = config.programId;
@@ -533,6 +630,7 @@ async function executeOrchestrator(
       boot.wizardFlagPayloads,
     ),
   });
+  if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
@@ -640,6 +738,7 @@ async function executeOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
+  if (signal?.aborted) return cancelledRun();
   // The framework key for reference + variant resolution. `input.integration`
   // is the detected framework and always wins; `input.skillId` is the
   // fallback for the basic-integration path, where the caller sets it to the
@@ -660,6 +759,7 @@ async function executeOrchestrator(
         triage: boot.triageProvider,
       },
     );
+    if (signal?.aborted) return cancelledRun();
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -834,8 +934,12 @@ async function executeOrchestrator(
       // not, which is why the offer lives here and not there.
       seededConsent.set(
         task.id,
-        await askSeededConsent(seeded.type, seeded.notice, { interaction }),
+        await askSeededConsent(seeded.type, seeded.notice, {
+          interaction,
+          signal,
+        }),
       );
+      if (signal?.aborted) return cancelledRun();
     }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
@@ -869,6 +973,7 @@ async function executeOrchestrator(
   const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
+        signal,
         getSource: () => input.skillId ?? programId,
         beforeShow: () => {
           // How late the first ask lands is the measure of this run shape: it
@@ -900,6 +1005,7 @@ async function executeOrchestrator(
   const seedHarness = requireTaskHarness(seedPick);
   const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
+    signal,
     config,
     input,
     boot,
@@ -924,15 +1030,9 @@ async function executeOrchestrator(
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
-  // A decided seed failure ends the run and releases its queue artifacts.
-  if (seedResult.failure) return failed(seedResult.failure);
-  if (seedResult.error) {
-    logToFile(
-      `[orchestrator] seed error: ${seedResult.error} ${
-        seedResult.message ?? ''
-      }`,
-    );
-  }
+  if (signal?.aborted) return cancelledRun();
+  const seedTerminal = terminalResult(seedResult);
+  if (seedTerminal) return seedTerminal;
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
     types: store.list().map((t) => t.type),
@@ -1055,6 +1155,7 @@ async function executeOrchestrator(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
   const runTask: RunTask = async (task) => {
+    if (signal?.aborted) return;
     renderQueue();
 
     try {
@@ -1065,6 +1166,7 @@ async function executeOrchestrator(
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
+        if (signal?.aborted) return;
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
@@ -1087,6 +1189,7 @@ async function executeOrchestrator(
           boot.skillsBaseUrl,
           { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
         );
+        if (signal?.aborted) return;
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
         } else {
@@ -1114,33 +1217,54 @@ async function executeOrchestrator(
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
-      const taskResult = await taskHarness.runTask({
-        config,
-        input,
-        boot,
-        emit,
-        prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
-        spinner,
-        model: requireKnownModel(taskModel.model, taskPick.model),
-        effort: taskModel.effort,
-        allowedTools: resolved.allowedTools,
-        disallowedTools: resolved.disallowedTools,
-        askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
-        orchestrator: orchestratorCtx(task.id),
-        spinnerMessage: '',
-        successMessage: '',
-        additionalFeatureQueue: [],
-        requestRemark: false,
-        analyticsProperties: {
-          task_type: task.type,
-          task_id: task.id,
-          harness: taskPick.harness,
-        },
-      });
-      // A decided failure (a 401 the harness already reported) is the run's,
-      // not the task's: stop the drain and report it, where the harness used
-      // to exit the process.
-      if (taskResult.failure) throw new RunTaskFatal(taskResult.failure);
+      let taskResult: AgentResult;
+      try {
+        taskResult = await taskHarness.runTask({
+          signal,
+          config,
+          input,
+          boot,
+          emit,
+          prompt: assembleTaskPrompt(
+            promptContext,
+            resolved.prompt,
+            skillPaths,
+          ),
+          spinner,
+          model: requireKnownModel(taskModel.model, taskPick.model),
+          effort: taskModel.effort,
+          allowedTools: resolved.allowedTools,
+          disallowedTools: resolved.disallowedTools,
+          askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
+          orchestrator: orchestratorCtx(task.id),
+          spinnerMessage: '',
+          successMessage: '',
+          additionalFeatureQueue: [],
+          requestRemark: false,
+          analyticsProperties: {
+            task_type: task.type,
+            task_id: task.id,
+            harness: taskPick.harness,
+          },
+        });
+      } catch (error) {
+        if (signal?.aborted) return;
+        if (error instanceof RunTaskFatal) throw error;
+        const failure = classifyRunFailure(error);
+        throw new RunTaskFatal(
+          {
+            code: failure.code,
+            message: failure.message,
+            error: error instanceof Error ? error : undefined,
+          },
+          RunOutcome.Failed,
+          task.type,
+        );
+      }
+      if (signal?.aborted) return;
+      const terminal = terminalResult(taskResult);
+      if (terminal)
+        throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1152,9 +1276,21 @@ async function executeOrchestrator(
           referenceSkillId,
         );
       } catch (err) {
-        logToFile(`[orchestrator] per-task skill sweep failed: ${String(err)}`);
+        try {
+          logToFile('[orchestrator] per-task skill sweep failed:', err);
+        } catch {
+          // Cleanup logging must not replace the task result.
+        }
       }
-      renderQueue();
+      try {
+        renderQueue();
+      } catch (err) {
+        try {
+          logToFile('[orchestrator] per-task queue render failed:', err);
+        } catch {
+          // Cleanup logging must not replace the task result.
+        }
+      }
     }
   };
   // A task that stops for the user is offered, not imposed, and the answer was
@@ -1164,12 +1300,16 @@ async function executeOrchestrator(
     renderQueue();
   }
 
-  let fatal: AgentFailure | undefined;
+  let fatal: RunTaskFatal | undefined;
   try {
-    await drainQueue(store, runTask);
+    await drainQueue(store, runTask, {
+      ...DEFAULT_DRAIN_OPTIONS,
+      signal,
+      onFatal: () => controller.abort(),
+    });
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
-    fatal = error.failure;
+    fatal = error;
   } finally {
     // The queue file is wiped below; the e2e harness reads outcomes from here.
     config.hooks?.recordTaskOutcomes?.(
@@ -1180,7 +1320,7 @@ async function executeOrchestrator(
       })) satisfies TaskOutcome[],
     );
     try {
-      if (referenceSkillId && referenceInstallPath) {
+      if (!signal?.aborted && referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(
           path.join(input.installDir, referenceInstallPath),
           claudeSkillsDir,
@@ -1188,10 +1328,14 @@ async function executeOrchestrator(
         );
       }
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'orchestrator_reference_promote' },
-      );
+      try {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_reference_promote' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
     }
     cleanupQueue();
     try {
@@ -1201,14 +1345,27 @@ async function executeOrchestrator(
         referenceSkillId,
       );
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'orchestrator_skill_sweep' },
-      );
+      try {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_skill_sweep' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
     }
   }
 
-  if (fatal) return failed(fatal);
+  if (fatal) {
+    // The steps the fatal task stopped still get their terminal event.
+    const stoppedBy = drainVerdict(store.list()).requiredFailedTypes;
+    if (fatal.taskType && !stoppedBy.includes(fatal.taskType)) {
+      stoppedBy.push(fatal.taskType);
+    }
+    reportBlockedTasks(store.list(), stoppedBy);
+    return { outcome: fatal.outcome, failure: fatal.failure };
+  }
+  if (signal?.aborted) return cancelledRun();
 
   renderQueue();
 
@@ -1252,14 +1409,7 @@ async function executeOrchestrator(
   // drops out of the funnel. The queue itself is left alone, because the run
   // cache is already wiped by here and writing to it would recreate the folder
   // the cleanup just removed.
-  for (const task of store.list()) {
-    if (task.status !== TaskStatus.Pending) continue;
-    analytics.wizardCapture('orchestrator task blocked', {
-      type: task.type,
-      optional: task.optional === true,
-      failed_types: verdict.requiredFailedTypes.join(',') || 'none',
-    });
-  }
+  reportBlockedTasks(store.list(), verdict.requiredFailedTypes);
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
     const failedTypes = verdict.requiredFailedTypes.join(', ');
     const whatFailed = describeDrainFailure(verdict);

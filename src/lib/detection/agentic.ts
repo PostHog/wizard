@@ -15,11 +15,11 @@
 
 import {
   initializeAgent,
-  runAgent as executeAgent,
+  executeAgent,
   buildRunTags,
   AgentSignals,
   AgentErrorType,
-} from '@agent/agent-interface';
+} from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import {
@@ -454,15 +454,24 @@ export async function detectProjectsWithAgent(
       middleware,
     );
 
-    if (result.error === AgentErrorType.AGENTIC_DETECTION_TIMEOUT) {
+    if (
+      result.kind === 'failure' &&
+      result.classification === AgentErrorType.AGENTIC_DETECTION_TIMEOUT
+    ) {
       if (attempt === 0) {
         onEvent?.('Project scan timed out; retrying...');
         continue;
       }
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
     }
-    if (result.error) {
-      throw new Error(result.message || `Agent error: ${result.error}`);
+    if (result.kind !== 'success') {
+      if (result.kind === 'decided_failure') {
+        throw result.failure.error ?? new Error(result.failure.message);
+      }
+      throw (
+        result.error ??
+        new Error(result.message || `Agent error: ${result.classification}`)
+      );
     }
 
     // Transcript first, final message last — its verdicts win path conflicts.

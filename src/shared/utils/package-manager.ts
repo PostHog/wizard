@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readFileHead } from './bounded-fs';
-import { withProgress } from '../../telemetry';
+import { withProgress } from './telemetry';
 import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
 import type { PackageJson } from './package-json';
 import { analytics } from './analytics';

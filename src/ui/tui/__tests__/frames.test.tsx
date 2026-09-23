@@ -52,8 +52,11 @@ vi.mock('@shared/api', async (actual) => ({
 }));
 vi.mock('@agent/tools', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
-  fetchSkillMenu: vi.fn(pending),
   downloadSkill: vi.fn(pending),
+}));
+vi.mock('@shared/skill-menu', async (actual) => ({
+  ...(await actual<Record<string, unknown>>()),
+  fetchSkillMenu: vi.fn(pending),
 }));
 vi.mock('@ui/tui/hooks/useGithubConnection', () => ({
   useGithubConnection: () => undefined,

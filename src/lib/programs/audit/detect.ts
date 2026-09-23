@@ -1,4 +1,4 @@
-import type { AbortCase } from '@agent/agent-runner';
+import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 
 /** `[ABORT] <reason>` cases the audit skill can emit. Reason strings are

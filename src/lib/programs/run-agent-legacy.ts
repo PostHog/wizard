@@ -7,8 +7,8 @@
  * authenticates, resolves the program's binding, builds the agent's inputs
  * from the session, maps every progress event back onto `getUI()` one call
  * per event, answers the agent's questions through `getUI()`, and applies the
- * result — `wizardAbort` for a decided failure, the terminal analytics event
- * for a finished top-level run.
+ * result — `wizardAbort` with the outcome's terminal status for a decided
+ * failure, the terminal analytics event for a finished top-level run.
  *
  * This is the only file that knows about `getUI()`, the session and
  * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
@@ -19,24 +19,26 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import {
+  buildRunTags,
+  flushScanReport,
+  resolveBinding,
   runAgent,
   RunOutcome,
-  resolveBinding,
   TASK_OUTCOMES_KEY,
-  type RunConfig,
-  type RunInput,
-  type SwitchboardCtx,
-} from '@agent/runner';
-import type { ProgramBinding } from '@agent/runner/switchboard';
+} from '@agent';
+import type {
+  ProgramBinding,
+  RunConfig,
+  RunInput,
+  SwitchboardCtx,
+} from '@agent/types';
 import type { ProgramRun } from './program-run';
-import { buildRunTags } from '@agent/agent-interface';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
   classifySettingsConflicts,
   restoreClaudeSettings,
 } from '@shared/claude-settings';
-import { flushScanReport } from '@agent/yara-hooks';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
@@ -286,7 +288,14 @@ async function runProgram(
     throw result.failure.error;
   }
   if (result.outcome !== RunOutcome.Success) {
-    await wizardAbort(result.failure);
+    if (result.failure.authErrorDetail) {
+      ui.showAuthError(result.failure.authErrorDetail);
+    }
+    // The terminal status follows how the run ended, not whether an Error came back.
+    await wizardAbort({
+      ...result.failure,
+      status: result.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
+    });
   } else if (!composed) {
     // A composed sub-run leaves the terminal event to its host program's run.
     // The run already succeeded: a failed flush is logged, never the outcome.

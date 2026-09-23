@@ -99,6 +99,7 @@ vi.mock('@utils/env-api-key', () => ({
 vi.mock('@utils/debug', () => ({
   configureLogFileFromEnvironment: vi.fn(),
   logToFile: vi.fn(),
+  setDebugSink: vi.fn(),
 }));
 vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
 vi.mock('../lib/detection/index', () => ({

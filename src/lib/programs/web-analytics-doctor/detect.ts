@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
-import type { AbortCase } from '@agent/agent-runner';
+import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { findPackageJsons } from '@lib/programs/shared/package-scanning';
 

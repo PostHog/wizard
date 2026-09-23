@@ -37,7 +37,7 @@ function session() {
 function emitResult(text: string) {
   return execute.mockImplementationOnce((...args) => {
     args[5]?.onMessage({ type: 'result', result: text });
-    return Promise.resolve({});
+    return Promise.resolve({ kind: 'success' });
   });
 }
 
@@ -92,7 +92,8 @@ describe('agentic detection retry', () => {
   it('retries a timed-out first run with a fresh Haiku session', async () => {
     const events: string[] = [];
     execute.mockResolvedValueOnce({
-      error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+      kind: 'failure',
+      classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
     });
     emitResult(
       '{"path":".","framework":"Next.js","targetId":"nextjs","hasPostHog":false}',
@@ -116,7 +117,8 @@ describe('agentic detection retry', () => {
 
   it('reports a typed timeout when the retry also times out', async () => {
     execute.mockResolvedValue({
-      error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+      kind: 'failure',
+      classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
     });
 
     await expect(detectProjectsWithAgent(session(), options)).rejects.toThrow(
@@ -141,7 +143,7 @@ describe('agentic detection retry', () => {
         },
       });
       args[5]?.onMessage({ type: 'result', result: 'Done.' });
-      return Promise.resolve({});
+      return Promise.resolve({ kind: 'success' });
     });
 
     const report = await detectProjectsWithAgent(session(), {

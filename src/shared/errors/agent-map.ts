@@ -1,3 +1,6 @@
+// Leaf module on purpose: every module imports the errors, so the agent entry
+// would form a module cycle here.
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B1: error codes move next to their owners
 import { AgentErrorType } from '@agent/signals';
 import { ErrorCodes, type ErrorCode } from './codes';
 

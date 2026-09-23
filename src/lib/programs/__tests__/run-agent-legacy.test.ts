@@ -10,10 +10,11 @@ import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
 import { startTUI } from '@ui/tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
-import { setUI } from '@ui';
+import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -206,22 +207,105 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
-  'passes a %s result to the existing abort handler',
-  async (outcome) => {
-    const failure = { message: 'Failed', exitCode: 2 };
+it.each([
+  [RunOutcome.Aborted, 'cancelled'],
+  [RunOutcome.Failed, 'error'],
+] as const)(
+  'passes a %s result to the existing abort handler as %s',
+  async (outcome, status) => {
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Failed',
+      exitCode: 2,
+    };
     vi.mocked(runAgent).mockResolvedValue({ outcome, failure, snapshot });
     await runProgramAgent(program(), session());
-    expect(wizardAbort).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({ ...failure, status });
     expect(analytics.shutdown).not.toHaveBeenCalled();
   },
 );
+
+it.each([
+  [
+    RunOutcome.Failed,
+    'error',
+    { code: ErrorCodes.AgentMcpMissing, message: 'Could not access MCP' },
+  ],
+  [
+    RunOutcome.Aborted,
+    'cancelled',
+    { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  ],
+] as const)(
+  'labels a %s run %s from its outcome when no Error came back',
+  async (outcome, status, failure) => {
+    const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
+      '@utils/wizard-abort',
+    );
+    vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome,
+      failure: { ...failure },
+      snapshot,
+    });
+    try {
+      await runProgramAgent(program(), session());
+    } finally {
+      exit.mockRestore();
+      stderr.mockRestore();
+    }
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith(status);
+    if (status === 'error') {
+      // Error tracking still sees the failure, as its code and message.
+      expect(analytics.captureException).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          message: failure.message,
+          code: failure.code,
+        }),
+        { error_code: failure.code },
+      );
+    } else {
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    }
+  },
+);
+
+it('shows the auth guidance from a decided 401 before the error outro', async () => {
+  const detail = { hasSettingsConflict: false, logFilePath: '/tmp/wizard.log' };
+  const show = vi.spyOn(getUI(), 'showAuthError');
+  vi.mocked(runAgent).mockResolvedValue({
+    outcome: RunOutcome.Failed,
+    failure: {
+      code: ErrorCodes.AuthInvalidOrExpired,
+      message: 'Authentication failed (401)',
+      authErrorDetail: detail,
+    },
+    snapshot,
+  });
+  await runProgramAgent(program(), session());
+  expect(show).toHaveBeenCalledExactlyOnceWith(detail);
+  expect(wizardAbort).toHaveBeenCalledWith(
+    expect.objectContaining({ authErrorDetail: detail }),
+  );
+  // wizardAbort sends the one terminal event for a failed run.
+  expect(analytics.shutdown).not.toHaveBeenCalled();
+});
 
 it('rethrows the original crash for the outer runner', async () => {
   const error = new Error('mint refused');
   const result: RunResult = {
     outcome: RunOutcome.Crashed,
-    failure: { error },
+    failure: {
+      code: ErrorCodes.InternalUnhandled,
+      message: error.message,
+      error,
+    },
     snapshot,
   };
   vi.mocked(runAgent).mockResolvedValue(result);

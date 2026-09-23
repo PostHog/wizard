@@ -29,6 +29,7 @@ import {
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
 import type { AgentFailure } from './runner/shared/types';
+import type { AgentResult } from './runner/harness/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
 import {
@@ -55,7 +56,7 @@ import {
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
 } from './signals';
-import { classifyAuthFailure, WizardError } from '@shared/errors';
+import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
 
@@ -318,6 +319,7 @@ export function createStopHook(
  * Internal configuration object returned by initializeAgent
  */
 type AgentRunConfig = {
+  signal?: AbortSignal;
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
@@ -716,6 +718,52 @@ export async function initializeAgent(
  *
  * @returns An object containing any error detected in the agent's output
  */
+function sdkErrorStatus(value: unknown): number | undefined {
+  if (typeof value === 'number' && value >= 400 && value < 600) return value;
+  if (typeof value === 'string') {
+    const match = value.match(/(?:^|\b)(4\d\d|5\d\d)(?:\b|$)/);
+    return match ? Number(match[1]) : undefined;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return (
+      sdkErrorStatus(record.status) ??
+      sdkErrorStatus(record.statusCode) ??
+      sdkErrorStatus(record.code) ??
+      sdkErrorStatus(record.error)
+    );
+  }
+  return undefined;
+}
+
+function sdkResultFailure(
+  message: Record<string, unknown>,
+): Extract<AgentResult, { kind: 'failure' }> | undefined {
+  if (message.subtype === 'success' && message.is_error !== true)
+    return undefined;
+  const errors = Array.isArray(message.errors) ? message.errors : [];
+  const detail =
+    errors
+      .map((error) =>
+        typeof error === 'string' ? error : JSON.stringify(error),
+      )
+      .join('; ') ||
+    (typeof message.result === 'string'
+      ? message.result
+      : String(message.subtype ?? 'SDK result failed'));
+  const status =
+    sdkErrorStatus(message.api_error_status) ??
+    sdkErrorStatus(message.status) ??
+    errors.map(sdkErrorStatus).find((code) => code !== undefined) ??
+    sdkErrorStatus(message.result);
+  return {
+    kind: 'failure',
+    classification:
+      status === 429 ? AgentErrorType.RATE_LIMIT : AgentErrorType.API_ERROR,
+    message: detail,
+  };
+}
+
 export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
@@ -754,11 +802,14 @@ export async function runAgent(
     onMessage(message: any): void;
     finalize(resultMessage: any, totalDurationMs: number): any;
   },
-): Promise<{
-  error?: AgentErrorType;
-  message?: string;
-  failure?: AgentFailure;
-}> {
+): Promise<AgentResult> {
+  if (agentConfig.signal?.aborted) {
+    return {
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Agent run cancelled',
+    };
+  }
   const emit = agentConfig.emit ?? NO_PROGRESS;
   const {
     spinnerMessage = 'Customizing your PostHog setup...',
@@ -785,6 +836,8 @@ export async function runAgent(
   let receivedSuccessResult = false;
   let loggedInitialContext = false;
   let lastResultMessage: any = null;
+  let terminalFailure: Extract<AgentResult, { kind: 'failure' }> | undefined;
+  let assistantErrorStatus: number | undefined;
 
   // SDK >=0.3.142 replaced TodoWrite (snapshot) with TaskCreate/TaskUpdate (accumulate by id).
   // The agent's TaskCreate tool_use doesn't know the assigned taskId — the SDK returns it
@@ -816,9 +869,7 @@ export async function runAgent(
   };
 
   // Helper to handle successful completion (used in normal path and race condition recovery)
-  const completeWithSuccess = (
-    suppressedError?: Error,
-  ): { error?: AgentErrorType; message?: string } => {
+  const completeWithSuccess = (suppressedError?: Error): AgentResult => {
     const durationMs = Date.now() - startTime;
     const durationSeconds = Math.round(durationMs / 1000);
 
@@ -881,13 +932,17 @@ export async function runAgent(
       logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
     }
     spinner.stop(successMessage);
-    return {};
+    return { kind: 'success' };
   };
 
   // Abort controller — lets us force-kill the SDK query when we detect an
   // [ABORT] signal in the agent's output. Also stashes the reason so the
   // runner can surface it via outroData after we unwind.
   let abortController = new AbortController();
+  const onExternalAbort = () => {
+    abortController.abort();
+    signalDone();
+  };
   let timedOut = false;
   let abortReason: string | null = null;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
@@ -903,6 +958,10 @@ export async function runAgent(
   // failure the caller ends the run with. The query is aborted to unwind.
   let authFailure: AgentFailure | undefined;
   const agentConfigDir = createIsolatedAgentConfigDir();
+  agentConfig.signal?.addEventListener('abort', onExternalAbort, {
+    once: true,
+  });
+  if (agentConfig.signal?.aborted) onExternalAbort();
   const timeoutMs = config?.timeoutMs;
   const timeoutId = timeoutMs
     ? setTimeout(() => {
@@ -1201,6 +1260,10 @@ export async function runAgent(
             emitStepEvents,
             resolveStepKey,
           );
+          if (message.type === 'assistant') {
+            assistantErrorStatus =
+              sdkErrorStatus(message.error) ?? assistantErrorStatus;
+          }
 
           // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
           // cannot complete the program. Kill the SDK query immediately —
@@ -1232,12 +1295,24 @@ export async function runAgent(
           // 401 on a bearer past its refresh instant: it aged out, so re-mint
           // once and resume. Any other 401 is a bad credential: show the auth
           // error screen and exit.
-          if (message.type === 'assistant' && signals.hasApiErrorStatus(401)) {
+          if (
+            (message.type === 'assistant' &&
+              sdkErrorStatus(message.error) === 401) ||
+            (message.type === 'result' &&
+              (sdkErrorStatus(message.api_error_status) === 401 ||
+                sdkErrorStatus(message.status) === 401)) ||
+            (message.type === 'result' &&
+              Array.isArray(message.errors) &&
+              message.errors.some(
+                (error: unknown) => sdkErrorStatus(error) === 401,
+              ))
+          ) {
             signalDone();
             if (
               agentConfig.refreshGatewayAuth &&
               !reminted &&
-              isPastRefresh(agentConfig.gatewayAuth)
+              isPastRefresh(agentConfig.gatewayAuth) &&
+              !agentConfig.signal?.aborted
             ) {
               logToFile(
                 'Agent error: 401 on an aged gateway bearer; re-minting',
@@ -1273,9 +1348,12 @@ export async function runAgent(
               ...authError,
               sessionExpired,
             });
-            emit({
-              kind: 'authError',
-              detail: {
+            // The caller ends the run with this; the query is abandoned here
+            // where the process used to exit.
+            authFailure = {
+              code: authCode,
+              message: 'Authentication failed (401)',
+              authErrorDetail: {
                 hasSettingsConflict: authError.hasSettingsConflict,
                 conflicts: authError.conflicts,
                 usingManagedLogin: authError.usingManagedLogin,
@@ -1283,25 +1361,19 @@ export async function runAgent(
                 sessionExpired,
                 logFilePath: getLogFilePath(),
               },
-            });
-            // The caller ends the run with this; the query is abandoned here
-            // where the process used to exit.
-            authFailure = {
-              code: authCode,
-              message: 'Authentication failed (401)',
-              error: new WizardError(
-                'Authentication failed',
-                {
-                  hasSettingsConflict: authError.hasSettingsConflict,
-                  conflictSources: authError.conflictSources,
-                  conflictKeys: authError.conflictKeys,
-                  gatewayUrl: authError.gatewayUrl,
-                  region: authError.region,
-                  usingManagedLogin: authError.usingManagedLogin,
-                  apiKeySource: authError.apiKeySource,
-                },
-                authCode,
-              ),
+              detail: {
+                hasSettingsConflict: authError.hasSettingsConflict,
+                conflictSources: authError.conflictSources,
+                conflictKeys: authError.conflictKeys,
+                conflicts: authError.conflicts,
+                credentialPlaces: authError.credentialPlaces,
+                sessionExpired,
+                logFilePath: getLogFilePath(),
+                gatewayUrl: authError.gatewayUrl,
+                region: authError.region,
+                usingManagedLogin: authError.usingManagedLogin,
+                apiKeySource: authError.apiKeySource,
+              },
             };
             abortController.abort();
             break;
@@ -1323,6 +1395,14 @@ export async function runAgent(
             if (message.subtype === 'success' && !message.is_error) {
               receivedSuccessResult = true;
               lastResultMessage = message;
+            } else if (!receivedSuccessResult) {
+              terminalFailure = sdkResultFailure(message);
+              if (terminalFailure && assistantErrorStatus === 429) {
+                terminalFailure = {
+                  ...terminalFailure,
+                  classification: AgentErrorType.RATE_LIMIT,
+                };
+              }
             }
             signalDone();
           }
@@ -1337,17 +1417,28 @@ export async function runAgent(
     };
 
     const refreshGatewayAuth = agentConfig.refreshGatewayAuth;
-    if ((await runQuery()) === 'remint' && refreshGatewayAuth) {
+    if (
+      (await runQuery()) === 'remint' &&
+      refreshGatewayAuth &&
+      !agentConfig.signal?.aborted
+    ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
       reminted = true;
       remintRequested = false;
       abortController = new AbortController();
+      if (agentConfig.signal?.aborted) abortController.abort();
       signals.forgetApiErrors();
       spinner.message('Renewing the gateway token...');
       const stale = agentConfig.gatewayAuth;
       // A refusal or failure here ends the run with its own message.
       agentConfig.gatewayAuth = await refreshGatewayAuth();
+      if (agentConfig.signal?.aborted)
+        return {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'Agent run cancelled',
+        };
       logToFile(
         `Gateway token renewed after a 401 (${Math.round(
           (Date.now() - stale.refreshAtMs) / 1000,
@@ -1365,27 +1456,47 @@ export async function runAgent(
     // A fresh bearer was rejected. The auth screen is already up; hand the
     // decided failure to the caller, which owns the exit.
     if (authFailure) {
-      return { failure: authFailure };
+      return { kind: 'decided_failure', failure: authFailure };
+    }
+    if (agentConfig.signal?.aborted) {
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
     }
 
     // A YARA hook detected a terminal violation and aborted the run.
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
       spinner.stop('Security check stopped the setup');
-      return { error: AgentErrorType.YARA_VIOLATION };
+      return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
     }
 
     // If the middleware caught an [ABORT] and aborted the SDK query, surface
     // it as a structured error before checking other signals.
     if (abortReason) {
       spinner.stop('Wizard aborted');
-      return { error: AgentErrorType.ABORT, message: abortReason };
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: abortReason,
+      };
+    }
+    if (agentConfig.signal?.aborted) {
+      spinner.stop('Wizard aborted');
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
     }
 
     if (timedOut) {
       spinner.stop('Agent run timed out');
       return {
-        error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
         message: `Agent run timed out after ${timeoutMs! / 1000}s`,
       };
     }
@@ -1394,13 +1505,16 @@ export async function runAgent(
     if (signals.has('MCP_MISSING')) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
-      return { error: AgentErrorType.MCP_MISSING };
+      return { kind: 'failure', classification: AgentErrorType.MCP_MISSING };
     }
 
     if (signals.has('RESOURCE_MISSING')) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
-      return { error: AgentErrorType.RESOURCE_MISSING };
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.RESOURCE_MISSING,
+      };
     }
 
     // A clean success result already arrived. The Claude SDK can emit a second
@@ -1413,6 +1527,11 @@ export async function runAgent(
       return completeWithSuccess();
     }
 
+    if (terminalFailure) {
+      spinner.stop(errorMessage);
+      return terminalFailure;
+    }
+
     // Check for API errors (rate limits, etc.)
     // Surface just the API error line(s), not the entire output
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
@@ -1420,16 +1539,29 @@ export async function runAgent(
     if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.RATE_LIMIT,
+        message: apiErrorMessage,
+      };
     }
 
     if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.API_ERROR,
+        message: apiErrorMessage,
+      };
     }
 
-    return completeWithSuccess();
+    spinner.stop(errorMessage);
+    return {
+      kind: 'failure',
+      classification: AgentErrorType.API_ERROR,
+      message: 'SDK stream ended without a success result',
+    };
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone();
@@ -1440,14 +1572,27 @@ export async function runAgent(
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
       spinner.stop('Security check stopped the setup');
-      return { error: AgentErrorType.YARA_VIOLATION };
+      return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
     }
 
     // If the middleware caught an [ABORT] and triggered abortController.abort(),
     // the SDK will throw an AbortError — surface it as a clean abort result.
     if (abortReason) {
       spinner.stop('Wizard aborted');
-      return { error: AgentErrorType.ABORT, message: abortReason };
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: abortReason,
+      };
+    }
+
+    if (agentConfig.signal?.aborted) {
+      spinner.stop('Wizard aborted');
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
     }
 
     // If we already received a successful result, the error is from SDK cleanup
@@ -1461,7 +1606,8 @@ export async function runAgent(
     if (timedOut) {
       spinner.stop('Agent run timed out');
       return {
-        error: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
         message: `Agent run timed out after ${timeoutMs! / 1000}s`,
       };
     }
@@ -1473,13 +1619,23 @@ export async function runAgent(
     if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.RATE_LIMIT,
+        message: apiErrorMessage,
+        error: error instanceof Error ? error : undefined,
+      };
     }
 
     if (signals.hasApiError()) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.API_ERROR,
+        message: apiErrorMessage,
+        error: error instanceof Error ? error : undefined,
+      };
     }
 
     // No API error found, re-throw the original exception
@@ -1493,18 +1649,23 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
+    agentConfig.signal?.removeEventListener('abort', onExternalAbort);
     if (timeoutId) clearTimeout(timeoutId);
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion. A 401 never reached
     // this block before (the process exited first), so it still does not count.
     if (!receivedSuccessResult && !authFailure) {
       const durationMs = Date.now() - startTime;
-      analytics.wizardCapture('agent aborted', {
-        duration_ms: durationMs,
-        duration_seconds: Math.round(durationMs / 1000),
-        model: agentConfig.model,
-        ...config?.analyticsProperties,
-      });
+      try {
+        analytics.wizardCapture('agent aborted', {
+          duration_ms: durationMs,
+          duration_seconds: Math.round(durationMs / 1000),
+          model: agentConfig.model,
+          ...config?.analyticsProperties,
+        });
+      } catch {
+        // Analytics must not replace the SDK outcome.
+      }
     }
   }
 }

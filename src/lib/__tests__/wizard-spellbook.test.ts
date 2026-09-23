@@ -5,12 +5,16 @@ import { Integration } from '@shared/constants';
 import type { ProgramConfig } from '../programs/program-step';
 import { buildSession } from '../wizard-session';
 import { writeWizardSpellbook } from '../wizard-spellbook';
-import { downloadSkill, fetchSkillMenu } from '@agent/tools/tools';
+import { downloadSkill } from '@agent/tools/tools';
+import { fetchSkillMenu } from '@shared/skill-menu';
 
 vi.mock('@agent/tools/tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/tools/tools')>()),
-  fetchSkillMenu: vi.fn(),
   downloadSkill: vi.fn(),
+}));
+vi.mock('@shared/skill-menu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/skill-menu')>()),
+  fetchSkillMenu: vi.fn(),
 }));
 
 const program: ProgramConfig = {

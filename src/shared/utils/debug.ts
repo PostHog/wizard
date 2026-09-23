@@ -1,7 +1,6 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { inspect } from 'node:util';
-import { getUI } from '@ui';
 import { IS_DEV, runtimeEnv } from '@env';
 import { WIZARD_LOG_FILE } from './paths';
 
@@ -107,9 +106,21 @@ export function logToFile(...args: unknown[]): void {
   appendLine(`[${ts}] ${renderLine(args)}\n`);
 }
 
+/** Where `debug()` lines go. The UI module installs the current UI's info log at load; until then they go to stdout. */
+export type DebugSink = (line: string) => void;
+
+let debugSink: DebugSink = (line) => process.stdout.write(`${line}\n`);
+
+/** Replace the console sink; returns the previous one so callers can restore it. */
+export function setDebugSink(sink: DebugSink): DebugSink {
+  const previous = debugSink;
+  debugSink = sink;
+  return previous;
+}
+
 export function debug(...args: unknown[]): void {
   if (!consoleLoggingEnabled) return;
-  getUI().log.info(renderLine(args));
+  debugSink(renderLine(args));
 }
 
 export function enableDebugLogs(): void {

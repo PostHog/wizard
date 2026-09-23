@@ -30,6 +30,10 @@ Each domain has a dedicated boundary:
   [ai-gateway](https://github.com/PostHog/ai-gateway). To disable scanning in
   the field without a release, see the kill-switch runbook:
   `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
+- **Agent** → `src/agent/`, imported only through `@agent` (values) and
+  `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
+- **Shared** → `src/shared/`, stateless library code with no upward imports;
+  see [src/shared/README.md](src/shared/README.md)
 - **Programs** → step arrays in `src/lib/programs/`
 - **TUI** → screen components and primitives in `src/ui/tui/`
 
@@ -197,6 +201,11 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
   the store directly from business logic.
+- Shared helpers never call `getUI()`; they take a sink or return data. `debug()`
+  reaches the UI through the sink `src/ui/index.ts` installs.
+- Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add
+  to those entry modules rather than deep-importing; lint and
+  `pnpm test:arch` reject `@agent/*` paths elsewhere.
 - Session mutations go through explicit store setters that call `emitChange()`.
   Never mutate `session` directly — nanostore holds a shallow copy.
 - The router resolves the active screen from session state. No imperative

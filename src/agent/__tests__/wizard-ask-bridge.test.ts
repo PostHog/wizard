@@ -19,6 +19,122 @@ beforeEach(() => {
 });
 
 describe('createWizardAskBridge', () => {
+  it('dismisses and settles an active question on run cancellation', async () => {
+    const controller = new AbortController();
+    const signals: AbortSignal[] = [];
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion: (_question, { signal }) => {
+        signals.push(signal);
+        return new Promise<AskAnswers>(() => undefined);
+      },
+    });
+    const result = bridge.request({
+      questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+    });
+    expect(bridge.getPendingQuestion()).not.toBeNull();
+    expect(signals[0].aborted).toBe(false);
+    controller.abort();
+    await expect(result).resolves.toEqual({
+      answers: { goal: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+    // The run's abort reaches the host as this question's own abort, so the
+    // host dismisses the overlay it opened.
+    expect(signals[0].aborted).toBe(true);
+    expect(bridge.getPendingQuestion()).toBeNull();
+  });
+
+  it('aborts every open question when the run is cancelled', async () => {
+    const controller = new AbortController();
+    const signals: AbortSignal[] = [];
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion: (_question, { signal }) => {
+        signals.push(signal);
+        return new Promise<AskAnswers>(() => undefined);
+      },
+    });
+    const questions = [{ id: 'goal', prompt: 'Goal?', kind: 'text' as const }];
+    const first = bridge.request({ questions });
+    const second = bridge.request({ questions });
+    controller.abort();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { answers: { goal: CANCELLED_SENTINEL }, timedOut: false },
+      { answers: { goal: CANCELLED_SENTINEL }, timedOut: false },
+    ]);
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, true]);
+  });
+
+  it('leaves an answered question alone when the run is cancelled later', async () => {
+    const controller = new AbortController();
+    const signals: AbortSignal[] = [];
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion: (_question, { signal }) => {
+        signals.push(signal);
+        return Promise.resolve({ goal: 'ship it' });
+      },
+    });
+    await expect(
+      bridge.request({
+        questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+      }),
+    ).resolves.toEqual({ answers: { goal: 'ship it' }, timedOut: false });
+    controller.abort();
+    // A late abort must not dismiss whatever the host shows next.
+    expect(signals[0].aborted).toBe(false);
+  });
+
+  it('settles a cancelled question when the host rejects on dismissal', async () => {
+    const controller = new AbortController();
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion: (_question, { signal }) =>
+        new Promise<AskAnswers>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(new Error('overlay broken')),
+            { once: true },
+          );
+        }),
+    });
+    const result = bridge.request({
+      questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+    });
+    controller.abort();
+    await expect(result).resolves.toEqual({
+      answers: { goal: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+    expect(bridge.getPendingQuestion()).toBeNull();
+  });
+
+  it('does not open a question when the run was already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const showQuestion = vi.fn();
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion,
+    });
+    await expect(
+      bridge.request({
+        questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+      }),
+    ).resolves.toEqual({
+      answers: { goal: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+    expect(showQuestion).not.toHaveBeenCalled();
+    expect(bridge.getPendingQuestion()).toBeNull();
+  });
+
   it('forwards questions to showQuestion and resolves with the captured answers', async () => {
     const captured: PendingQuestion[] = [];
     let resolveAnswers!: (answers: AskAnswers) => void;
@@ -253,6 +369,38 @@ describe('createWizardAskBridge', () => {
           ([name]) => name === 'wizard_ask cancelled',
         );
         expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('settles a timed-out question when the host rejects on dismissal', async () => {
+      vi.useFakeTimers();
+      try {
+        // The host's dismissal is its own: an abort listener's throw reaches
+        // no caller. What reaches the bridge is the host's promise, which may
+        // reject once its overlay is torn down; the timeout has already won.
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: (_question, { signal }) =>
+            new Promise<AskAnswers>((_resolve, reject) => {
+              signal.addEventListener(
+                'abort',
+                () => reject(new Error('overlay broken')),
+                { once: true },
+              );
+            }),
+          timeoutMs: 1000,
+        });
+        const result = bridge.request({
+          questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+        });
+        vi.advanceTimersByTime(1000);
+        await expect(result).resolves.toEqual({
+          answers: { goal: CANCELLED_SENTINEL },
+          timedOut: true,
+        });
+        expect(bridge.getPendingQuestion()).toBeNull();
       } finally {
         vi.useRealTimers();
       }

@@ -117,7 +117,7 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/shared/errors/detect-map.ts`](../src/shared/errors/detect-map.ts)) maps `kind`
+([`src/lib/programs/detect-map.ts`](../src/lib/programs/detect-map.ts)) maps `kind`
 → code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 

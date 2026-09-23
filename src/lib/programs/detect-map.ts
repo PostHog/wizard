@@ -1,4 +1,4 @@
-import { ErrorCodes, type ErrorCode } from './codes';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import type { RevenueDetectError } from '@lib/programs/revenue-analytics/detect';
 import type { SelfDrivingDetectError } from '@lib/programs/self-driving/detect';
 import type { SourceMapsDetectError } from '@lib/programs/error-tracking-upload-source-maps/detect';

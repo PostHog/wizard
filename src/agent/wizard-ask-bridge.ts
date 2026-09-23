@@ -54,17 +54,19 @@ export interface WizardAskBridge {
 }
 
 export interface WizardAskBridgeOptions {
+  /** Run cancellation: settles open questions as cancelled and aborts their signals. */
+  signal?: AbortSignal;
   /** Returns the active skill id, used as the analytics `source` on the request. */
   getSource: () => string;
   /**
    * Opens the overlay and resolves once the user submits or cancels. `signal`
-   * is this question's own: it aborts when the timeout wins the race, and the
-   * host dismisses this question's overlay. Without that the host keeps its
-   * pending-question state, and every later `wizard_ask` in the run fails with
-   * "another request is pending" — one unanswered prompt would block
-   * credential collection for all remaining sources. The host's abort
-   * handling must not throw: the bridge cannot catch an abort listener's
-   * error, and Node rethrows it as an uncaught exception.
+   * is this question's own: it aborts when the timeout wins the race or the
+   * run is cancelled, and the host dismisses this question's overlay. Without
+   * that the host keeps its pending-question state, and every later
+   * `wizard_ask` in the run fails with "another request is pending" — one
+   * unanswered prompt would block credential collection for all remaining
+   * sources. The host's abort handling must not throw: the bridge cannot catch
+   * an abort listener's error, and Node rethrows it as an uncaught exception.
    */
   showQuestion: (
     question: PendingQuestion,
@@ -124,6 +126,9 @@ export function createWizardAskBridge(
       return null;
     },
     async request({ questions, subject }) {
+      if (opts.signal?.aborted) {
+        return { answers: buildCancelledAnswers(questions), timedOut: false };
+      }
       const pending: PendingQuestion = {
         id: randomUUID(),
         questions,
@@ -137,24 +142,34 @@ export function createWizardAskBridge(
       const controller = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
       let timedOut = false;
+      let cancelForAbort: (() => void) | undefined;
 
-      // Race the user against the timeout. Whichever fires first wins. On
-      // timeout we also abort this question's signal so the host dismisses its
-      // overlay: resolving our side alone would leave the host's
-      // pending-question state set, and the next wizard_ask would be rejected
-      // as a duplicate request.
+      // Race the user against the timeout and the run. Whichever fires first
+      // wins. When the timeout or the run wins we also abort this question's
+      // signal so the host dismisses its overlay: resolving our side alone
+      // would leave the host's pending-question state set, and the next
+      // wizard_ask would be rejected as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
           timedOut = true;
-          controller.abort();
+          // Settle first: a host that rejects once dismissed must not win.
           resolve(buildCancelledAnswers(questions));
+          controller.abort();
         }, timeoutMs);
+      });
+      const aborted = new Promise<AskAnswers>((resolve) => {
+        cancelForAbort = () => {
+          resolve(buildCancelledAnswers(questions));
+          controller.abort();
+        };
+        opts.signal?.addEventListener('abort', cancelForAbort, { once: true });
       });
 
       try {
         const answers = await Promise.race([
           opts.showQuestion(pending, { signal: controller.signal }),
           timeoutPromise,
+          aborted,
         ]);
         const durationMs = Date.now() - startedAt;
 
@@ -178,6 +193,8 @@ export function createWizardAskBridge(
         return { answers, timedOut };
       } finally {
         if (timer) clearTimeout(timer);
+        if (cancelForAbort)
+          opts.signal?.removeEventListener('abort', cancelForAbort);
         pendingQuestions.delete(pending.id);
       }
     },

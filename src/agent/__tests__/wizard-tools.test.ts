@@ -24,7 +24,6 @@ import {
   ensureGitignoreCoverage,
   describeAskCancellation,
   evaluateAskCap,
-  fetchSkillMenu,
   mergeEnvValues,
   normaliseAskSubject,
   parseEnvKeys,
@@ -1461,49 +1460,5 @@ describe('downloadSkill (e2e over HTTP)', () => {
       captured.mockRestore();
       await server.close();
     }
-  });
-});
-
-describe('fetchSkillMenu', () => {
-  const noSleep = () => Promise.resolve();
-  const menu = { categories: { integration: [] } };
-  const menuResponse = () =>
-    Promise.resolve({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: () => Promise.resolve(menu),
-    });
-
-  it('retries a flaky menu fetch before succeeding', async () => {
-    let attempts = 0;
-
-    const result = await fetchSkillMenu('http://localhost:8765', {
-      fetchImpl: (() => {
-        attempts += 1;
-        if (attempts < 3) return Promise.reject(new Error('reset'));
-        return menuResponse();
-      }) as any,
-      sleepImpl: noSleep,
-    });
-
-    expect(attempts).toBe(3);
-    expect(result).toEqual(menu);
-  });
-
-  it('returns null after exhausting retries', async () => {
-    let attempts = 0;
-
-    const result = await fetchSkillMenu('http://localhost:8765', {
-      fetchImpl: (() => {
-        attempts += 1;
-        return Promise.reject(new Error('network down'));
-      }) as any,
-      sleepImpl: noSleep,
-      maxAttempts: 3,
-    });
-
-    expect(attempts).toBe(3);
-    expect(result).toBeNull();
   });
 });

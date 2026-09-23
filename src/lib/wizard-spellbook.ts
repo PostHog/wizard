@@ -3,12 +3,12 @@ import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from '@shared/constants';
 import type { ProgramConfig } from './programs/program-step';
 import type { WizardSession } from './wizard-session';
+import { downloadSkill } from '@agent';
 import {
-  downloadSkill,
   fetchSkillMenu,
   type SkillEntry,
   type SkillMenu,
-} from '@agent/tools/tools';
+} from '@shared/skill-menu';
 
 export type WizardSpellbook = { path: string; skillsIncluded: boolean };
 type SpellbookSession = Pick<

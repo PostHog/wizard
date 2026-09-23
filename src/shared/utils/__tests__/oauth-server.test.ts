@@ -3,7 +3,7 @@ import * as net from 'node:net';
 import { startCallbackServer } from '@utils/oauth';
 import { logToFile } from '../debug';
 
-vi.mock('../debug', () => ({ logToFile: vi.fn() }));
+vi.mock('../debug', () => ({ logToFile: vi.fn(), setDebugSink: vi.fn() }));
 
 const authUrl = 'https://oauth.example.test/authorize';
 const signupUrl = 'https://oauth.example.test/signup';

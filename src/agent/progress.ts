@@ -241,9 +241,11 @@ export type ProgressEmitter = (event: AgentProgress) => void;
  * capability is optional. With none supplied the agent installs no ask bridge,
  * so `wizard_ask` returns its existing "not available" error, and an optional
  * task notice is declined — the same path a `--ci` run takes today.
- * On a request's `signal` abort, the host dismisses that request alone, and
- * that dismissal must not throw: abort listeners run where the agent cannot
- * catch them, so Node would rethrow the error as an uncaught exception.
+ * Each request's `signal` aborts when that request times out, the run's
+ * signal aborts, or another task fails the run. On that abort the host
+ * dismisses that request alone, and that dismissal must not throw: abort
+ * listeners run where the agent cannot catch them, so Node would rethrow the
+ * error as an uncaught exception.
  */
 export interface AgentInteraction {
   /**

@@ -22,10 +22,8 @@
 import fs from 'fs';
 import path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import {
-  TASK_OUTCOMES_KEY,
-  type TaskOutcome,
-} from '@agent/runner/sequence/orchestrator/queue';
+import { TASK_OUTCOMES_KEY } from '@agent';
+import type { TaskOutcome } from '@agent/types';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 import type { E2eDecisionReport } from './e2e-profile.js';

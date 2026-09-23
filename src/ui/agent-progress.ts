@@ -1,5 +1,5 @@
 import type { WizardUI, SpinnerHandle } from './wizard-ui';
-import type { AgentInteraction, AgentProgress } from '@agent/progress';
+import type { AgentInteraction, AgentProgress } from '@agent/types';
 import { logToFile } from '@utils/debug';
 
 // ── Progress → WizardUI, one call per event ───────────────────────────
@@ -95,6 +95,8 @@ function dismissOnAbort<T>(
       logToFile('[agent-progress] dismissing an aborted request failed', error);
     }
   };
-  signal.addEventListener('abort', onAbort, { once: true });
+  // An abort listener added to an already aborted signal never fires.
+  if (signal.aborted) onAbort();
+  else signal.addEventListener('abort', onAbort, { once: true });
   return open.finally(() => signal.removeEventListener('abort', onAbort));
 }

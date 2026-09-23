@@ -85,6 +85,71 @@ describe('task notice timeout', () => {
     }
   });
 
+  it('closes an active notice on run cancellation without marking a timeout', async () => {
+    const controller = new AbortController();
+    showTaskNotice.mockReturnValue(new Promise<boolean>(() => undefined));
+    const result = offerSeededTask(NOTICE, {
+      interaction,
+      signal: controller.signal,
+    });
+    expect(noticeSignal().aborted).toBe(false);
+    controller.abort();
+    await expect(result).resolves.toEqual({ keep: false, timedOut: false });
+    // The run's abort reaches the host as this notice's own abort.
+    expect(noticeSignal().aborted).toBe(true);
+  });
+
+  it('declines without showing the notice when the run was already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      offerSeededTask(NOTICE, { interaction, signal: controller.signal }),
+    ).resolves.toEqual({ keep: false, timedOut: false });
+    expect(showTaskNotice).not.toHaveBeenCalled();
+  });
+
+  it('declines a timed-out notice when the host rejects on dismissal', async () => {
+    vi.useFakeTimers();
+    try {
+      showTaskNotice.mockImplementation(
+        (_notice, { signal }) =>
+          new Promise<boolean>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => reject(new Error('overlay broken')),
+              { once: true },
+            );
+          }),
+      );
+      const promise = offerSeededTask(NOTICE, { timeoutMs: 1000, interaction });
+      vi.advanceTimersByTime(1000);
+      // The timeout won; the host's rejection must not turn it into an error.
+      await expect(promise).resolves.toEqual({ keep: false, timedOut: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('declines a cancelled notice when the host rejects on dismissal', async () => {
+    const controller = new AbortController();
+    showTaskNotice.mockImplementation(
+      (_notice, { signal }) =>
+        new Promise<boolean>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(new Error('overlay broken')),
+            { once: true },
+          );
+        }),
+    );
+    const result = offerSeededTask(NOTICE, {
+      interaction,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(result).resolves.toEqual({ keep: false, timedOut: false });
+  });
+
   it('keeps the step when the user accepts in time', async () => {
     vi.useFakeTimers();
     try {

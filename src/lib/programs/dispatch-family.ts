@@ -2,12 +2,12 @@ import type { Arguments } from 'yargs';
 
 import { auditConfig } from '@lib/programs/audit/index';
 import { AUDIT_CHECKS_FILE } from '@lib/programs/audit/types';
-import { WIZARD_TOOL_NAMES } from '@agent/tools';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { agentSkillConfig } from '@lib/programs/program-registry';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { getSkillsBaseUrl } from '@shared/constants';
-import { fetchSkillMenu, type CliEntry } from '@agent/tools';
+import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 
 import { dispatchProgram } from '../../commands/factories/shared';

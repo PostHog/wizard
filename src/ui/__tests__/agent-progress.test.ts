@@ -168,6 +168,20 @@ it('dismisses an open question or notice when its signal aborts', () => {
   expect(cancelNotice).toHaveBeenCalledOnce();
 });
 
+it('dismisses at once when the request signal aborted before it opened', () => {
+  const ui = new LoggingUI();
+  vi.spyOn(ui, 'requestQuestion').mockReturnValue(new Promise(() => undefined));
+  const cancelAsk = vi.spyOn(ui, 'cancelPendingQuestion');
+  vi.spyOn(ui, 'showTaskNotice').mockReturnValue(new Promise(() => undefined));
+  const cancelNotice = vi.spyOn(ui, 'cancelTaskNotice');
+  const interaction = uiInteraction(ui);
+  // An abort listener added to an aborted signal never fires.
+  void interaction.ask?.(question, { signal: AbortSignal.abort() });
+  void interaction.taskNotice?.(notice, { signal: AbortSignal.abort() });
+  expect(cancelAsk).toHaveBeenCalledOnce();
+  expect(cancelNotice).toHaveBeenCalledOnce();
+});
+
 it('settles a timed-out question when the host dismissal throws', async () => {
   vi.useFakeTimers();
   try {

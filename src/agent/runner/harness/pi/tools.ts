@@ -39,7 +39,6 @@ import {
   createAskAccounting,
   describeAskCancellation,
   ensureGitignoreCoverage,
-  fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
   normaliseAskSubject,
@@ -54,6 +53,7 @@ import {
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from '@agent/tools/tools';
+import { fetchSkillMenu } from '@shared/skill-menu';
 import type { LLMProvider } from '@posthog/warlock';
 import type { ProgressEmitter } from '@agent/progress';
 import {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCodes } from '../codes';
-import { ERROR_CATALOG } from '../catalog';
+import { ErrorCodes, ERROR_CATALOG } from '@shared/errors';
 import { detectErrorCode, type DetectErrorKind } from '../detect-map';
 
 /**
