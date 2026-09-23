@@ -16,11 +16,12 @@ import {
   type AskAnswers,
   type PendingQuestion,
 } from '@lib/wizard-session';
-import { AGENT_ERROR_CODE, ErrorCodes } from '@shared/errors';
+import { AGENT_ERROR_CODE, ErrorCodes, WizardError } from '@shared/errors';
 import { AgentErrorType } from '@agent/signals';
 import type { AgentFailure } from '@agent/runner/shared/types';
 import type { AgentProgress } from '@agent/progress';
 import type {
+  AgentResult,
   AgentHarness,
   BackendRunInputs,
   TaskRunInputs,
@@ -64,12 +65,13 @@ vi.mock('@agent/gateway-session', async (importOriginal) => ({
 // The fake harness: reports a little of everything, then returns what the
 // current test told it to.
 const harnessState = vi.hoisted(() => ({
-  result: {} as { error?: string; message?: string; failure?: unknown },
+  result: { kind: 'success' } as AgentResult,
   throws: undefined as Error | undefined,
   lastInputs: undefined as unknown,
   tasks: [] as TaskRunInputs[],
   selected: [] as Harness[],
   taskFailure: undefined as AgentFailure | undefined,
+  taskThrow: undefined as Error | undefined,
   seedFailure: undefined as AgentFailure | undefined,
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
 }));
@@ -91,10 +93,12 @@ vi.mock('@agent/runner/switchboard/harness', () => {
       const { store, currentTaskId } = inputs.orchestrator;
       if (!currentTaskId) {
         if (harnessState.seedFailure)
-          return Promise.resolve({ failure: harnessState.seedFailure });
+          return { kind: 'decided_failure', failure: harnessState.seedFailure };
         store.enqueue({ type: 'install' });
+      } else if (harnessState.taskThrow) {
+        throw harnessState.taskThrow;
       } else if (harnessState.taskFailure) {
-        return Promise.resolve({ failure: harnessState.taskFailure });
+        return { kind: 'decided_failure', failure: harnessState.taskFailure };
       } else {
         await askIfRequested(inputs);
         store.complete(currentTaskId, {
@@ -103,7 +107,7 @@ vi.mock('@agent/runner/switchboard/harness', () => {
           forNextAgent: 'done',
         });
       }
-      return Promise.resolve({});
+      return { kind: 'success' };
     },
     async run(inputs: BackendRunInputs) {
       harnessState.lastInputs = inputs;
@@ -133,7 +137,7 @@ vi.mock('@agent/runner/switchboard/harness', () => {
       await askIfRequested(inputs);
       if (harnessState.throws) throw harnessState.throws;
       spinner.stop('Done');
-      return harnessState.result as never;
+      return harnessState.result;
     },
   };
   return {
@@ -243,10 +247,11 @@ const input = (over: Partial<RunInput> = {}): RunInput => ({
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'run-agent-standalone-'));
-  harnessState.result = {};
+  harnessState.result = { kind: 'success' };
   harnessState.tasks = [];
   harnessState.selected = [];
   harnessState.taskFailure = undefined;
+  harnessState.taskThrow = undefined;
   harnessState.seedFailure = undefined;
   harnessState.throws = undefined;
   harnessState.lastInputs = undefined;
@@ -381,7 +386,10 @@ describe('runAgent standalone', () => {
   );
 
   it('cleans up when the seed fails before the drain starts', async () => {
-    const failure = { message: 'Authentication failed (401)' };
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Authentication failed (401)',
+    };
     harnessState.seedFailure = failure;
     const result = await runAgent(
       config({
@@ -427,6 +435,38 @@ describe('runAgent standalone', () => {
     );
     expect(result.outcome).toBe('failed');
     expect(result.failure).toBe(failure);
+    expect(harnessState.tasks).toHaveLength(2);
+    expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
+  });
+
+  it('treats a coded task harness rejection as run-fatal without retrying', async () => {
+    const error = new WizardError(
+      'Gateway rejected the request',
+      {},
+      ErrorCodes.AgentApiError,
+    );
+    harnessState.taskThrow = error;
+    const result = await runAgent(
+      config({
+        binding: {
+          harness: Harness.pi,
+          sequence: Sequence.orchestrator,
+          model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.pi,
+        },
+      }),
+      input(),
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.failure).toMatchObject({
+      code: ErrorCodes.AgentApiError,
+      message: error.message,
+    });
+    expect(result.failure?.error).toBe(error);
     expect(harnessState.tasks).toHaveLength(2);
     expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
   });
@@ -571,7 +611,8 @@ describe('runAgent standalone', () => {
 
   it('returns an agent abort as a decided failure with the matched case', async () => {
     harnessState.result = {
-      error: AgentErrorType.ABORT,
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
       message: 'No Stripe found',
     };
     const events: AgentProgress[] = [];
@@ -588,15 +629,16 @@ describe('runAgent standalone', () => {
       body: 'Stripe is required.',
       errorDetail: { reason: 'No Stripe found' },
     });
-    expect(result.failure?.error?.message).toBe(
-      'Agent aborted: No Stripe found',
-    );
+    expect(result.failure?.error).toBeUndefined();
     expect(events.some((e) => e.kind === 'completion')).toBe(false);
     expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 
   it('returns a coded failure for a harness error', async () => {
-    harnessState.result = { error: AgentErrorType.NO_PROGRESS };
+    harnessState.result = {
+      kind: 'failure',
+      classification: AgentErrorType.NO_PROGRESS,
+    };
 
     const result = await runAgent(config(), input());
 
@@ -607,9 +649,23 @@ describe('runAgent standalone', () => {
     expect(result.failure?.message).toContain('without changing your project');
   });
 
+  it('resolves a crash even when the thrown Error has hostile getters', async () => {
+    const hostile = new Error('hidden');
+    Object.defineProperty(hostile, 'message', {
+      get() {
+        throw new Error('message getter');
+      },
+    });
+    harnessState.throws = hostile;
+    const result = await runAgent(config(), input());
+    expect(result.outcome).toBe(RunOutcome.Crashed);
+    expect(result.failure?.error).toBe(hostile);
+    expect(result.failure?.code).toBe(ErrorCodes.InternalUnhandled);
+  });
+
   it('passes a harness-decided failure through untouched', async () => {
     const failure = { code: ErrorCodes.AgentAbort, message: 'decided' };
-    harnessState.result = { failure };
+    harnessState.result = { kind: 'decided_failure', failure };
 
     const result = await runAgent(config(), input());
 
@@ -642,6 +698,25 @@ describe('runAgent standalone', () => {
 
     expect(result.outcome).toBe('success');
     expect(result.snapshot.tasks).toHaveLength(1);
+  });
+
+  it('finishes when an async observer rejects', async () => {
+    const result = await runAgent(config(), input(), {
+      onProgress: () => Promise.reject(new Error('observer rejected')),
+    });
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(result.snapshot.tasks).toHaveLength(1);
+  });
+
+  it('returns an aborted result before setup for a pre-aborted host signal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await runAgent(config(), input(), {
+      signal: controller.signal,
+    });
+    expect(result.outcome).toBe(RunOutcome.Aborted);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
+    expect(harnessState.lastInputs).toBeUndefined();
   });
 
   it('calls the bound hooks with the run credentials', async () => {

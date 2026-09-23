@@ -430,8 +430,14 @@ export async function detectProjectsWithAgent(
     middleware,
   );
 
-  if (result.error) {
-    throw new Error(result.message || `Agent error: ${result.error}`);
+  if (result.kind !== 'success') {
+    if (result.kind === 'decided_failure') {
+      throw result.failure.error ?? new Error(result.failure.message);
+    }
+    throw (
+      result.error ??
+      new Error(result.message || `Agent error: ${result.classification}`)
+    );
   }
 
   // Transcript first, final message last — its verdicts win path conflicts.

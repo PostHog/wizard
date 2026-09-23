@@ -6,6 +6,7 @@ import {
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
+import { ErrorCodes } from '@shared/errors';
 
 vi.mock('@utils/debug');
 vi.mock('@ui', () => ({ getUI: () => ui }));
@@ -13,6 +14,7 @@ const ui = vi.hoisted(() => ({
   addTokenUsage: vi.fn(),
   setStage: vi.fn(),
   pushStatus: vi.fn(),
+  showAuthError: vi.fn(),
   log: { error: vi.fn() },
 }));
 vi.mock('@agent/agent-interface', async (original) => ({
@@ -55,7 +57,7 @@ it('keeps initialization and execution progress visible during detection', async
         result:
           '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
       });
-      return Promise.resolve({});
+      return Promise.resolve({ kind: 'success' });
     },
   );
   const session = buildSession({ installDir: '/tmp/detection-test' });
@@ -77,4 +79,39 @@ it('keeps initialization and execution progress visible during detection', async
     ['Initialization diagnostic'],
     ['Execution diagnostic'],
   ]);
+});
+
+it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
+  vi.mocked(initializeAgent).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof initializeAgent>>,
+  );
+  vi.mocked(executeAgent).mockImplementation(
+    (_config, _prompt, _options, _spinner, _messages, middleware) => {
+      middleware?.onMessage({
+        type: 'result',
+        result: '{"projects":[{"path":".","targetId":"node"}]}',
+      });
+      return Promise.resolve({
+        kind: 'decided_failure',
+        failure: {
+          code: ErrorCodes.AuthInvalidOrExpired,
+          message: 'Authentication failed (401)',
+        },
+      });
+    },
+  );
+  const session = buildSession({ installDir: '/tmp/detection-test' });
+  session.credentials = {
+    accessToken: 'test',
+    projectApiKey: 'phc_test',
+    projectId: 1,
+    host: HostResolution.fromApiHost('https://us.posthog.com'),
+  };
+  await expect(
+    detectProjectsWithAgent(session, {
+      programId: 'posthog-integration',
+      targets: [{ id: 'node', name: 'Node.js' }],
+    }),
+  ).rejects.toThrow('Authentication failed (401)');
+  expect(ui.showAuthError).not.toHaveBeenCalled();
 });
