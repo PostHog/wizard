@@ -156,6 +156,11 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     harness: Harness.pi,
     model: DEFAULT_AGENT_MODEL,
   },
+  'feature-flags': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'ai-observability': {
     sequence: Sequence.linear,
     harness: Harness.pi,

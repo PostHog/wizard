@@ -10,6 +10,7 @@ exports[`post-auth gate ids per program > match the golden 1`] = `
     "detect",
   ],
   "events-audit": [],
+  "feature-flags": [],
   "mcp-add": [],
   "mcp-analytics": [],
   "mcp-remove": [],

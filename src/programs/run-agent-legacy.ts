@@ -203,6 +203,7 @@ async function runSessionProgram(
         agentFlow: programConfig.agentFlow,
         allowedTools: programConfig.allowedTools,
         disallowedTools: programConfig.disallowedTools,
+        agentPrompts: programConfig.agentPrompts,
         excludedTaskTypes: programConfig.excludedTaskTypes,
         postAuthGates: postAuthGateSteps(programConfig.steps).map(
           (step) => step.id,
