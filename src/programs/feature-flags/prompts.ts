@@ -28,14 +28,16 @@ First establish two facts from the repo.
 
 - \`backend\`: server code that handles requests, such as route handlers, API
   views, controllers, server components, or server loaders.
-- \`frontend\`: code the app owns that runs in a browser or on a device, such
-  as client components, a single-page app, scripts in its page templates, or
-  mobile screens.
+- \`frontend\`: JavaScript or device code the app owns that runs in a browser
+  or on a device, such as client components, a single-page app, inline
+  scripts in its page templates, script files its pages load (directly or
+  through asset helpers such as import maps or Vite), or mobile screens.
 
 A side counts only when the app already has code there to put an evaluation
-in. Never add a side to host a flag. Full-stack frameworks usually have both;
-an API has only a backend; a mobile app or a static single-page app has only a
-frontend.
+in. Never add a side to host a flag. Server-rendered templates that load no
+JavaScript of the app's own are not a frontend: such an app has only a
+backend. An API has only a backend; a mobile app or a static single-page app
+has only a frontend.
 
 **2. Is PostHog already integrated on each of those sides?** Look for the
 PostHog SDK for that side in the dependency manifests (or, for template
