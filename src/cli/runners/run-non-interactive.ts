@@ -284,6 +284,14 @@ export function runNonInteractive(
         session.inferenceAuth = ciInferenceAuth;
         store?.setInferenceAuth(ciInferenceAuth);
       }
+
+      // Controlled headless: nothing runs until the parent asks. Detection,
+      // runs, answers and the exit all arrive over the socket.
+      if (options.controlSocket && store) {
+        await serveControl(store, config, options);
+        return;
+      }
+
       if (config.ciPreRun) {
         const ui = getUI();
         await config.ciPreRun(session, {
@@ -429,4 +437,56 @@ export function runNonInteractive(
       process.exit(1);
     })
     .finally(() => detachSignalHandlers());
+}
+
+/** Serve the control API over the headless store until the parent shuts it down. */
+async function serveControl(
+  store: WizardStore,
+  config: ProgramConfig,
+  options: Record<string, unknown>,
+): Promise<void> {
+  const { attachControlServer } = await import('@headless/control');
+  const { wizardStoreControlTarget } = await import('@tui/control/index');
+  const { InkUI } = await import('@tui/ink-ui');
+  const { createControlHooks } = await import('@cli/control-hooks');
+  const { controlMode } = await import('@cli/control-flags');
+  const { runProgramAgent } = await import('./run-program-agent');
+  const { VERSION } = await import('@shared/version');
+  const { logToFile } = await import('@utils/debug');
+
+  // The parent answers the agent's questions over the socket, so the ask
+  // bridge stays wired despite `ci`, and questions land in the store.
+  store.session = { ...store.session, e2eAsk: true };
+  setUI(new InkUI(store));
+
+  let release: () => void = () => undefined;
+  const served = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const handle = await attachControlServer(
+    wizardStoreControlTarget(store, { screens: false }),
+    {
+      socketPath: options.controlSocket as string,
+      surface: 'headless',
+      mode: controlMode(options),
+      version: VERSION,
+      program: config.id,
+      hooks: createControlHooks({
+        store,
+        programId: config.id,
+        runs: { runProgramAgent },
+        shutdown: () => {
+          release();
+          return Promise.resolve();
+        },
+      }),
+    },
+  );
+  process.once('SIGINT', release);
+  process.once('SIGTERM', release);
+  logToFile(`[control] serving ${config.id} on ${handle.socketPath}`);
+  await served;
+  process.off('SIGINT', release);
+  process.off('SIGTERM', release);
+  await handle.close();
 }

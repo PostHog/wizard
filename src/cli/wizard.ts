@@ -8,6 +8,7 @@ import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
+import { CONTROL_OPTIONS, controlFlagRefusal } from './control-flags';
 
 /**
  * Global yargs options applied to every command. These are read from the
@@ -75,6 +76,9 @@ export const GLOBAL_OPTIONS = {
     type: 'boolean' as const,
     hidden: true,
   },
+  // Always declared so the published headless path accepts them; init()
+  // refuses the socket on published TUI runs and a mode without a socket.
+  ...CONTROL_OPTIONS,
 };
 
 export class Wizard {
@@ -223,6 +227,19 @@ export class Wizard {
 
   /** Parse argv and dispatch to the matching registered command. */
   init(): void {
+    const controlRefusal = controlFlagRefusal(
+      process.argv.slice(2),
+      process.env,
+      IS_PRODUCTION_BUILD,
+    );
+    if (controlRefusal) {
+      process.stderr.write(`\n\x1b[1;91m✖ ${controlRefusal}\x1b[0m\n\n`);
+      emitWizardError({
+        code: ErrorCodes.CliFlagUnavailable,
+        message: controlRefusal,
+      });
+      process.exit(1);
+    }
     // In published builds, `--ci` is undeclared, so yargs would reject it as
     // an unknown argument — accurate but unhelpful, since --help doesn't list
     // --ci either and the user has no path forward. POSTHOG_WIZARD_CI silently

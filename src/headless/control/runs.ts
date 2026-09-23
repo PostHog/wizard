@@ -1,0 +1,69 @@
+import { randomUUID } from 'node:crypto';
+import type { ProgramId } from '@programs/types';
+import type { ControlState, RunRecord } from '@shared/control/types';
+
+/** Thrown when a route needs an idle store while a run is in flight. Maps to 409. */
+export class RunInFlightError extends Error {
+  constructor(runId?: string) {
+    super(
+      runId ? `A run is already in flight: ${runId}` : 'A run is in flight',
+    );
+    this.name = 'RunInFlightError';
+  }
+}
+
+/** Every independent run this process served, in start order. */
+export class RunLedger {
+  private readonly records: RunRecord[] = [];
+
+  get active(): RunRecord | null {
+    return this.records.find((r) => r.status === 'running') ?? null;
+  }
+
+  start(
+    programId: ProgramId,
+    installDir: string,
+    skillId: string | null = null,
+  ): RunRecord {
+    const running = this.active;
+    if (running) throw new RunInFlightError(running.runId);
+    const record: RunRecord = {
+      runId: randomUUID(),
+      programId,
+      skillId,
+      installDir,
+      status: 'running',
+      error: null,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      result: null,
+    };
+    this.records.push(record);
+    return record;
+  }
+
+  finish(runId: string, result: ControlState): void {
+    const record = this.find(runId);
+    record.status = 'done';
+    record.result = result;
+    record.finishedAt = new Date().toISOString();
+  }
+
+  fail(runId: string, error: string, result: ControlState): void {
+    const record = this.find(runId);
+    record.status = 'failed';
+    record.error = error;
+    record.result = result;
+    record.finishedAt = new Date().toISOString();
+  }
+
+  list(): RunRecord[] {
+    return this.records.map((r) => ({ ...r }));
+  }
+
+  private find(runId: string): RunRecord {
+    const record = this.records.find((r) => r.runId === runId);
+    if (!record) throw new Error(`unknown run ${runId}`);
+    return record;
+  }
+}

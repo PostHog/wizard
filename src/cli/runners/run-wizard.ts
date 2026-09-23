@@ -32,6 +32,7 @@ import type { WizardSession } from '@tui/session';
 import { cliTuiHost } from '@cli/tui-host';
 import { runCleanups } from '@utils/cleanup-registry';
 import { getUI } from '@cli/ui';
+import { IS_PRODUCTION_BUILD } from '@env';
 
 const WIZARD_VERSION = VERSION;
 
@@ -169,6 +170,32 @@ export function runWizard(
       }
 
       activeTui.store.session = session;
+
+      // A controlled TUI serves its store's actions over the socket; the flow still runs here.
+      if (!IS_PRODUCTION_BUILD && options.controlSocket) {
+        const { attachControlServer } = await import('@headless/control');
+        const { wizardStoreControlTarget } = await import('@tui/control/index');
+        const { createControlHooks } = await import('@cli/control-hooks');
+        const { controlMode } = await import('@cli/control-flags');
+        await attachControlServer(
+          wizardStoreControlTarget(activeTui.store, { screens: true }),
+          {
+            socketPath: options.controlSocket as string,
+            surface: 'tui',
+            mode: controlMode(options),
+            version: WIZARD_VERSION,
+            program: config.id,
+            hooks: createControlHooks({
+              store: activeTui.store,
+              programId: config.id,
+              shutdown: () => {
+                activeTui.unmount();
+                process.exit(0);
+              },
+            }),
+          },
+        );
+      }
 
       // Flush a terminal-phase push on Ctrl-C so the web app sees the
       // run ended in error rather than hanging on the last "running"

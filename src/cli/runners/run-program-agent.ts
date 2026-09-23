@@ -35,6 +35,7 @@ import {
   uiInteraction,
 } from '@programs';
 import type {
+  HostFailure,
   ProgramCompletionContext,
   ProgramRunHost,
   ProgramRun,
@@ -71,6 +72,9 @@ import { getUI } from '@cli/ui';
 import { registerCleanup } from '@utils/cleanup-registry';
 import { wizardAbort } from '@cli/wizard-abort';
 
+/** Ends a run with a decided failure. */
+type HostAbort = (failure?: HostFailure) => Promise<never>;
+
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
  * Entry point for the runners and for composed run steps.
@@ -81,9 +85,12 @@ export async function runProgramAgent(
   options: {
     composed?: boolean;
     inferenceAuth?: InferenceAuthProvider;
+    /** How a decided failure ends the run; a controlled run fails its request instead of exiting. */
+    abort?: HostAbort;
     deferSkillCleanupCommit?: boolean;
   } = {},
 ): Promise<void> {
+  const abort = options.abort ?? ((failure) => wizardAbort(failure));
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
@@ -122,6 +129,7 @@ export async function runProgramAgent(
       programConfig,
       options.composed ?? false,
       options.inferenceAuth,
+      abort,
     );
     if (succeeded && !options.deferSkillCleanupCommit) {
       commitRegisteredRunSkillCleanups();
@@ -147,7 +155,8 @@ async function runProgram(
   run: ProgramRun,
   programConfig: ProgramConfig,
   composed: boolean,
-  inferenceAuth?: InferenceAuthProvider,
+  inferenceAuth: InferenceAuthProvider | undefined,
+  abort: HostAbort,
 ): Promise<boolean> {
   // 1. Init logging + debug
   initLogFile();
@@ -163,10 +172,10 @@ async function runProgram(
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs that declare a health-check screen get pre-flight checks;
   // for everything else the checks never fire and never block.
-  await runHealthGate(session, programConfig);
+  await runHealthGate(session, programConfig, abort);
 
   // 3. Settings conflicts
-  await runSettingsGate(session);
+  await runSettingsGate(session, abort);
 
   analytics.wizardCapture('agent started', {
     integration: run.integrationLabel,
@@ -178,7 +187,7 @@ async function runProgram(
   // agent run in the same invocation (self-driving's integration phase) reuses
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
-  await authenticate(session, programConfig.id, cliAuthHost());
+  await authenticate(session, programConfig.id, cliAuthHost(abort));
   maybeStampAiSdkDetected(session);
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -395,7 +404,7 @@ async function runProgram(
     if (programResult.failure?.authErrorDetail) {
       ui.showAuthError(programResult.failure.authErrorDetail);
     }
-    await wizardAbort(programResult.failure ?? {});
+    await abort(programResult.failure ?? {});
   }
   return programResult.outcome === RunOutcome.Success;
 }
@@ -405,6 +414,7 @@ async function runProgram(
 async function runHealthGate(
   session: WizardSession,
   programConfig: ProgramConfig,
+  abort: HostAbort,
 ): Promise<void> {
   const { rawProgramFlow } = await import('@tui/flows/index');
   const hasHealthCheckScreen = rawProgramFlow(programConfig.id).some(
@@ -442,7 +452,7 @@ async function runHealthGate(
     // (CI) do the same automatically — the degraded services are reported
     // above, but we proceed rather than aborting on a transient upstream blip.
     if (!isNonInteractiveEnvironment()) {
-      await wizardAbort({
+      await abort({
         code: ErrorCodes.EnvServiceOutage,
         message:
           'Cannot start — external services are down:\n' +
@@ -455,7 +465,10 @@ async function runHealthGate(
   }
 }
 
-async function runSettingsGate(session: WizardSession): Promise<void> {
+async function runSettingsGate(
+  session: WizardSession,
+  abort: HostAbort,
+): Promise<void> {
   const settingsConflicts = checkAllSettingsConflicts(session.installDir);
   logToFile(
     `[agent-runner] settings conflicts: ${
@@ -517,7 +530,7 @@ async function runSettingsGate(session: WizardSession): Promise<void> {
   // closed: the screen names the file + keys and exits.
   if (unfixable.length > 0) {
     if (isNonInteractiveEnvironment()) {
-      await wizardAbort({
+      await abort({
         code: ErrorCodes.SettingsUnfixableConflict,
         message:
           'Cannot start — a Claude settings file redirects the agent away ' +
