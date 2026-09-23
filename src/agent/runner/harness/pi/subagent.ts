@@ -17,6 +17,7 @@ import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
+import { gatewayTerminalFailure } from './gateway';
 
 /**
  * Read-only built-ins a subagent may use. bash is supplied separately as the
@@ -115,8 +116,19 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
       });
 
       let result = '';
+      let finalTurn:
+        | {
+            stopReason?: string;
+            errorMessage?: string;
+            diagnostics?: {
+              error?: { name?: string; code?: string | number };
+            }[];
+          }
+        | undefined;
       const unsub = child.subscribe((e) => {
         if (e.type === 'message_end') {
+          if ((e.message as { role?: string })?.role === 'assistant')
+            finalTurn = e.message as typeof finalTurn;
           const t = extractText(e.message).trim();
           if (t) result = t;
         }
@@ -124,6 +136,8 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
       logToFile(`[pi] subagent dispatch: ${args.description}`);
       try {
         await child.prompt(args.prompt);
+        const failure = gatewayTerminalFailure(finalTurn);
+        if (failure) throw new Error(`Subagent failed: ${failure.message}`);
       } finally {
         unsub();
       }

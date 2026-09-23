@@ -15,6 +15,7 @@ import {
   modelCapabilities,
   type ThinkingLevel,
 } from '../../switchboard/models';
+import { AgentErrorType } from '../../../signals';
 
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -146,6 +147,49 @@ export interface GatewayTurnError {
   diagnostics?: { error?: { name?: string; code?: string | number } }[];
 }
 
+export type GatewayTerminalFailure = {
+  classification:
+    | AgentErrorType.API_ERROR
+    | AgentErrorType.RATE_LIMIT
+    | AgentErrorType.ABORT;
+  message: string;
+  status?: number;
+};
+
+export function gatewayTerminalFailure(
+  turn: ({ stopReason?: string } & GatewayTurnError) | undefined,
+): GatewayTerminalFailure | undefined {
+  if (!turn || (turn.stopReason !== 'error' && turn.stopReason !== 'aborted'))
+    return undefined;
+  const message =
+    turn.errorMessage ||
+    (turn.stopReason === 'aborted'
+      ? 'Agent turn aborted'
+      : 'Gateway request failed');
+  if (turn.stopReason === 'aborted') {
+    return { classification: AgentErrorType.ABORT, message };
+  }
+  const codes =
+    turn.diagnostics
+      ?.map((d) => d.error?.code)
+      .filter((code) => code !== undefined) ?? [];
+  const structuredStatus = codes
+    .map(Number)
+    .find((code) => Number.isInteger(code) && code >= 400 && code < 600);
+  const rateLimited =
+    structuredStatus !== undefined
+      ? structuredStatus === 429
+      : /\b429\b|rate limit/i.test(message);
+  return {
+    classification: rateLimited
+      ? AgentErrorType.RATE_LIMIT
+      : AgentErrorType.API_ERROR,
+    message,
+    status:
+      structuredStatus ?? (isGatewayAuthRejection(turn) ? 401 : undefined),
+  };
+}
+
 /**
  * Whether a turn's error is the gateway rejecting the bearer. pi attaches the
  * SDK's own error to `diagnostics`, so its code decides when one is present.
@@ -159,6 +203,10 @@ export function isGatewayAuthRejection(
     typeof turn === 'string'
       ? { errorMessage: turn, diagnostics: undefined }
       : turn ?? {};
+  const structuredStatus = (diagnostics ?? [])
+    .map((diagnostic) => Number(diagnostic.error?.code))
+    .find((code) => Number.isInteger(code) && code >= 400 && code < 600);
+  if (structuredStatus !== undefined) return structuredStatus === 401;
   for (const diagnostic of diagnostics ?? []) {
     const code = diagnostic.error?.code;
     if (code === 401 || code === '401') return true;
@@ -192,20 +240,25 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
   prompt(text: string): Promise<void>;
   /** Feed every assistant `message_end`; the last turn decides. */
   noteAssistantTurn(message: unknown): void;
+  terminalFailure(): GatewayTerminalFailure | undefined;
 } {
   let auth = opts.auth;
   let rejected = false;
   let reminted = false;
+  let lastTurn: ({ stopReason?: string } & GatewayTurnError) | undefined;
   return {
     noteAssistantTurn(message) {
-      const turn = message as
+      lastTurn = message as
         | ({ stopReason?: string } & GatewayTurnError)
         | undefined;
-      rejected = turn?.stopReason === 'error' && isGatewayAuthRejection(turn);
+      rejected =
+        lastTurn?.stopReason === 'error' && isGatewayAuthRejection(lastTurn);
     },
+    terminalFailure: () => gatewayTerminalFailure(lastTurn),
     async prompt(text) {
       if (opts.signal?.aborted) return;
       rejected = false;
+      lastTurn = undefined;
       await opts.session.prompt(text);
       if (opts.signal?.aborted || !rejected || reminted || !isPastRefresh(auth))
         return;
@@ -218,6 +271,7 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
       );
       opts.onRemint?.();
       rejected = false;
+      lastTurn = undefined;
       const next = opts.continueText;
       if (opts.signal?.aborted) return;
       await opts.session.prompt(typeof next === 'function' ? next() : next);

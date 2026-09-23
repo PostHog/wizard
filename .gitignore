@@ -37,8 +37,6 @@ plugins
 .claude/settings.local.json
 .claude/worktrees/
 
-e2e-tests/fixtures/.tracking/*
-
 # Generated at build time by scripts/generate-version.js
 src/shared/version.ts
 # Re-include src/lib explicitly: a user-global ignore pattern like `lib/`

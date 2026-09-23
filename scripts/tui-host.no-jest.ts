@@ -59,6 +59,7 @@ import {
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
 import { buildSession } from '@tui/session';
+import { readPersonalApiKey } from '@e2e-harness/surface-e2e';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -184,12 +185,7 @@ function runAppBuild(root: string): boolean {
 }
 
 async function main() {
-  const apiKey = (
-    process.env.POSTHOG_PERSONAL_API_KEY ??
-    (process.env.POSTHOG_KEY_FILE
-      ? fs.readFileSync(process.env.POSTHOG_KEY_FILE, 'utf8')
-      : '')
-  ).trim();
+  const apiKey = readPersonalApiKey(process.env);
   const projectId = process.env.PROJECT_ID!;
   // Which program to drive — defaults to the integration flow. Set PROGRAM to
   // an id (e.g. `self-driving`) to host a different one.
