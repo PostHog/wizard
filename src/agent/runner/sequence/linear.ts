@@ -294,6 +294,5 @@ export async function runLinearProgram({
 
   emit({ kind: 'lifecycle', phase: 'completed', message: run.successMessage });
 
-  await analytics.shutdown('success');
   return { outcome: RunOutcome.Success, outro: outroData };
 }

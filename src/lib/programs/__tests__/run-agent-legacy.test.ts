@@ -107,6 +107,21 @@ const session = () => ({
 
 let logSpy: ReturnType<typeof vi.spyOn>;
 
+/** A run that reports, shows its outro and succeeds. */
+const finishRun: typeof runAgent = (_config, _input, options) => {
+  options?.onProgress?.({ kind: 'status', message: 'Working' });
+  options?.onProgress?.({
+    kind: 'completion',
+    outro: { kind: OutroKind.Success, message: 'Done' },
+  });
+  options?.onProgress?.({
+    kind: 'lifecycle',
+    phase: 'completed',
+    message: 'Done',
+  });
+  return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(authenticate).mockImplementation((sess) => {
@@ -115,19 +130,7 @@ beforeEach(() => {
   });
   setUI(new LoggingUI());
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  vi.mocked(runAgent).mockImplementation((_config, _input, options) => {
-    options?.onProgress?.({ kind: 'status', message: 'Working' });
-    options?.onProgress?.({
-      kind: 'completion',
-      outro: { kind: OutroKind.Success, message: 'Done' },
-    });
-    options?.onProgress?.({
-      kind: 'lifecycle',
-      phase: 'completed',
-      message: 'Done',
-    });
-    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-  });
+  vi.mocked(runAgent).mockImplementation(finishRun);
 });
 afterEach(() => logSpy.mockRestore());
 
@@ -152,9 +155,34 @@ it.each([
     expect(logSpy).toHaveBeenCalledWith('◇  Working');
     expect(logSpy).toHaveBeenCalledWith('└  Done');
     expect(initLogFile).toHaveBeenCalledOnce();
-    expect(analytics.shutdown).not.toHaveBeenCalled();
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
   },
 );
+
+it('sends terminal analytics after the outro and the run, before the host goes on', async () => {
+  const order: string[] = [];
+  logSpy.mockImplementation((line) => {
+    if (line === '└  Done') order.push('outro');
+  });
+  vi.mocked(runAgent).mockImplementation(async (...args) => {
+    const result = await finishRun(...args);
+    order.push('run-returned');
+    return result;
+  });
+  vi.mocked(analytics.shutdown).mockImplementation(() => {
+    order.push('shutdown');
+    return Promise.resolve();
+  });
+  await runProgramAgent(program(), session());
+  order.push('host-continues');
+  expect(order).toEqual([
+    'outro',
+    'run-returned',
+    'shutdown',
+    'host-continues',
+  ]);
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+});
 
 it('clamps a composed program to linear and keeps host analytics alive', async () => {
   await runProgramAgent(program(), session(), { composed: true });
@@ -167,6 +195,10 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
     expect.anything(),
   );
   expect(analytics.shutdown).not.toHaveBeenCalled();
+
+  // The host program's own run, later in the same process, ends it once.
+  await runProgramAgent(program(), session());
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
 it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
@@ -201,6 +233,8 @@ it('shows the auth guidance from a decided 401 before the error outro', async ()
   expect(wizardAbort).toHaveBeenCalledWith(
     expect.objectContaining({ authErrorDetail: detail }),
   );
+  // wizardAbort sends the one terminal event for a failed run.
+  expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
 it('rethrows the original crash for the outer runner', async () => {
@@ -242,6 +276,11 @@ it.each([
     );
     await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
     expect(wizardAbort).not.toHaveBeenCalled();
+    // One terminal event for the process, sent before the stream settles.
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+    expect(
+      vi.mocked(analytics.shutdown).mock.invocationCallOrder[0],
+    ).toBeLessThan(streamShutdown.mock.invocationCallOrder[0]);
     expect(runAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         binding: expect.objectContaining({ harness, sequence }),

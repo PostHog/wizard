@@ -278,38 +278,37 @@ export async function offerSeededTask(
   // No one to show the notice to: a step nobody can answer for must not run.
   // The same answer a non-interactive host gives today.
   if (!interaction?.taskNotice) return { keep: false, timedOut: false };
-  const { taskNotice, cancelTaskNotice } = interaction;
+  const { taskNotice } = interaction;
 
+  // This notice's own signal: its timeout or the run's cancellation aborts it.
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
   let cancelForAbort: (() => void) | undefined;
   const timeout = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true;
-      // Dismisses the overlay and settles the showTaskNotice promise too, so
-      // the losing side of the race cannot leave a modal on screen.
-      try {
-        cancelTaskNotice?.();
-      } catch {
-        // An overlay failure must not leave a pending notice promise.
-      }
+      // Settle first: a host that rejects once dismissed must not win.
       resolve(false);
+      // The host dismisses this notice's overlay and settles its promise too,
+      // so the losing side of the race cannot leave a modal on screen.
+      controller.abort();
     }, timeoutMs);
   });
   const aborted = new Promise<boolean>((resolve) => {
     cancelForAbort = () => {
-      try {
-        cancelTaskNotice?.();
-      } catch {
-        // A host overlay failure must not prevent the run from settling.
-      }
       resolve(false);
+      controller.abort();
     };
     signal?.addEventListener('abort', cancelForAbort, { once: true });
     if (signal?.aborted) cancelForAbort();
   });
   try {
-    const keep = await Promise.race([taskNotice(notice), timeout, aborted]);
+    const keep = await Promise.race([
+      taskNotice(notice, { signal: controller.signal }),
+      timeout,
+      aborted,
+    ]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
@@ -445,8 +444,10 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
   requiredFailedTypes: string[];
   optionalFailedTypes: string[];
   blocked: number;
+  blockedTypes: string[];
 } {
   const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
+  const pending = tasks.filter((t) => t.status === TaskStatus.Pending);
   return {
     requiredFailedTypes: failed
       .filter((t) => t.optional !== true)
@@ -454,8 +455,35 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
     optionalFailedTypes: failed
       .filter((t) => t.optional === true)
       .map((t) => t.type),
-    blocked: tasks.filter((t) => t.status === TaskStatus.Pending).length,
+    blocked: pending.length,
+    blockedTypes: pending.map((t) => t.type),
   };
+}
+
+/**
+ * The one-line "what went wrong" the abort message leads with.
+ *
+ * Both halves are named. A drain that ends with work still pending used to
+ * report only how many steps never ran, which is the least useful fact about
+ * them: a user who agreed to connect their data sources and then read that
+ * "2 steps never ran" had no way to tell whether that step was one of them.
+ */
+export function describeDrainFailure(verdict: {
+  requiredFailedTypes: string[];
+  blockedTypes: string[];
+}): string {
+  const parts: string[] = [];
+  if (verdict.requiredFailedTypes.length > 0) {
+    parts.push(`the ${verdict.requiredFailedTypes.join(', ')} step failed`);
+  }
+  if (verdict.blockedTypes.length > 0) {
+    parts.push(
+      `the ${verdict.blockedTypes.join(', ')} step${
+        verdict.blockedTypes.length === 1 ? '' : 's'
+      } never ran`,
+    );
+  }
+  return parts.join(', so ');
 }
 
 /** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
@@ -1311,11 +1339,23 @@ async function executeOrchestrator(
   // A failed optional task is exempt: reported per-task, never run-failing.
   const verdict = drainVerdict(store.list());
   const blocked = verdict.blocked;
+  // A pending task at this point never ran and never will — its dependency
+  // failed. No transition fires for it, so without this the step leaves no
+  // terminal event at all: a step the user was offered and accepted simply
+  // drops out of the funnel. The queue itself is left alone, because the run
+  // cache is already wiped by here and writing to it would recreate the folder
+  // the cleanup just removed.
+  for (const task of store.list()) {
+    if (task.status !== TaskStatus.Pending) continue;
+    analytics.wizardCapture('orchestrator task blocked', {
+      type: task.type,
+      optional: task.optional === true,
+      failed_types: verdict.requiredFailedTypes.join(',') || 'none',
+    });
+  }
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
     const failedTypes = verdict.requiredFailedTypes.join(', ');
-    const whatFailed = failedTypes
-      ? `the ${failedTypes} step failed`
-      : `${blocked} steps never ran`;
+    const whatFailed = describeDrainFailure(verdict);
     // A grant narrowed at login is the one failure cause the user can fix
     // alone — lead with the fix, and only fall back to the report-a-bug line
     // when trying again doesn't work.
@@ -1389,6 +1429,5 @@ async function executeOrchestrator(
   };
   emit({ kind: 'completion', outro });
   emit({ kind: 'lifecycle', phase: 'completed', message });
-  await analytics.shutdown('success');
   return { outcome: RunOutcome.Success, outro };
 }

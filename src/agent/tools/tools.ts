@@ -120,7 +120,7 @@ export async function downloadSkill(
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  let step: 'download' | 'extract' = 'download';
+  let step: 'download' | 'extract' | 'scan' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
@@ -138,6 +138,11 @@ export async function downloadSkill(
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
     // must not skip it.
+    //
+    // The scan is its own step: it runs the YARA-X WASM engine, and an engine
+    // that fails to load throws from here. Left as `extract` that lands on the
+    // event as an unzip failure, which the pure-JS unzip cannot produce.
+    step = 'scan';
     const poisonReason = await scanInstalledSkill(skillDir, triage);
     if (poisonReason) {
       fs.rmSync(skillDir, { recursive: true, force: true });
