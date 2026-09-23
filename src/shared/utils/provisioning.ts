@@ -46,7 +46,7 @@ const getProvisioningBaseUrl = (
  * that registers the dev client; prod uses the client registered for the target
  * region (the wizard OAuth app is registered separately per region).
  *
- * TODO: same assumption as `getOAuthClientId` in oauth.ts — a pinned base URL is
+ * TODO: same assumption as `getOAuthClientId` in oauth-token.ts — a pinned base URL is
  * treated as a dev-seeded instance. Make configurable if we ever point
  * `--base-url` at a non-dev instance with its own OAuth app.
  */

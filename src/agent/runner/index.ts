@@ -36,9 +36,15 @@ import type {
 } from './shared/types';
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
+import {
+  createTranscriptTail,
+  type TranscriptTail,
+} from './shared/transcript-tail';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
+import type { ProgressEmitter } from '@agent/progress';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { registerCleanup } from '@utils/cleanup-registry';
 import { hostAborted } from './shared/errors';
 
 export type {
@@ -81,6 +87,8 @@ export async function runAgent(
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
+  let scanReport: { flush(): void } | undefined;
+  let transcript: TranscriptTail | undefined;
   let cleanupInstalledSkills: (() => void) | undefined;
   const cleanFailedRun = () => {
     try {
@@ -95,7 +103,12 @@ export async function runAgent(
   };
   const snapshot = (): RunResult['snapshot'] => {
     try {
-      if (collector) return collector.snapshot();
+      if (collector) {
+        const collected = collector.snapshot();
+        return transcript
+          ? { ...collected, transcriptTail: transcript.text() }
+          : collected;
+      }
     } catch {
       // A partial snapshot must not replace the run's primary failure.
     }
@@ -113,10 +126,17 @@ export async function runAgent(
 
   let result: RunResult;
   try {
+    // The report line reaches the collector once it exists; a drain cannot run before that.
+    if (config.scanReport !== 'defer') {
+      scanReport = armScanReportFlush(input.flags.yaraReport, (event) =>
+        collector?.emit(event),
+      );
+    }
     // Capture before preparation so pre-harness failures also clean new skills.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;
+    if (config.run.collectTranscript) transcript = createTranscriptTail(emit);
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
@@ -152,6 +172,7 @@ export async function runAgent(
           emit,
           interaction: options.interaction,
           signal: options.signal,
+          transcript,
         });
         result = {
           ...(options.signal?.aborted ? hostAborted() : sequenceResult),
@@ -214,13 +235,31 @@ export async function runAgent(
   }
   if (result.outcome !== RunOutcome.Success) cleanFailedRun();
   try {
-    const report = flushScanReport({ yaraReport: input.flags.yaraReport });
-    if (report)
-      collector?.emit({ kind: 'log', level: 'info', message: report });
+    // A deferred report keeps counting this run's scans toward the host run's.
+    scanReport?.flush();
   } catch {
     // Scan reporting is best effort after the run outcome is decided.
   }
   return result;
+}
+
+/**
+ * Write the scan report and emit its line once: from the run's own tail, or
+ * earlier when a process drain (wizardAbort, a signal handler) runs cleanups.
+ */
+function armScanReportFlush(
+  yaraReport: boolean,
+  emit: ProgressEmitter,
+): { flush(): void } {
+  let flushed = false;
+  const flush = () => {
+    if (flushed) return;
+    flushed = true;
+    const report = flushScanReport({ yaraReport });
+    if (report) emit({ kind: 'log', level: 'info', message: report });
+  };
+  registerCleanup(flush);
+  return { flush };
 }
 
 function safeErrorMessage(error: unknown): string {

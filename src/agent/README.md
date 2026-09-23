@@ -23,8 +23,9 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 - `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill,
   tools, copy), the resolved `binding` (sequence, harness, model and task-role
   routes), supplied program commandments and stage policy, the skills origin,
-  flag snapshot, trace tags, tool allow and deny lists, seed tasks and bound
-  completion `hooks`.
+  flag snapshot, trace tags, tool allow and deny lists, seed tasks, bound
+  completion `hooks` and `scanReport` (`defer` leaves the scan report to the
+  host run).
 - `RunInput`: install directory, resolved PostHog credentials and inference-auth
   provider, project and user payloads, skill id, detected integration, `flags`
   (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`, `benchmark`,
@@ -34,11 +35,13 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   (`AgentFailure`: message, outro data, error, exit code, error code, detail).
   Every result carries `skillId` and a `snapshot` of what the run reported:
   tasks, status lines, stage, token usage totals, final cost, dashboard and
-  notebook URLs, handoff text.
+  notebook URLs, handoff text, and the transcript tail when the run definition
+  sets `collectTranscript`.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
-  `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
-  copies, never live objects.
+  `usage`, `finalCost`, `authError`, `handoff`, `completion`, and `activity`
+  (one line per step, only from a run that collects its transcript). Payloads
+  are copies, never live objects.
 - `AgentInteraction`: every member optional. `ask(question, { signal })`
   resolves with answers, and `taskNotice(notice, { signal })` resolves with
   whether to keep an optional task. Each request has its own signal, which

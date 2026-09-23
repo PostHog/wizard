@@ -6,7 +6,13 @@ import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Integration, Sequence } from '@shared/constants';
 import { uploadEnvironmentVariablesStep } from '@steps/upload-environment-variables';
 import { checkLocalServices } from '@shared/local-dev';
-import { buildSession, OutroKind } from '@lib/wizard-session';
+import {
+  buildSession,
+  DiscoveredFeature,
+  OutroKind,
+  ScanConsent,
+} from '@lib/wizard-session';
+import type { ApiUser } from '@shared/api';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
@@ -59,10 +65,14 @@ vi.mock('@utils/analytics', () => ({
     wizardCapture: vi.fn(),
     captureException: vi.fn(),
     setTag: vi.fn(),
+    identifyUser: vi.fn(),
+    setGroups: vi.fn(),
+    groupIdentify: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
     getWizardFlagPayloads: vi.fn().mockReturnValue({}),
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
+  groupsFromUser: () => ({}),
   sessionProperties: () => ({}),
 }));
 vi.mock('@agent/runner', async (original) => ({
@@ -81,6 +91,20 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
+// Fixture ids such as `metrics` are health-check programs, so preflight probes readiness.
+vi.mock('@shared/health-checks/readiness', async (original) => {
+  const actual = await original<
+    typeof import('@shared/health-checks/readiness')
+  >();
+  return {
+    ...actual,
+    evaluateWizardReadiness: vi.fn().mockResolvedValue({
+      decision: actual.WizardReadiness.Yes,
+      health: {},
+      reasons: [],
+    }),
+  };
+});
 vi.mock('@utils/wizard-abort', async (original) => {
   const actual = await original<typeof import('@utils/wizard-abort')>();
   return {
@@ -372,6 +396,21 @@ it('passes a session-scoped CI bearer to a composed child run', async () => {
   expect(vi.mocked(runAgent).mock.calls[0]?.[1].inferenceAuth).toBe(
     inferenceAuth,
   );
+});
+
+it('hands the session stamp latch to runProgram, so the organization is stamped once', async () => {
+  const stamped = Object.assign(session(), {
+    apiUser: { organization: { id: 'org-1' } } as ApiUser,
+    scanConsent: ScanConsent.Granted,
+    discoveredFeatures: [DiscoveredFeature.LLM],
+    // maybeStampAiSdkDetected (mocked here) leaves the latch set.
+    aiSdkStampReported: true,
+  });
+
+  await runProgramAgent(program(), stamped);
+
+  expect(runAgent).toHaveBeenCalledOnce();
+  expect(analytics.groupIdentify).not.toHaveBeenCalled();
 });
 
 it('passes the fixed CI bearer through the callable host without agent-global gateway state', async () => {

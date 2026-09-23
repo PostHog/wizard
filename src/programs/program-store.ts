@@ -1,14 +1,28 @@
-import type { AgentProgress, RunResult } from '../agent/types.js';
+import type {
+  AgentProgress,
+  ResolvedBinding,
+  RunResult,
+} from '../agent/types.js';
 import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
 import type { Integration } from '../shared/constants.js';
 import { appendStatus } from '../shared/status-history.js';
 import type { PlannedEvent } from './posthog-integration/watch-event-plan.js';
 
-export type ProgramProgress = {
+/** One agent run's progress event, attributed to its run and step. */
+export type ProgramRunProgress = {
+  kind: 'run';
   runId: string;
   stepId?: string;
   event: AgentProgress;
 };
+
+/** A copy of the invocation's data, sent after each write. */
+export type ProgramDataProgress = {
+  kind: 'program';
+  data: ProgramInvocationData;
+};
+
+export type ProgramProgress = ProgramRunProgress | ProgramDataProgress;
 
 type RunProjectionBase = {
   runId: string;
@@ -24,13 +38,14 @@ export type ProgramRunProjection = RunProjectionBase &
     | { phase: 'finished'; outcome: RunResult['outcome'] }
   );
 
+/** What a diagnostic is about: one run's progress event, or a data snapshot. */
+type DiagnosticSource =
+  | { runId: string; eventKind: AgentProgress['kind'] }
+  | { eventKind: 'data' };
+
 export type ProgramStoreProjection = {
   runs: ProgramRunProjection[];
-  diagnostics: {
-    runId: string;
-    eventKind: AgentProgress['kind'];
-    message: string;
-  }[];
+  diagnostics: (DiagnosticSource & { message: string })[];
 };
 
 /** Data owned by one program invocation, independent of its progress feed. */
@@ -50,12 +65,20 @@ export type ProgramInvocationData = {
     parentProgramId: string | null;
     completedRuns: string[];
   };
+  /** The route of the latest agent run; null until one resolves. */
+  binding: ResolvedBinding | null;
+  /** Latched once the organization's AI SDK stamp was considered for this login. */
+  aiSdkStampReported: boolean;
 };
 
 export type ProgramInvocationDataInit = Partial<
   Pick<
     ProgramInvocationData,
-    'credentials' | 'apiProject' | 'apiUser' | 'eventPlan'
+    | 'credentials'
+    | 'apiProject'
+    | 'apiUser'
+    | 'eventPlan'
+    | 'aiSdkStampReported'
   >
 > & {
   detection?: Partial<ProgramInvocationData['detection']>;
@@ -99,6 +122,9 @@ function emptySnapshot(): RunResult['snapshot'] {
   };
 }
 
+const isDataCloneError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === 'DataCloneError';
+
 function cloneRunResult(result: RunResult): RunResult {
   if (result.outcome === 'success' || !result.failure.error)
     return structuredClone(result);
@@ -112,9 +138,6 @@ function cloneRunResult(result: RunResult): RunResult {
     if (clone.outcome !== 'success') clone.failure.error = source;
     return clone;
   };
-  const isDataCloneError = (error: unknown): boolean =>
-    error instanceof DOMException && error.name === 'DataCloneError';
-
   let clone: RunResult;
   try {
     clone = structuredClone(result);
@@ -180,6 +203,7 @@ function applyAgentProgress(run: RunEntry, event: AgentProgress): void {
     case 'spinner':
     case 'log':
     case 'authError':
+    case 'activity':
       break;
     case 'completion':
       run.outro = structuredClone(event.outro);
@@ -191,13 +215,29 @@ function applyAgentProgress(run: RunEntry, event: AgentProgress): void {
   }
 }
 
+/** Setter surface a host control port may expose (C2c, B2-30). Type only. */
+export type ProgramDataWriter = Pick<
+  ProgramStore,
+  | 'setAuthenticated'
+  | 'setDetection'
+  | 'setFrameworkContext'
+  | 'setEventPlan'
+  | 'setComposition'
+  | 'markProgramCompleted'
+>;
+
 export class ProgramStore {
   private readonly runs: RunEntry[] = [];
   private readonly settled: SettledProgramRun[] = [];
   private readonly diagnostics: ProgramStoreProjection['diagnostics'] = [];
   private readonly data: ProgramInvocationData;
+  private readonly onData?: (progress: ProgramDataProgress) => void;
 
-  constructor(initial: ProgramInvocationDataInit = {}) {
+  constructor(
+    initial: ProgramInvocationDataInit = {},
+    options: { onData?: (progress: ProgramDataProgress) => void } = {},
+  ) {
+    this.onData = options.onData;
     this.data = structuredClone({
       credentials: initial.credentials ?? null,
       apiProject: initial.apiProject ?? null,
@@ -215,6 +255,8 @@ export class ProgramStore {
         parentProgramId: initial.composition?.parentProgramId ?? null,
         completedRuns: initial.composition?.completedRuns ?? [],
       },
+      binding: null,
+      aiSdkStampReported: initial.aiSdkStampReported ?? false,
     });
   }
 
@@ -226,6 +268,7 @@ export class ProgramStore {
     auth: Pick<ProgramInvocationData, 'credentials' | 'apiProject' | 'apiUser'>,
   ): void {
     Object.assign(this.data, structuredClone(auth));
+    this.emitData();
   }
 
   setDetection(
@@ -245,14 +288,17 @@ export class ProgramStore {
     if (patch.complete !== undefined) {
       this.data.detection.complete = patch.complete;
     }
+    this.emitData();
   }
 
   setFrameworkContext(key: string, value: unknown): void {
     this.data.detection.frameworkContext[key] = structuredClone(value);
+    this.emitData();
   }
 
   setEventPlan(events: PlannedEvent[]): void {
     this.data.eventPlan = structuredClone(events);
+    this.emitData();
   }
 
   setComposition(patch: Partial<ProgramInvocationData['composition']>): void {
@@ -262,17 +308,29 @@ export class ProgramStore {
     if (patch.completedRuns !== undefined) {
       this.data.composition.completedRuns = [...patch.completedRuns];
     }
+    this.emitData();
+  }
+
+  setBinding(binding: ResolvedBinding): void {
+    this.data.binding = structuredClone(binding);
+    this.emitData();
+  }
+
+  setAiSdkStampReported(): void {
+    if (this.data.aiSdkStampReported) return;
+    this.data.aiSdkStampReported = true;
+    this.emitData();
   }
 
   markProgramCompleted(programId: string): void {
-    if (!this.data.composition.completedRuns.includes(programId)) {
-      this.data.composition.completedRuns.push(programId);
-    }
+    if (this.data.composition.completedRuns.includes(programId)) return;
+    this.data.composition.completedRuns.push(programId);
+    this.emitData();
   }
 
   beginRun(
     identity: { runId: string; stepId?: string },
-    observer?: (progress: ProgramProgress) => void,
+    observer?: (progress: ProgramRunProgress) => void,
   ): AgentProgressAdapter {
     if (this.runs.some((run) => run.runId === identity.runId)) {
       throw new Error(`Duplicate program run id: ${identity.runId}`);
@@ -286,28 +344,20 @@ export class ProgramStore {
 
     return {
       onProgress: (event) => {
+        const source = { runId: run.runId, eventKind: event.kind };
         if (run.state.phase === 'finished') {
-          this.recordDiagnostic(run.runId, event.kind, 'progress after finish');
+          this.recordDiagnostic(source, 'progress after finish');
           return;
         }
         applyAgentProgress(run, event);
         if (!observer) return;
-        try {
-          const delivery: unknown = observer({
+        this.deliver(source, () =>
+          observer({
+            kind: 'run',
             ...identity,
             event: structuredClone(event),
-          });
-          if (
-            delivery &&
-            typeof (delivery as PromiseLike<unknown>).then === 'function'
-          ) {
-            void Promise.resolve(delivery).catch((error: unknown) => {
-              this.recordDiagnostic(run.runId, event.kind, error);
-            });
-          }
-        } catch (error) {
-          this.recordDiagnostic(run.runId, event.kind, error);
-        }
+          }),
+        );
       },
       finish: (result) => {
         if (run.state.phase === 'finished') {
@@ -365,14 +415,42 @@ export class ProgramStore {
     );
   }
 
-  private recordDiagnostic(
-    runId: string,
-    eventKind: AgentProgress['kind'],
-    error: unknown,
-  ): void {
+  private emitData(): void {
+    const onData = this.onData;
+    if (!onData) return;
+    let data: ProgramInvocationData;
+    try {
+      data = structuredClone(this.data);
+    } catch (error) {
+      if (!isDataCloneError(error)) throw error;
+      this.recordDiagnostic({ eventKind: 'data' }, error);
+      return;
+    }
+    this.deliver({ eventKind: 'data' }, () =>
+      onData({ kind: 'program', data }),
+    );
+  }
+
+  /** Never waits for an observer; a throw or a rejection becomes a diagnostic. */
+  private deliver(source: DiagnosticSource, send: () => unknown): void {
+    try {
+      const delivery = send();
+      if (
+        delivery &&
+        typeof (delivery as PromiseLike<unknown>).then === 'function'
+      ) {
+        void Promise.resolve(delivery).catch((error: unknown) => {
+          this.recordDiagnostic(source, error);
+        });
+      }
+    } catch (error) {
+      this.recordDiagnostic(source, error);
+    }
+  }
+
+  private recordDiagnostic(source: DiagnosticSource, error: unknown): void {
     this.diagnostics.push({
-      runId,
-      eventKind,
+      ...source,
       message: error instanceof Error ? error.message : String(error),
     });
     if (this.diagnostics.length > MAX_DIAGNOSTICS) this.diagnostics.shift();

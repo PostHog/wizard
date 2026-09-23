@@ -26,3 +26,17 @@ export type {
   ProgramSwitchboardCtx,
   ProgramSwitchboardTrace,
 } from './binding';
+export type {
+  ProgramRunProgress,
+  ProgramDataProgress,
+  ProgramDataWriter,
+} from './program-store';
+export type { ProgramOverrides, WizardFlagSnapshot } from './run-program';
+export type {
+  ProgramWorkflowRequest,
+  ProgramWorkflowDecision,
+} from './run-program';
+export type {
+  ProgramPreflightDecision,
+  ProgramPreflightHost,
+} from './preflight';
