@@ -44,7 +44,6 @@
     "src/programs/audit/types.ts -> src/lib/wizard-session.ts",
     "src/programs/authenticate.ts -> src/lib/wizard-session.ts",
     "src/programs/authenticate.ts -> src/ui/index.ts",
-    "src/programs/detection/agentic.ts -> src/lib/wizard-session.ts",
     "src/programs/detection/agentic.ts -> src/ui/agent-progress.ts",
     "src/programs/detection/agentic.ts -> src/ui/index.ts",
     "src/programs/detection/project-scope.ts -> src/lib/wizard-session.ts",

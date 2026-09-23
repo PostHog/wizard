@@ -1024,6 +1024,106 @@ describe('runAgent standalone', () => {
     expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 
+  it('collectTranscript fills snapshot.transcriptTail; run.prompt replaces the assembled prompt', async () => {
+    const events: AgentProgress[] = [];
+    const long = 'x'.repeat(150);
+    harnessState.run = ({ middleware }) => {
+      middleware?.onMessage({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: '  Globbing every manifest.  ' },
+            {
+              type: 'tool_use',
+              name: 'Glob',
+              input: { pattern: '**/{package.json}' },
+            },
+            {
+              type: 'tool_use',
+              name: 'Read',
+              input: { file_path: 'apps/web/package.json' },
+            },
+            { type: 'tool_use', name: 'TaskList', input: {} },
+            { type: 'text', text: long },
+          ],
+        },
+      });
+      middleware?.onMessage({ type: 'result', result: '{"path":"."}' });
+      return Promise.resolve({ kind: 'success' });
+    };
+
+    const result = await runAgent(
+      config({
+        run: {
+          ...config().run,
+          prompt: () => 'Scan the repo only.',
+          collectTranscript: true,
+        },
+      }),
+      input(),
+      { onProgress: (event) => events.push(event) },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect((harnessState.lastInputs as BackendRunInputs).prompt).toBe(
+      'Scan the repo only.',
+    );
+    expect(result.snapshot.transcriptTail).toBe(
+      `  Globbing every manifest.  \n${long}\n{"path":"."}`,
+    );
+    expect(events.filter((event) => event.kind === 'activity')).toEqual([
+      { kind: 'activity', line: 'Globbing every manifest.' },
+      { kind: 'activity', line: 'Glob **/{package.json}' },
+      { kind: 'activity', line: 'Read apps/web/package.json' },
+      { kind: 'activity', line: 'TaskList' },
+      { kind: 'activity', line: `${'x'.repeat(100)}…` },
+    ]);
+  });
+
+  it('keeps only the newest 256 KiB of a collected transcript', async () => {
+    const chunk = 'y'.repeat(100 * 1024);
+    harnessState.run = ({ middleware }) => {
+      for (const text of ['oldest', chunk, chunk, chunk]) {
+        middleware?.onMessage({
+          type: 'assistant',
+          message: { content: [{ type: 'text', text }] },
+        });
+      }
+      return Promise.resolve({ kind: 'success' });
+    };
+
+    const result = await runAgent(
+      config({ run: { ...config().run, collectTranscript: true } }),
+      input(),
+    );
+
+    expect(result.snapshot.transcriptTail).toBe(`${chunk}\n${chunk}\n`);
+  });
+
+  it('reports no activity and keeps no transcript unless the run asks', async () => {
+    const events: AgentProgress[] = [];
+    let middleware: BackendRunInputs['middleware'];
+    harnessState.run = (inputs) => {
+      middleware = inputs.middleware;
+      return Promise.resolve({ kind: 'success' });
+    };
+
+    const result = await runAgent(config(), input(), {
+      onProgress: (event) => events.push(event),
+    });
+
+    expect(middleware).toBeUndefined();
+    expect(result.snapshot.transcriptTail).toBeUndefined();
+    expect(events.some((event) => event.kind === 'activity')).toBe(false);
+  });
+
+  it('leaves a deferred scan report to the host run', async () => {
+    const result = await runAgent(config({ scanReport: 'defer' }), input());
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(flushScanReport).not.toHaveBeenCalled();
+  });
+
   it('finishes when the observer throws on every event', async () => {
     const result = await runAgent(config(), input(), {
       onProgress: () => {

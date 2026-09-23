@@ -40,13 +40,13 @@ for the coordinated change checklist.
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
 **The entry point** (`index.ts`) is the front door:
-`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It takes
-resolved execution data and an invocation snapshot (`shared/types.ts`), reports
-through `onProgress` and asks through `interaction` (`../progress.ts`), and
-returns every ending as a result. It never renders, reads a session or exits.
-The gates, OAuth, flags and binding lookup that used to run here live in
-`src/programs/run-agent-legacy.ts`, which also maps progress back onto
-`getUI()` for today's runners.
+`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
+takes resolved execution data and an invocation snapshot (`shared/types.ts`),
+reports through `onProgress` and asks through `interaction` (`../progress.ts`),
+and returns every ending as a result. It never renders, reads a session or
+exits. The gates, OAuth, flags and binding lookup that used to run here live in
+`src/programs/run-agent-legacy.ts`, which also maps progress back onto `getUI()`
+for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, the gateway mint and the scan-triage classifier. Whether the run turns
@@ -77,7 +77,8 @@ gateway.
 
 ## How they connect
 
-- Programs supply inference auth; prepare resolves it and builds triage for the resolved harness.
+- Programs supply inference auth; prepare resolves it and builds triage for the
+  resolved harness.
 - The switchboard knows which sequences and harnesses exist (via its two
   registries), but not what they do.
 - A sequence knows how to shape a conversation, but delegates the actual model
@@ -128,23 +129,24 @@ block-beta
 ```
 
 Calls descend on the left, results return through the middle, and cancellation
-moves down the right. Blue marks the result contracts and run-scoped abort.
-On the first fatal task result, `drainQueue` stops scheduling, cancels
-active work and pending asks, joins siblings, then preserves that failure for
-the host to present.
+moves down the right. Blue marks the result contracts and run-scoped abort. On
+the first fatal task result, `drainQueue` stops scheduling, cancels active work
+and pending asks, joins siblings, then preserves that failure for the host to
+present.
 
 ## Flow
 
 1. The caller runs its gates, authenticates, fetches PostHog flags and resolves
    a `ProgramBinding { sequence, harness, model }`; analytics tags the run.
-2. `runAgent(config, input, options)` resolves the supplied inference auth and prepares triage.
+2. `runAgent(config, input, options)` resolves the supplied inference auth and
+   prepares triage.
 3. Sequence takes over — shapes the LLM's work into one conversation (linear) or
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes once, at the end or earlier when a process drain
-   runs the cleanups, and its line arrives as `log` progress; `runAgent`
-   returns a `RunResult`.
+5. The scan report flushes once, at the end or earlier when a process drain runs
+   the cleanups, unless `RunConfig.scanReport` defers it to the host run; its
+   line arrives as `log` progress; `runAgent` returns a `RunResult`.
 6. The caller applies it: a decided failure goes to `wizardAbort` with the
    terminal status its outcome names, a crash is rethrown for the runner's own
    handling, and a non-composed success sends the terminal success analytics.
