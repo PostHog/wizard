@@ -54,6 +54,9 @@ export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
       case 'completion':
         ui.setOutroData(event.outro);
         break;
+      case 'activity':
+        // Step lines belong to the caller that asked for them, not the run UI.
+        break;
       default: {
         const unhandled: never = event;
         throw new Error(

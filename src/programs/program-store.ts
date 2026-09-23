@@ -180,6 +180,7 @@ function applyAgentProgress(run: RunEntry, event: AgentProgress): void {
     case 'spinner':
     case 'log':
     case 'authError':
+    case 'activity':
       break;
     case 'completion':
       run.outro = structuredClone(event.outro);

@@ -36,6 +36,10 @@ import type {
 } from './shared/types';
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
+import {
+  createTranscriptTail,
+  type TranscriptTail,
+} from './shared/transcript-tail';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
@@ -81,6 +85,7 @@ export async function runAgent(
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
+  let transcript: TranscriptTail | undefined;
   let cleanupInstalledSkills: (() => void) | undefined;
   const cleanFailedRun = () => {
     try {
@@ -95,7 +100,12 @@ export async function runAgent(
   };
   const snapshot = (): RunResult['snapshot'] => {
     try {
-      if (collector) return collector.snapshot();
+      if (collector) {
+        const collected = collector.snapshot();
+        return transcript
+          ? { ...collected, transcriptTail: transcript.text() }
+          : collected;
+      }
     } catch {
       // A partial snapshot must not replace the run's primary failure.
     }
@@ -117,6 +127,7 @@ export async function runAgent(
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;
+    if (config.run.collectTranscript) transcript = createTranscriptTail(emit);
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
@@ -152,6 +163,7 @@ export async function runAgent(
           emit,
           interaction: options.interaction,
           signal: options.signal,
+          transcript,
         });
         result = {
           ...(options.signal?.aborted ? hostAborted() : sequenceResult),
@@ -213,12 +225,15 @@ export async function runAgent(
     result = { ...hostAborted(), skillId: input.skillId, snapshot: snapshot() };
   }
   if (result.outcome !== RunOutcome.Success) cleanFailedRun();
-  try {
-    const report = flushScanReport({ yaraReport: input.flags.yaraReport });
-    if (report)
-      collector?.emit({ kind: 'log', level: 'info', message: report });
-  } catch {
-    // Scan reporting is best effort after the run outcome is decided.
+  // A deferred report keeps counting this run's scans toward the host run's.
+  if (config.scanReport !== 'defer') {
+    try {
+      const report = flushScanReport({ yaraReport: input.flags.yaraReport });
+      if (report)
+        collector?.emit({ kind: 'log', level: 'info', message: report });
+    } catch {
+      // Scan reporting is best effort after the run outcome is decided.
+    }
   }
   return result;
 }

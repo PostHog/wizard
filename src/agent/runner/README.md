@@ -142,7 +142,8 @@ the host to present.
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes; `runAgent` returns a `RunResult`.
+5. The scan report flushes unless `RunConfig.scanReport` defers it; `runAgent`
+   returns a `RunResult`.
 6. The caller applies it: a decided failure goes to `wizardAbort` with the
    terminal status its outcome names, a crash is rethrown for the runner's own
    handling, and a non-composed success sends the terminal success analytics.
