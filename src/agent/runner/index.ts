@@ -95,6 +95,15 @@ export async function runAgent(
       },
     };
   };
+  const flushReport = (): void => {
+    try {
+      const report = flushScanReport({ yaraReport: input.flags.yaraReport });
+      if (report)
+        collector?.emit({ kind: 'log', level: 'info', message: report });
+    } catch {
+      // Scan reporting is best effort after the run outcome is decided.
+    }
+  };
   let result: RunResult;
   try {
     collector = createProgressCollector(options.onProgress);
@@ -102,11 +111,7 @@ export async function runAgent(
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
-      try {
-        flushScanReport({ yaraReport: input.flags.yaraReport });
-      } catch {
-        // Scan reporting is best effort.
-      }
+      flushReport();
       return {
         outcome: RunOutcome.Aborted,
         skillId: input.skillId,
@@ -209,13 +214,7 @@ export async function runAgent(
       };
     }
   }
-  try {
-    const report = flushScanReport({ yaraReport: input.flags.yaraReport });
-    if (report)
-      collector?.emit({ kind: 'log', level: 'info', message: report });
-  } catch {
-    // Scan reporting is best effort after the run outcome is decided.
-  }
+  flushReport();
   return result;
 }
 

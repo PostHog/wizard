@@ -208,7 +208,7 @@ vi.mock('@shared/skill-menu', async (original) => ({
 }));
 
 import { runAgent, RunOutcome } from '@agent/runner';
-import type { RunConfig, RunInput } from '@agent/runner';
+import type { RunAgentOptions, RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
@@ -1029,8 +1029,10 @@ describe('runAgent standalone', () => {
     }
   });
 
-  it.each<[string, () => void, string]>([
-    ['completes', () => undefined, 'success'],
+  it.each<
+    [string, (host: AbortController) => Partial<RunAgentOptions>, string]
+  >([
+    ['completes', () => ({}), 'success'],
     [
       'stops itself',
       () => {
@@ -1039,6 +1041,7 @@ describe('runAgent standalone', () => {
           classification: AgentErrorType.ABORT,
           message: 'No Stripe found',
         };
+        return {};
       },
       'failed',
     ],
@@ -1046,8 +1049,34 @@ describe('runAgent standalone', () => {
       'crashes',
       () => {
         harnessState.throws = new Error('SDK exploded');
+        return {};
       },
       'crashed',
+    ],
+    [
+      'is cancelled mid-run',
+      (host) => {
+        harnessState.askQuestions = [
+          { id: 'q1', prompt: 'Continue?', kind: 'text' },
+        ];
+        return {
+          interaction: {
+            ask: () => {
+              host.abort();
+              return new Promise<AskAnswers>(() => undefined);
+            },
+          },
+        };
+      },
+      'aborted',
+    ],
+    [
+      'is cancelled before it starts',
+      (host) => {
+        host.abort();
+        return {};
+      },
+      'aborted',
     ],
   ])(
     'sends the scan summary to onProgress when the run %s',
@@ -1055,12 +1084,15 @@ describe('runAgent standalone', () => {
       const summary =
         'YARA scan report: /tmp/yara.json\n— YARA Scanner Summary —';
       vi.mocked(flushScanReport).mockReturnValueOnce(summary);
-      arrange();
+      const host = new AbortController();
+      const options = arrange(host);
       const runInput = input();
       runInput.flags.yaraReport = true;
       const events: AgentProgress[] = [];
 
       const result = await runAgent(config(), runInput, {
+        ...options,
+        signal: host.signal,
         onProgress: (e) => events.push(e),
       });
 
