@@ -12,7 +12,8 @@
  * Every other variant runs the fixed linear pipeline:
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  *
- * The agent reports and asks; it never renders, reads a session, or exits.
+ * The agent reports and asks; it never renders, reads a session, exits, or
+ * sends the process's terminal analytics.
  * Coded errors return Failed, uncoded throws return Crashed, and both retain
  * the caught error. Scan-report flushing is best effort after the result is
  * decided. The legacy adapter in `src/lib/runners/run-program-agent.ts`

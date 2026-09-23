@@ -190,17 +190,17 @@ describe.each(['linear', 'task'] as const)(
         vi.useFakeTimers();
         let resolve!: (answers: AskAnswers) => void;
         let reject!: (error: Error) => void;
-        const cancelAsk = vi.fn();
+        let signal: AbortSignal | undefined;
         const bridge = createAskBridge(
           {
-            ask: () => {
+            ask: (_question, context) => {
               expectPermission('deny');
+              signal = context.signal;
               return new Promise((res, rej) => {
                 resolve = res;
                 reject = rej;
               });
             },
-            cancelAsk,
           },
           { getSource: () => 'test', richLinks: false, timeoutMs: 1000 },
         );
@@ -227,7 +227,7 @@ describe.each(['linear', 'task'] as const)(
         }
 
         expectPermission('allow');
-        expect(cancelAsk).toHaveBeenCalledTimes(ending === 'timeout' ? 1 : 0);
+        expect(signal?.aborted).toBe(ending === 'timeout');
         expect(vi.getTimerCount()).toBe(0);
       },
     );

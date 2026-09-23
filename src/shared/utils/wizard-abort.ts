@@ -32,6 +32,8 @@ interface WizardAbortOptions {
   exitCode?: number;
   code?: ErrorCode;
   detail?: Record<string, unknown>;
+  /** Terminal analytics status. Defaults from whether `error` is set. */
+  status?: 'error' | 'cancelled';
 }
 
 function resolveErrorCode(
@@ -68,16 +70,23 @@ export async function wizardAbort(
   // 1. Run registered cleanup functions
   runCleanups();
 
-  // 2. Capture error in analytics (if provided)
-  if (error) {
-    analytics.captureException(error, {
-      ...((error instanceof WizardError && error.context) || {}),
+  // 2. Capture error in analytics. An 'error' ending with no Error object
+  //    is captured as its code and message.
+  const status = options?.status ?? (error ? 'error' : 'cancelled');
+  const captured =
+    error ??
+    (status === 'error'
+      ? new WizardError(message, undefined, code)
+      : undefined);
+  if (captured) {
+    analytics.captureException(captured, {
+      ...((captured instanceof WizardError && captured.context) || {}),
       ...(code ? { error_code: code } : {}),
     });
   }
 
   // 3. Shutdown analytics
-  await analytics.shutdown(error ? 'error' : 'cancelled');
+  await analytics.shutdown(status);
 
   // 4. Render the error outro. Synthesize OutroData from `message`
   //    when the caller didn't provide structured data.

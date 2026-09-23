@@ -7,7 +7,8 @@
  * authenticates, resolves the program's binding, builds the agent's inputs
  * from the session, maps every progress event back onto `getUI()` one call
  * per event, answers the agent's questions through `getUI()`, and applies the
- * result — `wizardAbort` for a decided failure, nothing more for success.
+ * result — `wizardAbort` with the outcome's terminal status for a decided
+ * failure, the terminal analytics event for a finished top-level run.
  *
  * The host owns `getUI()`, the legacy session, and `wizardAbort`; the callable
  * program receives explicit input and effects.
@@ -19,7 +20,7 @@ import { createUiReducer, getUI, uiInteraction } from '@ui';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
 import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
 import {
-  runProgram as runCallableProgram,
+  runProgram,
   createPosthogInferenceAuthProvider,
   resolveProgramBinding,
   getProgramCommandments,
@@ -119,7 +120,7 @@ export async function runProgramAgent(
         ? await programConfig.run(session, runHost)
         : programConfig.run;
 
-    const succeeded = await runProgram(
+    const succeeded = await runLegacyStep(
       session,
       runDef,
       programConfig,
@@ -145,7 +146,7 @@ export async function runProgramAgent(
  * Gates → authenticate → flags → binding → the functional run → apply result.
  * Every step happens in the order it did inside the agent's bootstrap.
  */
-async function runProgram(
+async function runLegacyStep(
   session: WizardSession,
   run: ProgramRun,
   programConfig: ProgramConfig,
@@ -339,7 +340,7 @@ async function runProgram(
   };
 
   const reduceUi = createUiReducer(ui);
-  const programResult = await runCallableProgram(
+  const programResult = await runProgram(
     programConfig.id,
     {
       installDir: input.installDir,
@@ -384,7 +385,7 @@ async function runProgram(
     },
   );
 
-  // The host owns process exits and rethrowing crashes.
+  // The host owns process exits, terminal analytics and rethrowing crashes.
   if (programResult.outcome === RunOutcome.Crashed) {
     throw (
       programResult.failure?.error ??
@@ -395,7 +396,20 @@ async function runProgram(
     if (programResult.failure?.authErrorDetail) {
       ui.showAuthError(programResult.failure.authErrorDetail);
     }
-    await wizardAbort(programResult.failure ?? {});
+    // The terminal status follows how the run ended, not whether an Error came back.
+    await wizardAbort({
+      ...programResult.failure,
+      status:
+        programResult.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
+    });
+  } else if (!composed) {
+    // A composed sub-run leaves the terminal event to its host program's run.
+    // The run already succeeded: a failed flush is logged, never the outcome.
+    try {
+      await analytics.shutdown('success');
+    } catch (error) {
+      logToFile('[agent-runner] analytics shutdown failed:', error);
+    }
   }
   return programResult.outcome === RunOutcome.Success;
 }

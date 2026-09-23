@@ -48,28 +48,35 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
   `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
   copies, never live objects.
-- `AgentInteraction`: every member optional. `ask(question)` resolves with
-  answers, `cancelAsk()` dismisses the open question, `taskNotice(notice)`
-  resolves with whether to keep an optional task, `cancelTaskNotice()` declines
-  it.
+- `AgentInteraction`: every member optional. `ask(question, { signal })`
+  resolves with answers, and `taskNotice(notice, { signal })` resolves with
+  whether to keep an optional task. Each request has its own signal, which
+  aborts when that request times out, the host aborts the run, or another task
+  fails the run; on abort the host dismisses that request alone, without
+  throwing.
 - `signal`: an optional `AbortSignal` from the host. A pre-aborted signal
   returns `Aborted` before execution; aborting during execution is passed to the
   active harness and returns `Aborted` with the current snapshot. It does not
-  pause or resume a run.
+  pause or resume a run. `Aborted` means only that the host's signal cancelled
+  the run.
 - Errors: the agent does not exit the process or throw for a decided failure. A
   caught coded error returns `Failed`; an uncoded throw returns `Crashed`. Both
-  retain the caught `Error` (or an `Error` wrapper for a non-`Error` throw). A
+  retain the caught `Error` (or an `Error` wrapper for a non-`Error` throw). An
+  agent that stops itself with `[ABORT]` returns `Failed` with its abort code. A
   gateway 401 returns an authentication failure with detail for the host to
   present. The host decides how to present a returned failure, set an exit code,
   or rethrow an attached error. Final scan-report flushing is best effort and
   does not replace the run result.
+- Analytics shutdown is host-owned: the agent never sends the terminal
+  `setup wizard finished` event. The host sends it from the outcome: `Success`
+  is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
 `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`,
-`downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `OutroKind`,
-`flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on
-first call.
+`AgentErrorType`, `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`,
+`OutroKind`, `flushScanReport`, and `runMcpPromptViaSdk`, which loads the
+streaming module on first call.
 
 Minimal invocation:
 

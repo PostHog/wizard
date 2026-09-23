@@ -153,5 +153,7 @@ work.
    resolves a `RunResult` with an outcome and progress snapshot. A non-success
    result carries a code and message; a caught error remains attached.
 6. The caller applies it. The legacy runner sends a decided failure to
-   `wizardAbort`; for a crash it rethrows the attached `Error` when present.
-   Other hosts can log, present, or rethrow the failure as they need.
+   `wizardAbort` with the terminal status its outcome names; for a crash it
+   rethrows the attached `Error` when present; after a non-composed success it
+   sends the terminal success analytics. Other hosts can log, present, or
+   rethrow the failure as they need. The agent sends no terminal analytics.

@@ -11,13 +11,14 @@ import type { TaskNotice } from '@lib/wizard-session';
 
 // Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
 // factory would otherwise read these before they exist.
-const { showTaskNotice, cancelTaskNotice, wizardCapture, captureException } =
-  vi.hoisted(() => ({
-    showTaskNotice: vi.fn<(notice: TaskNotice) => Promise<boolean>>(),
-    cancelTaskNotice: vi.fn(),
-    wizardCapture: vi.fn(),
-    captureException: vi.fn(),
-  }));
+const { showTaskNotice, wizardCapture, captureException } = vi.hoisted(() => ({
+  showTaskNotice:
+    vi.fn<
+      (notice: TaskNotice, context: { signal: AbortSignal }) => Promise<boolean>
+    >(),
+  wizardCapture: vi.fn(),
+  captureException: vi.fn(),
+}));
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -36,9 +37,13 @@ import {
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
 
 /** The answerer under test, standing where `getUI()` used to. */
-const interaction = {
-  taskNotice: (notice: TaskNotice) => showTaskNotice(notice),
-  cancelTaskNotice: () => cancelTaskNotice(),
+const interaction = { taskNotice: showTaskNotice };
+
+/** The signal the offer handed the host with its one notice. */
+const noticeSignal = (): AbortSignal => {
+  const call = showTaskNotice.mock.calls[0];
+  if (!call) throw new Error('No notice was shown');
+  return call[1].signal;
 };
 
 const NOTICE: TaskNotice = {
@@ -52,7 +57,6 @@ const NOTICE: TaskNotice = {
 
 const resetMocks = () => {
   showTaskNotice.mockReset();
-  cancelTaskNotice.mockReset();
   wizardCapture.mockReset();
   captureException.mockReset();
 };
@@ -68,9 +72,11 @@ describe('task notice timeout', () => {
       signal: controller.signal,
     });
 
+    expect(noticeSignal().aborted).toBe(false);
     controller.abort();
     await expect(pending).resolves.toEqual({ keep: false, timedOut: false });
-    expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+    // The host dismisses the notice when its own signal aborts.
+    expect(noticeSignal().aborted).toBe(true);
   });
 
   it('waits five minutes before giving up on an answer', () => {
@@ -88,7 +94,7 @@ describe('task notice timeout', () => {
 
       await expect(promise).resolves.toEqual({ keep: false, timedOut: true });
       // Without this the modal stays on screen over the rest of the run.
-      expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+      expect(noticeSignal().aborted).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -101,9 +107,62 @@ describe('task notice timeout', () => {
       interaction,
       signal: controller.signal,
     });
+    expect(noticeSignal().aborted).toBe(false);
     controller.abort();
     await expect(result).resolves.toEqual({ keep: false, timedOut: false });
-    expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+    // The run's abort reaches the host as this notice's own abort.
+    expect(noticeSignal().aborted).toBe(true);
+  });
+
+  it('declines without showing the notice when the run was already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      offerSeededTask(NOTICE, { interaction, signal: controller.signal }),
+    ).resolves.toEqual({ keep: false, timedOut: false });
+    expect(showTaskNotice).not.toHaveBeenCalled();
+  });
+
+  it('declines a timed-out notice when the host rejects on dismissal', async () => {
+    vi.useFakeTimers();
+    try {
+      showTaskNotice.mockImplementation(
+        (_notice, { signal }) =>
+          new Promise<boolean>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => reject(new Error('overlay broken')),
+              { once: true },
+            );
+          }),
+      );
+      const promise = offerSeededTask(NOTICE, { timeoutMs: 1000, interaction });
+      vi.advanceTimersByTime(1000);
+      // The timeout won; the host's rejection must not turn it into an error.
+      await expect(promise).resolves.toEqual({ keep: false, timedOut: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('declines a cancelled notice when the host rejects on dismissal', async () => {
+    const controller = new AbortController();
+    showTaskNotice.mockImplementation(
+      (_notice, { signal }) =>
+        new Promise<boolean>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(new Error('overlay broken')),
+            { once: true },
+          );
+        }),
+    );
+    const result = offerSeededTask(NOTICE, {
+      interaction,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(result).resolves.toEqual({ keep: false, timedOut: false });
   });
 
   it('keeps the step when the user accepts in time', async () => {
@@ -120,7 +179,7 @@ describe('task notice timeout', () => {
       vi.advanceTimersByTime(5000);
       // The timer must not fire after an answer — it would close a modal that
       // is no longer there and stamp a second outcome on the step.
-      expect(cancelTaskNotice).not.toHaveBeenCalled();
+      expect(noticeSignal().aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -139,7 +198,7 @@ describe('task notice timeout', () => {
         keep: false,
         timedOut: false,
       });
-      expect(cancelTaskNotice).not.toHaveBeenCalled();
+      expect(noticeSignal().aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }

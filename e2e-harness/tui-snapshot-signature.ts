@@ -1,3 +1,10 @@
+/**
+ * The fixed-route snapshot signature. `scripts/tui-host.no-jest.ts` takes a
+ * frame whenever this string changes: the screen, the overlay, the task list,
+ * the status lines, the run phase or the framework context. `ctx` hashes the
+ * context values, not only its keys, because audit ledger updates keep the
+ * same key and still need a frame.
+ */
 import type { WizardStore } from '@ui/tui/store';
 
 function digest(s: string): string {
