@@ -62,6 +62,7 @@ import {
   type QueuedTask,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
+import { drainFailureError } from './drain-failure';
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
@@ -1198,8 +1199,18 @@ export async function runOrchestrator(
       failed_types: verdict.requiredFailedTypes.join(',') || 'none',
     });
   }
-  if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
-    const failedTypes = verdict.requiredFailedTypes.join(', ');
+  // `drainFailureError` picks the stable exception name: a blocked-only
+  // drain has nothing in `Failed`, so grouping it under "failed tasks" sent
+  // triage
+  // hunting for a failure the queue state does not contain. The user-facing
+  // line comes from `describeDrainFailure`, which names both the step that
+  // failed and the steps it stranded.
+  const failedTypes = verdict.requiredFailedTypes.join(', ');
+  const errorName = drainFailureError({
+    failed: verdict.requiredFailedTypes.length,
+    blocked,
+  });
+  if (errorName) {
     const whatFailed = describeDrainFailure(verdict);
     // A grant narrowed at login is the one failure cause the user can fix
     // alone — lead with the fix, and only fall back to the report-a-bug line
@@ -1217,7 +1228,7 @@ export async function runOrchestrator(
       code: ErrorCodes.AgentOrchestratorTasksFailed,
       message,
       error: new WizardError(
-        'orchestrator drain ended with failed tasks',
+        errorName,
         {
           tasks_failed: summary.failed,
           tasks_blocked: blocked,
