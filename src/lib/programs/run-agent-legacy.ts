@@ -284,7 +284,12 @@ async function runProgram(
     await wizardAbort(result.failure);
   } else if (!composed) {
     // A composed sub-run leaves the terminal event to its host program's run.
-    await analytics.shutdown('success');
+    // The run already succeeded: a failed flush is logged, never the outcome.
+    try {
+      await analytics.shutdown('success');
+    } catch (error) {
+      logToFile('[agent-runner] analytics shutdown failed:', error);
+    }
   }
 }
 
