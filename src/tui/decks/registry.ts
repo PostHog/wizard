@@ -34,10 +34,6 @@ const TIPS_DECKS: Partial<Record<ProgramId, TipsDeck>> = {
   'self-driving': selfDrivingTips,
 };
 
-export function hasProgramLearnDeck(programId: ProgramId): boolean {
-  return programId in LEARN_DECKS;
-}
-
 export function getProgramContentBlocks(
   programId: ProgramId,
   store?: WizardStore,

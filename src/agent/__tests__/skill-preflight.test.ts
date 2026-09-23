@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { scanProjectSkills } from '../skill-preflight';
 import { scanInstalledSkill } from '../yara-hooks';
 
@@ -14,7 +15,9 @@ describe('project skill preflight', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skills-'));
+    workingDirectory = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skills-')),
+    );
     vi.mocked(scanInstalledSkill).mockResolvedValue(null);
   });
 
@@ -104,5 +107,107 @@ describe('project skill preflight', () => {
     await expect(
       scanProjectSkills(workingDirectory, undefined),
     ).rejects.toThrow('changed during security scan');
+  });
+
+  it('scans skills from the working directory through the Git root', async () => {
+    execFileSync('git', ['init', '-q'], { cwd: workingDirectory });
+    const nested = path.join(workingDirectory, 'packages', 'app');
+    fs.mkdirSync(nested, { recursive: true });
+    const rootSkill = skill('root', '# Root');
+    const parentSkill = path.join(
+      workingDirectory,
+      'packages',
+      '.claude',
+      'skills',
+      'parent',
+    );
+    fs.mkdirSync(parentSkill, { recursive: true });
+    fs.writeFileSync(path.join(parentSkill, 'SKILL.md'), '# Parent');
+    vi.mocked(scanInstalledSkill).mockImplementation((directory) =>
+      Promise.resolve(directory === rootSkill ? 'Root poison' : null),
+    );
+
+    expect(await scanProjectSkills(nested, undefined)).toEqual([
+      { skillDir: rootSkill, reason: 'Root poison' },
+    ]);
+
+    expect(scanInstalledSkill).toHaveBeenCalledWith(
+      rootSkill,
+      undefined,
+      'skill-load',
+    );
+    expect(scanInstalledSkill).toHaveBeenCalledWith(
+      parentSkill,
+      undefined,
+      'skill-load',
+    );
+  });
+
+  it('does not scan a skill above the Git repository root', async () => {
+    const outsideSkill = skill('outside', '# Outside');
+    const repo = path.join(workingDirectory, 'repo');
+    const nested = path.join(repo, 'packages', 'app');
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    const rootSkill = path.join(repo, '.claude', 'skills', 'root');
+    fs.mkdirSync(rootSkill, { recursive: true });
+    fs.writeFileSync(path.join(rootSkill, 'SKILL.md'), '# Root');
+
+    await scanProjectSkills(nested, undefined);
+
+    expect(scanInstalledSkill).toHaveBeenCalledWith(
+      rootSkill,
+      undefined,
+      'skill-load',
+    );
+    expect(scanInstalledSkill).not.toHaveBeenCalledWith(
+      outsideSkill,
+      undefined,
+      'skill-load',
+    );
+  });
+
+  it('includes uppercase text files in the clean-scan fingerprint', async () => {
+    const skillDir = skill('uppercase', '# Safe');
+    fs.writeFileSync(path.join(skillDir, 'PAYLOAD.TXT'), '# Safe');
+
+    await scanProjectSkills(workingDirectory, undefined);
+    await scanProjectSkills(workingDirectory, undefined);
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(1);
+
+    fs.writeFileSync(path.join(skillDir, 'PAYLOAD.TXT'), '# Changed');
+    await scanProjectSkills(workingDirectory, undefined);
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips dangling skill links while scanning healthy and live linked skills', async () => {
+    const healthy = skill('healthy', '# Healthy');
+    const linkedTarget = path.join(workingDirectory, 'linked-target');
+    fs.mkdirSync(linkedTarget);
+    fs.writeFileSync(path.join(linkedTarget, 'SKILL.md'), '# Linked');
+    const skillsRoot = path.join(workingDirectory, '.claude', 'skills');
+    const liveLink = path.join(skillsRoot, 'linked');
+    fs.symlinkSync(linkedTarget, liveLink, 'dir');
+    fs.symlinkSync(
+      path.join(workingDirectory, 'missing'),
+      path.join(skillsRoot, 'dangling'),
+      'dir',
+    );
+
+    await expect(
+      scanProjectSkills(workingDirectory, undefined),
+    ).resolves.toEqual([]);
+
+    expect(scanInstalledSkill).toHaveBeenCalledWith(
+      healthy,
+      undefined,
+      'skill-load',
+    );
+    expect(scanInstalledSkill).toHaveBeenCalledWith(
+      liveLink,
+      undefined,
+      'skill-load',
+    );
+    expect(scanInstalledSkill).toHaveBeenCalledTimes(2);
   });
 });

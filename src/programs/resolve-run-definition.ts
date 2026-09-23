@@ -2,7 +2,7 @@
 
 import type { AgentRunDefinition } from '@agent/types';
 import { LONGER_ASK_TIMEOUT_MS } from '@agent';
-import type { AdditionalFeature } from '@shared/constants';
+import { POSTHOG_DOCS_URL, type AdditionalFeature } from '@shared/constants';
 import type { SkillProgramOptions } from './agent-skill/index.js';
 import { SPINNER_MESSAGE } from './framework-config';
 import { AUDIT_ABORT_CASES } from './audit/detect.js';
@@ -26,6 +26,7 @@ export type SourceMapsSelection = {
 };
 
 export type ProgramRunDefinitionInput = {
+  skillId?: string;
   typescript?: boolean;
   additionalFeatureQueue?: readonly AdditionalFeature[];
   warehouseSources?: readonly DetectedSource[];
@@ -66,6 +67,8 @@ export function resolveProgramRunDefinition(
   input: ProgramRunDefinitionInput,
 ): AgentRunDefinition | undefined {
   switch (programId) {
+    case 'agent-skill':
+      return resolveAgentSkillRunDefinition(input.skillId);
     case 'audit':
       return resolveAuditRunDefinition();
     case 'events-audit':
@@ -79,6 +82,21 @@ export function resolveProgramRunDefinition(
     default:
       return undefined;
   }
+}
+
+export function resolveAgentSkillRunDefinition(
+  skillId?: string,
+): AgentRunDefinition | undefined {
+  if (!skillId) return undefined;
+  return {
+    skillId,
+    integrationLabel: skillId,
+    spinnerMessage: `Running ${skillId}...`,
+    successMessage: `${skillId} complete!`,
+    estimatedDurationMinutes: 5,
+    reportFile: `posthog-${skillId}-report.md`,
+    docsUrl: POSTHOG_DOCS_URL,
+  };
 }
 
 export function resolveAuditRunDefinition(): AgentRunDefinition {

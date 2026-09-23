@@ -31,6 +31,7 @@ import type {
   SpinnerHandle,
 } from '@agent/types';
 import { createPosthogInferenceAuthProvider } from '../credentials';
+import { WizardError } from '@shared/errors';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -451,7 +452,10 @@ export async function detectProjectsWithAgent(
 
   if (result.kind !== 'success') {
     if (result.kind === 'decided_failure') {
-      throw result.failure.error ?? new Error(result.failure.message);
+      throw (
+        result.failure.error ??
+        new WizardError(result.failure.message, undefined, result.failure.code)
+      );
     }
     throw (
       result.error ??

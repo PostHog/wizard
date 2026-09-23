@@ -44,11 +44,12 @@ export interface RunMiddleware {
  * re-derives run context.
  */
 export interface BackendRunInputs {
-  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
+  /** Host cancellation for the whole agent run. */
+  signal?: AbortSignal;
   /** The fully assembled prompt. */
   prompt: string;
   /** Installed framework-skill path, when the program installs one. */
@@ -93,11 +94,12 @@ export type AgentResult =
  * them from the program-level config the linear pipeline assembles once.
  */
 export interface TaskRunInputs {
-  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
+  /** Host cancellation shared by every task in this run. */
+  signal?: AbortSignal;
   /** The fully assembled per-task or seed prompt. */
   prompt: string;
   spinner: SpinnerHandle;

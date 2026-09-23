@@ -1,9 +1,9 @@
-import { ErrorCodes } from '@shared/errors';
 import { RunOutcome } from '@agent';
 import { OutroKind } from '@agent/progress';
 import type { RunResult } from '@agent/types';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import { Integration } from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
 import { ProgramStore, type ProgramProgress } from '../program-store';
 
 function success(snapshot: RunResult['snapshot'], skillId?: string): RunResult {
@@ -225,7 +225,7 @@ it('keeps crash errors detached without losing their type or metadata', () => {
   const result: RunResult = {
     outcome: RunOutcome.Crashed,
     failure: {
-      code: ErrorCodes.GatewayMintFailed,
+      code: ErrorCodes.InternalUnhandled,
       message: error.message,
       error,
     },
@@ -250,6 +250,49 @@ it('keeps crash errors detached without losing their type or metadata', () => {
     'gateway_unavailable',
   );
 });
+
+it.each(['metadata', 'cause'] as const)(
+  'preserves a crash error with non-cloneable %s',
+  (field) => {
+    class GatewayFailure extends Error {
+      config = { transformRequest: () => 'body' };
+    }
+    const store = new ProgramStore();
+    const error = new GatewayFailure('Connection failed');
+    if (field === 'cause') {
+      error.cause = () => 'retry';
+    }
+    const result: RunResult = {
+      outcome: RunOutcome.Crashed,
+      failure: {
+        code: ErrorCodes.InternalUnhandled,
+        message: error.message,
+        error,
+      },
+      snapshot: {
+        tasks: [],
+        statusMessages: ['original'],
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        },
+      },
+    };
+
+    expect(() => store.beginRun({ runId: field }).finish(result)).not.toThrow();
+    result.snapshot.statusMessages.push('changed input');
+    for (const stored of [store.results()[0], store.settledRuns()[0].result]) {
+      expect(stored.outcome).toBe(RunOutcome.Crashed);
+      if (stored.outcome !== RunOutcome.Crashed) continue;
+      expect(stored.failure.error).toBe(error);
+      expect(stored.failure.error).toBeInstanceOf(GatewayFailure);
+      expect(stored.failure.error?.message).toBe('Connection failed');
+      expect(stored.snapshot.statusMessages).toEqual(['original']);
+    }
+  },
+);
 
 it('owns authentication, detection, and composition data independently of progress', () => {
   const store = new ProgramStore();
