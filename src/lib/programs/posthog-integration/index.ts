@@ -16,7 +16,10 @@ import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import { WIZARD_INTERACTION_EVENT_NAME } from '@shared/constants';
+import {
+  WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
+  WIZARD_INTERACTION_EVENT_NAME,
+} from '@shared/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
@@ -249,6 +252,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
   seedTasks: warehouseSeedTasks,
 
+  // Kill switch over the shipped default: only an explicit 'false' excludes,
+  // so a failed flag fetch keeps AI Observability and Logs in the run.
+  excludedTaskTypes: (flags) =>
+    flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+      ? ['ai-observability', 'logs']
+      : [],
+
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (session: WizardSession): Promise<void> => {
@@ -322,6 +332,17 @@ export const posthogIntegrationConfig: ProgramConfig = {
       const versionBucket = config.detection.getVersionBucket(frameworkVersion);
       analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
     }
+    // The same kill switch the orchestrator applies via excludedTaskTypes,
+    // gated here for linear/composed runs, which assemble their own prompt —
+    // without this, disabling the flag would not reach this path and the
+    // prompt would still instruct installing the AIO and Logs skills. Only an
+    // explicit 'false' excludes, so a failed flag fetch keeps the default.
+    const wizardFlags = await analytics.getAllFlagsForWizard();
+    const skillCategoryInstruction =
+      wizardFlags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] !== 'false'
+        ? `Choose a skill from the \`integration\` category that matches this project's framework. Start with this framework skill; load the AI Observability and Logs skills when its workflow calls for them, and follow each installed skill's own steps to completion — framework first, then AI Observability, then Logs — before verification and the setup report. Both are included by default where applicable; the skills define applicability and how to report skipped work. These three categories — \`integration\`, \`ai-observability\`, \`logs\` — are the only ones this run uses. Do NOT load or install skills from any other category (llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. In particular, \`ai-observability\` is the category for AI Observability; do not substitute \`llm-analytics\`.`
+        : `Choose a skill from the \`integration\` category that matches this project's framework. The \`integration\` category is the ONLY one this run uses. Do NOT load or install skills from any other category (ai-observability, logs, llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. If the installed skill's workflow contains an "AI Observability and Logs" section, skip that entire section: this run excludes both products.`;
+
     const frameworkContext = session.frameworkContext;
     const contextTags = config.analytics.getTags(frameworkContext);
     Object.entries(contextTags).forEach(([key, value]) => {
@@ -370,12 +391,12 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
+STEP 1: Call load_skill_menu (from the wizard-tools MCP server) with category: "integration" to see available framework skills.
    If the tool fails, emit: ${
      AgentSignals.ERROR_MCP_MISSING
    } Could not load skill menu and halt.
 
-   Choose a skill from the \`integration\` category that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
+   ${skillCategoryInstruction}
    If no suitable integration skill is found, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.

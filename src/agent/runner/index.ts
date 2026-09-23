@@ -64,6 +64,7 @@ export type {
 export { shouldDisableAsk } from './shared/bootstrap';
 export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
+export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
 
 /**
  * Run a program's agent pipeline.
