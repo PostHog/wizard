@@ -168,6 +168,6 @@ async function* runProductionPromptStreaming(args: {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo
   // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import('@agent');
+  const { runMcpPromptViaSdk } = await import('@programs');
   yield* runMcpPromptViaSdk(args);
 }

@@ -50,9 +50,6 @@
     "src/tui/family-picker.tsx -> src/cli/commands/command.ts",
     "src/tui/screen-sequences.ts -> src/programs/ai-opt-in-gate.ts",
     "src/tui/screen-sequences.ts -> src/programs/program-step.ts",
-    "src/tui/screens/health/HealthCheckScreen.tsx -> src/agent/index.ts",
-    "src/tui/services/mcp-suggested-prompts-services.ts -> src/agent/index.ts",
-    "src/tui/services/wizard-spellbook.ts -> src/agent/index.ts",
     "src/tui/services/wizard-spellbook.ts -> src/programs/program-step.ts",
     "src/tui/store.ts -> src/programs/ai-opt-in-gate.ts",
     "src/ui/index.ts -> src/headless/renderers/logging-ui.ts"

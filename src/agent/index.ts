@@ -47,9 +47,9 @@ export { flushScanReport } from './yara-hooks';
 export { downloadSkill } from './tools';
 
 /**
- * Leaves in C2. The TUI receives agent data through program state. Until
- * then the suggested-prompts screen streams through this wrapper, which loads
- * the streaming module on first call so the startup chunk does not grow.
+ * Streams one suggested MCP prompt. Hosts reach it through `@programs`; the
+ * wrapper loads the streaming module on first call so the startup chunk does
+ * not grow.
  */
 export async function* runMcpPromptViaSdk(
   args: Parameters<

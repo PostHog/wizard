@@ -3,7 +3,7 @@ import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from '@shared/constants';
 import type { ProgramConfig } from '@programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
-import { downloadSkill } from '@agent';
+import { downloadSkill } from '@programs';
 import {
   fetchSkillMenu,
   type SkillEntry,
