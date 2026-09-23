@@ -32,10 +32,7 @@ import {
   type NoAgentMcpPort,
   type NoAgentProgramOptions,
 } from './no-agent';
-import {
-  resolveProgramRunDefinition,
-  type ProgramRunDefinitionInput,
-} from './resolve-run-definition';
+import type { ProgramRunDefinitionInput } from './resolve-run-definition';
 import {
   resolvePosthogIntegrationRun,
   type PosthogIntegrationRunEffects,
@@ -134,14 +131,6 @@ const DEFAULT_FLAGS: RunInput['flags'] = {
   yaraReport: false,
 };
 
-const NO_AGENT_PROGRAMS = new Set([
-  'posthog-doctor',
-  'mcp-add',
-  'mcp-remove',
-  'mcp-tutorial',
-  'slack',
-]);
-
 /** Run a registered program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
@@ -233,9 +222,11 @@ async function runProgramWithStore(
     try {
       credentials = await options.credentials.resolve(programId);
     } catch (error) {
+      if (options.signal?.aborted) return cancelled();
       return fail(error instanceof Error ? error.message : String(error));
     }
   }
+  if (options.signal?.aborted) return cancelled();
   if (credentials) {
     store.setAuthenticated({
       credentials: credentials.posthog,
@@ -243,7 +234,7 @@ async function runProgramWithStore(
       apiUser: credentials.apiUser,
     });
   }
-  if (NO_AGENT_PROGRAMS.has(programId)) {
+  if (program.strategy === 'no-agent') {
     const result = await runNoAgentProgram(
       programId,
       {
@@ -251,8 +242,9 @@ async function runProgramWithStore(
         credentials: credentials?.posthog,
         mcp: { ...input.mcp, local: input.flags?.localMcp },
       },
-      { mcp: options.mcp, workflow: options.workflow },
+      { mcp: options.mcp, workflow: options.workflow, signal: options.signal },
     );
+    if (options.signal?.aborted) return cancelled();
     return {
       programId,
       outcome:
@@ -361,7 +353,7 @@ async function runProgramWithStore(
     let run: AgentRunDefinition | undefined | null = input.run;
     let hooks: RunHooks | undefined = input.hooks;
     let seedTasks = input.seedTasks;
-    if (!run && programId === 'posthog-integration') {
+    if (!run && program.strategy === 'integration') {
       if (!input.frameworkConfig || !options.integrationEffects) {
         return fail(
           'PostHog integration requires prepared framework configuration and host effects.',
@@ -387,7 +379,7 @@ async function runProgramWithStore(
       } catch (error) {
         return fail(error instanceof Error ? error.message : String(error));
       }
-    } else if (!run && programId === 'self-driving') {
+    } else if (!run && program.strategy === 'self-driving') {
       const resolved = resolveSelfDrivingRun({
         installDir: input.installDir,
         detectedTools: input.detectedTools ?? [],
@@ -395,10 +387,12 @@ async function runProgramWithStore(
       run = resolved.run;
       hooks ??= resolved.hooks;
     }
-    run ??=
-      typeof program.run === 'object'
-        ? program.run
-        : resolveProgramRunDefinition(programId, input);
+    if (!run) {
+      if (program.strategy === 'static') run = program.run;
+      if (program.strategy === 'resolved') {
+        run = program.resolve(input);
+      }
+    }
     if (!run) {
       return fail(
         `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,

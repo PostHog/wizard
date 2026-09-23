@@ -154,6 +154,28 @@ it('treats no supported MCP add client as a failed headless installation', async
   });
 });
 
+it('does not start MCP installation after cancellation during detection', async () => {
+  const mcp = mcpPort();
+  const controller = new AbortController();
+  let complete!: (clients: string[]) => void;
+  vi.mocked(mcp.detectSupportedClients).mockImplementation(
+    () =>
+      new Promise<string[]>((resolve) => {
+        complete = resolve;
+      }),
+  );
+
+  const pending = runNoAgentProgram('mcp-add', input(), {
+    mcp,
+    signal: controller.signal,
+  });
+  controller.abort();
+  complete(['Codex']);
+
+  expect(await pending).toMatchObject({ outcome: 'aborted' });
+  expect(mcp.add).not.toHaveBeenCalled();
+});
+
 it('reports per-client MCP remove failures while keeping the existing headless success outcome', async () => {
   const mcp = mcpPort();
   vi.mocked(mcp.detectInstalledClients).mockResolvedValue(['Codex', 'Zed']);

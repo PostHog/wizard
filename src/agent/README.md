@@ -13,6 +13,7 @@ import type { RunConfig, RunInput, RunResult, AgentProgress } from '@agent/types
 runAgent(config: RunConfig, input: RunInput, options?: {
   onProgress?: (event: AgentProgress) => void;
   interaction?: AgentInteraction;
+  signal?: AbortSignal;
 }): Promise<RunResult>
 ```
 
@@ -42,6 +43,8 @@ if (result.outcome !== RunOutcome.Success) {
 ```
 
 `src/agent/__tests__/run-agent-standalone.test.ts` runs this with no UI, no store and no registry.
+
+Pass an `AbortController` signal in the options and call `controller.abort()` to cancel an active run. The result then has `RunOutcome.Aborted`.
 
 ## Intent
 

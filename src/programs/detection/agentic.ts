@@ -132,7 +132,6 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
-  inferenceAuth?: import('@agent/types').InferenceAuthProvider;
 };
 
 function buildPrompt(
@@ -372,7 +371,6 @@ export async function detectProjectsWithAgent(
       skillsBaseUrl: getSkillsBaseUrl(),
       programId,
       inferenceAuth:
-        options.inferenceAuth ??
         session.inferenceAuth ??
         createPosthogInferenceAuthProvider(session.credentials, programId),
       integrationLabel: 'agentic-detect',
