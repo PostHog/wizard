@@ -8,6 +8,8 @@
  * Grouped by fate, per the stack plan (sections 4.1 to 4.5 and 7).
  */
 
+import type { RunAgentOptions, RunConfig, RunInput, RunResult } from './types';
+
 /**
  * Stays. The agent's contract: the one way to run it, the marker strings
  * program prompts embed, the tool ids programs put in allowedTools and
@@ -15,15 +17,33 @@
  * binding, the harness axis and each harness's task capability.
  */
 export type * from './types';
-export { runAgent, RunOutcome } from './runner';
-export { AgentSignals } from './agent-interface';
+export { RunOutcome } from './runner/shared/types';
+export { AgentSignals } from './signals';
 export { OutroKind } from './progress';
-export { WIZARD_TOOL_NAMES } from './tools';
+export { WIZARD_TOOL_NAMES } from './tools/tool-names';
 export { DEFAULT_AGENT_BINDING } from './default-binding';
-export { harnessRunsTasks, resolveHarness } from './runner/switchboard';
+export {
+  harnessRunsTasks,
+  resolveHarness,
+} from './runner/switchboard/resolve-harness';
 
-/** Leaves in C3 (M16, then D12), once skill install becomes shared. */
-export { downloadSkill } from './tools';
+/** Runs one agent pipeline; the runner loads on the first call. */
+export async function runAgent(
+  config: RunConfig,
+  input: RunInput,
+  options?: RunAgentOptions,
+): Promise<RunResult> {
+  const runner = await import('./runner');
+  return runner.runAgent(config, input, options);
+}
+
+/** Leaves in C3 (M16, then D12), once skill install becomes shared. The installer loads on the first call. */
+export async function downloadSkill(
+  ...args: Parameters<typeof import('./tools/tools').downloadSkill>
+): ReturnType<typeof import('./tools/tools').downloadSkill> {
+  const tools = await import('./tools/tools');
+  return tools.downloadSkill(...args);
+}
 
 /**
  * Leaves in C2. The TUI receives agent data through program state. Until

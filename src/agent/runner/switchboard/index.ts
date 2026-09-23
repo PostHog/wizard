@@ -1,7 +1,6 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
 import { Harness, Sequence } from '@shared/constants';
-import { DEFAULT_AGENT_BINDING } from '@agent/default-binding';
 import type { EffortLevel } from './models';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -50,34 +49,6 @@ export interface SwitchboardCtx {
 /** A resolver middleware: defer via `next()`, or assert by returning a value. */
 export type Middleware<D> = (ctx: SwitchboardCtx, next: () => D) => D;
 
-/**
- * Run a middleware chain over `ctx`. Each middleware receives `next` (which
- * runs the rest of the chain) and can either:
- *   - defer: call `next()` and optionally modify its result (overlay pattern)
- *   - short-circuit: return a value without calling `next()` (skip the rest)
- *
- * **Earlier in the array = higher precedence.** Index 0 runs first and can
- * short-circuit the rest; index 1 only runs if index 0 deferred. So
- * `[cliSequenceMw, orchestratorFeatureFlagMw]` means CLI takes precedence over the
- * flag, not the other way around.
- *
- * `fallback` runs at the end — reached only when every middleware deferred.
- * Typically the map read for the base value.
- */
-export function runChain<D>(
-  chain: Middleware<D>[],
-  ctx: SwitchboardCtx,
-  fallback: () => D,
-): D {
-  function step(index: number): D {
-    if (index >= chain.length) return fallback();
-    const middleware = chain[index];
-    const next = () => step(index + 1);
-    return middleware(ctx, next);
-  }
-  return step(0);
-}
-
 // ── Data model ──────────────────────────────────────────────────────────
 
 /** Harness + model for one leaf of agent work. */
@@ -104,15 +75,11 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-/** The harness axis's fallback when the caller supplies no base binding. */
-export const DEFAULT_BINDING: ProgramBinding = DEFAULT_AGENT_BINDING;
-
 // ── Unified re-export surface ───────────────────────────────────────────
+export { HARNESS_OPTIONS, getHarness } from './harness';
 export {
-  HARNESS_OPTIONS,
-  getHarness,
   harnessRunsTasks,
   resolveHarness,
-} from './harness';
+  resolveRoleHarness,
+} from './resolve-harness';
 export { SEQUENCE_OPTIONS, getSequence, type SequenceRunner } from './sequence';
-export { resolveRoleHarness } from './harness';

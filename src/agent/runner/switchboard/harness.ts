@@ -1,20 +1,12 @@
 /**
- * Harness axis: registry, middleware, resolver. Mirrors `sequence.ts`.
+ * Harness axis: the registry. Mirrors `sequence.ts`; the resolver is
+ * `resolve-harness.ts`.
  */
 
-import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness } from '@shared/constants';
-import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
-import {
-  DEFAULT_BINDING,
-  runChain,
-  type HarnessPick,
-  type Middleware,
-  type SwitchboardCtx,
-} from '.';
 
 export const HARNESS_OPTIONS: Partial<Record<Harness, AgentHarness>> = {
   [Harness.anthropic]: anthropicBackend,
@@ -27,102 +19,4 @@ export function getHarness(name: Harness): AgentHarness {
     throw new Error(`No harness registered for '${name}'.`);
   }
   return harness;
-}
-
-/** Whether the orchestrator can drive this harness: it implements `runTask`. */
-export function harnessRunsTasks(name: Harness): boolean {
-  return typeof getHarness(name).runTask === 'function';
-}
-
-/**
- * A validated caller-supplied route overlays the base binding.
- */
-const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
-  const pick = next();
-  const route = ctx.flagRoute;
-  if (!route) return pick;
-  if (ctx.trace) {
-    ctx.trace.harness = 'flag';
-    // Harness-only routes keep the binding's model — trace it truthfully so
-    // analytics never attributes the fallback model to the flag.
-    if (route.model) ctx.trace.model = 'flag';
-  }
-  return {
-    harness: route.harness ?? Harness.pi,
-    model: route.model ?? pick.model,
-    thinkingLevel: route.thinkingLevel ?? pick.thinkingLevel,
-  };
-};
-
-/** `--harness` override. Dev/test only — the option is gated out of published builds. */
-const cliHarnessOverride: Middleware<HarnessPick> = (ctx, next) => {
-  const pick = next();
-  if (!ctx.cliHarness) return pick;
-  if (ctx.trace) ctx.trace.harness = 'cli';
-  return { ...pick, harness: ctx.cliHarness };
-};
-
-/** `--model` override. Dev/test only — the option is gated out of published builds. */
-const cliModelOverride: Middleware<HarnessPick> = (ctx, next) => {
-  const pick = next();
-  if (!ctx.cliModel) return pick;
-  if (ctx.trace) ctx.trace.model = 'cli';
-  return { ...pick, model: ctx.cliModel };
-};
-
-// Order = precedence: CLI > flag > binding default. The prod spread collapses
-// to [], dropping the CLI overrides from the chain.
-const HARNESS_MIDDLEWARE: Middleware<HarnessPick>[] = [
-  ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride, cliModelOverride]),
-  flagRunnerOverride,
-];
-
-/**
- * Resolve the harness for a role. Linear callers omit `role`; orchestrator
- * callers pass `'seed'` or `task.type`. `contextMillOverride[role]` overlays.
- */
-export function resolveHarness(
-  ctx: SwitchboardCtx,
-  role = 'default',
-): HarnessPick {
-  const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
-    if (ctx.trace)
-      Object.assign(ctx.trace, { harness: 'binding', model: 'binding' });
-    const binding = ctx.baseBinding ?? DEFAULT_BINDING;
-    return {
-      harness: binding.harness,
-      model: binding.model,
-      thinkingLevel: binding.thinkingLevel,
-      ...binding.contextMillOverride?.[role],
-    };
-  });
-  logToFile(
-    `[switchboard] resolved: program=${ctx.program ?? '?'} harness=${
-      pick.harness
-    }` +
-      `${ctx.trace?.harness ? ` (${ctx.trace.harness})` : ''} model=${
-        pick.model
-      }` +
-      `${ctx.trace?.model ? ` (${ctx.trace.model})` : ''}`,
-  );
-  return pick;
-}
-
-/** The agent resolves a task role only from data the caller already supplied. */
-export function resolveRoleHarness(
-  binding: {
-    harness: Harness;
-    model: string;
-    thinkingLevel?: HarnessPick['thinkingLevel'];
-    roleBindings?: Record<string, HarnessPick>;
-  },
-  role: string,
-): HarnessPick {
-  return (
-    binding.roleBindings?.[role] ?? {
-      harness: binding.harness,
-      model: binding.model,
-      thinkingLevel: binding.thinkingLevel,
-    }
-  );
 }
