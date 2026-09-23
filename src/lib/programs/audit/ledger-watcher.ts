@@ -4,6 +4,7 @@
  * every path gets it — including the e2e host, which builds no task stream.
  */
 
+import fs from 'fs';
 import path from 'path';
 import { getUI } from '@ui';
 import {
@@ -35,4 +36,17 @@ export function startAuditLedgerWatcher(
       ...options,
     },
   );
+}
+
+/**
+ * The wizard seeds the ledger, so it removes it too. The skills' own `rm`
+ * step is up to the agent, and a skipped one leaves the file in the project.
+ */
+export function removeAuditLedger(installDir: string, file: string): void {
+  const target = path.join(installDir, file);
+  try {
+    fs.rmSync(target, { force: true });
+  } catch (error) {
+    logToFile(`[audit-ledger] could not remove ${target}: ${String(error)}`);
+  }
 }
