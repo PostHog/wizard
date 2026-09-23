@@ -22,7 +22,7 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`. Success may carry an `outro`; the other three carry a `failure` (`AgentFailure`: message, outro data, error, exit code, error code, detail). Every result carries `skillId` and a `snapshot` of what the run reported: tasks, status lines, stage, token usage totals, final cost, dashboard and notebook URLs, handoff text.
 - `AgentProgress`: one event per thing the run reports, in emission order. Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`, `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are copies, never live objects.
 - `AgentInteraction`: every member optional. `ask(question)` resolves with answers, `cancelAsk()` dismisses the open question, `taskNotice(notice)` resolves with whether to keep an optional task, `cancelTaskNotice()` declines it.
-- Errors: the agent does not exit the process and does not throw for a decided failure. An unexpected throw becomes `outcome: Crashed` with the error attached. A gateway 401 emits `authError` and then fails.
+- Errors: the agent does not exit the process and returns decided failures. A caught coded error becomes `Failed`. An uncoded throw becomes `Crashed` with the error attached. A gateway 401 returns an auth failure. The host decides whether to show auth UI.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`, `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`, `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on first call.
 

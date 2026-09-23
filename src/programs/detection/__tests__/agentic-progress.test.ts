@@ -15,6 +15,7 @@ const ui = vi.hoisted(() => ({
   addTokenUsage: vi.fn(),
   setStage: vi.fn(),
   pushStatus: vi.fn(),
+  showAuthError: vi.fn(),
   log: { error: vi.fn() },
 }));
 vi.mock('@agent/agent-interface', async (original) => ({
@@ -73,7 +74,7 @@ it('keeps initialization and execution progress visible during detection', async
         result:
           '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
       });
-      return Promise.resolve({});
+      return Promise.resolve({ kind: 'success' });
     },
   );
   const session = detectionSession();
@@ -96,8 +97,7 @@ it('keeps initialization and execution progress visible during detection', async
   ]);
 });
 
-it('rejects a decided failure even when the transcript contains a report', async () => {
-  const original = new Error('Gateway bearer rejected');
+it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
   vi.mocked(initializeAgent).mockResolvedValue(
     {} as Awaited<ReturnType<typeof initializeAgent>>,
   );
@@ -105,12 +105,39 @@ it('rejects a decided failure even when the transcript contains a report', async
     (_config, _prompt, _options, _spinner, _messages, middleware) => {
       middleware?.onMessage({
         type: 'result',
-        result:
-          '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
+        result: '{"projects":[{"path":".","targetId":"node"}]}',
       });
-      return Promise.resolve({ failure: { error: original } });
+      return Promise.resolve({
+        kind: 'decided_failure',
+        failure: {
+          code: ErrorCodes.AuthInvalidOrExpired,
+          message: 'Authentication failed (401)',
+        },
+      });
     },
   );
+  await expect(
+    detectProjectsWithAgent(detectionSession(), {
+      programId: 'posthog-integration',
+      targets: [{ id: 'node', name: 'Node.js' }],
+    }),
+  ).rejects.toThrow('Authentication failed (401)');
+  expect(ui.showAuthError).not.toHaveBeenCalled();
+});
+
+it('preserves the original error from a decided failure', async () => {
+  const original = new Error('Gateway bearer rejected');
+  vi.mocked(initializeAgent).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof initializeAgent>>,
+  );
+  vi.mocked(executeAgent).mockResolvedValue({
+    kind: 'decided_failure',
+    failure: {
+      code: ErrorCodes.GatewayMintRefused,
+      message: original.message,
+      error: original,
+    },
+  });
 
   await expect(
     detectProjectsWithAgent(detectionSession(), {
@@ -120,38 +147,13 @@ it('rejects a decided failure even when the transcript contains a report', async
   ).rejects.toBe(original);
 });
 
-it.each([
-  { message: 'Gateway token refused', expected: 'Gateway token refused' },
-  { message: undefined, expected: 'Agent detection failed' },
-])(
-  'keeps the code and message of a failure without an Error',
-  async ({ message, expected }) => {
-    vi.mocked(initializeAgent).mockResolvedValue(
-      {} as Awaited<ReturnType<typeof initializeAgent>>,
-    );
-    vi.mocked(executeAgent).mockResolvedValue({
-      failure: { code: ErrorCodes.GatewayMintRefused, message },
-    });
-
-    await expect(
-      detectProjectsWithAgent(detectionSession(), {
-        programId: 'posthog-integration',
-        targets: [{ id: 'node', name: 'Node.js' }],
-      }),
-    ).rejects.toMatchObject({
-      name: 'WizardError',
-      message: expected,
-      code: ErrorCodes.GatewayMintRefused,
-    });
-  },
-);
-
-it('continues to reject legacy agent errors', async () => {
+it('rejects classified agent failures', async () => {
   vi.mocked(initializeAgent).mockResolvedValue(
     {} as Awaited<ReturnType<typeof initializeAgent>>,
   );
   vi.mocked(executeAgent).mockResolvedValue({
-    error: AgentErrorType.API_ERROR,
+    kind: 'failure',
+    classification: AgentErrorType.API_ERROR,
     message: 'Agent API unavailable',
   });
 

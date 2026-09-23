@@ -25,7 +25,7 @@
 import { Sequence } from '@shared/constants';
 import { RunOutcome } from './shared/types';
 export { RunOutcome } from './shared/types';
-import { classifyRunFailure } from '@shared/errors';
+import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { logToFile } from '@utils/debug';
 import type {
   RunAgentOptions,
@@ -79,92 +79,153 @@ export async function runAgent(
   input: RunInput,
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
-  const collector = createProgressCollector(options.onProgress);
-  const { emit } = collector;
-  const log = (message: string) =>
-    emit({ kind: 'log', level: 'info', message });
+  let collector: ReturnType<typeof createProgressCollector> | undefined;
   let cleanupInstalledSkills: (() => void) | undefined;
   const cleanFailedRun = () => {
     try {
       cleanupInstalledSkills?.();
     } catch (error) {
-      logToFile('[agent-runner] failed-run skill cleanup error:', error);
+      try {
+        logToFile('[agent-runner] failed-run skill cleanup error:', error);
+      } catch {
+        // Cleanup diagnostics must not replace the run result.
+      }
     }
   };
+  const snapshot = (): RunResult['snapshot'] => {
+    try {
+      if (collector) return collector.snapshot();
+    } catch {
+      // A partial snapshot must not replace the run's primary failure.
+    }
+    return {
+      tasks: [],
+      statusMessages: [],
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      },
+    };
+  };
 
-  // Flush the warlock scan report once, at this single seam, on every
-  // termination path and for every harness (linear, orchestrator, or future).
-  // flushScanReport is idempotent (it zeroes scan state), so a caller that also
-  // flushes from its own cleanup path sees a harmless no-op. No harness has to
-  // know reporting exists.
+  let result: RunResult;
   try {
     // Capture before preparation so pre-harness failures also clean new skills.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
+    collector = createProgressCollector(options.onProgress);
+    const { emit } = collector;
+    const log = (message: string) =>
+      emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
-      cleanFailedRun();
-      return {
+      result = {
         ...hostAborted(),
         skillId: input.skillId,
-        snapshot: collector.snapshot(),
+        snapshot: snapshot(),
       };
+    } else {
+      const boot = await prepareRun(config, input);
+      if (options.signal?.aborted) {
+        result = {
+          ...hostAborted(),
+          skillId: input.skillId,
+          snapshot: snapshot(),
+        };
+      } else {
+        if (config.binding.sequence === Sequence.orchestrator) {
+          log('Task-queue orchestrator enabled.');
+        }
+        try {
+          logToFile(
+            `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
+              ` harness=${config.binding.harness} composed=${config.composed}`,
+          );
+        } catch {
+          // Logging is best effort.
+        }
+        const sequenceResult = await getSequence(config.binding.sequence).run({
+          config,
+          input,
+          boot,
+          emit,
+          interaction: options.interaction,
+          signal: options.signal,
+        });
+        result = {
+          ...(options.signal?.aborted ? hostAborted() : sequenceResult),
+          skillId: input.skillId,
+          snapshot: snapshot(),
+        };
+      }
     }
-    const boot = await prepareRun(config, input);
-    if (options.signal?.aborted) {
-      cleanFailedRun();
-      return {
-        ...hostAborted(),
-        skillId: input.skillId,
-        snapshot: collector.snapshot(),
-      };
-    }
-    if (config.binding.sequence === Sequence.orchestrator) {
-      log('Task-queue orchestrator enabled.');
-    }
-    logToFile(
-      `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
-        ` harness=${config.binding.harness} composed=${config.composed}`,
-    );
-    const result = await getSequence(config.binding.sequence).run({
-      config,
-      input,
-      boot,
-      emit,
-      interaction: options.interaction,
-      signal: options.signal,
-    });
-    if (result.outcome !== RunOutcome.Success || options.signal?.aborted)
-      cleanFailedRun();
-    return {
-      ...(options.signal?.aborted ? hostAborted() : result),
-      skillId: input.skillId,
-      snapshot: collector.snapshot(),
-    };
   } catch (error) {
-    if (options.signal?.aborted) {
-      cleanFailedRun();
-      return {
-        ...hostAborted(),
-        skillId: input.skillId,
-        snapshot: collector.snapshot(),
+    const original =
+      error instanceof Error ? error : new Error(safeErrorMessage(error));
+    let failure: ReturnType<typeof classifyRunFailure>;
+    try {
+      failure = classifyRunFailure(original);
+    } catch {
+      failure = {
+        code: ErrorCodes.InternalUnhandled,
+        message: 'Unexpected agent error',
+        coded: false,
       };
     }
-    // Not a decision the agent made. Hand it back whole rather than throw, so
-    // every ending of a run is a result the caller reads the same way.
-    const failure = classifyRunFailure(error);
-    logToFile('[agent-runner] run crashed:', error);
-    cleanFailedRun();
-    return {
-      outcome: RunOutcome.Crashed,
-      skillId: input.skillId,
-      failure: {
-        code: failure.code,
-        message: failure.message,
-        error: error instanceof Error ? error : new Error(String(error)),
-      },
-      snapshot: collector.snapshot(),
-    };
-  } finally {
+    try {
+      logToFile('[agent-runner] run failed:', original);
+    } catch {
+      // Logging is best effort.
+    }
+    if (options.signal?.aborted) {
+      result = {
+        ...hostAborted(),
+        skillId: input.skillId,
+        snapshot: snapshot(),
+      };
+    } else if (failure.coded) {
+      result = {
+        outcome: RunOutcome.Failed,
+        skillId: input.skillId,
+        failure: {
+          code: failure.code,
+          message: failure.message,
+          error: original,
+        },
+        snapshot: snapshot(),
+      };
+    } else {
+      result = {
+        outcome: RunOutcome.Crashed,
+        skillId: input.skillId,
+        failure: {
+          code: failure.code,
+          message: failure.message,
+          error: original,
+        },
+        snapshot: snapshot(),
+      };
+    }
+  }
+
+  if (options.signal?.aborted && result.outcome === RunOutcome.Success) {
+    result = { ...hostAborted(), skillId: input.skillId, snapshot: snapshot() };
+  }
+  if (result.outcome !== RunOutcome.Success) cleanFailedRun();
+  try {
     const report = flushScanReport({ yaraReport: input.flags.yaraReport });
-    if (report) log(report);
+    if (report)
+      collector?.emit({ kind: 'log', level: 'info', message: report });
+  } catch {
+    // Scan reporting is best effort after the run outcome is decided.
+  }
+  return result;
+}
+
+function safeErrorMessage(error: unknown): string {
+  try {
+    return String(error);
+  } catch {
+    return 'Unknown thrown value';
   }
 }

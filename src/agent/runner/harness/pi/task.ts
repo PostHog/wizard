@@ -43,6 +43,7 @@ import {
 } from './gateway';
 import { runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
+import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
   applyOutroMarkers,
@@ -165,7 +166,13 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
 }
 
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
-  if (inputs.signal?.aborted) return {};
+  if (inputs.signal?.aborted) {
+    return {
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Agent run cancelled',
+    };
+  }
   const {
     config,
     input,
@@ -222,6 +229,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       ...analyticsProperties,
     });
 
+  let mcpCleanup: (() => void) | undefined;
+  let aioFailed = true;
+  let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -259,7 +269,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const model = registry.find(GATEWAY_PROVIDER, modelId);
     if (!model) {
       return {
-        error: AgentErrorType.API_ERROR,
+        kind: 'failure',
+        classification: AgentErrorType.API_ERROR,
         message: 'pi: gateway model could not be resolved',
       };
     }
@@ -287,7 +298,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const extensionFactories = [security.factory] as Array<
       (pi: unknown) => void
     >;
-    let mcpCleanup: (() => void) | undefined;
     let posthogMcp = false;
     if (allowsPostHogMcp(allowedTools)) {
       try {
@@ -301,6 +311,12 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         mcpCleanup = mcp.cleanup;
         posthogMcp = true;
       } catch (err) {
+        try {
+          mcpCleanup?.();
+        } catch {
+          /* Setup cleanup is best effort. */
+        }
+        mcpCleanup = undefined;
         // Silent here reads as a task failure minutes later: a task that asked
         // for this tool can only skip or fail without it.
         logToFile(`[pi-task] PostHog MCP setup skipped: ${String(err)}`);
@@ -391,20 +407,16 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       noTools: 'builtin',
       customTools,
     });
+    cancellation = bindPiCancellation(inputs.signal, agentSession, (error) => {
+      logToFile(`[pi-task] abort failed: ${String(error)}`);
+    });
     await agentSession.bindExtensions({});
-    const cancellation = bindPiCancellation(
-      inputs.signal,
-      agentSession,
-      (error) => {
-        logToFile(`[pi-task] abort failed: ${String(error)}`);
-      },
-    );
 
     // A turn that ends on a 401 from an aged bearer re-mints once and
     // continues with the nudge the task would get anyway.
     const turns = withGatewayRemint({
-      session: agentSession,
       signal: inputs.signal,
+      session: agentSession,
       registry,
       auth,
       refreshAuth,
@@ -477,12 +489,18 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // before it reaches this call site).
     capture.setInitialPrompt(taskPrompt);
 
+    let terminal = turns.terminalFailure();
     try {
       if (inputs.signal?.aborted) {
         if (spinnerMessage) spinner.stop('Run cancelled');
-        return {};
+        return {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'Agent run cancelled',
+        };
       }
       await turns.prompt(taskPrompt);
+      terminal = turns.terminalFailure();
 
       // pi's prompt() resolves the moment a turn carries no tool call — which
       // an agent mid-plan does emit. While the work has not reached its
@@ -492,6 +510,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         nudges < MAX_TASK_NUDGES &&
         !inputs.signal?.aborted &&
         !security.state.criticalViolation &&
+        !terminal &&
         !isSettled(orchestrator)
       ) {
         nudges += 1;
@@ -501,11 +520,13 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         await turns.prompt(
           orchestrator.currentTaskId ? TASK_NUDGE : SEED_NUDGE,
         );
+        terminal = turns.terminalFailure();
       }
 
       if (
         requestRemark &&
         !security.state.criticalViolation &&
+        !terminal &&
         !inputs.signal?.aborted
       ) {
         try {
@@ -515,14 +536,47 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         }
       }
     } finally {
-      await cancellation.settle();
-      unsubscribe();
-      mcpCleanup?.();
+      try {
+        unsubscribe();
+      } catch {
+        /* Keep the terminal result. */
+      }
     }
 
     if (inputs.signal?.aborted) {
       if (spinnerMessage) spinner.stop('Run cancelled');
-      return {};
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
+    }
+
+    if (terminal && !security.state.criticalViolation) {
+      if (errorMessage || spinnerMessage)
+        spinner.stop(errorMessage ?? 'Task failed');
+      captureAborted(terminal.classification);
+      if (terminal.status === 401) {
+        return {
+          kind: 'decided_failure',
+          failure: {
+            code: ErrorCodes.AuthInvalidOrExpired,
+            message: 'Authentication failed (401)',
+            detail: { providerMessage: terminal.message },
+          },
+        };
+      }
+      return terminal.classification === AgentErrorType.ABORT
+        ? {
+            kind: 'abort',
+            classification: AgentErrorType.ABORT,
+            message: terminal.message,
+          }
+        : {
+            kind: 'failure',
+            classification: terminal.classification,
+            message: terminal.message,
+          };
     }
 
     if (security.state.criticalViolation) {
@@ -531,7 +585,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         `[pi-task] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
       );
       captureAborted(AgentErrorType.YARA_VIOLATION);
-      return { error: AgentErrorType.YARA_VIOLATION };
+      return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
     }
 
     const remark = signals.remark();
@@ -562,19 +616,49 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       `[pi-task] usage task=${taskType} model=${modelId} effort=${caps.thinkingLevel} dur=${durations.duration_seconds}s turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
     );
     if (successMessage) spinner.stop(successMessage);
-    return {};
+    aioFailed = false;
+    return { kind: 'success' };
   } catch (err) {
     if (inputs.signal?.aborted) {
       if (spinnerMessage) spinner.stop('Run cancelled');
-      return {};
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
     }
     const message = err instanceof Error ? err.message : String(err);
     logToFile(`[pi-task] run error: ${message}`);
     if (errorMessage || spinnerMessage) {
       spinner.stop(errorMessage ?? 'Task failed');
     }
-    const error = runErrorType(message);
-    captureAborted(error);
-    return { error, message };
+    const coded = classifyRunFailure(err);
+    if (coded.coded && err instanceof Error) {
+      captureAborted(AgentErrorType.API_ERROR);
+      return {
+        kind: 'decided_failure',
+        failure: { code: coded.code, message: coded.message, error: err },
+      };
+    }
+    const classification = runErrorType(message);
+    captureAborted(classification);
+    return {
+      kind: 'failure',
+      classification,
+      message,
+      error: err instanceof Error ? err : undefined,
+    };
+  } finally {
+    await cancellation?.settle();
+    try {
+      mcpCleanup?.();
+    } catch {
+      /* Keep the terminal result. */
+    }
+    try {
+      capture.finishPiRun(aioFailed);
+    } catch {
+      /* Telemetry is best effort. */
+    }
   }
 }

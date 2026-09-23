@@ -30,7 +30,9 @@ import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { ErrorCodes, WizardError } from '@shared/errors';
+import { AGENT_ERROR_CODE } from '@agent/error-map';
+import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
+import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '@agent/progress';
 import type {
   AgentFailure,
@@ -153,6 +155,38 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
+function terminalResult(result: AgentResult):
+  | {
+      outcome: RunOutcome.Aborted | RunOutcome.Failed;
+      failure: AgentFailure;
+    }
+  | undefined {
+  switch (result.kind) {
+    case 'success':
+      return undefined;
+    case 'decided_failure':
+      return { outcome: RunOutcome.Failed, failure: result.failure };
+    case 'abort':
+      return {
+        outcome: RunOutcome.Aborted,
+        failure: {
+          code: AGENT_ERROR_CODE[result.classification],
+          message: result.message ?? 'Agent aborted',
+          error: result.error,
+        },
+      };
+    case 'failure':
+      return {
+        outcome: RunOutcome.Failed,
+        failure: {
+          code: AGENT_ERROR_CODE[result.classification],
+          message: result.message ?? 'Agent failed',
+          error: result.error,
+        },
+      };
+  }
+}
+
 /** Every skill entry the menu knows, across categories. */
 async function fetchSkillMenuEntries(
   skillsBaseUrl: string,
@@ -241,7 +275,11 @@ export async function offerSeededTask(
       timedOut = true;
       // Dismisses the overlay and settles the showTaskNotice promise too, so
       // the losing side of the race cannot leave a modal on screen.
-      cancelTaskNotice?.();
+      try {
+        cancelTaskNotice?.();
+      } catch {
+        // An overlay failure must not leave a pending notice promise.
+      }
       resolve(false);
     }, timeoutMs);
   });
@@ -249,9 +287,10 @@ export async function offerSeededTask(
     cancelForAbort = () => {
       try {
         cancelTaskNotice?.();
-      } finally {
-        resolve(false);
+      } catch {
+        // A host overlay failure must not prevent the run from settling.
       }
+      resolve(false);
     };
     signal?.addEventListener('abort', cancelForAbort, { once: true });
     if (signal?.aborted) cancelForAbort();
@@ -453,6 +492,10 @@ export function displayOrder(
 export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
+  const controller = new AbortController();
+  const abortFromHost = () => controller.abort();
+  context.signal?.addEventListener('abort', abortFromHost, { once: true });
+  if (context.signal?.aborted) abortFromHost();
   let cleaned = false;
   const cleanupQueue = (): void => {
     if (cleaned) return;
@@ -463,15 +506,24 @@ export async function runOrchestrator(
         force: true,
       });
     } catch (error) {
-      analytics.captureException(
-        error instanceof Error ? error : new Error(String(error)),
-        { step: 'orchestrator_cache_cleanup' },
-      );
+      try {
+        analytics.captureException(
+          error instanceof Error ? error : new Error(String(error)),
+          { step: 'orchestrator_cache_cleanup' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
     }
   };
   try {
-    return await executeOrchestrator(context, cleanupQueue);
+    return await executeOrchestrator(
+      { ...context, signal: controller.signal },
+      cleanupQueue,
+      controller,
+    );
   } finally {
+    context.signal?.removeEventListener('abort', abortFromHost);
     cleanupQueue();
   }
 }
@@ -479,6 +531,7 @@ export async function runOrchestrator(
 async function executeOrchestrator(
   { config, input, boot, emit, interaction, signal }: SequenceContext,
   cleanupQueue: () => void,
+  controller: AbortController,
 ): Promise<SequenceResult> {
   if (signal?.aborted) return hostAborted();
   const runId = randomUUID();
@@ -885,15 +938,8 @@ async function executeOrchestrator(
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (signal?.aborted) return hostAborted();
-  // A decided seed failure ends the run and releases its queue artifacts.
-  if (seedResult.failure) return failed(seedResult.failure);
-  if (seedResult.error) {
-    logToFile(
-      `[orchestrator] seed error: ${seedResult.error} ${
-        seedResult.message ?? ''
-      }`,
-    );
-  }
+  const seedTerminal = terminalResult(seedResult);
+  if (seedTerminal) return seedTerminal;
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
     types: store.list().map((t) => t.type),
@@ -1077,35 +1123,49 @@ async function executeOrchestrator(
       const taskPick = resolveRoleHarness(config.binding, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
-      const taskResult = await taskHarness.runTask({
-        signal,
-        config,
-        input,
-        boot,
-        emit,
-        prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
-        spinner,
-        model: requireKnownModel(taskModel.model, taskPick.model),
-        effort: taskModel.effort,
-        allowedTools: resolved.allowedTools,
-        disallowedTools: resolved.disallowedTools,
-        askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
-        orchestrator: orchestratorCtx(task.id),
-        spinnerMessage: '',
-        successMessage: '',
-        additionalFeatureQueue: [],
-        requestRemark: false,
-        analyticsProperties: {
-          task_type: task.type,
-          task_id: task.id,
-          harness: taskPick.harness,
-        },
-      });
+      let taskResult: AgentResult;
+      try {
+        taskResult = await taskHarness.runTask({
+          signal,
+          config,
+          input,
+          boot,
+          emit,
+          prompt: assembleTaskPrompt(
+            promptContext,
+            resolved.prompt,
+            skillPaths,
+          ),
+          spinner,
+          model: requireKnownModel(taskModel.model, taskPick.model),
+          effort: taskModel.effort,
+          allowedTools: resolved.allowedTools,
+          disallowedTools: resolved.disallowedTools,
+          askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
+          orchestrator: orchestratorCtx(task.id),
+          spinnerMessage: '',
+          successMessage: '',
+          additionalFeatureQueue: [],
+          requestRemark: false,
+          analyticsProperties: {
+            task_type: task.type,
+            task_id: task.id,
+            harness: taskPick.harness,
+          },
+        });
+      } catch (error) {
+        if (signal?.aborted) return;
+        if (error instanceof RunTaskFatal) throw error;
+        const failure = classifyRunFailure(error);
+        throw new RunTaskFatal({
+          code: failure.code,
+          message: failure.message,
+          error: error instanceof Error ? error : undefined,
+        });
+      }
       if (signal?.aborted) return;
-      // A decided failure (a 401 the harness already reported) is the run's,
-      // not the task's: stop the drain and report it, where the harness used
-      // to exit the process.
-      if (taskResult.failure) throw new RunTaskFatal(taskResult.failure);
+      const terminal = terminalResult(taskResult);
+      if (terminal) throw new RunTaskFatal(terminal.failure, terminal.outcome);
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1117,9 +1177,21 @@ async function executeOrchestrator(
           referenceSkillId,
         );
       } catch (err) {
-        logToFile(`[orchestrator] per-task skill sweep failed: ${String(err)}`);
+        try {
+          logToFile('[orchestrator] per-task skill sweep failed:', err);
+        } catch {
+          // Cleanup logging must not replace the task result.
+        }
       }
-      renderQueue();
+      try {
+        renderQueue();
+      } catch (err) {
+        try {
+          logToFile('[orchestrator] per-task queue render failed:', err);
+        } catch {
+          // Cleanup logging must not replace the task result.
+        }
+      }
     }
   };
   // A task that stops for the user is offered, not imposed, and the answer was
@@ -1129,12 +1201,16 @@ async function executeOrchestrator(
     renderQueue();
   }
 
-  let fatal: AgentFailure | undefined;
+  let fatal: RunTaskFatal | undefined;
   try {
-    await drainQueue(store, runTask, { ...DEFAULT_DRAIN_OPTIONS, signal });
+    await drainQueue(store, runTask, {
+      ...DEFAULT_DRAIN_OPTIONS,
+      signal,
+      onFatal: () => controller.abort(),
+    });
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
-    fatal = error.failure;
+    fatal = error;
   } finally {
     try {
       if (!signal?.aborted && referenceSkillId && referenceInstallPath) {
@@ -1145,10 +1221,14 @@ async function executeOrchestrator(
         );
       }
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'orchestrator_reference_promote' },
-      );
+      try {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_reference_promote' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
     }
     cleanupQueue();
     try {
@@ -1158,16 +1238,19 @@ async function executeOrchestrator(
         referenceSkillId,
       );
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'orchestrator_skill_sweep' },
-      );
+      try {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_skill_sweep' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
     }
   }
 
+  if (fatal) return { outcome: fatal.outcome, failure: fatal.failure };
   if (signal?.aborted) return hostAborted();
-
-  if (fatal) return failed(fatal);
 
   renderQueue();
 

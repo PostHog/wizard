@@ -8,6 +8,7 @@ import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
 import type { AskAnswers } from '@lib/wizard-session';
 import { Harness, Sequence } from '@shared/constants';
+import { AgentErrorType } from '@agent/signals';
 import { HostResolution } from '@shared/host-resolution';
 
 vi.mock('@utils/analytics');
@@ -16,7 +17,7 @@ vi.mock('@agent/aio-capture', () => ({ createAioCapture: vi.fn() }));
 vi.mock('@agent/agent-interface', async (original) => ({
   ...(await original<typeof import('@agent/agent-interface')>()),
   initializeAgent: vi.fn().mockResolvedValue({}),
-  runAgent: vi.fn().mockResolvedValue({}),
+  runAgent: vi.fn().mockResolvedValue({ kind: 'success' }),
 }));
 
 const questions = [{ id: 'q', prompt: 'Continue?', kind: 'text' as const }];
@@ -144,7 +145,13 @@ describe.each(['linear', 'task'] as const)(
         (_agent, _prompt, _options, _spinner, runOptions) =>
           new Promise((resolve) => {
             expect(runOptions?.signal).toBe(controller.signal);
-            controller.signal.addEventListener('abort', () => resolve({}));
+            controller.signal.addEventListener('abort', () =>
+              resolve({
+                kind: 'abort',
+                classification: AgentErrorType.ABORT,
+                message: 'Agent run cancelled',
+              }),
+            );
           }),
       );
 
@@ -171,7 +178,7 @@ describe.each(['linear', 'task'] as const)(
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
-  vi.mocked(executeAgent).mockReset().mockResolvedValue({});
+  vi.mocked(executeAgent).mockReset().mockResolvedValue({ kind: 'success' });
 });
 
 describe.each(['linear', 'task'] as const)(

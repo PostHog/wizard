@@ -2,6 +2,7 @@ import { piBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
 import { Harness, Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
+import { AgentErrorType } from '@agent/signals';
 
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
@@ -10,7 +11,7 @@ vi.mock('@agent/aio-capture', () => ({
   createAioCapture: () => ({
     captureFromPiMessageEndEvent: vi.fn(),
     setInitialPrompt: vi.fn(),
-    flush: vi.fn(),
+    finishPiRun: vi.fn(),
   }),
 }));
 vi.mock('../security', () => ({
@@ -196,7 +197,11 @@ it.each(['linear', 'task'] as const)(
 
     await vi.waitFor(() => expect(agentSession.prompt).toHaveBeenCalledOnce());
     controller.abort();
-    await expect(pending).resolves.toEqual({});
+    await expect(pending).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Agent run cancelled',
+    });
     expect(agentSession.abort).toHaveBeenCalledOnce();
   },
 );

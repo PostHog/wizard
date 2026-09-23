@@ -1,6 +1,7 @@
 // Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
 import { Harness } from '@shared/constants';
+import { AgentErrorType } from '@agent/signals';
 import {
   initializeAgent,
   runAgent as executeAgent,
@@ -72,13 +73,18 @@ export const anthropicBackend: AgentHarness = {
       },
       runOptions(input),
     );
-    if (inputs.signal?.aborted) return {};
+    if (inputs.signal?.aborted)
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
     log.step(`Verbose logs: ${getLogFilePath()}`);
     log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
 
     return executeAgent(
-      agent,
+      { ...agent, signal: inputs.signal },
       prompt,
       runOptions(input),
       spinner,
@@ -155,10 +161,15 @@ export const anthropicBackend: AgentHarness = {
       },
       options,
     );
-    if (inputs.signal?.aborted) return {};
+    if (inputs.signal?.aborted)
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
 
     return executeAgent(
-      { ...agent, model, allowedTools, disallowedTools },
+      { ...agent, model, allowedTools, disallowedTools, signal: inputs.signal },
       prompt,
       options,
       spinner,

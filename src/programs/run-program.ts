@@ -191,11 +191,12 @@ async function runProgramWithStore(
     progress: store.read(),
     settledRuns: store.settledRuns(),
     artifacts,
-    failure: { message },
+    failure: { code: ErrorCodes.InternalUnhandled, message },
   });
   const abort = (message: string): ProgramRunOutcome => ({
     ...fail(message),
     outcome: RunOutcome.Aborted,
+    failure: { code: ErrorCodes.AgentAbort, message },
   });
   const cancelled = (): ProgramRunOutcome => ({
     ...abort('Run cancelled by host.'),
@@ -257,7 +258,14 @@ async function runProgramWithStore(
       settledRuns: store.settledRuns(),
       programData: result.data,
       artifacts,
-      ...('failure' in result ? { failure: result.failure } : {}),
+      ...('failure' in result
+        ? {
+            failure: {
+              ...result.failure,
+              code: result.failure.code ?? ErrorCodes.InternalUnhandled,
+            },
+          }
+        : {}),
     };
   }
   if (!credentials)

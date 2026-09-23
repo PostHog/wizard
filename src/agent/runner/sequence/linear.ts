@@ -11,10 +11,10 @@
  */
 
 import { OutroKind, type OutroData } from '@agent/progress';
-import { AgentErrorType, AgentSignals } from '../../agent-interface';
+import { AgentErrorType } from '../../agent-interface';
 import { logToFile } from '@utils/debug';
 import { createBenchmarkPipeline } from '@agent/middleware/benchmark';
-import { ErrorCodes, WizardError } from '@shared/errors';
+import { ErrorCodes } from '@shared/errors';
 import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage } from '@agent/yara-hooks';
@@ -51,6 +51,7 @@ export async function runLinearProgram({
       skillsBaseUrl,
       { triage: boot.triageProvider },
     );
+    if (signal?.aborted) return hostAborted();
     if (installResult.kind !== 'ok') {
       if (signal?.aborted) return hostAborted();
       return failed(installFailure(run.integrationLabel, installResult));
@@ -101,6 +102,7 @@ export async function runLinearProgram({
       : null,
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
+  if (signal?.aborted) return hostAborted();
 
   // 8. Run the agent through the run-level harness. The harness owns the agent
   // loop + model transport; everything around it (skill install, prompt, ask
@@ -123,11 +125,18 @@ export async function runLinearProgram({
   if (signal?.aborted) return hostAborted();
 
   // 9. Error handling (full set from both harnesses)
-  if (agentResult.failure) {
+  if (agentResult.kind === 'decided_failure') {
     return failed(agentResult.failure);
   }
 
-  if (agentResult.error === AgentErrorType.ABORT) {
+  if (agentResult.kind === 'success') {
+    // Success continues through the post-run hooks and outro below.
+  } else if (agentResult.kind !== 'abort' && agentResult.kind !== 'failure') {
+    const _exhaustive: never = agentResult;
+    return _exhaustive;
+  }
+
+  if (agentResult.kind === 'abort') {
     const reason = agentResult.message ?? '';
     const matched = run.abortCases?.find((c) => c.match.test(reason));
     const abortCode = matched?.errorCode ?? ErrorCodes.AgentAbort;
@@ -156,22 +165,20 @@ export async function runLinearProgram({
     return {
       outcome: RunOutcome.Aborted,
       failure: {
+        message: matched?.message ?? `${run.integrationLabel} aborted`,
         outroData,
         code: abortCode,
-        error: new WizardError(
-          `Agent aborted: ${reason}`,
-          {
-            integration: run.integrationLabel,
-            error_type: AgentErrorType.ABORT,
-            reason,
-          },
-          abortCode,
-        ),
+        error: agentResult.error,
       },
     };
   }
 
-  if (agentResult.error === AgentErrorType.MCP_MISSING) {
+  const classification =
+    agentResult.kind === 'failure' ? agentResult.classification : undefined;
+  const failureMessage =
+    agentResult.kind === 'failure' ? agentResult.message : undefined;
+
+  if (classification === AgentErrorType.MCP_MISSING) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
       message:
@@ -179,53 +186,30 @@ export async function runLinearProgram({
         'The wizard was unable to connect to the PostHog MCP server.\n' +
         'This could be due to a network issue or a configuration problem.\n\n' +
         `Please try again, or check the documentation:\n${run.docsUrl}`,
-      error: new WizardError(
-        'Agent could not access PostHog MCP server',
-        {
-          integration: run.integrationLabel,
-          error_type: AgentErrorType.MCP_MISSING,
-          signal: AgentSignals.ERROR_MCP_MISSING,
-        },
-        AGENT_ERROR_CODE[AgentErrorType.MCP_MISSING],
-      ),
+      error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
 
-  if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
+  if (classification === AgentErrorType.RESOURCE_MISSING) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
       message:
         'Could not access the setup resource\n\n' +
         'This may indicate a version mismatch or a temporary service issue.\n\n' +
         `Please try again, or check the documentation:\n${run.docsUrl}`,
-      error: new WizardError(
-        'Agent could not access setup resource',
-        {
-          integration: run.integrationLabel,
-          error_type: AgentErrorType.RESOURCE_MISSING,
-          signal: AgentSignals.ERROR_RESOURCE_MISSING,
-        },
-        AGENT_ERROR_CODE[AgentErrorType.RESOURCE_MISSING],
-      ),
+      error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
 
-  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
+  if (classification === AgentErrorType.YARA_VIOLATION) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      message: agentResult.message ?? formatYaraAbortMessage(),
-      error: new WizardError(
-        'YARA scanner terminated session',
-        {
-          integration: run.integrationLabel,
-          error_type: AgentErrorType.YARA_VIOLATION,
-        },
-        AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      ),
+      message: failureMessage ?? formatYaraAbortMessage(),
+      error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
 
-  if (agentResult.error === AgentErrorType.NO_PROGRESS) {
+  if (classification === AgentErrorType.NO_PROGRESS) {
     analytics.wizardCapture('agent no progress', {
       integration: run.integrationLabel,
       error_type: AgentErrorType.NO_PROGRESS,
@@ -235,18 +219,11 @@ export async function runLinearProgram({
       message:
         'The Wizard exited without changing your project. Please contact the ' +
         'PostHog team with wizard@posthog.com about this error.',
-      error: new WizardError(
-        'Agent made no progress',
-        {
-          integration: run.integrationLabel,
-          error_type: AgentErrorType.NO_PROGRESS,
-        },
-        AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
-      ),
+      error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
 
-  if (agentResult.error === AgentErrorType.INCOMPLETE_TASKS) {
+  if (classification === AgentErrorType.INCOMPLETE_TASKS) {
     analytics.wizardCapture('agent incomplete tasks', {
       integration: run.integrationLabel,
       error_type: AgentErrorType.INCOMPLETE_TASKS,
@@ -256,46 +233,41 @@ export async function runLinearProgram({
       message:
         'The Wizard exited without completing its planned tasks. Please contact ' +
         'the PostHog team with wizard@posthog.com about this error.',
-      error: new WizardError(
-        'Agent left planned tasks incomplete',
-        {
-          integration: run.integrationLabel,
-          error_type: AgentErrorType.INCOMPLETE_TASKS,
-        },
-        AGENT_ERROR_CODE[AgentErrorType.INCOMPLETE_TASKS],
-      ),
+      error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
 
   if (
-    agentResult.error === AgentErrorType.RATE_LIMIT ||
-    agentResult.error === AgentErrorType.API_ERROR
+    classification === AgentErrorType.RATE_LIMIT ||
+    classification === AgentErrorType.API_ERROR
   ) {
     analytics.wizardCapture('agent api error', {
       integration: run.integrationLabel,
-      error_type: agentResult.error,
-      error_message: agentResult.message,
+      error_type: classification,
+      error_message: failureMessage,
     });
 
     return failed({
-      code: AGENT_ERROR_CODE[agentResult.error],
+      code: AGENT_ERROR_CODE[classification],
       message: `API Error\n\n${
-        agentResult.message || 'Unknown error'
+        failureMessage || 'Unknown error'
       }\n\nPlease report this to: wizard@posthog.com`,
-      error: new WizardError(
-        `API error: ${agentResult.message}`,
-        {
-          integration: run.integrationLabel,
-          error_type: agentResult.error,
-        },
-        AGENT_ERROR_CODE[agentResult.error],
-      ),
+      error: agentResult.kind === 'failure' ? agentResult.error : undefined,
+    });
+  }
+
+  if (agentResult.kind === 'failure') {
+    return failed({
+      code: AGENT_ERROR_CODE[agentResult.classification],
+      message: agentResult.message ?? 'Agent failed',
+      error: agentResult.error,
     });
   }
 
   // 10. Post-run hooks
   if (config.hooks?.postRun) {
     await config.hooks.postRun(credentials);
+    if (signal?.aborted) return hostAborted();
   }
   if (signal?.aborted) return hostAborted();
 
