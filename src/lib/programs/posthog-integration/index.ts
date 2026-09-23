@@ -50,6 +50,25 @@ function resolveContinueUrl(
 const WAREHOUSE_LINK_LIMIT = 3;
 
 /**
+ * How many detected sources the seeded step is allowed to collect credentials
+ * for.
+ *
+ * The step's cost to the user is one credential prompt per source, and the
+ * wizard knows the count at seed time: detection keys off dependency and
+ * `.env` key names, so an ordinary app can match a dozen sources it has no
+ * intention of importing. Offering all of them asks a person to agree, up
+ * front, to an interrogation whose length they cannot see — and the runs
+ * offered more than a handful answer none of the prompts at all, while the
+ * short ones are where every connected source comes from.
+ *
+ * So the step takes the first few and the outro carries the rest as links,
+ * which is the same trade {@link WAREHOUSE_LINK_LIMIT} already makes for a
+ * list too long to read. Ordering is the registry's, which groups databases
+ * ahead of the API-key SaaS that inflates the tail.
+ */
+const WAREHOUSE_SEED_LIMIT = 3;
+
+/**
  * The app's new-source page, pre-selected to one source kind.
  *
  * `kind` is matched case-insensitively against the connector list, and a kind
@@ -87,9 +106,11 @@ function warehouseSourceUrl(
  *
  * Returns undefined when nothing was detected, so the outro is unchanged for
  * projects with no connectable source — and when the run's own warehouse step
- * connected them, where every bullet here would ask the user to redo work the
- * wizard just did and send them at a new-source form that would collide with
- * the source already created.
+ * connected everything it was given, where every bullet here would ask the
+ * user to redo work the wizard just did and send them at a new-source form
+ * that would collide with the source already created. A completed step is
+ * only ever given the first {@link WAREHOUSE_SEED_LIMIT} sources, so anything
+ * past that is still unconnected and still belongs here.
  */
 function buildWarehouseNextSteps(
   sess: WizardSession,
@@ -97,9 +118,10 @@ function buildWarehouseNextSteps(
   projectId: number | string,
   completedSeededTypes: readonly string[],
 ): { heading: string; items: string[] } | undefined {
-  if (completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)) return undefined;
-
-  const sources = getDetectedWarehouseSources(sess);
+  const detected = getDetectedWarehouseSources(sess);
+  const sources = completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)
+    ? detected.slice(WAREHOUSE_SEED_LIMIT)
+    : detected;
   if (sources.length === 0) return undefined;
 
   const listed = sources.slice(0, WAREHOUSE_LINK_LIMIT);
@@ -148,12 +170,17 @@ function warehouseReportInstruction(sess: WizardSession): string {
  *
  * Empty when nothing was detected, and in CI, signup, and any other run where
  * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
- * the task's whole timeout and then fail the run.
+ * the task's whole timeout and then fail the run. Capped at
+ * {@link WAREHOUSE_SEED_LIMIT} sources, with the rest handed over as outro
+ * links by {@link buildWarehouseNextSteps}.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   if (shouldDisableAsk(sess)) return [];
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return [];
+
+  const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);
+  const deferred = sources.length - offered.length;
 
   // The task is queued either way. A decline withholds reporting, not the
   // feature. See the matching gate in reportWarehouseSourcesDetected.
@@ -161,13 +188,17 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
     analytics.wizardCapture('orchestrator warehouse task queued', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
+      // What the step was actually given, which is what its outcome is a rate
+      // of. The two counts above stay the detection totals they have always
+      // been, so the detection trend reads across this change.
+      warehouse_offered_count: offered.length,
     });
   }
   return [
     {
       type: WAREHOUSE_SEED_TASK_TYPE,
       inputs: {
-        sources: sources.map((s) => ({
+        sources: offered.map((s) => ({
           kind: s.kind,
           label: s.label,
           mode: s.mode,
@@ -182,9 +213,14 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
         // moment now", and equally must not read as "walk away for the run".
         body: [
           'We detected some warehouse sources we can connect to enrich your PostHog data. Answer now, and we connect them at the end of the run, after your code changes. We will ask you for the credentials at that point, and beep when we do.',
+          ...(deferred > 0
+            ? [
+                `We found ${deferred} more we can connect. Those are listed with a link each at the end, so this step stays short.`,
+              ]
+            : []),
           "You can select [Skip] if you'd like to do this later in PostHog.",
         ],
-        items: sources.map((s) => s.label),
+        items: offered.map((s) => s.label),
         docsLabel: 'Learn more about warehouse sources',
         docsUrl: WAREHOUSE_SOURCES_DOCS_URL,
         prompt: 'Connect these during setup?',

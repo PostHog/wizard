@@ -8,7 +8,10 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
-import { drainVerdict } from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
+import {
+  describeDrainFailure,
+  drainVerdict,
+} from '@lib/agent/runner/sequence/orchestrator/orchestrator-runner';
 
 describe('drainVerdict', () => {
   let dir: string;
@@ -52,5 +55,47 @@ describe('drainVerdict', () => {
     const v = drainVerdict(store.list());
     expect(v.requiredFailedTypes).toEqual(['install']);
     expect(v.blocked).toBe(1);
+    expect(v.blockedTypes).toEqual(['report']);
+  });
+
+  it('names a step the user accepted that never became runnable', () => {
+    const install = store.enqueue({ type: 'install' });
+    store.enqueue({
+      type: 'warehouse',
+      optional: true,
+      dependsOn: [install.id],
+    });
+    finish(install.id, false);
+
+    expect(drainVerdict(store.list()).blockedTypes).toEqual(['warehouse']);
+  });
+});
+
+describe('describeDrainFailure', () => {
+  it('names the failure and the steps it stopped', () => {
+    expect(
+      describeDrainFailure({
+        requiredFailedTypes: ['install'],
+        blockedTypes: ['warehouse', 'report'],
+      }),
+    ).toBe('the install step failed, so the warehouse, report steps never ran');
+  });
+
+  it('names blocked steps when nothing failed outright', () => {
+    expect(
+      describeDrainFailure({
+        requiredFailedTypes: [],
+        blockedTypes: ['warehouse'],
+      }),
+    ).toBe('the warehouse step never ran');
+  });
+
+  it('names the failure alone when nothing was left pending', () => {
+    expect(
+      describeDrainFailure({
+        requiredFailedTypes: ['report'],
+        blockedTypes: [],
+      }),
+    ).toBe('the report step failed');
   });
 });
