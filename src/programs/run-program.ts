@@ -14,7 +14,10 @@ import { getSkillsBaseUrl } from '@shared/constants';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { buildRunTags } from '@shared/run-tags';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import {
+  registerRunSkillCleanup,
+  type RunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 import type { DiscoveredFeature } from '@shared/scan-consent';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -163,6 +166,8 @@ export interface ProgramOptions {
   }) => Promise<boolean>;
   /** Evaluate feature flags for a run whose input carries none. */
   featureFlags?: () => Promise<WizardFlagSnapshot>;
+  /** Leave new skills armed after success; the host commits them at exit. */
+  deferSkillCommit?: boolean;
   signal?: AbortSignal;
 }
 
@@ -207,10 +212,11 @@ export async function runProgram(
     { aiSdkStampReported: input.aiSdkStampReported },
     { onData: options.onProgress },
   );
-  const cleanups = new Map<string, () => void>();
+  // Registered, so a process drain mid-run (wizardAbort, a signal) removes new skills too.
+  const cleanups = new Map<string, RunSkillCleanup>();
   const captureSkills = (installDir: string) => {
     if (cleanups.has(installDir)) return;
-    cleanups.set(installDir, captureRunSkillCleanup(installDir));
+    cleanups.set(installDir, registerRunSkillCleanup(installDir));
   };
   captureSkills(input.installDir);
   const cleanFailedInvocation = () => {
@@ -229,6 +235,9 @@ export async function runProgram(
       captureSkills,
     });
     if (result.outcome !== RunOutcome.Success) cleanFailedInvocation();
+    else if (!options.deferSkillCommit) {
+      for (const cleanup of cleanups.values()) cleanup.commit();
+    }
     return result;
   } catch (error) {
     cleanFailedInvocation();

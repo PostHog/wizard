@@ -132,7 +132,7 @@ export async function runAgent(
         collector?.emit(event),
       );
     }
-    // Capture before preparation so pre-harness failures also clean new skills.
+    // The standalone contract: capture before preparation so pre-harness failures clean new skills too.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;

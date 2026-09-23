@@ -92,6 +92,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
+      // Covers installs before runProgram registers its own, such as the outage skill.
       registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@ui/tui/start-tui');

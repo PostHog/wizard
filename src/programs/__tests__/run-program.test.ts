@@ -35,6 +35,8 @@ import { refreshAccessToken } from '@utils/oauth-token';
 import { DiscoveredFeature } from '@shared/scan-consent';
 import { captureSwitchboardDecision } from '../binding-telemetry';
 import { gatewayAuth } from '../gateway-session';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
+import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
 
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
@@ -2073,5 +2075,80 @@ describe('runProgram', () => {
     } finally {
       fs.rmSync(installDir, { recursive: true, force: true });
     }
+  });
+
+  describe('skill cleanup', () => {
+    let installDir: string;
+    let newSkill: string;
+    let oldSkill: string;
+    const markSkill = (dir: string) => {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+    };
+
+    beforeEach(() => {
+      clearCleanup();
+      installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skills-'));
+      const skillRoot = path.join(installDir, '.claude', 'skills');
+      oldSkill = path.join(skillRoot, 'before-run');
+      newSkill = path.join(skillRoot, 'during-run');
+      markSkill(oldSkill);
+    });
+    afterEach(() => {
+      clearCleanup();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    });
+
+    it("a process drain mid-run removes this invocation's new skills", async () => {
+      vi.mocked(runAgent).mockImplementation(() => {
+        markSkill(newSkill);
+        // What wizardAbort and the CLI roots' signal handlers call.
+        runCleanups();
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram('metrics', { installDir, credentials });
+
+      expect(fs.existsSync(newSkill)).toBe(false);
+      expect(fs.existsSync(oldSkill)).toBe(true);
+    });
+
+    it('deferSkillCommit keeps the handle until the host commits', async () => {
+      vi.mocked(runAgent).mockImplementation(() => {
+        markSkill(newSkill);
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram(
+        'metrics',
+        { installDir, credentials },
+        { deferSkillCommit: true },
+      );
+      // A host that fails after the run still drains this invocation's skills.
+      runCleanups();
+      expect(fs.existsSync(newSkill)).toBe(false);
+
+      await runProgram(
+        'metrics',
+        { installDir, credentials },
+        { deferSkillCommit: true },
+      );
+      commitRegisteredRunSkillCleanups();
+      runCleanups();
+      expect(fs.existsSync(newSkill)).toBe(true);
+      expect(fs.existsSync(oldSkill)).toBe(true);
+    });
+
+    it('commits its own handles after a successful run', async () => {
+      vi.mocked(runAgent).mockImplementation(() => {
+        markSkill(newSkill);
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram('metrics', { installDir, credentials });
+      runCleanups();
+
+      expect(fs.existsSync(newSkill)).toBe(true);
+    });
   });
 });

@@ -542,6 +542,29 @@ it('disarms registered skill cleanup after a successful standalone program run',
   }
 });
 
+it('leaves the skill commit to the host when asked, so a later drain still removes new skills', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-run-deferred-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
+  vi.mocked(runAgent).mockImplementationOnce(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+  });
+  try {
+    await runProgramAgent(
+      program(),
+      { ...session(), installDir },
+      { deferSkillCleanupCommit: true },
+    );
+    runCleanups();
+    expect(fs.existsSync(skillDir)).toBe(false);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
 it.each(['ci', 'headless'] as const)(
   'removes new Wizard skills when %s stream settlement fails after agent success',
   async (mode) => {
@@ -614,7 +637,7 @@ it('keeps new Wizard skills after headless stream settlement succeeds', async ()
   }
 });
 
-it('cleans a marked install when program setup throws before the functional runner', async () => {
+it("cleans a marked install when program setup throws before the functional runner, through the CLI root's drain", async () => {
   const installDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wizard-setup-cleanup-'),
   );
@@ -626,13 +649,31 @@ it('cleans a marked install when program setup throws before the functional runn
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     throw setupFailure;
   };
+  const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
+    '@utils/wizard-abort',
+  );
+  vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  const stderr = vi
+    .spyOn(process.stderr, 'write')
+    .mockImplementation(() => true);
   try {
-    await expect(
-      runProgramAgent(failingProgram, { ...session(), installDir }),
-    ).rejects.toBe(setupFailure);
+    runNonInteractive(
+      failingProgram,
+      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+      'headless',
+    );
+    await vi.waitFor(() => expect(exit).toHaveBeenCalled());
+    expect(wizardAbort).toHaveBeenCalledWith(
+      expect.objectContaining({ error: setupFailure }),
+    );
     expect(fs.existsSync(skillDir)).toBe(false);
     expect(runAgent).not.toHaveBeenCalled();
   } finally {
+    exit.mockRestore();
+    stderr.mockRestore();
     fs.rmSync(installDir, { recursive: true, force: true });
   }
 });

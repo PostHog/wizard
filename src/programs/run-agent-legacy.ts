@@ -44,10 +44,6 @@ import { authenticate } from './authenticate';
 import { getDetectedWarehouseSources } from './warehouse-source/detect';
 import { mayReportScanResults } from '@shared/scan-consent';
 import { AUDIT_CHECKS_KEY } from './audit/types';
-import {
-  commitRegisteredRunSkillCleanups,
-  registerRunSkillCleanup,
-} from '@shared/skill-run-cleanup';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
@@ -66,33 +62,19 @@ export async function runProgramAgent(
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
 
-  // wizardAbort and TUI signal handlers drain this registry on interruption.
-  const cleanupInstalledSkills = registerRunSkillCleanup(session.installDir);
+  const runDef =
+    typeof programConfig.run === 'function'
+      ? await programConfig.run(session)
+      : programConfig.run;
 
-  try {
-    const runDef =
-      typeof programConfig.run === 'function'
-        ? await programConfig.run(session)
-        : programConfig.run;
-
-    const succeeded = await runLegacyStep(
-      session,
-      runDef,
-      programConfig,
-      options.composed ?? false,
-      options.inferenceAuth,
-    );
-    if (succeeded && !options.deferSkillCleanupCommit) {
-      commitRegisteredRunSkillCleanups();
-    }
-  } catch (error) {
-    try {
-      cleanupInstalledSkills();
-    } catch (cleanupError) {
-      logToFile('[agent-runner] failed-run skill cleanup error:', cleanupError);
-    }
-    throw error;
-  }
+  await runLegacyStep(
+    session,
+    runDef,
+    programConfig,
+    options.composed ?? false,
+    options.inferenceAuth,
+    options.deferSkillCleanupCommit,
+  );
 }
 
 /**
@@ -106,7 +88,8 @@ async function runLegacyStep(
   programConfig: ProgramConfig,
   composed: boolean,
   inferenceAuth?: InferenceAuthProvider,
-): Promise<boolean> {
+  deferSkillCommit?: boolean,
+): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = run.skillId ?? run.integrationLabel;
@@ -208,6 +191,7 @@ async function runLegacyStep(
         else projectData(progress.data);
       },
       interaction: uiInteraction(ui),
+      deferSkillCommit,
       // AI opt-in enforcement. Parks while AiOptInRequiredScreen is up if the
       // org hasn't approved third-party AI — before the skill install and agent
       // start, so no source leaves the machine. The screen alone is cosmetic;
@@ -248,7 +232,6 @@ async function runLegacyStep(
       logToFile('[agent-runner] analytics shutdown failed:', error);
     }
   }
-  return programResult.outcome === RunOutcome.Success;
 }
 
 // ── Host capabilities ─────────────────────────────────────────────────
