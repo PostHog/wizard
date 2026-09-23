@@ -12,7 +12,7 @@ import type {
 } from '@agent/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import type { Integration } from '@shared/constants';
-import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
+import { ErrorCodes } from '@shared/errors';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { logToFile } from '@utils/debug';
 import type { FrameworkConfig } from './framework-config';
@@ -32,10 +32,7 @@ import {
   type NoAgentMcpPort,
   type NoAgentProgramOptions,
 } from './no-agent';
-import {
-  resolveProgramRunDefinition,
-  type ProgramRunDefinitionInput,
-} from './resolve-run-definition';
+import type { ProgramRunDefinitionInput } from './resolve-run-definition';
 import {
   resolvePosthogIntegrationRun,
   type PosthogIntegrationRunEffects,
@@ -134,14 +131,6 @@ const DEFAULT_FLAGS: RunInput['flags'] = {
   yaraReport: false,
 };
 
-const NO_AGENT_PROGRAMS = new Set([
-  'posthog-doctor',
-  'mcp-add',
-  'mcp-remove',
-  'mcp-tutorial',
-  'slack',
-]);
-
 /** Run a registered program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
@@ -194,10 +183,7 @@ async function runProgramWithStore(
   const artifacts: ProgramRunOutcome['artifacts'] = {};
   const runId = input.runId ?? randomUUID();
 
-  const fail = (
-    message: string,
-    code: ErrorCode = ErrorCodes.InternalUnhandled,
-  ): ProgramRunOutcome => ({
+  const fail = (message: string): ProgramRunOutcome => ({
     programId,
     outcome: RunOutcome.Failed,
     runResults: store.results(),
@@ -205,16 +191,12 @@ async function runProgramWithStore(
     progress: store.read(),
     settledRuns: store.settledRuns(),
     artifacts,
-    failure: { code, message },
+    failure: { code: ErrorCodes.InternalUnhandled, message },
   });
-  // A thrown error keeps the code it was decided with.
-  const failFrom = (error: unknown): ProgramRunOutcome => {
-    const failure = classifyRunFailure(error);
-    return fail(failure.message, failure.code);
-  };
   const abort = (message: string): ProgramRunOutcome => ({
-    ...fail(message, ErrorCodes.AgentAbort),
+    ...fail(message),
     outcome: RunOutcome.Aborted,
+    failure: { code: ErrorCodes.AgentAbort, message },
   });
   const cancelled = (): ProgramRunOutcome => ({
     ...abort('Run cancelled by host.'),
@@ -223,8 +205,7 @@ async function runProgramWithStore(
 
   if (options.signal?.aborted) return cancelled();
 
-  if (!program)
-    return fail(`Unknown program: ${programId}`, ErrorCodes.CliBadArgs);
+  if (!program) return fail(`Unknown program: ${programId}`);
 
   if (input.integration !== undefined || input.typescript !== undefined) {
     store.setDetection({
@@ -242,9 +223,11 @@ async function runProgramWithStore(
     try {
       credentials = await options.credentials.resolve(programId);
     } catch (error) {
-      return failFrom(error);
+      if (options.signal?.aborted) return cancelled();
+      return fail(error instanceof Error ? error.message : String(error));
     }
   }
+  if (options.signal?.aborted) return cancelled();
   if (credentials) {
     store.setAuthenticated({
       credentials: credentials.posthog,
@@ -252,7 +235,7 @@ async function runProgramWithStore(
       apiUser: credentials.apiUser,
     });
   }
-  if (NO_AGENT_PROGRAMS.has(programId)) {
+  if (program.strategy === 'no-agent') {
     const result = await runNoAgentProgram(
       programId,
       {
@@ -260,8 +243,9 @@ async function runProgramWithStore(
         credentials: credentials?.posthog,
         mcp: { ...input.mcp, local: input.flags?.localMcp },
       },
-      { mcp: options.mcp, workflow: options.workflow },
+      { mcp: options.mcp, workflow: options.workflow, signal: options.signal },
     );
+    if (options.signal?.aborted) return cancelled();
     return {
       programId,
       outcome:
@@ -277,18 +261,15 @@ async function runProgramWithStore(
       ...('failure' in result
         ? {
             failure: {
-              code: ErrorCodes.InternalUnhandled,
               ...result.failure,
+              code: result.failure.code ?? ErrorCodes.InternalUnhandled,
             },
           }
         : {}),
     };
   }
   if (!credentials)
-    return fail(
-      `Credentials are required to run ${programId}.`,
-      ErrorCodes.ArgsMissingApiKey,
-    );
+    return fail(`Credentials are required to run ${programId}.`);
   if (options.signal?.aborted) return cancelled();
 
   if (
@@ -302,13 +283,12 @@ async function runProgramWithStore(
     if (!options.awaitAiApproval) {
       return fail(
         'AI processing approval is required before this program can run.',
-        ErrorCodes.CliInteractiveRequired,
       );
     }
     try {
       approval.granted = await options.awaitAiApproval({ programId });
     } catch (error) {
-      return failFrom(error);
+      return fail(error instanceof Error ? error.message : String(error));
     }
     if (!approval.granted) return abort('AI processing approval declined.');
   }
@@ -366,7 +346,7 @@ async function runProgramWithStore(
         return abort('GitHub connection was not confirmed.');
       }
     } catch (error) {
-      return failFrom(error);
+      return fail(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -381,7 +361,7 @@ async function runProgramWithStore(
     let run: AgentRunDefinition | undefined | null = input.run;
     let hooks: RunHooks | undefined = input.hooks;
     let seedTasks = input.seedTasks;
-    if (!run && programId === 'posthog-integration') {
+    if (!run && program.strategy === 'integration') {
       if (!input.frameworkConfig || !options.integrationEffects) {
         return fail(
           'PostHog integration requires prepared framework configuration and host effects.',
@@ -405,9 +385,9 @@ async function runProgramWithStore(
         hooks ??= resolved.hooks;
         seedTasks ??= () => resolved.seedTasks;
       } catch (error) {
-        return failFrom(error);
+        return fail(error instanceof Error ? error.message : String(error));
       }
-    } else if (!run && programId === 'self-driving') {
+    } else if (!run && program.strategy === 'self-driving') {
       const resolved = resolveSelfDrivingRun({
         installDir: input.installDir,
         detectedTools: input.detectedTools ?? [],
@@ -415,14 +395,15 @@ async function runProgramWithStore(
       run = resolved.run;
       hooks ??= resolved.hooks;
     }
-    run ??=
-      typeof program.run === 'object'
-        ? program.run
-        : resolveProgramRunDefinition(programId, input);
+    if (!run) {
+      if (program.strategy === 'static') run = program.run;
+      if (program.strategy === 'resolved') {
+        run = program.resolve(input);
+      }
+    }
     if (!run) {
       return fail(
         `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
-        ErrorCodes.CliInteractiveRequired,
       );
     }
     if (options.signal?.aborted) return cancelled();
