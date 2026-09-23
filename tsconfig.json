@@ -19,6 +19,8 @@
     "src/**/*",
     "test/**/*",
     "e2e-harness/**/*",
+    // Harness and maintenance scripts run with tsx; typechecking keeps them in step.
+    "scripts/**/*",
     "types/**/*"
   ],
   "exclude": [

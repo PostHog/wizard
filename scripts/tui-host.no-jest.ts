@@ -22,13 +22,16 @@ import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { initLocalDev } from '@shared/local-dev';
 import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
-import { runProgramAgent } from '@programs/run-agent-legacy';
+import { runProgramAgent } from '@cli/runners/run-program-agent';
+import { advanceStep } from '@cli/runners/run-wizard';
+import { cliAuthHost } from '@cli/runners/auth-host';
+import { cliTuiHost } from '@cli/tui-host';
+import { rawProgramFlow } from '@tui/flows/index';
 import {
   TaskStreamPush,
   createFileDestination,
 } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
-import { authenticate } from '@programs/authenticate';
 import { getOrAskForProjectData } from '@programs/project-data';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
@@ -211,7 +214,8 @@ async function main() {
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
   });
 
-  const { store } = startTUI(VERSION, programId);
+  // The same host the CLI hands the TUI: its UI becomes current, aborts end the run.
+  const { store } = startTUI(VERSION, programId, cliTuiHost());
   store.session = buildSession({
     installDir: process.env.APP_DIR!,
     ci: true,
@@ -227,7 +231,6 @@ async function main() {
     // skills (:8765) against the production MCP.
     localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
     localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
-    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
     // Switchboard variation overrides (see e2e.json `variations`), threaded by
     // the snapshot driver as one run per variation. Empty ⇒ resolved default.
@@ -270,13 +273,16 @@ async function main() {
   // Resolve credentials from the phx key (same bearer as an OAuth token) and set
   // them on the store — advances the auth screen with no browser, no keystrokes.
   const authByState = async () => {
-    const d = await getOrAskForProjectData({
-      signup: false,
-      ci: true,
-      apiKey,
-      projectId: Number(projectId),
-      programId,
-    });
+    const d = await getOrAskForProjectData(
+      {
+        signup: false,
+        ci: true,
+        apiKey,
+        projectId: Number(projectId),
+        programId,
+      },
+      cliAuthHost(),
+    );
     store.setCredentials({
       accessToken: d.accessToken,
       projectApiKey: d.projectApiKey,
@@ -293,39 +299,18 @@ async function main() {
     await store.getGate('integration-check');
     await store.getGate('health-check');
 
-    // Mirror run-wizard's composed walk for programs whose steps splice in
-    // their own run steps (self-driving: detect → integrate → handoff → run),
-    // or scope their own run to a picked project (error-tracking).
-    // `authenticate` here resolves the phx key, not OAuth, since the session is
-    // built with ci + apiKey.
-    if (programConfig.steps.some((s) => s.run || s.targetDir)) {
-      const runSessionFor = async (
-        step: (typeof programConfig.steps)[number],
-      ) => {
-        const live = store.session;
-        const runSession = step.targetDir
-          ? {
-              ...live,
-              installDir: step.targetDir(live),
-              frameworkContext: { ...live.frameworkContext },
-            }
-          : live;
-        if (step.onRunPrep) await step.onRunPrep(runSession);
-        return runSession;
-      };
-      for (const step of programConfig.steps) {
+    // run-wizard's composed walk, for programs whose flow composes a child run
+    // (self-driving: detect → integrate → handoff → run) or scopes its own run
+    // to a picked project (error-tracking). `authenticate` resolves the phx
+    // key, not OAuth, since the session is built with ci + apiKey.
+    if (
+      programConfig.runSteps &&
+      Object.keys(programConfig.runSteps).length > 0
+    ) {
+      for (const step of rawProgramFlow(programConfig.id)) {
         if (step.screenId === 'outro') break;
         if (step.show && !step.show(store.session)) continue;
-        if (step.screenId === 'auth') {
-          await authenticate(store.session, programConfig.id);
-        } else if (step.run) {
-          await step.run(await runSessionFor(step));
-          store.completeRunStep(step.id);
-        } else if (step.screenId === 'run') {
-          await runProgramAgent(programConfig, await runSessionFor(step));
-        } else if (step.isComplete) {
-          await store.waitUntil(step.isComplete);
-        }
+        await advanceStep(step, store, programConfig);
       }
     } else {
       await runProgramAgent(programConfig, store.session);
