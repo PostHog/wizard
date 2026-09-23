@@ -146,17 +146,23 @@ export function createWizardAskBridge(
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
           timedOut = true;
-          opts.cancelQuestion?.();
-          resolve(buildCancelledAnswers(questions));
+          try {
+            opts.cancelQuestion?.();
+          } catch {
+            // A host overlay failure must not leave the ask pending.
+          } finally {
+            resolve(buildCancelledAnswers(questions));
+          }
         }, timeoutMs);
       });
       const aborted = new Promise<AskAnswers>((resolve) => {
         cancelForAbort = () => {
           try {
             opts.cancelQuestion?.();
-          } finally {
-            resolve(buildCancelledAnswers(questions));
+          } catch {
+            // A host overlay failure must not prevent the run from settling.
           }
+          resolve(buildCancelledAnswers(questions));
         };
         opts.signal?.addEventListener('abort', cancelForAbort, { once: true });
         if (opts.signal?.aborted) cancelForAbort();
